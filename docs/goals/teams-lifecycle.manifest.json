@@ -1,0 +1,334 @@
+{
+  "lifecycle_id": "teams.multi-agent-console.overview",
+  "status": "implementation-ready",
+  "entrypoint": "console.topology",
+  "return_path": "drawer.close -> source.focus -> console.topology",
+  "owner_feature": "feature.teams-console",
+  "canonical_docs": [
+    "docs/goals/teams-overview-design.md",
+    "docs/design/teams-detailed-design-v1.md",
+    "docs/design/teams-control-protocol-v1.md",
+    "docs/design/teams-control-protocol-v1.manifest.json",
+    "docs/design/multi-agent-console-prototype.html",
+    "docs/architecture/resource-map.json",
+    "docs/architecture/function-map.json",
+    "docs/architecture/mainline-call-map.json",
+    "docs/architecture/verification-map.json",
+    "docs/architecture/module-registry.json"
+  ],
+  "nodes": [
+    {
+      "id": "console.topology",
+      "kind": "ui-entry",
+      "owner": "ui",
+      "status": "design"
+    },
+    {
+      "id": "console.conversations",
+      "kind": "ui-entry",
+      "owner": "ui",
+      "status": "design"
+    },
+    {
+      "id": "console.notifications",
+      "kind": "ui-entry",
+      "owner": "ui",
+      "status": "design"
+    },
+    {
+      "id": "console.search",
+      "kind": "plugin-entry",
+      "owner": "search-plugin",
+      "status": "design"
+    },
+    {
+      "id": "console.memory",
+      "kind": "plugin-entry",
+      "owner": "memory-plugin",
+      "status": "design"
+    },
+    {
+      "id": "console.settings",
+      "kind": "ui-entry",
+      "owner": "ui",
+      "status": "design"
+    },
+    {
+      "id": "console.notification-center",
+      "kind": "projection",
+      "owner": "agent",
+      "status": "design"
+    },
+    {
+      "id": "console.search-plugin",
+      "kind": "plugin",
+      "owner": "search-plugin",
+      "status": "design"
+    },
+    {
+      "id": "console.memory-plugin",
+      "kind": "plugin",
+      "owner": "memory-plugin",
+      "status": "design"
+    },
+    {
+      "id": "console.machine-summary",
+      "kind": "projection",
+      "owner": "ui",
+      "status": "design"
+    },
+    {
+      "id": "console.agent-summary",
+      "kind": "projection",
+      "owner": "ui",
+      "status": "design"
+    },
+    {
+      "id": "console.relation-graph",
+      "kind": "projection",
+      "owner": "ui",
+      "status": "design"
+    },
+    {
+      "id": "console.drawer-stack",
+      "kind": "navigation",
+      "owner": "ui",
+      "status": "design"
+    },
+    {
+      "id": "console.focused-session",
+      "kind": "existing-webui",
+      "owner": "dsh-adapter",
+      "status": "design"
+    },
+    {
+      "id": "console.control-command",
+      "kind": "control",
+      "owner": "server",
+      "status": "design"
+    },
+    {
+      "id": "console.control-protocol",
+      "kind": "protocol",
+      "owner": "server",
+      "status": "design"
+    }
+  ],
+  "edges": [
+    {
+      "from": "console.topology",
+      "to": "console.machine-summary",
+      "kind": "read",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.topology",
+      "to": "console.conversations",
+      "kind": "navigate",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.topology",
+      "to": "console.notifications",
+      "kind": "navigate",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.topology",
+      "to": "console.search",
+      "kind": "navigate",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.topology",
+      "to": "console.memory",
+      "kind": "navigate",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.topology",
+      "to": "console.settings",
+      "kind": "navigate",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.notifications",
+      "to": "console.notification-center",
+      "kind": "read",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.search",
+      "to": "console.search-plugin",
+      "kind": "query",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.memory",
+      "to": "console.memory-plugin",
+      "kind": "command",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.machine-summary",
+      "to": "console.agent-summary",
+      "kind": "project",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.agent-summary",
+      "to": "console.relation-graph",
+      "kind": "project",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.relation-graph",
+      "to": "console.drawer-stack",
+      "kind": "navigate",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.drawer-stack",
+      "to": "console.focused-session",
+      "kind": "focus",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.drawer-stack",
+      "to": "console.control-command",
+      "kind": "invoke",
+      "status": "binding-pending"
+    },
+    {
+      "from": "console.control-command",
+      "to": "console.control-protocol",
+      "kind": "route",
+      "status": "binding-pending"
+    }
+  ],
+  "resource_boundaries": [
+    {
+      "resource_id": "link-state",
+      "truth_store": "network",
+      "allowed_operations": [
+        "connect",
+        "disconnect",
+        "observe",
+        "authorize"
+      ],
+      "business_payload": false
+    },
+    {
+      "resource_id": "discovery-projection",
+      "truth_store": "server",
+      "allowed_operations": [
+        "observe",
+        "resolve-sessions"
+      ],
+      "business_payload": true
+    },
+    {
+      "resource_id": "agent-relation-truth",
+      "truth_store": "agent",
+      "allowed_operations": [
+        "observe",
+        "create",
+        "update",
+        "delete"
+      ],
+      "business_payload": true
+    },
+    {
+      "resource_id": "console-navigation",
+      "truth_store": "ui",
+      "allowed_operations": [
+        "push",
+        "pop",
+        "restore-focus"
+      ],
+      "business_payload": false
+    }
+  ],
+  "verification_gates": [
+    {
+      "id": "gate.console.resource-boundary",
+      "status": "pending",
+      "required": true,
+      "checks": [
+        "control routing is not carried in business payload metadata",
+        "machine/session address resolves before Session API invocation"
+      ]
+    },
+    {
+      "id": "gate.console.single-owner",
+      "status": "pending",
+      "required": true,
+      "checks": [
+        "one owner for machine connections",
+        "one owner for relation truth",
+        "one owner for drawer navigation",
+        "existing Conversation pipeline remains the Session presentation owner"
+      ]
+    },
+    {
+      "id": "gate.console.ui-accessibility",
+      "status": "pending",
+      "required": true,
+      "checks": [
+        "keyboard and screen-reader drawer navigation",
+        "focus restoration",
+        "reduced motion",
+        "non-color status semantics",
+        "mobile touch target and zoom behavior"
+      ]
+    },
+    {
+      "id": "gate.console.desktop-mobile-equivalence",
+      "status": "pending",
+      "required": true,
+      "checks": [
+        "shared semantic components",
+        "layout-only desktop/mobile divergence",
+        "same status and action semantics"
+      ]
+    },
+    {
+      "id": "gate.console.runtime-smoke",
+      "status": "pending",
+      "required": true,
+      "checks": [
+        "two-machine live summary",
+        "any-agent Session navigation",
+        "nested drawer push/pop",
+        "connected/reconnecting/disconnected distinction",
+        "real browser desktop and mobile viewport"
+      ]
+    }
+  ],
+  "approval_required": [],
+  "frozen_implementation_defaults": {
+    "machine_authentication": [
+      "none",
+      "shared-api-key",
+      "shared-token"
+    ],
+    "relation_authority": "graph classification never grants capability permission",
+    "cross_machine_business_routing": "host-to-host; UI is not a business relay",
+    "display_name_truth": "host canonical name; console local alias is projection-only",
+    "credential_persistence": "opaque reference only; secret is owned outside Teams",
+    "config_conflict": "revision compare-and-swap with explicit conflict",
+    "relation_report_freshness": {
+      "heartbeat_seconds": 30,
+      "ttl_seconds": 90,
+      "expiry_projection": "stale",
+      "history_retention": "retain"
+    }
+  },
+  "design_reference": {
+    "prototype": "docs/design/multi-agent-console-prototype.html",
+    "detailed_design": "docs/design/teams-detailed-design-v1.md",
+    "control_protocol": "docs/design/teams-control-protocol-v1.md",
+    "layout_rule": "desktop/mobile share semantic components and actions; only layout differs",
+    "primary_fast_path": "agent-card -> current-session -> focused-conversation"
+  }
+}

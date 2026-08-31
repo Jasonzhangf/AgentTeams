@@ -1,0 +1,3 @@
+- insert:
+    - id: teams-console
+      name: '@deepseek-ai/teams-console'

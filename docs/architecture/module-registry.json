@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "map_id": "teams-module-registry",
+  "status": "design",
+  "external_boundaries": [
+    {
+      "boundary_id": "deepseek-harness-dsh-web-host",
+      "owner": "deepseek-harness",
+      "status": "external",
+      "repository_root": "../deepseek-harness",
+      "allowed_symbols": [
+        "runProfile",
+        "composeProfile",
+        "prepareProfile",
+        "loadProfile",
+        "composeEntries",
+        "boot",
+        "mountRootInclude",
+        "WebServer[Service.init]"
+      ],
+      "forbidden_paths": ["Teams/**"]
+    }
+  ],
+  "modules": [
+    {"module_id":"bootstrap","owner":"bootstrap","status":"design","owned_paths":["bootstrap/**"],"forbidden_paths":["network/**","config/**","agent/**"]},
+    {"module_id":"network","owner":"network","status":"design","owned_paths":["network/**"],"forbidden_paths":["agent/**","config/**","server/**"]},
+    {"module_id":"config","owner":"config","status":"design","owned_paths":["config/**"],"forbidden_paths":["network/**","agent/**"]},
+    {"module_id":"server","owner":"server","status":"design","owned_paths":["server/**"],"forbidden_paths":["agent/**","ui/**"]},
+    {"module_id":"runtime","owner":"runtime","status":"design","owned_paths":["runtime/**"],"forbidden_paths":["agent/**","ui/**"]},
+    {"module_id":"agent","owner":"agent","status":"design","owned_paths":["agent/**"],"forbidden_paths":["network/**","config/**","server/**"]},
+    {"module_id":"search-plugin","owner":"search-plugin","status":"design","owned_paths":["search-plugin/**"],"forbidden_paths":["memory-plugin/**","agent/**","ui/**"]},
+    {"module_id":"memory-plugin","owner":"memory-plugin","status":"design","owned_paths":["memory-plugin/**"],"forbidden_paths":["search-plugin/**","agent/**","ui/**"]},
+    {"module_id":"dsh-adapter","owner":"dsh-adapter","status":"design","owned_paths":["dsh-adapter/**"],"forbidden_paths":["opencode-adapter/**"]},
+    {"module_id":"opencode-adapter","owner":"opencode-adapter","status":"implemented","owned_paths":["opencode-adapter/**"],"forbidden_paths":["dsh-adapter/**","ui/**"]},
+    {"module_id":"ui","owner":"ui","status":"design","owned_paths":["ui/**"],"forbidden_paths":["network/**","config/**","server/**","agent/**"]}
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "preparation_id": "prepare-teams-multi-agent-console-20260831",
+  "status": "confirmed",
+  "objective": "Establish Teams as an AppSDK 0.1.6-governed design project for a cross-agent DSH and OpenCode control console. The project records shared desktop/mobile UI semantics, nested drawer interaction, daemon-runtime/network composition, configuration-server admission, and host adapters without starting runtime implementation.",
+  "change_kind": "new_project",
+  "project_root": ".",
+  "legacy_roots": [
+    "../playground/maui-0830/docs/design/multi-agent-console-prototype.html",
+    "../playground/maui-0830/docs/goals/dsh-multi-agent-ui-overview-design.md",
+    "../playground/maui-0830/docs/goals/dsh-multi-agent-ui-lifecycle.manifest.json"
+  ],
+  "new_roots": [
+    ".appsdk",
+    ".appsdk-control",
+    "bootstrap",
+    "network",
+    "config",
+    "server",
+    "runtime",
+    "agent",
+    "dsh-adapter",
+    "opencode-adapter",
+    "ui",
+    "docs",
+    "playground",
+    "active",
+    "protected",
+    "generated"
+  ],
+  "protected_roots": [
+    ".appsdk/**",
+    "active/lib/**",
+    "protected/**",
+    "generated/**"
+  ],
+  "runtime_forbidden_roots": [
+    ".appsdk-control/**",
+    "playground/**",
+    "protected/**",
+    "generated/**"
+  ],
+  "boundary": {
+    "allowed_paths": [
+      "**"
+    ],
+    "forbidden_paths": [
+      "../deepseek-harness/**",
+      "../dsh-tui/**",
+      "../.github/**",
+      "../playground/maui-0830/**",
+      "$DSH_HOME/**"
+    ],
+    "payload_control_separation": "Bootstrap link configuration, endpoint, machine identity, generation, health, auth grant, permission decision, routing, reconnect, diagnostics, and runtime lifecycle are typed control resources. They must never enter business request/response payloads or metadata. Business payloads must never reconstruct control state."
+  },
+  "acceptance_criteria": [
+    "Teams is initialized as an AppSDK 0.1.6 project with governance contracts, maps, lifecycle manifest, and sdk.lock.",
+    "The design records one owner each for bootstrap link configuration, network transport and health, shared runtime configuration, account and permission admission, server listener and connection registry, daemon runtime lifecycle, agent/session semantics, capability publication, and UI projection.",
+    "Daemon runtime composes runtime lifecycle with network connection lifecycle; Agent remains network-agnostic and consumes an upper-layer runtime abstraction.",
+    "A control server can discover live daemon runtimes, share and synchronize configuration, authenticate accounts, and evaluate permissions without storing session messages, tool results, or approval bodies.",
+    "DSH and OpenCode compatibility is explicit: shared domain and typed federation semantics, separate DSH ClientContext/Slot and OpenCode PluginInput/Hooks adapters, and no claim of a shared host UI bundle.",
+    "The static HTML prototype is included as Playground design evidence with direct current-session navigation, reusable DSH Conversation surface, and nested drawer gestures.",
+    "No runtime implementation or source modification outside Teams is started before the governance maps and lifecycle manifest are admitted."
+  ],
+  "non_goals": [
+    "Implement or publish a runtime plugin in this design-only change.",
+    "Modify DSH, OpenCode, their installed profiles, or the official DSH WebUI.",
+    "Store business session content in the control server.",
+    "Give master/slave relations implicit authority over agents or high-risk actions.",
+    "Treat DSH and OpenCode as if they share one UI mounting protocol.",
+    "Add fallback, silent payload stripping, or duplicate network/config/session implementations."
+  ],
+  "assumptions": [
+    "The control server is a separately deployable server module and is reached through the configured network plugin transport.",
+    "Bootstrap link configuration is available before shared runtime configuration synchronization begins.",
+    "The server module owns deployment, listener, server-side connection registry, account admission, and permission decisions; the network plugin owns client link configuration, transport, and health.",
+    "The current DSH Conversation/Session rendering path remains the presentation owner for a focused DSH session.",
+    "Desktop and mobile share semantic components and action/state contracts; only layout and responsive composition differ.",
+    "The initial local Console Hub is the default deployment shape pending approval of the final product decision."
+  ],
+  "questions": [
+    {"question_id":"scope-kind","question":"Is this a new project, module refactor, project refactor, or debug task?","status":"answered","answer":"New design project named Teams."},
+    {"question_id":"project-root","question":"Which relative directory is the new AppSDK project root?","status":"answered","answer":"Teams/ at the repository root; its AppSDK project root is Teams/."},
+    {"question_id":"legacy-boundary","question":"Which existing directories remain read-only and outside the new project?","status":"answered","answer":"Existing DSH/OpenCode source, installed profiles, dsh-tui, and maui-0830 remain outside Teams; maui-0830 design files are read-only source evidence only."},
+    {"question_id":"new-boundary","question":"Which directories may the new project create or modify?","status":"answered","answer":"Only Teams/** for this design/governance milestone. Runtime code is not started."}
+  ],
+  "confirmed_by": "Jason",
+  "confirmed_at": "2026-08-31T00:00:00Z",
+  "created_at": "2026-01-01T00:00:00Z"
+}

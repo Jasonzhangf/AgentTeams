@@ -1,0 +1,31 @@
+{
+  "name": "@deepseek-ai/teams-opencode-adapter",
+  "description": "OpenCode host adapter for the Teams multi-agent console",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.mjs",
+  "types": "lib/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.mts",
+      "default": "./lib/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "lib/index.mjs",
+    "lib/index.d.mts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.18.15 <2"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3"
+  }
+}

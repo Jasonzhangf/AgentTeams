@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "manifest_id": "teams-control-protocol-v1",
+  "status": "implementation-ready",
+  "canonical_doc": "docs/design/teams-control-protocol-v1.md",
+  "owner_modules": [
+    "network",
+    "server",
+    "config",
+    "runtime",
+    "dsh-adapter",
+    "opencode-adapter",
+    "ui"
+  ],
+  "resources": [
+    "bootstrap-link-config",
+    "remote-machine-connection-config",
+    "machine-auth-config",
+    "capability-use-relation",
+    "account-permission",
+    "server-listener",
+    "link-state",
+    "shared-runtime-config",
+    "local-agent-runtime-config",
+    "config-sync-transaction",
+    "runtime-lifecycle",
+    "agent-capability",
+    "notification-projection",
+    "agent-session-truth",
+    "console-navigation",
+    "console-settings"
+  ],
+  "chains": [
+    {
+      "chain_id": "machine-auth-v1",
+      "entrypoint": "resolveMachineAuthConfig",
+      "terminal": "registerRuntimeConnection",
+      "return_path": "auth-error -> settings.machine"
+    },
+    {
+      "chain_id": "host-command-v1",
+      "entrypoint": "dispatchHostCommand",
+      "terminal": "projectHostCommandResult",
+      "return_path": "command-error -> source drawer"
+    },
+    {
+      "chain_id": "config-save-v1",
+      "entrypoint": "saveAgentRuntimeConfig",
+      "terminal": "applyAgentRuntimeConfig",
+      "return_path": "conflict -> settings.agent"
+    },
+    {
+      "chain_id": "notification-approval-v1",
+      "entrypoint": "resolveNotificationTarget",
+      "terminal": "projectNotificationResult",
+      "return_path": "approval-error -> notification row"
+    }
+  ],
+  "boundaries": {
+    "control_resources": [
+      "machine-auth-config",
+      "capability-use-relation",
+      "account-permission",
+      "config-sync-transaction",
+      "link-state",
+      "runtime-lifecycle"
+    ],
+    "business_resources": [
+      "agent-session-truth",
+      "notification-projection"
+    ],
+    "ui_resources": [
+      "console-navigation",
+      "console-settings"
+    ],
+    "forbidden_payload_fields": [
+      "machineId",
+      "endpoint",
+      "generation",
+      "health",
+      "authGrant",
+      "permissionDecision",
+      "routing",
+      "retry",
+      "diagnostics"
+    ]
+  },
+  "required_gates": [
+    "teams-machine-token-auth",
+    "teams-permission-grant-owner",
+    "teams-host-command-no-business-payload",
+    "teams-config-conflict-protocol",
+    "teams-mobile-high-risk-confirmation",
+    "teams-dsh-opencode-adapter-separation",
+    "teams-capability-use-relation-graph"
+  ],
+  "frozen_defaults": {
+    "machine_authentication": [
+      "none",
+      "shared-api-key",
+      "shared-token"
+    ],
+    "credential_persistence": "opaque-reference-only",
+    "display_name_truth": "host-canonical-name-with-console-local-alias",
+    "config_conflict": "revision-compare-and-swap-explicit-conflict",
+    "relation_report_freshness": {
+      "heartbeat_seconds": 30,
+      "ttl_seconds": 90,
+      "expired_projection": "stale",
+      "retain_history": true
+    }
+  }
+}

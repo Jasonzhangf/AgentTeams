@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "map_id": "teams-function-map",
+  "status": "design",
+  "functions": [
+    {"function_id":"bootstrap_link_resolution","owner":"network","status":"design","entry_symbols":["resolveBootstrapLinkConfig"],"required_gates":["teams-network-control-boundary"]},
+    {"function_id":"network_connection_lifecycle","owner":"network","status":"design","entry_symbols":["connectLink","observeLinkHealth","reconnectLink","closeLink"],"required_gates":["teams-network-control-boundary"]},
+    {"function_id":"server_admission","owner":"server","status":"design","entry_symbols":["authenticateMachine","evaluatePermission","registerRuntimeConnection"],"required_gates":["teams-account-permission-owner"]},
+    {"function_id":"machine_token_authentication","owner":"network","status":"design","entry_symbols":["resolveMachineAuthConfig","validateSharedCredential","reportMachineAuthState"],"required_gates":["teams-machine-token-auth"]},
+    {"function_id":"host_command_dispatch","owner":"server","status":"design","entry_symbols":["dispatchHostCommand","projectHostCommandResult"],"required_gates":["teams-host-command-no-business-payload"]},
+    {"function_id":"shared_config_sync","owner":"config","status":"design","entry_symbols":["readConfigVersion","syncSharedRuntimeConfig","applyRuntimeConfig"],"required_gates":["teams-config-owner","teams-bootstrap-before-config"]},
+    {"function_id":"agent_config_revision_save","owner":"config","status":"design","entry_symbols":["saveAgentRuntimeConfig","resolveConfigConflict","applyAgentRuntimeConfig"],"required_gates":["teams-config-conflict-protocol","teams-agent-provider-model-boundary"]},
+    {"function_id":"daemon_runtime_start","owner":"runtime","status":"design","entry_symbols":["startDaemonRuntime","advanceRuntimeLifecycle","publishRuntimeCapabilities"],"required_gates":["teams-runtime-network-composition","teams-bootstrap-before-config"]},
+    {"function_id":"agent_runtime_projection","owner":"agent","status":"design","entry_symbols":["createAgentRuntimeView","openAgentSession","observeAgentState"],"required_gates":["teams-agent-network-agnostic"]},
+    {"function_id":"capability_use_relation_graph","owner":"agent","status":"design","entry_symbols":["reportCapabilityUseByConsumer","reportCapabilityUseByProvider","reconcileCapabilityUseReports","projectCapabilityUseGraph"],"required_gates":["teams-capability-use-relation-graph"]},
+    {"function_id":"notification_projection","owner":"agent","status":"design","entry_symbols":["projectAgentNotifications","resolveNotificationTarget","acknowledgeNotification"],"required_gates":["teams-notification-target-resolution"]},
+    {"function_id":"search_plugin_lifecycle","owner":"search-plugin","status":"design","entry_symbols":["connectSearchPlugin","indexSearchSources","querySearchIndex","reportSearchState"],"required_gates":["teams-search-plugin-boundary"]},
+    {"function_id":"memory_plugin_lifecycle","owner":"memory-plugin","status":"design","entry_symbols":["summarizeSessionMemory","validateMemoryDraft","saveMemoryRecord","loadMemoryRecord","exportMemoryRecord"],"required_gates":["teams-memory-plugin-boundary"]},
+    {"function_id":"agent_local_config","owner":"config","status":"design","entry_symbols":["readAgentRuntimeConfig","saveAgentRuntimeConfig","applyAgentRuntimeConfig"],"required_gates":["teams-agent-provider-model-boundary"]},
+    {"function_id":"dsh_client_adapter","owner":"dsh-adapter","status":"partial","paths":["ui/teams-console/src/client/index.ts","ui/teams-console/src/client/dsh-adapter.ts"],"entry_symbols":["apply","openDshSession","openCurrentAgentSession"],"required_gates":["teams-dsh-slot-contract","teams-dsh-live-smoke"]},
+    {"function_id":"opencode_plugin_adapter","owner":"opencode-adapter","status":"implemented","entry_symbols":["registerOpenCodeHooks","projectOpenCodeEvent","projectOpenCodePermission","createTeamsOpenCodePlugin","TeamsOpenCodePlugin"],"paths":["opencode-adapter/src/index.ts"],"required_gates":["teams-opencode-hook-contract","teams-dsh-opencode-adapter-separation"]},
+    {"function_id":"console_projection","owner":"ui","status":"design","entry_symbols":["projectFleetTopology","projectActivity","projectAgentCard"],"required_gates":["teams-projection-no-truth-ownership"]},
+    {"function_id":"console_settings_projection","owner":"ui","status":"design","entry_symbols":["projectMachineConnectionSettings","projectAgentRuntimeSettings","openSettingsDrawer"],"required_gates":["teams-settings-owner"]},
+    {"function_id":"drawer_navigation","owner":"ui","status":"design","entry_symbols":["pushDrawer","expandDrawer","closeDrawer","restoreDrawerFocus"],"required_gates":["teams-drawer-accessibility","teams-static-ui-replay"]},
+    {"function_id":"focused_session_bridge","owner":"dsh-adapter","status":"partial","paths":["ui/teams-console/src/client/dsh-adapter.ts","ui/teams-console/src/client/controller.ts"],"entry_symbols":["openCurrentAgentSession","openDshSession","focusCurrentSession","focusSession"],"required_gates":["teams-current-session-fast-path","teams-dsh-conversation-reuse","teams-dsh-live-smoke"]}
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "modules": [
+    {
+      "module_id": "teams-design",
+      "status": "active",
+      "owner": "teams-design",
+      "owned_paths": [
+        ".appsdk/goal.json",
+        ".appsdk/maps/**",
+        "docs/**",
+        "playground/**",
+        "opencode-adapter/package.json",
+        "opencode-adapter/src/**",
+        "opencode-adapter/tests/**",
+        "opencode-adapter/tsconfig.json",
+        "opencode-adapter/tsdown.config.ts",
+        "ui/teams-console/cordis.patch.yml",
+        "ui/teams-console/package.json",
+        "ui/teams-console/src/**",
+        "ui/teams-console/tests/**",
+        "ui/teams-console/tsconfig.json",
+        "ui/teams-console/tsdown.config.ts",
+        "ui/teams-console/vitest.config.ts",
+        "tests/**",
+        "contracts/**",
+        "protected/source/**"
+      ],
+      "forbidden_paths": [
+        "active/lib/**",
+        "protected/**",
+        "generated/**",
+        ".appsdk-control/**",
+        "../deepseek-harness/**",
+        "../dsh-tui/**"
+      ],
+      "verification_gates": [
+        "teams_design_contract",
+        "teams_resource_owner_unique",
+        "teams_payload_control_separation",
+        "teams_lifecycle_manifest",
+        "teams_static_ui_replay"
+      ]
+    }
+  ]
+}

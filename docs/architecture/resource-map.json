@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "map_id": "teams-resource-map",
+  "status": "design",
+  "resources": [
+    {
+      "resource_id": "bootstrap-link-config",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "daemon bootstrap configuration",
+      "allowed_operations": ["read", "validate", "dial"],
+      "forbidden_relations": ["business_payload", "agent_direct_network"]
+    },
+    {
+      "resource_id": "shared-runtime-config",
+      "owner": "config",
+      "kind": "control_resource",
+      "truth_store": "configuration server versioned config",
+      "allowed_operations": ["read", "validate", "sync", "apply"],
+      "forbidden_relations": ["session_payload", "network_truth"]
+    },
+    {
+      "resource_id": "account-permission",
+      "owner": "server",
+      "kind": "control_resource",
+      "truth_store": "server admission and permission ledger",
+      "allowed_operations": ["authenticate", "authorize", "grant", "revoke", "audit"],
+      "forbidden_relations": ["ui_implied_authority", "business_payload_metadata"]
+    },
+    {
+      "resource_id": "server-listener",
+      "owner": "server",
+      "kind": "control_resource",
+      "truth_store": "server deployment and listener registry",
+      "allowed_operations": ["deploy", "listen", "register_connection", "remove_connection", "observe"],
+      "forbidden_relations": ["network_listener_ownership", "session_truth"]
+    },
+    {
+      "resource_id": "link-state",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "runtime network connection state",
+      "allowed_operations": ["connect", "health_check", "reconnect", "disconnect", "report_error"],
+      "forbidden_relations": ["agent_business_state", "payload_metadata"]
+    },
+    {
+      "resource_id": "runtime-lifecycle",
+      "owner": "runtime",
+      "kind": "control_resource",
+      "truth_store": "daemon runtime state machine",
+      "allowed_operations": ["bootstrap", "start", "sync", "ready", "run", "stop"],
+      "relations": {"must_reference": ["bootstrap-link-config", "link-state", "shared-runtime-config"]}
+    },
+    {
+      "resource_id": "agent-capability",
+      "owner": "runtime",
+      "kind": "typed_runtime_projection",
+      "truth_store": "runtime-published capability contract",
+      "allowed_operations": ["publish", "revoke", "observe"],
+      "relations": {"must_reference": ["runtime-lifecycle", "account-permission"]}
+    },
+    {
+      "resource_id": "discovery-projection",
+      "owner": "server",
+      "kind": "control_projection",
+      "truth_store": "server discovery registry",
+      "allowed_operations": ["publish_machine", "publish_agent", "publish_capability", "observe"],
+      "relations": {"must_reference": ["server-listener", "account-permission", "agent-capability"]}
+    },
+    {
+      "resource_id": "agent-session-truth",
+      "owner": "agent",
+      "kind": "business_resource",
+      "truth_store": "host-owned agent/session system",
+      "allowed_operations": ["observe", "open", "send", "approve", "cancel"],
+      "forbidden_relations": ["direct_network", "direct_config", "direct_server"]
+    },
+    {
+      "resource_id": "agent-relation-truth",
+      "owner": "agent",
+      "kind": "business_resource",
+      "truth_store": "consumer and provider capability-use reports",
+      "allowed_operations": ["report_consumer_use", "report_provider_use", "observe", "reconcile"],
+      "relations": {
+        "consumer_reporter": "using_agent",
+        "provider_reporter": "used_agent",
+        "graph_projector": "server"
+      },
+      "forbidden_relations": ["implied_permission", "session_lineage_derivation", "ui_only_edge", "single_side_only"]
+    },
+    {
+      "resource_id": "notification-projection",
+      "owner": "agent",
+      "kind": "business_projection",
+      "truth_store": "host-owned notification and interaction event projection",
+      "allowed_operations": ["observe", "resolve", "acknowledge"],
+      "forbidden_relations": ["control_truth", "ui_implied_completion"]
+    },
+    {
+      "resource_id": "search-index-cache",
+      "owner": "search-plugin",
+      "kind": "plugin_resource",
+      "truth_store": "search plugin index and cache",
+      "allowed_operations": ["connect", "discover", "index", "query", "report_state"],
+      "forbidden_relations": ["memory_truth_write", "session_truth_write", "business_payload_metadata"]
+    },
+    {
+      "resource_id": "memory-record-truth",
+      "owner": "memory-plugin",
+      "kind": "plugin_resource",
+      "truth_store": "memory plugin records and export artifacts",
+      "allowed_operations": ["summarize", "validate", "save", "load", "search", "export"],
+      "forbidden_relations": ["session_transcript_ownership", "business_payload_metadata"]
+    },
+    {
+      "resource_id": "remote-machine-connection-config",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "network-owned remote machine connection profile",
+      "allowed_operations": ["read", "validate", "save", "sync", "observe"],
+      "forbidden_relations": ["agent_session_truth", "business_payload_metadata"]
+    },
+    {
+      "resource_id": "machine-auth-config",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "optional shared API key/token credential reference",
+      "allowed_operations": ["read", "validate", "observe"],
+      "forbidden_relations": ["pairing_state", "business_payload", "business_payload_metadata"]
+    },
+    {
+      "resource_id": "local-agent-runtime-config",
+      "owner": "config",
+      "kind": "control_resource",
+      "truth_store": "versioned per-agent provider and model configuration",
+      "allowed_operations": ["read", "validate", "save", "sync", "apply"],
+      "forbidden_relations": ["network_truth", "session_payload"]
+    },
+    {
+      "resource_id": "config-sync-transaction",
+      "owner": "config",
+      "kind": "control_resource",
+      "truth_store": "version compare-and-swap and conflict result",
+      "allowed_operations": ["read_revision", "compare_and_swap", "report_conflict", "apply"],
+      "forbidden_relations": ["session_payload", "silent_overwrite"]
+    },
+    {
+      "resource_id": "console-navigation",
+      "owner": "ui",
+      "kind": "ui_control_resource",
+      "truth_store": "console process navigation state",
+      "allowed_operations": ["select", "push_drawer", "expand_drawer", "pop_drawer", "restore_focus"],
+      "forbidden_relations": ["business_truth", "control_truth_mutation"]
+    },
+    {
+      "resource_id": "console-settings",
+      "owner": "ui",
+      "kind": "ui_control_resource",
+      "truth_store": "console settings navigation and edit state",
+      "allowed_operations": ["select_machine", "select_agent", "edit", "restore_focus"],
+      "forbidden_relations": ["config_truth_ownership", "business_payload"]
+    },
+    {
+      "resource_id": "business-payload",
+      "owner": "agent",
+      "kind": "business_payload",
+      "truth_store": "public Session/Conversation request and response",
+      "allowed_operations": ["read", "write_by_business_owner"],
+      "forbidden_relations": ["machineId", "endpoint", "generation", "health", "auth_grant", "permission_decision", "routing", "retry", "diagnostics"]
+    }
+  ]
+}
