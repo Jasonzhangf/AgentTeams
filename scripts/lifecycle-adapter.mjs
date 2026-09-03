@@ -13,7 +13,7 @@ const hash = value => `sha256:${createHash('sha256').update(value).digest('hex')
 const now = () => new Date().toISOString()
 
 function run(program, args, cwd = projectRoot) {
-  const result = spawnSync(program, args, { cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env: { ...process.env, CI: 'true' } })
+  const result = spawnSync(program, args, { cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env: { ...process.env, CI: 'true', npm_config_prefer_offline: 'true', npm_config_fetch_timeout: '30000' } })
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
   if (result.status !== 0) throw new Error(`${program} ${args.join(' ')} failed${output ? `\n${output}` : ''}`)
   return output
@@ -244,7 +244,7 @@ function baseline() {
       cwd: baselineWorktree,
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024,
-      env: { ...process.env, CI: 'true' },
+      env: { ...process.env, CI: 'true', npm_config_prefer_offline: 'true', npm_config_fetch_timeout: '30000' },
     })
     if (first.status !== 0) {
       throw new Error(`pre-fix lifecycle adapter failed before admission:\n${first.stdout ?? ''}${first.stderr ?? ''}`)
@@ -253,7 +253,7 @@ function baseline() {
       cwd: baselineWorktree,
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024,
-      env: { ...process.env, CI: 'true' },
+      env: { ...process.env, CI: 'true', npm_config_prefer_offline: 'true', npm_config_fetch_timeout: '30000' },
     })
     if (second.status === 0) {
       throw new Error('baseline review admission unexpectedly passed')
