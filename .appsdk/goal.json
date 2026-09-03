@@ -1,48 +1,33 @@
 {
   "goal_id": "goal-teams-multi-agent-console",
-  "raw_request": "建立 Teams 目录，本设计命名为 Teams，落盘设计，用 appsdk 0.1.6 来治理。",
-  "understood_objective": "建立名为 Teams 的 AppSDK 0.1.6 设计项目，落盘跨 agent DSH/OpenCode 控制台的概要设计、静态 HTML、交互动画概念、daemon runtime/network 合并架构、配置服务器 admission、资源/函数/主线/验证地图和生命周期 manifest。",
+  "raw_request": "按 AppSDK 0.1.6 治理推进 Teams，优先交付 OpenCode 可安装、可复核、可验收的多 Agent 控制台；DSH 适配延期。",
+  "understood_objective": "优先交付 Teams OpenCode 控制台：Topology 按 Machine -> Agent 定位，Agent Card 直接进入当前 Session，Conversation 复用 OpenCode 宿主能力，Notifications 按重要性和时间直达 Agent 或 Session，Search/Memory 作为独立插件接入，Desktop/Mobile 共享语义而仅改变排版。DSH adapter 保留为 deferred scope，不作为当前 release 前置。",
   "acceptance_criteria": [
-    "Teams 目录存在并初始化为 AppSDK 0.1.6 项目，sdk.lock 与治理契约一致。",
-    "概要设计覆盖 desktop/mobile 静态页面、Agent Card 直接进入当前 Session、复用 DSH Conversation、无限 drawer、header 上拉全屏/下拉关闭/内容可操作。",
-    "架构明确 network plugin、config module、server module、daemon runtime、agent、DSH adapter、OpenCode adapter、UI 的唯一 owner 和禁止依赖。",
-    "每个 daemon runtime 启动先用 Bootstrap Link Config 连接配置服务器，再完成账号/权限 admission、Shared Runtime Config 同步和 capability publication。",
-    "DSH 与 OpenCode 同时兼容但不共享同一 UI bundle：共享 typed domain/core，各自使用宿主 adapter。",
-    "控制面字段与业务 payload 物理隔离，session 消息、tool 结果、approval body 不进入控制服务器。",
-    "静态 HTML 原型和生命周期 manifest 已落盘，当前状态保持 design，不声称 runtime、安装或双端 live 验证完成。"
+    "Teams 目录使用 AppSDK 0.1.6 治理，sdk.lock 与治理契约一致。",
+    "概要设计覆盖 desktop/mobile 静态页面、Agent Card 当前 Session 快速入口、OpenCode Session/Conversation 接入、无限 drawer、header 上拉全屏和下拉关闭。",
+    "network、config、server、runtime、agent、OpenCode adapter、UI 的 owner 和边界明确；DSH adapter 标记为 deferred。",
+    "daemon runtime 启动先连接 Bootstrap Link Config，再完成 admission、配置同步和 capability publication。",
+    "OpenCode 是当前首要宿主；其 adapter 使用 PluginInput/Hooks/SDK，不共享 DSH 宿主 UI mounting。",
+    "控制面字段与业务 payload 物理隔离，控制服务器不保存 Session 消息、tool 结果和 approval body。",
+    "静态 HTML 原型、架构地图、验证地图和生命周期 manifest 已落盘。"
   ],
   "non_goals": [
-    "本轮不创建可安装 runtime plugin package。",
-    "不修改 DSH、OpenCode、已安装 profile 或官方 WebUI。",
-    "不在配置服务器存储业务 Session 内容。",
-    "不从 master/slave 标签推断权限、调度或高风险控制权。",
-    "不实现 P2P federation protocol 或 UI 中继。",
-    "不添加 fallback、silent strip 或重复 network/config/session owner。"
+    "不做 Machine pairing；v1 使用可选 shared API key/token 无状态校验。",
+    "不让 UI 作为跨机器业务消息中继。",
+    "不从 master/slave 关系标签推断权限、调度或审批权。",
+    "不复制 OpenCode Session transcript 或宿主 UI owner；不在本阶段实现 DSH adapter。",
+    "不增加 fallback、silent strip 或重复 network/config/session owner。"
   ],
   "assumptions": [
-    "Teams 是仓库根下的独立项目目录，现有 maui-0830 原型仅作只读设计来源。",
-    "Bootstrap Link Config 先于 Shared Runtime Config，同一 daemon runtime 统一编排网络连接与 runtime 生命周期。",
-    "server module 是部署、监听、服务端 connection registry、账号 admission、permission decision 的唯一 owner。",
-    "network plugin 是链路配置、transport、health、client link state 的唯一 owner。",
-    "agent 只依赖 runtime 暴露的上层 capability，不直接依赖 network/config/server。",
+    "Teams 是仓库根下的独立 AppSDK 项目，maui 原型仅作只读设计来源。",
+    "network 负责链路配置和 transport，config 负责共享配置，server 负责部署与 admission，runtime 合并 daemon 与 network 生命周期，agent 保持网络无关。",
     "Desktop/mobile 共享语义组件和状态，只由 layout adapter 区分排版。",
-    "当前设计阶段不需要部署服务器、启动 runtime 或运行真实 DSH/OpenCode 客户端。"
+    "Teams 只保存 opaque credential reference，secret 由外部 credential owner 保存。"
   ],
   "ambiguities": [],
-  "questions": [
-    {"question_id":"machine-pairing","question":"机器添加使用手动 endpoint + 显式授权、二维码/短码，还是只允许已配对机器？","status":"answered","answer":"不做 pairing；使用 none/shared-api-key/shared-token。"},
-    {"question_id":"relation-persistence","question":"AgentRelation 是否持久化为 Host-owned durable event？","status":"answered","answer":"v1 graph-only；保留双方 report 和历史观察，不新增 durable relation event。"},
-    {"question_id":"master-slave-authority","question":"master/slave 是关系标签，还是包含调度、消息、审批或控制权限？","status":"answered","answer":"仅 graph 分类；实际能力由独立 policy 授权。"},
-    {"question_id":"cross-machine-routing","question":"跨机器消息是否只允许 Host-to-Host，禁止 UI 作为中继？","status":"answered","answer":"Host-to-Host；UI 不作为业务中继。"},
-    {"question_id":"mobile-mutation","question":"移动端是否允许完整 mutation，还是只读、审批和低风险控制？","status":"answered","answer":"允许连接、Agent 和审批权限配置；高风险 mutation 二次确认。"},
-    {"question_id":"console-hub-profile","question":"Console Hub 随本地 DSH profile 启动，还是独立 Console profile？","status":"answered","answer":"本机 Teams Federation Host plugin 聚合层。"},
-    {"question_id":"display-name-owner","question":"机器和 agent 显示名由 Host durable owner 提供，还是允许 Console 本地别名？","status":"answered","answer":"Host 提供 canonical name；Console 只保存本地 alias。"},
-    {"question_id":"bootstrap-persistence","question":"Bootstrap Link Config 持久化在 DSH/OpenCode 用户配置、Teams 配置，还是平台密钥存储引用？","status":"answered","answer":"Teams 只保存 opaque credential reference；secret 由外部 credential owner 保存。"},
-    {"question_id":"config-conflict","question":"Shared Runtime Config 冲突采用版本拒绝、显式合并还是 server owner 覆盖？","status":"answered","answer":"revision compare-and-swap，冲突显式返回。"},
-    {"question_id":"temporary-grant","question":"account/permission admission 是否支持临时 grant、过期和撤销事件？","status":"answered","answer":"v1 不创建 pairing/grant；permission 由 server capability policy 显式决定。"}
-  ],
+  "questions": [],
   "status": "confirmed",
   "confirmed_by": "Jason",
   "confirmed_at": "2026-08-31T00:00:00Z",
-  "created_at": "2026-08-31T00:00:00Z"
+  "created_at": "2026-09-02T00:00:00Z"
 }

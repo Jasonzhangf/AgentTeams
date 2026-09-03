@@ -7,6 +7,7 @@ export type DrawerRequest =
   | { readonly kind: 'agent'; readonly agent: AgentFixture }
   | { readonly kind: 'session'; readonly agent: AgentFixture; readonly sessionId: string }
   | { readonly kind: 'notifications'; readonly agent: AgentFixture }
+  | { readonly kind: 'settings' }
 
 export interface TeamsConsoleState {
   readonly open: boolean
@@ -64,6 +65,12 @@ export class TeamsConsoleController {
   popDrawer(): void {
     const drawers = this.state.drawers.slice(0, -1)
     this.update({ ...this.state, drawers, expanded: drawers.length === 0 ? false : this.state.expanded })
+  }
+
+  /** Whether the given key event should close the top drawer. Keyboard Escape is the only contract. */
+  handlesKeyboard(event: { readonly key: string }): boolean {
+    if (event.key === 'Escape' && this.state.drawers.length > 0) return true
+    return false
   }
 
   toggleExpanded(): void {

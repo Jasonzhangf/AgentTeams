@@ -100,4 +100,33 @@ describe('TeamsConsoleController', () => {
       notice: null,
     })
   })
+
+  it('opens Settings as a utility drawer without adding a sixth entry', () => {
+    const controller = new TeamsConsoleController()
+    controller.openConsole()
+    controller.pushDrawer({ kind: 'settings' })
+
+    expect(controller.getSnapshot().entry).toBe('topology')
+    expect(controller.getSnapshot().drawers).toEqual([{ kind: 'settings' }])
+  })
+
+  it('handles the Escape key on the top drawer without disturbing the entry state', () => {
+    const controller = new TeamsConsoleController()
+    controller.openConsole()
+    controller.selectEntry('conversations')
+    controller.pushDrawer({ kind: 'agent', agent })
+    controller.pushDrawer({ kind: 'notifications', agent })
+
+    expect(controller.handlesKeyboard({ key: 'Escape' })).toBe(true)
+    controller.popDrawer()
+    expect(controller.getSnapshot().drawers).toHaveLength(1)
+    expect(controller.getSnapshot().entry).toBe('conversations')
+
+    expect(controller.handlesKeyboard({ key: 'Escape' })).toBe(true)
+    controller.popDrawer()
+    expect(controller.getSnapshot().drawers).toEqual([])
+
+    expect(controller.handlesKeyboard({ key: 'Escape' })).toBe(false)
+    expect(controller.handlesKeyboard({ key: 'a' })).toBe(false)
+  })
 })

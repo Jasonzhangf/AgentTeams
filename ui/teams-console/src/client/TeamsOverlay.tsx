@@ -2,8 +2,10 @@ import { useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TeamsConsoleState } from './controller.ts'
 import type { TeamsOverlayFace } from './slots.ts'
-import type { ConsoleEntry, AgentFixture } from './model.ts'
-import { agents, notifications, sessions } from './model.ts'
+import type { TeamsHostActions } from './model.ts'
+import type { AgentPresetBinding } from './model.ts'
+import type { ConsoleEntry, AgentFixture, DshSessionProjection, TeamsHostProjection, TeamsMemoryProjection, TeamsNotificationProjection, TeamsSearchProjection } from './model.ts'
+import { agents, notifications, projectAgentCurrentSessions, projectDshSessionList, referenceProjections, sessions } from './model.ts'
 import { Drawer } from './Drawer.tsx'
 import css from './teams.module.css'
 
@@ -11,6 +13,10 @@ export type TeamsOverlayProps =
   PropsRuntime<'shell.overlay'>
   & PropsLocale<'teams'>
   & TeamsOverlayFace
+  & { readonly agentPresetBindings: readonly AgentPresetBinding[] }
+  & { readonly settingsNavigation?: NonNullable<TeamsOverlayFace['settingsNavigation']> }
+  & { readonly hostProjection?: TeamsHostProjection }
+  & { readonly hostActions?: TeamsHostActions }
 
 const entries: readonly { id: ConsoleEntry; label: string }[] = [
   { id: 'topology', label: 'topology' },
@@ -20,9 +26,10 @@ const entries: readonly { id: ConsoleEntry; label: string }[] = [
   { id: 'memory', label: 'memory' },
 ]
 
-function agentOf(id: string): AgentFixture | undefined {
-  return agents.find(agent => agent.id === id)
+function agentOf(id: string, liveAgents: readonly AgentFixture[] = agents): AgentFixture | undefined {
+  return liveAgents.find(agent => agent.id === id)
 }
+
 
 function StatusDot({ status }: { readonly status: AgentFixture['status'] }): ReactNode {
   return <span className={`${css.statusDot} ${css[`status-${status}`]}`} aria-label={status} />
@@ -91,10 +98,11 @@ function AgentCard({ agent, controller, t, availableSessionIds }: {
   )
 }
 
-function TopologyView({ controller, t, availableSessionIds }: Pick<TeamsOverlayProps, 'controller' | 't'> & {
+function TopologyView({ controller, t, availableSessionIds, liveAgents }: Pick<TeamsOverlayProps, 'controller' | 't'> & {
   readonly availableSessionIds: ReadonlySet<string>
+  readonly liveAgents: readonly AgentFixture[]
 }): ReactNode {
-  const machineNames = [...new Set(agents.map(agent => agent.machine))]
+  const machineNames = [...new Set(liveAgents.map(agent => agent.machine))]
   return (
     <div className={css.viewBody}>
       <div className={css.viewHeading}>
@@ -102,7 +110,7 @@ function TopologyView({ controller, t, availableSessionIds }: Pick<TeamsOverlayP
           <h2>{t('topology')}</h2>
           <p>{t('fixtureNotice')}</p>
         </div>
-        <span className={css.summary}>{machineNames.length} {t('machine')} · {agents.length} agents</span>
+        <span className={css.summary}>{machineNames.length} {t('machine')} · {liveAgents.length} agents</span>
       </div>
       <div className={css.machineList}>
         {machineNames.map(machine => (
@@ -112,7 +120,7 @@ function TopologyView({ controller, t, availableSessionIds }: Pick<TeamsOverlayP
               <span>{t('online')}</span>
             </div>
             <div className={css.agentGrid}>
-              {agents.filter(agent => agent.machine === machine).map(agent => (
+              {liveAgents.filter(agent => agent.machine === machine).map(agent => (
                 <AgentCard key={agent.id} agent={agent} controller={controller} t={t} availableSessionIds={availableSessionIds} />
               ))}
             </div>
@@ -154,8 +162,10 @@ function ConversationsView({ controller, t, availableSessionIds }: Pick<TeamsOve
   )
 }
 
-function NotificationsView({ controller, t, availableSessionIds }: Pick<TeamsOverlayProps, 'controller' | 't'> & {
+function NotificationsView({ controller, t, availableSessionIds, projection, hostActions }: Pick<TeamsOverlayProps, 'controller' | 't'> & {
   readonly availableSessionIds: ReadonlySet<string>
+  readonly projection: TeamsNotificationProjection
+  readonly hostActions?: TeamsHostActions
 }): ReactNode {
   return (
     <div className={css.viewBody}>
@@ -163,24 +173,39 @@ function NotificationsView({ controller, t, availableSessionIds }: Pick<TeamsOve
         <div><h2>{t('notifications')}</h2><p>{t('attention')} first</p></div>
       </div>
       <div className={css.list}>
-        {notifications.map(notification => {
+        {projection.items.map(notification => {
           const agent = agentOf(notification.agentId)
           if (agent === undefined) return null
           return (
-            <button
-              type="button"
-              className={`${css.listRow} ${notification.priority === 'high' ? css.listRowAttention : ''}`}
-              key={notification.id}
-              onClick={() => {
-                if (notification.interactive && sessionAvailable(notification.sessionId, availableSessionIds)) {
-                  controller.focusSession(agent, notification.sessionId)
-                }
+            <div className={`${css.listRow} ${notification.priority === 'high' ? css.listRowAttention : ''}`} key={notification.id}>
+              <button type="button" className={css.listCopy} onClick={() => {
+                if (notification.interactive && sessionAvailable(notification.sessionId, availableSessionIds)) controller.focusSession(agent, notification.sessionId)
                 else controller.pushDrawer({ kind: 'notifications', agent })
-              }}
-            >
+              }}>
               <span className={css.priority}>{notification.priority}</span>
-              <span className={css.listCopy}><strong>{notification.title}</strong><span>{agent.label} · {notification.detail}</span></span>
-            </button>
+              <span><strong>{notification.title}</strong><span>{agent.label} · {notification.detail}</span></span>
+              </button>
+              {hostActions !== undefined && !notification.processed && (
+                <span className={css.agentActions}>
+                  {notification.interactive && notification.sessionId !== undefined && notification.requestId !== undefined && (
+                    <span className={css.agentActions}>
+                      <button type="button" className={css.primaryAction} onClick={() => { hostActions.replyPermission(notification.sessionId as string, notification.requestId as string, 'once') }}>Allow once</button>
+                      <button type="button" className={css.secondaryAction} onClick={() => { hostActions.replyPermission(notification.sessionId as string, notification.requestId as string, 'always') }}>Always</button>
+                      <button type="button" className={css.secondaryAction} onClick={() => { hostActions.replyPermission(notification.sessionId as string, notification.requestId as string, 'reject') }}>Reject</button>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className={css.secondaryAction}
+                    aria-label={`Acknowledge ${notification.title}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      hostActions.acknowledgeNotification(notification.id)
+                    }}
+                  >Ack</button>
+                </span>
+              )}
+            </div>
           )
         })}
       </div>
@@ -188,10 +213,11 @@ function NotificationsView({ controller, t, availableSessionIds }: Pick<TeamsOve
   )
 }
 
-function SearchView({ controller, t, availableSessionIds }: Pick<TeamsOverlayProps, 'controller' | 't'> & {
+function SearchView({ controller, t, availableSessionIds, projection }: Pick<TeamsOverlayProps, 'controller' | 't'> & {
   readonly availableSessionIds: ReadonlySet<string>
+  readonly projection: TeamsSearchProjection
 }): ReactNode {
-  const result = sessions[0]
+  const result = projection.results[0]
   if (result === undefined) return null
   const agent = agentOf(result.agentId)
   return (
@@ -205,36 +231,74 @@ function SearchView({ controller, t, availableSessionIds }: Pick<TeamsOverlayPro
           <button
             type="button"
             className={css.searchResult}
-            disabled={!availableSessionIds.has(result.id)}
-            onClick={() => { if (availableSessionIds.has(result.id)) controller.focusSession(agent, result.id) }}
+            disabled={result.sessionId === undefined || !availableSessionIds.has(result.sessionId)}
+            onClick={() => {
+              if (result.sessionId !== undefined && availableSessionIds.has(result.sessionId)) controller.focusSession(agent, result.sessionId)
+            }}
           >
           <strong>{result.title}</strong>
-          <span>{agent.label} · {result.preview}</span>
+          <span>{agent.label} · {result.excerpt}</span>
         </button>
       )}
     </div>
   )
 }
 
-function MemoryView({ t }: Pick<TeamsOverlayProps, 't'>): ReactNode {
+function MemoryView({ t, projection }: Pick<TeamsOverlayProps, 't'> & { readonly projection: TeamsMemoryProjection }): ReactNode {
   return (
     <div className={css.viewBody}>
       <div className={css.viewHeading}><div><h2>{t('memory')}</h2><p>{t('memoryStatus')}</p></div></div>
       <div className={css.pluginState}>
         <span className={css.stateMarker}>M</span>
         <div><strong>Session memory records</strong><span>Summarize · validate · save · load · export</span></div>
-        <span className={css.stateLabel}>boundary ready</span>
+        <span className={css.stateLabel}>{projection.state}</span>
       </div>
     </div>
   )
 }
 
-function DrawerContent({ drawer, controller, t, availableSessionIds }: {
+function SettingsContent({
+  t,
+  settingsNavigation,
+}: Pick<TeamsOverlayProps, 't'> & {
+  readonly settingsNavigation: { readonly openMachineConnection: () => void; readonly openAgentRuntime: (agentId: string) => void }
+}): ReactNode {
+  const handlers = settingsNavigation
+  const machineBound = settingsNavigation !== undefined
+  const agentBound = settingsNavigation !== undefined
+  return (
+    <div className={css.agentDetail}>
+      <div className={css.detailHero}><span className={css.stateMarker}>CFG</span><h3>{t('settings')}</h3></div>
+      <p>{t('settingsDescription')}</p>
+      <button
+        type="button"
+        className={css.secondaryAction}
+        disabled={!machineBound}
+        onClick={() => { handlers.openMachineConnection() }}
+      >{t('machineConnection')}</button>
+      <button
+        type="button"
+        className={css.secondaryAction}
+        disabled={!agentBound}
+        onClick={() => { handlers.openAgentRuntime('planner') }}
+      >{t('agentRuntime')}</button>
+    </div>
+  )
+}
+
+const NOOP_SETTINGS = {
+  openMachineConnection: () => undefined,
+  openAgentRuntime: (_: string) => undefined,
+}
+
+function DrawerContent({ drawer, controller, t, availableSessionIds, settingsNavigation }: {
   readonly drawer: TeamsConsoleState['drawers'][number]
   readonly controller: TeamsOverlayFace['controller']
   readonly t: TeamsOverlayProps['t']
   readonly availableSessionIds: ReadonlySet<string>
+  readonly settingsNavigation?: TeamsOverlayProps['settingsNavigation']
 }): ReactNode {
+  const effectiveSettings = settingsNavigation ?? NOOP_SETTINGS
   if (drawer.kind === 'session') {
     return (
       <div className={css.sessionHandoff}>
@@ -274,6 +338,9 @@ function DrawerContent({ drawer, controller, t, availableSessionIds }: {
       </div>
     )
   }
+  if (drawer.kind === 'settings') {
+    return <SettingsContent t={t} settingsNavigation={effectiveSettings} />
+  }
   return (
     <div className={css.agentDetail}>
       <div className={css.detailHero}><StatusDot status={drawer.agent.status} /><h3>{drawer.agent.label}</h3></div>
@@ -290,14 +357,23 @@ function DrawerContent({ drawer, controller, t, availableSessionIds }: {
   )
 }
 
-export function TeamsOverlay({ controller, t, useSessions }: TeamsOverlayProps): ReactNode {
+export function TeamsOverlay({ controller, t, useSessions, projections, agentPresetBindings, settingsNavigation, hostProjection, hostActions }: TeamsOverlayProps): ReactNode {
   const state: TeamsConsoleState = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot)
   const sessionsState = useSessions(snapshot => snapshot)
   const availableSessionIds = useMemo(
-    () => new Set(Object.keys(sessionsState?.byId ?? {})),
-    [sessionsState],
+    () => new Set(hostProjection?.sessions.map(session => session.id) ?? Object.keys(sessionsState?.byId ?? {})),
+    [hostProjection, sessionsState],
   )
+  const liveAgents = useMemo(() => hostProjection?.agents ?? projectAgentCurrentSessions(
+    agents,
+    projectDshSessionList({
+      ...(sessionsState?.current === undefined ? {} : { current: sessionsState.current }),
+      byId: Object.fromEntries(Object.entries(sessionsState?.byId ?? {}).map(([id, session]) => [id, session as DshSessionProjection])),
+    }, agentPresetBindings),
+    sessionsState?.current,
+  ), [agentPresetBindings, hostProjection, sessionsState])
   const topDrawer = state.drawers[state.drawers.length - 1]
+  const resolvedProjections = useMemo(() => projections ?? referenceProjections(), [projections])
   const drawerDepth = state.drawers.length
   const activeLabel = useMemo(() => entries.find(entry => entry.id === state.entry)?.label ?? 'topology', [state.entry])
 
@@ -321,7 +397,10 @@ export function TeamsOverlay({ controller, t, useSessions }: TeamsOverlayProps):
       <section className={css.console} aria-label={t('entry')}>
         <header className={css.consoleHeader}>
           <div><strong>{t('entry')}</strong><span>{t('fixtureNotice')}</span></div>
-          <button type="button" className={css.closeButton} onClick={() => { controller.closeConsole() }}>{t('close')}</button>
+          <div className={css.headerActions}>
+            <button type="button" className={css.settingsButton} aria-label={t('settings')} title={t('settings')} onClick={() => { controller.pushDrawer({ kind: 'settings' }) }}>CFG</button>
+            <button type="button" className={css.closeButton} onClick={() => { controller.closeConsole() }}>{t('close')}</button>
+          </div>
         </header>
         <nav className={css.entryNav} aria-label={t('entry')}>
           {entries.map(entry => (
@@ -335,11 +414,11 @@ export function TeamsOverlay({ controller, t, useSessions }: TeamsOverlayProps):
             </button>
           ))}
         </nav>
-        {state.entry === 'topology' && <TopologyView controller={controller} t={t} availableSessionIds={availableSessionIds} />}
+        {state.entry === 'topology' && <TopologyView controller={controller} t={t} availableSessionIds={availableSessionIds} liveAgents={liveAgents} />}
         {state.entry === 'conversations' && <ConversationsView controller={controller} t={t} availableSessionIds={availableSessionIds} />}
-        {state.entry === 'notifications' && <NotificationsView controller={controller} t={t} availableSessionIds={availableSessionIds} />}
-        {state.entry === 'search' && <SearchView controller={controller} t={t} availableSessionIds={availableSessionIds} />}
-        {state.entry === 'memory' && <MemoryView t={t} />}
+        {state.entry === 'notifications' && <NotificationsView controller={controller} t={t} availableSessionIds={availableSessionIds} projection={hostProjection?.notifications ?? resolvedProjections.notifications} hostActions={hostActions} />}
+        {state.entry === 'search' && <SearchView controller={controller} t={t} availableSessionIds={availableSessionIds} projection={resolvedProjections.search} />}
+        {state.entry === 'memory' && <MemoryView t={t} projection={resolvedProjections.memory} />}
         {state.notice !== null && <div className={css.notice} role="status">{state.notice}</div>}
         {topDrawer !== undefined && (
           <div className={css.drawerStack}>
@@ -351,6 +430,7 @@ export function TeamsOverlay({ controller, t, useSessions }: TeamsOverlayProps):
                     controller={controller}
                     t={t}
                     availableSessionIds={availableSessionIds}
+                    settingsNavigation={settingsNavigation}
                   />
                 )}
               </Drawer>

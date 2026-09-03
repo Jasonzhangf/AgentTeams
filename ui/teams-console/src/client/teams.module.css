@@ -56,7 +56,7 @@
   z-index: 1000;
   inset: 0;
   display: grid;
-  place-items: end center;
+  place-items: center;
   pointer-events: none;
 }
 
@@ -77,10 +77,10 @@
   display: flex;
   flex-direction: column;
   width: min(1180px, calc(100% - 32px));
-  max-height: min(900px, calc(100% - 32px));
+  max-height: min(880px, calc(100% - 64px));
   overflow: hidden;
   border: 1px solid #334155;
-  border-radius: 14px 14px 0 0;
+  border-radius: 14px;
   color: #e2e8f0;
   background: #0f172a;
   box-shadow: 0 20px 60px rgb(2 6 23 / 40%);
@@ -111,6 +111,29 @@
 .consoleHeader {
   padding: 18px 22px;
   border-bottom: 1px solid #253149;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingsButton {
+  min-width: 36px;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid #475569;
+  border-radius: 7px;
+  color: #cbd5e1;
+  background: transparent;
+  cursor: pointer;
+}
+
+.settingsButton:hover,
+.settingsButton:focus-visible {
+  border-color: #93c5fd;
+  color: #f8fafc;
 }
 
 .consoleHeader div,
@@ -512,34 +535,144 @@ dd {
 }
 
 @media (max-width: 800px) {
+  .overlay {
+    place-items: end stretch;
+  }
+
   .console {
     width: 100%;
-    max-height: calc(100% - 12px);
-    border-radius: 14px 14px 0 0;
+    max-height: 100%;
+    border: 0;
+    border-radius: 0;
+    background: #0b1220;
+  }
+
+  .consoleHeader {
+    min-height: 58px;
+    padding: 12px 14px;
+  }
+
+  .consoleHeader span {
+    display: none;
+  }
+
+  .settingsButton,
+  .closeButton {
+    min-width: 34px;
+    min-height: 34px;
+    padding: 7px;
+    font-size: 0;
+  }
+
+  .settingsButton::before {
+    content: '\2699';
+    font-size: 16px;
+  }
+
+  .closeButton::before {
+    content: '\00d7';
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .entryNav {
+    order: 3;
+    flex: 0 0 auto;
+    justify-content: space-around;
+    gap: 0;
+    padding: 6px 4px max(6px, env(safe-area-inset-bottom));
+    border-top: 1px solid #253149;
+    border-bottom: 0;
+    background: #101b2f;
+  }
+
+  .entryButton {
+    flex: 1 1 20%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 7px 3px;
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .viewBody {
-    padding: 18px 16px 28px;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 16px 14px 22px;
+  }
+
+  .viewHeading {
+    margin-bottom: 14px;
+  }
+
+  .viewHeading h2 {
+    font-size: 20px;
+  }
+
+  .summary {
+    white-space: nowrap;
+  }
+
+  .machineList,
+  .list {
+    gap: 10px;
+  }
+
+  .machineSection {
+    gap: 8px;
   }
 
   .agentGrid {
     grid-template-columns: 1fr;
   }
 
-  .entryNav {
-    padding-inline: 10px;
+  .agentCard {
+    gap: 11px;
+    padding: 13px;
   }
 
-  .entryButton {
-    padding-inline: 9px;
+  .agentActions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .primaryAction,
+  .secondaryAction {
+    min-height: 40px;
+  }
+
+  .listRow,
+  .searchResult {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px 10px;
+    padding: 12px;
+  }
+
+  .listRow time {
+    grid-column: 2;
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .drawer {
+    max-height: 92%;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .drawerBody {
+    min-height: 260px;
+    padding: 16px 14px max(20px, env(safe-area-inset-bottom));
   }
 
   .drawerHeader {
-    align-items: flex-start;
+    min-height: 56px;
+    padding: 10px 14px;
   }
 
   .drawerActions {
-    flex-direction: column;
+    flex-direction: row;
   }
 }
 

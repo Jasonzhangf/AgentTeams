@@ -35,18 +35,27 @@ export function Drawer({ drawer, depth, controller, t, children }: DrawerProps):
     <section
       className={`${css.drawer} ${depth > 0 ? css.drawerNested : ''} ${dragging ? css.drawerDragging : ''}`}
       style={{ zIndex: 20 + depth }}
-      aria-label={drawer.kind === 'session' ? t('currentSession') : drawer.kind === 'notifications' ? t('notifications') : drawer.agent.label}
+      aria-label={drawer.kind === 'settings' ? t('settings') : drawer.kind === 'session' ? t('currentSession') : drawer.kind === 'notifications' ? t('notifications') : drawer.agent.label}
+      role="dialog"
+      aria-modal={depth === 0 ? 'true' : 'false'}
+      onKeyDown={(event) => {
+        if (controller.handlesKeyboard(event)) {
+          event.stopPropagation()
+          controller.popDrawer()
+        }
+      }}
     >
       <header
         className={css.drawerHeader}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
+        tabIndex={0}
       >
         <div className={css.drawerHeaderCopy}>
           <span className={css.drawerHandle} aria-hidden />
           <div>
-            <strong>{drawer.kind === 'session' ? drawer.agent.currentSessionTitle : drawer.kind === 'notifications' ? t('notifications') : drawer.agent.label}</strong>
-            <span>{drawer.agent.machine} · {drawer.agent.label}</span>
+            <strong>{drawer.kind === 'settings' ? t('settings') : drawer.kind === 'session' ? drawer.agent.currentSessionTitle : drawer.kind === 'notifications' ? t('notifications') : drawer.agent.label}</strong>
+            <span>{drawer.kind === 'settings' ? t('settingsDescription') : `${drawer.agent.machine} · ${drawer.agent.label}`}</span>
           </div>
         </div>
         <div className={css.drawerActions}>

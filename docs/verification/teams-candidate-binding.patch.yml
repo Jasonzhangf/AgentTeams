@@ -1,0 +1,6 @@
+# Candidate-only deployment overlay; production configuration remains unchanged.
+- id: teams-console
+  config:
+    agentPresetBindings:
+      - agentId: planner
+        agentPreset: standard

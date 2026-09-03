@@ -1,0 +1,21 @@
+{
+  "name": "@deepseek-ai/teams-console-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@deepseek-ai/teams-opencode-adapter": "file:../opencode-adapter",
+    "@opencode-ai/sdk": "1.18.23"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "files": ["lib/index.mjs", "lib/index.d.mts", "static/**"]
+}

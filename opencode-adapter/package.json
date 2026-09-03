@@ -22,9 +22,12 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=1.18.15 <2"
+    "@opencode-ai/plugin": ">=1.18.15 <2",
+    "@opencode-ai/sdk": ">=1.18.15 <2"
   },
   "devDependencies": {
+    "@opencode-ai/plugin": "1.18.23",
+    "@opencode-ai/sdk": "1.18.23",
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3"
   }

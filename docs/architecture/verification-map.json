@@ -1,36 +1,361 @@
 {
   "schema_version": 1,
   "map_id": "teams-verification-map",
-  "status": "design",
+  "status": "partial",
   "gates": [
-    {"gate_id":"teams-appsdk-verify","status":"active","required":true,"command":"appsdk verify Teams","checks":["project contract","goal confirmation","sdk lock","canonical governance maps"]},
-    {"gate_id":"teams-network-control-boundary","status":"pending","required":true,"checks":["network owns link config transport health reconnect","agent has no direct network path"]},
-    {"gate_id":"teams-account-permission-owner","status":"pending","required":true,"checks":["server owns capability policy and permission decision audit","network does not duplicate admission truth"]},
-    {"gate_id":"teams-machine-token-auth","status":"pending","required":true,"checks":["no pairing challenge or grant is created","none/shared-api-key/shared-token modes are explicit","configured sender and receiver credentials must match","credential mismatch is distinct from transport failure","credential is absent from business payload and metadata"]},
-    {"gate_id":"teams-permission-grant-owner","status":"pending","required":true,"checks":["server owns capability policy","UI cannot imply authority from relation or drawer state","default policy is least privilege"]},
-    {"gate_id":"teams-host-command-no-business-payload","status":"pending","required":true,"checks":["host command routes through local hub and remote host policy","control envelope does not contain Session business body","unknown mutation result is not automatically replayed"]},
-    {"gate_id":"teams-config-owner","status":"pending","required":true,"checks":["config owns version and sync","bootstrap link config is not shared runtime config"]},
-    {"gate_id":"teams-config-conflict-protocol","status":"pending","required":true,"checks":["config save uses expected revision","conflict returns current revision/value explicitly","server does not silently overwrite or merge"]},
-    {"gate_id":"teams-bootstrap-before-config","status":"pending","required":true,"checks":["dial and admission precede config sync","runtime ready requires config convergence"]},
-    {"gate_id":"teams-runtime-network-composition","status":"pending","required":true,"checks":["runtime composes network lifecycle","agent consumes runtime capability only"]},
-    {"gate_id":"teams-agent-network-agnostic","status":"pending","required":true,"checks":["agent does not import network/config/server","agent remains upper-layer task/session owner"]},
-    {"gate_id":"teams-capability-use-relation-graph","status":"pending","required":true,"checks":["consumer reports capability read/request/use/stop","provider reports requester/allow/deny/current-user/stop","server correlates both reports into graph projection","one-sided or conflicting reports remain visible","relation does not imply additional permission","relation is distinct from Session lineage"]},
-    {"gate_id":"teams-notification-target-resolution","status":"pending","required":true,"checks":["notification target resolves to the owning Agent or Session","interactive notification does not fabricate a Session","processed state comes from business-owner result"]},
-    {"gate_id":"teams-search-plugin-boundary","status":"pending","required":true,"checks":["Search owns index/cache/query lifecycle","Search returns explicit indexing/stale/error/permission states","Search does not write Memory truth"]},
-    {"gate_id":"teams-memory-plugin-boundary","status":"pending","required":true,"checks":["Memory owns summarize/validate/save/load/export","pending-save is distinct from saved","Memory does not own Session transcript truth"]},
-    {"gate_id":"teams-agent-provider-model-boundary","status":"pending","required":true,"checks":["each Agent has independent provider and model","save/apply is owned by config","provider/model do not enter Session payload metadata"]},
-    {"gate_id":"teams-settings-owner","status":"pending","required":true,"checks":["Settings is UI navigation only","Machine connection edits route to network/config owners","nested Agent settings preserve machine context"]},
-    {"gate_id":"teams-dsh-slot-contract","status":"partial","required":true,"checks":["DSH adapter declares dsh.client and slots","focused session reuses Conversation owner","runtime slot registration verified in installed DSH boot manifest"]},
-    {"gate_id":"teams-opencode-hook-contract","status":"partial","required":true,"checks":["OpenCode adapter exports the v1 default { server() } package shape","OpenCode adapter uses PluginInput and Hooks-shaped contract","session events resolve IDs from the SDK info shape","permission.ask projects interactive notification identity","event projection keeps session identity and notification kind only","question interaction is not fabricated when the current Hooks contract does not expose it","no ClientContext/Slot assumption"]},
-    {"gate_id":"teams-dsh-opencode-adapter-separation","status":"pending","required":true,"checks":["DSH uses ClientContext/Slots","OpenCode uses PluginInput/Hooks/SDK","shared types do not imply shared host mounting"]},
-    {"gate_id":"teams-projection-no-truth-ownership","status":"pending","required":true,"checks":["UI consumes projections","UI does not own network/config/server/session truth"]},
-    {"gate_id":"teams-drawer-accessibility","status":"pending","required":true,"checks":["header drag only","up expands","down closes","content remains operable","focus restores","reduced motion"]},
-    {"gate_id":"teams-current-session-fast-path","status":"partial","required":true,"checks":["Agent Card primary action opens current session directly","session list is secondary detail action","controller and sessions.open bridge are unit-tested","browser click-to-conversation remains unverified"]},
-    {"gate_id":"teams-mobile-high-risk-confirmation","status":"pending","required":true,"checks":["mobile and desktop share capability semantics","high-risk actions show target and explicit confirmation","confirmation does not replace server permission decision"]},
-    {"gate_id":"teams-dsh-conversation-reuse","status":"pending","required":true,"checks":["focused session uses existing Conversation","no second transcript implementation"]},
-    {"gate_id":"teams-static-ui-replay","status":"partial","required":true,"checks":["desktop 1440x960","mobile 390x844","nested drawer","session composer","approval entry","no overflow","desktop/mobile live page exposes five entries and notification drawer","session composer remains DSH-owned and is not duplicated"]},
-    {"gate_id":"teams-dsh-live-smoke","status":"partial","required":true,"checks":["installed DSH adapter connects and opens current session","DSH profile binds HTTP 3187 and serves Teams client module","sidebar entry opens Teams overlay","current-session bridge browser confirmation remains unverified"]},
-    {"gate_id":"teams-opencode-live-smoke","status":"partial","required":true,"checks":["installed OpenCode adapter observes session/event hooks","OpenCode 1.18.23 local plugin install accepted","in-process event and permission hook projection passed","long-running OpenCode host session remains unverified"]},
-    {"gate_id":"teams-desktop-mobile-equivalence","status":"pending","required":true,"checks":["same semantic actions","layout-only divergence","touch and keyboard paths"]}
+    {
+      "gate_id": "teams-appsdk-verify",
+      "status": "active",
+      "required": true,
+      "command": "appsdk verify Teams",
+      "checks": [
+        "project contract",
+        "goal confirmation",
+        "sdk lock",
+        "canonical governance maps"
+      ]
+    },
+    {
+      "gate_id": "teams-network-control-boundary",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "network owns link config transport health reconnect",
+        "agent has no direct network path",
+        "link endpoint/auth validation and generation lifecycle tests"
+      ]
+    },
+    {
+      "gate_id": "teams-account-permission-owner",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "server owns capability policy and permission decision audit",
+        "network does not duplicate admission truth",
+        "credential admission and default observe policy tests"
+      ]
+    },
+    {
+      "gate_id": "teams-machine-token-auth",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "no pairing challenge or grant is created",
+        "none/shared-api-key/shared-token modes are explicit",
+        "configured sender and receiver credentials must match",
+        "credential mismatch is distinct from transport failure",
+        "credential is absent from business payload and metadata",
+        "Teams UI source files never carry password/secret/apikey/bearer/token strings",
+        "host-boundary.spec asserts UI never holds credentials",
+        "network/link.ts owns resolveBootstrapLinkConfig and connectLink with explicit auth modes"
+      ]
+    },
+    {
+      "gate_id": "teams-permission-grant-owner",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "server owns capability policy",
+        "UI cannot imply authority from relation or drawer state",
+        "default policy is least privilege",
+        "server/admission.ts owns authenticateMachine, evaluatePermission, and registerRuntimeConnection",
+        "Teams UI never derives authority or disabled state from agent.relation comparisons",
+        "host-boundary.spec covers the UI-side guard"
+      ]
+    },
+    {
+      "gate_id": "teams-host-command-no-business-payload",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "host command routes through local hub and remote host policy",
+        "control envelope does not contain Session business body",
+        "unknown mutation result is not automatically replayed",
+        "UI side guard: Teams never reads session.history, queue, approval, or draft to construct a host command",
+        "host-boundary.spec covers the UI side"
+      ]
+    },
+    {
+      "gate_id": "teams-config-owner",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "config owns version and sync",
+        "bootstrap link config is not shared runtime config",
+        "sync is blocked before admission"
+      ]
+    },
+    {
+      "gate_id": "teams-config-conflict-protocol",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "config save uses expected revision",
+        "stale revision is explicitly rejected",
+        "server does not silently overwrite or merge"
+      ]
+    },
+    {
+      "gate_id": "teams-bootstrap-before-config",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "dial and admission precede config sync",
+        "runtime ready requires config convergence",
+        "single startup orchestration has positive and denied-admission tests"
+      ]
+    },
+    {
+      "gate_id": "teams-runtime-network-composition",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "runtime composes network lifecycle",
+        "agent consumes runtime capability only",
+        "bootstrap -> admission -> config-sync -> ready ordering has positive and negative tests",
+        "capability publication is blocked before admitted ready state"
+      ]
+    },
+    {
+      "gate_id": "teams-agent-network-agnostic",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "agent does not import network/config/server",
+        "agent remains upper-layer task/session owner",
+        "agent modules expose only pure functions and types",
+        "agent-boundary.spec scans every agent source for forbidden cross-owner imports"
+      ]
+    },
+    {
+      "gate_id": "teams-capability-use-relation-graph",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "consumer and provider reports are correlated by relation identity",
+        "one-sided or conflicting reports remain visible",
+        "classification is display-only and does not imply additional permission",
+        "relation is distinct from Session lineage"
+      ]
+    },
+    {
+      "gate_id": "teams-notification-target-resolution",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "notifications sort pending/priority/time through the Agent owner",
+        "target resolves to the owning Agent or existing Session",
+        "interactive notification without a Session fails explicitly",
+        "processed state comes from business-owner result"
+      ]
+    },
+    {
+      "gate_id": "teams-search-plugin-boundary",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "Search owns index/cache/query lifecycle",
+        "non-ready state is explicit instead of empty-result fallback",
+        "Search does not write Memory truth"
+      ]
+    },
+    {
+      "gate_id": "teams-memory-plugin-boundary",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "Memory owns summarize/validate/save/load/export",
+        "pending-save is distinct from saved",
+        "unsaved draft cannot load",
+        "Memory does not own Session transcript truth"
+      ]
+    },
+    {
+      "gate_id": "teams-agent-provider-model-boundary",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "each Agent has independent provider and model",
+        "save/apply is owned by config",
+        "provider/model do not enter Session payload metadata",
+        "config.saveAgentRuntimeConfig enforces revision CAS and required provider/model",
+        "config sync is blocked before server admission",
+        "Teams UI never writes provider or model directly",
+        "config-boundary.spec covers owner boundaries"
+      ]
+    },
+    {
+      "gate_id": "teams-settings-owner",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "Settings is UI navigation only",
+        "Machine connection edits route to network/config owners",
+        "nested Agent settings preserve machine context",
+        "SettingsContent exposes typed SettingsNavigationHandlers",
+        "Handlers are disabled when host does not bind them",
+        "Teams surface never imports network/config/server truth modules",
+        "settings.spec asserts the boundary"
+      ]
+    },
+    {
+      "gate_id": "teams-dsh-slot-contract",
+      "status": "partial",
+      "required": false,
+      "lifecycle": "deferred",
+      "checks": [
+        "DSH adapter declares dsh.client and slots",
+        "focused session reuses Conversation owner",
+        "runtime slot registration verified in installed DSH boot manifest"
+      ]
+    },
+    {
+      "gate_id": "teams-opencode-hook-contract",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "OpenCode adapter exports the v1 default { server() } package shape",
+        "OpenCode adapter uses PluginInput and Hooks-shaped contract",
+        "session events resolve IDs from the SDK info shape",
+        "permission.ask projects interactive notification identity",
+        "event projection keeps session identity and notification kind only",
+        "question interaction is not fabricated when the current Hooks contract does not expose it",
+        "no ClientContext/Slot assumption"
+      ]
+    },
+    {
+      "gate_id": "teams-dsh-opencode-adapter-separation",
+      "status": "partial",
+      "required": false,
+      "lifecycle": "deferred",
+      "checks": [
+        "DSH uses ClientContext/Slots",
+        "OpenCode uses PluginInput/Hooks/SDK",
+        "shared types do not imply shared host mounting",
+        "DSH adapter and dsh-adapter/agent-identity do not import opencode-adapter or any OpenCode type",
+        "opencode-adapter does not import any @deepseek-ai/dsh-client-ui or client-runtime type",
+        "separator.spec covers both directions"
+      ]
+    },
+    {
+      "gate_id": "teams-projection-no-truth-ownership",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "UI consumes projections",
+        "UI does not own network/config/server/session truth",
+        "Teams UI does not import network, config, server, agent, runtime, search-plugin, memory-plugin, or dsh-adapter/agent-identity modules",
+        "controller never calls sessions.open or writes localStorage directly",
+        "dsh-adapter.spec and projection.spec cover the boundary"
+      ]
+    },
+    {
+      "gate_id": "teams-drawer-accessibility",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "header drag only",
+        "up expands",
+        "down closes",
+        "content remains operable",
+        "focus restores",
+        "reduced motion",
+        "dialog role and aria-modal",
+        "Escape key closes the top drawer",
+        "header is keyboard-focusable",
+        "Escape handling is unit-tested"
+      ]
+    },
+    {
+      "gate_id": "teams-current-session-fast-path",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "Agent Card primary action opens current session directly",
+        "live current session binds only through explicit host agentId and host-selected current session or running state",
+        "session list is secondary detail action",
+        "controller and sessions.open bridge are unit-tested",
+        "browser click-to-conversation remains unverified"
+      ]
+    },
+    {
+      "gate_id": "teams-mobile-high-risk-confirmation",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "mobile and desktop share capability semantics",
+        "high-risk actions show target and explicit confirmation",
+        "confirmation does not replace server permission decision",
+        "Teams surface owns no high-risk primitive of its own",
+        "Memory/Search high-risk flows stay inside their respective plugin owners",
+        "Server permission decision remains authoritative"
+      ]
+    },
+    {
+      "gate_id": "teams-dsh-conversation-reuse",
+      "status": "partial",
+      "required": false,
+      "lifecycle": "deferred",
+      "checks": [
+        "focused session uses existing Conversation",
+        "no second transcript implementation",
+        "Teams surface forwards sessions.open and never reads transcript/draft/queue/approval",
+        "Teams surface never imports ui-conversation",
+        "dsh-adapter.spec asserts openDshSession and openCurrentAgentSession delegate only to the DSH session owner"
+      ]
+    },
+    {
+      "gate_id": "teams-static-ui-replay",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "desktop 1440x960",
+        "mobile 390x844",
+        "nested drawer",
+        "session composer",
+        "approval entry",
+        "no overflow",
+        "desktop/mobile live page exposes five entries and notification drawer",
+        "session composer remains DSH-owned and is not duplicated"
+      ]
+    },
+    {
+      "gate_id": "teams-dsh-live-smoke",
+      "status": "partial",
+      "required": false,
+      "lifecycle": "deferred",
+      "checks": [
+        "installed DSH adapter connects and opens current session",
+        "DSH profile binds HTTP 3187 and serves Teams client module",
+        "sidebar entry opens Teams overlay",
+        "Host agent identity producer external binding is installed",
+        "current-session bridge browser confirmation remains unverified"
+      ]
+    },
+    {
+      "gate_id": "teams-opencode-live-smoke",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "installed OpenCode adapter observes session/event hooks",
+        "OpenCode 1.18.23 local plugin install accepted",
+        "in-process event and permission hook projection passed",
+        "long-running OpenCode host session remains unverified"
+      ]
+    },
+    {
+      "gate_id": "teams-desktop-mobile-equivalence",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "same semantic actions",
+        "layout-only divergence",
+        "touch and keyboard paths",
+        "five entry navigation reaches the same handler on both viewports",
+        "Drawer keyboard Escape closes the top drawer on desktop and mobile",
+        "Agent Card current-session primary action stays the primary affordance on both viewports",
+        "mobile 390x844 and desktop 1440x960 share the same component tree and projection input"
+      ]
+    }
   ]
 }

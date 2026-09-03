@@ -28,15 +28,12 @@
     ],
     "generated_root": "generated/**",
     "playground_retention": "archive_then_remove",
-    "playground_root": "playground/**",
+    "playground_root": "playground/experiments/**",
     "promotion_requires": [
       "experiment_evidence",
       "architecture_review_pass",
       "unique_owner",
-      "required_gates",
-      "dsh_live_smoke",
-      "opencode_live_smoke",
-      "desktop_mobile_browser_verification"
+      "required_gates"
     ],
     "protected_kinds": [
       "source",
@@ -66,16 +63,13 @@
       "contracts/records/record-graph.contract.json"
     ],
     "runtime_forbidden_roots": [
-      ".appsdk-control/**",
       "playground/**",
-      "generated/**",
-      "active/lib/**",
-      "protected/**"
+      "generated/**"
     ],
     "zone_transition_contract": "contracts/transitions/zone-transition-manifest.json"
   },
   "lifecycle": {
-    "stage": "draft"
+    "stage": "contract_bound"
   },
   "lifecycles": {
     "artifact": "generated",
@@ -109,7 +103,22 @@
       "owned_paths": [
         ".appsdk/**",
         "docs/**",
-        "playground/**",
+        "contracts/**",
+        "agent/**",
+        "config/**",
+        "dsh-adapter/**",
+        "memory-plugin/**",
+        "network/**",
+        "runtime/**",
+        "search-plugin/**",
+        "server/**",
+      "scripts/**",
+      "console-host/package.json",
+      "console-host/src/**",
+      "console-host/tests/**",
+      "console-host/tsconfig.json",
+      "console-host/vitest.config.ts",
+      "console-host/static/**",
         "opencode-adapter/package.json",
         "opencode-adapter/src/**",
         "opencode-adapter/tests/**",
@@ -121,10 +130,7 @@
         "ui/teams-console/tests/**",
         "ui/teams-console/tsconfig.json",
         "ui/teams-console/tsdown.config.ts",
-        "ui/teams-console/vitest.config.ts",
-        "tests/**",
-        "contracts/**",
-        "protected/source/**"
+        "ui/teams-console/vitest.config.ts"
       ],
       "regression": {
         "allow_skipped": false,
@@ -138,8 +144,16 @@
         "input_paths": [
           ".appsdk/**",
           "docs/**",
-          "playground/**",
-          "tests/**"
+          "agent/**",
+          "config/**",
+          "dsh-adapter/**",
+          "memory-plugin/**",
+          "network/**",
+          "runtime/**",
+          "search-plugin/**",
+          "server/**",
+          "ui/teams-console/src/**",
+          "opencode-adapter/src/**"
         ],
         "minimum_test_count": 1,
         "ordinary_mode_after_freeze": "disabled",

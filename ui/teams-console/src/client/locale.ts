@@ -28,6 +28,9 @@ export type TeamsKey =
   | 'searchPlaceholder'
   | 'memoryStatus'
   | 'fixtureNotice'
+  | 'settingsDescription'
+  | 'machineConnection'
+  | 'agentRuntime'
 
 export const en: Record<TeamsKey, string> = {
   entry: 'Teams',
@@ -57,6 +60,9 @@ export const en: Record<TeamsKey, string> = {
   searchPlaceholder: 'Search sessions, notifications, memory',
   memoryStatus: 'Memory plugin boundary',
   fixtureNotice: 'Static vertical slice',
+  settingsDescription: 'Connection and per-agent runtime configuration.',
+  machineConnection: 'Remote machine connection',
+  agentRuntime: 'Agent provider and model',
 }
 
 export const zh: Record<TeamsKey, string> = {
@@ -87,4 +93,7 @@ export const zh: Record<TeamsKey, string> = {
   searchPlaceholder: '搜索 sessions、通知、记忆',
   memoryStatus: '记忆插件边界',
   fixtureNotice: '静态 vertical slice',
+  settingsDescription: '连接配置与每个 Agent 的运行时配置。',
+  machineConnection: '远程机器连接',
+  agentRuntime: 'Agent Provider 和 Model',
 }
