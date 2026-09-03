@@ -107,10 +107,10 @@ function main() {
   const installedOpenCode = join(adapterInstallRoot, 'node_modules', '@deepseek-ai', 'teams-opencode-adapter', 'lib', 'index.mjs')
   run('test', ['-s', installedUi], uiInstallRoot)
   run('test', ['-s', installedOpenCode], adapterInstallRoot)
-  const install = evidence(`${attempt}-install`, 'deployment_install', 'install', c, { artifact_hash: artifact.artifact_hash, environment_id: environmentId, entrypoint: installedOpenCode, execution_surface: 'deployed_blackbox', producer: { adapter: 'project::deployment_adapter', identity: 'project::deployment_adapter' } })
+  const install = evidence(`${attempt}-install`, 'deployment_install', 'install', c, { artifact_hash: artifact.artifact_hash, environment_id: environmentId, entrypoint: installedOpenCode, execution_surface: 'deployed_blackbox', producer: { adapter, identity: `${adapter}/deployment` } })
   write(join(evidenceRoot, `${install.evidence_id}.json`), install)
   run('node', ['--check', installedOpenCode], adapterInstallRoot)
-  const restart = evidence(`${attempt}-restart`, 'deployment_restart', 'restart', c, { artifact_hash: artifact.artifact_hash, environment_id: environmentId, entrypoint: installedOpenCode, execution_surface: 'deployed_blackbox', producer: { adapter: 'project::deployment_adapter', identity: 'project::deployment_adapter' } })
+  const restart = evidence(`${attempt}-restart`, 'deployment_restart', 'restart', c, { artifact_hash: artifact.artifact_hash, environment_id: environmentId, entrypoint: installedOpenCode, execution_surface: 'deployed_blackbox', producer: { adapter, identity: `${adapter}/deployment` } })
   write(join(evidenceRoot, `${restart.evidence_id}.json`), restart)
   run('node', ['--input-type=module', '-e', `await import(${JSON.stringify(installedOpenCode)})`], adapterInstallRoot)
   const blackbox = evidence(`${attempt}-blackbox`, 'deployed_blackbox', 'runtime', c, { artifact_hash: artifact.artifact_hash, environment_id: environmentId, entrypoint: installedOpenCode, execution_surface: 'deployed_blackbox', producer: { adapter, identity: `${adapter}/deployment` } })
@@ -131,7 +131,7 @@ function main() {
     candidate_tree_hash: c.tree, artifact_hash: artifact.artifact_hash,
     whitebox_producer: { adapter, identity: `${adapter}/whitebox` },
     whitebox_evidence_ids: [whitebox.evidence_id], blackbox_evidence_ids: [blackbox.evidence_id],
-    deployment: { environment_id: environmentId, install_receipt_id: install.evidence_id, restart_receipt_id: restart.evidence_id, entrypoint: installedOpenCode, producer: { adapter: 'project::deployment_adapter', identity: 'project::deployment_adapter' }, observed_at: now() },
+    deployment: { environment_id: environmentId, install_receipt_id: install.evidence_id, restart_receipt_id: restart.evidence_id, entrypoint: installedOpenCode, producer: { adapter, identity: `${adapter}/deployment` }, observed_at: now() },
     source_unchanged: true, result: 'pass', created_at: now(),
   })
   process.stdout.write(`${JSON.stringify({ ok: true, attempt, candidate: c, artifact_hash: artifact.artifact_hash })}\n`)
