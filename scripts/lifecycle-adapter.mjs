@@ -75,9 +75,9 @@ function main() {
 
   run('appsdk', ['compile-module', 'Teams', '--module', moduleId])
   run('pnpm', ['--dir', 'deepseek-harness', 'exec', 'vitest', 'run', '--config', '../Teams/ui/teams-console/vitest.config.ts'], projectRoot)
-  run('pnpm', ['--dir', 'Teams/ui/teams-console', 'run', 'bundle'], projectRoot)
-  run('pnpm', ['--dir', 'Teams/opencode-adapter', 'run', 'typecheck'], projectRoot)
-  run('pnpm', ['--dir', 'Teams/opencode-adapter', 'run', 'build'], projectRoot)
+  run('pnpm', ['--dir', 'deepseek-harness', 'exec', 'tsdown', '--config', '../Teams/ui/teams-console/tsdown.config.ts'], projectRoot)
+  run('pnpm', ['--dir', 'deepseek-harness', 'exec', 'tsc', '--noEmit', '--project', '../Teams/opencode-adapter/tsconfig.json'], projectRoot)
+  run('pnpm', ['--dir', 'deepseek-harness', 'exec', 'tsdown', '--config', '../Teams/opencode-adapter/tsdown.config.ts'], projectRoot)
 
   const artifact = json(join(root, 'generated', 'modules', moduleId, 'module.compiled.json'))
   const worktreeId = `worktree-${c.head.slice(0, 12)}`
