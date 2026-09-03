@@ -571,8 +571,16 @@ function emitPromotionRecords() {
     public_api_hash: moduleArtifact.public_api_hash,
     created_at: now(),
   }
-  writeOrAssert(join(records, 'worktree-record.json'), worktree)
-  writeOrAssert(join(records, `worktree-record-${moduleId}.json`), worktree)
+  const existingWorktree = readJsonIfExists(join(records, 'worktree-record.json'))
+  const existingModuleWorktree = readJsonIfExists(join(records, `worktree-record-${moduleId}.json`))
+  if (!existingWorktree) write(join(records, 'worktree-record.json'), worktree)
+  if (!existingModuleWorktree) write(join(records, `worktree-record-${moduleId}.json`), worktree)
+  for (const existing of [existingWorktree, existingModuleWorktree]) {
+    if (!existing) continue
+    for (const key of ['worktree_id', 'issue_id', 'module_id', 'base_ref', 'base_commit', 'branch', 'head_commit', 'isolation_mode', 'scope_hash']) {
+      if (existing[key] !== worktree[key]) throw new Error(`promotion worktree record does not bind current source: ${key}`)
+    }
+  }
   writeOrAssert(join(records, 'merge-record.json'), merge)
   writeOrAssert(join(records, `merge-record-${moduleId}.json`), merge)
   writeOrAssert(join(records, 'regression-report.json'), regression)
