@@ -52,7 +52,7 @@ function fileHash(path) {
 
 function assertCleanCandidate() {
   const status = git(['status', '--porcelain']).split('\n').filter(Boolean)
-  if (status.some(line => !/^\?\? (?:Teams\/)?(?:\.appsdk\/records\/|\.appsdk-control\/|\.agent-collab\/|deepseek-harness\/node_modules)$/u.test(line))) {
+  if (status.some(line => !/^\?\? (?:Teams\/)?(?:\.appsdk\/records\/.*|\.appsdk-control\/.*|\.agent-collab\/.*|deepseek-harness\/node_modules)$/u.test(line))) {
     throw new Error('lifecycle adapter requires a clean candidate worktree')
   }
 }
