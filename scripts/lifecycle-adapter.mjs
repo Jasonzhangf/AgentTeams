@@ -76,9 +76,9 @@ function main() {
   run('appsdk', ['compile-module', 'Teams', '--module', moduleId])
   run('pnpm', ['--dir', 'deepseek-harness', 'exec', 'vitest', 'run', '--config', '../Teams/ui/teams-console/vitest.config.ts'], projectRoot)
   run('pnpm', ['--dir', 'deepseek-harness', 'exec', 'tsc', '--project', '../Teams/ui/teams-console/tsconfig.json'], projectRoot)
-  run('pnpm', ['--dir', 'deepseek-harness', 'exec', 'tsdown', '--config', '../Teams/ui/teams-console/tsdown.config.ts'], projectRoot)
+  run('node', ['../../deepseek-harness/node_modules/.bin/tsdown', '--config', 'tsdown.config.ts'], join(root, 'ui', 'teams-console'))
   run('pnpm', ['--dir', 'deepseek-harness', 'exec', 'tsc', '--noEmit', '--project', '../Teams/opencode-adapter/tsconfig.json'], projectRoot)
-  run('pnpm', ['--dir', 'deepseek-harness', 'exec', 'tsdown', 'Teams/opencode-adapter/src/index.ts', '--out-dir', 'Teams/opencode-adapter/lib', '--format', 'esm', '--platform', 'node', '--target', 'es2022', '--dts', '--clean'], projectRoot)
+  run('node', ['../../deepseek-harness/node_modules/.bin/tsdown', 'src/index.ts', '--out-dir', 'lib', '--format', 'esm', '--platform', 'node', '--target', 'es2022', '--dts', '--clean'], join(root, 'opencode-adapter'))
 
   const artifact = json(join(root, 'generated', 'modules', moduleId, 'module.compiled.json'))
   const worktreeId = `worktree-${c.head.slice(0, 12)}`
