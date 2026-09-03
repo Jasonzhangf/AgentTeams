@@ -74,7 +74,7 @@ function main() {
   mkdirSync(control, { recursive: true })
 
   run('appsdk', ['compile-module', 'Teams', '--module', moduleId])
-  run('pnpm', ['exec', '--package', 'vitest', 'vitest', 'run', '--config', 'Teams/ui/teams-console/vitest.config.ts'], join(root, 'ui', 'teams-console'))
+  run('pnpm', ['exec', 'vitest', 'run', '--config', 'vitest.config.ts'], join(root, 'ui', 'teams-console'))
   run('pnpm', ['--dir', 'Teams/ui/teams-console', 'run', 'bundle'], projectRoot)
   run('pnpm', ['--dir', 'Teams/opencode-adapter', 'run', 'typecheck'], projectRoot)
   run('pnpm', ['--dir', 'Teams/opencode-adapter', 'run', 'build'], projectRoot)
