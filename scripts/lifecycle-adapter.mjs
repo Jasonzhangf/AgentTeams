@@ -82,7 +82,7 @@ function main() {
 
   const artifact = json(join(root, 'generated', 'modules', moduleId, 'module.compiled.json'))
   const worktreeId = `worktree-${c.head.slice(0, 12)}`
-  const whitebox = evidence(`${attempt}-whitebox`, 'development_whitebox', 'gate', c, { artifact_hash: artifact.artifact_hash, entrypoint: 'Teams UI/OpenCode test and build suite', execution_surface: 'development_whitebox', producer: { adapter: 'project::whitebox_adapter', identity: 'project::whitebox_adapter' } })
+  const whitebox = evidence(`${attempt}-whitebox`, 'development_whitebox', 'gate', c, { artifact_hash: artifact.artifact_hash, entrypoint: 'Teams UI/OpenCode test and build suite', execution_surface: 'development_whitebox', producer: { adapter, identity: `${adapter}/whitebox` } })
   const build = evidence(`${attempt}-build`, 'artifact', 'build', c, { artifact_hash: artifact.artifact_hash, entrypoint: 'appsdk compile-module Teams --module teams-design', execution_surface: 'development_whitebox' })
   const positive = evidence(`${attempt}-positive`, 'positive_intervention', 'positive_test', c, { entrypoint: 'Teams UI and OpenCode focused tests', execution_surface: 'development_whitebox' })
   const environmentId = hash(JSON.stringify({ node: process.version, platform: process.platform, arch: process.arch, candidate: c.head }))
@@ -113,7 +113,7 @@ function main() {
   const restart = evidence(`${attempt}-restart`, 'deployment_restart', 'restart', c, { artifact_hash: artifact.artifact_hash, environment_id: environmentId, entrypoint: installedOpenCode, execution_surface: 'deployed_blackbox', producer: { adapter: 'project::deployment_adapter', identity: 'project::deployment_adapter' } })
   write(join(evidenceRoot, `${restart.evidence_id}.json`), restart)
   run('node', ['--input-type=module', '-e', `await import(${JSON.stringify(installedOpenCode)})`], adapterInstallRoot)
-  const blackbox = evidence(`${attempt}-blackbox`, 'deployed_blackbox', 'runtime', c, { artifact_hash: artifact.artifact_hash, environment_id: environmentId, entrypoint: installedOpenCode, execution_surface: 'deployed_blackbox', producer: { adapter: 'project::blackbox_adapter', identity: 'project::blackbox_adapter' } })
+  const blackbox = evidence(`${attempt}-blackbox`, 'deployed_blackbox', 'runtime', c, { artifact_hash: artifact.artifact_hash, environment_id: environmentId, entrypoint: installedOpenCode, execution_surface: 'deployed_blackbox', producer: { adapter, identity: `${adapter}/deployment` } })
   write(join(evidenceRoot, `${blackbox.evidence_id}.json`), blackbox)
   const evidenceSet = [whitebox, build, positive, install, restart, blackbox]
   for (const item of [whitebox, build, positive]) write(join(evidenceRoot, `${item.evidence_id}.json`), item)
@@ -129,7 +129,7 @@ function main() {
     validation_id: `validation-${attempt}`, issue_id: issueId, module_id: moduleId,
     fix_candidate_id: `fix-${c.head.slice(0, 12)}-${attempt}`, candidate_commit: c.head,
     candidate_tree_hash: c.tree, artifact_hash: artifact.artifact_hash,
-    whitebox_producer: { adapter: 'project::whitebox_adapter', identity: 'project::whitebox_adapter' },
+    whitebox_producer: { adapter, identity: `${adapter}/whitebox` },
     whitebox_evidence_ids: [whitebox.evidence_id], blackbox_evidence_ids: [blackbox.evidence_id],
     deployment: { environment_id: environmentId, install_receipt_id: install.evidence_id, restart_receipt_id: restart.evidence_id, entrypoint: installedOpenCode, producer: { adapter: 'project::deployment_adapter', identity: 'project::deployment_adapter' }, observed_at: now() },
     source_unchanged: true, result: 'pass', created_at: now(),
