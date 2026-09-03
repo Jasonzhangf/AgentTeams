@@ -200,6 +200,10 @@ function ensureWorktreeDependencies(worktreeRoot) {
     mkdirSync(dirname(target), { recursive: true })
     symlinkSync(source, target, 'dir')
   }
+  const exclude = join(worktreeRoot, '.git', 'info', 'exclude')
+  if (existsSync(exclude)) {
+    writeFileSync(exclude, ['/deepseek-harness/node_modules', '/Teams/ui/teams-console/node_modules', '/Teams/opencode-adapter/node_modules'].join('\n') + '\n', { flag: 'a' })
+  }
 }
 
 function baseline() {
@@ -211,7 +215,8 @@ function baseline() {
     process.stdout.write(`${JSON.stringify({ ok: true, idempotent: true, reproductionId: existing.reproduction_id })}\n`)
     return
   }
-  const baselineCommit = git(['rev-parse', `${current.head}^`])
+  const fixCommit = git(['log', '--format=%H', '--grep=anchor candidate before whitebox evidence', '-1'])
+  const baselineCommit = git(['rev-parse', `${fixCommit}^`])
   run('git', ['cat-file', '-e', `${baselineCommit}:Teams/scripts/lifecycle-adapter.mjs`], projectRoot)
   const attemptId = `baseline-${Date.now()}-${randomUUID()}`
   const baselineWorktree = join(projectRoot, 'playground', attemptId)
