@@ -200,7 +200,7 @@ function ensureWorktreeDependencies(worktreeRoot) {
     mkdirSync(dirname(target), { recursive: true })
     symlinkSync(source, target, 'dir')
   }
-  const exclude = join(worktreeRoot, '.git', 'info', 'exclude')
+  const exclude = run('git', ['rev-parse', '--git-path', 'info/exclude'], worktreeRoot).trim()
   if (existsSync(exclude)) {
     writeFileSync(exclude, ['/deepseek-harness/node_modules', '/Teams/ui/teams-console/node_modules', '/Teams/opencode-adapter/node_modules'].join('\n') + '\n', { flag: 'a' })
   }
