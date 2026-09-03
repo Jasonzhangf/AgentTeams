@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
-const projectRoot = resolve(root, '..', '..')
+const projectRoot = resolve(root, '..')
 const moduleId = 'teams-design'
 const issueId = 'teams-lifecycle-20260902'
 const adapter = 'teams::lifecycle-adapter:v1'
