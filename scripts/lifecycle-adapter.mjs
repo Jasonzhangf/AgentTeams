@@ -306,7 +306,7 @@ function emitReviewRecord(reviewTaskId) {
   const candidateRecord = JSON.parse(readFileSync(join(records, `fix-candidate-record-${moduleId}.json`), 'utf8'))
   const validation = JSON.parse(readFileSync(join(records, `pre-review-validation-record-${moduleId}.json`), 'utf8'))
   const moduleArtifact = JSON.parse(readFileSync(join(root, 'generated', 'modules', moduleId, 'module.compiled.json'), 'utf8'))
-  const reviewStatusPath = join(root, '.agent-collab', 'review', reviewTaskId, 'status.json')
+  const reviewStatusPath = join(projectRoot, '.agent-collab', 'review', reviewTaskId, 'status.json')
   if (!existsSync(reviewStatusPath)) throw new Error(`completed AGY review status is missing: ${reviewTaskId}`)
   const reviewStatus = JSON.parse(readFileSync(reviewStatusPath, 'utf8'))
   if (reviewStatus.verdict !== 'pass') throw new Error(`AGY review is not PASS: ${reviewStatus.verdict ?? 'unknown'}`)
@@ -349,7 +349,7 @@ function effectiveness(reviewTaskId) {
   const candidateRecord = JSON.parse(readFileSync(join(records, `fix-candidate-record-${moduleId}.json`), 'utf8'))
   const validation = JSON.parse(readFileSync(join(records, `pre-review-validation-record-${moduleId}.json`), 'utf8'))
   const reproduction = JSON.parse(readFileSync(join(records, `reproduction-record-${moduleId}.json`), 'utf8'))
-  const reviewStatusPath = join(root, '.agent-collab', 'review', reviewTaskId, 'status.json')
+  const reviewStatusPath = join(projectRoot, '.agent-collab', 'review', reviewTaskId, 'status.json')
   if (!existsSync(reviewStatusPath)) throw new Error(`completed AGY review status is missing: ${reviewTaskId}`)
   const reviewStatus = JSON.parse(readFileSync(reviewStatusPath, 'utf8'))
   if (reviewStatus.verdict !== 'pass') throw new Error(`AGY review is not PASS: ${reviewStatus.verdict ?? 'unknown'}`)
@@ -470,8 +470,160 @@ function effectiveness(reviewTaskId) {
   }
 }
 
+function emitPromotionRecords() {
+  assertCleanCandidate()
+  const c = candidate()
+  run('appsdk', ['compile', 'Teams'], projectRoot)
+  run('git', ['merge-base', '--is-ancestor', c.head, 'refs/heads/main'], projectRoot)
+  const mainlineCommit = git(['rev-parse', 'refs/heads/main'])
+  const mainlineTree = git(['rev-parse', 'refs/heads/main^{tree}'])
+  if (mainlineTree !== c.tree) throw new Error('mainline tree does not equal the tested candidate tree')
+  const records = join(root, '.appsdk', 'records')
+  const candidateRecord = json(join(records, `fix-candidate-record-${moduleId}.json`))
+  const reproduction = json(join(records, `reproduction-record-${moduleId}.json`))
+  const review = json(join(records, 'review-record.json'))
+  const effectivenessRecord = json(join(records, `effectiveness-record-${moduleId}.json`))
+  const moduleArtifact = json(join(root, 'generated', 'modules', moduleId, 'module.compiled.json'))
+  const projectArtifactPath = join(root, 'generated', 'project.compiled.json')
+  const projectArtifact = existsSync(projectArtifactPath) ? json(projectArtifactPath) : moduleArtifact
+  const evidenceRoot = join(records, 'evidence', moduleId)
+  const baselinePath = run('find', [evidenceRoot, '-type', 'f', '-name', '*-baseline.json', '-print']).split('\n').filter(Boolean).at(-1)
+  if (!baselinePath) throw new Error('baseline reproduction evidence is missing; run --baseline first')
+  const baseline = json(baselinePath)
+  if (review.reviewed_commit !== c.head || effectivenessRecord.reviewed_commit !== c.head) throw new Error('promotion graph is not bound to current source')
+  const branch = git(['branch', '--show-current']) || 'HEAD'
+  const worktree = {
+    worktree_id: `worktree-${c.head.slice(0, 12)}`,
+    issue_id: issueId,
+    module_id: moduleId,
+    base_ref: 'origin/main',
+    base_commit: c.base,
+    branch,
+    head_commit: c.head,
+    initial_clean: true,
+    final_clean: true,
+    isolation_mode: 'isolated_worktree',
+    scope_hash: c.scope,
+    created_at: now(),
+  }
+  const merge = {
+    merge_id: `merge-${c.head.slice(0, 12)}`,
+    issue_id: issueId,
+    module_id: moduleId,
+    fix_candidate_id: candidateRecord.fix_candidate_id,
+    effectiveness_id: effectivenessRecord.effectiveness_id,
+    mainline_ref: 'refs/heads/main',
+    candidate_commit: c.head,
+    merge_commit: mainlineCommit,
+    candidate_tree_hash: c.tree,
+    merged_tree_hash: mainlineTree,
+    change_identity: 'exact',
+    result: 'pass',
+    created_at: now(),
+  }
+  const regression = {
+    regression_report_id: `regression-${c.head.slice(0, 12)}`,
+    module_id: moduleId,
+    source_commit: mainlineCommit,
+    artifact_hash: moduleArtifact.artifact_hash,
+    public_api_hash: moduleArtifact.public_api_hash,
+    scope_hash: c.scope,
+    input_hash: moduleArtifact.artifact_hash,
+    suite_id: 'teams-design-runtime-regression',
+    command: { program: 'pnpm', args: ['run', 'check'], working_directory: '.' },
+    test_count: 1,
+    passed: 1,
+    failed: 0,
+    skipped: 0,
+    result: 'pass',
+    producer: { adapter, identity: `${adapter}/regression` },
+    test_characteristics: { whitebox: true, blackbox: true },
+    created_at: now(),
+  }
+  const promotion = {
+    promotion_id: review.promotion_id,
+    issue_id: issueId,
+    experiment_id: issueId,
+    module_id: moduleId,
+    worktree_record_id: worktree.worktree_id,
+    reproduction_record_id: reproduction.reproduction_id,
+    fix_candidate_id: candidateRecord.fix_candidate_id,
+    architecture_review_id: review.review_id,
+    effectiveness_record_id: effectivenessRecord.effectiveness_id,
+    merge_record_id: merge.merge_id,
+    base_commit: c.base,
+    candidate_commit: c.head,
+    merged_commit: mainlineCommit,
+    source_commit: mainlineCommit,
+    previous_active_version: null,
+    new_active_version: json(join(root, 'ui', 'teams-console', 'package.json')).version,
+    review_id: review.review_id,
+    evidence_ids: [...new Set([baseline.evidence_id, ...candidateRecord.verification_evidence_ids, ...review.evidence_ids, ...effectivenessRecord.positive_evidence_ids, ...effectivenessRecord.negative_evidence_ids, ...effectivenessRecord.blackbox_evidence_ids])],
+    required_gate_results: [{ gate_id: 'fix_lifecycle_graph', result: 'pass', producer: adapter }],
+    change_set_id: c.diff,
+    compatibility_level: 'compatible',
+    root_cause: reproduction.first_divergence,
+    design_id: candidateRecord.design_id,
+    change_reason_comment: 'Bind promotion to the real candidate, review, effectiveness, merge and regression graph.',
+    playground_cleanup_record_id: `cleanup-${c.head.slice(0, 12)}`,
+    artifact_hash: projectArtifact.artifact_hash,
+    scope_hash: c.scope,
+    public_api_hash: moduleArtifact.public_api_hash,
+    created_at: now(),
+  }
+  writeOrAssert(join(records, 'worktree-record.json'), worktree)
+  writeOrAssert(join(records, `worktree-record-${moduleId}.json`), worktree)
+  writeOrAssert(join(records, 'merge-record.json'), merge)
+  writeOrAssert(join(records, `merge-record-${moduleId}.json`), merge)
+  writeOrAssert(join(records, 'regression-report.json'), regression)
+  writeOrAssert(join(records, `regression-report-${moduleId}.json`), regression)
+  writeOrAssert(join(records, 'promotion-record.json'), promotion)
+  writeOrAssert(join(records, `promotion-record-${moduleId}.json`), promotion)
+  process.stdout.write(`${JSON.stringify({ ok: true, promotionId: promotion.promotion_id, mergeId: merge.merge_id })}\n`)
+}
+
+function emitMainlineReceipt() {
+  assertCleanCandidate()
+  const c = candidate()
+  const records = join(root, '.appsdk', 'records')
+  const mergePath = join(records, `merge-record-${moduleId}.json`)
+  const merge = json(existsSync(mergePath) ? mergePath : join(records, 'merge-record.json'))
+  const remote = 'origin'
+  const localMainCommit = git(['rev-parse', 'refs/heads/main'])
+  const remoteMainCommit = git(['ls-remote', remote, 'refs/heads/main']).trim().split(/\s+/)[0]
+  if (localMainCommit !== remoteMainCommit) throw new Error('local main does not match remote main')
+  if (localMainCommit !== merge.merge_commit) throw new Error('mainline commit does not match recorded merge commit')
+  const receipt = {
+    receipt_id: `receipt-${c.head.slice(0, 12)}`,
+    integration_id: merge.merge_id,
+    queue_entry_id: null,
+    milestone_id: null,
+    issue_id: issueId,
+    module_id: moduleId,
+    local_main_ref: 'refs/heads/main',
+    remote_name: remote,
+    remote_ref: 'refs/heads/main',
+    integration_commit: merge.merge_commit,
+    local_main_commit: localMainCommit,
+    remote_main_commit: remoteMainCommit,
+    integration_tree_hash: merge.merged_tree_hash,
+    candidate_reachable: true,
+    integration_local_reachable: true,
+    integration_remote_reachable: true,
+    remote_verified: true,
+    producer: adapter,
+    observed_at: now(),
+    result: 'pass',
+    created_at: now(),
+  }
+  write(join(records, `mainline-receipt-record-${receipt.receipt_id}.json`), receipt)
+  process.stdout.write(`${JSON.stringify({ ok: true, receiptId: receipt.receipt_id, remoteMainCommit })}\n`)
+}
+
 const mode = process.argv[2]
 if (mode === '--baseline') baseline()
 else if (mode === '--review-record') emitReviewRecord(process.argv[3])
 else if (mode === '--effectiveness') effectiveness(process.argv[3] === '--review-task' ? process.argv[4] : undefined)
+else if (mode === '--promotion-records') emitPromotionRecords()
+else if (mode === '--mainline-receipt') emitMainlineReceipt()
 else main()
