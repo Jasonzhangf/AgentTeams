@@ -189,11 +189,9 @@ function ensureWorktreeDependencies(worktreeRoot) {
   const teamsRoot = join(worktreeRoot, 'Teams')
   const sourceUi = join(root, 'ui', 'teams-console', 'node_modules')
   const sourceAdapter = join(root, 'opencode-adapter', 'node_modules')
-  const sourceHarness = join(projectRoot, 'deepseek-harness', 'node_modules')
   const targets = [
     [join(teamsRoot, 'ui', 'teams-console', 'node_modules'), sourceUi],
     [join(teamsRoot, 'opencode-adapter', 'node_modules'), sourceAdapter],
-    [join(worktreeRoot, 'deepseek-harness', 'node_modules'), sourceHarness],
   ]
   for (const [target, source] of targets) {
     if (existsSync(target) || !existsSync(source)) continue
@@ -202,7 +200,7 @@ function ensureWorktreeDependencies(worktreeRoot) {
   }
   const exclude = run('git', ['rev-parse', '--git-path', 'info/exclude'], worktreeRoot).trim()
   if (existsSync(exclude)) {
-    writeFileSync(exclude, ['/deepseek-harness/node_modules', '/Teams/ui/teams-console/node_modules', '/Teams/opencode-adapter/node_modules'].join('\n') + '\n', { flag: 'a' })
+    writeFileSync(exclude, ['/Teams/ui/teams-console/node_modules', '/Teams/opencode-adapter/node_modules'].join('\n') + '\n', { flag: 'a' })
   }
 }
 
