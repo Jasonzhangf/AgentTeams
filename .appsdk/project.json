@@ -1,7 +1,9 @@
 {
   "access": {
     "protected_paths": [
-      ".appsdk/**",
+    ".appsdk/goal.json",
+    ".appsdk/maps/**",
+    ".appsdk/sdk.lock",
       "generated/**",
       "protected/source/**"
     ]
