@@ -472,14 +472,21 @@ function effectiveness(reviewTaskId) {
 
 function emitPromotionRecords() {
   assertCleanCandidate()
-  const c = candidate()
   run('appsdk', ['compile', 'Teams'], projectRoot)
+  const records = join(root, '.appsdk', 'records')
+  const candidateRecord = json(join(records, `fix-candidate-record-${moduleId}.json`))
+  const c = {
+    head: candidateRecord.head_commit,
+    base: candidateRecord.base_commit,
+    tree: candidateRecord.tree_hash,
+    diff: candidateRecord.diff_hash,
+    scope: candidateRecord.scope_hash,
+    changed: candidateRecord.changed_paths,
+  }
   run('git', ['merge-base', '--is-ancestor', c.head, 'refs/heads/main'], projectRoot)
   const mainlineCommit = git(['rev-parse', 'refs/heads/main'])
   const mainlineTree = git(['rev-parse', 'refs/heads/main^{tree}'])
   if (mainlineTree !== c.tree) throw new Error('mainline tree does not equal the tested candidate tree')
-  const records = join(root, '.appsdk', 'records')
-  const candidateRecord = json(join(records, `fix-candidate-record-${moduleId}.json`))
   const reproduction = json(join(records, `reproduction-record-${moduleId}.json`))
   const review = json(join(records, 'review-record.json'))
   const effectivenessRecord = json(join(records, `effectiveness-record-${moduleId}.json`))
