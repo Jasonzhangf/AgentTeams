@@ -129,7 +129,7 @@ function main() {
     validation_id: `validation-${attempt}`, issue_id: issueId, module_id: moduleId,
     fix_candidate_id: `fix-${c.head.slice(0, 12)}-${attempt}`, candidate_commit: c.head,
     candidate_tree_hash: c.tree, artifact_hash: artifact.artifact_hash,
-    whitebox_producer: { adapter, identity: `${adapter}/development_whitebox` },
+    whitebox_producer: { adapter: 'project::whitebox_adapter', identity: 'project::whitebox_adapter' },
     whitebox_evidence_ids: [whitebox.evidence_id], blackbox_evidence_ids: [blackbox.evidence_id],
     deployment: { environment_id: environmentId, install_receipt_id: install.evidence_id, restart_receipt_id: restart.evidence_id, entrypoint: installedOpenCode, producer: { adapter: 'project::deployment_adapter', identity: 'project::deployment_adapter' }, observed_at: now() },
     source_unchanged: true, result: 'pass', created_at: now(),
