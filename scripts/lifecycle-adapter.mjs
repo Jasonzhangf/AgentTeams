@@ -206,6 +206,12 @@ function ensureWorktreeDependencies(worktreeRoot) {
   }
 }
 
+function prepareWorktree(worktreeRoot) {
+  const harness = join(worktreeRoot, 'deepseek-harness')
+  run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'], harness)
+  run('pnpm', ['run', 'build:lib'], harness)
+}
+
 function baseline() {
   assertCleanCandidate()
   const current = candidate()
@@ -235,6 +241,7 @@ function baseline() {
   try {
     run('git', ['worktree', 'add', '--detach', baselineWorktree, baselineCommit], projectRoot)
     ensureWorktreeDependencies(baselineWorktree)
+    prepareWorktree(baselineWorktree)
     const first = spawnSync(process.execPath, ['Teams/scripts/lifecycle-adapter.mjs'], {
       cwd: baselineWorktree,
       encoding: 'utf8',
