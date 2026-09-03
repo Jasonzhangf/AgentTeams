@@ -9,8 +9,8 @@ export interface TeamsClientConfig {
   readonly agentPresetBindings?: readonly AgentPresetBinding[]
   readonly settingsNavigation?: SettingsNavigationHandlers
   readonly sessionActions?: SessionActionHandlers
-  readonly hostProjection?: TeamsHostProjection
-  readonly hostActions?: TeamsHostActions
+  readonly hostProjection?: TeamsHostProjection | undefined
+  readonly hostActions?: TeamsHostActions | undefined
 }
 
 export interface TeamsOverlayFace {
@@ -22,8 +22,8 @@ export interface TeamsOverlayFace {
   }
   readonly agentPresetBindings?: readonly AgentPresetBinding[]
   readonly settingsNavigation?: SettingsNavigationHandlers
-  readonly hostProjection?: TeamsHostProjection
-  readonly hostActions?: TeamsHostActions
+  readonly hostProjection?: TeamsHostProjection | undefined
+  readonly hostActions?: TeamsHostActions | undefined
 }
 
 /** Typed navigation hooks exposed by the host. Teams never owns network or config truth. */

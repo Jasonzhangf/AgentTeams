@@ -59,7 +59,7 @@ export function apply(ctx: ClientContext, config: TeamsClientConfig = {}): void 
     id: 'teams-console-overlay',
     order: 100,
     locale: NS,
-      inject: (): { controller: TeamsConsoleController; agentPresetBindings: readonly AgentPresetBinding[]; settingsNavigation: NonNullable<TeamsClientConfig['settingsNavigation']>; hostProjection?: TeamsClientConfig['hostProjection']; hostActions?: TeamsClientConfig['hostActions'] } => ({
+    inject: (): { controller: TeamsConsoleController; agentPresetBindings: readonly AgentPresetBinding[]; settingsNavigation: NonNullable<TeamsClientConfig['settingsNavigation']>; hostProjection?: TeamsClientConfig['hostProjection'] | undefined; hostActions?: TeamsClientConfig['hostActions'] | undefined } => ({
       controller,
       agentPresetBindings: config.agentPresetBindings ?? [],
       settingsNavigation: config.settingsNavigation ?? {

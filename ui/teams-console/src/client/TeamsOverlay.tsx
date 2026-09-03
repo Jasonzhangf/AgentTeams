@@ -15,8 +15,8 @@ export type TeamsOverlayProps =
   & TeamsOverlayFace
   & { readonly agentPresetBindings: readonly AgentPresetBinding[] }
   & { readonly settingsNavigation?: NonNullable<TeamsOverlayFace['settingsNavigation']> }
-  & { readonly hostProjection?: TeamsHostProjection }
-  & { readonly hostActions?: TeamsHostActions }
+  & { readonly hostProjection?: TeamsHostProjection | undefined }
+  & { readonly hostActions?: TeamsHostActions | undefined }
 
 const entries: readonly { id: ConsoleEntry; label: string }[] = [
   { id: 'topology', label: 'topology' },
@@ -165,7 +165,7 @@ function ConversationsView({ controller, t, availableSessionIds }: Pick<TeamsOve
 function NotificationsView({ controller, t, availableSessionIds, projection, hostActions }: Pick<TeamsOverlayProps, 'controller' | 't'> & {
   readonly availableSessionIds: ReadonlySet<string>
   readonly projection: TeamsNotificationProjection
-  readonly hostActions?: TeamsHostActions
+  readonly hostActions?: TeamsHostActions | undefined
 }): ReactNode {
   return (
     <div className={css.viewBody}>
