@@ -35,12 +35,12 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-client-locale": "workspace:^",
-    "@deepseek-ai/dsh-client-runtime": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
+    "@deepseek-ai/cordis": ">=4.0.1 <5",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.0-rc.5 <0.2",
+    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.5 <0.2",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0-rc.5 <0.2",
+    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.1.0-rc.5 <0.2",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.5 <0.2",
     "react": "^18.2.0"
   },
   "devDependencies": {
