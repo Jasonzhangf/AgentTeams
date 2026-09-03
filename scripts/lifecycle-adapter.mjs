@@ -82,6 +82,14 @@ function main() {
 
   const artifact = json(join(root, 'generated', 'modules', moduleId, 'module.compiled.json'))
   const worktreeId = `worktree-${c.head.slice(0, 12)}`
+  const fixCandidateId = `fix-${c.head.slice(0, 12)}-${attempt}`
+  const candidateCreatedAt = now()
+  const candidateRecord = {
+    fix_candidate_id: fixCandidateId,
+    issue_id: issueId, module_id: moduleId, base_commit: c.base, head_commit: c.head,
+    worktree_id: worktreeId, tree_hash: c.tree, diff_hash: c.diff, scope_hash: c.scope, owner: adapter,
+    changed_paths: c.changed, design_id: issueId, verification_evidence_ids: [], created_at: candidateCreatedAt,
+  }
   const whitebox = evidence(`${attempt}-whitebox`, 'development_whitebox', 'gate', c, { artifact_hash: artifact.artifact_hash, entrypoint: 'Teams UI/OpenCode test and build suite', execution_surface: 'development_whitebox', producer: { adapter, identity: `${adapter}/whitebox` } })
   const build = evidence(`${attempt}-build`, 'artifact', 'build', c, { artifact_hash: artifact.artifact_hash, entrypoint: 'appsdk compile-module Teams --module teams-design', execution_surface: 'development_whitebox' })
   const positive = evidence(`${attempt}-positive`, 'positive_intervention', 'positive_test', c, { entrypoint: 'Teams UI and OpenCode focused tests', execution_surface: 'development_whitebox' })
@@ -119,12 +127,8 @@ function main() {
   const evidenceSet = [whitebox, build, positive, install, restart, blackbox]
   write(join(records, 'evidence-record.json'), whitebox)
   write(join(records, `evidence-record-${moduleId}.json`), whitebox)
-  write(join(records, `fix-candidate-record-${moduleId}.json`), {
-    fix_candidate_id: `fix-${c.head.slice(0, 12)}-${attempt}`,
-    issue_id: issueId, module_id: moduleId, base_commit: c.base, head_commit: c.head,
-    worktree_id: worktreeId, tree_hash: c.tree, diff_hash: c.diff, scope_hash: c.scope, owner: adapter,
-    changed_paths: c.changed, design_id: issueId, verification_evidence_ids: evidenceSet.map(item => item.evidence_id), created_at: now(),
-  })
+  candidateRecord.verification_evidence_ids = evidenceSet.map(item => item.evidence_id)
+  write(join(records, `fix-candidate-record-${moduleId}.json`), candidateRecord)
   write(join(records, `pre-review-validation-record-${moduleId}.json`), {
     validation_id: `validation-${attempt}`, issue_id: issueId, module_id: moduleId,
     fix_candidate_id: `fix-${c.head.slice(0, 12)}-${attempt}`, candidate_commit: c.head,
