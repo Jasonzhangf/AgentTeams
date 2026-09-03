@@ -85,6 +85,7 @@ function main() {
   const whitebox = evidence(`${attempt}-whitebox`, 'development_whitebox', 'gate', c, { artifact_hash: artifact.artifact_hash, entrypoint: 'Teams UI/OpenCode test and build suite', execution_surface: 'development_whitebox', producer: { adapter, identity: `${adapter}/whitebox` } })
   const build = evidence(`${attempt}-build`, 'artifact', 'build', c, { artifact_hash: artifact.artifact_hash, entrypoint: 'appsdk compile-module Teams --module teams-design', execution_surface: 'development_whitebox' })
   const positive = evidence(`${attempt}-positive`, 'positive_intervention', 'positive_test', c, { entrypoint: 'Teams UI and OpenCode focused tests', execution_surface: 'development_whitebox' })
+  for (const item of [whitebox, build, positive]) write(join(evidenceRoot, `${item.evidence_id}.json`), item)
   const environmentId = hash(JSON.stringify({ node: process.version, platform: process.platform, arch: process.arch, candidate: c.head }))
   const deploymentRoot = join(control, 'deployment')
   mkdirSync(deploymentRoot, { recursive: true })
@@ -116,7 +117,6 @@ function main() {
   const blackbox = evidence(`${attempt}-blackbox`, 'deployed_blackbox', 'runtime', c, { artifact_hash: artifact.artifact_hash, environment_id: environmentId, entrypoint: installedOpenCode, execution_surface: 'deployed_blackbox', producer: { adapter, identity: `${adapter}/deployment` } })
   write(join(evidenceRoot, `${blackbox.evidence_id}.json`), blackbox)
   const evidenceSet = [whitebox, build, positive, install, restart, blackbox]
-  for (const item of [whitebox, build, positive]) write(join(evidenceRoot, `${item.evidence_id}.json`), item)
   write(join(records, 'evidence-record.json'), whitebox)
   write(join(records, `evidence-record-${moduleId}.json`), whitebox)
   write(join(records, `fix-candidate-record-${moduleId}.json`), {
