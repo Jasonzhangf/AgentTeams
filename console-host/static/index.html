@@ -63,13 +63,27 @@
         drawer.hidden = false
       }
       function renderSessions() {
-        sessions.replaceChildren(...currentProjection.sessions.map(session => {
+        const items = []
+        for (const session of currentProjection.sessions) {
+          const agent = currentProjection.agents.find(candidate => candidate.agentId === session.agentId)
+          const agentLabel = agent ? agent.label : session.agentId
           const item = document.createElement('button')
           item.type = 'button'
-          item.textContent = session.title || session.id
-          item.addEventListener('click', () => showDrawer(session.title || session.id, `OpenCode session ${session.id}`))
-          return item
-        }))
+          item.textContent = `${agentLabel}: ${session.title || session.id}`
+          item.addEventListener('click', () => showDrawer(session.title || session.id, `${agentLabel} session ${session.id}`))
+          items.push(item)
+        }
+        for (const relation of currentProjection.relations || []) {
+          const relationNode = document.createElement('p')
+          relationNode.textContent = `Relation ${relation.relationId}: ${relation.consumerAgentId} -> ${relation.providerAgentId} (${relation.consistency})`
+          items.push(relationNode)
+        }
+        for (const message of currentProjection.messages || []) {
+          const messageNode = document.createElement('p')
+          messageNode.textContent = `Message ${message.messageId}: ${message.fromAgentId} -> ${message.toAgentId} ${message.kind}`
+          items.push(messageNode)
+        }
+        sessions.replaceChildren(...items)
       }
       document.querySelectorAll('[data-entry]').forEach(button => button.addEventListener('click', () => {
         document.querySelectorAll('[data-entry]').forEach(item => item.removeAttribute('aria-current'))
@@ -79,11 +93,13 @@
           sessions.replaceChildren(...currentProjection.notifications.map(notification => {
             const item = document.createElement('button')
             item.type = 'button'
-            item.textContent = `Approval: ${notification.sessionId}`
-            item.addEventListener('click', () => showDrawer('Approval', `Permission ${notification.requestId}`, [
-              { label: 'Allow once', payload: { kind: 'reply-permission', sessionId: notification.sessionId, permissionId: notification.requestId, response: 'once' } },
-              { label: 'Always allow', payload: { kind: 'reply-permission', sessionId: notification.sessionId, permissionId: notification.requestId, response: 'always' } },
-              { label: 'Reject', payload: { kind: 'reply-permission', sessionId: notification.sessionId, permissionId: notification.requestId, response: 'reject' } },
+            const agent = currentProjection.agents.find(candidate => candidate.agentId === notification.agentId)
+            const agentLabel = agent ? agent.label : notification.agentId
+            item.textContent = `Approval: ${agentLabel}: ${notification.sessionId}`
+            item.addEventListener('click', () => showDrawer('Approval', `${agentLabel} permission ${notification.requestId}`, [
+              { label: 'Allow once', payload: { kind: 'reply-permission', agentId: notification.agentId, sessionId: notification.sessionId, permissionId: notification.requestId, response: 'once' } },
+              { label: 'Always allow', payload: { kind: 'reply-permission', agentId: notification.agentId, sessionId: notification.sessionId, permissionId: notification.requestId, response: 'always' } },
+              { label: 'Reject', payload: { kind: 'reply-permission', agentId: notification.agentId, sessionId: notification.sessionId, permissionId: notification.requestId, response: 'reject' } },
             ]))
             return item
           }))
@@ -96,7 +112,7 @@
       fetch('/api/projection').then(response => response.json()).then(projection => {
         currentProjection = projection
         document.querySelector('#status').textContent = 'Connected'
-        summary.textContent = projection.sessions.length + ' OpenCode sessions discovered'
+        summary.textContent = projection.agents.length + ' agents, ' + projection.sessions.length + ' sessions, ' + (projection.relations || []).length + ' relations'
         renderSessions()
       }).catch(() => { document.querySelector('#status').textContent = 'Error'; summary.textContent = 'OpenCode projection unavailable' })
     </script>

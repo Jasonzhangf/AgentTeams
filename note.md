@@ -66,3 +66,69 @@
 - 2026-09-03 OpenCode permission via Console Host Camo：真实 server `127.0.0.1:3253` 在 `bash=ask` 下创建 Session `ses_f99e3acabffe3d5T6iyS5gIIQt` 和 pending permission `per_0661c8b920011sU4iJO6qFnG1s`；重建并重启 Host `127.0.0.1:3254` 后 `/api/projection` 真实返回 Agent、20 Sessions 和 pending notification。Camo profile `teams-permission-live` 在桌面视口进入 Notifications，打开 Approval drawer 并点击 `Reject`；随后 OpenCode `/permission` 返回 `[]`，证明用户入口到官方 permission endpoint 的 reject 收口。所有运行时已精确停止；allow once/always 和 lifecycle records 仍待完成。
 - 2026-09-03 OpenCode permission allow via Console Host Camo：真实 server `127.0.0.1:3255` 在 `bash=ask` 下创建 `ses_f99df8488ffes2gNSz22B8to6Y`，通过 `/prompt_async` 产生 pending `per_06620ddb5001L0tYZyix3Iu7T0`；Camo profile `teams-permission-allow` 在桌面视口进入 Notifications、打开 Approval drawer、点击 `Allow once`，随后 `/permission` 返回 `[]` 且 Session message 包含 `TEAMS_ALLOW_ONCE`，证明 allow once 正向执行。所有运行时已精确停止；always 分支和 lifecycle records 仍待完成。
 - 2026-09-03 OpenCode permission always via Console Host Camo：真实 server `127.0.0.1:3257` 创建 `ses_f99dc5f89ffeuxPdbSxHdEq4Ii` 和 pending `per_06623dd13001bNOes6wGrz24VK`；Camo profile `teams-permission-always` 进入 Notifications、打开 Approval drawer、点击 `Always allow`，随后 `/permission` 返回 `[]` 且 message 含 `TEAMS_ALWAYS_ALLOW`，证明 always 正向执行。所有运行时已精确停止；lifecycle records 仍未生成。
+
+## 2026-09-04 v2 transport design based on zterm principles
+
+- 同意 Jason 方向：参考 `~/code/zterm` 的连接架构，但 Teams 独立实现协议和网络层。
+- 设计已落盘：`Teams/docs/design/teams-control-protocol-v2-master-agent-host.md` 与 `Teams/docs/design/teams-control-protocol-v2.manifest.json`。
+- 关键拆分：Registration directory WebSocket、Master account directory WebSocket、Agent Host target WebSocket 三资源分离；target transport 只存在一个，Session 以 logical channel 多路复用。
+- 控制与业务物理隔离：target control frame 管 hello/ping/health/generation/channel；Session channel frame 管 session.message/permission/notification/relation。
+- Session 正文不禁止经过 Agent Host WebSocket；禁止的是进入控制帧/metadata/routing/auth/health/retry/config。
+- 已更新 README 与 docs/architecture resource/function/mainline/module/verification maps；`appsdk verify Teams` 通过。
+- 未写网络 runtime；下一步等 Jason 批准后进入 Phase A：control-protocol schema 与 channel 状态机测试。
+
+## 2026-09-04 Phase A & AppSDK 治理闭环
+
+- Phase A control-protocol 已实现并保持绿测：`control-protocol/frames.ts`、`channel-state.ts`、两个 spec；Vitest `16/16` 通过，strict `tsc --noEmit` 通过。
+- AppSDK 治理修复完成：无效 migration record 备份后，官方 `appsdk pin-lock` 重写 SDK lock/migration record，并加入 `control-protocol/**` owned paths。
+- 验证：`appsdk verify Teams`、`appsdk compile Teams`、再次 `appsdk verify Teams`、`git diff --check` 全部通过。
+- C2C/ChatGPT 规划仍等待连接选择；未 commit/push/review/merge。
+
+## 2026-09-04 Phase B Agent Host Registration + Server Directory
+
+- 新增 `network/host-registration.ts`：Agent Host 注册 client，校验链路已连接、凭证一致、identity/capability/route candidates 合法后才 publish 目录。
+- 新增 `server/directory.ts`：Server host directory skeleton，支持 upsert、presence refresh、stale removal、account filter；拒绝 Session/permission body 字段进入目录。
+- 新增根级 `Teams/vitest.config.ts` 收口 `server/**`、`network/**`、`control-protocol/**` 测试；新增 8 个定向测试，Phase A/B 合计 `28/28` 通过。
+- 验证：strict `tsc --noEmit --allowImportingTsExtensions` 通过；`appsdk verify Teams`、`appsdk compile Teams`、再次 verify、`git diff --check` 全部通过。
+- C2C/ChatGPT：Camo 自动配置 ChatGPT connector 失败（input pipeline 超时），改用本地 Phase B 开发推进；连接配置仍待 Jason 手动完成或修复 Camo。
+
+## 2026-09-04 Phase C Account Directory + Route Plan
+
+- 新增 `network/account-directory.ts`：Master 账户目录快照、generation 确认、refresh、host 解析；无目录 generation 或 generation 倒退显式失败。
+- 新增 `network/route-plan.ts`：manual/auto 显式 route plan；失败 candidate 退休后才进入下一候选，成功不可被改写成失败。
+- 验证：Phase A/B/C 定向测试合计 `36/36` 通过；strict `tsc`、AppSDK verify/compile、`git diff --check` 通过。
+
+## 2026-09-04 Phase D Target Transport + Session Channel Multiplex
+
+- 新增 `network/target-transport.ts`：target hello/ack/health/generation/close/fail 生命周期，stale generation 显式拒绝。
+- 新增 `network/session-channel-registry.ts`：一个 target transport 上多个 logical channel 的 open/ack/message/close/error 注册表，未打开、未知 channel、stale generation 显式失败。
+- 验证：Phase A/B/C/D 定向测试合计 `43/43` 通过；strict `tsc`、AppSDK verify/compile、`git diff --check` 通过。
+
+## 2026-09-04 Phase E Agent Host Config + OpenCode Binding + AppSDK 投影修复
+
+- `agent-host/agent-host.ts` 实现 Agent Host 配置校验与 OpenCode facade binding：endpoint/auth、credential reference 必填；registration/projection 仅承载 host/agent/capability/sessionIds，不携带 sessionId/permissionId。
+- `network/host-registration.ts`、`network/account-directory.ts`、`network/route-plan.ts`、`network/target-transport.ts`、`network/session-channel-registry.ts`、`server/directory.ts` 严格 strict typecheck 通过；opencode-adapter `pnpm exec tsc --noEmit` 通过。
+- 治理补齐：`Teams/.appsdk/maps/module-registry.json` 与 `Teams/.appsdk/project.json` owned paths / regression input_paths 同步加入 `control-protocol/**`、`agent-host/**` 与根 `vitest.config.ts`；`appsdk compile Teams` 重投影后两者一致，`appsdk verify Teams` 仍返回 `contract_bound`。
+- Phase A-E 根级回归 `45/45` 通过；`git diff --check` 未出现宽行警告；真实 OpenCode live（permission allow/reject/always + Console Host Camo）证据保留自 9-3。
+- 文档同步：README 增列 Phase E；impl-plan 把 Phase E 标注为基础绑定已完成、明确未完成的 runtime listener 边界；`docs/architecture/function-map.json` 新增 `agent_host_config_binding`（owner=agent-host, status=implemented）；`docs/architecture/resource-map.json` 新增 `agent-host-config` control resource；`docs/architecture/verification-map.json` 在 `teams-agent-host-registration` gate 下追加 binding 不携带 Session/permission 的检查。
+- ChatGPT 规划连接：本机 `c2c doctor` 绿色、setupMode=auto、`connectorName=Codex with ChatGPT · teams-protocol-v2-20260903`，但 `session` 仍为 `projectReady=false`；下一步走 Bind Project，等待 Jason 在 ChatGPT 里创建项目 `teams-protocol-v2-20260903`（仅限项目记忆）后再启动 INIT/PLAN。
+- 未启动 review/commit/push；工作树仍待 Jason 决定是否合并 Phase E 基线。
+
+## 2026-09-04 Governance recovery reset and preflight
+
+- Jason 已批准 Teams governance recovery；本轮仅恢复 AppSDK 治理，不扩展业务 runtime scope。
+- 在独立、非 main 的 `playground/teams-governance-reset-20260904` worktree 执行官方 `appsdk reset-governance Teams --discard-legacy`，保留 business source/runtime data/Active/Protected，旧治理控制态先保存 immutable snapshot 后丢弃。
+- reset 后重新执行 AppSDK 0.1.6 `init`、`pin-lock`、`compile`、`verify`；canonical verify 返回 `ok=true`、`stage=contract_bound`。
+- 重新建立 fresh Guide PlanRecord `teams-control-transport-v2-1`；`goal_scope`、`architecture_maps`、`owner_worktree`、`preflight_verify` 均通过，随后 `guide close` 返回 `workflow_complete=true`。
+- preflight 实际验证：全部 AppSDK/Teams JSON maps 与 v2 protocol manifest 可解析；Teams focused Vitest `16 files / 57 tests` 通过；OpenCode adapter 与 Console Host typecheck 通过；mapped strict TypeScript check 通过；`git diff --check` 通过。
+- 依赖验证暴露并记录了两个环境路径问题：首次 Vitest 因 local OpenCode adapter 未 build 而无法解析 package export；首次 mapped `tsc` 因 TypeScript 6 的 config/file-list 约束及 Node globals 声明失败。安装声明依赖、构建 adapter，并使用 `--ignoreConfig --skipLibCheck --types node` 后通过。
+- 本轮没有执行 runtime install/restart/live replay、review、commit、push、merge 或 worktree cleanup；AppSDK close 明确报告 canonical lifecycle 尚未 freeze/retire。
+
+## 2026-09-05 AppSDK 0.1.6 governance migration closeout
+
+- 旧治理按已批准的 reset 路线作废：完整旧 `.appsdk` 与 `.appsdk-control` 已移出项目 active root，immutable audit snapshot 保存在 `/tmp/teams-appsdk-latest-migration-20260905/`；snapshot hash 校验通过。
+- Teams 已使用 AppSDK `0.1.6` 重新初始化，当前唯一 active governance root 为 `Teams/.appsdk/`；项目契约为 `project_id=teams`，goal 为 `goal-teams-multi-agent-console`，module 为 `teams-design`，lifecycle stage 为 `contract_bound`。
+- 当前 SDK lock 与安装于 `Teams/.appsdk/sdk.bin` 的修复版 binary 一致：SHA-256 `7d8e77be1c9d622cf312b412b0128358d808cafb828a4e2e1fa7678a220d3a79`；bundle digest 与 manifest digest 由 `pin-lock` 生成，不手写。
+- AppSDK 0.1.6 原始 canonical contract 判断存在真实路径兼容缺陷：新正式路径为 `contracts/transitions/zone-transition.manifest.json`，既有测试/迁移夹具仍使用 `zone-transition-manifest.json`。修复位于 AppSDK `assert_declared_contracts` owner：拆分 canonical 条件并兼容两种已存在路径，未恢复旧 Teams governance root、未引入 fallback。
+- AppSDK 修复 worktree 的 `cargo fmt --check`、`cargo test --all-targets --no-fail-fast` 均通过，CLI smoke 为 `51/51`；Teams 使用修复版 binary 串行执行 `guide compile`、`compile`、`verify` 全部通过，`verify` 返回 `ok=true`、`stage=contract_bound`。
+- 本轮未执行 runtime install/restart/live replay；未执行 AppSDK/Teams review、commit、push、merge 或 worktree cleanup。AppSDK 修复源仍在独立 worktree，Teams 当前治理 binary 已内置并锁定。

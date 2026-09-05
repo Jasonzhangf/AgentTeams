@@ -1,17 +1,489 @@
 {
   "schema_version": 1,
+  "map_id": "teams-function-map",
+  "status": "partial",
   "functions": [
-    {"function_id":"goal_clarification","owner":"appsdk::goal","entry_symbols":["clarify"],"required_gates":["goal_confirmed"]},
-    {"function_id":"compile_artifact","owner":"appsdk::compiler","entry_symbols":["compile"],"required_gates":["contract_valid","sdk_pinned"]},
-    {"function_id":"sdk_version_migration","owner":"appsdk::delivery","entry_symbols":["pin_lock","migrate_governance_maps","assert_sdk_migration_record","install_current_governance_maps","install_bundle_resources","write_project"],"required_gates":["sdk_migration","governance_map_migration","sdk_pinned"]},
-    {"function_id":"historical_review_map_resolution","owner":"appsdk::fix_lifecycle","entry_symbols":["assert_review_map_bindings","assert_fix_architecture_gate","assert_fix_lifecycle_graph"],"required_gates":["governance_map_migration","architecture_review_pass"]},
-    {"function_id":"rehydrate_frozen_artifact","owner":"appsdk::lifecycle","entry_symbols":["rehydrate_frozen","write_rehydrate_transaction","read_rehydrate_transaction","stage_protected_archive","restore_active_from_archive","assert_active_projection_matches","publish_active","finish_rehydrate_transaction"],"required_gates":["contract_valid","sdk_pinned","record_graph","frozen_rehydrate","rehydrate_transaction_recovery"]},
-    {"function_id":"development_scenario_composition","owner":"appsdk::development_scenarios","entry_symbols":["assert_development_scenarios"],"required_gates":["scenario_pair_activation"]},
-    {"function_id":"evidence_record_validation","owner":"appsdk::fix_lifecycle","entry_symbols":["assert_evidence_record"],"required_gates":["contract_valid","fix_lifecycle_graph"]},
-    {"function_id":"pre_review_validation","owner":"appsdk::verification","entry_symbols":["verify_review_admission","assert_pre_review_validation_gate","deployment_receipt_time"],"required_gates":["development_whitebox","deployment_receipts","deployed_blackbox_effectiveness","pre_review_validation"]},
-    {"function_id":"portable_mainline_ref_resolution","owner":"appsdk::host_vcs","entry_symbols":["resolve_recorded_mainline_commit","assert_single_merge_gate"],"required_gates":["portable_mainline_ref","mainline_merge_identity"]},
-    {"function_id":"parallel_merge_queue","owner":"appsdk::merge_queue","entry_symbols":["assert_parallel_merge_gate"],"required_gates":["exclusive_worker_worktree","incremental_milestone_delivery","serial_merge_queue","integration_affected_verification","tested_integration_identity","remote_main_receipt","mainline_merge_identity"]},
-    {"function_id":"fix_lifecycle_graph","owner":"appsdk::fix_lifecycle","entry_symbols":["assert_fix_lifecycle_graph"],"required_gates":["worktree_clean","baseline_reproduced","fix_candidate_verified","architecture_review_pass","post_architecture_effectiveness","mainline_merge_identity"]},
-    {"function_id":"promote_freeze_publish","owner":"appsdk::lifecycle","entry_symbols":["promote_module","freeze_module","publish_active"],"required_gates":["fix_lifecycle_graph","record_graph","artifact_hash","vcs_clean"]}
+    {
+      "function_id": "bootstrap_link_resolution",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/link.ts"
+      ],
+      "entry_symbols": [
+        "resolveBootstrapLinkConfig"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary"
+      ]
+    },
+    {
+      "function_id": "network_connection_lifecycle",
+      "owner": "network",
+      "status": "partial",
+      "paths": [
+        "network/link.ts"
+      ],
+      "entry_symbols": [
+        "connectLink",
+        "closeLink"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary"
+      ]
+    },
+    {
+      "function_id": "agent_host_registration",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/host-registration.ts"
+      ],
+      "entry_symbols": [
+        "prepareAgentHostRegistration",
+        "registerAgentHost"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary",
+        "teams-agent-host-registration"
+      ]
+    },
+    {
+      "function_id": "server_host_directory",
+      "owner": "server",
+      "status": "implemented",
+      "paths": [
+        "server/directory.ts"
+      ],
+      "entry_symbols": [
+        "createHostDirectory",
+        "upsertDirectoryHost",
+        "touchHostPresence",
+        "removeDirectoryHost",
+        "removeStaleHosts",
+        "listDirectoryHosts"
+      ],
+      "required_gates": [
+        "teams-agent-host-registration"
+      ]
+    },
+    {
+      "function_id": "account_directory_refresh",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/account-directory.ts"
+      ],
+      "entry_symbols": [
+        "createAccountDirectorySnapshot",
+        "confirmDirectoryGeneration",
+        "refreshAccountDirectory",
+        "resolveHostFromDirectory"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary",
+        "teams-account-directory-lifecycle"
+      ]
+    },
+    {
+      "function_id": "route_plan_selection",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/route-plan.ts"
+      ],
+      "entry_symbols": [
+        "buildRoutePlan",
+        "beginRouteCandidate",
+        "succeedRouteCandidate",
+        "failRouteCandidate"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary",
+        "teams-explicit-route-no-fallback"
+      ]
+    },
+    {
+      "function_id": "agent_host_target_transport",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/target-transport.ts"
+      ],
+      "entry_symbols": [
+        "beginTargetTransport",
+        "receiveHelloAck",
+        "confirmTargetHealth",
+        "assertTargetGeneration",
+        "closeTargetTransport",
+        "failTargetTransport"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary",
+        "teams-transport-control-session-separation"
+      ]
+    },
+    {
+      "function_id": "session_channel_multiplex",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/session-channel-registry.ts"
+      ],
+      "entry_symbols": [
+        "createSessionChannelRegistry",
+        "openSessionChannel",
+        "acknowledgeSessionChannel",
+        "sendSessionMessage",
+        "closeSessionChannel",
+        "acknowledgeSessionChannelClose",
+        "failSessionChannel"
+      ],
+      "required_gates": [
+        "teams-multiplex-target-reuse",
+        "teams-transport-control-session-separation"
+      ]
+    },
+    {
+      "function_id": "agent_host_config_binding",
+      "owner": "agent-host",
+      "status": "implemented",
+      "paths": [
+        "agent-host/agent-host.ts"
+      ],
+      "entry_symbols": [
+        "createAgentHostConfig",
+        "createAgentHostBinding"
+      ],
+      "required_gates": [
+        "teams-agent-host-registration",
+        "teams-session-channel-ordering"
+      ]
+    },
+    {
+      "function_id": "server_admission",
+      "owner": "server",
+      "status": "partial",
+      "paths": [
+        "server/admission.ts"
+      ],
+      "entry_symbols": [
+        "authenticateMachine",
+        "evaluatePermission",
+        "registerRuntimeConnection"
+      ],
+      "required_gates": [
+        "teams-account-permission-owner",
+        "teams-machine-token-auth"
+      ]
+    },
+    {
+      "function_id": "machine_token_authentication",
+      "owner": "network",
+      "status": "design",
+      "entry_symbols": [
+        "resolveMachineAuthConfig",
+        "validateSharedCredential",
+        "reportMachineAuthState"
+      ],
+      "required_gates": [
+        "teams-machine-token-auth"
+      ]
+    },
+    {
+      "function_id": "host_command_dispatch",
+      "owner": "agent-host",
+      "status": "design",
+      "entry_symbols": [
+        "dispatchHostCommand",
+        "projectHostCommandResult"
+      ],
+      "binding_status": "binding-pending",
+      "required_gates": [
+        "teams-host-command-no-business-payload",
+        "teams-session-channel-ordering"
+      ]
+    },
+    {
+      "function_id": "control_protocol_schema",
+      "owner": "control-protocol",
+      "status": "implemented",
+      "paths": [
+        "control-protocol/frames.ts",
+        "control-protocol/channel-state.ts"
+      ],
+      "entry_symbols": [
+        "parseTargetControlFrame",
+        "parseSessionChannelFrame",
+        "createChannelState",
+        "openChannel",
+        "onOpenAck",
+        "onMessage",
+        "onClose",
+        "onCloseAck",
+        "onError"
+      ],
+      "required_gates": [
+        "teams-control-protocol-schema",
+        "teams-transport-control-session-separation"
+      ]
+    },
+    {
+      "function_id": "shared_config_sync",
+      "owner": "config",
+      "status": "partial",
+      "paths": [
+        "config/runtime-config.ts"
+      ],
+      "entry_symbols": [
+        "readConfigVersion",
+        "syncSharedRuntimeConfig"
+      ],
+      "required_gates": [
+        "teams-config-owner",
+        "teams-bootstrap-before-config"
+      ]
+    },
+    {
+      "function_id": "agent_config_revision_save",
+      "owner": "config",
+      "status": "partial",
+      "paths": [
+        "config/runtime-config.ts"
+      ],
+      "entry_symbols": [
+        "saveAgentRuntimeConfig"
+      ],
+      "required_gates": [
+        "teams-config-conflict-protocol",
+        "teams-agent-provider-model-boundary"
+      ]
+    },
+    {
+      "function_id": "daemon_runtime_start",
+      "owner": "runtime",
+      "status": "partial",
+      "paths": [
+        "runtime/daemon-runtime.ts",
+        "runtime/capability-publication.ts"
+      ],
+      "entry_symbols": [
+        "startDaemonRuntime",
+        "startDaemonRuntimeWithCapability",
+        "advanceRuntimeLifecycle",
+        "stopDaemonRuntime",
+        "publishRuntimeCapabilities"
+      ],
+      "required_gates": [
+        "teams-runtime-network-composition",
+        "teams-bootstrap-before-config"
+      ]
+    },
+    {
+      "function_id": "agent_runtime_projection",
+      "owner": "agent",
+      "status": "partial",
+      "paths": [
+        "ui/teams-console/src/client/model.ts"
+      ],
+      "entry_symbols": [
+        "projectAgentCurrentSessions",
+        "projectDshSessionList"
+      ],
+      "required_gates": [
+        "teams-agent-network-agnostic",
+        "teams-current-session-fast-path"
+      ]
+    },
+    {
+      "function_id": "capability_use_relation_graph",
+      "owner": "agent",
+      "status": "partial",
+      "paths": [
+        "agent/relation-graph.ts"
+      ],
+      "entry_symbols": [
+        "reportCapabilityUseByConsumer",
+        "reportCapabilityUseByProvider",
+        "reconcileCapabilityUseReports",
+        "projectCapabilityUseGraph"
+      ],
+      "required_gates": [
+        "teams-capability-use-relation-graph"
+      ]
+    },
+    {
+      "function_id": "notification_projection",
+      "owner": "agent",
+      "status": "partial",
+      "paths": [
+        "agent/notification-projection.ts"
+      ],
+      "entry_symbols": [
+        "projectAgentNotifications",
+        "resolveNotificationTarget",
+        "acknowledgeNotification"
+      ],
+      "required_gates": [
+        "teams-notification-target-resolution"
+      ]
+    },
+    {
+      "function_id": "search_plugin_lifecycle",
+      "owner": "search-plugin",
+      "status": "partial",
+      "paths": [
+        "search-plugin/search-index.ts"
+      ],
+      "entry_symbols": [
+        "connectSearchPlugin",
+        "indexSearchSources",
+        "querySearchIndex"
+      ],
+      "required_gates": [
+        "teams-search-plugin-boundary"
+      ]
+    },
+    {
+      "function_id": "memory_plugin_lifecycle",
+      "owner": "memory-plugin",
+      "status": "partial",
+      "paths": [
+        "memory-plugin/memory-record.ts"
+      ],
+      "entry_symbols": [
+        "summarizeSessionMemory",
+        "validateMemoryDraft",
+        "saveMemoryRecord",
+        "loadMemoryRecord",
+        "exportMemoryRecord"
+      ],
+      "required_gates": [
+        "teams-memory-plugin-boundary"
+      ]
+    },
+    {
+      "function_id": "agent_local_config",
+      "owner": "config",
+      "status": "partial",
+      "entry_symbols": [
+        "readAgentRuntimeConfig",
+        "saveAgentRuntimeConfig",
+        "applyAgentRuntimeConfig"
+      ],
+      "required_gates": [
+        "teams-agent-provider-model-boundary"
+      ]
+    },
+    {
+      "function_id": "dsh_client_adapter",
+      "owner": "dsh-adapter",
+      "status": "partial",
+      "lifecycle": "deferred",
+      "paths": [
+        "ui/teams-console/src/client/index.ts",
+        "ui/teams-console/src/client/dsh-adapter.ts",
+        "dsh-adapter/agent-identity.ts"
+      ],
+      "entry_symbols": [
+        "apply",
+        "openDshSession",
+        "openCurrentAgentSession",
+        "projectHostSessionIdentities",
+        "projectDshAgentSessionList"
+      ],
+      "required_gates": [
+        "teams-dsh-slot-contract",
+        "teams-dsh-live-smoke"
+      ],
+      "binding_status": "external-producer-pending"
+    },
+    {
+      "function_id": "opencode_plugin_adapter",
+      "owner": "opencode-adapter",
+      "status": "partial",
+      "entry_symbols": [
+        "registerOpenCodeHooks",
+        "projectOpenCodeEvent",
+        "projectOpenCodePermission",
+        "createTeamsOpenCodePlugin",
+        "subscribeOpenCodeNotifications",
+        "TeamsOpenCodePluginWithNotifications"
+      ],
+      "paths": [
+        "opencode-adapter/src/index.ts"
+      ],
+      "required_gates": [
+        "teams-opencode-hook-contract",
+        "teams-dsh-opencode-adapter-separation",
+        "teams-opencode-live-smoke"
+      ]
+    },
+    {
+      "function_id": "console_projection",
+      "owner": "ui",
+      "status": "partial",
+      "entry_symbols": [
+        "projectFleetTopology",
+        "projectActivity",
+        "projectAgentCard"
+      ],
+      "required_gates": [
+        "teams-projection-no-truth-ownership"
+      ]
+    },
+    {
+      "function_id": "console_settings_projection",
+      "owner": "ui",
+      "status": "partial",
+      "entry_symbols": [
+        "projectMachineConnectionSettings",
+        "projectAgentRuntimeSettings",
+        "openSettingsDrawer"
+      ],
+      "required_gates": [
+        "teams-settings-owner"
+      ]
+    },
+    {
+      "function_id": "drawer_navigation",
+      "owner": "ui",
+      "status": "partial",
+      "paths": [
+        "ui/teams-console/src/client/Drawer.tsx",
+        "ui/teams-console/src/client/controller.ts"
+      ],
+      "entry_symbols": [
+        "pushDrawer",
+        "popDrawer",
+        "toggleExpanded",
+        "handlesKeyboard"
+      ],
+      "required_gates": [
+        "teams-drawer-accessibility",
+        "teams-static-ui-replay"
+      ]
+    },
+    {
+      "function_id": "focused_session_bridge",
+      "owner": "dsh-adapter",
+      "status": "partial",
+      "lifecycle": "deferred",
+      "paths": [
+        "ui/teams-console/src/client/dsh-adapter.ts",
+        "ui/teams-console/src/client/controller.ts"
+      ],
+      "entry_symbols": [
+        "openCurrentAgentSession",
+        "openDshSession",
+        "focusCurrentSession",
+        "focusSession"
+      ],
+      "required_gates": [
+        "teams-current-session-fast-path",
+        "teams-dsh-conversation-reuse",
+        "teams-dsh-live-smoke"
+      ]
+    }
   ]
 }

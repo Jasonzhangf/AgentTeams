@@ -1,43 +1,221 @@
 {
   "schema_version": 1,
-  "modules": [{
-    "module_id": "teams-design",
-    "status": "active",
-    "owner": "teams-design",
-    "owned_paths": [
-      ".appsdk/goal.json",
-      ".appsdk/maps/**",
-      "docs/**",
-      "contracts/**",
-      "agent/**",
-      "config/**",
-      "dsh-adapter/**",
-      "memory-plugin/**",
-      "network/**",
-      "runtime/**",
-      "search-plugin/**",
-      "server/**",
-      "scripts/**",
-      "console-host/package.json",
-      "console-host/src/**",
-      "console-host/tests/**",
-      "console-host/tsconfig.json",
-      "console-host/vitest.config.ts",
-      "console-host/static/**",
-      "opencode-adapter/package.json",
-      "opencode-adapter/src/**",
-      "opencode-adapter/tests/**",
-      "opencode-adapter/tsconfig.json",
-      "opencode-adapter/tsdown.config.ts",
-      "ui/teams-console/cordis.patch.yml",
-      "ui/teams-console/package.json",
-      "ui/teams-console/src/**",
-      "ui/teams-console/tests/**",
-      "ui/teams-console/tsconfig.json",
-      "ui/teams-console/tsdown.config.ts",
-      "ui/teams-console/vitest.config.ts"
-    ],
-    "forbidden_paths": ["active/lib/**", "protected/**", "generated/**"],
-    "verification_gates": ["fix_lifecycle_graph", "mainline_merge_identity"]
-  }]
+  "map_id": "teams-module-registry",
+  "status": "partial",
+  "external_boundaries": [
+    {
+      "boundary_id": "deepseek-harness-dsh-web-host",
+      "owner": "deepseek-harness",
+      "status": "external",
+      "repository_root": "../deepseek-harness",
+      "allowed_symbols": [
+        "runProfile",
+        "composeProfile",
+        "prepareProfile",
+        "loadProfile",
+        "composeEntries",
+        "boot",
+        "mountRootInclude",
+        "WebServer[Service.init]"
+      ],
+      "forbidden_paths": [
+        "Teams/**"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "module_id": "bootstrap",
+      "owner": "bootstrap",
+      "status": "design",
+      "owned_paths": [
+        "bootstrap/**"
+      ],
+      "forbidden_paths": [
+        "network/**",
+        "config/**",
+        "agent/**"
+      ]
+    },
+    {
+      "module_id": "network",
+      "owner": "network",
+      "status": "partial",
+      "owned_paths": [
+        "network/**"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "config/**",
+        "server/**"
+      ]
+    },
+    {
+      "module_id": "control-protocol",
+      "owner": "control-protocol",
+      "status": "implemented",
+      "owned_paths": [
+        "control-protocol/**",
+        "vitest.config.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "server/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "agent-host",
+      "owner": "agent-host",
+      "status": "design",
+      "owned_paths": [
+        "agent-host/**"
+      ],
+      "forbidden_paths": [
+        "ui/**",
+        "network/**",
+        "server/**"
+      ]
+    },
+    {
+      "module_id": "master-host",
+      "owner": "master-host",
+      "status": "design",
+      "owned_paths": [
+        "console-host/**"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "server/**",
+        "network/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "acp-adapter",
+      "owner": "acp-adapter",
+      "status": "design",
+      "owned_paths": [
+        "acp-adapter/**"
+      ],
+      "forbidden_paths": [
+        "ui/**",
+        "opencode-adapter/**",
+        "dsh-adapter/**"
+      ]
+    },
+    {
+      "module_id": "config",
+      "owner": "config",
+      "status": "partial",
+      "owned_paths": [
+        "config/**"
+      ],
+      "forbidden_paths": [
+        "network/**",
+        "agent/**"
+      ]
+    },
+    {
+      "module_id": "server",
+      "owner": "server",
+      "status": "partial",
+      "owned_paths": [
+        "server/**"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "runtime",
+      "owner": "runtime",
+      "status": "partial",
+      "owned_paths": [
+        "runtime/**"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "agent",
+      "owner": "agent",
+      "status": "partial",
+      "owned_paths": [
+        "agent/**"
+      ],
+      "forbidden_paths": [
+        "network/**",
+        "config/**",
+        "server/**"
+      ]
+    },
+    {
+      "module_id": "search-plugin",
+      "owner": "search-plugin",
+      "status": "design",
+      "owned_paths": [
+        "search-plugin/**"
+      ],
+      "forbidden_paths": [
+        "memory-plugin/**",
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "memory-plugin",
+      "owner": "memory-plugin",
+      "status": "design",
+      "owned_paths": [
+        "memory-plugin/**"
+      ],
+      "forbidden_paths": [
+        "search-plugin/**",
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "dsh-adapter",
+      "owner": "dsh-adapter",
+      "status": "partial",
+      "lifecycle": "deferred",
+      "owned_paths": [
+        "dsh-adapter/**"
+      ],
+      "forbidden_paths": [
+        "opencode-adapter/**"
+      ]
+    },
+    {
+      "module_id": "opencode-adapter",
+      "owner": "opencode-adapter",
+      "status": "implemented",
+      "owned_paths": [
+        "opencode-adapter/**"
+      ],
+      "forbidden_paths": [
+        "dsh-adapter/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "ui",
+      "owner": "ui",
+      "status": "design",
+      "owned_paths": [
+        "ui/**"
+      ],
+      "forbidden_paths": [
+        "network/**",
+        "config/**",
+        "server/**",
+        "agent/**"
+      ]
+    }
+  ]
 }

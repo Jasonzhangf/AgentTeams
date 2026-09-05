@@ -13,14 +13,20 @@ describe('Teams standalone Console Host', () => {
     await new Promise<void>(resolve => upstream.listen(0, '127.0.0.1', () => { resolve() }))
     const address = upstream.address()
     if (address === null || typeof address === 'string') throw new Error('upstream address missing')
-    const projection = await projectConsoleHost({ openCodeUrl: `http://127.0.0.1:${address.port}`, staticRoot: '.' })
+    const projection = await projectConsoleHost({
+      agents: [{ agentId: 'opencode-local', machineId: 'local', label: 'OpenCode', openCodeUrl: `http://127.0.0.1:${address.port}` }],
+      staticRoot: '.',
+    })
     expect(projection.sessions).toEqual([{ id: 'ses_host', title: 'Host session', directory: '/workspace', running: false, agentId: 'opencode-local' }])
     expect(projection.agents).toEqual([{ agentId: 'opencode-local', machineId: 'local', label: 'OpenCode', sessionIds: ['ses_host'], currentSessionId: 'ses_host' }])
     await new Promise<void>(resolve => upstream.close(() => { resolve() }))
   })
 
   it('serves health and projection routes', async () => {
-    const server = createConsoleHost({ openCodeUrl: 'http://127.0.0.1:1', staticRoot: '.' })
+    const server = createConsoleHost({
+      agents: [{ agentId: 'opencode-local', machineId: 'local', label: 'OpenCode', openCodeUrl: 'http://127.0.0.1:1' }],
+      staticRoot: '.',
+    })
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', () => { resolve() }))
     const address = server.address()
     if (address === null || typeof address === 'string') throw new Error('host address missing')

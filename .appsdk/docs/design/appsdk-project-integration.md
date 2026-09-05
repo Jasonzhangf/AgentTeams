@@ -14,6 +14,11 @@ external AppSDK installation
 
 The business project must not copy AppSDK source, compiler, or harness into its own source tree.
 
+Project-scoped CLI commands use the process `cwd` as the default project root.
+An explicit project argument is optional for out-of-directory operator use.
+Projects and Skills must not require a project-root environment variable, and
+help output must remain available without loading project state.
+
 ## Governance preflight ownership
 
 Governance readiness is part of the implementation task. Missing contracts,
@@ -116,9 +121,9 @@ Ignore:
 
 消费者只使用全局安装的 AppSDK Bundle。Bundle 版本必须同时绑定 Rust CLI、machine contracts、文档、规则和 skills；不能让项目自行扫描一个不受版本控制的全局目录。Bundle manifest 是机器真源，`init`/`new` 将其中声明的 Skill、规则和文档安装到项目 `.appsdk/`，并生成 `.appsdk/sdk-resources.json`。
 
-项目中的手动合同（例如 `project.json`、records、maps）由 AI/开发者维护，SDK 只校验 schema、引用、owner、scope 和生命周期关系。`.appsdk/sdk-resources.json` 是自动生成文件，只能由 SDK 重建；`verify` 会校验项目资源文件自身的摘要，发现手工改写立即 fail-fast，但不把当前全局 Bundle 身份当作项目开发门禁。
+项目中的手动合同（例如 `project.json`、records、maps）由 AI/开发者维护，SDK 只校验 schema、引用、owner、scope 和生命周期关系。`.appsdk/sdk-resources.json` 是自动生成文件，只能由 SDK 重建；`verify` 会校验资源文件摘要和 Bundle digest，发现手工改写立即 fail-fast。
 
-`contracts/sdk-bundle.manifest.json` 声明当前 Bundle 的资源集合和安装位置；初始化后项目内的机器真源位于 `.appsdk/contracts/sdk-bundle.manifest.json`。它和 binary 同版本发布；`pin-lock` 可把 binary digest、Bundle digest、manifest digest 和资源集合写入迁移审计锁。普通 `verify`/`compile` 不比较全局 binary、Bundle 或其摘要；`--binary` 文件只作为显式迁移输入，不得因当前执行文件不同而阻断项目开发。
+`contracts/sdk-bundle.manifest.json` 声明当前 Bundle 的资源集合和安装位置；初始化后项目内的机器真源位于 `.appsdk/contracts/sdk-bundle.manifest.json`。它和 binary 同版本发布；`pin-lock` 把 binary digest、Bundle digest、manifest digest 和资源集合一起写入锁。执行 `pin-lock` 的 binary 必须与 `--binary` 指向的文件字节一致，防止旧 CLI 把新 binary 与旧 embedded Bundle 拼成伪锁。
 
 `.appsdk/sdk.lock` binds the project to the external implementation:
 
@@ -142,6 +147,66 @@ The lock is committed. A template may retain the two documented `replace-with-*`
 
 Runtime may consume only the compiled manifest and verified Active artifact. Runtime must not scan `.appsdk-control/`, Playground, Protected source, or arbitrary instruction files to reconstruct capability.
 
+## Development Process Control Harness
+
+The Harness is an agent-facing governance control plane, not a business runtime
+capability. `.appsdk/project.json#/guidance/rule_sources` explicitly declares
+project AGENTS, Skills, and their machine JSON contracts. `appsdk guide compile`
+reads only those paths and writes deterministic `.appsdk/guidance/compiled.json`.
+Markdown is digest-bound context for the agent; AppSDK validates only declared
+JSON nodes, edges, severity, and evidence contracts.
+
+Active PlanRecord and append-only PlanRevisionRecord/StepExecutionRecord events
+live under ignored `.appsdk-control/guidance/<task-id>/`. Existing AppSDK records
+remain the lifecycle truth. Missing Harness state does not block ordinary
+`verify` or `compile`; projects opt in and default to advisory guidance.
+
+After `new`, or `init` on a project with an approved Guidance declaration,
+follow the printed onboarding route:
+
+```bash
+appsdk guide compile <project>
+appsdk guide init <project> --task <task-id> --mode <develop|debug> --module <module-id>
+```
+
+The read-only intake names declared AGENTS/local Skill sources, questions still
+requiring user confirmation, exact Skill invocation suggestions, and the next
+guide commands. It never scans undeclared directories or writes an intake
+record. The Agent asks only unresolved questions and persists the confirmed
+technical plan through `appsdk guide plan`.
+
+If an existing governed project has no Guide declaration, rerun `appsdk init`
+idempotently. It preserves existing project/maps/records/Active/Protected truth,
+installs missing Guide resources, and prints:
+
+```bash
+appsdk guide init <project> --task guidance-setup --mode bootstrap --module <module-id>
+```
+
+The Agent reads the returned root AGENTS, bundled AppSDK Skill, and direct
+project-local Skill candidates, then proposes reusable workflows, project
+commands, evidence, severity, and source ownership. No durable rule is written
+or compiled before explicit user approval. After approval, update AGENTS, the
+project-local Skill and machine contract, and
+`.appsdk/project.json#/guidance/rule_sources` in a clean owner worktree; then run
+`appsdk guide compile` and `appsdk verify`. This setup proposal is project-level
+and must not be replaced by a task PlanProposal.
+
+`appsdk init` is also the single Collab bootstrap entry for a live tmux Agent.
+After AppSDK-owned resources are installed, it invokes the official
+`collab init` once with the same process environment. Collab—not AppSDK—resolves
+the project root from tmux pane cwd, starts or reuses the single daemon,
+registers the current peer, and creates or refreshes its finite default
+`direct-message` subscription. Do not follow `appsdk init` with a second
+`collab init`, `collab whoami`, or manual ordinary-message subscription.
+
+Without `TMUX_PANE`, no Agent peer exists to register. AppSDK keeps governance
+initialization usable and prints an explicit Collab-pending result; it does not
+fabricate identity/subscription state. In a live tmux context, missing Collab or
+a failed official Collab initialization reports `COLLAB_INIT_*` and collaboration
+unavailable. Independent AppSDK work continues; dependent shared writes wait for
+reliable task/file ownership. No failed registration is reported as successful.
+
 Frozen artifacts must be reproducible across clean worktree locations. The canonical module build runner appends a Rust `--remap-path-prefix` from the current project root to a stable logical path while preserving existing `RUSTFLAGS`. This removes absolute checkout paths from compiler metadata without changing source, payload, or lifecycle hashes. `rehydrate-frozen` and normal module compilation use the same runner; a path-dependent artifact is rejected rather than reconciled by copying or editing a frozen hash.
 
 ## Bootstrap
@@ -153,6 +218,11 @@ appsdk prepare ./existing-workspace
 ```
 
 AI 使用 `.appsdk-prepare.json` 模板向用户确认：这是新项目、模块重构、项目重构还是 debug；新项目根目录是什么；旧代码和 V3 等 legacy roots 是什么；新代码、Protected 和禁止修改边界是什么。用户确认后将 `status` 更新为 `confirmed`，然后才能执行 `init`。没有确认记录时，`init` 会 fail-fast。
+
+已经存在 `.appsdk/project.json` 的治理根可以直接幂等重跑 `appsdk init`，用于补齐
+当前 SDK 的 Guide 等 bundle 资源。此路径以现有项目合同作为 root 真源，不要求重新
+创建 preparation record，也不覆盖项目合同或 lifecycle truth。新建、迁移到新 root、
+或通过 `--project-root` 创建尚不存在的治理根仍必须走 confirmed preparation。
 
 对已有工作区，confirmed preparation 后必须先进入旧状态迁移预检：
 
@@ -175,7 +245,7 @@ confirmed preparation
 appsdk init ./existing-workspace --project-root new-code
 ```
 
-`init` 的第一个参数是已有工作区，`--project-root` 是新 AppSDK 项目的相对根目录。这样旧代码可以留在工作区，新代码和治理面进入独立子目录。它是幂等操作：创建 `playground/`、`active/lib/`、`protected/`、`generated/`、`.appsdk/` 和 `.appsdk-control/`，只补齐缺失的治理合同，并向新项目根目录的 `.gitignore` 追加一次 SDK 管理区块。它不覆盖已有项目文件，也不覆盖已有 Git 忽略规则；绝对路径和 `..` 路径会被拒绝。
+`init` 的第一个参数是已有工作区，`--project-root` 是新 AppSDK 项目的相对根目录。这样旧代码可以留在工作区，新代码和治理面进入独立子目录。它是幂等操作：创建 `playground/`、`active/lib/`、`protected/`、`generated/`、`.appsdk/` 和 `.appsdk-control/`，只补齐缺失的治理合同，并向新项目根目录的 `.gitignore` 追加一次 SDK 管理区块。在 live tmux Agent 中，它还以同一环境调用一次官方 `collab init`，由 Collab 完成 daemon、peer 与默认 `direct-message` 订阅；不需要第二次初始化。它不覆盖已有项目文件，也不覆盖已有 Git 忽略规则；绝对路径和 `..` 路径会被拒绝。
 
 新项目执行：
 
@@ -208,7 +278,7 @@ is:
 clean owner worktree + candidate commit
   -> lifecycle adapter binds FixCandidateRecord
   -> whitebox adapter runs and records the actual whitebox result
-  -> deployment adapter installs and restarts the exact artifact, recording both receipts
+  -> deployment adapter performs module.deployment_operations and records applicable receipts
   -> blackbox adapter exercises the deployed public entrypoint
   -> lifecycle adapter binds PreReviewValidationRecord
   -> appsdk verify --review-admission <project> --module <id>
@@ -223,8 +293,9 @@ artifact from another worktree/project/version.
 For an upgrade, run `appsdk prepare`/`init` idempotently, inspect and snapshot
 the old project and legacy roots, obtain explicit ownership-transfer approval,
 run the pinned target binary's migration command, then execute the adapter
-sequence above. Only after admission passes may review, merge, install,
-restart, promotion, and freeze proceed. A blocked adapter is an actionable
+sequence above. Only after admission passes may runtime review and applicable
+merge/promotion/freeze proceed. Installation needed for admission runs before
+admission. A blocked required adapter is an actionable
 external capability gap, not permission to edit records manually.
 
 `init` intentionally leaves a project at `draft`. The required promotion before
@@ -236,7 +307,8 @@ early, AppSDK returns `COMPILE_BLOCKED` with this exact ordered continuation and
 
 ## Lifecycle
 
-新 feature 和新项目在进入代码实现前必须完成闭环设计：
+新项目和涉及实质架构变化的 feature 先确认相称设计；局部变更复用已有设计。
+下面是需要完整设计时的参考流程，不强制每个任务另写计划或使用 Guidance：
 
 ```text
 需求与验收标准
@@ -252,7 +324,8 @@ early, AppSDK returns `COMPILE_BLOCKED` with this exact ordered continuation and
 每个验收标准必须有 verification gate。设计缺失或矛盾是 worker 自身的
 治理前置失败，不得先写业务代码。
 
-Debug 必须保存思维链、错误证据、实验条件与结果、根因判断；合并前必须
+Debug 保留可复核的决策摘要、错误证据、实验条件与结果；长任务按需保存交接。
+合并前检查本次涉及的
 对集成后的 tree 重新做 resource/function/mainline/module map、边界、
 payload/control 隔离、owner 唯一和重复实现架构检查。
 
@@ -263,12 +336,12 @@ goal clarification
   -> baseline reproduction
   -> committed fix candidate + positive/negative evidence
   -> development whitebox PASS
-  -> build + install + restart
+  -> build + applicable install/restart
   -> deployed public-entrypoint blackbox PASS
   -> PreReviewValidationRecord + `appsdk verify --review-admission` PASS
   -> architecture boundary check
   -> selected review tool ReviewRecord PASS
-  -> unchanged-source effectiveness replay PASS
+  -> unchanged-source effectiveness evidence PASS (reuse valid evidence)
   -> one independently verifiable milestone per clean worktree
   -> commit + serial merge queue + tested integration for every milestone
   -> start the next milestone only after the predecessor remote-main receipt

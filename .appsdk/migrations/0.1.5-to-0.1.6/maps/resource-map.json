@@ -1,36 +1,465 @@
 {
   "schema_version": 1,
+  "map_id": "teams-resource-map",
+  "status": "partial",
   "resources": [
-    {"resource_id":"project_contract","owner":"appsdk::project_contract","truth_store":".appsdk/project.json","allowed_operations":["read","validate","write"]},
-    {"resource_id":"sdk_bundle","owner":"appsdk::delivery","truth_store":"running binary + embedded Bundle manifest/resources","allowed_operations":["read","validate"]},
-    {"resource_id":"installed_sdk_resources","owner":"appsdk::delivery","truth_store":".appsdk/{contracts,docs,rules,skills}/**","allowed_operations":["read","validate","write"],"relations":{"must_reference":["sdk_bundle"]}},
-    {"resource_id":"sdk_lock","owner":"appsdk::delivery","truth_store":".appsdk/sdk.lock","allowed_operations":["read","validate","write"],"relations":{"must_reference":["project_contract","sdk_bundle","installed_sdk_resources"]}},
-    {"resource_id":"canonical_governance_maps","owner":"appsdk::architecture","truth_store":".appsdk/maps/{resource,function,mainline-call,verification}-map.json","allowed_operations":["read","validate","write"],"relations":{"must_reference":["sdk_bundle"]}},
-    {"resource_id":"historical_governance_maps","owner":"appsdk::delivery","truth_store":".appsdk/migrations/0.1.5-to-0.1.6/maps/**","allowed_operations":["read","validate","write"],"relations":{"must_reference":["project_contract","sdk_bundle"]}},
-    {"resource_id":"sdk_migration_record","owner":"appsdk::delivery","truth_store":".appsdk/migrations/0.1.5-to-0.1.6/record.json","allowed_operations":["read","validate","write"],"relations":{"must_reference":["project_contract","sdk_bundle","canonical_governance_maps","historical_governance_maps"]}},
-    {"resource_id":"lifecycle_records","owner":"appsdk::record_graph","truth_store":".appsdk/records/**","allowed_operations":["read","validate","write"]},
-    {"resource_id":"compiled_artifact","owner":"appsdk::compiler","truth_store":"generated/project.compiled.json","allowed_operations":["read","write"]},
-    {"resource_id":"frozen_generated_projection","owner":"appsdk::lifecycle","truth_store":"generated/modules/<module>/**","allowed_operations":["read","validate","write"],"relations":{"must_reference":["lifecycle_records"]}},
-    {"resource_id":"protected_archive","owner":"appsdk::lifecycle","truth_store":"protected/history/<module>/**","allowed_operations":["read","validate","write"],"relations":{"must_reference":["frozen_generated_projection","lifecycle_records"]}},
-    {"resource_id":"protected_version_archive","owner":"appsdk::lifecycle","truth_store":"protected/history-versions/<module>/<version>/**","allowed_operations":["read","validate","write"],"relations":{"must_reference":["lifecycle_records"]}},
-    {"resource_id":"active_library","owner":"appsdk::lifecycle","truth_store":"active/lib/<module>/**","allowed_operations":["read","validate","write"],"relations":{"must_reference":["protected_archive","frozen_generated_projection","lifecycle_records"]}},
-    {"resource_id":"frozen_rehydrate_transaction","owner":"appsdk::lifecycle","truth_store":".appsdk/transactions/rehydrate-<module>/marker.json","allowed_operations":["read","validate","write","remove"],"relations":{"must_reference":["lifecycle_records","frozen_generated_projection","protected_archive","active_library"]},"forbidden_relations":["unowned_active_projection","hash_mismatched_projection"]},
-    {"resource_id":"fix_worktree","owner":"appsdk::fix_lifecycle","truth_store":".appsdk/records/worktree-record-<module>.json","allowed_operations":["read","validate","write"]},
-    {"resource_id":"fix_evidence_set","owner":"appsdk::fix_lifecycle","truth_store":".appsdk/records/evidence/<module>/<evidence_id>.json","allowed_operations":["read","validate","write"]},
-    {"resource_id":"fix_candidate","owner":"appsdk::fix_lifecycle","truth_store":".appsdk/records/fix-candidate-record-<module>.json","allowed_operations":["read","validate","write"]},
-    {"resource_id":"pre_review_validation","owner":"appsdk::verification","truth_store":".appsdk/records/pre-review-validation-record-<module>.json","allowed_operations":["read","validate","write"],"relations":{"must_reference":["fix_candidate","compiled_artifact","fix_evidence_set"]}},
-    {"resource_id":"architecture_review","owner":"appsdk::fix_lifecycle","truth_store":".appsdk/records/review-record-<module>.json","allowed_operations":["read","validate","write"],"relations":{"must_reference":["fix_candidate","pre_review_validation","fix_evidence_set"]}},
-    {"resource_id":"fix_effectiveness","owner":"appsdk::fix_lifecycle","truth_store":".appsdk/records/effectiveness-record-<module>.json","allowed_operations":["read","validate","write"]},
-    {"resource_id":"development_scenarios","owner":"appsdk::development_scenarios","truth_store":".appsdk/contracts/development-scenarios.manifest.json","allowed_operations":["read","validate"]},
-    {"resource_id":"worker_collaboration","owner":"appsdk::collaboration","truth_store":".appsdk/records/collaboration-record-<collaboration_id>.json","allowed_operations":["read","validate","write"],"relations":{"must_reference":["fix_worktree","collaboration_index"]}},
-    {"resource_id":"collaboration_index","owner":"appsdk::collaboration","truth_store":".appsdk/records/collaboration-index.json","allowed_operations":["read","validate","write"],"forbidden_relations":["duplicate_semantic_claim","duplicate_worker","duplicate_worktree"]},
-    {"resource_id":"merge_queue","owner":"appsdk::merge_queue","truth_store":".appsdk/records/merge-queue-record-<queue_entry_id>.json","allowed_operations":["read","validate","write"],"relations":{"must_reference":["worker_collaboration","merge_queue_state"]}},
-    {"resource_id":"merge_queue_state","owner":"appsdk::merge_queue","truth_store":".appsdk/records/merge-queue-state.json","allowed_operations":["read","validate","write"],"forbidden_relations":["multiple_merge_owners","duplicate_queue_entry"]},
-    {"resource_id":"integration_candidate","owner":"appsdk::merge_queue","truth_store":".appsdk/records/integration-record-<integration_id>.json","allowed_operations":["read","validate","write"],"relations":{"must_reference":["merge_queue"]}},
-    {"resource_id":"mainline_receipt","owner":"appsdk::host_vcs","truth_store":".appsdk/records/mainline-receipt-record-<receipt_id>.json","allowed_operations":["read","validate","write"],"relations":{"must_reference":["integration_candidate","remote_repository"]}},
-    {"resource_id":"remote_repository","owner":"appsdk::host_vcs","truth_store":"git ls-remote <remote> <ref>","allowed_operations":["observe"]},
-    {"resource_id":"remote_tracking_ref","owner":"appsdk::host_vcs","truth_store":"refs/remotes/<remote>/<recorded-mainline-ref>","allowed_operations":["read","validate"],"relations":{"must_reference":["mainline_merge"]}},
-    {"resource_id":"mainline_merge","owner":"appsdk::merge_queue","truth_store":".appsdk/records/merge-record-<module>.json","allowed_operations":["read","validate","write"]},
-    {"resource_id":"lifecycle_error","owner":"appsdk::record_graph","truth_store":"process error chain","allowed_operations":["emit"]}
+    {
+      "resource_id": "bootstrap-link-config",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "daemon bootstrap configuration",
+      "allowed_operations": [
+        "read",
+        "validate",
+        "dial"
+      ],
+      "forbidden_relations": [
+        "business_payload",
+        "agent_direct_network"
+      ]
+    },
+    {
+      "resource_id": "shared-runtime-config",
+      "owner": "config",
+      "kind": "control_resource",
+      "truth_store": "configuration server versioned config",
+      "allowed_operations": [
+        "read",
+        "validate",
+        "sync",
+        "apply"
+      ],
+      "forbidden_relations": [
+        "session_payload",
+        "network_truth"
+      ]
+    },
+    {
+      "resource_id": "account-permission",
+      "owner": "server",
+      "kind": "control_resource",
+      "truth_store": "server admission and permission ledger",
+      "allowed_operations": [
+        "authenticate",
+        "authorize",
+        "grant",
+        "revoke",
+        "audit"
+      ],
+      "forbidden_relations": [
+        "ui_implied_authority",
+        "business_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "server-listener",
+      "owner": "server",
+      "kind": "control_resource",
+      "truth_store": "server deployment and listener registry",
+      "allowed_operations": [
+        "deploy",
+        "listen",
+        "register_connection",
+        "remove_connection",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "network_listener_ownership",
+        "session_truth"
+      ]
+    },
+    {
+      "resource_id": "link-state",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "network-owned connection state for registration control or one target transport",
+      "allowed_operations": [
+        "connect",
+        "health_check",
+        "reconnect",
+        "disconnect",
+        "report_error"
+      ],
+      "forbidden_relations": [
+        "agent_business_state",
+        "session_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "runtime-lifecycle",
+      "owner": "runtime",
+      "kind": "control_resource",
+      "truth_store": "daemon runtime state machine",
+      "allowed_operations": [
+        "bootstrap",
+        "start",
+        "sync",
+        "ready",
+        "run",
+        "stop"
+      ],
+      "relations": {
+        "must_reference": [
+          "bootstrap-link-config",
+          "link-state",
+          "shared-runtime-config"
+        ]
+      }
+    },
+    {
+      "resource_id": "agent-capability",
+      "owner": "runtime",
+      "kind": "typed_runtime_projection",
+      "truth_store": "runtime-published capability contract",
+      "allowed_operations": [
+        "publish",
+        "revoke",
+        "observe"
+      ],
+      "relations": {
+        "must_reference": [
+          "runtime-lifecycle",
+          "account-permission"
+        ]
+      }
+    },
+    {
+      "resource_id": "discovery-projection",
+      "owner": "server",
+      "kind": "control_projection",
+      "truth_store": "server discovery registry",
+      "allowed_operations": [
+        "publish_machine",
+        "publish_agent",
+        "publish_capability",
+        "publish_route_candidates",
+        "observe"
+      ],
+      "relations": {
+        "must_reference": [
+          "server-listener",
+          "account-permission",
+          "agent-capability",
+          "host-directory-truth"
+        ]
+      }
+    },
+    {
+      "resource_id": "agent-session-truth",
+      "owner": "agent",
+      "kind": "business_resource",
+      "truth_store": "host-owned agent/session system",
+      "allowed_operations": [
+        "observe",
+        "open",
+        "send",
+        "approve",
+        "cancel"
+      ],
+      "relations": {
+        "transport_exposure": "agent-host-target-transport"
+      },
+      "forbidden_relations": [
+        "direct_network",
+        "direct_config",
+        "direct_server"
+      ]
+    },
+    {
+      "resource_id": "agent-relation-truth",
+      "owner": "agent",
+      "kind": "business_resource",
+      "truth_store": "consumer and provider capability-use reports",
+      "allowed_operations": [
+        "report_consumer_use",
+        "report_provider_use",
+        "observe",
+        "reconcile"
+      ],
+      "relations": {
+        "consumer_reporter": "using_agent",
+        "provider_reporter": "used_agent",
+        "graph_projector": "server"
+      },
+      "forbidden_relations": [
+        "implied_permission",
+        "session_lineage_derivation",
+        "ui_only_edge",
+        "single_side_only"
+      ]
+    },
+    {
+      "resource_id": "notification-projection",
+      "owner": "agent",
+      "kind": "business_projection",
+      "truth_store": "host-owned notification and interaction event projection",
+      "allowed_operations": [
+        "observe",
+        "resolve",
+        "acknowledge"
+      ],
+      "forbidden_relations": [
+        "control_truth",
+        "ui_implied_completion"
+      ]
+    },
+    {
+      "resource_id": "search-index-cache",
+      "owner": "search-plugin",
+      "kind": "plugin_resource",
+      "truth_store": "search plugin index and cache",
+      "allowed_operations": [
+        "connect",
+        "discover",
+        "index",
+        "query",
+        "report_state"
+      ],
+      "forbidden_relations": [
+        "memory_truth_write",
+        "session_truth_write",
+        "business_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "memory-record-truth",
+      "owner": "memory-plugin",
+      "kind": "plugin_resource",
+      "truth_store": "memory plugin records and export artifacts",
+      "allowed_operations": [
+        "summarize",
+        "validate",
+        "save",
+        "load",
+        "search",
+        "export"
+      ],
+      "forbidden_relations": [
+        "session_transcript_ownership",
+        "business_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "remote-machine-connection-config",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "network-owned remote machine connection profile",
+      "allowed_operations": [
+        "read",
+        "validate",
+        "save",
+        "sync",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "agent_session_truth",
+        "business_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "machine-auth-config",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "optional shared API key/token credential reference",
+      "allowed_operations": [
+        "read",
+        "validate",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "pairing_state",
+        "business_payload",
+        "business_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "local-agent-runtime-config",
+      "owner": "config",
+      "kind": "control_resource",
+      "truth_store": "versioned per-agent provider and model configuration",
+      "allowed_operations": [
+        "read",
+        "validate",
+        "save",
+        "sync",
+        "apply"
+      ],
+      "forbidden_relations": [
+        "network_truth",
+        "session_payload"
+      ]
+    },
+    {
+      "resource_id": "config-sync-transaction",
+      "owner": "config",
+      "kind": "control_resource",
+      "truth_store": "version compare-and-swap and conflict result",
+      "allowed_operations": [
+        "read_revision",
+        "compare_and_swap",
+        "report_conflict",
+        "apply"
+      ],
+      "forbidden_relations": [
+        "session_payload",
+        "silent_overwrite"
+      ]
+    },
+    {
+      "resource_id": "console-navigation",
+      "owner": "ui",
+      "kind": "ui_control_resource",
+      "truth_store": "console process navigation state",
+      "allowed_operations": [
+        "select",
+        "push_drawer",
+        "expand_drawer",
+        "pop_drawer",
+        "restore_focus"
+      ],
+      "forbidden_relations": [
+        "business_truth",
+        "control_truth_mutation"
+      ]
+    },
+    {
+      "resource_id": "console-settings",
+      "owner": "ui",
+      "kind": "ui_control_resource",
+      "truth_store": "console settings navigation and edit state",
+      "allowed_operations": [
+        "select_machine",
+        "select_agent",
+        "edit",
+        "restore_focus"
+      ],
+      "forbidden_relations": [
+        "config_truth_ownership",
+        "business_payload"
+      ]
+    },
+    {
+      "resource_id": "business-payload",
+      "owner": "agent",
+      "kind": "business_payload",
+      "truth_store": "public Session/Conversation request and response carried only inside an opened session logical channel",
+      "allowed_operations": [
+        "read",
+        "write_by_business_owner"
+      ],
+      "forbidden_relations": [
+        "machineId",
+        "endpoint",
+        "generation",
+        "health",
+        "auth_grant",
+        "permission_decision",
+        "routing",
+        "retry",
+        "diagnostics"
+      ]
+    },
+    {
+      "resource_id": "host-directory-truth",
+      "owner": "server",
+      "kind": "control_resource",
+      "truth_store": "Agent Host published identity, capability revision, route candidates and presence",
+      "allowed_operations": [
+        "publish",
+        "heartbeat",
+        "read",
+        "validate",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "session_payload",
+        "permission_decision"
+      ]
+    },
+    {
+      "resource_id": "account-directory-truth",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "Master confirmed account directory snapshot, generation and route plan",
+      "allowed_operations": [
+        "login",
+        "refresh",
+        "read",
+        "validate",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "session_payload",
+        "control_truth_write"
+      ]
+    },
+    {
+      "resource_id": "agent-host-config",
+      "owner": "agent-host",
+      "kind": "control_resource",
+      "truth_store": "Agent Host config binding between OpenCode facade projection and host registration request",
+      "allowed_operations": [
+        "validate",
+        "bind",
+        "project",
+        "publish_registration"
+      ],
+      "forbidden_relations": [
+        "session_payload",
+        "business_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "route-plan",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "network-owned ordered candidates for one target transport",
+      "allowed_operations": [
+        "select",
+        "resolve",
+        "record_health",
+        "retire",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "business_payload",
+        "agent_direct_selection"
+      ]
+    },
+    {
+      "resource_id": "agent-host-target-transport",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "network-owned single WebSocket target transport with target generation, health and channel registry",
+      "allowed_operations": [
+        "dial",
+        "hello",
+        "multiplex",
+        "heartbeat",
+        "reconnect",
+        "close",
+        "report_error"
+      ],
+      "forbidden_relations": [
+        "agent_business_state",
+        "session_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "session-channel-registry",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "network-owned mapping from Session logical channel id to target transport generation and Agent adapter reference",
+      "allowed_operations": [
+        "open",
+        "route",
+        "close",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "session_transcript_truth",
+        "business_payload_metadata"
+      ]
+    }
   ]
 }
