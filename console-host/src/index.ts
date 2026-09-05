@@ -3,11 +3,33 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { createOpencodeClient } from '@opencode-ai/sdk'
 import { replyOpenCodePermission, sendOpenCodeMessage } from '@deepseek-ai/teams-opencode-adapter'
+import { AgentMessage, buildAgentPairChannelId, validateAgentMessage } from '../../control-protocol/agent-message.ts'
+import { RelationReport, validateRelationReport } from '../../control-protocol/relation-report.ts'
 
 export interface ConsoleHostOptions {
-  readonly openCodeUrl: string
+  readonly agents: readonly ConsoleHostAgentConfig[]
   readonly port?: number
   readonly staticRoot: string
+}
+
+export interface ConsoleHostAgentConfig {
+  readonly agentId: string
+  readonly machineId: string
+  readonly label: string
+  readonly openCodeUrl: string
+}
+
+export function resolveConsoleHostAgents(options: ConsoleHostOptions): readonly ConsoleHostAgentConfig[] {
+  if (options.agents.length === 0) throw new Error('console-host: at least one agent must be configured')
+  const ids = new Set<string>()
+  for (const agent of options.agents) {
+    if (agent.agentId.length === 0 || agent.machineId.length === 0 || agent.label.length === 0) {
+      throw new Error('console-host: agent identity fields are required')
+    }
+    if (ids.has(agent.agentId)) throw new Error(`console-host: duplicate agent ${agent.agentId}`)
+    ids.add(agent.agentId)
+  }
+  return options.agents
 }
 
 export interface ConsoleHostSession {
@@ -41,24 +63,76 @@ export interface ConsoleHostProjection {
   readonly sessions: readonly ConsoleHostSession[]
   readonly agents: readonly ConsoleHostAgent[]
   readonly notifications: readonly ConsoleHostNotification[]
+  readonly relations: readonly ConsoleHostRelation[]
+  readonly messages: readonly ConsoleHostAgentMessage[]
+}
+
+export interface ConsoleHostRelation {
+  readonly relationId: string
+  readonly consumerAgentId: string
+  readonly providerAgentId: string
+  readonly capabilityId: string
+  readonly classification: 'master-slave' | 'peer'
+  readonly consistency: 'consumer-only' | 'provider-only' | 'matched' | 'conflict'
+  readonly consumerState?: string
+  readonly providerState?: string
+  readonly lastReportedAt: string
+}
+
+export interface ConsoleHostAgentMessage {
+  readonly messageId: string
+  readonly relationId: string
+  readonly fromAgentId: string
+  readonly toAgentId: string
+  readonly kind: string
+  readonly correlationId: string
+  readonly payload: Readonly<Record<string, unknown>>
+  readonly sentAt: string
 }
 
 export type ConsoleHostAction =
-  | { readonly kind: 'send-message'; readonly sessionId: string; readonly text: string }
-  | { readonly kind: 'reply-permission'; readonly sessionId: string; readonly permissionId: string; readonly response: 'once' | 'always' | 'reject' }
+  | { readonly kind: 'send-message'; readonly agentId: string; readonly sessionId: string; readonly text: string }
+  | { readonly kind: 'reply-permission'; readonly agentId: string; readonly sessionId: string; readonly permissionId: string; readonly response: 'once' | 'always' | 'reject' }
 
-async function readBody(request: IncomingMessage): Promise<ConsoleHostAction> {
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
   for await (const chunk of request) chunks.push(Buffer.from(chunk))
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as ConsoleHostAction
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
+async function readBody(request: IncomingMessage): Promise<ConsoleHostAction> {
+  return await readJsonBody(request) as ConsoleHostAction
 }
 
 function openCodeClient(baseUrl: string) {
   return createOpencodeClient({ baseUrl })
 }
 
-async function dispatchAction(options: ConsoleHostOptions, action: ConsoleHostAction): Promise<void> {
-  const client = openCodeClient(options.openCodeUrl)
+export interface ConsoleHostResolvedOptions {
+  readonly agents: readonly ConsoleHostAgentConfig[]
+  readonly port?: number
+  readonly staticRoot: string
+}
+
+export function resolveConsoleHostOptions(options: ConsoleHostOptions): ConsoleHostResolvedOptions {
+  const agents = resolveConsoleHostAgents(options)
+  return {
+    agents,
+    ...(options.port === undefined ? {} : { port: options.port }),
+    staticRoot: options.staticRoot,
+  }
+}
+
+function findAgent(agents: readonly ConsoleHostAgentConfig[], agentId: string): ConsoleHostAgentConfig {
+  const agent = agents.find(candidate => candidate.agentId === agentId)
+  if (agent === undefined) throw new Error(`console-host: agent ${agentId} not configured`)
+  return agent
+}
+
+export async function dispatchConsoleHostAction(options: ConsoleHostOptions, action: ConsoleHostAction): Promise<void> {
+  const resolved = resolveConsoleHostOptions(options)
+  const agent = findAgent(resolved.agents, action.agentId)
+  const client = openCodeClient(agent.openCodeUrl)
   if (action.kind === 'send-message') {
     await sendOpenCodeMessage(client, action.sessionId, action.text)
     return
@@ -71,7 +145,7 @@ function json(response: ServerResponse, status: number, body: unknown): void {
   response.end(JSON.stringify(body))
 }
 
-async function fetchSessions(baseUrl: string): Promise<readonly ConsoleHostSession[]> {
+async function fetchSessions(agentId: string, baseUrl: string): Promise<readonly ConsoleHostSession[]> {
   const response = await fetch(`${baseUrl.replace(/\/$/u, '')}/session`)
   if (!response.ok) throw new Error(`OpenCode session list failed: ${response.status}`)
   const sessions = await response.json() as readonly Record<string, unknown>[]
@@ -80,11 +154,11 @@ async function fetchSessions(baseUrl: string): Promise<readonly ConsoleHostSessi
     ...(typeof session.title === 'string' ? { title: session.title } : {}),
     ...(typeof session.directory === 'string' ? { directory: session.directory } : {}),
     running: false,
-    agentId: 'opencode-local',
+    agentId,
   }))
 }
 
-async function fetchPermissions(baseUrl: string): Promise<readonly ConsoleHostNotification[]> {
+async function fetchPermissions(agentId: string, baseUrl: string): Promise<readonly ConsoleHostNotification[]> {
   const response = await fetch(`${baseUrl.replace(/\/$/u, '')}/permission`)
   if (!response.ok) throw new Error(`OpenCode permission list failed: ${response.status}`)
   const permissions = await response.json() as readonly Record<string, unknown>[]
@@ -92,8 +166,8 @@ async function fetchPermissions(baseUrl: string): Promise<readonly ConsoleHostNo
     const sessionId = String(permission.sessionID)
     const requestId = String(permission.id)
     return {
-      id: `permission-request:${sessionId}:${requestId}`,
-      agentId: 'opencode-local',
+      id: `permission-request:${agentId}:${sessionId}:${requestId}`,
+      agentId,
       sessionId,
       requestId,
       interactive: true,
@@ -105,35 +179,154 @@ async function fetchPermissions(baseUrl: string): Promise<readonly ConsoleHostNo
 }
 
 export async function projectConsoleHost(options: ConsoleHostOptions): Promise<ConsoleHostProjection> {
-  const [sessions, notifications] = await Promise.all([
-    fetchSessions(options.openCodeUrl),
-    fetchPermissions(options.openCodeUrl),
-  ])
-  const sessionIds = sessions.map(session => session.id)
-  return {
-    sessions,
-    agents: [{
-      agentId: 'opencode-local',
-      machineId: 'local',
-      label: 'OpenCode',
+  const resolved = resolveConsoleHostOptions(options)
+  const perAgent = await Promise.all(resolved.agents.map(async agent => {
+    const [sessions, notifications] = await Promise.all([
+      fetchSessions(agent.agentId, agent.openCodeUrl),
+      fetchPermissions(agent.agentId, agent.openCodeUrl),
+    ])
+    return { agent, sessions, notifications }
+  }))
+  const sessions = perAgent.flatMap(entry => entry.sessions)
+  const notifications = perAgent.flatMap(entry => entry.notifications)
+  const agents = perAgent.map(({ agent, sessions: agentSessions }) => {
+    const sessionIds = agentSessions.map(session => session.id)
+    return {
+      agentId: agent.agentId,
+      machineId: agent.machineId,
+      label: agent.label,
       sessionIds,
       ...(sessionIds[0] === undefined ? {} : { currentSessionId: sessionIds[0] }),
-    }],
-    notifications,
+    }
+  })
+  return { sessions, agents, notifications, relations: [], messages: [] }
+}
+
+function relationState(relation: RelationReport): string {
+  return relation.state
+}
+
+function projectRelationEdge(relationId: string, consumer?: RelationReport, provider?: RelationReport): ConsoleHostRelation {
+  const source = consumer ?? provider
+  if (source === undefined) throw new Error('console-host: cannot project empty relation')
+  const consumerAgentId = consumer?.reporterAgentId ?? provider?.subjectAgentId ?? source.reporterAgentId
+  const providerAgentId = provider?.reporterAgentId ?? consumer?.subjectAgentId ?? source.subjectAgentId
+  return {
+    relationId,
+    consumerAgentId,
+    providerAgentId,
+    capabilityId: source.capabilityId,
+    classification: 'master-slave',
+    consistency: consumer === undefined ? 'provider-only' : provider === undefined ? 'consumer-only' : 'matched',
+    ...(consumer === undefined ? {} : { consumerState: relationState(consumer) }),
+    ...(provider === undefined ? {} : { providerState: relationState(provider) }),
+    lastReportedAt: source.reportedAt,
   }
+}
+
+interface ConsoleHostRuntime {
+  readonly relations: Map<string, { consumer?: RelationReport; provider?: RelationReport }>
+  readonly messages: ConsoleHostAgentMessage[]
+}
+
+function createRuntime(): ConsoleHostRuntime {
+  return { relations: new Map(), messages: [] }
+}
+
+function upsertRelation(runtime: ConsoleHostRuntime, report: RelationReport): void {
+  const existing = runtime.relations.get(report.relationId) ?? {}
+  const next = report.role === 'consumer'
+    ? { ...existing, consumer: report }
+    : { ...existing, provider: report }
+  runtime.relations.set(report.relationId, next)
+}
+
+function listRelationEdges(runtime: ConsoleHostRuntime): readonly ConsoleHostRelation[] {
+  return [...runtime.relations.entries()].map(([relationId, pair]) => projectRelationEdge(relationId, pair.consumer, pair.provider))
+}
+
+async function currentSessionId(options: ConsoleHostOptions, agentId: string): Promise<string> {
+  const resolved = resolveConsoleHostOptions(options)
+  const agent = findAgent(resolved.agents, agentId)
+  const sessions = await fetchSessions(agent.agentId, agent.openCodeUrl)
+  const current = sessions[0]
+  if (current === undefined) throw new Error(`console-host: agent ${agentId} has no current session`)
+  return current.id
+}
+
+function formatAgentMessageText(fromAgentId: string, toAgentId: string, message: AgentMessage): string {
+  return `[Teams] ${fromAgentId} -> ${toAgentId} ${message.kind}: ${JSON.stringify(message.payload)}`
+}
+
+export async function relayConsoleHostAgentMessage(
+  options: ConsoleHostOptions,
+  runtime: ConsoleHostRuntime,
+  input: { readonly messageId: string; readonly relationId: string; readonly fromAgentId: string; readonly toAgentId: string; readonly message: AgentMessage },
+): Promise<ConsoleHostAgentMessage> {
+  const message = validateAgentMessage(input.message)
+  const resolved = resolveConsoleHostOptions(options)
+  const fromAgent = findAgent(resolved.agents, input.fromAgentId)
+  const toAgent = findAgent(resolved.agents, input.toAgentId)
+  if (fromAgent.agentId === toAgent.agentId) throw new Error('console-host: self-target agent message is not allowed')
+  if (!runtime.relations.has(input.relationId)) throw new Error(`console-host: relation ${input.relationId} does not exist`)
+  const targetSessionId = await currentSessionId(options, toAgent.agentId)
+  await dispatchConsoleHostAction(options, {
+    kind: 'send-message',
+    agentId: toAgent.agentId,
+    sessionId: targetSessionId,
+    text: formatAgentMessageText(input.fromAgentId, input.toAgentId, message),
+  })
+  const record: ConsoleHostAgentMessage = {
+    messageId: input.messageId,
+    relationId: input.relationId,
+    fromAgentId: input.fromAgentId,
+    toAgentId: input.toAgentId,
+    kind: input.message.kind,
+    correlationId: input.message.correlationId,
+    payload: input.message.payload,
+    sentAt: new Date().toISOString(),
+  }
+  runtime.messages.push(record)
+  return record
 }
 
 export function createConsoleHost(options: ConsoleHostOptions) {
   const staticRoot = resolve(options.staticRoot)
+  const runtime = createRuntime()
   return createServer(async (request: IncomingMessage, response: ServerResponse) => {
     try {
       if (request.url === '/api/projection') {
-        json(response, 200, await projectConsoleHost(options))
+        const projection = await projectConsoleHost(options)
+        json(response, 200, {
+          ...projection,
+          relations: listRelationEdges(runtime),
+          messages: runtime.messages,
+        })
         return
       }
       if (request.url === '/api/action' && request.method === 'POST') {
-        await dispatchAction(options, await readBody(request))
+        await dispatchConsoleHostAction(options, await readBody(request))
         json(response, 200, { ok: true })
+        return
+      }
+      if (request.url === '/api/relation' && request.method === 'POST') {
+        const report = validateRelationReport(await readJsonBody(request))
+        upsertRelation(runtime, report)
+        const pair = runtime.relations.get(report.relationId)
+        if (pair === undefined) throw new Error('console-host: relation update failed')
+        json(response, 200, projectRelationEdge(report.relationId, pair.consumer, pair.provider))
+        return
+      }
+      if (request.url === '/api/agent-message' && request.method === 'POST') {
+        const body = await readJsonBody(request) as Record<string, unknown>
+        const relayed = await relayConsoleHostAgentMessage(options, runtime, {
+          messageId: String(body.messageId),
+          relationId: String(body.relationId),
+          fromAgentId: String(body.fromAgentId),
+          toAgentId: String(body.toAgentId),
+          message: body.message as AgentMessage,
+        })
+        json(response, 200, relayed)
         return
       }
       if (request.url === '/health') {

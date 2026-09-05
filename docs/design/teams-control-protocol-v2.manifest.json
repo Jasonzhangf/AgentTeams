@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "manifest_id": "teams-control-protocol-v2",
+  "status": "design",
+  "canonical_doc": "docs/design/teams-control-protocol-v2-master-agent-host.md",
+  "owner_modules": [
+    "control-protocol",
+    "network",
+    "agent-host",
+    "master-host",
+    "server",
+    "opencode-adapter",
+    "acp-adapter",
+    "ui"
+  ],
+  "resources": [
+    "bootstrap-link-config",
+    "host-directory-truth",
+    "account-directory-truth",
+    "route-plan",
+    "agent-host-target-transport",
+    "session-channel-registry",
+    "link-state",
+    "account-permission",
+    "server-listener",
+    "discovery-projection",
+    "agent-session-truth",
+    "business-payload",
+    "notification-projection",
+    "console-navigation",
+    "console-settings"
+  ],
+  "chains": [
+    {
+      "chain_id": "agent-host-registration-v2",
+      "entrypoint": "registerAgentHost",
+      "terminal": "removeStaleHosts",
+      "return_path": "registration-error -> agent-host console"
+    },
+    {
+      "chain_id": "account-directory-refresh-v2",
+      "entrypoint": "createAccountDirectorySnapshot",
+      "terminal": "resolveHostFromDirectory",
+      "return_path": "directory-error -> master console"
+    },
+    {
+      "chain_id": "route-plan-selection-v2",
+      "entrypoint": "buildRoutePlan",
+      "terminal": "succeedRouteCandidate",
+      "return_path": "route-error -> explicit route result"
+    },
+    {
+      "chain_id": "target-transport-and-channel-v2",
+      "entrypoint": "beginTargetTransport",
+      "terminal": "acknowledgeSessionChannelClose",
+      "return_path": "transport-error/channel-error -> session list"
+    },
+    {
+      "chain_id": "control-protocol-schema-v2",
+      "entrypoint": "parseTargetControlFrame",
+      "terminal": "onError",
+      "return_path": "control-protocol-error -> target transport owner"
+    }
+  ],
+  "boundaries": {
+    "target_control_frames": [
+      "transport.hello",
+      "transport.hello_ack",
+      "transport.ping",
+      "transport.pong",
+      "transport.health",
+      "transport.generation",
+      "transport.capability",
+      "transport.route_info",
+      "transport.error",
+      "channel.open",
+      "channel.open_ack",
+      "channel.close",
+      "channel.close_ack",
+      "channel.error"
+    ],
+    "session_channel_frames": [
+      "session.list",
+      "session.current",
+      "session.open",
+      "session.message",
+      "session.message_delta",
+      "permission.ask",
+      "permission.reply",
+      "notification.upsert",
+      "notification.ack",
+      "relation.report"
+    ],
+    "control_resources": [
+      "bootstrap-link-config",
+      "host-directory-truth",
+      "account-directory-truth",
+      "route-plan",
+      "agent-host-target-transport",
+      "session-channel-registry",
+      "link-state",
+      "account-permission"
+    ],
+    "business_resources": [
+      "agent-session-truth",
+      "business-payload",
+      "notification-projection"
+    ],
+    "ui_resources": [
+      "console-navigation",
+      "console-settings"
+    ],
+    "forbidden_payload_fields": [
+      "machineId",
+      "endpoint",
+      "route",
+      "generation",
+      "health",
+      "authGrant",
+      "permissionDecision",
+      "config",
+      "routing",
+      "retry",
+      "diagnostics"
+    ]
+  },
+  "required_gates": [
+    "teams-network-control-boundary",
+    "teams-agent-host-registration",
+    "teams-account-directory-lifecycle",
+    "teams-explicit-route-no-fallback",
+    "teams-transport-control-session-separation",
+    "teams-multiplex-target-reuse",
+    "teams-control-protocol-schema",
+    "teams-session-channel-ordering",
+    "teams-machine-token-auth",
+    "teams-permission-grant-owner",
+    "teams-host-command-no-business-payload"
+  ],
+  "frozen_defaults": {
+    "transport_per_host": "one-healthy-target-transport-per-agent-host",
+    "session_reuse": "logical-session-stable-across-target-reconnect",
+    "directory_refresh_behavior": "future-transports-only",
+    "route_selection": "manual-or-explicit-auto-plan",
+    "auth_mode": [
+      "none",
+      "shared-api-key",
+      "shared-token"
+    ],
+    "credential_persistence": "opaque-reference-only"
+  }
+}

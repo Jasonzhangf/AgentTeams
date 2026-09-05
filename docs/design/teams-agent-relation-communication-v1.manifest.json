@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "manifest_id": "teams-agent-relation-communication-v1",
+  "status": "design",
+  "canonical_doc": "docs/design/teams-agent-relation-communication-v1.md",
+  "owner_modules": [
+    "agent",
+    "control-protocol",
+    "master-host",
+    "network",
+    "server",
+    "agent-host"
+  ],
+  "resources": [
+    "agent-relation-truth",
+    "agent-communication-control",
+    "agent-message-payload",
+    "agent-host-target-transport",
+    "session-channel-registry",
+    "account-permission",
+    "discovery-projection"
+  ],
+  "chains": [
+    {
+      "chain_id": "agent-relation-report-v1",
+      "entrypoint": "reportCapabilityUseByConsumer",
+      "terminal": "projectCapabilityUseGraph",
+      "return_path": "relation-error -> relation owner"
+    },
+    {
+      "chain_id": "agent-pair-message-v1",
+      "entrypoint": "openAgentPairChannel",
+      "terminal": "closeAgentPairChannel",
+      "return_path": "pair-channel-error -> master host"
+    },
+    {
+      "chain_id": "agent-message-relay-v1",
+      "entrypoint": "relayAgentMessage",
+      "terminal": "deliverAgentMessage",
+      "return_path": "message-error -> source Agent"
+    }
+  ],
+  "boundaries": {
+    "relation_control_fields": [
+      "relationId",
+      "reporterAgentId",
+      "subjectAgentId",
+      "capabilityId",
+      "role",
+      "reportRevision",
+      "reportedAt"
+    ],
+    "pair_channel_control_fields": [
+      "channelId",
+      "relationId",
+      "fromAgentId",
+      "toAgentId",
+      "targetGeneration"
+    ],
+    "agent_message_payload_fields": [
+      "kind",
+      "correlationId",
+      "payload"
+    ],
+    "forbidden_payload_fields": [
+      "machineId",
+      "endpoint",
+      "route",
+      "generation",
+      "targetGeneration",
+      "health",
+      "authGrant",
+      "permissionDecision",
+      "config",
+      "routing",
+      "retry",
+      "diagnostics",
+      "authToken",
+      "apiKey",
+      "bearer",
+      "password",
+      "token"
+    ]
+  },
+  "required_gates": [
+    "teams-capability-use-relation-graph",
+    "teams-agent-pair-channel-boundary",
+    "teams-agent-message-relay",
+    "teams-transport-control-session-separation",
+    "teams-multiplex-target-reuse"
+  ],
+  "frozen_defaults": {
+    "relay_owner": "master-host",
+    "direct_peer_socket": false,
+    "relation_permission_owner": "server",
+    "graph_classification": "display-only",
+    "message_payload_control_separation": true
+  }
+}

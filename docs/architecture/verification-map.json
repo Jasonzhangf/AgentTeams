@@ -22,7 +22,84 @@
       "checks": [
         "network owns link config transport health reconnect",
         "agent has no direct network path",
-        "link endpoint/auth validation and generation lifecycle tests"
+        "link endpoint/auth validation and generation lifecycle tests",
+        "network owns registration control, account directory control, route plan, and target transport separately",
+        "directory refresh must not close a healthy target transport",
+        "old target generation messages are rejected explicitly"
+      ]
+    },
+    {
+      "gate_id": "teams-agent-host-registration",
+      "status": "active",
+      "required": true,
+      "checks": [
+        "Agent Host publishes hostId, agentId, capability revision, presence and route candidates",
+        "agent-host config binding validates endpoint/auth and never includes sessionId or permissionId in registration/projection",
+        "server directory never stores Session body or permission body",
+        "host.presence refresh and stale removal are explicit"
+      ]
+    },
+    {
+      "gate_id": "teams-account-directory-lifecycle",
+      "status": "active",
+      "required": true,
+      "checks": [
+        "Master maintains an account directory control connection",
+        "confirmed directory generation is required before route resolution",
+        "directory refresh only affects future transports"
+      ]
+    },
+    {
+      "gate_id": "teams-explicit-route-no-fallback",
+      "status": "active",
+      "required": true,
+      "checks": [
+        "manual route fails explicitly",
+        "auto route consumes an ordered plan and retires failed candidate generations",
+        "route selection cannot rewrite failed candidate into success",
+        "route plan does not enter Session channel payload"
+      ]
+    },
+    {
+      "gate_id": "teams-transport-control-session-separation",
+      "status": "active",
+      "required": true,
+      "checks": [
+        "target control frames and Session channel frames are closed types",
+        "control facts do not enter Session message or metadata",
+        "channel payload can carry Session body after channel.open",
+        "Session body does not reconstruct transport or control state"
+      ]
+    },
+    {
+      "gate_id": "teams-multiplex-target-reuse",
+      "status": "active",
+      "required": true,
+      "checks": [
+        "one healthy target transport can open multiple Session logical channels",
+        "Session switch or directory update does not recreate a healthy transport",
+        "old generation channel open/message/close/error is rejected",
+        "channel registry does not own Session transcript truth"
+      ]
+    },
+    {
+      "gate_id": "teams-control-protocol-schema",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "schema version and error codes are explicit",
+        "unknown frame and channel state are rejected",
+        "channel state machine covers open/ack/close/close_ack/error"
+      ]
+    },
+    {
+      "gate_id": "teams-session-channel-ordering",
+      "status": "partial",
+      "required": true,
+      "checks": [
+        "agent-host dispatches channel commands to the selected Agent adapter",
+        "channel payload preserves request/response correlation",
+        "unknown channel id or stale generation is not replayed"
       ]
     },
     {
@@ -70,6 +147,7 @@
       "checks": [
         "host command routes through local hub and remote host policy",
         "control envelope does not contain Session business body",
+        "Session business body is allowed only in an opened Session logical channel",
         "unknown mutation result is not automatically replayed",
         "UI side guard: Teams never reads session.history, queue, approval, or draft to construct a host command",
         "host-boundary.spec covers the UI side"

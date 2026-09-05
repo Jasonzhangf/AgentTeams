@@ -72,7 +72,7 @@
       "resource_id": "link-state",
       "owner": "network",
       "kind": "control_resource",
-      "truth_store": "runtime network connection state",
+      "truth_store": "network-owned connection state for registration control or one target transport",
       "allowed_operations": [
         "connect",
         "health_check",
@@ -82,7 +82,7 @@
       ],
       "forbidden_relations": [
         "agent_business_state",
-        "payload_metadata"
+        "session_payload_metadata"
       ]
     },
     {
@@ -132,13 +132,15 @@
         "publish_machine",
         "publish_agent",
         "publish_capability",
+        "publish_route_candidates",
         "observe"
       ],
       "relations": {
         "must_reference": [
           "server-listener",
           "account-permission",
-          "agent-capability"
+          "agent-capability",
+          "host-directory-truth"
         ]
       }
     },
@@ -154,6 +156,9 @@
         "approve",
         "cancel"
       ],
+      "relations": {
+        "transport_exposure": "agent-host-target-transport"
+      },
       "forbidden_relations": [
         "direct_network",
         "direct_config",
@@ -337,7 +342,7 @@
       "resource_id": "business-payload",
       "owner": "agent",
       "kind": "business_payload",
-      "truth_store": "public Session/Conversation request and response",
+      "truth_store": "public Session/Conversation request and response carried only inside an opened session logical channel",
       "allowed_operations": [
         "read",
         "write_by_business_owner"
@@ -352,6 +357,108 @@
         "routing",
         "retry",
         "diagnostics"
+      ]
+    },
+    {
+      "resource_id": "host-directory-truth",
+      "owner": "server",
+      "kind": "control_resource",
+      "truth_store": "Agent Host published identity, capability revision, route candidates and presence",
+      "allowed_operations": [
+        "publish",
+        "heartbeat",
+        "read",
+        "validate",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "session_payload",
+        "permission_decision"
+      ]
+    },
+    {
+      "resource_id": "account-directory-truth",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "Master confirmed account directory snapshot, generation and route plan",
+      "allowed_operations": [
+        "login",
+        "refresh",
+        "read",
+        "validate",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "session_payload",
+        "control_truth_write"
+      ]
+    },
+    {
+      "resource_id": "agent-host-config",
+      "owner": "agent-host",
+      "kind": "control_resource",
+      "truth_store": "Agent Host config binding between OpenCode facade projection and host registration request",
+      "allowed_operations": [
+        "validate",
+        "bind",
+        "project",
+        "publish_registration"
+      ],
+      "forbidden_relations": [
+        "session_payload",
+        "business_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "route-plan",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "network-owned ordered candidates for one target transport",
+      "allowed_operations": [
+        "select",
+        "resolve",
+        "record_health",
+        "retire",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "business_payload",
+        "agent_direct_selection"
+      ]
+    },
+    {
+      "resource_id": "agent-host-target-transport",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "network-owned single WebSocket target transport with target generation, health and channel registry",
+      "allowed_operations": [
+        "dial",
+        "hello",
+        "multiplex",
+        "heartbeat",
+        "reconnect",
+        "close",
+        "report_error"
+      ],
+      "forbidden_relations": [
+        "agent_business_state",
+        "session_payload_metadata"
+      ]
+    },
+    {
+      "resource_id": "session-channel-registry",
+      "owner": "network",
+      "kind": "control_resource",
+      "truth_store": "network-owned mapping from Session logical channel id to target transport generation and Agent adapter reference",
+      "allowed_operations": [
+        "open",
+        "route",
+        "close",
+        "observe"
+      ],
+      "forbidden_relations": [
+        "session_transcript_truth",
+        "business_payload_metadata"
       ]
     }
   ]

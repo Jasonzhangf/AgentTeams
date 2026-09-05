@@ -33,6 +33,134 @@
       ]
     },
     {
+      "function_id": "agent_host_registration",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/host-registration.ts"
+      ],
+      "entry_symbols": [
+        "prepareAgentHostRegistration",
+        "registerAgentHost"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary",
+        "teams-agent-host-registration"
+      ]
+    },
+    {
+      "function_id": "server_host_directory",
+      "owner": "server",
+      "status": "implemented",
+      "paths": [
+        "server/directory.ts"
+      ],
+      "entry_symbols": [
+        "createHostDirectory",
+        "upsertDirectoryHost",
+        "touchHostPresence",
+        "removeDirectoryHost",
+        "removeStaleHosts",
+        "listDirectoryHosts"
+      ],
+      "required_gates": [
+        "teams-agent-host-registration"
+      ]
+    },
+    {
+      "function_id": "account_directory_refresh",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/account-directory.ts"
+      ],
+      "entry_symbols": [
+        "createAccountDirectorySnapshot",
+        "confirmDirectoryGeneration",
+        "refreshAccountDirectory",
+        "resolveHostFromDirectory"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary",
+        "teams-account-directory-lifecycle"
+      ]
+    },
+    {
+      "function_id": "route_plan_selection",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/route-plan.ts"
+      ],
+      "entry_symbols": [
+        "buildRoutePlan",
+        "beginRouteCandidate",
+        "succeedRouteCandidate",
+        "failRouteCandidate"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary",
+        "teams-explicit-route-no-fallback"
+      ]
+    },
+    {
+      "function_id": "agent_host_target_transport",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/target-transport.ts"
+      ],
+      "entry_symbols": [
+        "beginTargetTransport",
+        "receiveHelloAck",
+        "confirmTargetHealth",
+        "assertTargetGeneration",
+        "closeTargetTransport",
+        "failTargetTransport"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary",
+        "teams-transport-control-session-separation"
+      ]
+    },
+    {
+      "function_id": "session_channel_multiplex",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/session-channel-registry.ts"
+      ],
+      "entry_symbols": [
+        "createSessionChannelRegistry",
+        "openSessionChannel",
+        "acknowledgeSessionChannel",
+        "sendSessionMessage",
+        "closeSessionChannel",
+        "acknowledgeSessionChannelClose",
+        "failSessionChannel"
+      ],
+      "required_gates": [
+        "teams-multiplex-target-reuse",
+        "teams-transport-control-session-separation"
+      ]
+    },
+    {
+      "function_id": "agent_host_config_binding",
+      "owner": "agent-host",
+      "status": "implemented",
+      "paths": [
+        "agent-host/agent-host.ts"
+      ],
+      "entry_symbols": [
+        "createAgentHostConfig",
+        "createAgentHostBinding"
+      ],
+      "required_gates": [
+        "teams-agent-host-registration",
+        "teams-session-channel-ordering"
+      ]
+    },
+    {
       "function_id": "server_admission",
       "owner": "server",
       "status": "partial",
@@ -64,14 +192,40 @@
     },
     {
       "function_id": "host_command_dispatch",
-      "owner": "server",
+      "owner": "agent-host",
       "status": "design",
       "entry_symbols": [
         "dispatchHostCommand",
         "projectHostCommandResult"
       ],
+      "binding_status": "binding-pending",
       "required_gates": [
-        "teams-host-command-no-business-payload"
+        "teams-host-command-no-business-payload",
+        "teams-session-channel-ordering"
+      ]
+    },
+    {
+      "function_id": "control_protocol_schema",
+      "owner": "control-protocol",
+      "status": "implemented",
+      "paths": [
+        "control-protocol/frames.ts",
+        "control-protocol/channel-state.ts"
+      ],
+      "entry_symbols": [
+        "parseTargetControlFrame",
+        "parseSessionChannelFrame",
+        "createChannelState",
+        "openChannel",
+        "onOpenAck",
+        "onMessage",
+        "onClose",
+        "onCloseAck",
+        "onError"
+      ],
+      "required_gates": [
+        "teams-control-protocol-schema",
+        "teams-transport-control-session-separation"
       ]
     },
     {
@@ -314,6 +468,7 @@
       "function_id": "focused_session_bridge",
       "owner": "dsh-adapter",
       "status": "partial",
+      "lifecycle": "deferred",
       "paths": [
         "ui/teams-console/src/client/dsh-adapter.ts",
         "ui/teams-console/src/client/controller.ts"

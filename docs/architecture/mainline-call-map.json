@@ -64,6 +64,36 @@
       "entry_symbol": "runProfile",
       "terminal_symbol": "WebServer[Service.init]",
       "status": "partial"
+    },
+    {
+      "chain_id": "agent-host-registration-v2",
+      "entry_symbol": "registerAgentHost",
+      "terminal_symbol": "removeStaleHosts",
+      "status": "partial"
+    },
+    {
+      "chain_id": "account-directory-refresh-v2",
+      "entry_symbol": "createAccountDirectorySnapshot",
+      "terminal_symbol": "resolveHostFromDirectory",
+      "status": "partial"
+    },
+    {
+      "chain_id": "route-plan-selection-v2",
+      "entry_symbol": "buildRoutePlan",
+      "terminal_symbol": "succeedRouteCandidate",
+      "status": "partial"
+    },
+    {
+      "chain_id": "target-transport-and-channel-v2",
+      "entry_symbol": "beginTargetTransport",
+      "terminal_symbol": "acknowledgeSessionChannelClose",
+      "status": "partial"
+    },
+    {
+      "chain_id": "control-protocol-schema-v2",
+      "entry_symbol": "parseTargetControlFrame",
+      "terminal_symbol": "onError",
+      "status": "partial"
     }
   ],
   "edges": [
@@ -391,6 +421,71 @@
       "input_resource_id": "teams-http-entry",
       "output_resource_id": "teams-http-entry",
       "error_resource_id": "webserver-error"
+    },
+    {
+      "chain_id": "control-protocol-schema-v2",
+      "node": "control-01-target-parse",
+      "from": "target_control_frame_received",
+      "to": "target_control_frame_validated",
+      "owner": "control-protocol",
+      "caller": "target_transport_pending",
+      "callee": "parseTargetControlFrame",
+      "path": "control-protocol/frames.ts",
+      "input_resource_id": "agent-host-target-transport",
+      "output_resource_id": "agent-host-target-transport",
+      "error_resource_id": "control-protocol-error"
+    },
+    {
+      "chain_id": "control-protocol-schema-v2",
+      "node": "control-02-session-parse",
+      "from": "session_channel_frame_received",
+      "to": "session_channel_frame_validated",
+      "owner": "control-protocol",
+      "caller": "target_transport_pending",
+      "callee": "parseSessionChannelFrame",
+      "path": "control-protocol/frames.ts",
+      "input_resource_id": "session-channel-registry",
+      "output_resource_id": "session-channel-registry",
+      "error_resource_id": "control-protocol-error"
+    },
+    {
+      "chain_id": "control-protocol-schema-v2",
+      "node": "control-03-channel-state",
+      "from": "channel_event_received",
+      "to": "channel_state_transitioned",
+      "owner": "control-protocol",
+      "caller": "target_transport_pending",
+      "callee": "createChannelState -> openChannel -> onOpenAck -> onMessage -> onClose -> onCloseAck/onError",
+      "path": "control-protocol/channel-state.ts",
+      "input_resource_id": "session-channel-registry",
+      "output_resource_id": "session-channel-registry",
+      "error_resource_id": "control-protocol-error"
+    },
+    {
+      "chain_id": "agent-host-registration-v2",
+      "node": "agent-host-01-register",
+      "from": "host_registration_submitted",
+      "to": "host_directory_updated",
+      "owner": "network",
+      "caller": "registerAgentHost",
+      "callee": "upsertDirectoryHost",
+      "path": "network/host-registration.ts",
+      "input_resource_id": "host-directory-truth",
+      "output_resource_id": "discovery-projection",
+      "error_resource_id": "registration-error"
+    },
+    {
+      "chain_id": "agent-host-registration-v2",
+      "node": "agent-host-02-presence",
+      "from": "host_presence_observed",
+      "to": "host_presence_refreshed",
+      "owner": "server",
+      "caller": "touchHostPresence",
+      "callee": "removeStaleHosts",
+      "path": "server/directory.ts",
+      "input_resource_id": "host-directory-truth",
+      "output_resource_id": "discovery-projection",
+      "error_resource_id": "directory-error"
     }
   ]
 }

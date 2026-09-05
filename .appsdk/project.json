@@ -1,9 +1,9 @@
 {
   "access": {
     "protected_paths": [
-    ".appsdk/goal.json",
-    ".appsdk/maps/**",
-    ".appsdk/sdk.lock",
+      ".appsdk/goal.json",
+      ".appsdk/maps/**",
+      ".appsdk/sdk.lock",
       "generated/**",
       "protected/source/**"
     ]
@@ -68,7 +68,28 @@
       "playground/**",
       "generated/**"
     ],
-    "zone_transition_contract": "contracts/transitions/zone-transition-manifest.json"
+    "zone_transition_contract": "contracts/transitions/zone-transition.manifest.json"
+  },
+  "guidance": {
+    "compiled_manifest": ".appsdk/guidance/compiled.json",
+    "enforcement": "advisory",
+    "rule_sources": [
+      {
+        "kind": "agents",
+        "path": "AGENTS.md",
+        "precedence": 100,
+        "required": true,
+        "source_id": "project-agents"
+      },
+      {
+        "contract_path": ".appsdk/guidance/project-guidance.json",
+        "kind": "skill",
+        "path": ".appsdk/skills/appsdk-project-governance/SKILL.md",
+        "precedence": 200,
+        "required": true,
+        "source_id": "appsdk-governance-skill"
+      }
+    ]
   },
   "lifecycle": {
     "stage": "contract_bound"
@@ -88,7 +109,7 @@
       "build": {
         "args": [
           "-c",
-          "mkdir -p generated/modules/teams-design/lib && printf 'teams design placeholder\\n' > generated/modules/teams-design/lib/teams-design.placeholder"
+          "mkdir -p generated/modules/teams-design/lib && printf 'teams design placeholder\n' > generated/modules/teams-design/lib/teams-design.placeholder"
         ],
         "program": "sh",
         "working_directory": "."
@@ -110,19 +131,22 @@
         "contracts/**",
         "agent/**",
         "config/**",
+        "control-protocol/**",
+        "agent-host/**",
         "dsh-adapter/**",
         "memory-plugin/**",
         "network/**",
         "runtime/**",
         "search-plugin/**",
         "server/**",
-      "scripts/**",
-      "console-host/package.json",
-      "console-host/src/**",
-      "console-host/tests/**",
-      "console-host/tsconfig.json",
-      "console-host/vitest.config.ts",
-      "console-host/static/**",
+        "vitest.config.ts",
+        "scripts/**",
+        "console-host/package.json",
+        "console-host/src/**",
+        "console-host/tests/**",
+        "console-host/tsconfig.json",
+        "console-host/vitest.config.ts",
+        "console-host/static/**",
         "opencode-adapter/package.json",
         "opencode-adapter/src/**",
         "opencode-adapter/tests/**",
@@ -150,12 +174,15 @@
           "docs/**",
           "agent/**",
           "config/**",
+          "control-protocol/**",
+          "agent-host/**",
           "dsh-adapter/**",
           "memory-plugin/**",
           "network/**",
           "runtime/**",
           "search-plugin/**",
           "server/**",
+          "vitest.config.ts",
           "ui/teams-console/src/**",
           "opencode-adapter/src/**"
         ],

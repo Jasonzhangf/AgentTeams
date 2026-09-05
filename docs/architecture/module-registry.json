@@ -51,6 +51,60 @@
       ]
     },
     {
+      "module_id": "control-protocol",
+      "owner": "control-protocol",
+      "status": "implemented",
+      "owned_paths": [
+        "control-protocol/**",
+        "vitest.config.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "server/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "agent-host",
+      "owner": "agent-host",
+      "status": "design",
+      "owned_paths": [
+        "agent-host/**"
+      ],
+      "forbidden_paths": [
+        "ui/**",
+        "network/**",
+        "server/**"
+      ]
+    },
+    {
+      "module_id": "master-host",
+      "owner": "master-host",
+      "status": "design",
+      "owned_paths": [
+        "console-host/**"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "server/**",
+        "network/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "acp-adapter",
+      "owner": "acp-adapter",
+      "status": "design",
+      "owned_paths": [
+        "acp-adapter/**"
+      ],
+      "forbidden_paths": [
+        "ui/**",
+        "opencode-adapter/**",
+        "dsh-adapter/**"
+      ]
+    },
+    {
       "module_id": "config",
       "owner": "config",
       "status": "partial",
