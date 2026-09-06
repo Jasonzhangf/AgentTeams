@@ -131,12 +131,12 @@ export const teamsStyles = String.raw`
 }
 
 .teams-brand strong {
+  display: block;
   font-size: 17px;
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
-.teams-brand span,
-.teams-subtitle,
 .teams-muted,
 .teams-agent-meta,
 .teams-list-secondary,
@@ -145,8 +145,6 @@ export const teamsStyles = String.raw`
   color: var(--teams-muted);
 }
 
-.teams-brand span,
-.teams-subtitle,
 .teams-list-secondary,
 .teams-provider-meta,
 .teams-field-hint {
@@ -244,6 +242,7 @@ export const teamsStyles = String.raw`
 }
 
 .teams-view-title {
+  max-width: 100%;
   margin: 0;
   font-size: clamp(20px, 2.2vw, 28px);
   line-height: 1.2;
@@ -694,11 +693,25 @@ export const teamsStyles = String.raw`
   }
 
   .teams-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
     padding: 14px 16px;
   }
 
-  .teams-header .teams-brand span {
-    display: none;
+  .teams-brand,
+  .teams-header-actions {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .teams-header-actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .teams-header-actions > * {
+    flex: 0 0 auto;
   }
 
   .teams-content {

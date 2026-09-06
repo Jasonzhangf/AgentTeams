@@ -33,4 +33,12 @@ describe('independent UI boundary', () => {
     expect(source).not.toContain('api_key')
     expect(source).toContain('credentialref')
   })
+
+  it('renders only explicitly projected Agent actions and omits implementation copy', () => {
+    const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
+    expect(render).toContain("projection.configs.some(config => config.agentId === agent.agentId)")
+    expect(render).toContain('if (current !== undefined && sessionExists)')
+    expect(render).not.toContain('Host-owned Agent presence and current-session bindings.')
+    expect(render).not.toContain('Projection in, control actions out.')
+  })
 })
