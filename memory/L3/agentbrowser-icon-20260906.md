@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-09-06T09:47:02.988662+00:00","id":"agentbrowser-icon-20260906","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["agentbrowser","ai-reviewed","human-unreviewed","icon","ui-evidence"],"updated_at":"2026-09-06T09:47:02.988662+00:00"} -->
+
+# AgentBrowser icon admission
+
+2026-09-06 user-supplied minimal_cloud_browser_1788618910206.jpg is preserved byte-for-byte as ui/teams-console/assets/agentbrowser-icon.jpg with SHA-256 e310c0ee9f7ebb9da88f68498a90e6cd83f4540541574251c90da5e83e736587. UI loads it only for Agent projections declaring browser capability. Built desktop browser fixture accessibility tree showed image alt AgentBrowser icon beside AgentBrowser; pnpm build:governance and pnpm smoke passed, with artifact smoke comparing source and packaged JPEG bytes. Evidence: docs/evidence/agentbrowser-icon-20260906.md. Limits: desktop fixture only; no production host, physical phone, or platform-specific resized icon claim.
+<!-- project-memory:end -->

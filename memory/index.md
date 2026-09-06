@@ -81,7 +81,9 @@ _Empty._
 
 ## Level 3 — new or unreviewed
 
-_Empty._
+### AgentBrowser icon admission
+- tags: `agentbrowser`, `ai-reviewed`, `human-unreviewed`, `icon`, `ui-evidence`
+- details: [L3/agentbrowser-icon-20260906.md](L3/agentbrowser-icon-20260906.md)
 
 ## Skill description candidates
 
