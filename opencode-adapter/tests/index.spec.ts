@@ -18,6 +18,8 @@ import {
   createOpenCodePluginRuntime,
   projectOpenCodeTeamsProjection,
   projectOpenCodeNotifications,
+  compileOpenCodeConfig,
+  createOpenCodeConfigApplier,
 } from '../src/index.ts'
 
 describe('OpenCode Teams adapter', () => {
@@ -227,5 +229,131 @@ describe('OpenCode Teams adapter', () => {
     await runtime.hooks.event?.({ event: { type: 'session.created', properties: { sessionID: 'ses_10' } } })
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(runtime.facade.projection().sessions.map(session => session.id)).toEqual(['ses_9', 'ses_10'])
+  })
+
+  it('compiles only the selected provider/model projection and keeps credentials opaque', () => {
+    const compiled = compileOpenCodeConfig({
+      revision: 11,
+      acceptedRevision: 11,
+      providers: {
+        primary: {
+          id: 'primary',
+          label: 'Primary',
+          protocol: 'openai-responses',
+          apiBaseUrl: 'http://127.0.0.1:4444/v1',
+          enabled: true,
+          auth: { kind: 'none' },
+        },
+        backup: {
+          id: 'backup',
+          label: 'Backup',
+          protocol: 'openai-chat',
+          apiBaseUrl: 'https://backup.example/v1',
+          enabled: true,
+          auth: { kind: 'bearer', credentialRef: 'credential:backup' },
+        },
+      },
+      catalogs: {
+        primary: { state: 'ready', entries: [{ ref: { providerInstanceId: 'primary', modelId: 'primary-model' }, origin: 'manual', base: {}, overrides: {} }] },
+        backup: { state: 'ready', entries: [{ ref: { providerInstanceId: 'backup', modelId: 'backup-model' }, origin: 'manual', base: {}, overrides: {} }] },
+      },
+      agents: {
+        planner: {
+          primary: { providerInstanceId: 'primary', modelId: 'primary-model' },
+          backup: { providerInstanceId: 'backup', modelId: 'backup-model' },
+        },
+      },
+    }, 'planner')
+
+    expect(compiled).toEqual({
+      agentId: 'planner',
+      acceptedRevision: 11,
+      primary: { provider: 'primary', model: 'primary-model', protocol: 'openai-responses', baseUrl: 'http://127.0.0.1:4444/v1' },
+      backup: { provider: 'backup', model: 'backup-model', protocol: 'openai-chat', baseUrl: 'https://backup.example/v1', credentialRef: 'credential:backup' },
+    })
+    expect(JSON.stringify(compiled)).not.toContain('secret')
+    expect(Object.keys(compiled.primary)).toEqual(['provider', 'model', 'protocol', 'baseUrl'])
+  })
+
+  it('rejects compilation when a selected model is absent or unavailable', () => {
+    const config = {
+      revision: 3,
+      acceptedRevision: 3,
+      providers: {
+        primary: {
+          id: 'primary',
+          label: 'Primary',
+          protocol: 'openai-responses' as const,
+          apiBaseUrl: 'http://127.0.0.1:4444/v1',
+          enabled: true,
+          auth: { kind: 'none' as const },
+        },
+      },
+      catalogs: { primary: { state: 'ready' as const, entries: [] } },
+      agents: { planner: { primary: { providerInstanceId: 'primary', modelId: 'missing' } } },
+    }
+    expect(() => compileOpenCodeConfig(config, 'planner')).toThrow(/model not found/)
+  })
+
+  it('reports unsupported config apply without an effective revision', async () => {
+    const result = await createOpenCodeConfigApplier().apply({
+      revision: 4,
+      acceptedRevision: 4,
+      providers: {},
+      catalogs: {},
+      agents: {},
+    })
+    expect(result).toEqual({
+      status: 'unsupported',
+      error: { code: 'UNSUPPORTED_OPERATION', message: 'OpenCode config apply API is unsupported' },
+    })
+    expect(result).not.toHaveProperty('effectiveRevision')
+  })
+
+  it('propagates SDK list errors instead of treating them as an empty catalog', async () => {
+    const client = {
+      session: {
+        list: async () => ({ data: undefined, error: { message: 'unauthorized' }, response: { status: 401 } }),
+      },
+    }
+    await expect(listOpenCodeSessions(client as never)).rejects.toMatchObject({ status: 401 })
+  })
+
+  it('rejects non-2xx SDK envelopes even when they contain data', async () => {
+    const client = {
+      session: {
+        list: async () => ({ data: [], response: { status: 302 } }),
+      },
+    }
+    await expect(listOpenCodeSessions(client as never)).rejects.toMatchObject({ status: 302 })
+  })
+
+  it('rejects a raw non-2xx SDK status instead of passing it to the projection', async () => {
+    const client = {
+      session: {
+        list: async () => ({ status: 500 }),
+      },
+    }
+    await expect(listOpenCodeSessions(client as never)).rejects.toMatchObject({ status: 500, code: 'UPSTREAM_ERROR' })
+  })
+
+  it('propagates SDK get status errors without rewriting them as not found', async () => {
+    const client = {
+      session: {
+        get: async () => ({ data: undefined, error: { message: 'forbidden' }, response: { status: 403 } }),
+      },
+    }
+    await expect(getOpenCodeSession(client as never, 'ses_forbidden')).rejects.toMatchObject({ status: 403 })
+  })
+
+  it('propagates prompt and permission SDK errors', async () => {
+    const client = {
+      session: {
+        prompt: async () => ({ data: undefined, error: { message: 'upstream unavailable' }, response: { status: 503 } }),
+      },
+      postSessionIdPermissionsPermissionId: async () => ({ data: undefined, error: { message: 'permission missing' }, response: { status: 404 } }),
+    }
+    await expect(sendOpenCodeMessage(client as never, 'ses_upstream', 'hello')).rejects.toMatchObject({ status: 503 })
+    await expect(replyOpenCodePermission(client as never, 'per_missing', 'ses_upstream', 'reject')).rejects.toMatchObject({ status: 404 })
   })
 })

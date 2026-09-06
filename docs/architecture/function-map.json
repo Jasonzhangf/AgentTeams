@@ -3,12 +3,16 @@
   "map_id": "teams-function-map",
   "status": "partial",
   "functions": [
+    {"function_id":"compiled_runtime_relay_smoke","owner":"development-governance","status":"implemented","paths":["scripts/runtime-smoke.mjs"],"entry_symbols":[],"required_gates":["teams-compiled-library-smoke"],"note":"Node loads packaged Relay/client JS directly; temporary local TLS admission and directory, not deployed daemon/NAT evidence"},
+    {"function_id":"relay_login_admission","owner":"network","status":"partial","paths":["network/relay-login.ts"],"entry_symbols":["loginRelay"],"required_gates":["teams-wss-client-transport"],"note":"TLS precedes explicit admission; denial/timeout closes socket; actual Relay service integration remains pending"},
+    {"function_id":"relay_admission_schema","owner":"control-protocol","status":"implemented","paths":["control-protocol/relay-admission.ts"],"entry_symbols":["parseRelayAdmission"],"required_gates":["teams-wss-client-transport"]},
+    {"function_id":"network_wss_connection","owner":"network","status":"partial","paths":["network/wss-connection.ts"],"entry_symbols":["connectWss"],"required_gates":["teams-wss-client-transport"],"note":"Real bounded TLS socket; protocol admission, daemon lifecycle and deployment binding remain N2 work"},
     {"function_id":"host_current_session_projection","owner":"master-host","status":"partial","paths":["console-host/src/index.ts"],"entry_symbols":["projectConsoleHost","relayConsoleHostAgentMessage"],"required_gates":["teams-current-session-fast-path"],"note":"readCurrentSession is a read-only Agent Host port; binding absent means unknown, never the first list entry"},
     {"function_id":"agent_service_contracts_r1","owner":"control-protocol","status":"design","paths":["control-protocol/agent-services.ts"],"entry_symbols":[],"design_doc":"docs/design/teams-service-contracts-r1.md","required_gates":["teams-source-typecheck"]},
     {"function_id":"development_regression_gate","owner":"development-governance","status":"implemented","paths":["scripts/regression.mjs","vitest.config.ts",".appsdk/project.json"],"entry_symbols":[],"required_gates":["teams-source-regression"]},
     {"function_id":"compiled_library_http_smoke","owner":"development-governance","status":"implemented","paths":["scripts/artifact-smoke.mjs"],"entry_symbols":[],"required_gates":["teams-compiled-library-smoke"]},
     {"function_id":"development_artifact_packaging","owner":"development-governance","status":"implemented","paths":["scripts/package-artifact.mjs","package.json"],"entry_symbols":[],"required_gates":["teams-source-regression","teams-source-typecheck","teams-source-artifact","teams-appsdk-verify"]},
-    {"function_id":"relay_service_login_broadcast_assistance","owner":"server","status":"design","paths":["server/**"],"entry_symbols":[],"design_doc":"docs/design/teams-control-protocol-v2-master-agent-host.md","required_gates":["teams-daemon-relay-bootstrap"]},
+    {"function_id":"relay_service_login_broadcast_assistance","owner":"server","status":"partial","paths":["server/relay.ts"],"entry_symbols":["createRelayServer"],"design_doc":"docs/design/teams-control-protocol-v2-master-agent-host.md","required_gates":["teams-daemon-relay-bootstrap"],"note":"Actual local WSS server, bounded control/data and authenticated grants; deployed service and NAT replay pending"},
     {"function_id":"daemon_relay_bootstrap_and_peer_connection","owner":"network","status":"design","paths":["network/**"],"entry_symbols":[],"design_doc":"docs/design/teams-control-protocol-v2-master-agent-host.md","required_gates":["teams-daemon-relay-bootstrap"]},
     {
       "function_id": "bootstrap_link_resolution",
@@ -451,7 +455,7 @@
         "teams-static-ui-replay"
       ]
     },
-    {"function_id":"provider_catalog_and_binding","owner":"config","status":"design","paths":["config/runtime-config.ts"],"entry_symbols":[],"design_doc":"docs/design/teams-provider-config.md","required_gates":["teams-provider-config-catalog","teams-provider-config-effective"]},
-    {"function_id":"agent_work_resource_admission","owner":"agent","status":"design","paths":["agent/**"],"entry_symbols":[],"design_doc":"docs/design/teams-agent-relation-communication-v1.md","required_gates":["teams-agent-work-capacity","teams-passive-cli-agent","teams-console-offline-work"]}
+    {"function_id":"provider_catalog_and_binding","owner":"config","status":"partial","paths":["config/runtime-config.ts"],"entry_symbols":["createRuntimeConfigStore","createJsonFileConfigPersistence"],"design_doc":"docs/design/teams-provider-config.md","required_gates":["teams-provider-config-catalog","teams-provider-config-effective"],"note":"Typed multi-instance catalog and accepted/effective store implemented; actual catalog client, managed OpenCode apply and live provider replay pending"},
+    {"function_id":"agent_work_resource_admission","owner":"agent","status":"partial","paths":["agent/work-resource.ts"],"entry_symbols":["createWorkLedger","createFileWorkStore","proposeWork","requestWork","requestCancellation","completeRequest","closeWork","confirmWorkDestroyed","recover","recoverFileWorkStoreLock"],"design_doc":"docs/design/teams-agent-relation-communication-v1.md","required_gates":["teams-agent-work-capacity","teams-passive-cli-agent","teams-console-offline-work"],"note":"Local trusted ledger implemented; actual runtime execution/recovery and remote authenticated ingress not yet bound"}
   ]
 }
