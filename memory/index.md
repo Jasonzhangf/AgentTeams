@@ -19,9 +19,21 @@ _Empty._
 - tags: `agentbrowser`, `ai-reviewed`, `human-unreviewed`, `icon`, `ui-evidence`
 - details: [L2/agentbrowser-icon-20260906.md](L2/agentbrowser-icon-20260906.md)
 
+### Active recovery boundary remains runtime-owned
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `recovery`, `runtime`, `work`
+- details: [L2/agentteams-active-recovery-boundary-20260906.md](L2/agentteams-active-recovery-boundary-20260906.md)
+
+### Agent-to-Agent daemon Work replay
+- tags: `agentteams`, `ai-reviewed`, `daemon`, `human-unreviewed`, `relay`, `work`
+- details: [L2/agentteams-cross-daemon-work-20260906.md](L2/agentteams-cross-daemon-work-20260906.md)
+
 ### AgentTeams 长程交付与阶段L2记忆
 - tags: `ai-reviewed`, `delivery`, `governance`, `human-unreviewed`, `memory-l2`
 - details: [L2/agentteams-long-running-delivery-20260906.md](L2/agentteams-long-running-delivery-20260906.md)
+
+### Packaged Relay process replay
+- tags: `agentteams`, `ai-reviewed`, `deployment`, `human-unreviewed`, `relay`, `restart`
+- details: [L2/agentteams-relay-process-packaged-20260906.md](L2/agentteams-relay-process-packaged-20260906.md)
 
 ### Capability matching and shared resource capacity
 - tags: `ai-reviewed`, `capability`, `human-unreviewed`, `relations`, `resource`, `work`
@@ -108,11 +120,11 @@ _Empty._
 Base budget: 8 lines. Copy the compact lines into the project Skill `description` after manual architecture deduplication. Fill level 1 first; use level 2, then level 3, only for remaining slots.
 
 - L2: AgentBrowser icon admission (knowledge) [agentbrowser,ai-reviewed,human-unreviewed,icon,ui-evidence] -> L2/agentbrowser-icon-20260906.md
+- L2: Active recovery boundary remains runtime-owned (lesson) [agentteams,ai-reviewed,human-unreviewed,recovery,runtime,work] -> L2/agentteams-active-recovery-boundary-20260906.md
+- L2: Agent-to-Agent daemon Work replay (knowledge) [agentteams,ai-reviewed,daemon,human-unreviewed,relay,work] -> L2/agentteams-cross-daemon-work-20260906.md
 - L2: AgentTeams 长程交付与阶段L2记忆 (plan) [ai-reviewed,delivery,governance,human-unreviewed,memory-l2] -> L2/agentteams-long-running-delivery-20260906.md
+- L2: Packaged Relay process replay (knowledge) [agentteams,ai-reviewed,deployment,human-unreviewed,relay,restart] -> L2/agentteams-relay-process-packaged-20260906.md
 - L2: Capability matching and shared resource capacity (knowledge) [ai-reviewed,capability,human-unreviewed,relations,resource,work] -> L2/capability-relation-capacity-20260906.md
 - L2: Console integration candidate validation (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-candidate-20260906.md
 - L2: Console integration merged and main verified (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-delivery-20260906.md
-- L2: Console copy and explicit action projection (knowledge) [ai-reviewed,console,human-unreviewed,mobile,projection,ui] -> L2/console-ui-polish-20260906.md
-- L2: Local Agent process and Work execution candidate verified (knowledge) [ai-reviewed,human-unreviewed] -> L2/daemon-execution-candidate-20260906.md
-- L2: Daemon PR9 merged and owned worktree closed (knowledge) [ai-reviewed,human-unreviewed] -> L2/daemon-execution-delivery-20260906.md
 
