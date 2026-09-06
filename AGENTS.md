@@ -44,6 +44,16 @@
 
 ## Development contract
 
+- The user-selected long-running delivery contract is
+  `docs/goals/teams-long-running-delivery.md`. Each stage closes only after
+  applicable engineering evidence, evidence-reviewed memory Level 2 updates,
+  and verified owned-resource cleanup or explicit retained obligations.
+- Project memory has one writer: the primary integration owner. Workers submit
+  stage notes and memory candidates; only official memory commands write or
+  promote records, and promotion requires a real memory review reference.
+- The primary may review verified facts and promote them to memory Level 2.
+  Tag such records `ai-reviewed` and `human-unreviewed`; neither another agent
+  nor human approval is a prerequisite. Human review must never be implied.
 - Development commands and evidence applicability are owned by
   `docs/development-governance.md`. AppSDK lifecycle module `teams-source` is
   the source/artifact admission unit; semantic ownership remains in the five

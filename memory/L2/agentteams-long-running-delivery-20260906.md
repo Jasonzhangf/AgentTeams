@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"plan","created_at":"2026-09-06T04:34:07.083225+00:00","id":"agentteams-long-running-delivery-20260906","importance":0,"memory_level":2,"review_evidence":["docs/evidence/delivery-control-20260906/memory-review.md"],"review_status":"reviewed","source_refs":[],"tags":["ai-reviewed","delivery","governance","human-unreviewed","memory-l2"],"updated_at":"2026-09-06T04:34:38.655052+00:00"} -->
+
+# AgentTeams 长程交付与阶段L2记忆
+
+用户授权主任务01a07497-8e08-7e90-be56-c9f69d72bb26主导已确认首版，监督三个Luna/max任务并负责进度、冲突、协作、提交合并和安全资源清理。执行合同为docs/goals/teams-long-running-delivery.md，阶段顺序唯一真源为docs/goals/teams-development-plan.md。按用户最新澄清，每阶段由主任务去重写入AppSDK project-memory；实际完成的测试及来源事实由主任务复核后即可promote至Level 2，标记ai-reviewed与human-unreviewed，不需要另一个agent或人类审批。代码review、记忆事实复核、主线receipt和工作树清理分别证明。记录时基线PR #1和公共类型PR #2已合并，origin/main=e0b8e97ea718c1d5cf320c994b070e5fee49e577；N1/C1/W1在隔离工作树开发，产品运行时、各阶段资源关闭仍未完成。长期goal与每15分钟的heartbeat agentteams已创建；已创建监督不等于产品完成。
+<!-- project-memory:end -->
