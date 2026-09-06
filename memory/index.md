@@ -35,6 +35,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`
 - details: [L2/console-integration-delivery-20260906.md](L2/console-integration-delivery-20260906.md)
 
+### Console copy and explicit action projection
+- tags: `ai-reviewed`, `console`, `human-unreviewed`, `mobile`, `projection`, `ui`
+- details: [L2/console-ui-polish-20260906.md](L2/console-ui-polish-20260906.md)
+
 ### Local Agent process and Work execution candidate verified
 - tags: `ai-reviewed`, `human-unreviewed`
 - details: [L2/daemon-execution-candidate-20260906.md](L2/daemon-execution-candidate-20260906.md)
@@ -108,7 +112,7 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: Capability matching and shared resource capacity (knowledge) [ai-reviewed,capability,human-unreviewed,relations,resource,work] -> L2/capability-relation-capacity-20260906.md
 - L2: Console integration candidate validation (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-candidate-20260906.md
 - L2: Console integration merged and main verified (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-delivery-20260906.md
+- L2: Console copy and explicit action projection (knowledge) [ai-reviewed,console,human-unreviewed,mobile,projection,ui] -> L2/console-ui-polish-20260906.md
 - L2: Local Agent process and Work execution candidate verified (knowledge) [ai-reviewed,human-unreviewed] -> L2/daemon-execution-candidate-20260906.md
 - L2: Daemon PR9 merged and owned worktree closed (knowledge) [ai-reviewed,human-unreviewed] -> L2/daemon-execution-delivery-20260906.md
-- L2: PR8合并和daemon库工作树关闭回执 (knowledge) [ai-reviewed,cleanup,delivery,human-unreviewed] -> L2/daemon-library-delivery-20260906.md
 
