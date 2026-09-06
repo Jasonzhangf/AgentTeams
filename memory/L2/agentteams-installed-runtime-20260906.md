@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-09-06T10:45:26.056780+00:00","id":"agentteams-installed-runtime-20260906","importance":0,"memory_level":2,"review_evidence":["candidate 7af9c30; merge 40e0ff0; pnpm smoke:installed; pnpm test 60 files/318 tests; pnpm typecheck; AGY agentteams-packaged-runtime-20260906 PASS; AppSDK guide compile/compile/verify"],"review_status":"reviewed","source_refs":[],"tags":["agentteams","ai-reviewed","artifact","human-unreviewed","install","restart"],"updated_at":"2026-09-06T10:45:34.105839+00:00"} -->
+
+# Installed runtime replay
+
+2026-09-06 packaged-runtime-install built an artifact with a pinned ws dependency, installed it into an isolated temporary root, and replayed the packaged Relay and Agent entrypoints. Startup, registration, restart with a fresh generation, SIGTERM/SIGINT shutdown, and credential-value redaction passed. Candidate 7af9c30 passed tests (60 files/318 tests), typecheck, diff check, and AGY exact commit review; it merged as 40e0ff0. Mainline tests, typecheck, build:governance, smoke, and AppSDK guide compile/compile/verify passed. Evidence: docs/evidence/installed-runtime-20260906.md. This proves local installable package lifecycle only; no OS service manager, public ingress, NAT, direct transport, production Relay, or mobile claim.
+<!-- project-memory:end -->

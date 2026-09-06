@@ -27,6 +27,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `daemon`, `human-unreviewed`, `relay`, `work`
 - details: [L2/agentteams-cross-daemon-work-20260906.md](L2/agentteams-cross-daemon-work-20260906.md)
 
+### Installed runtime replay
+- tags: `agentteams`, `ai-reviewed`, `artifact`, `human-unreviewed`, `install`, `restart`
+- details: [L2/agentteams-installed-runtime-20260906.md](L2/agentteams-installed-runtime-20260906.md)
+
 ### AgentTeams 长程交付与阶段L2记忆
 - tags: `ai-reviewed`, `delivery`, `governance`, `human-unreviewed`, `memory-l2`
 - details: [L2/agentteams-long-running-delivery-20260906.md](L2/agentteams-long-running-delivery-20260906.md)
@@ -122,9 +126,9 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: AgentBrowser icon admission (knowledge) [agentbrowser,ai-reviewed,human-unreviewed,icon,ui-evidence] -> L2/agentbrowser-icon-20260906.md
 - L2: Active recovery boundary remains runtime-owned (lesson) [agentteams,ai-reviewed,human-unreviewed,recovery,runtime,work] -> L2/agentteams-active-recovery-boundary-20260906.md
 - L2: Agent-to-Agent daemon Work replay (knowledge) [agentteams,ai-reviewed,daemon,human-unreviewed,relay,work] -> L2/agentteams-cross-daemon-work-20260906.md
+- L2: Installed runtime replay (knowledge) [agentteams,ai-reviewed,artifact,human-unreviewed,install,restart] -> L2/agentteams-installed-runtime-20260906.md
 - L2: AgentTeams 长程交付与阶段L2记忆 (plan) [ai-reviewed,delivery,governance,human-unreviewed,memory-l2] -> L2/agentteams-long-running-delivery-20260906.md
 - L2: Packaged Relay process replay (knowledge) [agentteams,ai-reviewed,deployment,human-unreviewed,relay,restart] -> L2/agentteams-relay-process-packaged-20260906.md
 - L2: Capability matching and shared resource capacity (knowledge) [ai-reviewed,capability,human-unreviewed,relations,resource,work] -> L2/capability-relation-capacity-20260906.md
 - L2: Console integration candidate validation (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-candidate-20260906.md
-- L2: Console integration merged and main verified (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-delivery-20260906.md
 
