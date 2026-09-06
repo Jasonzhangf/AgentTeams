@@ -128,7 +128,7 @@
         "contracts/transitions/**"
       ],
       "dependency_modules": [],
-      "deployment_operations": [],
+      "deployment_operations": ["install", "restart"],
       "generated_outputs": [
         "generated/modules/teams-source/**"
       ],
@@ -136,6 +136,7 @@
       "owned_paths": [
         "agent/**",
         "agent-host/**",
+        "cli-adapter/**",
         "config/**",
         "control-protocol/**",
         "network/**",
@@ -223,7 +224,7 @@
           "vitest.config.ts",
           "docs/architecture/**"
         ],
-        "minimum_test_count": 237,
+        "minimum_test_count": 280,
         "ordinary_mode_after_freeze": "disabled",
         "reenable_on": [
           "source_change",

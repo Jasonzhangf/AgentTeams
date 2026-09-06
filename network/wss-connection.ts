@@ -48,8 +48,9 @@ function bytes(data: RawData): Buffer {
   return Buffer.from(data instanceof ArrayBuffer ? new Uint8Array(data) : data)
 }
 
-export async function connectWss(options: WssConnectionOptions): Promise<WssConnection> {
+export async function connectWss(options: WssConnectionOptions, signal?: AbortSignal): Promise<WssConnection> {
   validate(options)
+  if (signal?.aborted) throw failure('UNAVAILABLE', 'network: connection cancelled')
   // No insecure TLS override or redirect: credentials belong to this configured endpoint.
   const socket = new WebSocket(options.endpoint, {
     ca: options.ca,
@@ -76,6 +77,7 @@ export async function connectWss(options: WssConnectionOptions): Promise<WssConn
     }
     if (socket.readyState !== WebSocket.CLOSED) socket.terminate()
   }
+  const abort = () => terminate(failure('UNAVAILABLE', 'network: connection cancelled'))
   // Attach all handlers before awaiting open; frames can arrive with the handshake.
   socket.on('message', (data, binary) => {
     if (terminal) return
@@ -95,10 +97,11 @@ export async function connectWss(options: WssConnectionOptions): Promise<WssConn
   })
   socket.on('error', error => terminate(failure('UNAVAILABLE', 'network: WSS connection failed', error)))
   socket.on('close', () => {
+    signal?.removeEventListener('abort', abort)
     terminate(terminal ?? failure('UNAVAILABLE', 'network: WSS connection closed'))
     resolveClosed(terminal!)
   })
-  await new Promise<void>((resolve, reject) => {
+  const opened = new Promise<void>((resolve, reject) => {
     const opened = () => { socket.off('close', failed); socket.off('error', failed); resolve() }
     const failed = () => {
       socket.off('open', opened)
@@ -110,6 +113,9 @@ export async function connectWss(options: WssConnectionOptions): Promise<WssConn
     socket.once('close', failed)
     socket.once('error', failed)
   })
+  signal?.addEventListener('abort', abort, { once: true })
+  if (signal?.aborted) abort()
+  try { await opened } catch (error) { await closed; throw error }
   return {
     closed,
     read: async () => {

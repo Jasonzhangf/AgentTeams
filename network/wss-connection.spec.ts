@@ -75,6 +75,25 @@ it('rejects untrusted TLS certificates and insecure endpoints', async () => {
   await expect(connectWss(options('ws://localhost:4444'))).rejects.toMatchObject({ code: 'INVALID_INPUT' })
 })
 
+it('rejects pre-cancelled connections and closes established sockets on cancellation', async () => {
+  const host = await server()
+  const cancelled = new AbortController()
+  cancelled.abort()
+  await expect(connectWss(options(host.endpoint), cancelled.signal)).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+  expect(host.wss.clients.size).toBe(0)
+  const lifetime = new AbortController()
+  const accepted = once(host.wss, 'connection')
+  const connection = await connectWss(options(host.endpoint), lifetime.signal)
+  cleanup.push(() => connection.close())
+  const [peer] = await accepted
+  const peerClosed = once(peer, 'close')
+  const read = expect(connection.read()).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+  lifetime.abort()
+  await read
+  await connection.closed
+  await peerClosed
+})
+
 it('fails pending reads and future writes when the real peer disconnects', async () => {
   const host = await server()
   const accepted = once(host.wss, 'connection')
@@ -183,6 +202,48 @@ it('closes an admitted client on request timeout without replaying an unknown re
   await peerClosed
   await expect(connection.directory(false)).rejects.toMatchObject({ code: 'RESULT_UNKNOWN' })
   expect(requests).toBe(1)
+})
+
+it('stops an in-flight data handshake without waiting for its configured connection timeout', async () => {
+  const https = createServer({ key, cert })
+  const wss = new WebSocketServer({ noServer: true })
+  let upgradeCount = 0
+  let releaseStalled!: () => void
+  let stalledReady!: () => void
+  const stalled = new Promise<void>(resolve => { stalledReady = resolve })
+  https.on('upgrade', (request, socket, head) => {
+    if (++upgradeCount === 1) wss.handleUpgrade(request, socket, head, connection => {
+      connection.on('message', () => connection.send(JSON.stringify({ kind: 'relay.admitted', connectionId: 'c', generation: 1 })))
+    })
+    else { releaseStalled = () => socket.destroy(); stalledReady() }
+  })
+  https.listen(0, '127.0.0.1')
+  await once(https, 'listening')
+  cleanup.push(async () => {
+    releaseStalled?.()
+    for (const socket of wss.clients) socket.terminate()
+    await new Promise<void>(resolve => wss.close(() => resolve()))
+    await new Promise<void>(resolve => https.close(() => resolve()))
+  })
+  const address = https.address()
+  if (!address || typeof address === 'string') throw new Error('test listener missing')
+  const connection = await createRelayClient({ transport: { ...options(`wss://127.0.0.1:${address.port}`), connectTimeoutMs: 5000 },
+    declaration, admissionTimeoutMs: 1000, requestTimeoutMs: 1000, maxPendingRequests: 1, maxDataConnections: 1 })
+  const opening = expect(connection.openData({ grantId: 'g', accountId: 'account-a', scopeId: 'scope-a',
+    sourceAgentId: 'agent-a', targetAgentId: 'other', sourceGeneration: 1, targetGeneration: 1,
+    expiresAt: new Date(Date.now() + 10000).toISOString() })).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+  await stalled
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    expect(await Promise.race([connection.close().then(() => 'closed'),
+      new Promise<string>(resolve => { timeout = setTimeout(() => resolve('deadline'), 200) })])).toBe('closed')
+    await opening
+  } finally {
+    clearTimeout(timeout)
+    releaseStalled()
+    await connection.close()
+    await opening
+  }
 })
 
 it.each([

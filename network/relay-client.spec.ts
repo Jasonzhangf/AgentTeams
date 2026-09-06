@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
@@ -7,6 +7,11 @@ import { createRelayServer, type RelayServer } from '../server/relay.ts'
 import type { RelayGrant } from '../control-protocol/agent-services.ts'
 import { createRelayClient, type RelayClient, type RelayClientOptions } from './relay-client.ts'
 import { startAgentDaemon } from '../runtime/agent-daemon.ts'
+import { createWorkChannel } from './work-channel.ts'
+import { createWorkIngress } from '../agent-host/work-ingress.ts'
+import { createWorkHost } from '../agent-host/work-host.ts'
+import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
+import { createFileWorkStore, createWorkLedger } from '../agent/work-resource.ts'
 
 let directory: string
 let cert: Buffer
@@ -54,6 +59,32 @@ it('correlates concurrent directory requests and preserves scoped broadcasts', a
   const results = await Promise.all([a.directory(true), a.directory(true)])
   expect(results.every(peers => peers.length === 2)).toBe(true)
   expect(events).toContain('b')
+})
+
+it('publishes a snapshot with advancing revision and rejects identity changes and concurrent publication', async () => {
+  await start()
+  const a = await peer('a')
+  const declaration = { ...clientOptions('a').declaration, revision: 2 }
+  const publishing = a.publish(declaration)
+  declaration.identity.label = 'mutated by caller'
+  await expect(a.publish({ ...declaration, revision: 3 })).rejects.toMatchObject({ code: 'CONFLICT' })
+  await publishing
+  expect((await a.directory(false))[0].declaration).toMatchObject({ revision: 2, identity: { label: 'a' } })
+  await expect(a.publish(declaration)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+  await expect(a.publish({ ...declaration, revision: 3, identity: { ...declaration.identity, agentId: 'other' } }))
+    .rejects.toMatchObject({ code: 'INVALID_INPUT' })
+  await a.publish({ ...declaration, revision: 3 })
+  expect((await a.directory(false))[0].declaration).toMatchObject({ revision: 3, identity: { label: 'mutated by caller' } })
+})
+
+it('rejects publication before mutation when reply capacity is already full', async () => {
+  await start()
+  const a = await createRelayClient({ ...clientOptions('a'), maxPendingRequests: 1 })
+  clients.push(a)
+  const occupied = a.directory(false)
+  await expect(a.publish({ ...clientOptions('a').declaration, revision: 2 })).rejects.toMatchObject({ code: 'RESOURCE_EXHAUSTED' })
+  await occupied
+  expect((await a.directory(false))[0].declaration.revision).toBe(1)
 })
 
 it('opens a granted channel and exchanges opaque bytes through the real relay', async () => {
@@ -147,4 +178,93 @@ it('observes async event failure while allowing handlers to request directory re
   await peer('b')
   await delivered
   await expect(a.closed).resolves.toMatchObject({ message: 'consumer event processing failed' })
+})
+
+it('executes a real CLI Work between registered daemons over Relay without a Console', async () => {
+  await start()
+  const searchRoot = join(directory, 'work-input')
+  mkdirSync(searchRoot)
+  writeFileSync(join(searchRoot, 'sample.txt'), 'remote work needle\n')
+  const executor = createCliWorkExecutor({ searchRoot, profilePrefix: 'teams-network-work-test',
+    camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg' })
+  const providerOptions = clientOptions('provider')
+  let host!: ReturnType<typeof createWorkHost>
+  const provider = await startAgentDaemon({ presenceIntervalMs: 1000, relay: {
+    ...providerOptions, declaration: { ...providerOptions.declaration, capabilities: executor.capabilities },
+    onEvent: async event => {
+      if (event.kind !== 'relay.offer') return
+      const socket = await provider.network.openData(event.grant)
+      createWorkChannel(socket, { timeoutMs: 1000, maxPending: 4, maxIncoming: 4,
+        onRequest: createWorkIngress(host, { accountId: event.grant.accountId, scopeId: event.grant.scopeId, agentId: event.grant.sourceAgentId }) })
+    },
+  } })
+  clients.push(provider.network)
+  const ledger = createWorkLedger({ provider: { accountId: 'account', scopeId: 'scope', agentId: 'provider' },
+    generation: provider.network.generation, capabilities: executor.capabilities, store: createFileWorkStore(join(directory, 'network-work.json')) })
+  host = createWorkHost({ ledger, executor, policy: () => ({ revision: 1, authorizeWork: consumer => consumer.agentId === 'consumer' }) })
+  const consumer = await startAgentDaemon({ presenceIntervalMs: 1000, relay: clientOptions('consumer') })
+  clients.push(consumer.network)
+  const grant = await consumer.network.connect('provider', provider.network.generation)
+  const channel = createWorkChannel(await consumer.network.openData(grant), { timeoutMs: 2000, maxPending: 4, maxIncoming: 4 })
+  const proposal = { workId: 'remote-work', consumerAgentId: 'consumer', providerAgentId: 'provider', capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1 }
+  expect(await channel.request({ kind: 'work.propose', proposal })).toMatchObject({ kind: 'work.state', work: { state: 'accepted' } })
+  const command = { kind: 'work.request' as const, control: { workId: proposal.workId, requestId: 'remote-request', operation: 'search',
+    targetGeneration: provider.network.generation, demands: [{ resourceId: 'search-slot', amount: 1 }] }, payload: { query: 'remote work needle' } }
+  expect(await channel.request(command)).toMatchObject({ kind: 'work.result', control: { state: 'succeeded' },
+    payload: { matches: [expect.objectContaining({ path: './sample.txt', text: 'remote work needle\n' })] } })
+  const revision = ledger.snapshot.revision
+  expect(await channel.request(command)).toMatchObject({ kind: 'work.result', control: { state: 'succeeded' } })
+  expect(ledger.snapshot.revision).toBe(revision)
+  expect(await channel.request({ kind: 'work.close', workId: proposal.workId })).toMatchObject({ kind: 'work.state', work: { state: 'closed' } })
+  expect(ledger.snapshot.allocations.every(item => item.state === 'released')).toBe(true)
+  await channel.close()
+  await consumer.stop()
+  await provider.stop()
+})
+
+it('bounds Work requests and times out a silent peer without replay', async () => {
+  await start()
+  const a = await peer('a')
+  const b = await peer('b')
+  const grant = await a.connect('b', b.generation)
+  const [left, right] = await Promise.all([a.openData(grant), b.openData(grant)])
+  const channel = createWorkChannel(left, { timeoutMs: 40, maxPending: 1, maxIncoming: 1 })
+  const response = expect(channel.request({ kind: 'work.close', workId: 'w' })).rejects.toMatchObject({ code: 'RESULT_UNKNOWN' })
+  await expect(channel.request({ kind: 'work.close', workId: 'other' })).rejects.toMatchObject({ code: 'RESOURCE_EXHAUSTED' })
+  expect(JSON.parse((await right.read()).bytes.toString())).toMatchObject({ kind: 'work.close', workId: 'w' })
+  await response
+  await channel.closed
+  await right.closed
+})
+
+it('rejects invalid local Work input before allocating a deadline or closing the connection', async () => {
+  await start()
+  const a = await peer('a')
+  const b = await peer('b')
+  const grant = await a.connect('b', b.generation)
+  const [left, right] = await Promise.all([a.openData(grant), b.openData(grant)])
+  const channel = createWorkChannel(left, { timeoutMs: 40, maxPending: 1, maxIncoming: 1 })
+  await expect(channel.request({ kind: 'work.close', workId: () => 'invalid' } as never)).rejects.toThrow()
+  await new Promise(resolve => setTimeout(resolve, 80))
+  const response = channel.request({ kind: 'work.get', workId: 'w', requestId: 'r' })
+  const received = JSON.parse((await right.read()).bytes.toString())
+  await right.send({ binary: false, bytes: Buffer.from(JSON.stringify({ kind: 'work.result', correlationId: received.correlationId,
+    control: { workId: 'w', requestId: 'r', state: 'succeeded' }, payload: 'still usable' })) })
+  expect(await response).toMatchObject({ payload: 'still usable' })
+  await channel.close()
+})
+
+it('rejects a correlated Work reply that belongs to a different Work', async () => {
+  await start()
+  const a = await peer('a')
+  const b = await peer('b')
+  const grant = await a.connect('b', b.generation)
+  const [left, right] = await Promise.all([a.openData(grant), b.openData(grant)])
+  const channel = createWorkChannel(left, { timeoutMs: 1000, maxPending: 1, maxIncoming: 1 })
+  const response = expect(channel.request({ kind: 'work.get', workId: 'w', requestId: 'r' })).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+  const received = JSON.parse((await right.read()).bytes.toString())
+  await right.send({ binary: false, bytes: Buffer.from(JSON.stringify({ kind: 'work.result', correlationId: received.correlationId,
+    control: { workId: 'wrong-work', requestId: 'r', state: 'succeeded' }, payload: 'wrong result' })) })
+  await response
+  await channel.closed
 })

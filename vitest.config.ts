@@ -6,6 +6,7 @@ export default {
     allowOnly: false,
     include: [
       'agent-host/**/*.spec.ts',
+      'cli-adapter/**/*.spec.ts',
       'server/**/*.spec.ts',
       'network/**/*.spec.ts',
       'control-protocol/*.spec.ts',
