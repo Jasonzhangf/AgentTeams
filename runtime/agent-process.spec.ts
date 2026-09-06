@@ -12,6 +12,8 @@ import { createRelayConsoleClient } from './relay-console-client.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
 import { createConsoleHttpClient } from '../ui/teams-console/src/client/api.ts'
 import { startAgentProcess } from './agent-process.ts'
+import { createFileWorkStore, createWorkLedger, proposeWork, requestWork } from '../agent/work-resource.ts'
+import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 
 let directory: string
 let relay: RelayServer
@@ -218,4 +220,40 @@ it('completes Agent-to-Agent Work between two independently started daemons with
     await consumerAgent?.stop()
     await provider?.stop()
   }
+}, 15000)
+
+it('persists unknown state before refusing a restart with active Work', async () => {
+  const root = join(directory, 'recovery')
+  mkdirSync(join(root, 'files'), { recursive: true })
+  writeFileSync(join(root, 'files', 'active.txt'), 'active work\n')
+  const dataDirectory = join(root, 'data')
+  const workFile = join(dataDirectory, 'work.json')
+  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg',
+    searchRoot: join(root, 'files'), profilePrefix: 'teams-recovery' })
+  const provider = { accountId: 'account', scopeId: 'scope', agentId: 'provider2' }
+  const consumer = { accountId: 'account', scopeId: 'scope', agentId: 'consumer2' }
+  const ledger = createWorkLedger({ provider, generation: 1, capabilities: executor.capabilities, store: createFileWorkStore(workFile) })
+  const policy = { revision: 1, authorizeWork: (candidate: typeof consumer) => candidate.agentId === consumer.agentId,
+    authorizeRequest: (candidate: typeof consumer) => candidate.agentId === consumer.agentId }
+  proposeWork(ledger, consumer, { workId: 'active-work', consumerAgentId: consumer.agentId, providerAgentId: provider.agentId,
+    capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1 }, policy)
+  const admitted = requestWork(ledger, { authenticatedConsumer: consumer, policy, request: {
+    control: { workId: 'active-work', requestId: 'active-request', operation: 'search', targetGeneration: 1,
+      demands: [{ resourceId: 'search-slot', amount: 1 }] }, payload: { query: 'active work' },
+  } })
+  expect(admitted.executionAllowed).toBe(true)
+  const configPath = join(root, 'agent.json')
+  writeFileSync(configPath, JSON.stringify({ version: 1,
+    identity: { hostId: 'recovery-host', machineId: 'test', agentId: provider.agentId, accountId: provider.accountId, agentKind: 'custom', label: 'Recovery Provider' },
+    scopeId: provider.scopeId, dataDirectory, leasePort: await availablePort(), presenceIntervalMs: 1000,
+    policy: { revision: 1, allowedConsumers: [consumer.agentId], allowedManagers: [] },
+    cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: join(root, 'files'), profilePrefix: 'teams-recovery' },
+    relay: { endpoint: relay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: join(directory, 'cert.pem'), connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
+      requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 } }))
+  const restarted = child(configPath, 'Bearer provider2')
+  await expect(restarted.ready).rejects.toThrow(/persisted resources require trusted reconciliation/)
+  expect((await restarted.exited).code).toBe(1)
+  const recovered = JSON.parse(readFileSync(workFile, 'utf8')) as { requests: Array<{ state: string }>; allocations: Array<{ state: string }> }
+  expect(recovered.requests[0]?.state).toBe('unknown')
+  expect(recovered.allocations[0]?.state).toBe('unknown')
 }, 15000)

@@ -9,7 +9,7 @@ import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 import { createWorkHost } from '../agent-host/work-host.ts'
 import { createWorkIngress } from '../agent-host/work-ingress.ts'
-import { createFileWorkStore, createWorkLedger } from '../agent/work-resource.ts'
+import { createFileWorkStore, createTrustedWorkAuthority, createWorkLedger, recover } from '../agent/work-resource.ts'
 import { createConsoleIngress } from '../agent-host/console-ingress.ts'
 import { acceptAgentData } from './agent-data.ts'
 import type { ConsoleClientV1 } from '../control-protocol/console-api.ts'
@@ -164,8 +164,13 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     const ledger = createWorkLedger({ provider: { accountId: config.declaration.identity.accountId, scopeId: config.declaration.scopeId,
       agentId: config.declaration.identity.agentId }, generation: daemon.network.generation, capabilities: executor.capabilities,
       store: createFileWorkStore(resolve(config.dataDirectory, 'work.json')) })
-    if (ledger.snapshot.allocations.some(allocation => allocation.state !== 'released') ||
-      ledger.snapshot.requests.some(request => ['running', 'cancel_requested', 'unknown'].includes(request.state))) {
+    const hasUnreconciledState = ledger.snapshot.allocations.some(allocation => allocation.state !== 'released') ||
+      ledger.snapshot.requests.some(request => ['running', 'cancel_requested', 'unknown'].includes(request.state))
+    if (hasUnreconciledState) {
+      // A restarted daemon has no trusted external completion observation. Persist
+      // RESULT_UNKNOWN through the ledger owner before refusing new Work; never
+      // replay an operation or release a resource on process absence alone.
+      recover(ledger, createTrustedWorkAuthority(), [])
       throw new RelayProtocolError('RESULT_UNKNOWN', 'persisted resources require trusted reconciliation before serving Work')
     }
     host = createWorkHost({ ledger, policy: () => policy, executor })
