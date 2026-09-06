@@ -1,80 +1,105 @@
-# AgentTeams 下一步开发计划
+# AgentTeams 开发计划与依赖审查
 
-状态：设计范围更新；本轮不宣称运行时功能已实现。每个语义里程碑使用独立 clean
-worktree，完成 owner 绑定、定向红绿测试、适用回归/build/live、AppSDK 和 review。
+状态：待用户审批；本文件不授权功能实现。治理基准提交：
+`fdb907f2c23fad142ddbb2000d14031dc1a9a932`，分支 `codex/appsdk-reset-20260906`。
+基准已本地提交，未 push/合并。正式开发前须先按授权把基准及获批计划集成到主线，
+随后每个实现任务从最新 origin/main 建立独立 clean worktree。
 
-## 已确认范围
+## 审查结论
 
-- Agent 可被动提供浏览器 CLI 等能力。OpenCode 只作推理型 Agent 执行基座；
-  Teams 拥有独立 UI 和多 LLM provider 配置，非 LLM Agent 不要求 provider。
-- 每 Agent daemon；配置后 Agent 直接协作，Console 只作可离线的观察/配置面。
-- 首版覆盖公网、NAT、direct 和 relay；relay 不承担 Agent 协调决策。
-- peer、master/slave 由 Agent policy 组织，关系标签不授予权限。
-- capability/resource 声明 → Host 匹配 → work → 请求/执行；双方一对多，能力方
-  原子检查容量并拥有 allocation，Console 不作为协作 Host。
-- 测试主 provider 为 RCC 4444，goaichat 为显式备用配置。
-- 配置逻辑/模型接口参考 OpenMinis，不复用其 UI 或推理执行栈。
-- daemon 启动或附着 OpenCode 的实例所有权仍需在实现前确定。
+原 M1→M2→M3 串行方案存在四个依赖问题，改为“公共契约→并行模块→统一装配→真实验收”：
 
-## M0：迁移与真实治理基线
+1. daemon/relay 放在第三阶段太晚：所有 Agent 启动、发现和跨设备 work 都依赖它。
+   网络主线提前，与 provider/config 和能力执行并行，禁止先以 Console 转发拼出闭环。
+2. provider 与能力服务没有必然先后关系：无模型浏览器必须独立可用。
+   配置、工作/资源台账分开 owner；OpenCode 只进入推理型 Agent 路径。
+3. UI 与关系组织混在同一阶段容易让 Console 再次拥有状态：Agent 先保存 work/policy，
+   Console 后接只读投影和授权配置命令；master/slave 不进入网络路由决策。
+4. 完整 Search/Memory 插件不应阻挡首版：验收一对多只需第二种真实能力。
+   首版用固定目录只读文件检索 CLI；完整索引/记忆生命周期延期。
 
-本轮已重建为根 workspace/lockfile、完整现有测试入口和真实编译库产物；执行与
-证据适用性见 [开发管控](../development-governance.md)。主线集成与产品运行验收
-分别收尾，不把本工作树的验证结果写成已发布。
+保留现有 typed frame、directory、route/channel 状态组件及 OpenCode SDK adapter。
+删除旧生产绕路在新主线通过验收的同一集成任务中完成，不双写、不自动回退旧链。
+不新增通用调度框架、全局配置同步、自动 provider 切换或第二套证据系统。
 
-修根级安装/构建/测试入口、旧路径和 UI 外部宿主依赖；选定唯一生产 UI。
-将 AppSDK placeholder 替换为真实产物，更新调用边、测试与依赖哈希输入；producer
-从独立仓库根运行。旧源码归属条目随源码拆除同步清理，不伪装旧实现已删除。
-验收：干净 checkout 不依赖原仓库即可安装构建、运行完整适用回归；真实 artifact
-绑定当前候选。不再次 reset 有效治理。
+## 待批准的实施选择
 
-## M1：配置 owner 与语义修复
+- 一个 Agent 对应一个 daemon 和稳定身份。推理型 Agent 首版由 daemon 独占启动/停止
+  自己的 OpenCode 子进程及派生配置目录；附着任意外部实例延期，避免进程/配置双 owner。
+- 先打通显式 WSS 流量 relay，随后实现可达地址的 direct。跨 NAT 先以双方出站 relay
+  满足首版；STUN/打洞声明真实支持状态，不把映射成功当直连成功。选成熟实现后才启用
+  穿透能力；不可用时显式 unavailable。route plan 预先授权候选切换，不重放未知结果请求。
+- 单一账号/项目作用域内的多设备先行，保留身份、目标授权、撤销与隔离；首版不建组织
+  计费/复杂角色系统。relay 管连接准入，能力方独立管 work 和资源授权。
+- 首版包含 browser CLI、固定目录只读文件检索 CLI 和 OpenCode 推理 Agent；不包含
+  完整 Search/Memory 插件、自动主节点选举、消耗型余额与全局调度。
 
-按 [配置设计](../design/teams-provider-config.md) 实现 provider CRUD、模型刷新/手动
-模型、Agent binding、revision CAS、credential reference、OpenCode 编译与 apply。
-修 adapter 错误传播、current Session 猜测和业务 payload 数组误拒绝。
-验收：同协议多个 provider 独立配置；刷新不覆盖用户 override；401/403、空目录、
-未支持协议和并发 revision 冲突显式呈现；RCC 与显式选择的 goaichat 分别通过真实
-OpenCode 入口验证。Console 关闭后，已应用配置仍有效。
+以上收敛不改变公网/NAT/relay、双方一对多、Console 可离线和多 provider 要求。
 
-## M2：被动能力与 Agent Work 最小闭环
+## 顺序与可并发任务
 
-实现 [能力协议](../design/teams-agent-relation-communication-v1.md)：版本化 capability/
-CLI 接口与 resource 声明、匹配、work、请求结果和取消/资源回收。选择一个浏览器
-能力服务与 Host adapter 做真实闭环，不先新增通用调度框架。
-验收：无模型浏览器 Agent、两个 Host 并发消费、超额拒绝与释放后重用；一个 Host
-同时消费浏览器和另一能力；不兼容接口/未授权拒绝；关闭 Console 后执行继续。
+| 波次/任务 | 交付与 owner | 允许修改范围 | 前置依赖 | 可并发 |
+|---|---|---|---|---|
+| P0 公共契约 | 协议负责人：固定 identity、capability/resource、work/request、config、错误与版本契约 | `control-protocol/`、受影响设计/maps | 主线具备获批基准 | 此任务先串行完成 |
+| N1 relay 服务 | server owner：TLS 登录、目录、限定范围广播、连接辅助、流量 relay | `server/` 及所属测试/部署配置 | P0 | N2、C1、W1 |
+| N2 daemon 与网络 | runtime/network 集成 owner：启动、身份持久化、出站连接、注册/订阅、target/channel、实际收发 | `network/`、`runtime/`、`agent-host/` | P0；联调需要 N1 | N1、C1、W1 |
+| C1 provider 与 OpenCode | config owner：实例/模型目录、凭据引用、durable CAS、accepted/effective；adapter owner 同任务负责 apply/错误传播 | `config/`、`opencode-adapter/` | P0；服务级 apply 联调需要 N2 | N1、N2、W1 |
+| W1 Work 与资源 | agent owner：匹配、授权、持久化 work/request/allocation、原子容量、取消/恢复 | `agent/` | P0 | N1、N2、C1 |
+| B1 真实 CLI 能力 | CLI adapter owner：浏览器 context 与文件检索固定 operation/argv/schema | 新 `cli-adapter/` 及所属测试，P0 绑定 map 后创建 | W1 接口稳定 | U1；C1 未完成时也可推进 |
+| U1 独立 Console | presentation owner：独立构建、投影订阅、配置、真实 Session/审批入口、手机布局 | `ui/`；不写 runtime、网络或配置台账 | P0 投影/命令契约稳定 | B1；可提前开发契约组件，真实联调依赖 I1 |
+| I1 主线装配 | 唯一集成 owner：接通 N1/N2/C1/W1/B1/U1，Console HTTP 原型退出生产主线 | `runtime/`、`agent-host/`、`console-host/`、集成测试；跨模块修复回原 owner | 相关模块验证与 review 通过 | 同一集成候选串行 |
+| R1 关系与观测 | agent owner：持久化授权关系、report revision/pair 冲突、撤销与离线状态；UI 仅投影 | `agent/`；UI 配套由 U1 owner 单独提交 | I1 已证明独立 Agent Work | N3，前提文件 claim 不重叠 |
+| N3 direct 与网络韧性 | network owner：direct 路径、显式连接策略、断线重登、旧 generation 拒绝与连接隔离 | `network/`、`server/`、所属网络测试 | relay 主线 I1 | R1 |
+| V1 首版验收 | 集成负责人：双设备/双 NAT、手机蜂窝、部署重启、失败与恢复证据 | 集成/部署测试及 maps/evidence | I1、R1、N3 | 独立环境的场景可并行；最终候选串行收口 |
 
-## M3：Agent-to-Agent 与公网 relay
+P0 同时修业务 JSON 数组误拒绝，并定义当前 Session 的明确选择/未知状态契约。
+C1 修 SDK 错误传播；I1 移除 Console 猜测首个 Session 的路径，不把不相干修复混进配置 store。
+P0 不实现通用框架，只固化各并行任务真正共享的接口、控制/业务物理边界和失败样本。
 
-先实现 daemon bootstrap → relay 登录 → 声明发布/presence → 授权范围广播/目录
-查询 → 对端连接辅助。没有 Console 在线也必须独立完成启动与发现。
-relay 服务统一暴露目录、广播、连接协调及可用的 STUN/穿透/流量中继能力；
-未实现的服务能力明确 unavailable。先验证完整中继路径，再验证 direct 和选定的
-STUN/穿透方式；映射地址发现不等于实际可达。
+建议第一波最多四个 worker（N1/N2/C1/W1）。N1/N2 可以先按同一协议写各自测试，
+只有连上真实服务才算网络验收。B1/U1 在对应接口稳定后进入，不为凑并行提前实现不确定接口。
+表中的模块内验证不替代 I1/V1 的跨模块与真实环境证据。
 
-Agent Host 同时支持发起/接受授权 target，network 实现 direct 与 relay；NAT
-两侧通过主动出站连接通信。server 管连接准入，目标 Agent 管 capability 权限。
-接通 target/channel，替换 Console 直接调用 OpenCode 和拼 prompt 转发的生产路径。
-验收：两处 NAT daemon、direct/relay 各自实际样本、账号和目标授权拒绝、旧
-generation 拒绝、健康 Agent 隔离；关闭 Console 后 request/reply 仍完成。
+## 各波次退出条件
 
-## M4：关系组织与多设备管理
+**P0：** 版本不兼容、未授权、重复 request、旧 generation、资源不足、CAS 冲突、
+结果未知有明确类型；业务数组和合法字段保真。目录不保存 Session 正文；relay 不授予
+work 权限。持久化与重启恢复策略明确，测试绑定唯一 owner。
 
-唯一 relation reconciliation、Agent 持久化 policy/report、peer 与 master/slave
-实际协作，明确授权与撤销。Teams UI 接入真实 Conversation、实时通知、审批、设置。
-验收：手机蜂窝/桌面观察两处 daemon；关闭全部 Console 后继续协作，重新打开
-另一设备能读回关系与配置；master Agent 离线时报告其关系状态，不把 Console
-自动提升为 master；没有静默重发或权限转移。
+**第一波模块：** N1/N2 两个真实 daemon 在无 Console 条件下登录、发现、请求/响应；
+拒绝错误身份、越权目标、过期连接。C1 同协议多实例隔离、刷新保留 overrides、空目录和
+401/403 明确；accepted/effective 分离且重启可读回。W1 并发分配不超卖，重复请求不
+重复执行，超时不伪装取消，执行/销毁确认前不释放资源。
 
-## M5：扩展与首版交付
+**B1/I1：** 真实浏览器 Agent 无模型运行；两个 consumer 各占一个 context，navigate/
+snapshot 复用，第三个申请拒绝，work 关闭并销毁后可重用。一个 consumer 同时消费浏览器
+与固定目录检索。CLI 不执行任意远端 shell；非零退出和输出语义保真。N2 统一装配所有
+adapter，模块 worker 不另写第二套 daemon。关闭全部 Console 后 work 继续。
 
-接入 Search/Memory 生命周期。完成当前候选安装/重启/公共入口回放、AppSDK
-admission、review。commit/push/发布分别按用户授权与证据执行。
+**C1/I1 推理链：** RCC 4444 和显式选择的 goaichat 分别通过真实 OpenCode 入口；
+无隐式 failover。RCC 模型目录为空的既有异常须先按当时真源定位，不能以配置 expose_models
+代替实际目录或推理证据。远端 daemon 的 localhost 不等于 Console 所在设备。
 
-## 当前参考证据
+**R1/N3/V1：** 两处 NAT 的显式 relay、可达地址 direct 各自留证；真实手机蜂窝与桌面
+观察同一组 Agent。Console 全关闭、另一设备重开后能读回 config/work/relation；master
+离线不自动选举或提权。撤销、进程崩溃、断网、重复请求、重启对账均不超卖/重复副作用。
+NAT-to-NAT 直连只在实际穿透实现与回放通过后宣称支持。
 
-OpenMinis `origin/main` 已获取到 `4ef29002e88db1e20e462ec2ff46916e8a7dcb45`。
-RCC `GET http://127.0.0.1:4444/v1/models` 本轮 HTTP 200，但 `data/models` 均为空；
-本地配置 expose_models=[gpt-5.5]，差异尚未定位。goaichat 仅核实本地配置，未调用
-上游推理。这些证据不构成 provider live 或跨设备功能完成。
+## 并发与集成规则
+
+- 模块 worker 自动通过 Collab 注册任务/工作树/路径 claim；无可靠协调时只暂停冲突写入。
+  每个文件只有一个写 owner。`runtime/` 和 `agent-host/` 始终由 N2/I1 顺序移交。
+- P0 完成后冻结本波接口 revision。接口变化由协议 owner 提出并统一更新消费者；不让各
+  worker 私自增加兼容分支。`AGENTS.md`、根依赖/lockfile、公共 maps 由集成 owner 单写，
+  各 worker 提交明确的绑定变更需求，在同次集成中落实。
+- 每个任务定向红绿测试→适用回归/typecheck/build→真实入口→review；新服务在验证前
+  绑定安装/重启操作，不能继承当前库模块的空部署操作来跳过服务验收。
+- 合并按依赖排队；集成候选变更后重跑受影响验证。只有候选、产物、依赖、环境相同的
+  证据可复用。不以 mock 网络测试、HTTP health 或测试数量代替产品验收。
+
+## 审批与执行边界
+
+本次仅提交治理基准、修订并审查计划。用户审批以上范围和顺序后才创建实现任务。
+基准/计划的 push 与主线集成尚未执行；开发前需要相应授权和主线验证。
+公网地址、两处 NAT 设备、手机、测试凭据在 V1 前绑定实际环境；当前文档不假定可用。
+审批不自动授权生产变更、外部发布或任意凭据读取。

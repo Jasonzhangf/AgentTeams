@@ -24,5 +24,5 @@ Host Agent 匹配后请求，能力方执行，在资源容量内支持双方一
 OpenCode 仅用于推理型 Agent；Teams 独立管理多 LLM provider，参考 OpenMinis
 配置接口。首版验证公网/NAT/relay 与 Console 离线后的 Agent Work。
 
-不再沿旧 Phase 字母把纯状态组件记作网络完成。下一步按当前计划 M0–M5，
+不再沿旧 Phase 字母把纯状态组件记作网络完成。下一步按当前计划 P0、并行模块、I1 和 V1，
 分别绑定源码、真实产物、适用测试、入口证据和 review。
