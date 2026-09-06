@@ -8,6 +8,6 @@
     "outDir": "./generated/runtime-lib",
     "rootDir": "."
   },
-  "include": ["network/wss-connection.ts", "network/relay-login.ts", "network/relay-client.ts", "network/work-channel.ts", "runtime/agent-daemon.ts", "runtime/agent-process.ts", "runtime/console-process.ts", "agent-host/work-host.ts", "agent-host/work-ingress.ts", "agent-host/cli-executor.ts", "cli-adapter/cli.ts", "server/relay.ts", "server/relay-process.ts", "agent/work-resource.ts", "config/runtime-config.ts", "config/provider-model-client.ts"],
+  "include": ["network/wss-connection.ts", "network/relay-login.ts", "network/relay-client.ts", "network/work-channel.ts", "runtime/agent-daemon.ts", "runtime/agent-process.ts", "runtime/console-process.ts", "runtime/managed-opencode.ts", "runtime/managed-config-owner.ts", "runtime/process-config.ts", "agent-host/work-host.ts", "agent-host/work-ingress.ts", "agent-host/cli-executor.ts", "cli-adapter/cli.ts", "server/relay.ts", "server/relay-process.ts", "agent/work-resource.ts", "config/runtime-config.ts", "config/provider-model-client.ts", "opencode-adapter/src/managed-config.ts"],
   "exclude": ["**/*.spec.ts"]
 }
