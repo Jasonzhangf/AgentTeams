@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import { WebSocketServer } from 'ws'
 import { connectWss, type WssConnection } from './wss-connection.ts'
 import { loginRelay } from './relay-login.ts'
+import { createRelayClient } from './relay-client.ts'
 import { createRelayServer } from '../server/relay.ts'
 
 let directory: string
@@ -159,6 +160,29 @@ it('times out admission without claiming readiness or leaving the socket open', 
   await expect(loginRelay({ transport: options(host.endpoint), declaration, admissionTimeoutMs: 25 }))
     .rejects.toMatchObject({ code: 'UNAVAILABLE' })
   await peerClosed
+})
+
+it('closes an admitted client on request timeout without replaying an unknown result', async () => {
+  const host = await server()
+  let requests = 0
+  let peerClosed!: Promise<unknown>
+  host.wss.on('connection', socket => {
+    peerClosed = once(socket, 'close')
+    socket.on('message', data => {
+      const message = JSON.parse(data.toString())
+      if (message.kind === 'relay.login') {
+        socket.send(JSON.stringify({ kind: 'relay.admitted', connectionId: 'c', generation: 1 }))
+      } else requests++ // Accept the bytes, deliberately withhold the result.
+    })
+  })
+  const connection = await createRelayClient({ transport: options(host.endpoint), declaration,
+    admissionTimeoutMs: 1000, requestTimeoutMs: 25, maxPendingRequests: 1, maxDataConnections: 1 })
+  cleanup.push(() => connection.close())
+  await expect(connection.connect('other', 1)).rejects.toMatchObject({ code: 'RESULT_UNKNOWN' })
+  await expect(connection.closed).resolves.toMatchObject({ code: 'RESULT_UNKNOWN' })
+  await peerClosed
+  await expect(connection.directory(false)).rejects.toMatchObject({ code: 'RESULT_UNKNOWN' })
+  expect(requests).toBe(1)
 })
 
 it.each([

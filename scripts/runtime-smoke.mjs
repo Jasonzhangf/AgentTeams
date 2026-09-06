@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRelayServer } from '../generated/modules/teams-source/lib/runtime/server/relay.js'
-import { loginRelay } from '../generated/modules/teams-source/lib/runtime/network/relay-login.js'
+import { startAgentDaemon } from '../generated/modules/teams-source/lib/runtime/runtime/agent-daemon.js'
 
 // Exercise the packaged JS directly in Node, without TypeScript/test transforms.
 const directory = mkdtempSync(join(tmpdir(), 'teams-runtime-smoke-'))
@@ -22,22 +22,25 @@ try {
     authenticate: credential => credential === 'Bearer smoke-only'
       ? { accountId: 'smoke', scopeId: 'smoke', agentId: 'smoke' } : null,
   })
-  client = await loginRelay({ transport: { endpoint: relay.url, credential: 'Bearer smoke-only', ca: cert,
+  const relayOptions = { transport: { endpoint: relay.url, credential: 'Bearer smoke-only', ca: cert,
     maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 8, connectTimeoutMs: 1000 },
-    admissionTimeoutMs: 1000,
+    admissionTimeoutMs: 1000, requestTimeoutMs: 1000, maxPendingRequests: 4, maxDataConnections: 2,
     declaration: { identity: { hostId: 'smoke', machineId: 'smoke', agentId: 'smoke', accountId: 'smoke', agentKind: 'custom', label: 'smoke' },
       scopeId: 'smoke', revision: 1, capabilities: [], routes: [] },
-  })
-  assert.equal(client.receipt.generation, 1)
-  await client.transport.send({ bytes: Buffer.from(JSON.stringify({ kind: 'relay.directory', requestId: 'smoke-directory', subscribe: false })), binary: false })
-  const response = JSON.parse((await client.transport.read()).bytes.toString())
-  assert.equal(response.kind, 'relay.directory')
-  assert.equal(response.requestId, 'smoke-directory')
-  assert.equal(response.peers.length, 1)
-  assert.equal(response.peers[0].declaration.identity.agentId, 'smoke')
-  console.log('Packaged runtime smoke passed: verified TLS, real Relay admission and scoped directory. Local library evidence; no daemon deployment or NAT claim.')
+  }
+  client = await startAgentDaemon({ relay: relayOptions, presenceIntervalMs: 1000 })
+  assert.equal(client.status().state, 'online')
+  assert.equal(client.network.generation, 1)
+  const peers = await client.network.directory(false)
+  assert.equal(peers.length, 1)
+  assert.equal(peers[0].declaration.identity.agentId, 'smoke')
+  await client.stop()
+  assert.equal((await client.closed).state, 'stopped')
+  client = await startAgentDaemon({ relay: relayOptions, presenceIntervalMs: 1000 })
+  assert.equal(client.network.generation, 2)
+  console.log('Packaged runtime smoke passed: real TLS Relay, daemon library admission/directory, stop and fresh generation. No OS process deployment, executor or NAT claim.')
 } finally {
-  try { await client?.transport.close() } finally {
+  try { await client?.stop() } finally {
     try { await relay?.close() } finally { rmSync(directory, { recursive: true, force: true }) }
   }
 }
