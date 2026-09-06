@@ -71,6 +71,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `session`
 - details: [L2/p0-explicit-session-20260906.md](L2/p0-explicit-session-20260906.md)
 
+### RCC 4444 managed OpenCode live replay
+- tags: `ai-reviewed`, `human-unreviewed`, `live-replay`, `managed-opencode`, `rcc`
+- details: [L2/rcc-managed-live-20260906.md](L2/rcc-managed-live-20260906.md)
+
 ### SDK bundle更新与PR3/PR4交付回执
 - tags: `ai-reviewed`, `delivery`, `governance`, `human-unreviewed`
 - details: [L2/sdk-refresh-receipts-20260906.md](L2/sdk-refresh-receipts-20260906.md)
