@@ -15,6 +15,10 @@ import { acceptAgentData } from './agent-data.ts'
 import type { ConsoleClientV1 } from '../control-protocol/console-api.ts'
 import type { RelayClientOptions } from '../network/relay-client.ts'
 import { startAgentDaemon, type AgentDaemon } from './agent-daemon.ts'
+import { createJsonFileConfigPersistence, createRuntimeConfigStore, RuntimeConfigError } from '../config/runtime-config.ts'
+import { createOpenAIModelCatalogClient } from '../config/provider-model-client.ts'
+import { createConsoleConfigBinding } from './console-config.ts'
+import { createManagedConfigOwner } from './managed-config-owner.ts'
 
 export interface AgentProcessConfig {
   readonly declaration: AgentDeclaration
@@ -26,12 +30,13 @@ export interface AgentProcessConfig {
   readonly allowedConsumers: readonly string[]
   readonly allowedManagers: readonly string[]
   readonly cli: { readonly camoExecutable: string; readonly searchExecutable: string; readonly searchRoot: string; readonly profilePrefix: string }
+  readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs: number; readonly stopTimeoutMs: number }
 }
 
 export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcessConfig> {
   const configPath = resolve(path)
   const input = object(JSON.parse(await readFile(configPath, 'utf8')),
-    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli'], 'Agent config')
+    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli', 'openCode'], 'Agent config')
   if (input.version !== 1) throw new RelayProtocolError('UNSUPPORTED_VERSION', 'Agent config version must be 1')
   const location = (value: unknown, label: string) => resolve(dirname(configPath), text(value, label))
   const cli = object(input.cli, ['camoExecutable', 'searchExecutable', 'searchRoot', 'profilePrefix'], 'cli')
@@ -43,6 +48,13 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
     throw new RelayProtocolError('INVALID_INPUT', 'allowedManagers must be unique Agent IDs')
   }
   const declaration = parseAgentDeclaration({ identity: input.identity, scopeId: input.scopeId, revision: 1, capabilities: [], routes: [] })
+  let openCode: AgentProcessConfig['openCode']
+  if (input.openCode !== undefined) {
+    const value = object(input.openCode, ['executable', 'directory', 'configFile', 'port', 'startupTimeoutMs', 'stopTimeoutMs'], 'openCode')
+    openCode = { executable: location(value.executable, 'openCode.executable'), directory: location(value.directory, 'openCode.directory'),
+      configFile: location(value.configFile, 'openCode.configFile'), port: number(value.port, 'openCode.port', 65535),
+      startupTimeoutMs: number(value.startupTimeoutMs, 'openCode.startupTimeoutMs'), stopTimeoutMs: number(value.stopTimeoutMs, 'openCode.stopTimeoutMs') }
+  }
   return {
     declaration, dataDirectory: location(input.dataDirectory, 'dataDirectory'), leasePort: number(input.leasePort, 'leasePort', 65535),
     presenceIntervalMs: number(input.presenceIntervalMs, 'presenceIntervalMs'), policyRevision: number(policy.revision, 'policy.revision'),
@@ -50,6 +62,7 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
     allowedManagers: [...allowedManagers] as string[],
     cli: { camoExecutable: location(cli.camoExecutable, 'camoExecutable'), searchExecutable: location(cli.searchExecutable, 'searchExecutable'),
       searchRoot: location(cli.searchRoot, 'searchRoot'), profilePrefix: text(cli.profilePrefix, 'profilePrefix') },
+    ...(openCode === undefined ? {} : { openCode }),
     relay: await loadRelayConfig(input.relay, declaration, configPath, env),
   }
 }
@@ -94,6 +107,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   const config = await loadAgentProcessConfig(configPath, env)
   const lease = await ownDataDirectory(config)
   let daemon: AgentDaemon | undefined
+  let configBinding: { binding: ReturnType<typeof createConsoleConfigBinding>; owner: ReturnType<typeof createManagedConfigOwner> } | undefined
   let readyResolve!: () => void
   let readyReject!: (error: unknown) => void
   const ready = new Promise<void>((resolve, reject) => { readyResolve = resolve; readyReject = reject })
@@ -101,14 +115,28 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   try {
     const executor = createCliWorkExecutor(config.cli)
     let host!: ReturnType<typeof createWorkHost>
+    configBinding = config.openCode === undefined ? undefined : (() => {
+      const store = createRuntimeConfigStore(createJsonFileConfigPersistence(config.openCode.configFile))
+      const owner = createManagedConfigOwner({ agentId: config.declaration.identity.agentId, executable: config.openCode.executable,
+        directory: config.openCode.directory, port: config.openCode.port, startupTimeoutMs: config.openCode.startupTimeoutMs,
+        stopTimeoutMs: config.openCode.stopTimeoutMs, resolveCredential: async reference => {
+          const value = env[reference]
+          if (typeof value !== 'string' || value.length === 0) throw new RuntimeConfigError({ code: 'CREDENTIAL_UNAVAILABLE', message: `credential ${reference} is unavailable` })
+          return value
+        } })
+      return { binding: createConsoleConfigBinding({ agentId: config.declaration.identity.agentId, store,
+        models: createOpenAIModelCatalogClient(), applier: owner }), owner }
+    })()
     const allowed = (consumer: { agentId: string }) => config.allowedConsumers.includes(consumer.agentId)
     const policy = { revision: config.policyRevision, authorizeWork: allowed, authorizeRequest: allowed }
     const consoleClient: ConsoleClientV1 = {
       readProjection: async () => ({ version: 1, agents: [{ agentId: config.declaration.identity.agentId,
         machineId: config.declaration.identity.machineId, label: config.declaration.identity.label,
         presence: daemon?.status().state === 'online' ? 'online' : 'offline', capabilities: executor.capabilities.map(item => item.capabilityId) }],
-        sessions: [], notifications: [], configs: [] }),
-      command: async () => ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session or model configuration owner' } }),
+        sessions: [], notifications: [], configs: configBinding === undefined ? [] : [configBinding.binding.readProjection()] }),
+      command: async command => command.kind.startsWith('config.') && configBinding !== undefined
+        ? configBinding.binding.command(command as Extract<typeof command, { kind: `config.${string}` }>)
+        : ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: configBinding === undefined ? 'Agent has no Session or model configuration owner' : 'Agent has no Session execution capability' } }),
       sendSession: async () => ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } }),
     }
     daemon = await startAgentDaemon({ presenceIntervalMs: config.presenceIntervalMs, relay: { ...config.relay,
@@ -148,8 +176,9 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     const stop = (): Promise<void> => {
       if (stopping) return stopping
       stopping = (async () => {
-        await live.stop()
         try {
+          await live.stop()
+          await configBinding?.owner.stop()
           const results = await Promise.allSettled(ledger.snapshot.works.filter(work => work.state !== 'closed' && work.state !== 'rejected').map(work =>
             host.close({ accountId: ledger.provider.accountId, scopeId: ledger.provider.scopeId, agentId: work.consumerAgentId }, work.workId)))
           const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
@@ -162,7 +191,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     return { daemon: live, stop, closed }
   } catch (error) {
     readyReject(error)
-    try { await daemon?.stop() } finally { await closeLease(lease) }
+    try { await daemon?.stop(); await configBinding?.owner.stop() } finally { await closeLease(lease) }
     throw error
   }
 }

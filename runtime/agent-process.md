@@ -1,10 +1,10 @@
 # Agent process entry
 
-`startAgentProcess` composes one passive capability Agent with its own durable
-Work ledger, CLI executor and Relay connection. It does not need a Console or
-model provider. Its Console management protocol uses the same Relay data
-connections; managed OpenCode and the standalone Console application remain
-separate pending integration work.
+`startAgentProcess` composes one capability Agent with its own durable Work
+ledger, CLI executor and Relay connection. Passive Agents need no model
+provider. An optional `openCode` section enables the same daemon to own a
+managed OpenCode child and expose provider/model configuration through the
+Console control channel; Session execution remains a separate capability.
 
 Build with `pnpm build:runtime`; the executable entry is
 `node generated/runtime-lib/runtime/agent-process.js --config /absolute/agent.json`.
@@ -85,8 +85,20 @@ normal restart; idle crash restart is separately tested.
 
 `runtime/agent-process.spec.ts` exercises a real Node child over local TLS
 Relay: fixed-root search, duplicate process rejection, completed-result
-readback, graceful restart and idle SIGKILL restart. It also reads management
-projections through Relay, rejects unsupported commands and verifies malformed
-data isolation and management denial independently of Work admission. It does not prove public
+readback, graceful restart and idle SIGKILL restart. It also starts a managed
+inference child with a stub OpenCode executable, applies a durable provider
+binding through the remote Console ingress, and reads accepted/effective
+revision `3` back. It reads management projections through Relay, rejects
+unsupported commands and verifies malformed data isolation and management
+denial independently of Work admission. It does not prove public
 NAT transport, real phone access, active browser recovery or installed Agent
 deployment.
+
+For an inference Agent, add `openCode` with absolute executable and directory
+paths, a durable `configFile`, and a free local `port` plus positive startup and
+stop deadlines. Provider credential references are resolved from the daemon's
+environment at apply time; values never enter the JSON config, Console
+projection, or Session payload. Configuration changes remain CAS-protected:
+accepted state is persisted first, and `effectiveRevision` advances only after
+the child reports authenticated, matching `/config` readback. A failed apply is
+explicit and does not select the configured backup automatically.

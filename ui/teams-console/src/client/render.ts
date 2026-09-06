@@ -5,6 +5,7 @@ import { messages, type Locale, type MessageKey } from './locale.ts'
 import type { ConsoleProviderView, JsonValue } from './protocol.ts'
 
 const entries: readonly ConsoleEntry[] = ['topology', 'conversations', 'notifications', 'search', 'memory']
+const agentBrowserIcon = new URL('../../assets/agentbrowser-icon.jpg', import.meta.url).toString()
 
 type RenderOptions = { readonly fixtureLabel?: string }
 
@@ -99,6 +100,14 @@ function renderTopology(controller: TeamsConsoleController, state: ConsoleState,
     const card = element('article', 'teams-agent-card')
     const header = element('div', 'teams-card-header')
     const identity = element('div', 'teams-identity')
+    if (agent.capabilities.includes('browser')) {
+      const icon = element('img', 'teams-agent-icon')
+      icon.src = agentBrowserIcon
+      icon.alt = `${agent.label} icon`
+      icon.width = 32
+      icon.height = 32
+      append(identity, icon)
+    }
     const presence = element('span', `teams-presence teams-presence-${agent.presence}`)
     presence.setAttribute('aria-label', agent.presence)
     const copy = element('div', 'teams-identity-copy')

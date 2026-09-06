@@ -309,6 +309,15 @@ export const teamsStyles = String.raw`
   min-width: 0;
 }
 
+.teams-agent-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: 1px solid var(--teams-border);
+  border-radius: 9px;
+  object-fit: cover;
+}
+
 .teams-identity-copy {
   display: grid;
   min-width: 0;

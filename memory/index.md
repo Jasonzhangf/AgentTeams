@@ -23,6 +23,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`
 - details: [L2/console-integration-candidate-20260906.md](L2/console-integration-candidate-20260906.md)
 
+### Console integration merged and main verified
+- tags: `ai-reviewed`, `human-unreviewed`
+- details: [L2/console-integration-delivery-20260906.md](L2/console-integration-delivery-20260906.md)
+
 ### Local Agent process and Work execution candidate verified
 - tags: `ai-reviewed`, `human-unreviewed`
 - details: [L2/daemon-execution-candidate-20260906.md](L2/daemon-execution-candidate-20260906.md)
@@ -65,7 +69,9 @@ _Empty._
 
 ## Level 3 — new or unreviewed
 
-_Empty._
+### Managed OpenCode daemon wiring
+- tags: `config`, `daemon`, `managed-opencode`
+- details: [L3/managed-opencode-daemon-wire-20260906.md](L3/managed-opencode-daemon-wire-20260906.md)
 
 ## Skill description candidates
 
@@ -73,10 +79,10 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 
 - L2: AgentTeams 长程交付与阶段L2记忆 (plan) [ai-reviewed,delivery,governance,human-unreviewed,memory-l2] -> L2/agentteams-long-running-delivery-20260906.md
 - L2: Console integration candidate validation (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-candidate-20260906.md
+- L2: Console integration merged and main verified (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-delivery-20260906.md
 - L2: Local Agent process and Work execution candidate verified (knowledge) [ai-reviewed,human-unreviewed] -> L2/daemon-execution-candidate-20260906.md
 - L2: Daemon PR9 merged and owned worktree closed (knowledge) [ai-reviewed,human-unreviewed] -> L2/daemon-execution-delivery-20260906.md
 - L2: PR8合并和daemon库工作树关闭回执 (knowledge) [ai-reviewed,cleanup,delivery,human-unreviewed] -> L2/daemon-library-delivery-20260906.md
 - L2: Relay客户端和daemon库集成验证 (knowledge) [ai-reviewed,daemon,human-unreviewed,relay-client] -> L2/daemon-library-integration-20260906.md
 - L2: 第一波PR7合并和主集成树关闭回执 (knowledge) [ai-reviewed,cleanup,delivery,human-unreviewed] -> L2/first-wave-delivery-20260906.md
-- L2: 第一波库集成和真实本地Relay证据 (knowledge) [ai-reviewed,human-unreviewed,integration,relay] -> L2/first-wave-library-integration-20260906.md
 

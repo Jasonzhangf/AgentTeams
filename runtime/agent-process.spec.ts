@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createServer } from 'node:net'
@@ -40,9 +40,9 @@ async function availablePort() {
   await new Promise<void>(resolve => listener.close(() => resolve()))
   return address.port
 }
-function child(configPath: string) {
+function child(configPath: string, credential = 'Bearer provider') {
   const process = spawn(globalThis.process.execPath, ['--experimental-transform-types', resolve('runtime/agent-process.ts'), '--config', configPath],
-    { env: { ...globalThis.process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer provider' }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+    { env: { ...globalThis.process.env, TEAMS_AGENT_TEST_AUTH: credential }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
   children.push(process)
   let output = ''
   process.stderr!.on('data', chunk => { output += chunk.toString() })
@@ -63,7 +63,7 @@ function child(configPath: string) {
 it('executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state', async () => {
   relay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
     maxPayload: 65536, maxConnections: 16, maxGrants: 8, maxBufferedAmount: 65536, maxPendingMessages: 16, maxPendingBytes: 131072, grantTtlMs: 10000,
-    authenticate: credential => credential === 'Bearer provider' || credential === 'Bearer consumer'
+    authenticate: credential => credential === 'Bearer provider' || credential === 'Bearer consumer' || credential === 'Bearer managed'
       ? { accountId: 'account', scopeId: 'scope', agentId: credential.slice(7) } : null })
   const transport = { endpoint: relay.url, credential: 'Bearer consumer', ca: cert, connectTimeoutMs: 1000,
     maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 }
@@ -122,6 +122,41 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   await channel.request({ kind: 'work.close', workId: 'work' })
   first.process.kill('SIGTERM')
   expect((await first.exited).code).toBe(0)
+
+  const managedExecutable = join(directory, 'managed-opencode.mjs')
+  writeFileSync(managedExecutable, `#!/usr/bin/env node
+import { createServer } from 'node:http'
+const args = process.argv
+const port = Number(args[args.indexOf('--port') + 1])
+const config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT ?? '{}')
+const server = createServer((request, response) => {
+  if (request.url === '/global/health') { response.writeHead(200, {'content-type': 'application/json'}); response.end('{}'); return }
+  if (request.url === '/config') { response.writeHead(200, {'content-type': 'application/json'}); response.end(JSON.stringify(config)); return }
+  response.writeHead(404); response.end()
+})
+server.listen(port, '127.0.0.1')
+process.once('SIGTERM', () => server.close(() => process.exit(0)))
+process.once('SIGINT', () => server.close(() => process.exit(0)))
+`, { mode: 0o700 })
+  chmodSync(managedExecutable, 0o700)
+  const managedData = join(directory, 'managed-data')
+  const managedConfigPath = join(directory, 'managed-runtime.json')
+  writeFileSync(managedConfigPath, JSON.stringify({ revision: 3, acceptedRevision: 3,
+    providers: { probe: { id: 'probe', label: 'Probe', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:1/v1', enabled: true, auth: { kind: 'none' } } },
+    catalogs: { probe: { state: 'ready', entries: [{ ref: { providerInstanceId: 'probe', modelId: 'probe-model' }, origin: 'manual', base: {}, overrides: {} }] } },
+    agents: { managed: { primary: { providerInstanceId: 'probe', modelId: 'probe-model' } } } }))
+  const managedAgentConfig = join(directory, 'managed-agent.json')
+  writeFileSync(managedAgentConfig, JSON.stringify({ ...config, identity: { ...config.identity, hostId: 'managed-host', agentId: 'managed', label: 'Managed Agent' },
+    dataDirectory: managedData, leasePort: await availablePort(), policy: { revision: 1, allowedConsumers: ['consumer'], allowedManagers: ['consumer'] },
+    openCode: { executable: managedExecutable, directory: join(directory, 'managed-opencode-data'), configFile: managedConfigPath, port: await availablePort(), startupTimeoutMs: 5000, stopTimeoutMs: 2000 } }))
+  const managedChild = child(managedAgentConfig, 'Bearer managed')
+  expect(await managedChild.ready).toMatchObject({ agentId: 'managed' })
+  const managedConsole = createRelayConsoleClient(consumer, 'managed', 3000)
+  expect(await managedConsole.command({ kind: 'config.apply', agentId: 'managed' })).toEqual({ ok: true })
+  expect((await managedConsole.readProjection()).configs[0]).toMatchObject({ acceptedRevision: 3, effectiveRevision: 3 })
+  managedChild.process.kill('SIGTERM')
+  expect((await managedChild.exited).code).toBe(0)
+
   writeFileSync(path, JSON.stringify({ ...config, policy: { ...config.policy, allowedManagers: [] } }))
   const second = child(path)
   expect(await second.ready).toMatchObject({ generation: 2 })

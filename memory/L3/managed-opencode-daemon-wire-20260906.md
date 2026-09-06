@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-09-06T09:17:45.422910+00:00","id":"managed-opencode-daemon-wire-20260906","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["config","daemon","managed-opencode"],"updated_at":"2026-09-06T09:17:45.422910+00:00"} -->
+
+# Managed OpenCode daemon wiring
+
+Agent process now accepts an optional openCode section with strict absolute paths, durable config file, local port, and bounded startup/stop deadlines. When configured, the daemon creates a RuntimeConfigStore, OpenAI model catalog client, managed OpenCode owner, and Console config binding; config commands remain CAS protected and effectiveRevision advances only after authenticated child config readback. Credential references resolve from daemon environment at apply time. Passive Agents remain provider free. Real Node child integration over TLS Relay starts a stub OpenCode executable, applies provider binding through remote Console ingress, and reads accepted/effective revision 3. Evidence: pnpm test (59 files, 312 tests); pnpm typecheck; vitest agent-process-config, agent-process, managed-config-owner/live, managed-opencode-session.
+<!-- project-memory:end -->

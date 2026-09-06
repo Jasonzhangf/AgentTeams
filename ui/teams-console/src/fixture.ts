@@ -6,6 +6,7 @@ export const fixtureProjection: ConsoleProjectionV1 = {
     { agentId: 'planner', label: 'Planner', machineId: 'Mac Studio', presence: 'online', capabilities: ['session', 'config'], currentSessionId: 'planner-current', providerId: 'rcc', modelId: 'deepseek-v4' },
     { agentId: 'reviewer', label: 'Reviewer', machineId: 'Mac Studio', presence: 'unknown', capabilities: ['session'], currentSessionId: 'reviewer-current', providerId: 'openai', modelId: 'gpt-5.6-sol' },
     { agentId: 'offline-agent', label: 'Offline Agent', machineId: 'Build Mac', presence: 'offline', capabilities: ['session'] },
+    { agentId: 'browser-agent', label: 'AgentBrowser', machineId: 'MacBook Pro', presence: 'online', capabilities: ['browser'] },
   ],
   sessions: [
     { agentId: 'planner', sessionId: 'planner-current', title: 'Plan Teams runtime' },
