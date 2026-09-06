@@ -5,7 +5,21 @@ export type JsonValue = null | boolean | number | string | readonly JsonValue[] 
 export type ServiceErrorCode = 'INVALID_INPUT' | 'UNAUTHENTICATED' | 'FORBIDDEN' | 'NOT_FOUND'
   | 'UNSUPPORTED_VERSION' | 'UNSUPPORTED_OPERATION' | 'STALE_GENERATION' | 'REVISION_CONFLICT'
   | 'RESOURCE_EXHAUSTED' | 'CONFLICT' | 'RESULT_UNKNOWN' | 'UNAVAILABLE' | 'UPSTREAM_ERROR'
-export interface ServiceError { readonly code: ServiceErrorCode; readonly message: string }
+export interface CliExecutionFailure {
+  readonly kind: 'cli'
+  readonly code: string
+  readonly message: string
+  readonly contextId?: string
+  readonly exitCode?: number | null
+  readonly signal?: string | null
+  readonly stdout?: string
+  readonly stderr?: string
+}
+export interface ServiceError {
+  readonly code: ServiceErrorCode
+  readonly message: string
+  readonly execution?: CliExecutionFailure
+}
 export interface AuthenticatedAgent {
   readonly accountId: string
   readonly scopeId: string

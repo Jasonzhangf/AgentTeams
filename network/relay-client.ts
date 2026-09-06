@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import type { RelayClientControl, RelayGrant, RelayPeer, RelayServerControl } from '../control-protocol/agent-services.ts'
-import { parseRelayServerControl } from '../control-protocol/relay-codec.ts'
+import { setMaxListeners } from 'node:events'
+import type { AgentDeclaration, RelayClientControl, RelayGrant, RelayPeer, RelayServerControl } from '../control-protocol/agent-services.ts'
+import { parseAgentDeclaration, parseRelayServerControl } from '../control-protocol/relay-codec.ts'
 import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
 import { loginRelay, type RelayLoginOptions } from './relay-login.ts'
 import { connectWss, type WssConnection } from './wss-connection.ts'
@@ -21,6 +22,7 @@ export interface RelayClient {
   connect(targetAgentId: string, targetGeneration: number): Promise<RelayGrant>
   openData(grant: RelayGrant): Promise<WssConnection>
   presence(): Promise<void>
+  publish(declaration: AgentDeclaration): Promise<void>
   close(): Promise<void>
 }
 interface Pending {
@@ -46,15 +48,20 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
   const data = new Map<string, WssConnection>()
   const opening = new Set<string>()
   const connecting = new Set<Promise<WssConnection>>()
+  const dataLifetime = new AbortController()
+  setMaxListeners(options.maxDataConnections, dataLifetime.signal)
   let stopped: Error | undefined
   let resolveClosed!: (error: Error) => void
   const closed = new Promise<Error>(resolve => { resolveClosed = resolve })
   let shutdown: Promise<void> | undefined
+  let publishing = false
+  let declarationRevision = options.declaration.revision
   const stop = (error: Error): Promise<void> => {
     if (shutdown) return shutdown
     stopped = error
     for (const request of pending.values()) { clearTimeout(request.timer); request.reject(error) }
     pending.clear()
+    dataLifetime.abort()
     shutdown = (async () => {
       await Promise.all([login.transport.close(), ...[...data.values()].map(socket => socket.close()),
         ...[...connecting].map(attempt => attempt.then(socket => socket.close(), () => undefined))])
@@ -117,7 +124,8 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
     } catch (error) { await stop(error instanceof Error ? error : new Error('relay: control loop failed')) }
   }
   void pump()
-  const request = (kind: Reply['kind'], message: RelayClientControl & { requestId: string }): Promise<Reply> => {
+  const request = (kind: Reply['kind'], message: RelayClientControl & { requestId: string },
+    publication?: Extract<RelayClientControl, { kind: 'relay.publish' }>): Promise<Reply> => {
     if (stopped) return Promise.reject(stopped)
     if (pending.size >= options.maxPendingRequests) return Promise.reject(new RelayProtocolError('RESOURCE_EXHAUSTED', 'relay: pending request capacity exhausted'))
     return new Promise((resolve, reject) => {
@@ -126,7 +134,11 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
         void stop(new RelayProtocolError('RESULT_UNKNOWN', 'relay: request deadline elapsed'))
       }, options.requestTimeoutMs)
       pending.set(message.requestId, { kind, resolve, reject, timer })
-      void send(message).catch(error => stop(error instanceof Error ? error : new Error('relay: control write failed')))
+      void (async () => {
+        // Reserve the correlated readback slot before sending its publication mutation.
+        if (publication) await send(publication)
+        await send(message)
+      })().catch(error => stop(error instanceof Error ? error : new Error('relay: control write failed')))
     })
   }
   return {
@@ -157,7 +169,7 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
       let socket: WssConnection | undefined
       let timer: ReturnType<typeof setTimeout> | undefined
       try {
-        const attempt = connectWss(options.transport)
+        const attempt = connectWss(options.transport, dataLifetime.signal)
         connecting.add(attempt)
         try { socket = await attempt } finally { connecting.delete(attempt) }
         if (stopped) throw stopped
@@ -184,6 +196,22 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
       } finally { clearTimeout(timer); opening.delete(grant.grantId) }
     },
     presence: () => send({ kind: 'relay.presence', generation: login.receipt.generation }),
+    publish: async declaration => {
+      if (publishing) throw new RelayProtocolError('CONFLICT', 'relay: declaration publication already in progress')
+      const value = parseAgentDeclaration(structuredClone(declaration))
+      const identityFields = ['hostId', 'machineId', 'agentId', 'accountId', 'agentKind'] as const
+      if (identityFields.some(field => value.identity[field] !== identity[field]) || value.scopeId !== scopeId || value.revision <= declarationRevision) {
+        throw new RelayProtocolError('INVALID_INPUT', 'relay: publication must preserve identity and advance declaration revision')
+      }
+      publishing = true
+      try {
+        const response = await request('relay.directory', { kind: 'relay.directory', requestId: randomUUID(), subscribe: false },
+          { kind: 'relay.publish', generation: login.receipt.generation, declaration: value })
+        if (response.kind !== 'relay.directory' || !response.peers.some(peer => peer.generation === login.receipt.generation &&
+          JSON.stringify(peer.declaration) === JSON.stringify(value))) throw new RelayProtocolError('UNAVAILABLE', 'relay: publication readback mismatch')
+        declarationRevision = value.revision
+      } finally { publishing = false }
+    },
     close: () => stop(new RelayProtocolError('UNAVAILABLE', 'relay: client stopped locally')),
   }
 }

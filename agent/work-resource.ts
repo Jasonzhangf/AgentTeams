@@ -12,6 +12,7 @@ import {
 } from 'node:fs'
 import { dirname } from 'node:path'
 import { assertJsonValue } from '../control-protocol/json-value.ts'
+import { parseServiceError } from '../control-protocol/relay-codec.ts'
 import type {
   AgentWork,
   AuthenticatedAgent,
@@ -26,22 +27,6 @@ import type {
   WorkProposal,
   WorkRequest,
 } from '../control-protocol/agent-services.ts'
-
-const serviceErrorCodes: readonly ServiceErrorCode[] = [
-  'INVALID_INPUT',
-  'UNAUTHENTICATED',
-  'FORBIDDEN',
-  'NOT_FOUND',
-  'UNSUPPORTED_VERSION',
-  'UNSUPPORTED_OPERATION',
-  'STALE_GENERATION',
-  'REVISION_CONFLICT',
-  'RESOURCE_EXHAUSTED',
-  'CONFLICT',
-  'RESULT_UNKNOWN',
-  'UNAVAILABLE',
-  'UPSTREAM_ERROR',
-]
 
 export interface WorkServiceError extends Error {
   readonly error: ServiceError
@@ -218,10 +203,8 @@ function normalizeJsonValue(value: JsonValue): JsonValue {
 }
 
 function serviceError(value: unknown, path: string): ServiceError {
-  if (!isRecord(value)) fail('INVALID_INPUT', `${path} must be an error`)
-  const code = requiredString(value.code, `${path}.code`) as ServiceErrorCode
-  if (!serviceErrorCodes.includes(code)) fail('INVALID_INPUT', `${path}.code is unsupported`)
-  return { code, message: requiredString(value.message, `${path}.message`) }
+  try { return parseServiceError(value, path) }
+  catch (error) { fail('INVALID_INPUT', error instanceof Error ? error.message : `${path} must be an error`) }
 }
 
 function workState(value: unknown, path: string): AgentWork['state'] {

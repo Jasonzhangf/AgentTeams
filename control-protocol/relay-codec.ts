@@ -1,5 +1,6 @@
 import type {
   AgentDeclaration,
+  CliExecutionFailure,
   JsonValue,
   RelayGrant,
   RelayPeer,
@@ -169,12 +170,31 @@ export function parseAgentDeclaration(value: unknown): AgentDeclaration {
   }
 }
 
-function parseServiceError(value: unknown, label: string): ServiceError {
+export function parseServiceError(value: unknown, label: string): ServiceError {
   const input = object(value, label)
-  knownFields(input, ['code', 'message'], label)
+  knownFields(input, ['code', 'message', 'execution'], label)
+  let execution: CliExecutionFailure | undefined
+  if (input.execution !== undefined) {
+    const detail = object(input.execution, `${label}.execution`)
+    knownFields(detail, ['kind', 'code', 'message', 'contextId', 'exitCode', 'signal', 'stdout', 'stderr'], `${label}.execution`)
+    if (detail.kind !== 'cli') invalid(`${label}.execution.kind is unsupported`)
+    if (detail.exitCode !== undefined && detail.exitCode !== null && (!Number.isSafeInteger(detail.exitCode) || (detail.exitCode as number) < 0)) invalid(`${label}.execution.exitCode is invalid`)
+    if (detail.signal !== undefined && detail.signal !== null) stringValue(detail.signal, `${label}.execution.signal`)
+    for (const field of ['stdout', 'stderr'] as const) {
+      if (detail[field] !== undefined && typeof detail[field] !== 'string') invalid(`${label}.execution.${field} must be text`)
+    }
+    execution = { kind: 'cli', code: stringValue(detail.code, `${label}.execution.code`),
+      message: stringValue(detail.message, `${label}.execution.message`),
+      ...(detail.contextId === undefined ? {} : { contextId: stringValue(detail.contextId, `${label}.execution.contextId`) }),
+      ...(detail.exitCode === undefined ? {} : { exitCode: detail.exitCode as number | null }),
+      ...(detail.signal === undefined ? {} : { signal: detail.signal as string | null }),
+      ...(detail.stdout === undefined ? {} : { stdout: detail.stdout as string }),
+      ...(detail.stderr === undefined ? {} : { stderr: detail.stderr as string }) }
+  }
   return {
     code: enumValue(input.code, errorCodes, `${label}.code`),
     message: stringValue(input.message, `${label}.message`),
+    ...(execution ? { execution } : {}),
   }
 }
 

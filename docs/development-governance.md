@@ -24,8 +24,8 @@
 
 `pnpm verify` 顺序执行全量测试、类型检查、Guidance compile、AppSDK compile、编译
 产物 HTTP smoke、AppSDK verify；任何命令失败即停止。`pnpm test` 先构建被依赖的
-OpenCode adapter，再运行现有全部 39 个测试文件；从 module contract 读取最少
-237 测试门槛，拒绝 skip、TODO 和 `.only`。报告落在 `generated/validation/`。
+OpenCode adapter，再运行现有全部 48 个测试文件；从 module contract 读取最少
+280 测试门槛，拒绝 skip、TODO 和 `.only`。报告落在 `generated/validation/`。
 增加功能时补测试并按真实基线更新门槛，不靠降低门槛消除回归。
 
 类型检查覆盖核心源码及 Console/OpenCode 两个独立包。保留的旧宿主 UI 不进入新
@@ -40,9 +40,10 @@ OpenCode adapter，再运行现有全部 39 个测试文件；从 module contrac
 HTTP smoke 校验编译库与打包文件字节一致，使用已安装依赖执行编译后的 Console，
 检查 health、静态文件和无效请求错误；不调用模型、不冒充跨设备产品验收。
 
-本模块 `deployment_operations: []` 对应当前库产物，不启动常驻服务，所以本轮不
-要求服务安装/重启。后续 daemon、relay、OpenCode 部署里程碑必须在验证前声明真实
-部署操作并补齐 deployed public-entrypoint evidence；不可沿用空操作来跳过服务验证。
+本模块已包含 Relay 进程入口，`deployment_operations: ["install", "restart"]` 声明
+服务交付必需的安装与重启。普通源码测试和库 smoke 不满足这些操作；必须补齐安装
+副本的实际入口证据。Agent daemon 与 managed OpenCode 部署仍需各自适用的服务验收，
+不可用 Relay 单一进程回放替代；正式服务准入在对应证据齐备前保持未完成。
 AppSDK review admission、freeze/Active 发布保留正式证据门禁，本轮不生成假候选、
 假 review record、假部署 receipt。普通 compile/verify 与发布准入是不同证据。
 
