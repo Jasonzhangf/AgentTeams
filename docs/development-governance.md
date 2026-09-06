@@ -24,13 +24,14 @@
 
 `pnpm verify` 顺序执行全量测试、类型检查、Guidance compile、AppSDK compile、编译
 产物 HTTP smoke、AppSDK verify；任何命令失败即停止。`pnpm test` 先构建被依赖的
-OpenCode adapter，再运行现有全部 48 个测试文件；从 module contract 读取最少
-280 测试门槛，拒绝 skip、TODO 和 `.only`。报告落在 `generated/validation/`。
+OpenCode adapter，再运行现有全部 53 个测试文件；从 module contract 读取最少
+304 测试门槛，拒绝 skip、TODO 和 `.only`。报告落在 `generated/validation/`。
 增加功能时补测试并按真实基线更新门槛，不靠降低门槛消除回归。
 
-类型检查覆盖核心源码及 Console/OpenCode 两个独立包。保留的旧宿主 UI 不进入新
-产品的包构建，但它现有的 6 个测试文件仍进入全量回归；其外部 UI 运行依赖未迁移，
-不能宣称完整 UI 构建通过。新独立 UI 实现时必须绑定自己的 build 与桌面/手机实际回放。
+类型检查覆盖核心源码、Console/OpenCode 与独立 UI workspace。独立 UI 的 5 个测试
+文件进入全量回归，根 build 编译真实 UI，产物 smoke 从打包副本导入 UI 入口及其
+client 依赖。旧宿主 UI 与空壳准入文件已移除；浏览器 fixture 与真实 daemon/手机
+实际回放分别留证，构建和模块导入不替代产品运行验收。
 
 ## 产物与证据边界
 
@@ -38,7 +39,7 @@ OpenCode adapter，再运行现有全部 48 个测试文件；从 module contrac
 `generated/modules/teams-source/lib`，由 AppSDK 生成 module-artifact 与哈希。
 产物是有外部依赖的库集合，不是独立部署包。打包前只清理本 producer 独占的输出目录。
 HTTP smoke 校验编译库与打包文件字节一致，使用已安装依赖执行编译后的 Console，
-检查 health、静态文件和无效请求错误；不调用模型、不冒充跨设备产品验收。
+检查认证、静态文件、新 API、旧路由已移除以及 Session JSON 保真；不调用模型、不冒充跨设备产品验收。
 
 本模块已包含 Relay 进程入口，`deployment_operations: ["install", "restart"]` 声明
 服务交付必需的安装与重启。普通源码测试和库 smoke 不满足这些操作；必须补齐安装

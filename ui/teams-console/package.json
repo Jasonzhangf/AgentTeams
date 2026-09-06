@@ -1,62 +1,38 @@
 {
   "name": "@deepseek-ai/teams-console",
-  "description": "Cross-agent Teams console surface for DSH Cordis",
+  "description": "Independent host-injected Teams console surface",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
+  "types": "lib/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./client": {
-      "types": "./lib/types/client/index.d.ts",
-      "default": "./lib/client.js"
+    "./browser": {
+      "types": "./lib/browser.d.ts",
+      "default": "./lib/browser.js"
     },
     "./package.json": "./package.json"
   },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-slots",
-        "@deepseek-ai/dsh-client-ui-sidebar",
-        "@deepseek-ai/dsh-client-locale"
-      ],
-      "platform": "web"
-    }
-  },
   "scripts": {
-    "bundle": "tsdown"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "license": "MIT",
-  "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.1 <5",
-    "@deepseek-ai/dsh-client-locale": ">=0.1.0-rc.5 <0.2",
-    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.5 <0.2",
-    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0-rc.5 <0.2",
-    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.1.0-rc.5 <0.2",
-    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.5 <0.2",
-    "react": "^18.2.0"
-  },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-client-locale": "workspace:^",
-    "@deepseek-ai/dsh-client-runtime": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "@types/react": "~18.3.1",
-    "react": "^18.2.0"
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   },
   "files": [
     "lib/index.js",
-    "lib/client.js",
-    "lib/types/**/*.d.ts",
-    "cordis.patch.yml"
+    "lib/browser.js",
+    "lib/client/**/*.js",
+    "lib/**/*.d.ts",
+    "assets",
+    "fixture"
   ]
 }

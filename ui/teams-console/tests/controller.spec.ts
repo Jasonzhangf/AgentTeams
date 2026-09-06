@@ -1,132 +1,108 @@
 import { describe, expect, it } from 'vitest'
 import { TeamsConsoleController } from '../src/client/controller.ts'
-import type { AgentFixture } from '../src/client/model.ts'
-
-const agent: AgentFixture = {
-  id: 'planner',
-  label: 'Planner',
-  machine: 'Mac Studio',
-  status: 'running',
-  provider: 'rcc',
-  model: 'deepseek-v4',
-  currentSessionId: 'planner-current',
-  currentSessionTitle: 'Plan Teams runtime',
-  sessionCount: 1,
-  notificationCount: 1,
-  attention: 'high',
-}
+import { createFixtureClient } from '../src/fixture.ts'
 
 describe('TeamsConsoleController', () => {
-  it('opens on Topology and switches among the five entries', () => {
-    const controller = new TeamsConsoleController()
+  it('loads a projection, opens a Session, and sends unchanged business payload', async () => {
+    const client = createFixtureClient()
+    const controller = new TeamsConsoleController(client)
+    await controller.refresh()
+    controller.openConsole()
+    controller.openSession('planner', 'planner-current')
+    expect(controller.getSnapshot().drawer).toEqual({ kind: 'session', agentId: 'planner', sessionId: 'planner-current' })
 
-    expect(controller.getSnapshot()).toMatchObject({
-      open: false,
-      entry: 'topology',
-      drawers: [],
-      expanded: false,
+    await expect(controller.openSessionCommand('planner', 'planner-current')).resolves.toBe(true)
+    await expect(controller.sendSession('planner', 'planner-current', { text: 'hello' })).resolves.toBe(true)
+    expect(client.sentPayloads).toEqual([{ text: 'hello' }])
+  })
+
+  it('does not bind a model absent from the host catalog', async () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    await controller.refresh()
+    await expect(controller.bindModel('planner', 'empty-provider', 'guessed-model')).resolves.toBe(false)
+    expect(controller.getSnapshot().error).toContain('unknown model')
+  })
+
+  it('surfaces revision conflicts and keeps the error visible', async () => {
+    const controller = new TeamsConsoleController({
+      ...createFixtureClient(),
+      async command() { return { ok: false, error: { code: 'REVISION_CONFLICT', message: 'stale revision' } } },
     })
-
-    controller.openConsole()
-    expect(controller.getSnapshot().open).toBe(true)
-
-    for (const entry of ['conversations', 'notifications', 'search', 'memory', 'topology'] as const) {
-      controller.selectEntry(entry)
-      expect(controller.getSnapshot().entry).toBe(entry)
-      expect(controller.getSnapshot().drawers).toEqual([])
-    }
+    await controller.refresh()
+    const result = await controller.acknowledge('approval-1', 'planner')
+    expect(result).toBe(false)
+    expect(controller.getSnapshot().error).toContain('REVISION_CONFLICT')
   })
 
-  it('opens the current session directly and reports when none exists', () => {
-    const controller = new TeamsConsoleController()
+  it('closes the drawer without losing the loaded projection', async () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    await controller.refresh()
     controller.openConsole()
-    controller.focusCurrentSession(agent)
-
-    expect(controller.getSnapshot().drawers).toEqual([{
-      kind: 'session',
-      agent,
-      sessionId: 'planner-current',
-    }])
-
-    const withoutSession = { ...agent, currentSessionId: undefined, currentSessionTitle: undefined }
-    controller.focusCurrentSession(withoutSession)
-    expect(controller.getSnapshot().drawers).toHaveLength(1)
-    expect(controller.getSnapshot().notice).toContain('No current session')
+    controller.openAgent('planner')
+    controller.closeDrawer()
+    expect(controller.getSnapshot().drawer).toBeNull()
+    expect(controller.getSnapshot().projection).not.toBeNull()
   })
 
-  it('delegates current-session opening to the DSH adapter when configured', () => {
-    const opened: AgentFixture[] = []
-    const controller = new TeamsConsoleController((selected) => { opened.push(selected) })
-
-    controller.openConsole()
-    controller.focusCurrentSession(agent)
-
-    expect(opened).toEqual([agent])
-    expect(controller.getSnapshot().drawers).toEqual([])
+  it('resolves a permission reply through the host command', async () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    await controller.refresh()
+    await expect(controller.replyPermission('planner', 'planner-current', 'permission-1', 'once')).resolves.toBe(true)
+    expect(controller.getSnapshot().projection?.notifications[0]?.state).toBe('resolved')
   })
 
-  it('pushes and pops nested drawers while keeping expanded state coherent', () => {
-    const controller = new TeamsConsoleController()
-    controller.pushDrawer({ kind: 'agent', agent })
-    controller.pushDrawer({ kind: 'notifications', agent })
-    controller.toggleExpanded()
-
-    expect(controller.getSnapshot().drawers).toHaveLength(2)
-    expect(controller.getSnapshot().expanded).toBe(true)
-
-    controller.popDrawer()
-    expect(controller.getSnapshot().drawers).toHaveLength(1)
-    expect(controller.getSnapshot().expanded).toBe(true)
-
-    controller.popDrawer()
-    expect(controller.getSnapshot().drawers).toEqual([])
-    expect(controller.getSnapshot().expanded).toBe(false)
+  it('acknowledges a notification through the host command', async () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    await controller.refresh()
+    await expect(controller.acknowledge('approval-1', 'planner')).resolves.toBe(true)
+    expect(controller.getSnapshot().projection?.notifications[0]?.state).toBe('resolved')
   })
 
-  it('resets navigation, drawers, expansion, and notices on close', () => {
-    const controller = new TeamsConsoleController()
-    controller.openConsole()
-    controller.selectEntry('notifications')
-    controller.focusNotifications(agent)
-    controller.toggleExpanded()
-    controller.showNotice('temporary')
-    controller.closeConsole()
-
-    expect(controller.getSnapshot()).toEqual({
-      open: false,
-      entry: 'topology',
-      drawers: [],
-      expanded: false,
-      notice: null,
+  it('reports projection read failures without inventing an empty state', async () => {
+    const controller = new TeamsConsoleController({
+      async readProjection() { throw new Error('daemon unavailable') },
+      async command() { return { ok: true } },
+      async sendSession() { return { ok: true } },
     })
+    await controller.refresh()
+    expect(controller.getSnapshot().status).toBe('error')
+    expect(controller.getSnapshot().projection).toBeNull()
+    expect(controller.getSnapshot().error).toContain('daemon unavailable')
   })
 
-  it('opens Settings as a utility drawer without adding a sixth entry', () => {
-    const controller = new TeamsConsoleController()
-    controller.openConsole()
-    controller.pushDrawer({ kind: 'settings' })
-
-    expect(controller.getSnapshot().entry).toBe('topology')
-    expect(controller.getSnapshot().drawers).toEqual([{ kind: 'settings' }])
+  it('rejects an incomplete provider form before sending a command', async () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    await controller.refresh()
+    controller.beginAddProvider()
+    await expect(controller.putProvider('planner')).resolves.toBe(false)
+    expect(controller.getSnapshot().error).toContain('ID, label, and API base URL')
   })
 
-  it('handles the Escape key on the top drawer without disturbing the entry state', () => {
-    const controller = new TeamsConsoleController()
-    controller.openConsole()
-    controller.selectEntry('conversations')
-    controller.pushDrawer({ kind: 'agent', agent })
-    controller.pushDrawer({ kind: 'notifications', agent })
+  it('adds a provider through config.putProvider and refreshes accepted state', async () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    await controller.refresh()
+    controller.beginAddProvider()
+    controller.setProviderDraft('id', 'new-provider')
+    controller.setProviderDraft('label', 'New provider')
+    controller.setProviderDraft('apiBaseUrl', 'https://provider.invalid/v1')
+    await expect(controller.putProvider('planner')).resolves.toBe(true)
+    expect(controller.getSnapshot().projection?.configs[0]?.providers.some(provider => provider.id === 'new-provider')).toBe(true)
+  })
 
-    expect(controller.handlesKeyboard({ key: 'Escape' })).toBe(true)
-    controller.popDrawer()
-    expect(controller.getSnapshot().drawers).toHaveLength(1)
-    expect(controller.getSnapshot().entry).toBe('conversations')
+  it('refreshes an empty provider catalog without selecting the returned model', async () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    await controller.refresh()
+    await expect(controller.refreshModels('planner', 'empty-provider')).resolves.toBe(true)
+    const provider = controller.getSnapshot().projection?.configs[0]?.providers.find(candidate => candidate.id === 'empty-provider')
+    expect(provider?.models).toEqual([{ id: 'refreshed-model', label: 'Refreshed model' }])
+    expect(controller.getSnapshot().projection?.agents[0]?.modelId).toBe('deepseek-v4')
+  })
 
-    expect(controller.handlesKeyboard({ key: 'Escape' })).toBe(true)
-    controller.popDrawer()
-    expect(controller.getSnapshot().drawers).toEqual([])
-
-    expect(controller.handlesKeyboard({ key: 'Escape' })).toBe(false)
-    expect(controller.handlesKeyboard({ key: 'a' })).toBe(false)
+  it('moves accepted config to effective revision only after apply', async () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    await controller.refresh()
+    await expect(controller.applyConfig('planner')).resolves.toBe(true)
+    const config = controller.getSnapshot().projection?.configs[0]
+    expect(config?.effectiveRevision).toBe(config?.acceptedRevision)
   })
 })

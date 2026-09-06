@@ -12,6 +12,8 @@ import { createWorkIngress } from '../agent-host/work-ingress.ts'
 import { createWorkHost } from '../agent-host/work-host.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 import { createFileWorkStore, createWorkLedger } from '../agent/work-resource.ts'
+import { requestConsole, serveConsole } from './console-channel.ts'
+import { createRelayConsoleClient } from '../runtime/relay-console-client.ts'
 
 let directory: string
 let cert: Buffer
@@ -49,6 +51,80 @@ async function peer(id: string, onEvent?: RelayClientOptions['onEvent']) {
   clients.push(client)
   return client
 }
+
+it('exchanges a correlated Console command through actual TLS Relay and closes the one-request sockets', async () => {
+  await start()
+  let offer!: (grant: RelayGrant) => void
+  const offered = new Promise<RelayGrant>(resolve => { offer = resolve })
+  const a = await peer('console')
+  const b = await peer('daemon', event => { if (event.kind === 'relay.offer') offer(event.grant) })
+  const grant = await a.connect('daemon', b.generation)
+  await offered
+  const [left, right] = await Promise.all([a.openData(grant), b.openData(grant)])
+  const serving = serveConsole(right, async request => ({ kind: 'console.result', correlationId: request.correlationId,
+    result: { ok: false, error: { code: 'REVISION_CONFLICT', message: 'stale config' } } }), 1000)
+  const response = await requestConsole(left, { kind: 'console.command', correlationId: 'r', targetGeneration: b.generation,
+    command: { kind: 'config.apply', agentId: 'daemon' } }, 1000)
+  expect(response).toMatchObject({ kind: 'console.result', result: { ok: false, error: { code: 'REVISION_CONFLICT' } } })
+  await serving
+  await Promise.all([left.closed, right.closed])
+})
+
+it('reports Console timeout without replaying or cancelling the owning operation', async () => {
+  await start()
+  let offer!: (grant: RelayGrant) => void
+  const offered = new Promise<RelayGrant>(resolve => { offer = resolve })
+  const a = await peer('console')
+  const b = await peer('daemon', event => { if (event.kind === 'relay.offer') offer(event.grant) })
+  const grant = await a.connect('daemon', b.generation)
+  await offered
+  const [left, right] = await Promise.all([a.openData(grant), b.openData(grant)])
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  let calls = 0
+  let completed = false
+  const serving = serveConsole(right, async request => {
+    calls += 1
+    await pending
+    completed = true
+    return { kind: 'console.result', correlationId: request.correlationId, result: { ok: true } }
+  }, 1000).catch(error => error)
+  try {
+    await expect(requestConsole(left, { kind: 'console.command', correlationId: 'r', targetGeneration: b.generation,
+      command: { kind: 'config.apply', agentId: 'daemon' } }, 50)).rejects.toMatchObject({ code: 'RESULT_UNKNOWN' })
+    expect(calls).toBe(1)
+    expect(completed).toBe(false)
+    release()
+    await pending
+    await serving
+    expect(completed).toBe(true)
+  } finally { release() }
+})
+
+it('binds the Console client API to directory generation and real Relay connections', async () => {
+  await start()
+  const a = await peer('console')
+  const received: unknown[] = []
+  const jobs: Promise<void>[] = []
+  const b = await peer('daemon', async event => {
+    if (event.kind !== 'relay.offer') return
+    const socket = await b.openData(event.grant)
+    jobs.push(serveConsole(socket, async request => {
+      received.push(request)
+      if (request.kind === 'console.projection') return { kind: 'console.projection.result', correlationId: request.correlationId,
+        projection: { version: 1, agents: [{ agentId: 'daemon', machineId: 'm', label: 'D', presence: 'online', capabilities: ['browser'] }], sessions: [], notifications: [], configs: [] } }
+      return { kind: 'console.result', correlationId: request.correlationId, result: { ok: true } }
+    }, 1000))
+  })
+  const client = createRelayConsoleClient(a, 'daemon', 1000)
+  expect((await client.readProjection()).agents[0].agentId).toBe('daemon')
+  expect(await client.command({ kind: 'config.apply', agentId: 'daemon' })).toEqual({ ok: true })
+  expect(await client.sendSession({ agentId: 'daemon', sessionId: 's' }, ['business'])).toEqual({ ok: true })
+  await expect(client.command({ kind: 'config.apply', agentId: 'other' })).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  expect(received).toHaveLength(3)
+  expect(received[2]).toMatchObject({ kind: 'console.session', targetGeneration: b.generation, payload: ['business'] })
+  await Promise.all(jobs)
+})
 
 it('correlates concurrent directory requests and preserves scoped broadcasts', async () => {
   await start()

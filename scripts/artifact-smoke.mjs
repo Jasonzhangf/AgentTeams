@@ -1,42 +1,44 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { startConsoleHost } from '../console-host/lib/index.mjs'
+import { pathToFileURL } from 'node:url'
 
 const root = resolve(import.meta.dirname, '..')
 const artifact = resolve(root, 'generated/modules/teams-source/lib')
-// Execute the compiled library in its installed dependency context, after
-// checking byte identity with the packaged artifact. This is not deployment.
 assert.deepEqual(readFileSync(resolve(root, 'console-host/lib/index.mjs')), readFileSync(resolve(artifact, 'console-host/index.mjs')))
 assert.deepEqual(readFileSync(resolve(root, 'opencode-adapter/lib/index.mjs')), readFileSync(resolve(artifact, 'opencode-adapter/index.mjs')))
-const agents = ['source', 'target'].map(agentId => ({ agentId, machineId: 'local', label: agentId, openCodeUrl: 'http://127.0.0.1:1' }))
-const server = await startConsoleHost({ agents, staticRoot: resolve(artifact, 'static'), port: 0 })
-try {
-  const address = server.address()
-  assert.ok(address && typeof address !== 'string')
-  const base = `http://127.0.0.1:${address.port}`
-  const health = await fetch(`${base}/health`)
-  assert.equal(health.status, 200)
-  assert.deepEqual(await health.json(), { ok: true })
-  const page = await fetch(base)
-  assert.equal(page.status, 200)
-  assert.equal(await page.text(), readFileSync(resolve(artifact, 'static/index.html'), 'utf8'))
-  const invalid = await fetch(`${base}/api/action`, { method: 'POST', body: '{}' })
-  assert.equal(invalid.status, 500)
-  assert.equal(typeof (await invalid.json()).error, 'string')
-  const message = { kind: 'notify', correlationId: 'c', payload: { results: [{ config: { token: 'business', route: ['a', null] } }] } }
-  const postMessage = async message => {
-    const response = await fetch(`${base}/api/agent-message`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ messageId: 'm', relationId: 'missing', fromAgentId: 'source', toAgentId: 'target', message }),
-    })
-    assert.equal(response.status, 500)
-    return (await response.json()).error
-  }
-  // Deliberately stop at missing relation: prove protocol ingress, not execution.
-  assert.match(await postMessage(message), /relation missing does not exist/)
-  assert.match(await postMessage({ ...message, targetGeneration: 7 }), /unsupported field targetGeneration/)
-  console.log('Compiled Console HTTP smoke passed: health, exact static artifact, invalid action, JSON payload ingress and misplaced control rejection. No provider or cross-device claim.')
-} finally {
-  await new Promise((resolveClose, reject) => server.close(error => error ? reject(error) : resolveClose()))
+assert.deepEqual(readFileSync(resolve(root, 'ui/teams-console/lib/index.js')), readFileSync(resolve(artifact, 'ui/index.js')))
+assert.deepEqual(readFileSync(resolve(root, 'ui/teams-console/assets/agentbrowser-icon.jpg')), readFileSync(resolve(artifact, 'ui/assets/agentbrowser-icon.jpg')))
+const { createConsoleServer } = await import(pathToFileURL(resolve(artifact, 'console-host/index.mjs')).href)
+const consoleUi = await import(pathToFileURL(resolve(artifact, 'ui/index.js')).href)
+const browserUi = await import(pathToFileURL(resolve(artifact, 'ui/browser.js')).href)
+assert.equal(typeof consoleUi.createConsoleHttpClient, 'function')
+assert.equal(typeof browserUi.mountTeamsConsole, 'function')
+let received
+const client = {
+  readProjection: async () => ({ version: 1, agents: [], sessions: [], configs: [], notifications: [] }),
+  command: async () => ({ ok: false, error: { code: 'FORBIDDEN', message: 'smoke owner denial' } }),
+  sendSession: async (target, payload) => { received = { target, payload }; return { ok: true } },
 }
+const server = createConsoleServer({ staticRoot: resolve(artifact, 'static'), uiRoot: resolve(artifact, 'ui'),
+  authorize: async request => request.headers.authorization === 'smoke-only' ? client : undefined })
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+try {
+  const base = `http://127.0.0.1:${server.address().port}`
+  assert.equal((await fetch(base)).status, 401)
+  const headers = { authorization: 'smoke-only', 'content-type': 'application/json' }
+  const page = await fetch(base, { headers })
+  assert.equal(page.status, 200)
+  assert.equal(await page.text(), readFileSync(resolve(artifact, 'static/console.html'), 'utf8'))
+  assert.equal((await fetch(`${base}/ui/browser.js`, { headers })).status, 200)
+  for (const path of ['/api/action', '/api/agent-message', '/api/relation', '/api/projection']) {
+    assert.equal((await fetch(base + path, { headers })).status, 404)
+  }
+  const command = await fetch(`${base}/api/v1/command`, { method: 'POST', headers, body: JSON.stringify({ kind: 'config.apply', agentId: 'a' }) })
+  assert.deepEqual(await command.json(), { ok: false, error: { code: 'FORBIDDEN', message: 'smoke owner denial' } })
+  const payload = [{ config: { route: ['a', null], token: 'business' }, command: 'business' }]
+  const session = await fetch(`${base}/api/v1/session-message?agentId=a&sessionId=s`, { method: 'POST', headers, body: JSON.stringify(payload) })
+  assert.equal(session.status, 200)
+  assert.deepEqual(received, { target: { agentId: 'a', sessionId: 's' }, payload })
+  console.log('Packaged Console smoke passed: authenticated UI/API, legacy routes absent, owner denial and exact Session JSON. No provider or cross-device claim.')
+} finally { await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())) }

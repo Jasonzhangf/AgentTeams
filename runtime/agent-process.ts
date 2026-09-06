@@ -3,14 +3,16 @@ import { readFile, mkdir, open, link, unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { assertEnvelopeKeys } from '../control-protocol/json-value.ts'
+import { object, text, number, loadRelayConfig } from './process-config.ts'
 import { parseAgentDeclaration, RelayProtocolError } from '../control-protocol/relay-codec.ts'
 import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 import { createWorkHost } from '../agent-host/work-host.ts'
 import { createWorkIngress } from '../agent-host/work-ingress.ts'
 import { createFileWorkStore, createWorkLedger } from '../agent/work-resource.ts'
-import { createWorkChannel } from '../network/work-channel.ts'
+import { createConsoleIngress } from '../agent-host/console-ingress.ts'
+import { acceptAgentData } from './agent-data.ts'
+import type { ConsoleClientV1 } from '../control-protocol/console-api.ts'
 import type { RelayClientOptions } from '../network/relay-client.ts'
 import { startAgentDaemon, type AgentDaemon } from './agent-daemon.ts'
 
@@ -22,21 +24,8 @@ export interface AgentProcessConfig {
   readonly presenceIntervalMs: number
   readonly policyRevision: number
   readonly allowedConsumers: readonly string[]
+  readonly allowedManagers: readonly string[]
   readonly cli: { readonly camoExecutable: string; readonly searchExecutable: string; readonly searchRoot: string; readonly profilePrefix: string }
-}
-function object(value: unknown, keys: readonly string[], label: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new RelayProtocolError('INVALID_INPUT', `${label} must be an object`)
-  const record = value as Record<string, unknown>
-  assertEnvelopeKeys(record, keys, label)
-  return record
-}
-function text(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !value) throw new RelayProtocolError('INVALID_INPUT', `${label} is required`)
-  return value
-}
-function number(value: unknown, label: string, max = 2_147_483_647): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > max) throw new RelayProtocolError('INVALID_INPUT', `${label} is outside its positive integer range`)
-  return value as number
 }
 
 export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcessConfig> {
@@ -46,27 +35,22 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
   if (input.version !== 1) throw new RelayProtocolError('UNSUPPORTED_VERSION', 'Agent config version must be 1')
   const location = (value: unknown, label: string) => resolve(dirname(configPath), text(value, label))
   const cli = object(input.cli, ['camoExecutable', 'searchExecutable', 'searchRoot', 'profilePrefix'], 'cli')
-  const policy = object(input.policy, ['revision', 'allowedConsumers'], 'policy')
+  const policy = object(input.policy, ['revision', 'allowedConsumers', 'allowedManagers'], 'policy')
   if (!Array.isArray(policy.allowedConsumers) || policy.allowedConsumers.some(item => typeof item !== 'string' || !item) ||
     new Set(policy.allowedConsumers).size !== policy.allowedConsumers.length) throw new RelayProtocolError('INVALID_INPUT', 'allowedConsumers must be unique Agent IDs')
-  const relay = object(input.relay, ['endpoint', 'credentialEnv', 'caFile', 'connectTimeoutMs', 'admissionTimeoutMs', 'requestTimeoutMs',
-    'maxMessageBytes', 'maxBufferedBytes', 'maxPendingFrames', 'maxPendingRequests', 'maxDataConnections'], 'relay')
-  const credentialEnv = text(relay.credentialEnv, 'credentialEnv')
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(credentialEnv)) throw new RelayProtocolError('INVALID_INPUT', 'invalid credential environment reference')
-  const credential = text(env[credentialEnv], 'configured credential environment')
+  const allowedManagers = policy.allowedManagers === undefined ? [] : policy.allowedManagers
+  if (!Array.isArray(allowedManagers) || allowedManagers.some(item => typeof item !== 'string' || !item) || new Set(allowedManagers).size !== allowedManagers.length) {
+    throw new RelayProtocolError('INVALID_INPUT', 'allowedManagers must be unique Agent IDs')
+  }
   const declaration = parseAgentDeclaration({ identity: input.identity, scopeId: input.scopeId, revision: 1, capabilities: [], routes: [] })
   return {
     declaration, dataDirectory: location(input.dataDirectory, 'dataDirectory'), leasePort: number(input.leasePort, 'leasePort', 65535),
     presenceIntervalMs: number(input.presenceIntervalMs, 'presenceIntervalMs'), policyRevision: number(policy.revision, 'policy.revision'),
     allowedConsumers: [...policy.allowedConsumers] as string[],
+    allowedManagers: [...allowedManagers] as string[],
     cli: { camoExecutable: location(cli.camoExecutable, 'camoExecutable'), searchExecutable: location(cli.searchExecutable, 'searchExecutable'),
       searchRoot: location(cli.searchRoot, 'searchRoot'), profilePrefix: text(cli.profilePrefix, 'profilePrefix') },
-    relay: { declaration, transport: { endpoint: text(relay.endpoint, 'relay.endpoint'), credential,
-      ...(relay.caFile === undefined ? {} : { ca: await readFile(location(relay.caFile, 'relay.caFile')) }),
-      connectTimeoutMs: number(relay.connectTimeoutMs, 'connectTimeoutMs'), maxMessageBytes: number(relay.maxMessageBytes, 'maxMessageBytes'),
-      maxBufferedBytes: number(relay.maxBufferedBytes, 'maxBufferedBytes'), maxPendingFrames: number(relay.maxPendingFrames, 'maxPendingFrames') },
-      admissionTimeoutMs: number(relay.admissionTimeoutMs, 'admissionTimeoutMs'), requestTimeoutMs: number(relay.requestTimeoutMs, 'requestTimeoutMs'),
-      maxPendingRequests: number(relay.maxPendingRequests, 'maxPendingRequests'), maxDataConnections: number(relay.maxDataConnections, 'maxDataConnections') },
+    relay: await loadRelayConfig(input.relay, declaration, configPath, env),
   }
 }
 
@@ -119,16 +103,34 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     let host!: ReturnType<typeof createWorkHost>
     const allowed = (consumer: { agentId: string }) => config.allowedConsumers.includes(consumer.agentId)
     const policy = { revision: config.policyRevision, authorizeWork: allowed, authorizeRequest: allowed }
+    const consoleClient: ConsoleClientV1 = {
+      readProjection: async () => ({ version: 1, agents: [{ agentId: config.declaration.identity.agentId,
+        machineId: config.declaration.identity.machineId, label: config.declaration.identity.label,
+        presence: daemon?.status().state === 'online' ? 'online' : 'offline', capabilities: executor.capabilities.map(item => item.capabilityId) }],
+        sessions: [], notifications: [], configs: [] }),
+      command: async () => ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session or model configuration owner' } }),
+      sendSession: async () => ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } }),
+    }
     daemon = await startAgentDaemon({ presenceIntervalMs: config.presenceIntervalMs, relay: { ...config.relay,
       declaration: config.declaration,
       onEvent: async event => {
         if (event.kind !== 'relay.offer') return
         await ready
         if (event.grant.targetAgentId !== config.declaration.identity.agentId) throw new RelayProtocolError('FORBIDDEN', 'offer is not directed to this provider')
-        const socket = await daemon!.network.openData(event.grant)
-        createWorkChannel(socket, { timeoutMs: config.relay.requestTimeoutMs, maxPending: config.relay.maxPendingRequests,
-          maxIncoming: config.relay.maxPendingRequests, onRequest: createWorkIngress(host, {
-            accountId: event.grant.accountId, scopeId: event.grant.scopeId, agentId: event.grant.sourceAgentId }) })
+        void (async () => {
+          const socket = await daemon!.network.openData(event.grant)
+          const peer = { accountId: event.grant.accountId, scopeId: event.grant.scopeId, agentId: event.grant.sourceAgentId }
+          await acceptAgentData(socket, {
+          work: { timeoutMs: config.relay.requestTimeoutMs, maxPending: config.relay.maxPendingRequests,
+            maxIncoming: config.relay.maxPendingRequests, onRequest: createWorkIngress(host, peer) },
+          console: createConsoleIngress({ agentId: config.declaration.identity.agentId, generation: () => daemon!.network.generation,
+            client: consoleClient, authorize: principal => principal.accountId === config.declaration.identity.accountId &&
+              principal.scopeId === config.declaration.scopeId && config.allowedManagers.includes(principal.agentId) }, peer),
+          })
+        })().catch(error => {
+          // A scoped data failure must not kill registration or imply an owning operation completed.
+          console.error('Agent data connection closed:', error instanceof RelayProtocolError ? error.code : 'UNAVAILABLE')
+        })
       },
     } })
     const ledger = createWorkLedger({ provider: { accountId: config.declaration.identity.accountId, scopeId: config.declaration.scopeId,

@@ -1,5 +1,6 @@
 import type { PluginInput, Hooks } from '@opencode-ai/plugin'
 import type { Session } from '@opencode-ai/sdk'
+import { assertEnvelopeKeys, assertJsonValue } from '../../control-protocol/json-value.ts'
 import type {
   ConfigApplyResult,
   ModelEntry,
@@ -154,11 +155,21 @@ export interface OpenCodeSdkResponse<T> {
 
 export type OpenCodeSdkResult<T> = T | OpenCodeSdkResponse<T>
 
+export interface OpenCodeModelTarget {
+  readonly providerID: string
+  readonly modelID: string
+}
+
+export interface OpenCodeSessionPromptBody {
+  readonly parts: [{ type: 'text'; text: string }]
+  readonly model?: OpenCodeModelTarget
+}
+
 export interface OpenCodeSessionClient {
   readonly session: {
     list(options?: Readonly<Record<string, unknown>>): Promise<OpenCodeSdkResult<readonly Session[]>>
     get(options: { path: { id: string } }): Promise<OpenCodeSdkResult<Session>>
-    prompt(options: { path: { id: string }; body: { parts: [{ type: 'text'; text: string }] } }): Promise<OpenCodeSdkResult<unknown>>
+    prompt(options: { path: { id: string }; body: OpenCodeSessionPromptBody }): Promise<OpenCodeSdkResult<unknown>>
   }
   readonly postSessionIdPermissionsPermissionId: (options: { path: { id: string; permissionID: string }; body: { response: 'once' | 'always' | 'reject' } }) => Promise<OpenCodeSdkResult<unknown>>
 }
@@ -245,9 +256,40 @@ export async function getOpenCodeSession(client: OpenCodeSessionClient, sessionI
   return { id: session.id, title: session.title, directory: session.directory, time: session.time }
 }
 
-export async function sendOpenCodeMessage(client: OpenCodeSessionClient, sessionId: string, text: string): Promise<void> {
+function invalidOpenCodeModelTarget(message: string): never {
+  throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', message)
+}
+
+function validateOpenCodeModelTarget(target: OpenCodeModelTarget | undefined): OpenCodeModelTarget | undefined {
+  if (target === undefined) return undefined
+  if (typeof target !== 'object' || target === null || Array.isArray(target)) {
+    return invalidOpenCodeModelTarget('OpenCode model target must be a plain object')
+  }
+
+  try {
+    assertJsonValue(target, 'OpenCode model target')
+    assertEnvelopeKeys(target as unknown as Record<string, unknown>, ['providerID', 'modelID'], 'OpenCode model target')
+  } catch (error) {
+    return invalidOpenCodeModelTarget(error instanceof Error ? error.message : 'OpenCode model target is invalid')
+  }
+
+  const input = target as unknown as Record<string, unknown>
+  const providerID = input.providerID
+  const modelID = input.modelID
+  if (typeof providerID !== 'string' || providerID.trim() === '' || typeof modelID !== 'string' || modelID.trim() === '') {
+    return invalidOpenCodeModelTarget('OpenCode model target requires non-empty providerID and modelID')
+  }
+  return { providerID, modelID }
+}
+
+export async function sendOpenCodeMessage(client: OpenCodeSessionClient, sessionId: string, text: string, target?: OpenCodeModelTarget): Promise<void> {
   if (text.trim() === '') throw new Error('OpenCode message must not be empty')
-  const result = await client.session.prompt({ path: { id: sessionId }, body: { parts: [{ type: 'text', text }] } })
+  const selectedTarget = validateOpenCodeModelTarget(target)
+  const body: OpenCodeSessionPromptBody = {
+    parts: [{ type: 'text', text }],
+    ...(selectedTarget === undefined ? {} : { model: selectedTarget }),
+  }
+  const result = await client.session.prompt({ path: { id: sessionId }, body })
   unwrapOpenCodeResponse(result, 'session.prompt', true)
 }
 

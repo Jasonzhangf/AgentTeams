@@ -7,10 +7,6 @@
     "build": "tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@deepseek-ai/teams-opencode-adapter": "file:../opencode-adapter",
-    "@opencode-ai/sdk": "1.18.23"
-  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsdown": "^0.22.2",

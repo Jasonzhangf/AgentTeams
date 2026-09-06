@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const config = readFileSync(join(import.meta.dirname, 'runtime-config.ts'), 'utf8')
-const ui = readFileSync(join(import.meta.dirname, '../ui/teams-console/src/client/TeamsOverlay.tsx'), 'utf8')
+const ui = readFileSync(join(import.meta.dirname, '../ui/teams-console/src/client/controller.ts'), 'utf8')
 
 describe('Per-Agent provider/model boundary', () => {
   it('config owns save/apply for agent runtime config with revision CAS', () => {

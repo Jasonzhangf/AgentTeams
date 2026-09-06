@@ -5,7 +5,7 @@ import { afterEach, expect, it } from 'vitest'
 import { createCliWorkExecutor } from './cli-executor.ts'
 import { createWorkHost } from './work-host.ts'
 import { createFileWorkStore, createWorkLedger } from '../agent/work-resource.ts'
-import type { AgentWork } from '../control-protocol/agent-services.ts'
+import type { AgentWork, ResourceAllocation } from '../control-protocol/agent-services.ts'
 import { createWorkIngress } from './work-ingress.ts'
 import { parseWorkWireFrame } from '../control-protocol/work-wire.ts'
 
@@ -17,8 +17,24 @@ function fixture() {
   writeFileSync(join(root, 'sample.txt'), 'unique needle with metadata and generation\n')
   return root
 }
+function browserFixture() {
+  const root = fixture()
+  const executable = join(root, 'camo.mjs')
+  writeFileSync(executable, `#!/usr/bin/env node
+const [command, ...args] = process.argv.slice(2)
+const profile = args[args.indexOf('--profile') + 1]
+if (command === 'daemon') process.stdout.write(JSON.stringify({ kind: 'result', cmd: 'daemon', result: { status: 'started' } }) + '\\n')
+else if (command === 'start') process.stdout.write(JSON.stringify({ cmd: 'start', sessionId: 'session', profile, headless: true }) + '\\n')
+else if (command === 'stop') process.stdout.write(JSON.stringify({ cmd: 'stop', profile, state: 'stopped' }) + '\\n')
+else process.exit(1)
+`, { mode: 0o700 })
+  return { root, executable }
+}
 const work: AgentWork = { workId: 'w', consumerAgentId: 'consumer', providerAgentId: 'provider',
   capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1, state: 'accepted' }
+const browserWork: AgentWork = { ...work, capabilityId: 'browser' }
+const heldBrowserContext: ResourceAllocation = { allocationId: 'browser-allocation', workId: 'w',
+  resourceId: 'browser-context', amount: 1, scope: 'work', state: 'held' }
 
 it('runs real fixed-root search through provider admission and trusted completion', async () => {
   const root = fixture()
@@ -42,7 +58,7 @@ it('rejects mismatched operation envelopes before invoking a process', async () 
   const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
     searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
   const result = await executor.execute(work, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
-    operation: 'search', demands: [] }, payload: { operation: 'context.destroy', query: 'x' } })
+    operation: 'search', demands: [] }, payload: { operation: 'context.destroy', query: 'x' } }, [])
   expect(result).toMatchObject({ outcome: 'failed', error: { code: 'INVALID_INPUT' } })
 })
 
@@ -50,8 +66,47 @@ it('preserves a missing browser context error code through the executor boundary
   const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
     searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
   const result = await executor.execute({ ...work, capabilityId: 'browser' }, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
-    operation: 'snapshot', demands: [] }, payload: { contextId: 'missing' } })
+    operation: 'snapshot', demands: [] }, payload: { contextId: 'missing' } }, [])
   expect(result).toMatchObject({ outcome: 'failed', error: { code: 'NOT_FOUND' } })
+})
+
+it('does not report a lost browser owner as destroyed', async () => {
+  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
+    searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
+
+  await expect(executor.destroy(browserWork, [heldBrowserContext])).rejects.toMatchObject({ error: { code: 'UNAVAILABLE' } })
+})
+
+it('keeps a same-process parse failure as an explicit no-resource fact', async () => {
+  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
+    searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
+  const result = await executor.execute(browserWork, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
+    operation: 'context.create', demands: [] }, payload: { operation: 'search' } }, [])
+  expect(result).toMatchObject({ outcome: 'failed', error: { code: 'INVALID_INPUT' } })
+
+  await expect(executor.destroy(browserWork, [heldBrowserContext])).resolves.toEqual({ destroyed: true })
+})
+
+it('does not turn a post-restart parse failure into a no-resource fact', async () => {
+  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
+    searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
+  const result = await executor.execute(browserWork, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
+    operation: 'context.create', demands: [] }, payload: { operation: 'search' } }, [heldBrowserContext])
+  expect(result).toMatchObject({ outcome: 'failed', error: { code: 'INVALID_INPUT' } })
+
+  await expect(executor.destroy(browserWork, [heldBrowserContext])).rejects.toMatchObject({ error: { code: 'UNAVAILABLE' } })
+})
+
+it('keeps a successful local browser destruction fact for a repeated close', async () => {
+  const { root, executable } = browserFixture()
+  const executor = createCliWorkExecutor({ camoExecutable: executable, searchExecutable: '/missing/rg',
+    searchRoot: root, profilePrefix: 'teams-test-executor' })
+  const result = await executor.execute(browserWork, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
+    operation: 'context.create', demands: [] }, payload: {} }, [])
+  expect(result).toMatchObject({ outcome: 'succeeded', payload: { contextId: expect.any(String) } })
+
+  await expect(executor.destroy(browserWork, [heldBrowserContext])).resolves.toEqual({ destroyed: true })
+  await expect(executor.destroy(browserWork, [heldBrowserContext])).resolves.toEqual({ destroyed: true })
 })
 
 it('preserves real CLI failure output through durable Work state and the wire error chain', async () => {

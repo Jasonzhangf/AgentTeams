@@ -1,5 +1,5 @@
 {
-  "bundle_digest": "sha256:e775e955c2a2b8b6a36404d68b8a9151a2e643e2d38ac264e1316798525a47db",
+  "bundle_digest": "sha256:cb54d8aacb6debffb202422307d67e6a1ea562e97e123a8a4240c4bf32a28591",
   "manifest_digest": "sha256:5e1977d7ee1d8ac2effc92bab780bdaf8c616782940f92177793e2be8751b3df",
   "resources": [
     {
@@ -58,13 +58,13 @@
     },
     {
       "class": "contracts",
-      "digest": "sha256:21ae8fcd3aa3d017321e5bb5ee3a9606fdf561f9d69348802f1bcd1a12bef3a7",
+      "digest": "sha256:640136ffee5447cf7fa67451e11552e1af5485d3e8435983637ad8e0587d5f72",
       "path": ".appsdk/contracts/maps/verification-map.json",
       "source": "contracts/maps/verification-map.json"
     },
     {
       "class": "contracts",
-      "digest": "sha256:27c984ece673f64e6d030f982394ae0699832a00959cd807b1d51560afaf3de7",
+      "digest": "sha256:8cfc78a73d70275f174d827cc200ddfb6be51c26763d008e0466d0554827804c",
       "path": ".appsdk/contracts/migrations/sdk-0.1.5-to-0.1.6.json",
       "source": "contracts/migrations/sdk-0.1.5-to-0.1.6.json"
     },
@@ -232,7 +232,7 @@
     },
     {
       "class": "docs",
-      "digest": "sha256:07f87897e26f16b4b2e00e33df61e8c872af924756e71fe589e0c1744209fa4a",
+      "digest": "sha256:98c3433c6dcf91e364cb1bb24ac843130189257823aa1201f0f5d0cbca75a506",
       "path": ".appsdk/docs/design/appsdk-project-integration.md",
       "source": "docs/design/appsdk-project-integration.md"
     },

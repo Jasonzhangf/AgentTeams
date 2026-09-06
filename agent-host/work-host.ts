@@ -1,4 +1,4 @@
-import type { AgentWork, AuthenticatedAgent, ServiceErrorCode, WorkProposal, WorkRequest } from '../control-protocol/agent-services.ts'
+import type { AgentWork, AuthenticatedAgent, ResourceAllocation, ServiceErrorCode, WorkProposal, WorkRequest } from '../control-protocol/agent-services.ts'
 import {
   closeWork, completeRequest, confirmWorkDestroyed, createTrustedWorkAuthority,
   getRequest, proposeWork, requestWork,
@@ -7,9 +7,9 @@ import {
 
 /** Local adapter port. Terminal outcomes require actual execution completion. */
 export interface WorkExecutor {
-  execute(work: AgentWork, request: WorkRequest): Promise<RequestCompletion>
-  /** Resolve only after this Work's resources have actually been destroyed. */
-  destroy(work: AgentWork): Promise<{ readonly destroyed: true }>
+  execute(work: AgentWork, request: WorkRequest, allocations: readonly ResourceAllocation[]): Promise<RequestCompletion>
+  /** Resolve only after this Work's resources have actually been destroyed; allocations are a read-only ledger projection. */
+  destroy(work: AgentWork, allocations: readonly ResourceAllocation[]): Promise<{ readonly destroyed: true }>
 }
 export interface WorkHostOptions {
   readonly ledger: WorkLedger
@@ -44,6 +44,7 @@ export function createWorkHost({ ledger, policy, executor }: WorkHostOptions): W
       return structuredClone(getRequest(ledger, workId, requestId))
     },
     request: async (consumer, input) => {
+      const allocations = structuredClone(ledger.snapshot.allocations.filter(allocation => allocation.workId === input.control.workId))
       const admitted = requestWork(ledger, { authenticatedConsumer: consumer, request: input, policy: policy() })
       if (!admitted.executionAllowed) return structuredClone(admitted.request)
       const workId = admitted.request.control.workId
@@ -53,7 +54,7 @@ export function createWorkHost({ ledger, policy, executor }: WorkHostOptions): W
       const key = JSON.stringify([workId, requestId])
       const result = (async () => {
         let completion: RequestCompletion
-        try { completion = await executor.execute(work, request) }
+        try { completion = await executor.execute(work, request, allocations) }
         catch (cause) {
           // An exception is not proof that an external side effect stopped.
           completion = { outcome: 'unknown', error: { code: 'RESULT_UNKNOWN',
@@ -77,7 +78,8 @@ export function createWorkHost({ ledger, policy, executor }: WorkHostOptions): W
         if (requests.some(request => request.state === 'running' || request.state === 'cancel_requested')) {
           throw new WorkHostError('RESULT_UNKNOWN', 'persisted execution has no local completion proof')
         }
-        const confirmation = await executor.destroy(structuredClone(work))
+        const allocations = structuredClone(ledger.snapshot.allocations.filter(allocation => allocation.workId === workId))
+        const confirmation = await executor.destroy(structuredClone(work), allocations)
         if (confirmation?.destroyed !== true) throw new WorkHostError('RESULT_UNKNOWN', 'resource destruction is unconfirmed')
         return structuredClone(confirmWorkDestroyed(ledger, authority, workId))
       })().finally(() => { closings.delete(workId) })

@@ -1,3 +1,4 @@
 packages:
   - console-host
   - opencode-adapter
+  - ui/teams-console

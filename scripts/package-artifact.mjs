@@ -11,3 +11,5 @@ cpSync(resolve(root, 'opencode-adapter/lib'), resolve(output, 'opencode-adapter'
 cpSync(resolve(root, 'console-host/lib'), resolve(output, 'console-host'), { recursive: true })
 cpSync(resolve(root, 'console-host/static'), resolve(output, 'static'), { recursive: true })
 cpSync(resolve(root, 'generated/runtime-lib'), resolve(output, 'runtime'), { recursive: true })
+cpSync(resolve(root, 'ui/teams-console/lib'), resolve(output, 'ui'), { recursive: true })
+cpSync(resolve(root, 'ui/teams-console/assets'), resolve(output, 'ui/assets'), { recursive: true })
