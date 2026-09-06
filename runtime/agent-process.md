@@ -77,8 +77,11 @@ composition readiness, not successful execution of every external tool.
 
 SIGTERM and SIGINT close network admission and request local Work cleanup.
 Resource release still requires actual completion and destruction. A startup
-with held allocations or unconfirmed executions fails with `RESULT_UNKNOWN`;
-trusted reconciliation of active Work after a crash is not implemented yet.
+with a stale Work-store lock first reacquires the configured loopback lease and
+requires a matching `runtime-owner.json` PID/start-token record from the prior
+daemon; otherwise it fails closed. A startup with held allocations or
+unconfirmed executions still fails with `RESULT_UNKNOWN`; trusted reconciliation
+of active Work after a crash is not implemented yet.
 Do not clear the ledger, relabel requests successful or retry unknown side
 effects to force startup. Completed, closed Work remains queryable after a
 normal restart; idle crash restart is separately tested.

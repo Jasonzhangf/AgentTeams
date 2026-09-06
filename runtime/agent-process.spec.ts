@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createServer } from 'node:net'
@@ -66,7 +66,7 @@ function child(configPath: string, credential = 'Bearer provider') {
 it('executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state', async () => {
   relay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
     maxPayload: 65536, maxConnections: 16, maxGrants: 8, maxBufferedAmount: 65536, maxPendingMessages: 16, maxPendingBytes: 131072, grantTtlMs: 10000,
-    authenticate: credential => ['provider', 'consumer', 'managed', 'provider2', 'consumer2'].includes(credential.slice(7)) && credential.startsWith('Bearer ')
+    authenticate: credential => ['provider', 'consumer', 'managed', 'provider2', 'consumer2', 'stale-lock-agent'].includes(credential.slice(7)) && credential.startsWith('Bearer ')
       ? { accountId: 'account', scopeId: 'scope', agentId: credential.slice(7) } : null })
   const transport = { endpoint: relay.url, credential: 'Bearer consumer', ca: cert, connectTimeoutMs: 1000,
     maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 }
@@ -256,4 +256,28 @@ it('persists unknown state before refusing a restart with active Work', async ()
   const recovered = JSON.parse(readFileSync(workFile, 'utf8')) as { requests: Array<{ state: string }>; allocations: Array<{ state: string }> }
   expect(recovered.requests[0]?.state).toBe('unknown')
   expect(recovered.allocations[0]?.state).toBe('unknown')
+}, 15000)
+
+it('recovers a stale work lock only after the previous daemon lease is reacquired', async () => {
+  const root = join(directory, 'stale-lock')
+  const dataDirectory = join(root, 'data')
+  mkdirSync(dataDirectory, { recursive: true })
+  const leasePort = await availablePort()
+  const previousOwner = { version: 1, pid: 987654, startToken: 'previous-daemon-token', leasePort }
+  writeFileSync(join(dataDirectory, 'runtime-owner.json'), `${JSON.stringify(previousOwner)}\n`)
+  writeFileSync(join(dataDirectory, 'work.json.lock'), `${JSON.stringify({ version: 1, ownerPid: previousOwner.pid, ownerStartToken: previousOwner.startToken, lockToken: 'stale-lock-token' })}\n`)
+  const configPath = join(root, 'agent.json')
+  writeFileSync(configPath, JSON.stringify({ version: 1,
+    identity: { hostId: 'stale-lock-host', machineId: 'test', agentId: 'stale-lock-agent', accountId: 'account', agentKind: 'custom', label: 'Stale Lock Agent' },
+    scopeId: 'scope', dataDirectory, leasePort, presenceIntervalMs: 1000,
+    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+    cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: root, profilePrefix: 'teams-stale-lock' },
+    relay: { endpoint: relay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: join(directory, 'cert.pem'), connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
+      requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 } }))
+  const process = child(configPath, 'Bearer stale-lock-agent')
+  expect(await process.ready).toMatchObject({ agentId: 'stale-lock-agent' })
+  expect(existsSync(join(dataDirectory, 'work.json.lock'))).toBe(false)
+  process.process.kill('SIGTERM')
+  expect((await process.exited).code).toBe(0)
+  expect(existsSync(join(dataDirectory, 'runtime-owner.json'))).toBe(false)
 }, 15000)

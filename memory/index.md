@@ -43,6 +43,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `recovery`, `runtime`, `work`
 - details: [L2/agentteams-runtime-recovery-unknown-20260906.md](L2/agentteams-runtime-recovery-unknown-20260906.md)
 
+### Runtime stale Work lock recovery
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `recovery`
+- details: [L2/agentteams-runtime-stale-lock-recovery-20260906.md](L2/agentteams-runtime-stale-lock-recovery-20260906.md)
+
 ### Capability matching and shared resource capacity
 - tags: `ai-reviewed`, `capability`, `human-unreviewed`, `relations`, `resource`, `work`
 - details: [L2/capability-relation-capacity-20260906.md](L2/capability-relation-capacity-20260906.md)
@@ -134,5 +138,5 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: AgentTeams 长程交付与阶段L2记忆 (plan) [ai-reviewed,delivery,governance,human-unreviewed,memory-l2] -> L2/agentteams-long-running-delivery-20260906.md
 - L2: Packaged Relay process replay (knowledge) [agentteams,ai-reviewed,deployment,human-unreviewed,relay,restart] -> L2/agentteams-relay-process-packaged-20260906.md
 - L2: Runtime active-work recovery boundary (knowledge) [agentteams,ai-reviewed,human-unreviewed,recovery,runtime,work] -> L2/agentteams-runtime-recovery-unknown-20260906.md
-- L2: Capability matching and shared resource capacity (knowledge) [ai-reviewed,capability,human-unreviewed,relations,resource,work] -> L2/capability-relation-capacity-20260906.md
+- L2: Runtime stale Work lock recovery (knowledge) [agentteams,ai-reviewed,human-unreviewed,recovery] -> L2/agentteams-runtime-stale-lock-recovery-20260906.md
 

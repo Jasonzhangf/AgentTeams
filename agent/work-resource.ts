@@ -132,6 +132,15 @@ export type VerifyFileLockOwnerExited = (owner: FileLockOwnerIdentity) => boolea
 const trustedAuthorities = new WeakSet<object>()
 const processStartToken = randomUUID()
 
+/**
+ * The runtime persists this token beside its daemon lease so it can prove that
+ * a stale work-store lock belonged to the previous daemon owner. It is never
+ * sent over the network or included in Work payloads.
+ */
+export function currentWorkProcessStartToken(): string {
+  return processStartToken
+}
+
 export function createTrustedWorkAuthority(): TrustedWorkAuthority {
   const authority: TrustedWorkAuthority = { kind: 'trusted-local-work-authority' }
   trustedAuthorities.add(authority)
@@ -485,6 +494,13 @@ function readFileLockMetadata(lockPath: string): FileLockMetadata {
     if (isWorkServiceError(error)) throw error
     fail('INVALID_INPUT', `lock metadata is corrupted: ${error instanceof Error ? error.message : String(error)}`)
   }
+}
+
+export function readFileWorkStoreLockProof(filePath: string): FileLockRecoveryProof | undefined {
+  requiredString(filePath, 'filePath')
+  const lockPath = `${filePath}.lock`
+  if (!existsSync(lockPath)) return undefined
+  return readFileLockMetadata(lockPath)
 }
 
 function withFileLock<T>(filePath: string, action: () => T): T {
