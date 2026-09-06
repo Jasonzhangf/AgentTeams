@@ -1,33 +1,28 @@
 {
   "goal_id": "goal-teams-multi-agent-console",
-  "raw_request": "按 AppSDK 0.1.6 治理推进 Teams，优先交付 OpenCode 可安装、可复核、可验收的多 Agent 控制台；DSH 适配延期。",
-  "understood_objective": "优先交付 Teams OpenCode 控制台：Topology 按 Machine -> Agent 定位，Agent Card 直接进入当前 Session，Conversation 复用 OpenCode 宿主能力，Notifications 按重要性和时间直达 Agent 或 Session，Search/Memory 作为独立插件接入，Desktop/Mobile 共享语义而仅改变排版。DSH adapter 保留为 deferred scope，不作为当前 release 前置。",
+  "raw_request": "将 Teams 从 agent-tui 源仓库独立到 AgentTeams，并按 AppSDK 0.1.6 从新仓库根重新治理。",
+  "understood_objective": "交付独立 AgentTeams 仓库，保留 Teams 源码和相关提交历史，以 OpenCode 为首要宿主，继续开发跨机器、多 Agent 的 Master Console Host、Agent Host、控制协议、网络、通知、搜索、记忆和共享桌面/手机界面。",
   "acceptance_criteria": [
-    "Teams 目录使用 AppSDK 0.1.6 治理，sdk.lock 与治理契约一致。",
-    "概要设计覆盖 desktop/mobile 静态页面、Agent Card 当前 Session 快速入口、OpenCode Session/Conversation 接入、无限 drawer、header 上拉全屏和下拉关闭。",
-    "network、config、server、runtime、agent、OpenCode adapter、UI 的 owner 和边界明确；DSH adapter 标记为 deferred。",
-    "daemon runtime 启动先连接 Bootstrap Link Config，再完成 admission、配置同步和 capability publication。",
-    "OpenCode 是当前首要宿主；其 adapter 使用 PluginInput/Hooks/SDK，不共享 DSH 宿主 UI mounting。",
-    "控制面字段与业务 payload 物理隔离，控制服务器不保存 Session 消息、tool 结果和 approval body。",
-    "静态 HTML 原型、架构地图、验证地图和生命周期 manifest 已落盘。"
+    "本地项目根为 ~/code/AgentTeams，仓库根直接包含 Teams 源码而不再包含 Teams/ 前缀。",
+    "远端为 https://github.com/Jasonzhangf/AgentTeams.git，main 包含独立仓库历史和当前源码。",
+    "旧 AppSDK 治理已作废，新的唯一 active governance root 为仓库根 .appsdk。",
+    "AppSDK 0.1.6 project_id=teams、module=teams-design、goal 和源码边界绑定并通过 verify/compile。",
+    "OpenCode-first、控制面与业务 payload 隔离、单 owner 和显式失败边界保持不变。"
   ],
   "non_goals": [
-    "不做 Machine pairing；v1 使用可选 shared API key/token 无状态校验。",
-    "不让 UI 作为跨机器业务消息中继。",
-    "不从 master/slave 关系标签推断权限、调度或审批权。",
-    "不复制 OpenCode Session transcript 或宿主 UI owner；不在本阶段实现 DSH adapter。",
-    "不增加 fallback、silent strip 或重复 network/config/session owner。"
+    "本次不从源 agent-tui 仓库删除历史 Teams 路径。",
+    "本次不新增 DSH runtime 适配。",
+    "本次不伪造 review、freeze、runtime install 或 live replay 证据。"
   ],
   "assumptions": [
-    "Teams 是仓库根下的独立 AppSDK 项目，maui 原型仅作只读设计来源。",
-    "network 负责链路配置和 transport，config 负责共享配置，server 负责部署与 admission，runtime 合并 daemon 与 network 生命周期，agent 保持网络无关。",
-    "Desktop/mobile 共享语义组件和状态，只由 layout adapter 区分排版。",
-    "Teams 只保存 opaque credential reference，secret 由外部 credential owner 保存。"
+    "AgentTeams 是独立仓库，所有后续 worktree 位于其 playground/ 下。",
+    "network 负责链路和 transport，server 负责 discovery/admission/route publication，runtime 编排 daemon 与 network 生命周期。",
+    "Desktop 和 mobile 共享语义组件，只由 layout adapter 区分排版。"
   ],
   "ambiguities": [],
   "questions": [],
   "status": "confirmed",
   "confirmed_by": "Jason",
-  "confirmed_at": "2026-08-31T00:00:00Z",
-  "created_at": "2026-09-02T00:00:00Z"
+  "confirmed_at": "2026-09-06T00:00:00Z",
+  "created_at": "2026-09-06T00:00:00Z"
 }

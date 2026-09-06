@@ -1,5 +1,11 @@
 # Teams Notes
 
+## 2026-09-06 Standalone AgentTeams repository
+
+- Teams 已从 `agent-tui` 源仓库独立为 `AgentTeams`，本地根路径为 `~/code/AgentTeams`，远端为 `https://github.com/Jasonzhangf/AgentTeams.git`。
+- 历史通过子目录迁移保留，`agent-tui` monorepo 路径引用只保留在历史中；当前 active root 使用新仓库根。
+- 旧 `.appsdk` 治理已按 reset 授权作废，当前从独立仓库根重新初始化。
+
 ## 2026-08-31
 
 - 基线：新建 `Teams/` 作为独立 AppSDK 项目；现有 `maui-0830` UI 设计只读复用。

@@ -26,7 +26,7 @@
 
 - Before implementation read the resource, function, mainline, module, and
   verification maps. Bind every change to one feature and one owner.
-- Use one clean worktree below `Teams/playground/` for one semantic milestone.
+- Use one clean worktree below `playground/` for one semantic milestone.
   Keep main and other workers' dirty state untouched.
 - Append exploration, hypothesis, first divergence, intervention, root cause,
   and verification evidence to the current run notes.

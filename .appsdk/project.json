@@ -82,7 +82,7 @@
         "source_id": "project-agents"
       },
       {
-        "contract_path": ".appsdk/guidance/project-guidance.json",
+        "contract_path": ".appsdk/skills/appsdk-project-governance/appsdk-guidance.json",
         "kind": "skill",
         "path": ".appsdk/skills/appsdk-project-governance/SKILL.md",
         "precedence": 200,
@@ -164,9 +164,13 @@
         "allow_skipped": false,
         "command": {
           "args": [
-            "test"
+            "exec",
+            "vitest",
+            "run",
+            "--config",
+            "vitest.config.ts"
           ],
-          "program": "cargo",
+          "program": "pnpm",
           "working_directory": "."
         },
         "input_paths": [

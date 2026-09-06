@@ -80,7 +80,7 @@
   ],
   "questions": [
     {"question_id":"scope-kind","question":"Is this a new project, module refactor, project refactor, or debug task?","status":"answered","answer":"New design project named Teams."},
-    {"question_id":"project-root","question":"Which relative directory is the new AppSDK project root?","status":"answered","answer":"Teams/ at the repository root; its AppSDK project root is Teams/."},
+    {"question_id":"project-root","question":"Which relative directory is the new AppSDK project root?","status":"answered","answer":"AgentTeams repository root; its AppSDK project root is ."},
     {"question_id":"legacy-boundary","question":"Which existing directories remain read-only and outside the new project?","status":"answered","answer":"Existing DSH/OpenCode source, installed profiles, dsh-tui, and maui-0830 remain outside Teams; maui-0830 design files are read-only source evidence only."},
     {"question_id":"new-boundary","question":"Which directories may the new project create or modify?","status":"answered","answer":"Only Teams/** for this design/governance milestone. Runtime code is not started."}
   ],

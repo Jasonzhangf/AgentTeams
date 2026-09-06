@@ -4,3 +4,9 @@
 /active/lib/
 /generated/
 # END APPSDK MANAGED
+
+/node_modules/
+**/node_modules/
+/console-host/lib/
+/opencode-adapter/lib/
+/ui/teams-console/lib/
