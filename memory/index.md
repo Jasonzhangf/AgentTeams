@@ -59,6 +59,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `integration`, `relay`
 - details: [L2/first-wave-library-integration-20260906.md](L2/first-wave-library-integration-20260906.md)
 
+### GoAIChat explicit backup live replay
+- tags: `ai-reviewed`, `backup`, `goaichat`, `human-unreviewed`, `live-replay`, `provider`
+- details: [L2/goaichat-backup-live-20260906.md](L2/goaichat-backup-live-20260906.md)
+
 ### Managed OpenCode daemon wiring
 - tags: `ai-reviewed`, `config`, `daemon`, `human-unreviewed`, `managed-opencode`
 - details: [L2/managed-opencode-daemon-wire-20260906.md](L2/managed-opencode-daemon-wire-20260906.md)
