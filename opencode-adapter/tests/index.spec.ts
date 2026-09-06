@@ -101,16 +101,80 @@ describe('OpenCode Teams adapter', () => {
 
   it('uses the OpenCode SDK for session discovery, focused session, message send, and permission reply', async () => {
     const calls: string[] = []
+    const bodies: unknown[] = []
     const client = { session: {
       list: async () => { calls.push('list'); return { data: [{ id: 'ses_1', title: 'Current' }] } },
       get: async () => { calls.push('get'); return { data: { id: 'ses_1', title: 'Current' } } },
-      prompt: async (input: { path: { id: string }; body: { parts: readonly [{ type: 'text'; text: string }] } }) => { calls.push(`prompt:${input.path.id}:${input.body.parts[0].text}`) },
+      prompt: async (input: { path: { id: string }; body: { parts: readonly [{ type: 'text'; text: string }] } }) => { bodies.push(input.body); calls.push(`prompt:${input.path.id}:${input.body.parts[0].text}`) },
     }, postSessionIdPermissionsPermissionId: async (input: { path: { id: string; permissionID: string }; body: { response: 'once' | 'always' | 'reject' } }) => { calls.push(`permission:${input.path.id}:${input.path.permissionID}:${input.body.response}`) }}
     await expect(listOpenCodeSessions(client)).resolves.toEqual([{ id: 'ses_1', title: 'Current' }])
     await expect(getOpenCodeSession(client, 'ses_1')).resolves.toEqual({ id: 'ses_1', title: 'Current' })
     await sendOpenCodeMessage(client, 'ses_1', 'hello')
     await replyOpenCodePermission(client, 'per_1', 'ses_1', 'once')
     expect(calls).toEqual(['list', 'get', 'prompt:ses_1:hello', 'permission:ses_1:per_1:once'])
+    expect(bodies).toEqual([{ parts: [{ type: 'text', text: 'hello' }] }])
+  })
+
+  it('projects explicit primary and backup targets into the SDK model field', async () => {
+    const bodies: unknown[] = []
+    const client = { session: {
+      prompt: async ({ body }: { body: unknown }) => { bodies.push(body) },
+    }}
+
+    await sendOpenCodeMessage(client as never, 'ses_primary', 'use primary', { providerID: 'rcc-4444', modelID: 'gpt-5.5' })
+    await sendOpenCodeMessage(client as never, 'ses_backup', 'use backup', { providerID: 'goaichat-openai', modelID: 'qwen3.8-max' })
+
+    expect(bodies).toEqual([
+      { parts: [{ type: 'text', text: 'use primary' }], model: { providerID: 'rcc-4444', modelID: 'gpt-5.5' } },
+      { parts: [{ type: 'text', text: 'use backup' }], model: { providerID: 'goaichat-openai', modelID: 'qwen3.8-max' } },
+    ])
+  })
+
+  it('rejects invalid explicit targets before invoking the SDK', async () => {
+    let calls = 0
+    const client = { session: {
+      prompt: async () => { calls += 1 },
+    }}
+
+    await expect(sendOpenCodeMessage(client as never, 'ses_invalid', 'hello', { providerID: ' ', modelID: 'model' })).rejects.toMatchObject({ operation: 'session.prompt', code: 'INVALID_INPUT' })
+    await expect(sendOpenCodeMessage(client as never, 'ses_invalid', 'hello', { providerID: 'provider', modelID: '' })).rejects.toMatchObject({ operation: 'session.prompt', code: 'INVALID_INPUT' })
+    expect(calls).toBe(0)
+  })
+
+  it('rejects non-closed and non-plain explicit targets before invoking the SDK', async () => {
+    let calls = 0
+    const client = { session: {
+      prompt: async () => { calls += 1 },
+    }}
+    const extraSymbol = Symbol('extra')
+    let getterCalls = 0
+    const accessorTarget = Object.defineProperty({ providerID: 'provider', modelID: 'model' }, 'modelID', {
+      enumerable: true,
+      get: () => { getterCalls += 1; return 'model' },
+    })
+    const nonEnumerableTarget = Object.defineProperty({ modelID: 'model' }, 'providerID', {
+      value: 'provider',
+      enumerable: false,
+    })
+    const ClassTarget = class {
+      readonly providerID = 'provider'
+      readonly modelID = 'model'
+    }
+    const invalidTargets: readonly unknown[] = [
+      { providerID: 'provider', modelID: 'model', fallback: 'backup' },
+      Object.assign({ providerID: 'provider', modelID: 'model' }, { [extraSymbol]: true }),
+      ['provider', 'model'],
+      new Date(),
+      new ClassTarget(),
+      accessorTarget,
+      nonEnumerableTarget,
+    ]
+
+    for (const target of invalidTargets) {
+      await expect(sendOpenCodeMessage(client as never, 'ses_invalid', 'hello', target as never)).rejects.toMatchObject({ operation: 'session.prompt', code: 'INVALID_INPUT' })
+    }
+    expect(calls).toBe(0)
+    expect(getterCalls).toBe(0)
   })
 
   it('sorts notifications by priority and acknowledges a pending item', () => {
@@ -353,7 +417,7 @@ describe('OpenCode Teams adapter', () => {
       },
       postSessionIdPermissionsPermissionId: async () => ({ data: undefined, error: { message: 'permission missing' }, response: { status: 404 } }),
     }
-    await expect(sendOpenCodeMessage(client as never, 'ses_upstream', 'hello')).rejects.toMatchObject({ status: 503 })
+    await expect(sendOpenCodeMessage(client as never, 'ses_upstream', 'hello', { providerID: 'provider', modelID: 'model' })).rejects.toMatchObject({ status: 503 })
     await expect(replyOpenCodePermission(client as never, 'per_missing', 'ses_upstream', 'reject')).rejects.toMatchObject({ status: 404 })
   })
 })

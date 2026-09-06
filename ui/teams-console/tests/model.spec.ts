@@ -1,58 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { agents, projectAgentCurrentSessions, projectAgentPresetBindings, projectDshSessionList, projectDshSessions } from '../src/client/model.ts'
+import { modelLabel, projectAgents, projectConfig, projectNotifications, projectSessions, providerLabel } from '../src/client/model.ts'
+import type { ConsoleProjectionV1 } from '../src/client/protocol.ts'
 
-describe('Teams live Agent projection', () => {
-  it('binds a running session only through its explicit host agent identity', () => {
-    const projected = projectAgentCurrentSessions(agents, [
-      { id: 'live-planner', title: 'Live plan', agentId: 'planner', running: true },
-    ])
-    expect(projected.find(agent => agent.id === 'planner')).toMatchObject({
-      currentSessionId: 'live-planner', currentSessionTitle: 'Live plan',
-    })
+const projection: ConsoleProjectionV1 = {
+  version: 1,
+  agents: [{ agentId: 'a', label: 'A', machineId: 'M', presence: 'unknown', capabilities: [], modelId: 'missing-model' }],
+  sessions: [],
+  notifications: [],
+  configs: [{ agentId: 'a', acceptedRevision: 4, providers: [{ id: 'p', label: 'P', protocol: 'openai-chat', apiBaseUrl: 'https://example.invalid/v1', enabled: true, authKind: 'none', catalogState: 'empty', models: [] }] }],
+}
+
+describe('projection mapping', () => {
+  it('preserves unknown Agent presence and never invents counts or provider values', () => {
+    const agent = projectAgents(projection)[0]
+    expect(agent).toEqual(expect.objectContaining({ agentId: 'a', presence: 'unknown', sessionCount: 0, notificationCount: 0 }))
+    expect(agent).not.toHaveProperty('providerId')
   })
 
-  it('does not guess an Agent session from an unrelated or stopped session', () => {
-    const projected = projectAgentCurrentSessions(agents, [
-      { id: 'unrelated', agentId: 'other-agent', running: true },
-      { id: 'stopped-planner', agentId: 'planner', running: false },
-    ])
-    const planner = projected.find(agent => agent.id === 'planner')
-    expect(planner).toBeDefined()
-    expect(planner).not.toHaveProperty('currentSessionId')
-    expect(planner).not.toHaveProperty('currentSessionTitle')
+  it('keeps empty catalogs empty and reports unknown model explicitly', () => {
+    const config = projectConfig(projection, 'a')
+    const provider = config?.providers[0]
+    expect(provider?.models).toEqual([])
+    expect(modelLabel(provider!, 'missing-model')).toBe('Unknown model: missing-model')
   })
 
-  it('keeps the host-selected current session even after it stops running', () => {
-    const projected = projectAgentCurrentSessions(agents, [
-      { id: 'completed-planner', agentId: 'planner', running: false },
-    ], 'completed-planner')
-    expect(projected.find(agent => agent.id === 'planner')).toMatchObject({ currentSessionId: 'completed-planner' })
+  it('projects session and notification arrays without UI-owned mutation', () => {
+    const sessions = projectSessions({ ...projection, sessions: [{ agentId: 'a', sessionId: 's', title: 'S' }] })
+    const notifications = projectNotifications({ ...projection, notifications: [{ agentId: 'a', notificationId: 'n', kind: 'notice', state: 'pending', title: 'N' }] })
+    expect(sessions).toEqual([{ agentId: 'a', sessionId: 's', title: 'S' }])
+    expect(notifications).toEqual([{ agentId: 'a', notificationId: 'n', kind: 'notice', state: 'pending', title: 'N' }])
   })
 
-  it('accepts DSH preset identity only through an explicit host mapping', () => {
-    const projected = projectDshSessions([
-      { id: 'live-planner', agentPreset: 'planner', running: true },
-      { id: 'unknown', agentPreset: 'other', running: true },
-    ], { planner: 'planner' })
-    expect(projected).toEqual([
-      { id: 'live-planner', agentId: 'planner', running: true },
-      { id: 'unknown', running: true },
-    ])
-  })
-
-  it('rejects duplicate preset ownership instead of choosing silently', () => {
-    expect(() => projectAgentPresetBindings([
-      { agentId: 'planner', agentPreset: 'standard' },
-      { agentId: 'reviewer', agentPreset: 'standard' },
-    ])).toThrow(/multiple Agent owners/)
-  })
-
-  it('projects the DSH global session seat without changing ownership', () => {
-    expect(projectDshSessionList({
-      current: 's1',
-      byId: { s1: { id: 's1', agentPreset: 'standard', running: false } },
-    }, [{ agentId: 'planner', agentPreset: 'standard' }])).toEqual([
-      { id: 's1', agentId: 'planner', running: false },
-    ])
+  it('uses provider id when a projected provider label is blank', () => {
+    expect(providerLabel({ id: 'p', label: '  ', protocol: 'openai-chat', apiBaseUrl: 'https://example.invalid', enabled: true, authKind: 'none', catalogState: 'empty', models: [] })).toBe('p')
   })
 })

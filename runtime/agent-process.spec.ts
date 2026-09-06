@@ -8,6 +8,9 @@ import { afterAll, beforeAll, expect, it } from 'vitest'
 import { createRelayServer, type RelayServer } from '../server/relay.ts'
 import { createRelayClient, type RelayClient } from '../network/relay-client.ts'
 import { createWorkChannel } from '../network/work-channel.ts'
+import { createRelayConsoleClient } from './relay-console-client.ts'
+import { createConsoleServer } from '../console-host/src/server.ts'
+import { createConsoleHttpClient } from '../ui/teams-console/src/client/api.ts'
 
 let directory: string
 let relay: RelayServer
@@ -70,7 +73,7 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   writeFileSync(join(directory, 'search', 'sample.txt'), 'process work needle\n')
   const config = { version: 1, identity: { hostId: 'provider', machineId: 'test', agentId: 'provider', accountId: 'account', agentKind: 'custom', label: 'Provider' },
     scopeId: 'scope', dataDirectory: './data', leasePort: await availablePort(), presenceIntervalMs: 1000,
-    policy: { revision: 1, allowedConsumers: ['consumer'] },
+    policy: { revision: 1, allowedConsumers: ['consumer'], allowedManagers: ['consumer'] },
     cli: { camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './search', profilePrefix: 'teams-process-test' },
     relay: { endpoint: relay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: './cert.pem', connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
       requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 } }
@@ -89,6 +92,25 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
       properties: { query: { type: 'string', minLength: 1 }, maxResults: { type: 'integer', minimum: 1 } } },
     outputSchema: { required: ['query', 'status', 'exitCode', 'matches', 'truncated', 'stdout', 'stderr'] },
   })
+  const management = createRelayConsoleClient(consumer, 'provider', 2000)
+  expect((await management.readProjection()).agents[0]).toMatchObject({ agentId: 'provider', presence: 'online', capabilities: ['browser', 'file-search'] })
+  expect(await management.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+  const consoleServer = createConsoleServer({ staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
+    authorize: async request => request.headers.authorization === 'console-test' ? management : undefined })
+  await new Promise<void>(resolve => consoleServer.listen(0, '127.0.0.1', resolve))
+  const consoleUrl = `http://127.0.0.1:${(consoleServer.address() as { port: number }).port}`
+  try {
+    const httpClient = createConsoleHttpClient({ baseUrl: consoleUrl,
+      fetchImpl: (url, init) => fetch(url, { ...init, headers: { ...init?.headers, authorization: 'console-test' } }) })
+    expect((await httpClient.readProjection()).agents[0].agentId).toBe('provider')
+    expect(await httpClient.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+    expect((await fetch(consoleUrl, { headers: { authorization: 'console-test' } })).status).toBe(200)
+  } finally { await new Promise<void>(resolve => consoleServer.close(() => resolve())) }
+  const malformedGrant = await consumer.connect('provider', 1)
+  const malformed = await consumer.openData(malformedGrant)
+  await malformed.send({ bytes: Buffer.from('{"kind":"unrecognized"}'), binary: false })
+  await malformed.closed
+  expect((await management.readProjection()).agents[0].presence).toBe('online')
   const connect = async (generation: number) => {
     const grant = await consumer.connect('provider', generation)
     return createWorkChannel(await consumer.openData(grant), { timeoutMs: 2000, maxPending: 4, maxIncoming: 4 })
@@ -100,8 +122,10 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   await channel.request({ kind: 'work.close', workId: 'work' })
   first.process.kill('SIGTERM')
   expect((await first.exited).code).toBe(0)
+  writeFileSync(path, JSON.stringify({ ...config, policy: { ...config.policy, allowedManagers: [] } }))
   const second = child(path)
   expect(await second.ready).toMatchObject({ generation: 2 })
+  await expect(management.readProjection()).rejects.toMatchObject({ error: { code: 'FORBIDDEN' } })
   const query = await connect(2)
   expect(await query.request({ kind: 'work.get', workId: 'work', requestId: 'request' })).toMatchObject({ control: { state: 'succeeded' } })
   second.process.kill('SIGKILL')

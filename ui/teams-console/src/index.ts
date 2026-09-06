@@ -1,7 +1,5 @@
-/**
- * Host half of the Teams Cordis package.
- *
- * The host owns no UI state. The browser half is discovered through the
- * package's dsh.client declaration.
- */
-export function apply(): void {}
+export { createConsoleHttpClient, ConsoleTransportError } from './client/api.ts'
+export { mountTeamsConsole, TeamsConsoleController } from './client/index.ts'
+export type { ConsoleHttpClientOptions } from './client/api.ts'
+export type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleCommandV1, ConsoleProjectionV1, ConsoleProviderView, JsonValue, ServiceError } from './client/protocol.ts'
+export type { MountTeamsConsoleOptions, MountedTeamsConsole } from './client/index.ts'

@@ -26,13 +26,6 @@ importers:
         version: 4.1.11(@types/node@22.20.1)(vite@8.2.2(@types/node@22.20.1)(yaml@2.9.0))
 
   console-host:
-    dependencies:
-      '@deepseek-ai/teams-opencode-adapter':
-        specifier: file:../opencode-adapter
-        version: link:../opencode-adapter
-      '@opencode-ai/sdk':
-        specifier: 1.18.23
-        version: 1.18.23
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -61,6 +54,18 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+
+  ui/teams-console:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.11(@types/node@22.20.1)(vite@8.2.2(@types/node@22.20.1)(yaml@2.9.0))
 
 packages:
 

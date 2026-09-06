@@ -2,8 +2,9 @@
 
 `startAgentProcess` composes one passive capability Agent with its own durable
 Work ledger, CLI executor and Relay connection. It does not need a Console or
-model provider. Managed OpenCode and the Console API are separate pending
-integration work.
+model provider. Its Console management protocol uses the same Relay data
+connections; managed OpenCode and the standalone Console application remain
+separate pending integration work.
 
 Build with `pnpm build:runtime`; the executable entry is
 `node generated/runtime-lib/runtime/agent-process.js --config /absolute/agent.json`.
@@ -56,6 +57,14 @@ the JSON configuration or business payload. For example:
 must admit the configured identity/account/scope; provider Work admission
 independently requires membership in `policy.allowedConsumers`.
 
+Optional `policy.allowedManagers` lists Agent identities permitted to use the
+Console management protocol in this account/scope. Omission means no managers;
+Work consumption does not grant management authority. The passive process
+projects its actual CLI capabilities and explicitly rejects Session/model
+configuration commands it cannot execute. A malformed or expired data
+connection closes independently, with a diagnostic error code; it does not
+remove the Agent's registration or prove an operation completed.
+
 The loopback `leasePort` must be free and unique on the local machine. The
 kernel releases it when the process exits. `identity.json` binds the data
 directory to the stable identity, scope and lease port; changing these fields
@@ -76,6 +85,8 @@ normal restart; idle crash restart is separately tested.
 
 `runtime/agent-process.spec.ts` exercises a real Node child over local TLS
 Relay: fixed-root search, duplicate process rejection, completed-result
-readback, graceful restart and idle SIGKILL restart. It does not prove public
+readback, graceful restart and idle SIGKILL restart. It also reads management
+projections through Relay, rejects unsupported commands and verifies malformed
+data isolation and management denial independently of Work admission. It does not prove public
 NAT transport, real phone access, active browser recovery or installed Agent
 deployment.
