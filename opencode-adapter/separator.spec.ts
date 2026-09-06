@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const dshAdapter = readFileSync(join('Teams/ui/teams-console/src/client/index.ts'), 'utf8')
-const opencodeAdapter = readFileSync(join('Teams/opencode-adapter/src/index.ts'), 'utf8')
-const dshIdentity = readFileSync(join('Teams/dsh-adapter/agent-identity.ts'), 'utf8')
+const dshAdapter = readFileSync(join(import.meta.dirname, '../ui/teams-console/src/client/index.ts'), 'utf8')
+const opencodeAdapter = readFileSync(join(import.meta.dirname, 'src/index.ts'), 'utf8')
+const dshIdentity = readFileSync(join(import.meta.dirname, '../dsh-adapter/agent-identity.ts'), 'utf8')
 
 describe('DSH and OpenCode adapter separation', () => {
   it('DSH adapter never imports the OpenCode adapter or its types', () => {

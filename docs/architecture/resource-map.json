@@ -3,11 +3,20 @@
   "map_id": "teams-resource-map",
   "status": "partial",
   "resources": [
+    {"resource_id":"development-artifact","owner":"development-governance","kind":"build_artifact","truth_store":"generated/modules/teams-source/lib; current package builds, not a deployed service","allowed_operations":["build","package","verify"]},
+    {"resource_id":"relay-service-capabilities","owner":"server","kind":"control_resource","status":"design","truth_store":"relay service declared directory/broadcast/connection-assistance/STUN/traversal/traffic-relay support","allowed_operations":["declare","authenticate","query"]},
+    {"resource_id":"peer-connection-assistance","owner":"server","kind":"control_resource","status":"design","truth_store":"authorized peer signaling, candidate exchange and relay grants; not proof of peer reachability","allowed_operations":["request","authorize","exchange","expire"]},
+    {"resource_id":"provider-instance-config","owner":"config","kind":"control_resource","status":"design","truth_store":"target daemon durable versioned LLM provider instances; credential references only","allowed_operations":["read","validate","compare_and_swap"]},
+    {"resource_id":"provider-model-catalog","owner":"config","kind":"control_resource","status":"design","truth_store":"per-instance discovered/manual model entries with separate user overrides","allowed_operations":["refresh","read","override","report_error"]},
+    {"resource_id":"capability-descriptor","owner":"agent","kind":"control_resource","status":"design","truth_store":"provider Agent versioned interface/operation declarations","allowed_operations":["declare","publish","read","match"]},
+    {"resource_id":"agent-resource-descriptor","owner":"agent","kind":"control_resource","status":"design","truth_store":"provider Agent resource capacity/unit/sharing declarations","allowed_operations":["declare","publish","read"]},
+    {"resource_id":"agent-resource-allocation","owner":"agent","kind":"control_resource","status":"design","truth_store":"provider Agent atomic resource allocation ledger","allowed_operations":["admit","allocate","observe","release_after_confirmed_completion"]},
+    {"resource_id":"agent-work","owner":"agent","kind":"control_resource","status":"design","truth_store":"provider accepted work and policy; consumer owns its local reference","allowed_operations":["propose","accept","reject","request","close"]},
     {
       "resource_id": "bootstrap-link-config",
       "owner": "network",
       "kind": "control_resource",
-      "truth_store": "daemon bootstrap configuration",
+      "truth_store": "daemon configured relay service URL, Agent identity, credential reference and explicit connection policy",
       "allowed_operations": [
         "read",
         "validate",
@@ -22,7 +31,7 @@
       "resource_id": "shared-runtime-config",
       "owner": "config",
       "kind": "control_resource",
-      "truth_store": "configuration server versioned config",
+      "truth_store": "target daemon durable accepted configuration revision; effective revision separately observed",
       "allowed_operations": [
         "read",
         "validate",
@@ -179,7 +188,7 @@
       "relations": {
         "consumer_reporter": "using_agent",
         "provider_reporter": "used_agent",
-        "graph_projector": "server"
+        "graph_projector": "single pure agent-owned reconciliation implementation consumed as a read-only projection"
       },
       "forbidden_relations": [
         "implied_permission",
@@ -380,7 +389,7 @@
       "resource_id": "account-directory-truth",
       "owner": "network",
       "kind": "control_resource",
-      "truth_store": "Master confirmed account directory snapshot, generation and route plan",
+      "truth_store": "Agent or Console client confirmed directory snapshot and generation; never a resource admission authority",
       "allowed_operations": [
         "login",
         "refresh",
@@ -430,7 +439,7 @@
       "resource_id": "agent-host-target-transport",
       "owner": "network",
       "kind": "control_resource",
-      "truth_store": "network-owned single WebSocket target transport with target generation, health and channel registry",
+      "truth_store": "network-owned target per communicating identity pair/generation over direct or relay; many logical channels",
       "allowed_operations": [
         "dial",
         "hello",

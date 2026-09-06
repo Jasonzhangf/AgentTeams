@@ -2,28 +2,10 @@
   "schema_version": 1,
   "map_id": "teams-module-registry",
   "status": "partial",
-  "external_boundaries": [
-    {
-      "boundary_id": "deepseek-harness-dsh-web-host",
-      "owner": "deepseek-harness",
-      "status": "external",
-      "repository_root": "../deepseek-harness",
-      "allowed_symbols": [
-        "runProfile",
-        "composeProfile",
-        "prepareProfile",
-        "loadProfile",
-        "composeEntries",
-        "boot",
-        "mountRootInclude",
-        "WebServer[Service.init]"
-      ],
-      "forbidden_paths": [
-        "Teams/**"
-      ]
-    }
-  ],
+  "external_boundaries": [],
+  "scope": "Current product architecture. Legacy source remains captured by the AppSDK source module until separately removed.",
   "modules": [
+    {"module_id":"development-governance","owner":"development-governance","status":"implemented","owned_paths":["scripts/**","package.json","pnpm-lock.yaml","pnpm-workspace.yaml","tsconfig.json","vitest.config.ts",".appsdk/project.json",".appsdk/goal.json"],"forbidden_paths":["agent/**","network/**","server/**","config/**"]},
     {
       "module_id": "bootstrap",
       "owner": "bootstrap",
@@ -55,8 +37,7 @@
       "owner": "control-protocol",
       "status": "implemented",
       "owned_paths": [
-        "control-protocol/**",
-        "vitest.config.ts"
+        "control-protocol/**"
       ],
       "forbidden_paths": [
         "agent/**",
@@ -100,8 +81,7 @@
       ],
       "forbidden_paths": [
         "ui/**",
-        "opencode-adapter/**",
-        "dsh-adapter/**"
+        "opencode-adapter/**"
       ]
     },
     {
@@ -180,18 +160,6 @@
       ]
     },
     {
-      "module_id": "dsh-adapter",
-      "owner": "dsh-adapter",
-      "status": "partial",
-      "lifecycle": "deferred",
-      "owned_paths": [
-        "dsh-adapter/**"
-      ],
-      "forbidden_paths": [
-        "opencode-adapter/**"
-      ]
-    },
-    {
       "module_id": "opencode-adapter",
       "owner": "opencode-adapter",
       "status": "implemented",
@@ -199,7 +167,6 @@
         "opencode-adapter/**"
       ],
       "forbidden_paths": [
-        "dsh-adapter/**",
         "ui/**"
       ]
     },

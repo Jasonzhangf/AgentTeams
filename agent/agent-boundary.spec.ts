@@ -17,7 +17,7 @@ const truthPaths = [
 describe('Agent module boundary', () => {
   it('never imports network, config, server, or runtime modules', () => {
     for (const file of agentFiles) {
-      const text = readFileSync(join('Teams/agent', file), 'utf8')
+      const text = readFileSync(join(import.meta.dirname, file), 'utf8')
       for (const path of truthPaths) {
         expect(text.includes(`from '${path}`)).toBe(false)
         expect(text.includes(`from "${path}`)).toBe(false)
@@ -27,7 +27,7 @@ describe('Agent module boundary', () => {
 
   it('exposes only pure functions and types from agent modules', () => {
     for (const file of agentFiles) {
-      const text = readFileSync(join('Teams/agent', file), 'utf8')
+      const text = readFileSync(join(import.meta.dirname, file), 'utf8')
       expect(text.includes('export function')).toBe(true)
       expect(text.includes('class ')).toBe(false)
     }

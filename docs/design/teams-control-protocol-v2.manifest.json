@@ -3,150 +3,32 @@
   "manifest_id": "teams-control-protocol-v2",
   "status": "design",
   "canonical_doc": "docs/design/teams-control-protocol-v2-master-agent-host.md",
-  "owner_modules": [
-    "control-protocol",
-    "network",
-    "agent-host",
-    "master-host",
-    "server",
-    "opencode-adapter",
-    "acp-adapter",
-    "ui"
-  ],
-  "resources": [
-    "bootstrap-link-config",
-    "host-directory-truth",
-    "account-directory-truth",
-    "route-plan",
-    "agent-host-target-transport",
-    "session-channel-registry",
-    "link-state",
-    "account-permission",
-    "server-listener",
-    "discovery-projection",
-    "agent-session-truth",
-    "business-payload",
-    "notification-projection",
-    "console-navigation",
-    "console-settings"
-  ],
+  "owner_modules": ["control-protocol", "network", "agent-host", "master-host", "server", "agent", "config", "runtime", "opencode-adapter", "ui"],
+  "resources": ["bootstrap-link-config", "relay-service-capabilities", "peer-connection-assistance", "host-directory-truth", "account-directory-truth", "route-plan", "agent-host-target-transport", "session-channel-registry", "account-permission", "agent-work", "capability-descriptor", "agent-resource-allocation"],
   "chains": [
-    {
-      "chain_id": "agent-host-registration-v2",
-      "entrypoint": "registerAgentHost",
-      "terminal": "removeStaleHosts",
-      "return_path": "registration-error -> agent-host console"
-    },
-    {
-      "chain_id": "account-directory-refresh-v2",
-      "entrypoint": "createAccountDirectorySnapshot",
-      "terminal": "resolveHostFromDirectory",
-      "return_path": "directory-error -> master console"
-    },
-    {
-      "chain_id": "route-plan-selection-v2",
-      "entrypoint": "buildRoutePlan",
-      "terminal": "succeedRouteCandidate",
-      "return_path": "route-error -> explicit route result"
-    },
-    {
-      "chain_id": "target-transport-and-channel-v2",
-      "entrypoint": "beginTargetTransport",
-      "terminal": "acknowledgeSessionChannelClose",
-      "return_path": "transport-error/channel-error -> session list"
-    },
-    {
-      "chain_id": "control-protocol-schema-v2",
-      "entrypoint": "parseTargetControlFrame",
-      "terminal": "onError",
-      "return_path": "control-protocol-error -> target transport owner"
-    }
+    {"chain_id":"daemon-relay-bootstrap-v2","status":"design"},
+    {"chain_id": "agent-host-registration-v2", "status": "partial"},
+    {"chain_id": "target-transport-and-channel-v2", "status": "partial"},
+    {"chain_id": "agent-work-v1", "status": "design"},
+    {"chain_id": "provider-config-v1", "status": "design"}
   ],
   "boundaries": {
-    "target_control_frames": [
-      "transport.hello",
-      "transport.hello_ack",
-      "transport.ping",
-      "transport.pong",
-      "transport.health",
-      "transport.generation",
-      "transport.capability",
-      "transport.route_info",
-      "transport.error",
-      "channel.open",
-      "channel.open_ack",
-      "channel.close",
-      "channel.close_ack",
-      "channel.error"
-    ],
-    "session_channel_frames": [
-      "session.list",
-      "session.current",
-      "session.open",
-      "session.message",
-      "session.message_delta",
-      "permission.ask",
-      "permission.reply",
-      "notification.upsert",
-      "notification.ack",
-      "relation.report"
-    ],
-    "control_resources": [
-      "bootstrap-link-config",
-      "host-directory-truth",
-      "account-directory-truth",
-      "route-plan",
-      "agent-host-target-transport",
-      "session-channel-registry",
-      "link-state",
-      "account-permission"
-    ],
-    "business_resources": [
-      "agent-session-truth",
-      "business-payload",
-      "notification-projection"
-    ],
-    "ui_resources": [
-      "console-navigation",
-      "console-settings"
-    ],
-    "forbidden_payload_fields": [
-      "machineId",
-      "endpoint",
-      "route",
-      "generation",
-      "health",
-      "authGrant",
-      "permissionDecision",
-      "config",
-      "routing",
-      "retry",
-      "diagnostics"
-    ]
+    "control_state_carriers": ["typed-control-resource", "error-chain"],
+    "business_payload": "typed operation input/output, including legal objects and arrays",
+    "field_name_alone_does_not_determine_control_state": true,
+    "console_required_for_agent_work": false,
+    "session_id_required_for_non_session_work": false
   },
-  "required_gates": [
-    "teams-network-control-boundary",
-    "teams-agent-host-registration",
-    "teams-account-directory-lifecycle",
-    "teams-explicit-route-no-fallback",
-    "teams-transport-control-session-separation",
-    "teams-multiplex-target-reuse",
-    "teams-control-protocol-schema",
-    "teams-session-channel-ordering",
-    "teams-machine-token-auth",
-    "teams-permission-grant-owner",
-    "teams-host-command-no-business-payload"
-  ],
-  "frozen_defaults": {
-    "transport_per_host": "one-healthy-target-transport-per-agent-host",
-    "session_reuse": "logical-session-stable-across-target-reconnect",
-    "directory_refresh_behavior": "future-transports-only",
-    "route_selection": "manual-or-explicit-auto-plan",
-    "auth_mode": [
-      "none",
-      "shared-api-key",
-      "shared-token"
-    ],
+  "required_gates": ["teams-daemon-relay-bootstrap", "teams-network-control-boundary", "teams-agent-host-registration", "teams-explicit-route-no-fallback", "teams-transport-control-session-separation", "teams-multiplex-target-reuse", "teams-machine-token-auth", "teams-agent-work-capacity", "teams-console-offline-work"],
+  "design_defaults": {
+    "daemon_startup": "configured relay service -> login -> declare/broadcast -> directory/discovery -> assisted peer connection",
+    "relay_service_role": "directory, scoped broadcast, connection assistance; declared traversal/STUN/traffic relay capabilities",
+    "transport_scope": "one target per communicating identity pair and generation; many channels",
+    "routes": ["direct", "relay"],
+    "nat": "authenticated outbound relay connections",
+    "console_role": "optional observation/configuration client",
+    "public_unauthenticated_access": false,
+    "automatic_mutation_replay": false,
     "credential_persistence": "opaque-reference-only"
   }
 }

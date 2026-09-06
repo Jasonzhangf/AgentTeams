@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["agent/**/*.ts", "agent-host/**/*.ts", "config/**/*.ts", "control-protocol/**/*.ts", "network/**/*.ts", "runtime/**/*.ts", "server/**/*.ts", "memory-plugin/**/*.ts", "search-plugin/**/*.ts"],
+  "exclude": ["**/*.spec.ts", "**/vitest.config.ts"]
+}

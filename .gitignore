@@ -5,7 +5,10 @@
 /generated/
 # END APPSDK MANAGED
 
+
+
 /node_modules/
+/playground/
 **/node_modules/
 /console-host/lib/
 /opencode-adapter/lib/

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DSH Console · Multi-Agent Topology</title>
+  <title>Teams Console · Multi-Agent Topology</title>
   <style>
     :root {
       --bg: #f6f7f9;
@@ -1457,7 +1457,7 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">D</div>
         <div class="brand-copy">
-          <strong>DSH Console</strong>
+          <strong>Teams Console</strong>
           <span>Multi-Agent Topology</span>
         </div>
       </div>
@@ -1813,7 +1813,7 @@
           statusLabel: "Running",
           model: "deepseek-v4",
           uptime: "12m",
-          cwd: "~/code/dsh",
+          cwd: "~/code/agent-a",
           sessions: [
             { id: "planner-topology", title: "UI topology overview", state: "active", updated: "now", summary: "Designing the multi-agent console surface." },
             { id: "planner-relation", title: "Review relation model", state: "active", updated: "8m", summary: "Comparing peer and master-slave relationship labels." },
@@ -1828,7 +1828,7 @@
           statusLabel: "Waiting for approval",
           model: "deepseek-v4",
           uptime: "7m",
-          cwd: "~/code/dsh",
+          cwd: "~/code/agent-b",
           sessions: [
             { id: "builder-ui", title: "Implement drawer surface", state: "waiting", updated: "2m", summary: "Write access requested for packages/ui." },
             { id: "builder-tests", title: "Run UI regression", state: "completed", updated: "24m", summary: "Static interaction checks passed." }
@@ -1841,7 +1841,7 @@
           statusLabel: "Running",
           model: "deepseek-v4",
           uptime: "4m",
-          cwd: "~/code/dsh",
+          cwd: "~/code/agent-c",
           sessions: [
             { id: "reviewer-relation", title: "Review relation model", state: "active", updated: "8m", summary: "Validating relation labels and navigation." },
             { id: "reviewer-a11y", title: "Check keyboard paths", state: "completed", updated: "32m", summary: "Checked focus restore and Escape handling." }
@@ -1854,7 +1854,7 @@
           statusLabel: "Running",
           model: "deepseek-v4",
           uptime: "36m",
-          cwd: "/workspace/dsh",
+          cwd: "/workspace/agent-a",
           sessions: [
             { id: "runner-web", title: "Run web regression", state: "completed", updated: "5m", summary: "Browser regression suite completed." },
             { id: "runner-contracts", title: "Check API contracts", state: "active", updated: "12m", summary: "Comparing host and console control surfaces." }
@@ -1867,7 +1867,7 @@
           statusLabel: "Offline",
           model: "deepseek-v4",
           uptime: "18m",
-          cwd: "/workspace/dsh",
+          cwd: "/workspace/agent-b",
           sessions: [
             { id: "release-prepare", title: "Prepare release artifact", state: "error", updated: "18m", summary: "Heartbeat stopped before artifact upload." }
           ]
@@ -1879,7 +1879,7 @@
           statusLabel: "Offline",
           model: "deepseek-v4",
           uptime: "1h",
-          cwd: "/srv/dsh",
+          cwd: "/srv/agent-a",
           sessions: [
             { id: "research-last", title: "Index repository context", state: "completed", updated: "1h", summary: "Last public session before the host went offline." }
           ]
@@ -1891,7 +1891,7 @@
           statusLabel: "Offline",
           model: "deepseek-v4",
           uptime: "1h",
-          cwd: "/srv/dsh",
+          cwd: "/srv/agent-b",
           sessions: [
             { id: "indexer-last", title: "Refresh session index", state: "completed", updated: "1h", summary: "Indexed the last available session range." }
           ]
@@ -1903,7 +1903,7 @@
           statusLabel: "Offline",
           model: "deepseek-v4",
           uptime: "1h",
-          cwd: "/srv/dsh",
+          cwd: "/srv/agent-c",
           sessions: [
             { id: "archive-last", title: "Store session archive", state: "completed", updated: "1h", summary: "Archived the last synchronized transcript." }
           ]
@@ -1986,7 +1986,7 @@
           title: "Implement drawer surface",
           mode: "waiting",
           messages: [
-            { role: "user", name: "Jason", text: "Implement the session drawer using the existing DSH interaction model." },
+            { role: "user", name: "Jason", text: "Implement the session drawer using the Teams interaction model." },
             { role: "assistant", name: "builder", text: "The drawer surface is ready. I need write access before continuing." },
             { role: "approval", name: "Approval required", text: "Write access requested for packages/ui." }
           ]

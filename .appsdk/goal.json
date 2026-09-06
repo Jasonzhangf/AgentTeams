@@ -1,28 +1,20 @@
 {
-  "goal_id": "goal-teams-multi-agent-console",
-  "raw_request": "将 Teams 从 agent-tui 源仓库独立到 AgentTeams，并按 AppSDK 0.1.6 从新仓库根重新治理。",
-  "understood_objective": "交付独立 AgentTeams 仓库，保留 Teams 源码和相关提交历史，以 OpenCode 为首要宿主，继续开发跨机器、多 Agent 的 Master Console Host、Agent Host、控制协议、网络、通知、搜索、记忆和共享桌面/手机界面。",
+  "goal_id": "agentteams-development-governance-reset",
+  "raw_request": "reset appsdk,从头开始建立appsdk开发管控",
+  "understood_objective": "Rebuild AgentTeams development governance in an isolated worktree, preserving accepted architecture and replacing inherited placeholder and parent-repository assumptions with real local validation and artifact production.",
   "acceptance_criteria": [
-    "本地项目根为 ~/code/AgentTeams，仓库根直接包含 Teams 源码而不再包含 Teams/ 前缀。",
-    "远端为 https://github.com/Jasonzhangf/AgentTeams.git，main 包含独立仓库历史和当前源码。",
-    "旧 AppSDK 治理已作废，新的唯一 active governance root 为仓库根 .appsdk。",
-    "AppSDK 0.1.6 project_id=teams、module=teams-design、goal 和源码边界绑定并通过 verify/compile。",
-    "OpenCode-first、控制面与业务 payload 隔离、单 owner 和显式失败边界保持不变。"
+    "Initialize current official AppSDK resources without reusing historical admission records.",
+    "Bind project architecture maps, ownership, real test/build commands and compiled artifacts.",
+    "Run the complete existing test inventory, current standalone typechecks and package builds.",
+    "Compile Guidance and AppSDK and verify contracts; governance validation is not runtime readiness.",
+    "Review the validated candidate; preserve main and other worktrees. Commit, merge and deployment are separate delivery states."
   ],
-  "non_goals": [
-    "本次不从源 agent-tui 仓库删除历史 Teams 路径。",
-    "本次不新增 DSH runtime 适配。",
-    "本次不伪造 review、freeze、runtime install 或 live replay 证据。"
-  ],
-  "assumptions": [
-    "AgentTeams 是独立仓库，所有后续 worktree 位于其 playground/ 下。",
-    "network 负责链路和 transport，server 负责 discovery/admission/route publication，runtime 编排 daemon 与 network 生命周期。",
-    "Desktop 和 mobile 共享语义组件，只由 layout adapter 区分排版。"
-  ],
+  "non_goals": ["Implement daemon, relay, resource scheduling or provider runtime in this reset.", "Publish or freeze a runtime release.", "Reuse or build the retired host UI as the new Console.", "Modify credential stores or upstream providers."],
+  "assumptions": ["One source admission unit contains existing code; semantic ownership stays in docs/architecture/module-registry.json.", "Console is optional; passive capability Agents and one-to-many work are first-class.", "First release includes public network, NAT and relay; live runtime gates remain pending."],
   "ambiguities": [],
   "questions": [],
   "status": "confirmed",
-  "confirmed_by": "Jason",
+  "confirmed_by": "user",
   "confirmed_at": "2026-09-06T00:00:00Z",
   "created_at": "2026-09-06T00:00:00Z"
 }

@@ -3,11 +3,21 @@
   "map_id": "teams-verification-map",
   "status": "partial",
   "gates": [
+    {"gate_id":"teams-compiled-library-smoke","status":"active","required":true,"command":"pnpm smoke","checks":["compiled library byte identity with packaged files","real localhost HTTP health/static/error paths","not provider, daemon or deployed cross-device evidence"]},
+    {"gate_id":"teams-source-regression","status":"active","required":true,"command":"pnpm test","checks":["all 33 existing test files, including retained legacy boundary tests","minimum 128 cases; no skipped tests","repository-local paths and dependency build"]},
+    {"gate_id":"teams-source-typecheck","status":"active","required":true,"command":"pnpm typecheck","checks":["core source and current Console/OpenCode packages","retired host UI build excluded from current product; its existing tests remain included"]},
+    {"gate_id":"teams-source-artifact","status":"active","required":true,"command":"appsdk compile","checks":["real Console/OpenCode compiled libraries and static assets","no placeholder artifact","source hashes exclude installed dependencies and generated outputs"]},
+    {"gate_id":"teams-daemon-relay-bootstrap","status":"design","required":true,"checks":["daemon uses configured relay endpoint without Console","login before publication; no fake presence after rejection","scoped broadcast and directory query preserve identity/revision/freshness","connection assistance never substitutes for Agent resource permission","declared STUN/traversal capabilities report unavailable explicitly","STUN mapping and actual target reachability verified separately","restart/re-login does not duplicate identity"]},
+    {"gate_id":"teams-provider-config-catalog","status":"design","required":true,"checks":["same-protocol instances stay isolated","refresh preserves overrides/manual entries","401/403 and empty catalogs explicit","credentials never in shared config or payload"]},
+    {"gate_id":"teams-provider-config-effective","status":"design","required":true,"checks":["daemon durable CAS rejects concurrent Console conflict","accepted/effective revisions separated","RCC and explicit backup verified through OpenCode","passive agents need no LLM config"]},
+    {"gate_id":"teams-agent-work-capacity","status":"design","required":true,"checks":["provider atomically admits allocations","two consumers share capacity; overflow rejects","one consumer uses multiple capabilities","confirmed completion/cancel releases resources","restart and duplicates do not overallocate"]},
+    {"gate_id":"teams-console-offline-work","status":"design","required":true,"checks":["all Consoles closed while Agent work completes","another Console observes accepted config/work state","direct and NAT relay verified separately","Console never required in Agent-to-Agent path"]},
+    {"gate_id":"teams-passive-cli-agent","status":"design","required":true,"checks":["browser CLI capability without LLM matches consumer adapter","version/schema mismatch explicit","no arbitrary remote shell command","CLI error/output semantics preserved"]},
     {
       "gate_id": "teams-appsdk-verify",
       "status": "active",
       "required": true,
-      "command": "appsdk verify Teams",
+      "command": "appsdk verify",
       "checks": [
         "project contract",
         "goal confirmation",
@@ -107,7 +117,7 @@
       "status": "partial",
       "required": true,
       "checks": [
-        "server owns capability policy and permission decision audit",
+        "server owns network/account admission; provider Agent owns capability policy and execution admission",
         "network does not duplicate admission truth",
         "credential admission and default observe policy tests"
       ]
@@ -122,7 +132,7 @@
         "configured sender and receiver credentials must match",
         "credential mismatch is distinct from transport failure",
         "credential is absent from business payload and metadata",
-        "Teams UI source files never carry password/secret/apikey/bearer/token strings",
+        "UI projections never expose credential values; credential input uses its dedicated owner",
         "host-boundary.spec asserts UI never holds credentials",
         "network/link.ts owns resolveBootstrapLinkConfig and connectLink with explicit auth modes"
       ]
@@ -132,7 +142,7 @@
       "status": "partial",
       "required": true,
       "checks": [
-        "server owns capability policy",
+        "provider Agent owns capability policy; server transport grant is insufficient to execute",
         "UI cannot imply authority from relation or drawer state",
         "default policy is least privilege",
         "server/admission.ts owns authenticateMachine, evaluatePermission, and registerRuntimeConnection",
@@ -277,17 +287,6 @@
       ]
     },
     {
-      "gate_id": "teams-dsh-slot-contract",
-      "status": "partial",
-      "required": false,
-      "lifecycle": "deferred",
-      "checks": [
-        "DSH adapter declares dsh.client and slots",
-        "focused session reuses Conversation owner",
-        "runtime slot registration verified in installed DSH boot manifest"
-      ]
-    },
-    {
       "gate_id": "teams-opencode-hook-contract",
       "status": "partial",
       "required": true,
@@ -302,29 +301,15 @@
       ]
     },
     {
-      "gate_id": "teams-dsh-opencode-adapter-separation",
-      "status": "partial",
-      "required": false,
-      "lifecycle": "deferred",
-      "checks": [
-        "DSH uses ClientContext/Slots",
-        "OpenCode uses PluginInput/Hooks/SDK",
-        "shared types do not imply shared host mounting",
-        "DSH adapter and dsh-adapter/agent-identity do not import opencode-adapter or any OpenCode type",
-        "opencode-adapter does not import any @deepseek-ai/dsh-client-ui or client-runtime type",
-        "separator.spec covers both directions"
-      ]
-    },
-    {
       "gate_id": "teams-projection-no-truth-ownership",
       "status": "partial",
       "required": true,
       "checks": [
         "UI consumes projections",
         "UI does not own network/config/server/session truth",
-        "Teams UI does not import network, config, server, agent, runtime, search-plugin, memory-plugin, or dsh-adapter/agent-identity modules",
+        "Teams UI does not import network, config, server, agent, runtime, search-plugin or memory-plugin truth modules",
         "controller never calls sessions.open or writes localStorage directly",
-        "dsh-adapter.spec and projection.spec cover the boundary"
+        "projection tests cover the boundary; migrated host bindings need updated tests"
       ]
     },
     {
@@ -363,23 +348,10 @@
       "checks": [
         "mobile and desktop share capability semantics",
         "high-risk actions show target and explicit confirmation",
-        "confirmation does not replace server permission decision",
+        "confirmation does not replace provider Agent permission decision",
         "Teams surface owns no high-risk primitive of its own",
         "Memory/Search high-risk flows stay inside their respective plugin owners",
-        "Server permission decision remains authoritative"
-      ]
-    },
-    {
-      "gate_id": "teams-dsh-conversation-reuse",
-      "status": "partial",
-      "required": false,
-      "lifecycle": "deferred",
-      "checks": [
-        "focused session uses existing Conversation",
-        "no second transcript implementation",
-        "Teams surface forwards sessions.open and never reads transcript/draft/queue/approval",
-        "Teams surface never imports ui-conversation",
-        "dsh-adapter.spec asserts openDshSession and openCurrentAgentSession delegate only to the DSH session owner"
+        "Server transport admission and Agent execution permission are independently authoritative"
       ]
     },
     {
@@ -394,20 +366,7 @@
         "approval entry",
         "no overflow",
         "desktop/mobile live page exposes five entries and notification drawer",
-        "session composer remains DSH-owned and is not duplicated"
-      ]
-    },
-    {
-      "gate_id": "teams-dsh-live-smoke",
-      "status": "partial",
-      "required": false,
-      "lifecycle": "deferred",
-      "checks": [
-        "installed DSH adapter connects and opens current session",
-        "DSH profile binds HTTP 3187 and serves Teams client module",
-        "sidebar entry opens Teams overlay",
-        "Host agent identity producer external binding is installed",
-        "current-session bridge browser confirmation remains unverified"
+        "Teams owns presentation; OpenCode owns Session execution and persistence"
       ]
     },
     {
