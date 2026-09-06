@@ -23,3 +23,13 @@ failure. The final response supersedes that initial procedural interpretation.
 
 No product runtime, stage delivery or worktree/resource cleanup is declared
 complete by this review. The primary remains the sole project-memory writer.
+
+## Primary review after user clarification
+
+The user clarified that completed tests are facts and the primary may review
+their evidence and promote memory, tagged as not yet reviewed by a human.
+The primary checked the revised entry against that direct instruction, the
+successful validation in `validation.md`, current Git state, worktree inventory,
+`get_goal` and the automation configuration. Factual review PASS on 2026-09-06.
+The updated entry must carry `ai-reviewed` and `human-unreviewed`. Independent
+agent review above is historical evidence, not a future promotion prerequisite.
