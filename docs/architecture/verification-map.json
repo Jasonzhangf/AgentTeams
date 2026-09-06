@@ -4,7 +4,7 @@
   "status": "partial",
   "gates": [
     {"gate_id":"teams-compiled-library-smoke","status":"active","required":true,"command":"pnpm smoke","checks":["compiled library byte identity with packaged files","real localhost HTTP health/static/error paths","not provider, daemon or deployed cross-device evidence"]},
-    {"gate_id":"teams-source-regression","status":"active","required":true,"command":"pnpm test","checks":["all 33 existing test files, including retained legacy boundary tests","minimum 142 cases; no skipped tests","repository-local paths and dependency build"]},
+    {"gate_id":"teams-source-regression","status":"active","required":true,"command":"pnpm test","checks":["all 33 existing test files, including retained legacy boundary tests","minimum 143 cases; no skipped tests","repository-local paths and dependency build"]},
     {"gate_id":"teams-source-typecheck","status":"active","required":true,"command":"pnpm typecheck","checks":["core source and current Console/OpenCode packages","retired host UI build excluded from current product; its existing tests remain included"]},
     {"gate_id":"teams-source-artifact","status":"active","required":true,"command":"appsdk compile","checks":["real Console/OpenCode compiled libraries and static assets","no placeholder artifact","source hashes exclude installed dependencies and generated outputs"]},
     {"gate_id":"teams-daemon-relay-bootstrap","status":"design","required":true,"checks":["daemon uses configured relay endpoint without Console","login before publication; no fake presence after rejection","scoped broadcast and directory query preserve identity/revision/freshness","connection assistance never substitutes for Agent resource permission","declared STUN/traversal capabilities report unavailable explicitly","STUN mapping and actual target reachability verified separately","restart/re-login does not duplicate identity"]},
@@ -338,6 +338,8 @@
       "required": true,
       "checks": [
         "Agent Card primary action opens current session directly",
+        "Console never selects the first session; read-only Agent Host selection is validated against that Agent's session list",
+        "unknown selection prevents prototype message dispatch; stale selection and host-read failure remain errors",
         "live current session binds only through explicit host agentId and host-selected current session or running state",
         "session list is secondary detail action",
         "controller and sessions.open bridge are unit-tested",

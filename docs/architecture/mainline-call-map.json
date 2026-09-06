@@ -16,6 +16,7 @@
     {"chain_id": "agent-work-v1", "status": "design", "steps": ["provider publication", "consumer match", "provider admission", "request", "resource allocation", "execution", "result", "release"]}
   ],
   "edges": [
+    {"chain_id":"console-http-prototype","owner":"master-host","caller":"projectConsoleHost / currentSessionId","callee":"readSelectedSession -> options.readCurrentSession","path":"console-host/src/index.ts","status":"partial","note":"Agent Host owns selection; missing binding returns unknown, stale selection rejects; real daemon binding remains pending"},
     {"chain_id":"protocol-json-boundary","owner":"control-protocol","caller":"parseSessionChannelFrame","callee":"assertJsonValue","path":"control-protocol/frames.ts","status":"implemented"},
     {"chain_id":"protocol-json-boundary","owner":"control-protocol","caller":"validateAgentMessage","callee":"assertJsonValue","path":"control-protocol/agent-message.ts","status":"implemented"},
     {"chain_id": "daemon-start-v1", "owner": "runtime", "caller": "startDaemonRuntime", "callee": "connectLink", "path": "runtime/daemon-runtime.ts", "status": "partial", "note": "connectLink currently returns state without network I/O"},

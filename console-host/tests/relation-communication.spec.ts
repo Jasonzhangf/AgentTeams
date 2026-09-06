@@ -39,13 +39,15 @@ function testUpstream(sessions: readonly Record<string, unknown>[]): Promise<Tes
 describe('Teams Console Host relation and agent message relay', () => {
   it('stores relation reports and relays an agent message through the master host', async () => {
     const alpha = await testUpstream([{ id: 'ses_alpha', title: 'Alpha session' }])
-    const beta = await testUpstream([{ id: 'ses_beta', title: 'Beta session' }])
+    const beta = await testUpstream([{ id: 'wrong_first' }, { id: 'ses_beta', title: 'Beta session' }])
+    let selectedSession: string | undefined = 'ses_beta'
     const console = createConsoleHost({
       agents: [
         { agentId: 'agent-alpha', machineId: 'machine-alpha', label: 'Alpha', openCodeUrl: `http://127.0.0.1:${alpha.port}` },
         { agentId: 'agent-beta', machineId: 'machine-beta', label: 'Beta', openCodeUrl: `http://127.0.0.1:${beta.port}` },
       ],
       staticRoot: '.',
+      readCurrentSession: async agentId => agentId === 'agent-beta' ? selectedSession : undefined,
     })
     await new Promise<void>(resolve => console.listen(0, '127.0.0.1', () => { resolve() }))
     const address = console.address()
@@ -93,6 +95,14 @@ describe('Teams Console Host relation and agent message relay', () => {
       expect(projection.relations[0].consistency).toBe('matched')
       expect(projection.messages).toHaveLength(1)
       expect(beta.calls.some(call => call.includes('/prompt_async') || call.includes('/session/ses_beta'))).toBe(true)
+      expect(beta.calls.some(call => call.includes('/session/wrong_first'))).toBe(false)
+      const promptsBefore = beta.calls.filter(call => call.includes('/prompt')).length
+      selectedSession = undefined
+      await expect(postJson(`${base}/api/agent-message`, {
+        messageId: 'msg-unknown', relationId: 'rel-1', fromAgentId: 'agent-alpha', toAgentId: 'agent-beta',
+        message: { kind: 'notify', correlationId: 'c-unknown', payload: { text: 'must not send' } },
+      })).rejects.toThrow(/no current session/)
+      expect(beta.calls.filter(call => call.includes('/prompt'))).toHaveLength(promptsBefore)
     } finally {
       await new Promise<void>(resolve => console.close(() => { resolve() }))
       await alpha.close()
