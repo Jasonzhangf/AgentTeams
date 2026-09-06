@@ -1,0 +1,79 @@
+
+ RUN  v4.1.11 /Volumes/extension/code/AgentTeams/playground/p0-session-20260906
+
+ ❯ console-host/tests/index.spec.ts (3 tests | 2 failed) 29ms
+     × projects OpenCode sessions through the host boundary 20ms
+     × uses only the owning host selection, independent of list ordering 6ms
+ ❯ console-host/tests/relation-communication.spec.ts (1 test | 1 failed) 35ms
+     × stores relation reports and relays an agent message through the master host 35ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  console-host/tests/index.spec.ts > Teams standalone Console Host > projects OpenCode sessions through the host boundary
+AssertionError: expected [ { agentId: 'opencode-local', …(4) } ] to deeply equal [ { agentId: 'opencode-local', …(3) } ]
+
+- Expected
++ Received
+
+@@ -1,8 +1,9 @@
+  [
+    {
+      "agentId": "opencode-local",
++     "currentSessionId": "ses_host",
+      "label": "OpenCode",
+      "machineId": "local",
+      "sessionIds": [
+        "ses_host",
+      ],
+
+ ❯ console-host/tests/index.spec.ts:21:31
+     19|     })
+     20|     expect(projection.sessions).toEqual([{ id: 'ses_host', title: 'Hos…
+     21|     expect(projection.agents).toEqual([{ agentId: 'opencode-local', ma…
+       |                               ^
+     22|     await new Promise<void>(resolve => upstream.close(() => { resolve(…
+     23|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  console-host/tests/index.spec.ts > Teams standalone Console Host > uses only the owning host selection, independent of list ordering
+AssertionError: expected 'first' to be 'selected' // Object.is equality
+
+Expected: "selected"
+Received: "first"
+
+ ❯ console-host/tests/index.spec.ts:42:53
+     40|         return 'selected'
+     41|       } })
+     42|       expect(projection.agents[0].currentSessionId).toBe('selected')
+       |                                                     ^
+     43|       expect((await projectConsoleHost({ ...options, readCurrentSessio…
+     44|       await expect(projectConsoleHost({ ...options, readCurrentSession…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  console-host/tests/relation-communication.spec.ts > Teams Console Host relation and agent message relay > stores relation reports and relays an agent message through the master host
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ console-host/tests/relation-communication.spec.ts:96:109
+     94|       expect(projection.relations[0].consistency).toBe('matched')
+     95|       expect(projection.messages).toHaveLength(1)
+     96|       expect(beta.calls.some(call => call.includes('/prompt_async') ||…
+       |                                                                                                             ^
+     97|       expect(beta.calls.some(call => call.includes('/session/wrong_fir…
+     98|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 1 passed (4)
+   Start at  21:58:43
+   Duration  242ms (transform 73ms, setup 0ms, import 164ms, tests 64ms, environment 0ms)
+

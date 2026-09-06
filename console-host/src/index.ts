@@ -10,6 +10,8 @@ export interface ConsoleHostOptions {
   readonly agents: readonly ConsoleHostAgentConfig[]
   readonly port?: number
   readonly staticRoot: string
+  /** Read-only projection from the owning Agent Host; absence means unknown. */
+  readonly readCurrentSession?: (agentId: string) => Promise<string | undefined>
 }
 
 export interface ConsoleHostAgentConfig {
@@ -185,18 +187,19 @@ export async function projectConsoleHost(options: ConsoleHostOptions): Promise<C
       fetchSessions(agent.agentId, agent.openCodeUrl),
       fetchPermissions(agent.agentId, agent.openCodeUrl),
     ])
-    return { agent, sessions, notifications }
+    const currentSessionId = await readSelectedSession(options, agent.agentId, sessions)
+    return { agent, sessions, notifications, currentSessionId }
   }))
   const sessions = perAgent.flatMap(entry => entry.sessions)
   const notifications = perAgent.flatMap(entry => entry.notifications)
-  const agents = perAgent.map(({ agent, sessions: agentSessions }) => {
+  const agents = perAgent.map(({ agent, sessions: agentSessions, currentSessionId }) => {
     const sessionIds = agentSessions.map(session => session.id)
     return {
       agentId: agent.agentId,
       machineId: agent.machineId,
       label: agent.label,
       sessionIds,
-      ...(sessionIds[0] === undefined ? {} : { currentSessionId: sessionIds[0] }),
+      ...(currentSessionId === undefined ? {} : { currentSessionId }),
     }
   })
   return { sessions, agents, notifications, relations: [], messages: [] }
@@ -245,13 +248,22 @@ function listRelationEdges(runtime: ConsoleHostRuntime): readonly ConsoleHostRel
   return [...runtime.relations.entries()].map(([relationId, pair]) => projectRelationEdge(relationId, pair.consumer, pair.provider))
 }
 
+async function readSelectedSession(options: ConsoleHostOptions, agentId: string, sessions: readonly ConsoleHostSession[]): Promise<string | undefined> {
+  const selected = await options.readCurrentSession?.(agentId)
+  if (selected === undefined) return undefined
+  if (typeof selected !== 'string' || selected.length === 0 || !sessions.some(session => session.agentId === agentId && session.id === selected)) {
+    throw new Error(`console-host: selected session ${String(selected)} is missing for agent ${agentId}`)
+  }
+  return selected
+}
+
 async function currentSessionId(options: ConsoleHostOptions, agentId: string): Promise<string> {
   const resolved = resolveConsoleHostOptions(options)
   const agent = findAgent(resolved.agents, agentId)
   const sessions = await fetchSessions(agent.agentId, agent.openCodeUrl)
-  const current = sessions[0]
+  const current = await readSelectedSession(options, agentId, sessions)
   if (current === undefined) throw new Error(`console-host: agent ${agentId} has no current session`)
-  return current.id
+  return current
 }
 
 function formatAgentMessageText(fromAgentId: string, toAgentId: string, message: AgentMessage): string {

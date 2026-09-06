@@ -61,6 +61,11 @@ Provider CRUD/模型刷新不实现推理请求栈；凭据通过独立 owner �
 
 主任务：公共类型/协议验证、legacy payload 数组/字段误拒绝、Session 明确选择、N2、集成。
 
+当前 Session 由 Agent Host 拥有。Console 的 `readCurrentSession(agentId)` 仅提供
+只读投影入口，返回明确 Session ID 或 undefined（未知）；列表顺序不代表当前选择。
+选择必须属于目标 Agent 当前列表，失效/读取失败显式报错。未知状态下需要当前 Session
+的操作拒绝执行；显式携带 Session ID 的操作仍使用其目标。真实 daemon 绑定在 N2/I1 接入。
+
 业务 JSON 的字段名不能用于推断控制意图：例如浏览器返回的 `config`、`token` 或
 `route` 属性必须保留，数组同样保留。控制状态只读协议声明的外层字段和专用资源；
 外层未声明字段显式拒绝，不能把业务体塞进控制帧，也不能从业务体补齐缺失 generation。

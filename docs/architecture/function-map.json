@@ -3,6 +3,7 @@
   "map_id": "teams-function-map",
   "status": "partial",
   "functions": [
+    {"function_id":"host_current_session_projection","owner":"master-host","status":"partial","paths":["console-host/src/index.ts"],"entry_symbols":["projectConsoleHost","relayConsoleHostAgentMessage"],"required_gates":["teams-current-session-fast-path"],"note":"readCurrentSession is a read-only Agent Host port; binding absent means unknown, never the first list entry"},
     {"function_id":"agent_service_contracts_r1","owner":"control-protocol","status":"design","paths":["control-protocol/agent-services.ts"],"entry_symbols":[],"design_doc":"docs/design/teams-service-contracts-r1.md","required_gates":["teams-source-typecheck"]},
     {"function_id":"development_regression_gate","owner":"development-governance","status":"implemented","paths":["scripts/regression.mjs","vitest.config.ts",".appsdk/project.json"],"entry_symbols":[],"required_gates":["teams-source-regression"]},
     {"function_id":"compiled_library_http_smoke","owner":"development-governance","status":"implemented","paths":["scripts/artifact-smoke.mjs"],"entry_symbols":[],"required_gates":["teams-compiled-library-smoke"]},
