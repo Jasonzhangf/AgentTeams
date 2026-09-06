@@ -9,6 +9,9 @@ assert.deepEqual(readFileSync(resolve(root, 'console-host/lib/index.mjs')), read
 assert.deepEqual(readFileSync(resolve(root, 'opencode-adapter/lib/index.mjs')), readFileSync(resolve(artifact, 'opencode-adapter/index.mjs')))
 assert.deepEqual(readFileSync(resolve(root, 'ui/teams-console/lib/index.js')), readFileSync(resolve(artifact, 'ui/index.js')))
 assert.deepEqual(readFileSync(resolve(root, 'ui/teams-console/assets/agentbrowser-icon.jpg')), readFileSync(resolve(artifact, 'ui/assets/agentbrowser-icon.jpg')))
+assert.deepEqual(JSON.parse(readFileSync(resolve(artifact, 'package.json'), 'utf8')), {
+  name: 'agentteams-runtime-artifact', version: '0.1.0', private: true, type: 'module', dependencies: { ws: '8.21.3' },
+})
 const { createConsoleServer } = await import(pathToFileURL(resolve(artifact, 'console-host/index.mjs')).href)
 const consoleUi = await import(pathToFileURL(resolve(artifact, 'ui/index.js')).href)
 const browserUi = await import(pathToFileURL(resolve(artifact, 'ui/browser.js')).href)
