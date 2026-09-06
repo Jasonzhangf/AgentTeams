@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-09-06T09:37:19.747799+00:00","id":"rcc-managed-live-20260906","importance":0,"memory_level":2,"review_evidence":["AGY:agentteams-rcc-evidence-20260906-r1;commit:98f6e1c;docs:evidence/rcc-managed-live-20260906.md"],"review_status":"reviewed","source_refs":[],"tags":["ai-reviewed","human-unreviewed","live-replay","managed-opencode","rcc"],"updated_at":"2026-09-06T09:37:37.733700+00:00"} -->
+
+# RCC 4444 managed OpenCode live replay
+
+2026-09-06 primary Session evidence: direct POST to local RCC http://127.0.0.1:4444/v1/chat/completions with requested model gpt-5.5 returned HTTP 200 and assistant text teams-rcc-probe; RCC response model was gpt-5.6-sol, so Teams must retain its configured provider/model target and never infer binding from response model. Through a managed OpenCode 1.18.23 child, Teams applied explicit {providerID:rcc-4444,modelID:gpt-5.5}, created a real Session, sent a message, and received teams-rcc-teams-probe; effectiveRevision=1. Evidence: docs/evidence/rcc-managed-live-20260906.md; commit 98f6e1c. Limits: primary Session only; no tool/approval, goaichat backup, hidden fallback, public NAT, direct Agent-to-Agent, phone, or crash recovery evidence.
+<!-- project-memory:end -->
