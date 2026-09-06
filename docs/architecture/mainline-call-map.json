@@ -5,6 +5,7 @@
   "status": "partial",
   "note": "Current source edges and planned operations are separate. Design steps are not implemented symbols.",
   "chains": [
+    {"chain_id":"protocol-json-boundary","status":"implemented","steps":["parseTargetControlFrame or parseSessionChannelFrame","validate declared envelope fields","validateAgentMessage when applicable","assertJsonValue preserves business content; never derive control state from payload"]},
     {"chain_id":"development-validation-v1","status":"implemented","steps":["pnpm install --frozen-lockfile","pnpm test","pnpm typecheck","appsdk guide compile","appsdk compile","pnpm smoke","appsdk verify","review validated candidate"]},
     {"chain_id":"daemon-relay-bootstrap-v2","status":"design","steps":["load configured relay endpoint/identity","connect","login","register and broadcast capability/resource/presence","query/subscribe directory","request peer connection assistance","verify target hello","Agent Work matching"]},
     {"chain_id": "daemon-start-v1", "status": "partial", "entry_symbol": "startDaemonRuntime", "terminal_symbol": "syncSharedRuntimeConfig"},
@@ -15,6 +16,8 @@
     {"chain_id": "agent-work-v1", "status": "design", "steps": ["provider publication", "consumer match", "provider admission", "request", "resource allocation", "execution", "result", "release"]}
   ],
   "edges": [
+    {"chain_id":"protocol-json-boundary","owner":"control-protocol","caller":"parseSessionChannelFrame","callee":"assertJsonValue","path":"control-protocol/frames.ts","status":"implemented"},
+    {"chain_id":"protocol-json-boundary","owner":"control-protocol","caller":"validateAgentMessage","callee":"assertJsonValue","path":"control-protocol/agent-message.ts","status":"implemented"},
     {"chain_id": "daemon-start-v1", "owner": "runtime", "caller": "startDaemonRuntime", "callee": "connectLink", "path": "runtime/daemon-runtime.ts", "status": "partial", "note": "connectLink currently returns state without network I/O"},
     {"chain_id": "daemon-start-v1", "owner": "runtime", "caller": "startDaemonRuntime", "callee": "registerRuntimeConnection", "path": "runtime/daemon-runtime.ts", "status": "partial"},
     {"chain_id": "daemon-start-v1", "owner": "runtime", "caller": "startDaemonRuntime", "callee": "syncSharedRuntimeConfig", "path": "runtime/daemon-runtime.ts", "status": "partial"},

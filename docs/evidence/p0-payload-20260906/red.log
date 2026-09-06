@@ -1,0 +1,188 @@
+
+ RUN  v4.1.11 /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906
+
+ ❯ control-protocol/frames.spec.ts (12 tests | 5 failed) 7ms
+     × preserves business metadata without using it as transport generation 2ms
+     × preserves business object keys instead of guessing control intent 0ms
+     × accepts agent.message with opaque business payload 1ms
+     × rejects business payload placed on a control frame 1ms
+     × rejects unknown envelope fields instead of silently accepting them 0ms
+ ❯ control-protocol/agent-message.spec.ts (13 tests | 11 failed) 15ms
+     × preserves JSON arrays and business fields with control-like names 2ms
+     × rejects misplaced control fields on the message envelope 1ms
+     × rejects non-JSON payload entries: undefined 0ms
+     × rejects non-JSON payload entries: NaN 0ms
+     × rejects non-JSON payload entries: Infinity 0ms
+     × rejects non-JSON payload entries: 1n 0ms
+     × rejects non-JSON payload entries: () => 1 0ms
+     × rejects non-JSON payload entries: Sat Sep 05 2026 21:38:16 GMT-0700 (Pacific Daylight Time) 0ms
+     × rejects non-JSON payload entries: Map{} 0ms
+     × rejects non-JSON payload entries: Symbol(x) 0ms
+     × rejects cyclic payloads without rejecting shared JSON objects 7ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 16 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > preserves JSON arrays and business fields with control-like names
+Error: agent-message: payload.results must be an object
+ ❯ safeObject control-protocol/agent-message.ts:48:82
+     46|
+     47| function safeObject(value: unknown, path: string): Readonly<Record<str…
+     48|   if (typeof value !== 'object' || value === null || Array.isArray(val…
+       |                                                                                  ^
+     49|   for (const [key, entry] of Object.entries(value)) {
+     50|     if (forbiddenBusinessKeys.has(key)) throw new Error(`agent-message…
+ ❯ safeObject control-protocol/agent-message.ts:51:54
+ ❯ validateAgentMessage control-protocol/agent-message.ts:66:14
+ ❯ control-protocol/agent-message.spec.ts:21:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/16]⎯
+
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects misplaced control fields on the message envelope
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ control-protocol/agent-message.spec.ts:32:7
+     30|         payload: { text: 'hi' },
+     31|       }),
+     32|     ).toThrow(/targetGeneration/)
+       |       ^
+     33|   })
+     34|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/16]⎯
+
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects non-JSON payload entries: undefined
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects non-JSON payload entries: NaN
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects non-JSON payload entries: Infinity
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects non-JSON payload entries: 1n
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects non-JSON payload entries: () => 1
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects non-JSON payload entries: Sat Sep 05 2026 21:38:16 GMT-0700 (Pacific Daylight Time)
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects non-JSON payload entries: Map{}
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects non-JSON payload entries: Symbol(x)
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ control-protocol/agent-message.spec.ts:36:100
+     34|
+     35|   it.each([undefined, NaN, Infinity, 1n, () => 1, new Date(), new Map(…
+     36|     expect(() => validateAgentMessage({ kind: 'notify', correlationId:…
+       |                                                                                                    ^
+     37|   })
+     38|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/16]⎯
+
+ FAIL  control-protocol/agent-message.spec.ts > control-protocol Agent-to-Agent message schema > rejects cyclic payloads without rejecting shared JSON objects
+AssertionError: expected [Function] to throw error matching /JSON/ but got 'Maximum call stack size exceeded'
+
+- Expected:
+/JSON/
+
++ Received:
+"Maximum call stack size exceeded"
+
+ ❯ control-protocol/agent-message.spec.ts:42:97
+     40|     const cyclic: Record<string, unknown> = {}
+     41|     cyclic.self = cyclic
+     42|     expect(() => validateAgentMessage({ kind: 'notify', correlationId:…
+       |                                                                                                 ^
+     43|     const shared = { text: 'same' }
+     44|     expect(validateAgentMessage({ kind: 'notify', correlationId: 'c', …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/16]⎯
+
+ FAIL  control-protocol/frames.spec.ts > session channel frames > preserves business metadata without using it as transport generation
+Error: metadata contains forbidden control field targetGeneration
+ ❯ assertBusinessSafe control-protocol/frames.ts:310:13
+    308|   for (const [key, entry] of Object.entries(value)) {
+    309|     if (forbiddenBusinessKeys.has(key)) {
+    310|       throw new Error(`${path} contains forbidden control field ${key}…
+       |             ^
+    311|     }
+    312|     assertBusinessSafe(entry, `${path}.${key}`)
+ ❯ Object.session.message control-protocol/frames.ts:494:7
+ ❯ parseSessionChannelFrame control-protocol/frames.ts:455:33
+ ❯ control-protocol/frames.spec.ts:83:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/16]⎯
+
+ FAIL  control-protocol/frames.spec.ts > session channel frames > preserves business object keys instead of guessing control intent
+Error: body contains forbidden control field authToken
+ ❯ assertBusinessSafe control-protocol/frames.ts:310:13
+    308|   for (const [key, entry] of Object.entries(value)) {
+    309|     if (forbiddenBusinessKeys.has(key)) {
+    310|       throw new Error(`${path} contains forbidden control field ${key}…
+       |             ^
+    311|     }
+    312|     assertBusinessSafe(entry, `${path}.${key}`)
+ ❯ Object.session.message control-protocol/frames.ts:491:5
+ ❯ parseSessionChannelFrame control-protocol/frames.ts:455:33
+ ❯ control-protocol/frames.spec.ts:98:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/16]⎯
+
+ FAIL  control-protocol/frames.spec.ts > session channel frames > accepts agent.message with opaque business payload
+Error: agent-message: payload.targetGeneration is a forbidden control field
+ ❯ safeObject control-protocol/agent-message.ts:50:47
+     48|   if (typeof value !== 'object' || value === null || Array.isArray(val…
+     49|   for (const [key, entry] of Object.entries(value)) {
+     50|     if (forbiddenBusinessKeys.has(key)) throw new Error(`agent-message…
+       |                                               ^
+     51|     if (typeof entry === 'object' && entry !== null) safeObject(entry,…
+     52|   }
+ ❯ validateAgentMessage control-protocol/agent-message.ts:66:14
+ ❯ Object.agent.message control-protocol/frames.ts:531:5
+ ❯ parseSessionChannelFrame control-protocol/frames.ts:455:33
+ ❯ control-protocol/frames.spec.ts:120:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/16]⎯
+
+ FAIL  control-protocol/frames.spec.ts > session channel frames > rejects business payload placed on a control frame
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ control-protocol/frames.spec.ts:137:130
+    135|
+    136|   it('rejects business payload placed on a control frame', () => {
+    137|     expect(() => parseTargetControlFrame({ kind: 'transport.ping', tar…
+       |                                                                                                                                  ^
+    138|   })
+    139|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/16]⎯
+
+ FAIL  control-protocol/frames.spec.ts > session channel frames > rejects unknown envelope fields instead of silently accepting them
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ control-protocol/frames.spec.ts:141:192
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/16]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  16 failed | 9 passed (25)
+   Start at  21:38:16
+   Duration  184ms (transform 53ms, setup 0ms, import 71ms, tests 22ms, environment 0ms)
+

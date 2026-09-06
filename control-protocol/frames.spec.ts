@@ -78,8 +78,8 @@ describe('session channel frames', () => {
     ).toThrow(/unknown session channel frame/)
   })
 
-  it('rejects control fields in metadata', () => {
-    expect(() =>
+  it('preserves business metadata without using it as transport generation', () => {
+    expect(
       parseSessionChannelFrame({
         kind: 'session.message',
         targetGeneration: 7,
@@ -88,13 +88,13 @@ describe('session channel frames', () => {
         correlationId: 'corr-1',
         role: 'user',
         body: { text: 'hello' },
-        metadata: { targetGeneration: 7 },
+        metadata: { targetGeneration: 999 },
       }),
-    ).toThrow(/metadata.*targetGeneration/)
+    ).toMatchObject({ targetGeneration: 7, metadata: { targetGeneration: 999 } })
   })
 
-  it('rejects control fields in body top-level record', () => {
-    expect(() =>
+  it('preserves business object keys instead of guessing control intent', () => {
+    expect(
       parseSessionChannelFrame({
         kind: 'session.message',
         targetGeneration: 7,
@@ -104,10 +104,10 @@ describe('session channel frames', () => {
         role: 'user',
         body: { text: 'hello', authToken: 'secret' },
       }),
-    ).toThrow(/body.*authToken/)
+    ).toMatchObject({ body: { text: 'hello', authToken: 'secret' } })
   })
 
-  it('accepts agent.message with business payload and rejects routing fields in payload', () => {
+  it('accepts agent.message with opaque business payload', () => {
     expect(
       parseSessionChannelFrame({
         kind: 'agent.message',
@@ -116,13 +116,29 @@ describe('session channel frames', () => {
         message: { kind: 'notify', correlationId: 'corr-1', payload: { text: 'ready' } },
       }),
     ).toMatchObject({ kind: 'agent.message', channelId: 'pair-1' })
-    expect(() =>
+    expect(
       parseSessionChannelFrame({
         kind: 'agent.message',
         targetGeneration: 7,
         channelId: 'pair-1',
         message: { kind: 'notify', correlationId: 'corr-1', payload: { text: 'ready', targetGeneration: 7 } },
       }),
-    ).toThrow(/targetGeneration/)
+    ).toMatchObject({ targetGeneration: 7, message: { payload: { targetGeneration: 7 } } })
+  })
+
+  it('does not derive envelope generation from business payload', () => {
+    expect(() => parseSessionChannelFrame({
+      kind: 'agent.message', channelId: 'pair-1',
+      message: { kind: 'notify', correlationId: 'c', payload: { targetGeneration: 7 } },
+    })).toThrow(/targetGeneration/)
+  })
+
+  it('rejects business payload placed on a control frame', () => {
+    expect(() => parseTargetControlFrame({ kind: 'transport.ping', targetGeneration: 1, nonce: 'n', body: { text: 'hidden' } })).toThrow(/body/)
+  })
+
+  it('rejects unknown envelope fields instead of silently accepting them', () => {
+    expect(() => parseSessionChannelFrame({ kind: 'agent.message', targetGeneration: 7, channelId: 'pair-1', route: 'hidden', message: { kind: 'notify', correlationId: 'c', payload: {} } })).toThrow(/route/)
+    expect(() => parseTargetControlFrame({ kind: 'toString', targetGeneration: 1 })).toThrow(/unknown/)
   })
 })

@@ -216,10 +216,15 @@
       "status": "implemented",
       "paths": [
         "control-protocol/frames.ts",
+        "control-protocol/agent-message.ts",
+        "control-protocol/json-value.ts",
         "control-protocol/channel-state.ts"
       ],
       "entry_symbols": [
         "parseTargetControlFrame",
+        "validateAgentMessage",
+        "assertJsonValue",
+        "assertEnvelopeKeys",
         "parseSessionChannelFrame",
         "createChannelState",
         "openChannel",
