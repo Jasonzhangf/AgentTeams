@@ -51,6 +51,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `integration`, `relay`
 - details: [L2/first-wave-library-integration-20260906.md](L2/first-wave-library-integration-20260906.md)
 
+### Managed OpenCode daemon wiring
+- tags: `ai-reviewed`, `config`, `daemon`, `human-unreviewed`, `managed-opencode`
+- details: [L2/managed-opencode-daemon-wire-20260906.md](L2/managed-opencode-daemon-wire-20260906.md)
+
 ### P0业务JSON保真与外层控制边界
 - tags: `ai-reviewed`, `human-unreviewed`, `protocol`
 - details: [L2/p0-business-json-20260906.md](L2/p0-business-json-20260906.md)
@@ -69,9 +73,7 @@ _Empty._
 
 ## Level 3 — new or unreviewed
 
-### Managed OpenCode daemon wiring
-- tags: `config`, `daemon`, `managed-opencode`
-- details: [L3/managed-opencode-daemon-wire-20260906.md](L3/managed-opencode-daemon-wire-20260906.md)
+_Empty._
 
 ## Skill description candidates
 
