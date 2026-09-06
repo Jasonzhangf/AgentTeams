@@ -74,8 +74,8 @@ function ledger(fileName = 'work.json') {
   })
 }
 
-function accept(ledgerState: ReturnType<typeof ledger>, workId: string, consumerAgentId = consumer.agentId) {
-  return proposeWork(ledgerState, consumer, workProposal(workId, consumerAgentId), policy())
+function accept(ledgerState: ReturnType<typeof ledger>, workId: string, actor = consumer) {
+  return proposeWork(ledgerState, actor, workProposal(workId, actor.agentId), policy())
 }
 
 describe('Agent Work resource admission', () => {
@@ -166,6 +166,23 @@ describe('Agent Work resource admission', () => {
     expect(result.request.error?.code).toBe('RESOURCE_EXHAUSTED')
     expect(state.snapshot.allocations).toHaveLength(4)
     expect(state.snapshot.allocations.every(allocation => allocation.state === 'held')).toBe(true)
+  })
+
+  it('admits multiple consumers against one provider capacity and rejects the third', () => {
+    const state = ledger()
+    const consumerB = { ...consumer, agentId: 'consumer-b' }
+    const consumerC = { ...consumer, agentId: 'consumer-c' }
+    accept(state, 'work-a', consumer)
+    accept(state, 'work-b', consumerB)
+    requestWork(state, { authenticatedConsumer: consumer, request: request('work-a', 'request-a'), policy: policy() })
+    requestWork(state, { authenticatedConsumer: consumerB, request: request('work-b', 'request-b'), policy: policy() })
+
+    accept(state, 'work-c', consumerC)
+    const result = requestWork(state, { authenticatedConsumer: consumerC, request: request('work-c', 'request-c'), policy: policy() })
+    expect(result.executionAllowed).toBe(false)
+    expect(result.request.error?.code).toBe('RESOURCE_EXHAUSTED')
+    expect(state.snapshot.allocations).toHaveLength(4)
+    expect(new Set(state.snapshot.allocations.map(allocation => allocation.workId))).toEqual(new Set(['work-a', 'work-b']))
   })
 
   it('deduplicates requests and rejects changed parameters for the same request id', () => {
