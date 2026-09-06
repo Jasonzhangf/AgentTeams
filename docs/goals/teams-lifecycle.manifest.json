@@ -1,14 +1,16 @@
 {
   "lifecycle_id": "teams.multi-agent-console.overview",
-  "status": "implementation-ready",
+  "status": "design",
   "entrypoint": "console.topology",
   "return_path": "drawer.close -> source.focus -> console.topology",
   "owner_feature": "feature.teams-console",
   "canonical_docs": [
     "docs/goals/teams-overview-design.md",
     "docs/design/teams-detailed-design-v1.md",
-    "docs/design/teams-control-protocol-v1.md",
-    "docs/design/teams-control-protocol-v1.manifest.json",
+    "docs/design/teams-control-protocol-v2-master-agent-host.md",
+    "docs/design/teams-control-protocol-v2.manifest.json",
+    "docs/design/teams-agent-relation-communication-v1.md",
+    "docs/design/teams-provider-config.md",
     "docs/design/multi-agent-console-prototype.html",
     "docs/architecture/resource-map.json",
     "docs/architecture/function-map.json",
@@ -97,8 +99,8 @@
     },
     {
       "id": "console.focused-session",
-      "kind": "existing-webui",
-      "owner": "dsh-adapter",
+      "kind": "ui-presentation",
+      "owner": "ui",
       "status": "design"
     },
     {
@@ -267,7 +269,7 @@
         "one owner for machine connections",
         "one owner for relation truth",
         "one owner for drawer navigation",
-        "existing Conversation pipeline remains the Session presentation owner"
+        "Teams presents Conversation; execution substrate retains Session persistence and execution"
       ]
     },
     {
@@ -313,7 +315,10 @@
       "shared-token"
     ],
     "relation_authority": "graph classification never grants capability permission",
-    "cross_machine_business_routing": "host-to-host; UI is not a business relay",
+    "cross_machine_business_routing": "Agent-to-Agent direct or explicit relay; Console optional and never required",
+    "agent_work": "provider advertises capability/resources; consumer matches and requests; provider executes within capacity",
+    "cardinality": "one-to-many for both consumer and provider roles",
+    "llm_requirement": "optional; passive CLI capability Agents supported",
     "display_name_truth": "host canonical name; console local alias is projection-only",
     "credential_persistence": "opaque reference only; secret is owned outside Teams",
     "config_conflict": "revision compare-and-swap with explicit conflict",
@@ -327,7 +332,7 @@
   "design_reference": {
     "prototype": "docs/design/multi-agent-console-prototype.html",
     "detailed_design": "docs/design/teams-detailed-design-v1.md",
-    "control_protocol": "docs/design/teams-control-protocol-v1.md",
+    "control_protocol": "docs/design/teams-control-protocol-v2-master-agent-host.md",
     "layout_rule": "desktop/mobile share semantic components and actions; only layout differs",
     "primary_fast_path": "agent-card -> current-session -> focused-conversation"
   }

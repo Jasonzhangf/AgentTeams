@@ -1,99 +1,80 @@
-# Teams 开发总计划
+# AgentTeams 下一步开发计划
 
-状态：`implementation-ready / draft`
-项目：`Teams`
-治理：AppSDK `0.1.6`
+状态：设计范围更新；本轮不宣称运行时功能已实现。每个语义里程碑使用独立 clean
+worktree，完成 owner 绑定、定向红绿测试、适用回归/build/live、AppSDK 和 review。
 
-## 目标
+## 已确认范围
 
-优先交付可安装、可复核、可验收的 OpenCode 多 Agent 控制台：Topology 按 Machine -> Agent 定位，Agent Card 一次点击进入当前 Session，Conversation 复用 OpenCode 宿主能力，Notifications 按重要性和时间直达 Agent 或 Session，Search/Memory 作为独立插件接入，Desktop/Mobile 共享语义而仅改变排版。DSH 适配延期，不作为当前发布前置。
+- Agent 可被动提供浏览器 CLI 等能力。OpenCode 只作推理型 Agent 执行基座；
+  Teams 拥有独立 UI 和多 LLM provider 配置，非 LLM Agent 不要求 provider。
+- 每 Agent daemon；配置后 Agent 直接协作，Console 只作可离线的观察/配置面。
+- 首版覆盖公网、NAT、direct 和 relay；relay 不承担 Agent 协调决策。
+- peer、master/slave 由 Agent policy 组织，关系标签不授予权限。
+- capability/resource 声明 → Host 匹配 → work → 请求/执行；双方一对多，能力方
+  原子检查容量并拥有 allocation，Console 不作为协作 Host。
+- 测试主 provider 为 RCC 4444，goaichat 为显式备用配置。
+- 配置逻辑/模型接口参考 OpenMinis，不复用其 UI 或推理执行栈。
+- daemon 启动或附着 OpenCode 的实例所有权仍需在实现前确定。
 
-## 阶段顺序
+## M0：迁移与真实治理基线
 
-1. Phase 0：候选、module registry、resource/function/mainline/verification map 与 AppSDK 绑定。
-2. Phase 1：五入口 UI、current-session fast path、nested drawer、Desktop/Mobile layout。
-3. Phase 2：OpenCode `PluginInput/Hooks/SDK` adapter、Session/Event/permission owner 接入。
-4. Phase 3：Console Hub、network link、server admission、Shared Runtime Config、daemon lifecycle。
-5. Phase 4：consumer/provider 双边 relation report、graph projection、notification center 与 approval 跳转。
-6. Phase 5：Search index/cache/query 与 Memory summarize/validate/save/load/export 生命周期。
-7. Phase 6：Machine connection、per-Agent provider/model、Mobile 高风险确认和权限边界。
-8. Phase 7：OpenCode 长运行 hook、真实 session/permission/notification sink 闭环；DSH adapter deferred。
-9. Phase 8：candidate-bound install/restart、OpenCode live smoke、1440x960 与 390x844 回放、AppSDK records、review、merge/push。
+本轮已重建为根 workspace/lockfile、完整现有测试入口和真实编译库产物；执行与
+证据适用性见 [开发管控](../development-governance.md)。主线集成与产品运行验收
+分别收尾，不把本工作树的验证结果写成已发布。
 
-## 硬门禁
+修根级安装/构建/测试入口、旧路径和 UI 外部宿主依赖；选定唯一生产 UI。
+将 AppSDK placeholder 替换为真实产物，更新调用边、测试与依赖哈希输入；producer
+从独立仓库根运行。旧源码归属条目随源码拆除同步清理，不伪装旧实现已删除。
+验收：干净 checkout 不依赖原仓库即可安装构建、运行完整适用回归；真实 artifact
+绑定当前候选。不再次 reset 有效治理。
 
-- 每个 milestone 一个 semantic claim、分支和 `playground/<issue-or-task>` worktree。
-- 控制面字段、auth、permission、routing、retry、health、diagnostics 只能走 typed control resource；不得进入业务 payload 或 metadata。
-- OpenCode 只走 `PluginInput/Hooks/SDK`；不得复制 Session、Conversation 或 transcript owner。DSH `ClientContext/Slots` 适配延期。
-- 无 fallback、silent strip、静默覆盖或重复 owner；权限由 server truth 决定，relation label 不产生权限。
-- 未完成 candidate 安装、重启、真实入口和桌面/移动浏览器回放，不启动 AGY Review，不申报发布完成。
+## M1：配置 owner 与语义修复
 
-## 当前缺口
+按 [配置设计](../design/teams-provider-config.md) 实现 provider CRUD、模型刷新/手动
+模型、Agent binding、revision CAS、credential reference、OpenCode 编译与 apply。
+修 adapter 错误传播、current Session 猜测和业务 payload 数组误拒绝。
+验收：同协议多个 provider 独立配置；刷新不覆盖用户 override；401/403、空目录、
+未支持协议和并发 revision 冲突显式呈现；RCC 与显式选择的 goaichat 分别通过真实
+OpenCode 入口验证。Console 关闭后，已应用配置仍有效。
 
-- OpenCode 宿主 adapter 已有白盒实现；真实 session、permission、notification sink 和安装闭环仍未通过。
-- Console Hub/runtime/network/config/server 尚无真实部署证据。
-- OpenCode 长运行 hook、Search/Memory/Notification/Settings live evidence 尚待补齐。
-- AppSDK candidate、whitebox、install、restart、blackbox、pre-review records 尚未由正式 producer 生成。
+## M2：被动能力与 Agent Work 最小闭环
 
-## 验收顺序
+实现 [能力协议](../design/teams-agent-relation-communication-v1.md)：版本化 capability/
+CLI 接口与 resource 声明、匹配、work、请求结果和取消/资源回收。选择一个浏览器
+能力服务与 Host adapter 做真实闭环，不先新增通用调度框架。
+验收：无模型浏览器 Agent、两个 Host 并发消费、超额拒绝与释放后重用；一个 Host
+同时消费浏览器和另一能力；不兼容接口/未授权拒绝；关闭 Console 后执行继续。
 
-`appsdk verify Teams` -> 定向测试/typecheck/bundle -> deterministic compile -> candidate install/restart -> OpenCode live session/permission/notification smoke -> Desktop/Mobile Camo replay -> PreReviewValidation -> review -> effectiveness -> merge/mainline receipt -> promotion/freeze。
+## M3：Agent-to-Agent 与公网 relay
 
-## OpenCode-first 适配审计（2026-09-02）
+先实现 daemon bootstrap → relay 登录 → 声明发布/presence → 授权范围广播/目录
+查询 → 对端连接辅助。没有 Console 在线也必须独立完成启动与发现。
+relay 服务统一暴露目录、广播、连接协调及可用的 STUN/穿透/流量中继能力；
+未实现的服务能力明确 unavailable。先验证完整中继路径，再验证 direct 和选定的
+STUN/穿透方式；映射地址发现不等于实际可达。
 
-### 审计结论
+Agent Host 同时支持发起/接受授权 target，network 实现 direct 与 relay；NAT
+两侧通过主动出站连接通信。server 管连接准入，目标 Agent 管 capability 权限。
+接通 target/channel，替换 Console 直接调用 OpenCode 和拼 prompt 转发的生产路径。
+验收：两处 NAT daemon、direct/relay 各自实际样本、账号和目标授权拒绝、旧
+generation 拒绝、健康 Agent 隔离；关闭 Console 后 request/reply 仍完成。
 
-当前 `opencode-adapter/src/index.ts` 只有事件和权限的纯投影层：它可以把 OpenCode `session.*`、`message.updated` 和 `permission.ask` 转换为 Teams notification，但还不能独立完成可用的 OpenCode 控制台适配。缺口是：真实 Session 列表/当前 Session 读取、Session 对话发送入口、审批结果回写、长运行 server hook、notification sink 与 Teams UI/Console Host 的绑定、安装后 public entrypoint 验证。
+## M4：关系组织与多设备管理
 
-DSH adapter 不进入本阶段实现、安装、验证或 release admission。现有 DSH 源码和设计仅保留为 deferred scope，不从 worktree 删除。
+唯一 relation reconciliation、Agent 持久化 policy/report、peer 与 master/slave
+实际协作，明确授权与撤销。Teams UI 接入真实 Conversation、实时通知、审批、设置。
+验收：手机蜂窝/桌面观察两处 daemon；关闭全部 Console 后继续协作，重新打开
+另一设备能读回关系与配置；master Agent 离线时报告其关系状态，不把 Console
+自动提升为 master；没有静默重发或权限转移。
 
-### 当前必须实现的适配
+## M5：扩展与首版交付
 
-1. OpenCode host adapter：以 `PluginInput`、公开 SDK 和 `Hooks` 为唯一宿主边界，提供 server/plugin 的安装入口；接收 session、message、status、permission 生命周期；投影为 typed Teams control notifications；不把 routing、permission、health 或 provider/model 控制字段混入 Session 业务 payload。
-2. OpenCode Session adapter：通过 OpenCode SDK 读取 Agent/session 列表和当前 session，提供 current-session fast path；Session 对话、消息发送、工具结果和 transcript 继续由 OpenCode owner 处理，Teams 只持有引用和投影。
-3. OpenCode approval adapter：将 `permission.ask` 映射为可定位到 Agent/Session 的 interactive notification；用户的 allow/deny/reply 必须经 OpenCode SDK/Hooks 回写，不能由 UI 本地改变权限 truth。
-4. OpenCode notification sink adapter：建立宿主事件到 Teams notification center 的唯一 sink，支持 pending/processed、priority/time 排序、Agent badge 和直接跳回 Session；sink 不保存 Session body、tool output 或 approval body。
-5. Teams Console Host adapter：把 OpenCode host connection、machine/agent identity、runtime config、relation report、search/memory plugin projection 聚合给 UI；UI 只消费 typed projections，不直接依赖 OpenCode、network、config、server 或 runtime truth modules。
-6. UI layout adapter：保留现有五入口、Agent Card 当前 Session 快速入口、nested drawer、header 上拉全屏/下拉关闭；默认桌面居中 modal，`max-width:800px` 才切手机全宽底部布局。UI 不因 OpenCode-first 改变语义，只替换宿主数据和动作绑定。
-7. Search/Memory plugin adapter：Search 提供 connect/index/cache/query；Memory 提供 summarize/validate/save/load/export；二者必须有独立 typed input/output 与 lifecycle，不通过 UI 临时状态冒充插件能力。
+接入 Search/Memory 生命周期。完成当前候选安装/重启/公共入口回放、AppSDK
+admission、review。commit/push/发布分别按用户授权与证据执行。
 
-### 明确不做
+## 当前参考证据
 
-- 不实现 DSH `ClientContext/Slots`、DSH Conversation mounting、DSH current-session bridge 或 DSH live smoke。
-- 不让 Teams UI 成为 OpenCode transcript、permission 或 session 的第二 owner。
-- 不把 OpenCode 事件直接当作业务消息 payload，也不在 UI 侧重建控制面权限。
-
-### 适配文件范围
-
-- `Teams/opencode-adapter/src/index.ts`：OpenCode hooks、SDK session/permission bridge、typed notification sink。
-- `Teams/opencode-adapter/tests/**`：事件、session、permission、sink、生命周期和正反向边界测试。
-- `Teams/ui/teams-console/src/client/**`：只补 typed host projection/action binding；保留桌面默认和手机断点布局。
-- `Teams/agent/**`、`Teams/network/**`、`Teams/config/**`、`Teams/server/**`、`Teams/runtime/**`：按各自 owner 补齐 OpenCode host 所需的控制面主线，不交叉复制。
-- `Teams/search-plugin/**`、`Teams/memory-plugin/**`：插件输入/输出和生命周期接入。
-- `.appsdk/maps/**`、`Teams/docs/architecture/**`：同步 module、resource、function、mainline、verification map；DSH 条目保持 `deferred`。
-
-### 验收矩阵
-
-| 适配 | 必须证明 | 证据 |
-| --- | --- | --- |
-| OpenCode host | 官方 plugin shape 可安装并加载 | package typecheck/build + 安装后 import/server smoke |
-| Session | 能发现 agent/session，当前 session 可直达并发送消息 | SDK live session smoke + 正反向 session tests |
-| Approval | ask 可进入 Teams notification，allow/deny 真实回写 | OpenCode permission ask live smoke + sink evidence |
-| Notification | event 唯一进入 notification center，pending/processed 可区分 | sink tests + live event replay |
-| Console Host | machine/agent/config/relation 只走 typed control projection | boundary tests + host live smoke |
-| UI | 五入口、抽屉和默认桌面/手机排版保持行为一致 | desktop `1440x960`、mobile `390x844` Camo screenshots/replay |
-| Search/Memory | 独立插件可连接、查询/保存/加载/导出 | plugin lifecycle tests + live adapter evidence |
-| Governance | candidate 到 pre-review evidence 绑定同一 commit/artifact | AppSDK lifecycle producer + review admission |
-
-### 实施顺序
-
-1. 先补 OpenCode adapter 的 Session/permission/sink contract 和白盒测试。
-2. 接入 Console Host 的 typed projections 与 action dispatch，完成当前 Session fast path。
-3. 接入 Search/Memory plugin lifecycle。
-4. 建立隔离 OpenCode server，安装 candidate，跑真实 session、permission、notification smoke。
-5. 用 Camo 回放桌面和手机尺寸，验证 UI 语义一致及默认桌面排版。
-6. 运行 AppSDK lifecycle producer、review admission、架构 review、effectiveness 和发布流程。
-
-### 完成定义
-
-OpenCode plugin 可从发布包安装并启动；Teams 能发现多个 Machine/Agent/Session，Agent Card 可直接进入当前 Session；Session 消息和审批由 OpenCode owner 实际执行；通知可从 Agent badge、notification center 直达 Session 并完成 allow/deny；Search/Memory 通过独立插件生命周期工作；桌面默认排版、手机断点和抽屉交互真实回放通过；AppSDK records、review、merge/push 和远端 receipt 完整闭合。DSH 仍明确为 deferred，不计入本阶段完成条件。
+OpenMinis `origin/main` 已获取到 `4ef29002e88db1e20e462ec2ff46916e8a7dcb45`。
+RCC `GET http://127.0.0.1:4444/v1/models` 本轮 HTTP 200，但 `data/models` 均为空；
+本地配置 expose_models=[gpt-5.5]，差异尚未定位。goaichat 仅核实本地配置，未调用
+上游推理。这些证据不构成 provider live 或跨设备功能完成。

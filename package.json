@@ -1,0 +1,19 @@
+{
+  "name": "agentteams",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "pnpm --dir opencode-adapter build && node scripts/regression.mjs",
+    "typecheck": "pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck",
+    "build": "pnpm --dir opencode-adapter build && pnpm --dir console-host build",
+    "build:governance": "pnpm build && node scripts/package-artifact.mjs",
+    "smoke": "node scripts/artifact-smoke.mjs",
+    "verify": "pnpm test && pnpm typecheck && appsdk guide compile && appsdk compile && pnpm smoke && appsdk verify"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

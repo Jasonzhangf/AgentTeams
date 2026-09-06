@@ -146,10 +146,6 @@ version/hash/ReviewRecord to imitate migration, and do not retain two active
 governance roots. The new reset record proves the reset operation only; it does
 not inherit old PASS, review, delivery, or freeze claims.
 
-Reset idempotency is scoped to the receipt's canonical project root and branch.
-An inherited or legacy receipt does not prove this worktree was reset; a new
-authorized reset still requires the clean, non-main worktree checks.
-
 ### What to do with old reports and delivery output
 
 Use ownership and rebuildability, not age, to decide what is removable:

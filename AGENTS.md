@@ -2,14 +2,34 @@
 
 ## Project truth
 
-- Teams is the OpenCode-first multi-agent control plane. DSH remains deferred.
-- Master Console Host connects to independent Agent Hosts; an Agent Host adapts
-  one local agent runtime to the Teams protocol.
-- The server owns discovery, account admission, permission policy, and route
+- Teams is an independent multi-agent control plane. Agents may be passive
+  capability services, including browser CLI agents. OpenCode is the execution
+  substrate for LLM agents; Teams owns its UI and provider configuration.
+- Console Host is an optional, non-permanent observation/configuration client.
+  Agent Hosts communicate and coordinate independently after configuration.
+  Each Agent Host adapts one local capability service/runtime; peer and
+  master/slave relations do not depend on a live Console or grant authority
+  without Agent-side policy.
+- The server owns discovery, account and transport admission policy, and route
   publication. Network owns link configuration, transport, health, and route
   execution. Config owns versioned shared and per-agent provider/model config.
 - Runtime composes network and daemon lifecycle. Agent code remains network,
   server, and config agnostic.
+- Provider Agents declare capabilities/resources and own matching admission,
+  work execution and resource allocation. Consumer/Host Agents request matches
+  and work. Both roles support one-to-many; Console Host is not the consumer
+  role. See `docs/design/teams-agent-relation-communication-v1.md`.
+- Config owns LLM provider instances, model catalogs and per-agent bindings. Each
+  daemon durably owns its accepted config revision; Console submits changes.
+  OpenCode config is derived adapter output, not a second editable source.
+  See `docs/design/teams-provider-config.md`.
+- First release includes public networks, NAT and relay. Agent-to-Agent traffic
+  can use direct or explicit relay transport; Console is never a required relay.
+- Every daemon bootstraps from its configured relay-service address/identity:
+  login, publish capability/resource declarations, discover peers, then connect.
+  Relay service owns directory, scoped broadcast and connection assistance,
+  including traversal/STUN and traffic relay when supported. Agent work policy
+  and actual resource admission remain at the provider Agent.
 
 ## Semantic invariants
 
@@ -24,6 +44,12 @@
 
 ## Development contract
 
+- Development commands and evidence applicability are owned by
+  `docs/development-governance.md`. AppSDK lifecycle module `teams-source` is
+  the source/artifact admission unit; semantic ownership remains in the five
+  `docs/architecture/` maps. SDK-owned `.appsdk/maps/` describe SDK governance.
+- Use the root workspace and lockfile. Do not restore parent-repository paths,
+  placeholder builds, or historical lifecycle evidence producers.
 - Before implementation read the resource, function, mainline, module, and
   verification maps. Bind every change to one feature and one owner.
 - Use one clean worktree below `playground/` for one semantic milestone.
@@ -37,6 +63,9 @@
 
 - Run focused tests first, then the mapped regression suite, typecheck/build,
   AppSDK compile/verify, and required OpenCode install/restart/live replay.
+- `pnpm verify` runs the local source/governance baseline. Current library
+  artifacts have no service install/restart operations; deployment changes must
+  bind their real operations and public-entrypoint evidence before validation.
 - Runtime changes require evidence from the user-observable entrypoint. Camo
   desktop and mobile replays are separate evidence; desktop layout is not mobile
   evidence.
@@ -50,4 +79,3 @@
 - AppSDK maps and contracts: `.appsdk/`
 - Runtime source: `agent-host/`, `network/`, `server/`, `runtime/`,
   `control-protocol/`, `opencode-adapter/`, `console-host/`, `ui/`
-- Deferred source: `dsh-adapter/`

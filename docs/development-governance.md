@@ -1,0 +1,71 @@
+# AgentTeams 开发管控
+
+本次按用户“reset appsdk，从头开始建立 appsdk 开发管控”重建。目标是当前独立
+仓库的可执行质量基线，保留已经确认的产品架构。不是运行时发布或旧证据续期。
+
+## 唯一归属
+
+- 产品约束：根 `AGENTS.md`；需求/下一步：`docs/goals/`；协议与配置：`docs/design/`。
+- 产品 resource/function/mainline/module/verification：`docs/architecture/` 五个 map。
+- SDK 实现契约：官方初始化的 `.appsdk/contracts/`、`.appsdk/maps/`、SDK resources/lock。
+- 本项目交付单元：`.appsdk/project.json` 的 `teams-source`，绑定现有源码与真实库产物。
+  这是统一构建/准入边界，不替代 network、server、config 等语义 owner。
+- 根 `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml` 是依赖与命令入口。
+  源码哈希使用源码/配置路径，不把 node_modules 符号链接或 lib 构建输出当源码。
+
+## 每个开发里程碑
+
+1. 获取最新 origin/main，在主仓库 `playground/` 下创建独立 clean worktree；保持主线只读。
+2. 绑定受影响 feature/owner/路径/调用边/验收。先定位真源，比较删除、复用与直接实现。
+3. 关键行为先红测后最小修改；同步受影响 maps。探索与验证写本任务独占 run notes。
+4. 根目录安装 `pnpm install --frozen-lockfile`；定向验证后执行 `pnpm verify`。
+5. 完成适用实际入口证据，再用 AGY Review 审查精确候选。变更后重跑受影响验证和 review。
+6. commit、push、合并、安装、发布分别按授权执行；review PASS 不等于这些动作完成。
+
+`pnpm verify` 顺序执行全量测试、类型检查、Guidance compile、AppSDK compile、编译
+产物 HTTP smoke、AppSDK verify；任何命令失败即停止。`pnpm test` 先构建被依赖的
+OpenCode adapter，再运行现有全部 33 个测试文件；从 module contract 读取最少
+128 测试门槛，拒绝 skip、TODO 和 `.only`。报告落在 `generated/validation/`。
+增加功能时补测试并按真实基线更新门槛，不靠降低门槛消除回归。
+
+类型检查覆盖核心源码及 Console/OpenCode 两个独立包。保留的旧宿主 UI 不进入新
+产品的包构建，但它现有的 6 个测试文件仍进入全量回归；其外部 UI 运行依赖未迁移，
+不能宣称完整 UI 构建通过。新独立 UI 实现时必须绑定自己的 build 与桌面/手机实际回放。
+
+## 产物与证据边界
+
+`appsdk compile` 调用真实包构建，将 `.mjs`、声明和 Console 静态资源放入
+`generated/modules/teams-source/lib`，由 AppSDK 生成 module-artifact 与哈希。
+产物是有外部依赖的库集合，不是独立部署包。打包前只清理本 producer 独占的输出目录。
+HTTP smoke 校验编译库与打包文件字节一致，使用已安装依赖执行编译后的 Console，
+检查 health、静态文件和无效请求错误；不调用模型、不冒充跨设备产品验收。
+
+本模块 `deployment_operations: []` 对应当前库产物，不启动常驻服务，所以本轮不
+要求服务安装/重启。后续 daemon、relay、OpenCode 部署里程碑必须在验证前声明真实
+部署操作并补齐 deployed public-entrypoint evidence；不可沿用空操作来跳过服务验证。
+AppSDK review admission、freeze/Active 发布保留正式证据门禁，本轮不生成假候选、
+假 review record、假部署 receipt。普通 compile/verify 与发布准入是不同证据。
+
+公网/NAT/relay、daemon 自动登录、能力匹配、原子容量与一对多、Console 全关闭仍
+协作、多 provider apply/readback 仍是设计/待运行验证 gates。基础测试通过不能升级这些状态。
+
+Guidance 使用声明的项目 AGENTS 和官方治理 Skill，保持 advisory；它帮助计划，
+不重复保存质量 PASS。Collab 自动注册保留；无 tmux 时 pending，不阻断独立工作。
+
+## 本轮重置溯源
+
+基线 `origin/main@57c3dc422c0dd999e8abac13c54e351884bf7f68`，工作树
+`playground/appsdk-reset-20260906`。原控制数据先归档到
+`/tmp/agentteams-governance-before-reset-20260906.tgz`，SHA256
+`5e138ffd55f2be942a1f0c21ecf97a19277e7ccd7825b4e761b73884c21d3d30`。
+
+官方 reset 命令遇到历史 reset record 返回 already applied，没有实际重置。
+按本次明确授权，将旧 `.appsdk` 整体移到
+`/tmp/agentteams-appsdk-rebuild-20260906/old-control-after-resource-refresh`，
+再执行官方 `appsdk init`。不改历史 record/hashes 冒充 reset 成功。
+移除旧 preparation 和错误生命周期 producer；旧记录仍在归档中。
+归档位于本机临时目录，不能当长期发布档案。
+
+旧设计工作树保留；其已确认的架构修订转入当前工作树。主线未修改，未 commit、
+push 或 merge。当前安装的 AppSDK 0.1.6 没有可用的 `verify-git-main-protection`
+操作；本轮不声称已安装或验证 Git hooks，工作树边界由上述开发合同执行。

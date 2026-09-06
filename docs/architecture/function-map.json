@@ -3,6 +3,11 @@
   "map_id": "teams-function-map",
   "status": "partial",
   "functions": [
+    {"function_id":"development_regression_gate","owner":"development-governance","status":"implemented","paths":["scripts/regression.mjs","vitest.config.ts",".appsdk/project.json"],"entry_symbols":[],"required_gates":["teams-source-regression"]},
+    {"function_id":"compiled_library_http_smoke","owner":"development-governance","status":"implemented","paths":["scripts/artifact-smoke.mjs"],"entry_symbols":[],"required_gates":["teams-compiled-library-smoke"]},
+    {"function_id":"development_artifact_packaging","owner":"development-governance","status":"implemented","paths":["scripts/package-artifact.mjs","package.json"],"entry_symbols":[],"required_gates":["teams-source-regression","teams-source-typecheck","teams-source-artifact","teams-appsdk-verify"]},
+    {"function_id":"relay_service_login_broadcast_assistance","owner":"server","status":"design","paths":["server/**"],"entry_symbols":[],"design_doc":"docs/design/teams-control-protocol-v2-master-agent-host.md","required_gates":["teams-daemon-relay-bootstrap"]},
+    {"function_id":"daemon_relay_bootstrap_and_peer_connection","owner":"network","status":"design","paths":["network/**"],"entry_symbols":[],"design_doc":"docs/design/teams-control-protocol-v2-master-agent-host.md","required_gates":["teams-daemon-relay-bootstrap"]},
     {
       "function_id": "bootstrap_link_resolution",
       "owner": "network",
@@ -287,8 +292,7 @@
         "ui/teams-console/src/client/model.ts"
       ],
       "entry_symbols": [
-        "projectAgentCurrentSessions",
-        "projectDshSessionList"
+        "projectAgentCurrentSessions"
       ],
       "required_gates": [
         "teams-agent-network-agnostic",
@@ -376,29 +380,6 @@
       ]
     },
     {
-      "function_id": "dsh_client_adapter",
-      "owner": "dsh-adapter",
-      "status": "partial",
-      "lifecycle": "deferred",
-      "paths": [
-        "ui/teams-console/src/client/index.ts",
-        "ui/teams-console/src/client/dsh-adapter.ts",
-        "dsh-adapter/agent-identity.ts"
-      ],
-      "entry_symbols": [
-        "apply",
-        "openDshSession",
-        "openCurrentAgentSession",
-        "projectHostSessionIdentities",
-        "projectDshAgentSessionList"
-      ],
-      "required_gates": [
-        "teams-dsh-slot-contract",
-        "teams-dsh-live-smoke"
-      ],
-      "binding_status": "external-producer-pending"
-    },
-    {
       "function_id": "opencode_plugin_adapter",
       "owner": "opencode-adapter",
       "status": "partial",
@@ -415,7 +396,6 @@
       ],
       "required_gates": [
         "teams-opencode-hook-contract",
-        "teams-dsh-opencode-adapter-separation",
         "teams-opencode-live-smoke"
       ]
     },
@@ -464,26 +444,7 @@
         "teams-static-ui-replay"
       ]
     },
-    {
-      "function_id": "focused_session_bridge",
-      "owner": "dsh-adapter",
-      "status": "partial",
-      "lifecycle": "deferred",
-      "paths": [
-        "ui/teams-console/src/client/dsh-adapter.ts",
-        "ui/teams-console/src/client/controller.ts"
-      ],
-      "entry_symbols": [
-        "openCurrentAgentSession",
-        "openDshSession",
-        "focusCurrentSession",
-        "focusSession"
-      ],
-      "required_gates": [
-        "teams-current-session-fast-path",
-        "teams-dsh-conversation-reuse",
-        "teams-dsh-live-smoke"
-      ]
-    }
+    {"function_id":"provider_catalog_and_binding","owner":"config","status":"design","paths":["config/runtime-config.ts"],"entry_symbols":[],"design_doc":"docs/design/teams-provider-config.md","required_gates":["teams-provider-config-catalog","teams-provider-config-effective"]},
+    {"function_id":"agent_work_resource_admission","owner":"agent","status":"design","paths":["agent/**"],"entry_symbols":[],"design_doc":"docs/design/teams-agent-relation-communication-v1.md","required_gates":["teams-agent-work-capacity","teams-passive-cli-agent","teams-console-offline-work"]}
   ]
 }

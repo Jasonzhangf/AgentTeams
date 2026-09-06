@@ -1,41 +1,45 @@
-# Teams
+# AgentTeams
 
-Teams 是优先适配 OpenCode 的跨 agent 控制台项目，使用 AppSDK `0.1.6` 治理；DSH 适配延期。
+跨设备、多 Agent 管理项目。Agent 可以是被动浏览器 CLI 等能力服务，每个 Agent
+对应一个 daemon。能力方声明 capability/resource，调用方匹配后请求执行；双方
+支持资源容量内的一对多，可组成 peer、master/slave。Console Host 是观察面和配置面，
+可以常驻但不要求常驻；关闭 Console 不终止 Agent 协作。
 
-当前阶段：`implementation`
+OpenCode 只作为推理型 Agent 的执行基座，承载 Session、消息、工具与审批执行。
+Teams 拥有独立 UI 和多 LLM provider 配置；被动能力 Agent 不要求配置模型。
+首版覆盖公网、NAT 与 relay，Console 不充当必经业务中继。
 
-入口：
+每个 daemon 启动后按配置登录 relay 服务，发布能力/资源、查询目录并连接对端。
+relay 服务提供目录、广播和连接辅助，可扩展 STUN、内网穿透及流量中继。
 
-- [概要设计](docs/goals/teams-overview-design.md)
-- [详细设计 v1](docs/design/teams-detailed-design-v1.md)
-- [控制协议 v1](docs/design/teams-control-protocol-v1.md)
-- [控制协议 v2：Master Console Host + Agent Host](docs/design/teams-control-protocol-v2-master-agent-host.md)
-- [控制协议 v2 manifest](docs/design/teams-control-protocol-v2.manifest.json)
-- [控制协议 manifest](docs/design/teams-control-protocol-v1.manifest.json)
-- [生命周期 manifest](docs/goals/teams-lifecycle.manifest.json)
-- [静态 UI 原型](docs/design/multi-agent-console-prototype.html)
-- [架构资源地图](docs/architecture/resource-map.json)
-- [架构函数地图](docs/architecture/function-map.json)
-- [架构主线调用地图](docs/architecture/mainline-call-map.json)
-- [架构验证地图](docs/architecture/verification-map.json)
-- [架构模块注册表](docs/architecture/module-registry.json)
+## 设计入口
 
-AppSDK canonical maps 位于 `.appsdk/maps/`，由 AppSDK `0.1.6` 管理；Teams 业务架构地图位于 `docs/architecture/`，两者不混用。
+- [概要与唯一 owner](docs/goals/teams-overview-design.md)
+- [产品交互](docs/design/teams-detailed-design-v1.md)
+- [控制协议 v2](docs/design/teams-control-protocol-v2-master-agent-host.md)
+- [Agent 关系与通信](docs/design/teams-agent-relation-communication-v1.md)
+- [Provider 配置与 OpenMinis 参考](docs/design/teams-provider-config.md)
+- [下一步开发计划](docs/goals/teams-development-plan.md)
+- [架构 maps](docs/architecture/)
 
-当前已包含：
+## 当前进度
 
-- 独立 OpenCode v1 `{ server() }` adapter package 的白盒实现。
-- 控制协议 v2 Phase A：typed target/session frames、session channel 状态机、控制面与业务 payload 隔离测试。
-- 控制协议 v2 Phase B：Agent Host registration client、Server host directory skeleton、presence/stale/route candidate 正反向测试。
-- 控制协议 v2 Phase C：Master account directory snapshot/generation 确认，以及 manual/auto route plan 显式选择。
-- 控制协议 v2 Phase D：target transport 生命周期与 session logical channel multiplex registry。
-- 控制协议 v2 Phase E：Agent Host 配置校验与 OpenCode facade binding，注册/projection 不携带 Session/permission body。
+已有协议/目录/路由/channel 状态组件、OpenCode adapter 和直接访问 OpenCode HTTP
+API 的 Console 原型。独立 daemon、Agent-to-Agent transport 与公网 relay 尚未
+串成主线；provider 注册、模型目录刷新与配置应用仍待实现。
 
-仍未完成：
+迁移审计基线 `57c3dc4`：根配置的 57 个测试及 Console/OpenCode adapter 类型检查
+通过；根回归命令缺 package 入口，扩展测试存在旧路径和外部构建配置依赖。
+这是重置前基线。本次重建统一根 workspace/lockfile，修复迁移路径；全量现有
+33 个测试文件、128 个测试与核心/当前包类型检查通过。AppSDK 绑定实际构建的
+Console/OpenCode 库和静态资源，不再绑定占位文件。历史运行证据见 `note.md`，
+不替代当前候选的实际入口验证。
 
-- OpenCode live 回放只覆盖部分 Phase E；Master Console Host live integration 仍待 Phase F。
-- Search/Memory 插件 lifecycle 与 relation graph 仍待接入。
-- DSH adapter（deferred，不属于当前 release 前置）。
-- 服务器部署、AppSDK lifecycle records、AGY Review、提交和发布。
+## 开发管控入口
 
-v2 网络层参考 `~/code/zterm` 的连接架构原则（目录控制连接、target transport、logical channel、generation、route plan），但 Teams 独立实现自身协议和模块；不复制 zterm 终端协议或源码。
+在仓库根执行 `pnpm install --frozen-lockfile`，然后 `pnpm verify`。
+完整约定、适用边界与重置记录见 [开发管控](docs/development-governance.md)。
+源码/治理验证通过不表示 daemon、relay、provider live 或移动端验收完成。
+
+测试主 provider 使用 RCC 4444，goaichat 是显式备用配置。OpenMinis 仅作为配置
+逻辑和接口参考，不复用其 UI，不复制其推理执行栈。

@@ -1,5 +1,5 @@
 {
-  "bundle_digest": "sha256:17c79f1be2e01d2510ff424901bbf04a5ece13f3ec2bdcd5a9fc2fe90202f8e2",
+  "bundle_digest": "sha256:9ba613f85339e0dd1d85348bbe9a67c06ddeb24da023da152d4fd646be8b52be",
   "manifest_digest": "sha256:5e1977d7ee1d8ac2effc92bab780bdaf8c616782940f92177793e2be8751b3df",
   "resources": [
     {
@@ -40,31 +40,31 @@
     },
     {
       "class": "contracts",
-      "digest": "sha256:cf1e0e7cedc6f2d532d3fb5092ef1984adb22a7b79b473ea80faf8c326bdd829",
+      "digest": "sha256:44e8135acede8ae3bf4aa7f5aa5c4c2f62cdef5abc2ea9f8f43b873f5976f9c8",
       "path": ".appsdk/contracts/maps/resource-map.json",
       "source": "contracts/maps/resource-map.json"
     },
     {
       "class": "contracts",
-      "digest": "sha256:d374cad26dfae28974bb170f50f690c61ec9b1045bb86ca91812c9e44998e505",
+      "digest": "sha256:5a89f81462ad34d831bf1da9e82d690a1f9653added723cb4a99618149a3d16e",
       "path": ".appsdk/contracts/maps/function-map.json",
       "source": "contracts/maps/function-map.json"
     },
     {
       "class": "contracts",
-      "digest": "sha256:2758a9082ac2f88998d4b280f5000a5ecda31cb09054a414b408e024757d68c0",
+      "digest": "sha256:b6c41f115941405eeef0116ef602b390d04b6080fdf284b3a1b14a47fdd97d03",
       "path": ".appsdk/contracts/maps/mainline-call-map.json",
       "source": "contracts/maps/mainline-call-map.json"
     },
     {
       "class": "contracts",
-      "digest": "sha256:2862e8fa9aaf2743a3d94e52803dbe0846af1477fd0bf015e60651b1cbefbb0f",
+      "digest": "sha256:21ae8fcd3aa3d017321e5bb5ee3a9606fdf561f9d69348802f1bcd1a12bef3a7",
       "path": ".appsdk/contracts/maps/verification-map.json",
       "source": "contracts/maps/verification-map.json"
     },
     {
       "class": "contracts",
-      "digest": "sha256:fe02c3e492c2199713c2595ed023256407597b5700ec07ba7a3ee5f2eef3198f",
+      "digest": "sha256:27c984ece673f64e6d030f982394ae0699832a00959cd807b1d51560afaf3de7",
       "path": ".appsdk/contracts/migrations/sdk-0.1.5-to-0.1.6.json",
       "source": "contracts/migrations/sdk-0.1.5-to-0.1.6.json"
     },
@@ -232,7 +232,7 @@
     },
     {
       "class": "docs",
-      "digest": "sha256:76d0142e517a2c934de1c0dcfa7fa3b394184aa2c60887a7ac7e5bd2b8ee60cb",
+      "digest": "sha256:07f87897e26f16b4b2e00e33df61e8c872af924756e71fe589e0c1744209fa4a",
       "path": ".appsdk/docs/design/appsdk-project-integration.md",
       "source": "docs/design/appsdk-project-integration.md"
     },
@@ -304,7 +304,7 @@
     },
     {
       "class": "skills",
-      "digest": "sha256:577fbc9f5471dae734e98f05d24328d8d10fea5c33f0f55fbe0489da1ec2ed16",
+      "digest": "sha256:181a53c36e0c596ec60066a82b283f57c02be1d2dcf2f66b8789a6d28f405d1b",
       "path": ".appsdk/skills/appsdk-project-governance/references/bootstrap-migration.md",
       "source": "skills/appsdk-project-governance/references/bootstrap-migration.md"
     },
