@@ -1,15 +1,15 @@
 {
-  "goal_id": "agentteams-development-governance-reset",
-  "raw_request": "reset appsdk,从头开始建立appsdk开发管控",
-  "understood_objective": "Rebuild AgentTeams development governance in an isolated worktree, preserving accepted architecture and replacing inherited placeholder and parent-repository assumptions with real local validation and artifact production.",
+  "goal_id": "agentteams-parallel-service-development",
+  "raw_request": "确认Luna配置后开启三个长期辅助session并发开发，主任务负责主开发、审核与合并",
+  "understood_objective": "Establish shared service contracts, then implement isolated relay, provider/OpenCode and Agent Work modules with three Luna sessions; the primary task owns daemon/network integration, validation and merge.",
   "acceptance_criteria": [
-    "Initialize current official AppSDK resources without reusing historical admission records.",
-    "Bind project architecture maps, ownership, real test/build commands and compiled artifacts.",
-    "Run the complete existing test inventory, current standalone typechecks and package builds.",
-    "Compile Guidance and AppSDK and verify contracts; governance validation is not runtime readiness.",
-    "Review the validated candidate; preserve main and other worktrees. Commit, merge and deployment are separate delivery states."
+    "Shared contracts have one owner before parallel implementation; no duplicate configuration, routing or resource truth.",
+    "Three Luna sessions implement server, config/OpenCode and agent paths in separate clean worktrees; primary task owns shared interfaces and integration.",
+    "Each candidate passes affected tests, typecheck/build, applicable public-entrypoint validation and review before integration.",
+    "Service deployment operations and cross-device evidence are bound before service delivery; type declarations do not prove runtime implementation.",
+    "Preserve main and peer worktrees; integrate reviewed candidates through explicit Git evidence."
   ],
-  "non_goals": ["Implement daemon, relay, resource scheduling or provider runtime in this reset.", "Publish or freeze a runtime release.", "Reuse or build the retired host UI as the new Console.", "Modify credential stores or upstream providers."],
+  "non_goals": ["Claim runtime readiness from type declarations or unit tests.", "Publish to production without deployment authorization.", "Reuse the retired host UI as the new Console.", "Modify upstream providers or disclose credentials."],
   "assumptions": ["One source admission unit contains existing code; semantic ownership stays in docs/architecture/module-registry.json.", "Console is optional; passive capability Agents and one-to-many work are first-class.", "First release includes public network, NAT and relay; live runtime gates remain pending."],
   "ambiguities": [],
   "questions": [],
