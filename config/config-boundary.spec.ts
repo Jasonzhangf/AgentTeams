@@ -8,10 +8,12 @@ const ui = readFileSync(join(import.meta.dirname, '../ui/teams-console/src/clien
 describe('Per-Agent provider/model boundary', () => {
   it('config owns save/apply for agent runtime config with revision CAS', () => {
     expect(config.includes('export function saveAgentRuntimeConfig')).toBe(true)
+    expect(config.includes('export interface RuntimeConfigStore')).toBe(true)
+    expect(config.includes('export interface RuntimeConfigApplier')).toBe(true)
     expect(config.includes('expectedRevision')).toBe(true)
-    expect(config.includes('config.revision + 1')).toBe(true)
-    expect(config.includes('provider.length === 0')).toBe(true)
-    expect(config.includes('model.length === 0')).toBe(true)
+    expect(config.includes('acceptedRevision')).toBe(true)
+    expect(config.includes('commitAccepted')).toBe(true)
+    expect(config.includes('credentialRef')).toBe(true)
   })
 
   it('sync is blocked before server admission', () => {

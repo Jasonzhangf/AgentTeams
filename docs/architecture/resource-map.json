@@ -3,6 +3,7 @@
   "map_id": "teams-resource-map",
   "status": "partial",
   "resources": [
+    {"resource_id":"wss-client-socket","owner":"network","kind":"control_resource","status":"partial","truth_store":"network/wss-connection.ts live TLS socket and bounded unread/send buffers","allowed_operations":["connect","read_frame","send_frame","close"],"note":"Socket open/write is not relay admission or work completion; authentication stays in the dedicated HTTP header"},
     {"resource_id":"protocol-business-json","owner":"control-protocol","kind":"business_resource","truth_store":"validated business JSON in the declared payload/body/metadata/delta location; never transport or auth truth","allowed_operations":["validate_without_coercion","preserve"]},
     {"resource_id":"agent-service-contracts-r1","owner":"control-protocol","kind":"control_contract","status":"design","truth_store":"control-protocol/agent-services.ts; definitions only, service behavior remains pending","allowed_operations":["read","typecheck","review"]},
     {"resource_id":"development-artifact","owner":"development-governance","kind":"build_artifact","truth_store":"generated/modules/teams-source/lib; current package builds, not a deployed service","allowed_operations":["build","package","verify"]},

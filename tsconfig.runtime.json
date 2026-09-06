@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "noEmitOnError": true,
+    "declaration": true,
+    "rewriteRelativeImportExtensions": true,
+    "outDir": "./generated/runtime-lib",
+    "rootDir": "."
+  },
+  "include": ["network/wss-connection.ts", "network/relay-login.ts", "server/relay.ts", "agent/work-resource.ts", "config/runtime-config.ts"],
+  "exclude": ["**/*.spec.ts"]
+}

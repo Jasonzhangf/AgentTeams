@@ -5,6 +5,7 @@ import { join } from 'node:path'
 const agentFiles = [
   'relation-graph.ts',
   'notification-projection.ts',
+  'work-resource.ts',
 ]
 
 const truthPaths = [

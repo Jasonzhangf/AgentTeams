@@ -5,7 +5,7 @@
   "external_boundaries": [],
   "scope": "Current product architecture. Legacy source remains captured by the AppSDK source module until separately removed.",
   "modules": [
-    {"module_id":"development-governance","owner":"development-governance","status":"implemented","owned_paths":["scripts/**","package.json","pnpm-lock.yaml","pnpm-workspace.yaml","tsconfig.json","vitest.config.ts",".appsdk/project.json",".appsdk/goal.json"],"forbidden_paths":["agent/**","network/**","server/**","config/**"]},
+    {"module_id":"development-governance","owner":"development-governance","status":"implemented","owned_paths":["scripts/**","package.json","pnpm-lock.yaml","pnpm-workspace.yaml","tsconfig.json","tsconfig.runtime.json","vitest.config.ts",".appsdk/project.json",".appsdk/goal.json"],"forbidden_paths":["agent/**","network/**","server/**","config/**"]},
     {
       "module_id": "bootstrap",
       "owner": "bootstrap",

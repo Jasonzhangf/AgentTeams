@@ -106,7 +106,12 @@
         "opencode-adapter/index.d.mts",
         "console-host/index.mjs",
         "console-host/index.d.mts",
-        "static/index.html"
+        "static/index.html",
+        "runtime/network/wss-connection.js",
+        "runtime/network/relay-login.js",
+        "runtime/server/relay.js",
+        "runtime/agent/work-resource.js",
+        "runtime/config/runtime-config.js"
       ],
       "build": {
         "args": [
@@ -166,6 +171,7 @@
         "pnpm-workspace.yaml",
         "pnpm-lock.yaml",
         "tsconfig.json",
+        "tsconfig.runtime.json",
         "vitest.config.ts",
         ".gitignore"
       ],
@@ -213,10 +219,11 @@
           "pnpm-lock.yaml",
           "pnpm-workspace.yaml",
           "tsconfig.json",
+          "tsconfig.runtime.json",
           "vitest.config.ts",
           "docs/architecture/**"
         ],
-        "minimum_test_count": 143,
+        "minimum_test_count": 205,
         "ordinary_mode_after_freeze": "disabled",
         "reenable_on": [
           "source_change",

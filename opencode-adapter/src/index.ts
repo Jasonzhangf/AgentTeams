@@ -1,5 +1,29 @@
 import type { PluginInput, Hooks } from '@opencode-ai/plugin'
 import type { Session } from '@opencode-ai/sdk'
+import type {
+  ConfigApplyResult,
+  ModelEntry,
+  ProviderInstance,
+  RuntimeConfigApplier,
+  VersionedRuntimeConfig,
+} from '../../config/runtime-config.ts'
+
+export type OpenCodeAdapterErrorCode = 'UNAUTHENTICATED' | 'FORBIDDEN' | 'NOT_FOUND' | 'UPSTREAM_ERROR'
+  | 'INVALID_RESPONSE' | 'UNAVAILABLE' | 'UNSUPPORTED_OPERATION' | 'INVALID_INPUT'
+
+export class OpenCodeAdapterError extends Error {
+  readonly code: OpenCodeAdapterErrorCode
+  readonly operation: string
+  readonly status?: number
+
+  constructor(operation: string, code: OpenCodeAdapterErrorCode, message: string, status?: number) {
+    super(message)
+    this.name = 'OpenCodeAdapterError'
+    this.code = code
+    this.operation = operation
+    this.status = status
+  }
+}
 
 export interface OpenCodePluginInput {
   readonly client: unknown
@@ -122,40 +146,166 @@ export interface OpenCodePluginRuntime {
   readonly hooks: Hooks
 }
 
-export interface OpenCodeSessionClient {
-  readonly session: {
-    list(options?: Readonly<Record<string, unknown>>): Promise<{ data?: readonly Session[] } | readonly Session[]>
-    get(options: { path: { id: string } }): Promise<{ data?: Session } | Session>
-    prompt(options: { path: { id: string }; body: { parts: [{ type: 'text'; text: string }] } }): Promise<unknown>
-  }
-  readonly postSessionIdPermissionsPermissionId: (options: { path: { id: string; permissionID: string }; body: { response: 'once' | 'always' | 'reject' } }) => Promise<unknown>
+export interface OpenCodeSdkResponse<T> {
+  readonly data?: T
+  readonly error?: unknown
+  readonly response?: { readonly status: number }
 }
 
-function responseData<T>(response: T | { data?: T }): T | undefined {
-  if (typeof response === 'object' && response !== null && 'data' in response) return response.data
-  return response as T
+export type OpenCodeSdkResult<T> = T | OpenCodeSdkResponse<T>
+
+export interface OpenCodeSessionClient {
+  readonly session: {
+    list(options?: Readonly<Record<string, unknown>>): Promise<OpenCodeSdkResult<readonly Session[]>>
+    get(options: { path: { id: string } }): Promise<OpenCodeSdkResult<Session>>
+    prompt(options: { path: { id: string }; body: { parts: [{ type: 'text'; text: string }] } }): Promise<OpenCodeSdkResult<unknown>>
+  }
+  readonly postSessionIdPermissionsPermissionId: (options: { path: { id: string; permissionID: string }; body: { response: 'once' | 'always' | 'reject' } }) => Promise<OpenCodeSdkResult<unknown>>
+}
+
+export interface OpenCodeCompiledTarget {
+  /** The Teams provider-instance id; OpenCode does not own this identity. */
+  readonly provider: string
+  readonly model: string
+  readonly protocol: ProviderInstance['protocol']
+  readonly baseUrl: string
+  /** An opaque reference only. The credential value never enters this projection. */
+  readonly credentialRef?: string
+}
+
+export interface OpenCodeCompiledConfig {
+  readonly agentId: string
+  readonly acceptedRevision: number
+  readonly primary: OpenCodeCompiledTarget
+  readonly backup?: OpenCodeCompiledTarget
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null
+}
+
+function responseStatus(response: Readonly<Record<string, unknown>>): number | undefined {
+  const nested = response.response
+  if (isRecord(nested) && typeof nested.status === 'number') return nested.status
+  return typeof response.status === 'number' ? response.status : undefined
+}
+
+function responseMessage(value: unknown, operation: string): string {
+  if (value instanceof Error && value.message.length > 0) return value.message
+  if (isRecord(value) && typeof value.message === 'string' && value.message.length > 0) return value.message
+  return `OpenCode ${operation} failed`
+}
+
+function errorCodeForStatus(status: number | undefined): OpenCodeAdapterErrorCode {
+  if (status === 401) return 'UNAUTHENTICATED'
+  if (status === 403) return 'FORBIDDEN'
+  if (status === 404) return 'NOT_FOUND'
+  if (status !== undefined && status >= 500) return 'UPSTREAM_ERROR'
+  return 'INVALID_RESPONSE'
+}
+
+function unwrapOpenCodeResponse<T>(response: OpenCodeSdkResult<T>, operation: string, allowUndefined = false): T | undefined {
+  if (!isRecord(response)) {
+    if (response === undefined && !allowUndefined) throw new OpenCodeAdapterError(operation, 'INVALID_RESPONSE', `OpenCode ${operation} returned no data`)
+    return response as T | undefined
+  }
+  const status = responseStatus(response)
+  if (status !== undefined && (status < 200 || status >= 300)) {
+    throw new OpenCodeAdapterError(operation, errorCodeForStatus(status), responseMessage(response.error, operation), status)
+  }
+  const hasEnvelope = 'data' in response || 'error' in response || 'response' in response
+  if (!hasEnvelope) {
+    if (status !== undefined) {
+      if (allowUndefined) return undefined
+      throw new OpenCodeAdapterError(operation, 'INVALID_RESPONSE', `OpenCode ${operation} returned no data`, status)
+    }
+    return response as T
+  }
+  if (response.error !== undefined) {
+    throw new OpenCodeAdapterError(operation, errorCodeForStatus(status), responseMessage(response.error, operation), status)
+  }
+  if (response.data === undefined) {
+    if (allowUndefined) return undefined
+    throw new OpenCodeAdapterError(operation, errorCodeForStatus(status), `OpenCode ${operation} returned no data`, status)
+  }
+  return response.data as T
 }
 
 export async function listOpenCodeSessions(client: OpenCodeSessionClient, directory?: string): Promise<readonly OpenCodeSessionProjection[]> {
   const result = await client.session.list(directory === undefined ? {} : { query: { directory } })
-  const sessions = responseData(result) ?? []
+  const sessions = unwrapOpenCodeResponse(result, 'session.list')
+  if (sessions === undefined) throw new OpenCodeAdapterError('session.list', 'INVALID_RESPONSE', 'OpenCode session.list returned no data')
   return sessions.map(session => ({ id: session.id, title: session.title, directory: session.directory, time: session.time }))
 }
 
 export async function getOpenCodeSession(client: OpenCodeSessionClient, sessionId: string): Promise<OpenCodeSessionProjection> {
   const result = await client.session.get({ path: { id: sessionId } })
-  const session = responseData(result)
-  if (session === undefined) throw new Error(`OpenCode session not found: ${sessionId}`)
+  const session = unwrapOpenCodeResponse(result, 'session.get')
+  if (session === undefined) throw new OpenCodeAdapterError('session.get', 'NOT_FOUND', `OpenCode session not found: ${sessionId}`, 404)
   return { id: session.id, title: session.title, directory: session.directory, time: session.time }
 }
 
 export async function sendOpenCodeMessage(client: OpenCodeSessionClient, sessionId: string, text: string): Promise<void> {
   if (text.trim() === '') throw new Error('OpenCode message must not be empty')
-  await client.session.prompt({ path: { id: sessionId }, body: { parts: [{ type: 'text', text }] } })
+  const result = await client.session.prompt({ path: { id: sessionId }, body: { parts: [{ type: 'text', text }] } })
+  unwrapOpenCodeResponse(result, 'session.prompt', true)
 }
 
 export async function replyOpenCodePermission(client: OpenCodeSessionClient, permissionId: string, sessionId: string, response: 'once' | 'always' | 'reject'): Promise<void> {
-  await client.postSessionIdPermissionsPermissionId({ path: { id: sessionId, permissionID: permissionId }, body: { response } })
+  const result = await client.postSessionIdPermissionsPermissionId({ path: { id: sessionId, permissionID: permissionId }, body: { response } })
+  unwrapOpenCodeResponse(result, 'permission.reply', true)
+}
+
+function modelEntryFor(config: VersionedRuntimeConfig, providerInstanceId: string, modelId: string): ModelEntry | undefined {
+  return config.catalogs[providerInstanceId]?.entries.find(entry => entry.ref.providerInstanceId === providerInstanceId && entry.ref.modelId === modelId)
+}
+
+function compileTarget(config: VersionedRuntimeConfig, providerInstanceId: string, modelId: string): OpenCodeCompiledTarget {
+  const provider: ProviderInstance | undefined = config.providers[providerInstanceId]
+  if (provider === undefined) {
+    throw new OpenCodeAdapterError('config.compile', 'NOT_FOUND', `OpenCode provider not found: ${providerInstanceId}`)
+  }
+  if (!provider.enabled) {
+    throw new OpenCodeAdapterError('config.compile', 'UNAVAILABLE', `OpenCode provider is disabled: ${providerInstanceId}`)
+  }
+  const entry = modelEntryFor(config, providerInstanceId, modelId)
+  if (entry === undefined) {
+    throw new OpenCodeAdapterError('config.compile', 'NOT_FOUND', `OpenCode model not found: ${providerInstanceId}/${modelId}`)
+  }
+  if (entry.availability === 'unavailable') {
+    throw new OpenCodeAdapterError('config.compile', 'UNAVAILABLE', `OpenCode model is unavailable: ${providerInstanceId}/${modelId}`)
+  }
+  return {
+    provider: provider.id,
+    model: entry.ref.modelId,
+    protocol: provider.protocol,
+    baseUrl: provider.apiBaseUrl,
+    ...(provider.auth.kind === 'bearer' ? { credentialRef: provider.auth.credentialRef } : {}),
+  }
+}
+
+export function compileOpenCodeConfig(config: VersionedRuntimeConfig, agentId: string): OpenCodeCompiledConfig {
+  if (agentId.trim() === '') throw new OpenCodeAdapterError('config.compile', 'INVALID_INPUT', 'OpenCode agent id is required')
+  const binding = config.agents[agentId]
+  if (binding === undefined) throw new OpenCodeAdapterError('config.compile', 'NOT_FOUND', `OpenCode Agent binding not found: ${agentId}`)
+  return {
+    agentId,
+    acceptedRevision: config.acceptedRevision,
+    primary: compileTarget(config, binding.primary.providerInstanceId, binding.primary.modelId),
+    ...(binding.backup === undefined ? {} : { backup: compileTarget(config, binding.backup.providerInstanceId, binding.backup.modelId) }),
+  }
+}
+
+export function createOpenCodeConfigApplier(): RuntimeConfigApplier {
+  return {
+    apply: async (_config): Promise<ConfigApplyResult> => ({
+      status: 'unsupported',
+      error: {
+        code: 'UNSUPPORTED_OPERATION',
+        message: 'OpenCode config apply API is unsupported',
+      },
+    }),
+  }
 }
 
 export function createOpenCodeHostFacade(client: OpenCodeSessionClient, binding = createOpenCodeNotificationStoreBinding()): OpenCodeHostFacade {
