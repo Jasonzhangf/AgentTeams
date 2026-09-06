@@ -3,17 +3,14 @@ import { once } from 'node:events'
 import { createServer, type Server as HttpsServer } from 'node:https'
 import type { IncomingMessage } from 'node:http'
 import WebSocket, { WebSocketServer } from 'ws'
-import { assertEnvelopeKeys, assertJsonValue } from '../control-protocol/json-value.ts'
+import { assertEnvelopeKeys } from '../control-protocol/json-value.ts'
+import { parseAgentDeclaration } from '../control-protocol/relay-codec.ts'
 import type {
   AgentDeclaration,
   AuthenticatedAgent,
-  CapabilityDeclaration,
-  JsonValue,
-  OperationDeclaration,
   RelayGrant,
   RelayPeer,
   RelayServerControl,
-  ResourceDeclaration,
   ServiceError,
   ServiceErrorCode,
 } from '../control-protocol/agent-services.ts'
@@ -113,121 +110,24 @@ function knownFields(value: Record<string, unknown>, fields: readonly string[], 
   }
 }
 
-function positiveInteger(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
-    throw new RelayFailure('INVALID_INPUT', `${label} must be a positive integer`)
+function parseDeclaration(value: unknown): AgentDeclaration {
+  try {
+    return parseAgentDeclaration(value)
+  } catch (error) {
+    throw new RelayFailure('INVALID_INPUT', error instanceof Error ? error.message : 'invalid declaration')
   }
-  return value
+}
+
+function positiveInteger(value: unknown, label: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 1) {
+    throw new RelayFailure('INVALID_INPUT', `${label} must be a positive safe integer`)
+  }
+  return value as number
 }
 
 function boolean(value: unknown, label: string): boolean {
   if (typeof value !== 'boolean') throw new RelayFailure('INVALID_INPUT', `${label} must be boolean`)
   return value
-}
-
-function enumValue<T extends string>(value: unknown, values: readonly T[], label: string): T {
-  if (typeof value !== 'string' || !values.includes(value as T)) {
-    throw new RelayFailure('INVALID_INPUT', `${label} is unsupported`)
-  }
-  return value as T
-}
-
-function jsonValue(value: unknown, label: string): JsonValue {
-  try {
-    assertJsonValue(value, label)
-  } catch (error) {
-    throw new RelayFailure('INVALID_INPUT', error instanceof Error ? error.message : `${label} must contain only JSON values`)
-  }
-  return value
-}
-
-function jsonObject(value: unknown, label: string): Readonly<Record<string, JsonValue>> {
-  const input = object(value, label)
-  jsonValue(input, label)
-  return input as Readonly<Record<string, JsonValue>>
-}
-
-function parseOperation(value: unknown, index: number): OperationDeclaration {
-  const input = object(value, `capabilities[].operations[${index}]`)
-  knownFields(input, ['operation', 'inputSchema', 'outputSchema', 'cancellation'], `capabilities[].operations[${index}]`)
-  return {
-    operation: string(input.operation, `capabilities[].operations[${index}].operation`),
-    inputSchema: jsonObject(input.inputSchema, `capabilities[].operations[${index}].inputSchema`),
-    outputSchema: jsonObject(input.outputSchema, `capabilities[].operations[${index}].outputSchema`),
-    cancellation: enumValue(input.cancellation, ['unsupported', 'cooperative'], `capabilities[].operations[${index}].cancellation`),
-  }
-}
-
-function parseResource(value: unknown, index: number): ResourceDeclaration {
-  const input = object(value, `capabilities[].resources[${index}]`)
-  knownFields(input, ['resourceId', 'capacity', 'unit', 'sharing', 'allocationScope'], `capabilities[].resources[${index}]`)
-  return {
-    resourceId: string(input.resourceId, `capabilities[].resources[${index}].resourceId`),
-    capacity: positiveInteger(input.capacity, `capabilities[].resources[${index}].capacity`),
-    unit: enumValue(input.unit, ['slot', 'context'], `capabilities[].resources[${index}].unit`),
-    sharing: enumValue(input.sharing, ['exclusive', 'shared'], `capabilities[].resources[${index}].sharing`),
-    allocationScope: enumValue(input.allocationScope, ['request', 'work'], `capabilities[].resources[${index}].allocationScope`),
-  }
-}
-
-function parseCapability(value: unknown, index: number): CapabilityDeclaration {
-  const input = object(value, `capabilities[${index}]`)
-  knownFields(input, ['capabilityId', 'version', 'operations', 'resources'], `capabilities[${index}]`)
-  const operations = input.operations
-  const resources = input.resources
-  if (!Array.isArray(operations) || !Array.isArray(resources)) {
-    throw new RelayFailure('INVALID_INPUT', `capabilities[${index}] operations/resources must be arrays`)
-  }
-  return {
-    capabilityId: string(input.capabilityId, `capabilities[${index}].capabilityId`),
-    version: string(input.version, `capabilities[${index}].version`),
-    operations: operations.map(parseOperation),
-    resources: resources.map(parseResource),
-  }
-}
-
-function parseRoute(value: unknown, index: number): AgentDeclaration['routes'][number] {
-  const input = object(value, `routes[${index}]`)
-  knownFields(input, ['candidateId', 'kind', 'endpoint', 'port', 'authRequired', 'lastSeenAt'], `routes[${index}]`)
-  const route: AgentDeclaration['routes'][number] = {
-    candidateId: string(input.candidateId, `routes[${index}].candidateId`),
-    kind: enumValue(input.kind, ['lan', 'tailscale', 'ipv6', 'ipv4', 'gateway', 'relay-ws', 'relay-webrtc'], `routes[${index}].kind`),
-    authRequired: boolean(input.authRequired, `routes[${index}].authRequired`),
-    lastSeenAt: string(input.lastSeenAt, `routes[${index}].lastSeenAt`),
-  }
-  if (input.endpoint !== undefined) route.endpoint = string(input.endpoint, `routes[${index}].endpoint`)
-  if (input.port !== undefined) {
-    const port = positiveInteger(input.port, `routes[${index}].port`)
-    if (port > 65535) throw new RelayFailure('INVALID_INPUT', `routes[${index}].port is invalid`)
-    route.port = port
-  }
-  return route
-}
-
-function parseDeclaration(value: unknown): AgentDeclaration {
-  const input = object(value, 'declaration')
-  const identityInput = object(input.identity, 'declaration.identity')
-  knownFields(input, ['identity', 'scopeId', 'revision', 'capabilities', 'routes'], 'declaration')
-  knownFields(identityInput, ['hostId', 'machineId', 'agentId', 'accountId', 'agentKind', 'label'], 'declaration.identity')
-  const capabilities = input.capabilities
-  const routes = input.routes
-  if (!Array.isArray(capabilities) || !Array.isArray(routes)) {
-    throw new RelayFailure('INVALID_INPUT', 'declaration capabilities/routes must be arrays')
-  }
-  return {
-    identity: {
-      hostId: string(identityInput.hostId, 'declaration.identity.hostId'),
-      machineId: string(identityInput.machineId, 'declaration.identity.machineId'),
-      agentId: string(identityInput.agentId, 'declaration.identity.agentId'),
-      accountId: string(identityInput.accountId, 'declaration.identity.accountId'),
-      agentKind: enumValue(identityInput.agentKind, ['opencode', 'acp', 'custom'], 'declaration.identity.agentKind'),
-      label: string(identityInput.label, 'declaration.identity.label'),
-    },
-    scopeId: string(input.scopeId, 'declaration.scopeId'),
-    revision: positiveInteger(input.revision, 'declaration.revision'),
-    capabilities: capabilities.map(parseCapability),
-    routes: routes.map(parseRoute),
-  }
 }
 
 function parseControlMessage(data: RawData, isBinary: boolean): Record<string, unknown> {

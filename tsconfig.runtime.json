@@ -8,6 +8,6 @@
     "outDir": "./generated/runtime-lib",
     "rootDir": "."
   },
-  "include": ["network/wss-connection.ts", "network/relay-login.ts", "server/relay.ts", "agent/work-resource.ts", "config/runtime-config.ts"],
+  "include": ["network/wss-connection.ts", "network/relay-login.ts", "network/relay-client.ts", "runtime/agent-daemon.ts", "server/relay.ts", "agent/work-resource.ts", "config/runtime-config.ts", "config/provider-model-client.ts"],
   "exclude": ["**/*.spec.ts"]
 }

@@ -24,8 +24,8 @@
 
 `pnpm verify` 顺序执行全量测试、类型检查、Guidance compile、AppSDK compile、编译
 产物 HTTP smoke、AppSDK verify；任何命令失败即停止。`pnpm test` 先构建被依赖的
-OpenCode adapter，再运行现有全部 33 个测试文件；从 module contract 读取最少
-128 测试门槛，拒绝 skip、TODO 和 `.only`。报告落在 `generated/validation/`。
+OpenCode adapter，再运行现有全部 39 个测试文件；从 module contract 读取最少
+237 测试门槛，拒绝 skip、TODO 和 `.only`。报告落在 `generated/validation/`。
 增加功能时补测试并按真实基线更新门槛，不靠降低门槛消除回归。
 
 类型检查覆盖核心源码及 Console/OpenCode 两个独立包。保留的旧宿主 UI 不进入新

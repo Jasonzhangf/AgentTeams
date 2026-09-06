@@ -223,7 +223,7 @@
           "vitest.config.ts",
           "docs/architecture/**"
         ],
-        "minimum_test_count": 205,
+        "minimum_test_count": 237,
         "ordinary_mode_after_freeze": "disabled",
         "reenable_on": [
           "source_change",
