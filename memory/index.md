@@ -15,6 +15,10 @@ _Empty._
 
 ## Level 2 — reviewed reusable
 
+### AgentBrowser icon admission
+- tags: `agentbrowser`, `ai-reviewed`, `human-unreviewed`, `icon`, `ui-evidence`
+- details: [L2/agentbrowser-icon-20260906.md](L2/agentbrowser-icon-20260906.md)
+
 ### AgentTeams 长程交付与阶段L2记忆
 - tags: `ai-reviewed`, `delivery`, `governance`, `human-unreviewed`, `memory-l2`
 - details: [L2/agentteams-long-running-delivery-20260906.md](L2/agentteams-long-running-delivery-20260906.md)
@@ -81,14 +85,13 @@ _Empty._
 
 ## Level 3 — new or unreviewed
 
-### AgentBrowser icon admission
-- tags: `agentbrowser`, `ai-reviewed`, `human-unreviewed`, `icon`, `ui-evidence`
-- details: [L3/agentbrowser-icon-20260906.md](L3/agentbrowser-icon-20260906.md)
+_Empty._
 
 ## Skill description candidates
 
 Base budget: 8 lines. Copy the compact lines into the project Skill `description` after manual architecture deduplication. Fill level 1 first; use level 2, then level 3, only for remaining slots.
 
+- L2: AgentBrowser icon admission (knowledge) [agentbrowser,ai-reviewed,human-unreviewed,icon,ui-evidence] -> L2/agentbrowser-icon-20260906.md
 - L2: AgentTeams 长程交付与阶段L2记忆 (plan) [ai-reviewed,delivery,governance,human-unreviewed,memory-l2] -> L2/agentteams-long-running-delivery-20260906.md
 - L2: Console integration candidate validation (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-candidate-20260906.md
 - L2: Console integration merged and main verified (knowledge) [ai-reviewed,human-unreviewed] -> L2/console-integration-delivery-20260906.md
@@ -96,5 +99,4 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: Daemon PR9 merged and owned worktree closed (knowledge) [ai-reviewed,human-unreviewed] -> L2/daemon-execution-delivery-20260906.md
 - L2: PR8合并和daemon库工作树关闭回执 (knowledge) [ai-reviewed,cleanup,delivery,human-unreviewed] -> L2/daemon-library-delivery-20260906.md
 - L2: Relay客户端和daemon库集成验证 (knowledge) [ai-reviewed,daemon,human-unreviewed,relay-client] -> L2/daemon-library-integration-20260906.md
-- L2: 第一波PR7合并和主集成树关闭回执 (knowledge) [ai-reviewed,cleanup,delivery,human-unreviewed] -> L2/first-wave-delivery-20260906.md
 
