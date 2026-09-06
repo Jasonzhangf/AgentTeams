@@ -60,6 +60,12 @@ Provider CRUD/模型刷新不实现推理请求栈；凭据通过独立 owner �
 ## 开工与归属
 
 主任务：公共类型/协议验证、legacy payload 数组/字段误拒绝、Session 明确选择、N2、集成。
+
+业务 JSON 的字段名不能用于推断控制意图：例如浏览器返回的 `config`、`token` 或
+`route` 属性必须保留，数组同样保留。控制状态只读协议声明的外层字段和专用资源；
+外层未声明字段显式拒绝，不能把业务体塞进控制帧，也不能从业务体补齐缺失 generation。
+业务值只接受无损 JSON，拒绝循环、非有限数字、undefined、函数、非JSON对象和会被
+序列化丢弃的属性。`control-protocol/json-value.ts` 是此协议校验的唯一 owner。
 三个 Luna：N1 server、C1 config/opencode-adapter、W1 agent，互不修改目录。
 类型冻结只允许先并行实现各模块本地核心；跨模块/真实产品验收仍须P0其余语义修复和I1。
 改根依赖、公共maps和生产入口需交给主任务，不能另开第二条共享写路径。

@@ -1,3 +1,55 @@
+
+> agentteams@0.1.0 verify /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906
+> pnpm test && pnpm typecheck && appsdk guide compile && appsdk compile && pnpm smoke && appsdk verify
+
+
+> agentteams@0.1.0 test /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906
+> pnpm --dir opencode-adapter build && node scripts/regression.mjs
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    9.41 kB │ gzip: 2.32 kB
+ℹ lib/index.d.mts  7.74 kB │ gzip: 1.61 kB
+ℹ 2 files, total: 17.15 kB
+✔ Build complete in 514ms
+Test Files 33 passed
+Tests 142 passed
+
+> agentteams@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906
+> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    9.41 kB │ gzip: 2.32 kB
+ℹ lib/index.d.mts  7.74 kB │ gzip: 1.61 kB
+ℹ 2 files, total: 17.15 kB
+✔ Build complete in 418ms
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906/opencode-adapter
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906/console-host
+> tsc --noEmit
+
 {
   "enforcement": "advisory",
   "harness": "appsdk-development-process-control",
@@ -873,3 +925,178 @@
     }
   ]
 }
+{
+  "artifact_hash": "sha256:33f37d1322ca27aad940f8a30725c374b1ec9e1ced053462a0c41fc74a303d69",
+  "artifact_paths": [
+    "opencode-adapter/index.mjs",
+    "opencode-adapter/index.d.mts",
+    "console-host/index.mjs",
+    "console-host/index.d.mts",
+    "static/index.html"
+  ],
+  "artifact_schema": 1,
+  "artifacts": [
+    {
+      "hash": "sha256:800506aecf2bb7baef9ea45e4a468d982113ec1653e05e2e7a786fedc0af356f",
+      "path": "opencode-adapter/index.mjs"
+    },
+    {
+      "hash": "sha256:7882df05b7cd4169e16f120db99a445d54d8678f15fa43e0bc1b2d271b725b78",
+      "path": "opencode-adapter/index.d.mts"
+    },
+    {
+      "hash": "sha256:89684370309217421e994429af025dce600cc413ffc0da8e3afbce8b8c307a3c",
+      "path": "console-host/index.mjs"
+    },
+    {
+      "hash": "sha256:158145bf35a220fb97d0c74d520ce012aa423cdfd502505b23272e68a0765ab5",
+      "path": "console-host/index.d.mts"
+    },
+    {
+      "hash": "sha256:2a413aa2f5a05a05cea517e52a165335c5f551f4f48aa09297342a116f32374f",
+      "path": "static/index.html"
+    }
+  ],
+  "build": {
+    "args": [
+      "build:governance"
+    ],
+    "program": "pnpm",
+    "working_directory": "."
+  },
+  "contract_hash": "sha256:f82f45c3d1d5c13d7334330e3e1c4b6787b418d6214d90b1f1135cef146118e8",
+  "dependency_hashes": [],
+  "deployment_operations": [],
+  "module_id": "teams-source",
+  "public_api_hash": "sha256:cfdc40224f8a21ad9041c74c6e96978ecab7db4197f42ac382add37dbf0c1514",
+  "source_hash": "sha256:5775b4ec8d59693b69e4a2ba7db2ee786d05961f178a38f6bc80f8b41989355d",
+  "stage": "source_implemented"
+}
+{
+  "artifact_hash": "sha256:ea2011cd1bb2f12c46679bed7f6f400e5e3cc8f4162dfe092d0dfaed4fa25d43",
+  "artifact_schema": 1,
+  "modules": [
+    {
+      "active_artifact": "active/lib/teams-source/**",
+      "generated_outputs": [
+        "generated/modules/teams-source/**"
+      ],
+      "module_id": "teams-source",
+      "owned_paths": [
+        "agent/**",
+        "agent-host/**",
+        "config/**",
+        "control-protocol/**",
+        "network/**",
+        "runtime/**",
+        "server/**",
+        "opencode-adapter/src/**",
+        "opencode-adapter/tests/**",
+        "opencode-adapter/separator.spec.ts",
+        "opencode-adapter/package.json",
+        "opencode-adapter/tsconfig.json",
+        "opencode-adapter/tsdown.config.ts",
+        "console-host/src/**",
+        "console-host/tests/**",
+        "console-host/static/**",
+        "console-host/package.json",
+        "console-host/tsconfig.json",
+        "console-host/vitest.config.ts",
+        "ui/teams-console/src/**",
+        "ui/teams-console/tests/**",
+        "ui/teams-console/package.json",
+        "ui/teams-console/tsconfig.json",
+        "ui/teams-console/vitest.config.ts",
+        "ui/teams-console/tsdown.config.ts",
+        "ui/teams-console/cordis.patch.yml",
+        "dsh-adapter/**",
+        "memory-plugin/**",
+        "search-plugin/**",
+        "docs/**",
+        "scripts/**",
+        "AGENTS.md",
+        "README.md",
+        "package.json",
+        "pnpm-workspace.yaml",
+        "pnpm-lock.yaml",
+        "tsconfig.json",
+        "vitest.config.ts",
+        ".gitignore"
+      ],
+      "regression": {
+        "allow_skipped": false,
+        "command": {
+          "args": [
+            "test"
+          ],
+          "program": "pnpm",
+          "working_directory": "."
+        },
+        "input_paths": [
+          "agent/**",
+          "agent-host/**",
+          "config/**",
+          "control-protocol/**",
+          "network/**",
+          "runtime/**",
+          "server/**",
+          "opencode-adapter/src/**",
+          "opencode-adapter/tests/**",
+          "opencode-adapter/separator.spec.ts",
+          "opencode-adapter/package.json",
+          "opencode-adapter/tsconfig.json",
+          "opencode-adapter/tsdown.config.ts",
+          "console-host/src/**",
+          "console-host/tests/**",
+          "console-host/static/**",
+          "console-host/package.json",
+          "console-host/tsconfig.json",
+          "console-host/vitest.config.ts",
+          "ui/teams-console/src/**",
+          "ui/teams-console/tests/**",
+          "ui/teams-console/package.json",
+          "ui/teams-console/tsconfig.json",
+          "ui/teams-console/vitest.config.ts",
+          "ui/teams-console/tsdown.config.ts",
+          "ui/teams-console/cordis.patch.yml",
+          "dsh-adapter/**",
+          "memory-plugin/**",
+          "search-plugin/**",
+          "scripts/**",
+          "package.json",
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          "tsconfig.json",
+          "vitest.config.ts",
+          "docs/architecture/**"
+        ],
+        "minimum_test_count": 142,
+        "ordinary_mode_after_freeze": "disabled",
+        "reenable_on": [
+          "source_change",
+          "contract_change",
+          "public_api_change",
+          "artifact_change",
+          "dependency_change"
+        ],
+        "required_before_freeze": true,
+        "suite_id": "teams-source-regression"
+      },
+      "source_owner": "teams-source",
+      "stage": "source_implemented"
+    }
+  ],
+  "project_id": "agentteams",
+  "sdk": {
+    "bundle_manifest": ".appsdk/contracts/sdk-bundle.manifest.json",
+    "name": "appsdk",
+    "resource_record": ".appsdk/sdk-resources.json",
+    "version": "0.1.6"
+  }
+}
+
+> agentteams@0.1.0 smoke /Volumes/extension/code/AgentTeams/playground/daemon-main-20260906
+> node scripts/artifact-smoke.mjs
+
+Compiled Console HTTP smoke passed: health, exact static artifact, invalid action, JSON payload ingress and misplaced control rejection. No provider or cross-device claim.
+{"ok":true,"project_id":"agentteams","stage":"contract_bound"}

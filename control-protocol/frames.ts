@@ -1,5 +1,6 @@
 import { AgentMessage, validateAgentMessage } from './agent-message.ts'
 import { RelationReport, validateRelationReport } from './relation-report.ts'
+import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
 
 export type AgentKind = 'opencode' | 'acp' | 'custom'
 export type HealthState = 'starting' | 'ready' | 'error'
@@ -237,26 +238,6 @@ export interface SessionChannelFrameMap {
 
 export type SessionChannelFrame = SessionChannelFrameMap[keyof SessionChannelFrameMap]
 
-const forbiddenBusinessKeys = new Set([
-  'machineId',
-  'endpoint',
-  'route',
-  'generation',
-  'targetGeneration',
-  'health',
-  'authGrant',
-  'permissionDecision',
-  'config',
-  'routing',
-  'retry',
-  'diagnostics',
-  'authToken',
-  'apiKey',
-  'bearer',
-  'password',
-  'token',
-])
-
 function record(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`)
@@ -296,20 +277,6 @@ function assertIsoDate(value: unknown, label: string): void {
   const parsed = stringValue(value, label)
   if (Number.isNaN(Date.parse(parsed))) {
     throw new Error(`${label} must be an ISO date`)
-  }
-}
-
-function assertBusinessSafe(value: unknown, path: string): void {
-  if (Array.isArray(value)) {
-    value.forEach((entry, index) => assertBusinessSafe(entry, `${path}[${index}]`))
-    return
-  }
-  if (typeof value !== 'object' || value === null) return
-  for (const [key, entry] of Object.entries(value)) {
-    if (forbiddenBusinessKeys.has(key)) {
-      throw new Error(`${path} contains forbidden control field ${key}`)
-    }
-    assertBusinessSafe(entry, `${path}.${key}`)
   }
 }
 
@@ -355,11 +322,29 @@ function assertChannelId(input: Record<string, unknown>): string {
 export function parseTargetControlFrame(value: unknown): TargetControlFrame {
   const input = record(value, 'target control frame')
   const kind = stringValue(input.kind, 'kind') as keyof TargetControlFrameMap
-  if (!(kind in targetControlValidators)) {
+  if (!Object.hasOwn(targetControlValidators, kind)) {
     throw new Error(`unknown target control frame: ${kind}`)
   }
+  assertEnvelopeKeys(input, ['kind', 'targetGeneration', ...targetControlFields[kind]], 'target control frame')
   targetControlValidators[kind](input)
   return input as TargetControlFrame
+}
+
+const targetControlFields: { [K in keyof TargetControlFrameMap]: readonly (keyof TargetControlFrameMap[K])[] } = {
+  'transport.hello': ['protocolVersion', 'hostId', 'agentId', 'capabilitiesRevision'],
+  'transport.hello_ack': [],
+  'transport.ping': ['nonce'],
+  'transport.pong': ['nonce'],
+  'transport.health': ['health'],
+  'transport.generation': [],
+  'transport.capability': ['capabilitiesRevision', 'capabilities'],
+  'transport.route_info': ['route'],
+  'transport.error': ['code', 'message'],
+  'channel.open': ['channelId', 'sessionRef'],
+  'channel.open_ack': ['channelId'],
+  'channel.close': ['channelId', 'reason'],
+  'channel.close_ack': ['channelId'],
+  'channel.error': ['channelId', 'code', 'message'],
 }
 
 const targetControlValidators: {
@@ -449,11 +434,27 @@ function assertRouteCandidate(value: unknown): void {
 export function parseSessionChannelFrame(value: unknown): SessionChannelFrame {
   const input = record(value, 'session channel frame')
   const kind = stringValue(input.kind, 'kind') as keyof SessionChannelFrameMap
-  if (!(kind in sessionChannelValidators)) {
+  if (!Object.hasOwn(sessionChannelValidators, kind)) {
     throw new Error(`unknown session channel frame: ${kind}`)
   }
+  assertEnvelopeKeys(input, ['kind', 'targetGeneration', 'channelId', ...sessionChannelFields[kind]], 'session channel frame')
   sessionChannelValidators[kind](input)
   return input as SessionChannelFrame
+}
+
+const sessionChannelFields: { [K in keyof SessionChannelFrameMap]: readonly (keyof SessionChannelFrameMap[K])[] } = {
+  'session.list': ['requestId'],
+  'session.list_result': ['requestId', 'sessions'],
+  'session.current': ['requestId'],
+  'session.open': ['requestId', 'sessionId'],
+  'session.message': ['sessionId', 'correlationId', 'role', 'body', 'metadata'],
+  'session.message_delta': ['sessionId', 'correlationId', 'delta'],
+  'permission.ask': ['requestId', 'permissionRequest'],
+  'permission.reply': ['requestId', 'permissionId', 'action'],
+  'notification.upsert': ['notification'],
+  'notification.ack': ['requestId', 'notificationId'],
+  'agent.message': ['message'],
+  'relation.report': ['report'],
 }
 
 const sessionChannelValidators: {
@@ -488,10 +489,10 @@ const sessionChannelValidators: {
     stringValue(input.correlationId, 'correlationId')
     enumValue(input.role, ['user', 'assistant', 'system', 'tool'], 'role')
     const body = record(input.body, 'body')
-    assertBusinessSafe(body, 'body')
+    assertJsonValue(body, 'body')
     if (input.metadata !== undefined) {
       const metadata = record(input.metadata, 'metadata')
-      assertBusinessSafe(metadata, 'metadata')
+      assertJsonValue(metadata, 'metadata')
     }
   },
   'session.message_delta': (input) => {
@@ -499,7 +500,7 @@ const sessionChannelValidators: {
     assertChannelId(input)
     stringValue(input.sessionId, 'sessionId')
     stringValue(input.correlationId, 'correlationId')
-    assertBusinessSafe(input.delta, 'delta')
+    assertJsonValue(input.delta, 'delta')
   },
   'permission.ask': (input) => {
     positiveInteger(input.targetGeneration, 'targetGeneration')

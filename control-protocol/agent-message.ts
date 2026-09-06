@@ -1,3 +1,5 @@
+import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
+
 export type AgentMessageKind = 'request.capability' | 'reply.capability' | 'task.result' | 'notify' | 'error'
 
 export interface AgentMessage {
@@ -14,26 +16,6 @@ export interface AgentPairChannelRef {
   readonly targetGeneration: number
 }
 
-const forbiddenBusinessKeys = new Set([
-  'machineId',
-  'endpoint',
-  'route',
-  'generation',
-  'targetGeneration',
-  'health',
-  'authGrant',
-  'permissionDecision',
-  'config',
-  'routing',
-  'retry',
-  'diagnostics',
-  'authToken',
-  'apiKey',
-  'bearer',
-  'password',
-  'token',
-])
-
 function stringValue(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.length === 0) throw new Error(`agent-message: ${label} must be a non-empty string`)
   return value
@@ -44,26 +26,20 @@ function positiveInteger(value: unknown, label: string): number {
   return value
 }
 
-function safeObject(value: unknown, path: string): Readonly<Record<string, unknown>> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`agent-message: ${path} must be an object`)
-  for (const [key, entry] of Object.entries(value)) {
-    if (forbiddenBusinessKeys.has(key)) throw new Error(`agent-message: ${path}.${key} is a forbidden control field`)
-    if (typeof entry === 'object' && entry !== null) safeObject(entry, `${path}.${key}`)
-  }
-  return value as Readonly<Record<string, unknown>>
-}
-
 export function validateAgentMessage(value: unknown): AgentMessage {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('agent-message: message must be an object')
   const input = value as Record<string, unknown>
+  assertEnvelopeKeys(input, ['kind', 'correlationId', 'payload'], 'agent-message')
   const kind = stringValue(input.kind, 'kind') as AgentMessageKind
   if (!['request.capability', 'reply.capability', 'task.result', 'notify', 'error'].includes(kind)) {
     throw new Error(`agent-message: unsupported kind ${kind}`)
   }
+  if (typeof input.payload !== 'object' || input.payload === null || Array.isArray(input.payload)) throw new Error('agent-message: payload must be a JSON object')
+  assertJsonValue(input.payload, 'agent-message.payload')
   return {
     kind,
     correlationId: stringValue(input.correlationId, 'correlationId'),
-    payload: safeObject(input.payload, 'payload'),
+    payload: input.payload as Readonly<Record<string, unknown>>,
   }
 }
 
