@@ -55,6 +55,10 @@ _Empty._
 - tags: `ai-reviewed`, `config`, `daemon`, `human-unreviewed`, `managed-opencode`
 - details: [L2/managed-opencode-daemon-wire-20260906.md](L2/managed-opencode-daemon-wire-20260906.md)
 
+### Managed runtime delivery receipt
+- tags: `ai-reviewed`, `human-unreviewed`, `mainline`, `merge`
+- details: [L2/managed-runtime-delivery-20260906.md](L2/managed-runtime-delivery-20260906.md)
+
 ### P0业务JSON保真与外层控制边界
 - tags: `ai-reviewed`, `human-unreviewed`, `protocol`
 - details: [L2/p0-business-json-20260906.md](L2/p0-business-json-20260906.md)
