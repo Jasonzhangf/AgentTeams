@@ -1,5 +1,5 @@
 {
-  "bundle_digest": "sha256:9ba613f85339e0dd1d85348bbe9a67c06ddeb24da023da152d4fd646be8b52be",
+  "bundle_digest": "sha256:ae7da56fa164e7e99284b4f63e56c059d2ee9d1fa427a8b0e86179718df1dc35",
   "manifest_digest": "sha256:5e1977d7ee1d8ac2effc92bab780bdaf8c616782940f92177793e2be8751b3df",
   "resources": [
     {
@@ -274,7 +274,7 @@
     },
     {
       "class": "docs",
-      "digest": "sha256:f74a3828d561c5718faa0868addb40145509e8f4245cfaffa51a1464ed562f83",
+      "digest": "sha256:7c69da6074ead5628d4152f287321f65986cc9b73091a4702854fa3d9db80bf0",
       "path": ".appsdk/docs/design/project-memory.md",
       "source": "docs/design/project-memory.md"
     },
@@ -340,7 +340,7 @@
     },
     {
       "class": "skills",
-      "digest": "sha256:da5685cdc5d28e009cdb64da88108953be815032c892be1e64056f7aeb13c8d7",
+      "digest": "sha256:c0233cb6322de5060b0b81df4cae759a4af5b8575929f9930e40bad48af51648",
       "path": ".appsdk/skills/project-memory/SKILL.md",
       "source": "skills/project-memory/SKILL.md"
     }
