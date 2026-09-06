@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:net'
-import { readFile, mkdir, open, link, unlink } from 'node:fs/promises'
+import { readFile, mkdir, open, link, unlink, rename } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
@@ -9,7 +9,7 @@ import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 import { createWorkHost } from '../agent-host/work-host.ts'
 import { createWorkIngress } from '../agent-host/work-ingress.ts'
-import { createFileWorkStore, createTrustedWorkAuthority, createWorkLedger, recover } from '../agent/work-resource.ts'
+import { createFileWorkStore, createTrustedWorkAuthority, createWorkLedger, currentWorkProcessStartToken, readFileWorkStoreLockProof, recover, recoverFileWorkStoreLock } from '../agent/work-resource.ts'
 import { createConsoleIngress } from '../agent-host/console-ingress.ts'
 import { acceptAgentData } from './agent-data.ts'
 import type { ConsoleClientV1 } from '../control-protocol/console-api.ts'
@@ -31,6 +31,32 @@ export interface AgentProcessConfig {
   readonly allowedManagers: readonly string[]
   readonly cli: { readonly camoExecutable: string; readonly searchExecutable: string; readonly searchRoot: string; readonly profilePrefix: string }
   readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs: number; readonly stopTimeoutMs: number }
+}
+
+interface RuntimeOwnerRecord {
+  readonly version: 1
+  readonly pid: number
+  readonly startToken: string
+  readonly leasePort: number
+}
+
+function parseRuntimeOwner(value: unknown): RuntimeOwnerRecord {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new RelayProtocolError('INVALID_INPUT', 'runtime owner record must be an object')
+  const record = value as Record<string, unknown>
+  if (record.version !== 1 || typeof record.pid !== 'number' || !Number.isSafeInteger(record.pid) || record.pid <= 0 ||
+    typeof record.startToken !== 'string' || record.startToken.length === 0 || typeof record.leasePort !== 'number' ||
+    !Number.isSafeInteger(record.leasePort) || record.leasePort <= 0 || record.leasePort > 65535) {
+    throw new RelayProtocolError('INVALID_INPUT', 'runtime owner record is invalid')
+  }
+  return { version: 1, pid: record.pid, startToken: record.startToken, leasePort: record.leasePort }
+}
+
+async function readRuntimeOwner(path: string): Promise<RuntimeOwnerRecord | undefined> {
+  try { return parseRuntimeOwner(JSON.parse(await readFile(path, 'utf8'))) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    if (error instanceof RelayProtocolError) throw error
+    throw new RelayProtocolError('INVALID_INPUT', `runtime owner record is unreadable: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcessConfig> {
@@ -70,7 +96,7 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
 async function closeLease(server: Server): Promise<void> {
   if (server.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
 }
-async function ownDataDirectory(config: AgentProcessConfig): Promise<Server> {
+async function ownDataDirectory(config: AgentProcessConfig): Promise<{ readonly server: Server; readonly previousOwner?: RuntimeOwnerRecord }> {
   const lease = createServer(socket => socket.destroy())
   await new Promise<void>((resolve, reject) => {
     const failed = (error: Error) => { lease.off('listening', ready); reject(error) }
@@ -80,6 +106,8 @@ async function ownDataDirectory(config: AgentProcessConfig): Promise<Server> {
   })
   try {
     await mkdir(config.dataDirectory, { recursive: true, mode: 0o700 })
+    const ownerPath = resolve(config.dataDirectory, 'runtime-owner.json')
+    const previousOwner = await readRuntimeOwner(ownerPath)
     const { label: _label, ...stableIdentity } = config.declaration.identity
     const identity = JSON.stringify({ version: 1, identity: stableIdentity, scopeId: config.declaration.scopeId, leasePort: config.leasePort })
     const target = resolve(config.dataDirectory, 'identity.json')
@@ -94,7 +122,16 @@ async function ownDataDirectory(config: AgentProcessConfig): Promise<Server> {
       const directory = await open(config.dataDirectory, 'r')
       try { await directory.sync() } finally { await directory.close() }
     } finally { await unlink(temporary) }
-    return lease
+    const ownerTemporary = resolve(config.dataDirectory, `.runtime-owner-${randomUUID()}`)
+    const ownerFile = await open(ownerTemporary, 'wx', 0o600)
+    try {
+      await ownerFile.writeFile(`${JSON.stringify({ version: 1, pid: process.pid, startToken: currentWorkProcessStartToken(), leasePort: config.leasePort })}\n`)
+      await ownerFile.sync()
+    } finally { await ownerFile.close() }
+    try { await rename(ownerTemporary, ownerPath) } finally {
+      try { await unlink(ownerTemporary) } catch { /* already renamed */ }
+    }
+    return { server: lease, ...(previousOwner === undefined ? {} : { previousOwner }) }
   } catch (error) { await closeLease(lease); throw error }
 }
 
@@ -105,7 +142,8 @@ export interface AgentProcess {
 }
 export async function startAgentProcess(configPath: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcess> {
   const config = await loadAgentProcessConfig(configPath, env)
-  const lease = await ownDataDirectory(config)
+  const ownership = await ownDataDirectory(config)
+  const lease = ownership.server
   let daemon: AgentDaemon | undefined
   let configBinding: { binding: ReturnType<typeof createConsoleConfigBinding>; owner: ReturnType<typeof createManagedConfigOwner> } | undefined
   let readyResolve!: () => void
@@ -161,9 +199,19 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         })
       },
     } })
+    const workFile = resolve(config.dataDirectory, 'work.json')
+    const workLock = readFileWorkStoreLockProof(workFile)
+    if (workLock !== undefined) {
+      const previousOwner = ownership.previousOwner
+      if (previousOwner === undefined || previousOwner.pid !== workLock.ownerPid || previousOwner.startToken !== workLock.ownerStartToken || previousOwner.leasePort !== config.leasePort) {
+        throw new RelayProtocolError('UNAVAILABLE', 'stale work store lock has no matching previous daemon owner')
+      }
+      recoverFileWorkStoreLock(workFile, createTrustedWorkAuthority(), workLock, owner =>
+        owner.pid === previousOwner.pid && owner.startToken === previousOwner.startToken)
+    }
     const ledger = createWorkLedger({ provider: { accountId: config.declaration.identity.accountId, scopeId: config.declaration.scopeId,
       agentId: config.declaration.identity.agentId }, generation: daemon.network.generation, capabilities: executor.capabilities,
-      store: createFileWorkStore(resolve(config.dataDirectory, 'work.json')) })
+      store: createFileWorkStore(workFile) })
     const hasUnreconciledState = ledger.snapshot.allocations.some(allocation => allocation.state !== 'released') ||
       ledger.snapshot.requests.some(request => ['running', 'cancel_requested', 'unknown'].includes(request.state))
     if (hasUnreconciledState) {
@@ -188,7 +236,10 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
             host.close({ accountId: ledger.provider.accountId, scopeId: ledger.provider.scopeId, agentId: work.consumerAgentId }, work.workId)))
           const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
           if (failures.length) throw new AggregateError(failures.map(result => result.reason), 'Agent resource cleanup remains unconfirmed')
-        } finally { await closeLease(lease) }
+        } finally {
+          try { await unlink(resolve(config.dataDirectory, 'runtime-owner.json')) } catch { /* owner record may already be absent */ }
+          await closeLease(lease)
+        }
       })()
       return stopping
     }
