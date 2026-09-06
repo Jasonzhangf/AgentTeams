@@ -11,6 +11,7 @@ import { createWorkChannel } from '../network/work-channel.ts'
 import { createRelayConsoleClient } from './relay-console-client.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
 import { createConsoleHttpClient } from '../ui/teams-console/src/client/api.ts'
+import { startAgentProcess } from './agent-process.ts'
 
 let directory: string
 let relay: RelayServer
@@ -63,7 +64,7 @@ function child(configPath: string, credential = 'Bearer provider') {
 it('executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state', async () => {
   relay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
     maxPayload: 65536, maxConnections: 16, maxGrants: 8, maxBufferedAmount: 65536, maxPendingMessages: 16, maxPendingBytes: 131072, grantTtlMs: 10000,
-    authenticate: credential => credential === 'Bearer provider' || credential === 'Bearer consumer' || credential === 'Bearer managed'
+    authenticate: credential => ['provider', 'consumer', 'managed', 'provider2', 'consumer2'].includes(credential.slice(7)) && credential.startsWith('Bearer ')
       ? { accountId: 'account', scopeId: 'scope', agentId: credential.slice(7) } : null })
   const transport = { endpoint: relay.url, credential: 'Bearer consumer', ca: cert, connectTimeoutMs: 1000,
     maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 }
@@ -73,7 +74,7 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   writeFileSync(join(directory, 'search', 'sample.txt'), 'process work needle\n')
   const config = { version: 1, identity: { hostId: 'provider', machineId: 'test', agentId: 'provider', accountId: 'account', agentKind: 'custom', label: 'Provider' },
     scopeId: 'scope', dataDirectory: './data', leasePort: await availablePort(), presenceIntervalMs: 1000,
-    policy: { revision: 1, allowedConsumers: ['consumer'], allowedManagers: ['consumer'] },
+    policy: { revision: 1, allowedConsumers: ['consumer', 'initiator'], allowedManagers: ['consumer'] },
     cli: { camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './search', profilePrefix: 'teams-process-test' },
     relay: { endpoint: relay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: './cert.pem', connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
       requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 } }
@@ -170,4 +171,51 @@ process.once('SIGINT', () => server.close(() => process.exit(0)))
   third.process.kill('SIGINT')
   expect((await third.exited).code).toBe(0)
   expect(first.output()).not.toContain('Bearer provider')
+}, 15000)
+
+it('completes Agent-to-Agent Work between two independently started daemons without Console', async () => {
+  const root = join(directory, 'cross-daemon')
+  mkdirSync(join(root, 'provider-files'), { recursive: true })
+  writeFileSync(join(root, 'provider-files', 'agent.txt'), 'direct daemon work needle\n')
+  const providerConfig = join(root, 'provider.json')
+  const consumerConfig = join(root, 'consumer.json')
+  const base = {
+    version: 1,
+    scopeId: 'scope',
+    presenceIntervalMs: 1000,
+    cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './provider-files', profilePrefix: 'teams-cross-daemon' },
+    relay: { endpoint: relay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: join(directory, 'cert.pem'), connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
+      requestTimeoutMs: 3000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
+  }
+  writeFileSync(providerConfig, JSON.stringify({ ...base,
+    identity: { hostId: 'provider-host-2', machineId: 'test', agentId: 'provider2', accountId: 'account', agentKind: 'custom', label: 'Provider 2' },
+    dataDirectory: './provider-data', leasePort: await availablePort(), policy: { revision: 1, allowedConsumers: ['consumer2'], allowedManagers: [] } }))
+  writeFileSync(consumerConfig, JSON.stringify({ ...base,
+    identity: { hostId: 'consumer-host-2', machineId: 'test', agentId: 'consumer2', accountId: 'account', agentKind: 'custom', label: 'Consumer 2' },
+    dataDirectory: './consumer-data', leasePort: await availablePort(),
+    cli: { ...base.cli, searchRoot: './consumer-files', profilePrefix: 'teams-cross-consumer' },
+    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] } }))
+  mkdirSync(join(root, 'consumer-files'), { recursive: true })
+  let provider: Awaited<ReturnType<typeof startAgentProcess>> | undefined
+  let consumerAgent: Awaited<ReturnType<typeof startAgentProcess>> | undefined
+  try {
+    provider = await startAgentProcess(providerConfig, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer provider2' })
+    consumerAgent = await startAgentProcess(consumerConfig, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer consumer2' })
+    const providerPeer = (await consumerAgent.daemon.network.directory(false)).find(peer => peer.declaration.identity.agentId === 'provider2')
+    expect(providerPeer).toBeDefined()
+    const channel = createWorkChannel(await consumerAgent.daemon.network.openData(
+      await consumerAgent.daemon.network.connect('provider2', provider!.daemon.network.generation)),
+      { timeoutMs: 3000, maxPending: 4, maxIncoming: 4 })
+    try {
+      await expect(channel.request({ kind: 'work.propose', proposal: { workId: 'direct-work', consumerAgentId: 'consumer2', providerAgentId: 'provider2',
+        capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1 } })).resolves.toMatchObject({ work: { state: 'accepted' } })
+      await expect(channel.request({ kind: 'work.request', control: { workId: 'direct-work', requestId: 'direct-request', operation: 'search',
+        targetGeneration: provider!.daemon.network.generation, demands: [{ resourceId: 'search-slot', amount: 1 }] }, payload: { query: 'direct daemon work needle' } }))
+        .resolves.toMatchObject({ control: { state: 'succeeded' }, payload: { matches: [expect.objectContaining({ text: 'direct daemon work needle\n' })] } })
+      await expect(channel.request({ kind: 'work.close', workId: 'direct-work' })).resolves.toMatchObject({ work: { state: 'closed' } })
+    } finally { await channel.close() }
+  } finally {
+    await consumerAgent?.stop()
+    await provider?.stop()
+  }
 }, 15000)
