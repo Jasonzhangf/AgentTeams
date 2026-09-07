@@ -1,3 +1,4 @@
+import type { EndpointDiscoveryView } from './endpoint-ref.ts'
 import type { HostIdentity, RouteCandidate } from './frames.ts'
 
 /** Shared service contracts, revision 1. Declarations do not implement transport or authorization. */
@@ -58,6 +59,7 @@ export interface RelayPeer {
   readonly generation: number
   readonly lastSeenAt: string
   readonly presence: 'online' | 'offline'
+  readonly endpoints?: readonly EndpointDiscoveryView[]
 }
 export interface RelayGrant {
   readonly grantId: string

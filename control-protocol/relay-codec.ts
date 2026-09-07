@@ -8,6 +8,7 @@ import type {
   ServiceError,
   ServiceErrorCode,
 } from './agent-services.ts'
+import { parseEndpointDiscoveryView } from './endpoint-ref.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
 
 export class RelayProtocolError extends Error {
@@ -201,13 +202,17 @@ export function parseServiceError(value: unknown, label: string): ServiceError {
 function parsePeer(value: unknown, index: number): RelayPeer {
   const label = `peer[${index}]`
   const input = object(value, label)
-  knownFields(input, ['declaration', 'connectionId', 'generation', 'lastSeenAt', 'presence'], label)
+  knownFields(input, ['declaration', 'connectionId', 'generation', 'lastSeenAt', 'presence', 'endpoints'], label)
+  if (input.endpoints !== undefined && !Array.isArray(input.endpoints)) invalid(`${label}.endpoints must be an array`)
   return {
     declaration: parseAgentDeclaration(input.declaration),
     connectionId: stringValue(input.connectionId, `${label}.connectionId`),
     generation: positiveInteger(input.generation, `${label}.generation`),
     lastSeenAt: isoDate(input.lastSeenAt, `${label}.lastSeenAt`),
     presence: enumValue(input.presence, ['online', 'offline'], `${label}.presence`),
+    ...(input.endpoints === undefined ? {} : {
+      endpoints: input.endpoints.map(view => parseEndpointDiscoveryView(view)),
+    }),
   }
 }
 

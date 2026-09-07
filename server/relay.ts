@@ -5,6 +5,8 @@ import type { IncomingMessage } from 'node:http'
 import WebSocket, { WebSocketServer } from 'ws'
 import { assertEnvelopeKeys } from '../control-protocol/json-value.ts'
 import { parseAgentDeclaration } from '../control-protocol/relay-codec.ts'
+import { attachDeclarationEndpoints, projectPeerEndpoints } from './endpoint-discovery.ts'
+import { assertEndpointIdentity } from '../control-protocol/endpoint-ref.ts'
 import type {
   AgentDeclaration,
   AuthenticatedAgent,
@@ -116,6 +118,21 @@ function parseDeclaration(value: unknown): AgentDeclaration {
   } catch (error) {
     throw new RelayFailure('INVALID_INPUT', error instanceof Error ? error.message : 'invalid declaration')
   }
+}
+
+function endpointsFor(declaration: AgentDeclaration): RelayPeer['endpoints'] {
+  try {
+    return attachDeclarationEndpoints(declaration)
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+      ? error.code as ServiceErrorCode
+      : 'INVALID_INPUT'
+    throw new RelayFailure(code, error instanceof Error ? error.message : 'invalid Endpoint admission')
+  }
+}
+
+function peerWithEndpoints(peer: Omit<RelayPeer, 'endpoints'> & { endpoints?: RelayPeer['endpoints'] }): RelayPeer {
+  return { ...peer, endpoints: peer.endpoints ?? endpointsFor(peer.declaration) }
 }
 
 function positiveInteger(value: unknown, label: string): number {
@@ -360,13 +377,13 @@ class RelayServerImpl implements RelayServer {
     state.subscribed = false
     this.activeByIdentity.set(key, state)
     this.controls.set(state.connectionId, state)
-    const peer: RelayPeer = {
+    const peer: RelayPeer = peerWithEndpoints({
       declaration,
       connectionId: state.connectionId,
       generation,
       lastSeenAt: this.now().toISOString(),
       presence: 'online',
-    }
+    })
     this.setPeer(peer)
     this.send(state.socket, { kind: 'relay.admitted', connectionId: state.connectionId, generation })
   }
@@ -418,7 +435,7 @@ class RelayServerImpl implements RelayServer {
       throw new RelayFailure('REVISION_CONFLICT', 'declaration revision must increase')
     }
     state.declaration = declaration
-    this.setPeer({ ...previous, declaration, lastSeenAt: this.now().toISOString(), presence: 'online' })
+    this.setPeer(peerWithEndpoints({ ...previous, declaration, lastSeenAt: this.now().toISOString(), presence: 'online' }))
   }
 
   private presence(state: RelaySocketState, input: Record<string, unknown>): void {
@@ -434,14 +451,22 @@ class RelayServerImpl implements RelayServer {
     const requestId = string(input.requestId, 'requestId')
     state.subscribed = boolean(input.subscribe, 'subscribe')
     if (!state.auth) throw new RelayFailure('UNAUTHENTICATED', 'control identity is unavailable', requestId)
-    const peers = [...this.peers.values()].filter((peer) => peer.declaration.identity.accountId === state.auth?.accountId && peer.declaration.scopeId === state.auth?.scopeId)
+    const peers = [...this.peers.values()]
+      .filter((peer) => peer.declaration.identity.accountId === state.auth?.accountId && peer.declaration.scopeId === state.auth?.scopeId)
+      .map((peer) => projectPeerEndpoints(peer, state.auth!))
     this.send(state.socket, { kind: 'relay.directory', requestId, revision: this.revision, peers })
   }
 
   private async connect(state: RelaySocketState, input: Record<string, unknown>): Promise<void> {
     const requestId = string(input.requestId, 'requestId')
     const generation = this.assertCurrentGeneration(state, input.generation, 'generation')
-    const targetAgentId = string(input.targetAgentId, 'targetAgentId')
+    const rawTarget = string(input.targetAgentId, 'targetAgentId')
+    let targetAgentId: string
+    try {
+      targetAgentId = assertEndpointIdentity(rawTarget, 'targetAgentId')
+    } catch (error) {
+      throw new RelayFailure('INVALID_INPUT', error instanceof Error ? error.message : 'targetAgentId is not a transport target')
+    }
     const targetGeneration = positiveInteger(input.targetGeneration, 'targetGeneration')
     if (!state.auth || !state.identityKey) throw new RelayFailure('UNAUTHENTICATED', 'control identity is unavailable', requestId)
     const target = [...this.peers.values()].find((peer) => peer.declaration.identity.accountId === state.auth?.accountId && peer.declaration.scopeId === state.auth?.scopeId && peer.declaration.identity.agentId === targetAgentId)
@@ -659,7 +684,7 @@ class RelayServerImpl implements RelayServer {
     for (const state of this.controls.values()) {
       if (!state.identityKey || this.activeByIdentity.get(state.identityKey) !== state || !state.subscribed || !state.auth || !open(state.socket)) continue
       if (state.auth.accountId !== peer.declaration.identity.accountId || state.auth.scopeId !== peer.declaration.scopeId) continue
-      this.send(state.socket, { kind: 'relay.changed', revision: this.revision, peer })
+      this.send(state.socket, { kind: 'relay.changed', revision: this.revision, peer: projectPeerEndpoints(peer, state.auth) })
     }
   }
 
