@@ -4,7 +4,7 @@
     "module_id": "teams-source",
     "status": "active",
     "owner": "teams-source",
-    "owned_paths": ["agent/**", "agent-host/**", "config/**", "control-protocol/**", "network/**", "runtime/**", "server/**", "opencode-adapter/**", "console-host/**", "ui/**", "dsh-adapter/**", "memory-plugin/**", "search-plugin/**", "docs/**", "scripts/**", "AGENTS.md", "README.md", "package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "tsconfig.json", "vitest.config.ts", ".gitignore"],
+    "owned_paths": ["agent/**", "agent-host/**", "endpoint/**", "config/**", "control-protocol/**", "network/**", "runtime/**", "server/**", "opencode-adapter/**", "console-host/**", "ui/**", "dsh-adapter/**", "memory-plugin/**", "search-plugin/**", "docs/**", "scripts/**", "AGENTS.md", "README.md", "package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "tsconfig.json", "vitest.config.ts", ".gitignore"],
     "forbidden_paths": ["active/lib/**", "protected/**", "generated/**"],
     "verification_gates": ["fix_lifecycle_graph", "mainline_merge_identity"]
   }]

@@ -140,6 +140,7 @@
         "agent/**",
         "agent-host/**",
         "cli-adapter/**",
+        "endpoint/**",
         "config/**",
         "control-protocol/**",
         "network/**",
@@ -192,6 +193,7 @@
         "input_paths": [
           "agent/**",
           "agent-host/**",
+          "endpoint/**",
           "config/**",
           "control-protocol/**",
           "network/**",
