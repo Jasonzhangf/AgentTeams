@@ -44,11 +44,27 @@ describe('TeamsConsoleController', () => {
     expect(controller.getSnapshot().projection).not.toBeNull()
   })
 
+  it('pushes nested drawers and pops back to the source without changing projection truth', async () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    await controller.refresh()
+    const projection = controller.getSnapshot().projection
+    controller.openAgent('planner')
+    controller.openSession('planner', 'planner-current')
+    expect(controller.getSnapshot().drawerStack).toEqual([
+      { kind: 'agent', agentId: 'planner' },
+      { kind: 'session', agentId: 'planner', sessionId: 'planner-current' },
+    ])
+    controller.closeDrawer()
+    expect(controller.getSnapshot().drawer).toEqual({ kind: 'agent', agentId: 'planner' })
+    expect(controller.getSnapshot().projection).toBe(projection)
+  })
+
   it('resolves a permission reply through the host command', async () => {
     const controller = new TeamsConsoleController(createFixtureClient())
     await controller.refresh()
     await expect(controller.replyPermission('planner', 'planner-current', 'permission-1', 'once')).resolves.toBe(true)
     expect(controller.getSnapshot().projection?.notifications[0]?.state).toBe('resolved')
+    expect(controller.getSnapshot().projection?.sessionEvents?.find(event => event.permissionId === 'permission-1')?.state).toBe('resolved')
   })
 
   it('acknowledges a notification through the host command', async () => {
@@ -104,5 +120,24 @@ describe('TeamsConsoleController', () => {
     await expect(controller.applyConfig('planner')).resolves.toBe(true)
     const config = controller.getSnapshot().projection?.configs[0]
     expect(config?.effectiveRevision).toBe(config?.acceptedRevision)
+    expect(controller.getSnapshot().notice).toBe('Apply configuration: accepted by Agent')
+  })
+
+  it('refreshes the owner projection after sending instead of appending UI-owned transcript state', async () => {
+    const client = createFixtureClient()
+    let reads = 0
+    const controller = new TeamsConsoleController({
+      ...client,
+      async readProjection() {
+        reads += 1
+        return client.readProjection()
+      },
+    })
+    await controller.refresh()
+    const before = controller.getSnapshot().projection?.sessionEvents?.length
+    await expect(controller.sendSession('planner', 'planner-current', { text: 'owner refresh' })).resolves.toBe(true)
+    expect(reads).toBe(2)
+    expect(controller.getSnapshot().projection?.sessionEvents).toHaveLength((before ?? 0) + 1)
+    expect(controller.getSnapshot().notice).toContain('{"accepted":true}')
   })
 })

@@ -16,6 +16,18 @@ export interface ConsoleProviderView {
   readonly error?: ServiceError
 }
 
+export interface ConsoleSessionEventView {
+  readonly eventId: string
+  readonly agentId: string
+  readonly sessionId: string
+  readonly kind: 'message' | 'tool' | 'approval' | 'notification'
+  readonly title: string
+  readonly occurredAt?: string
+  readonly state?: 'pending' | 'running' | 'succeeded' | 'failed' | 'resolved' | 'unknown'
+  readonly detail?: string
+  readonly permissionId?: string
+}
+
 export interface ConsoleProjectionV1 {
   readonly version: 1
   readonly agents: readonly {
@@ -32,12 +44,15 @@ export interface ConsoleProjectionV1 {
   readonly notifications: readonly {
     readonly agentId: string; readonly notificationId: string; readonly sessionId?: string
     readonly kind: 'notice' | 'permission'; readonly state: 'pending' | 'resolved'; readonly title: string
-    readonly permissionId?: string
+    readonly permissionId?: string; readonly priority?: 'low' | 'normal' | 'high' | 'critical'
+    readonly occurredAt?: string; readonly detail?: string
   }[]
   readonly configs: readonly {
     readonly agentId: string; readonly acceptedRevision: number; readonly effectiveRevision?: number
     readonly providers: readonly ConsoleProviderView[]; readonly error?: ServiceError
   }[]
+  /** Optional owner-projected Session activity. The UI never appends to or persists this stream. */
+  readonly sessionEvents?: readonly ConsoleSessionEventView[]
 }
 
 export type ConsoleCommandV1 =

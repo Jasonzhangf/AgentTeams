@@ -1,4 +1,4 @@
-import type { ConsoleProjectionV1, ConsoleProviderView } from './protocol.ts'
+import type { ConsoleProjectionV1, ConsoleProviderView, ConsoleSessionEventView } from './protocol.ts'
 
 export type ConsoleEntry = 'topology' | 'conversations' | 'notifications' | 'search' | 'memory'
 export type UiStatus = 'online' | 'offline' | 'unknown'
@@ -30,6 +30,13 @@ export interface NotificationRow {
   readonly state: 'pending' | 'resolved'
   readonly title: string
   readonly permissionId?: string
+  readonly priority?: 'low' | 'normal' | 'high' | 'critical'
+  readonly occurredAt?: string
+  readonly detail?: string
+}
+
+export interface SessionFlowRow extends ConsoleSessionEventView {
+  readonly notificationId?: string
 }
 
 export interface AgentConfigView {
@@ -62,6 +69,20 @@ export function projectSessions(projection: ConsoleProjectionV1): readonly Sessi
 
 export function projectNotifications(projection: ConsoleProjectionV1): readonly NotificationRow[] {
   return projection.notifications
+}
+
+export function projectSessionFlow(projection: ConsoleProjectionV1, agentId: string, sessionId: string): readonly SessionFlowRow[] {
+  const notificationByPermission = new Map(
+    projection.notifications
+      .filter(notification => notification.agentId === agentId && notification.sessionId === sessionId && notification.permissionId !== undefined)
+      .map(notification => [notification.permissionId as string, notification.notificationId]),
+  )
+  return (projection.sessionEvents ?? [])
+    .filter(event => event.agentId === agentId && event.sessionId === sessionId)
+    .map(event => ({
+      ...event,
+      ...(event.permissionId === undefined ? {} : { notificationId: notificationByPermission.get(event.permissionId) }),
+    }))
 }
 
 export function projectConfig(projection: ConsoleProjectionV1, agentId: string): AgentConfigView | undefined {

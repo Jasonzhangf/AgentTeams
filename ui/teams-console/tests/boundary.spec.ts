@@ -41,4 +41,34 @@ describe('independent UI boundary', () => {
     expect(render).not.toContain('Host-owned Agent presence and current-session bindings.')
     expect(render).not.toContain('Projection in, control actions out.')
   })
+
+  it('renders owner-projected Session activity without creating a UI transcript ledger', () => {
+    const protocol = readFileSync(join(sourceRoot, 'client/protocol.ts'), 'utf8')
+    const controller = readFileSync(join(sourceRoot, 'client/controller.ts'), 'utf8')
+    const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
+    expect(protocol).toContain('readonly sessionEvents?')
+    expect(render).toContain('projectSessionFlow(state.projection, agentId, sessionId)')
+    expect(controller).not.toMatch(/sessionEvents\s*:/)
+    expect(controller).not.toMatch(/transcript|session\.history/)
+  })
+
+  it('uses one semantic drawer tree with layout-only desktop and mobile variants', () => {
+    const controller = readFileSync(join(sourceRoot, 'client/controller.ts'), 'utf8')
+    const index = readFileSync(join(sourceRoot, 'client/index.ts'), 'utf8')
+    const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
+    const styles = readFileSync(join(sourceRoot, 'client/styles.ts'), 'utf8')
+    expect(controller).toContain('readonly drawerStack: readonly DrawerState[]')
+    expect(index).toContain('restoreFocus(drawerFocusKey)')
+    expect(index).toContain("event.key === 'Tab'")
+    expect(index).toContain("querySelector<HTMLElement>('.teams-drawer-header')?.focus()")
+    expect(render.match(/function renderDrawer/g)).toHaveLength(1)
+    expect(styles).toContain('@media (max-width: 780px)')
+    expect(styles).toContain('.teams-drawer.is-expanded')
+  })
+
+  it('fails an interactive notification with no existing Session target visibly', () => {
+    const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
+    expect(render).toContain('sessionTargetExists')
+    expect(render).toContain('t.invalidNotificationTarget')
+  })
 })

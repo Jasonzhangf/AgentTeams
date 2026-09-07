@@ -1,5 +1,5 @@
 import type { ConsoleEntry, UiStatus } from './model.ts'
-import { modelLabel, projectAgents, projectConfig, projectNotifications, projectSessions, providerById, providerLabel } from './model.ts'
+import { modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerById, providerLabel } from './model.ts'
 import type { ConsoleState, DrawerState, ProviderDraft, TeamsConsoleController } from './controller.ts'
 import { messages, type Locale, type MessageKey } from './locale.ts'
 import type { ConsoleProviderView, JsonValue } from './protocol.ts'
@@ -27,11 +27,13 @@ function button(
   className: string,
   action: () => void | Promise<void>,
   disabled = false,
+  focusKey?: string,
 ): HTMLButtonElement {
   const value = element('button', `teams-button ${className}`)
   value.type = 'button'
   value.textContent = label
   value.disabled = disabled
+  if (focusKey !== undefined) value.dataset.focusKey = focusKey
   value.addEventListener('click', async () => { await action() })
   return value
 }
@@ -154,11 +156,12 @@ function renderTopology(controller: TeamsConsoleController, state: ConsoleState,
           await controller.openSessionCommand(agent.agentId, current)
         },
         actionDisabled(state),
+        `agent:${agent.agentId}:current-session`,
       ))
     }
-    append(actions, button(t.details, 'teams-button-secondary', () => { controller.openAgent(agent.agentId) }, actionDisabled(state)))
+    append(actions, button(t.details, 'teams-button-secondary', () => { controller.openAgent(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:details`))
     if (projection.configs.some(config => config.agentId === agent.agentId)) {
-      append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state)))
+      append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:configure`))
     }
     append(card, header, meta.childElementCount === 0 ? null : meta, capability, actions)
     append(grid, card)
@@ -190,7 +193,7 @@ function renderConversations(controller: TeamsConsoleController, state: ConsoleS
     append(actions, button(t.openSession, 'teams-button-primary', async () => {
       controller.openSession(session.agentId, session.sessionId)
       await controller.openSessionCommand(session.agentId, session.sessionId)
-    }, actionDisabled(state)))
+    }, actionDisabled(state), `session:${session.agentId}:${session.sessionId}`))
     append(item, main, actions)
     append(list, item)
   }
@@ -218,20 +221,36 @@ function renderNotifications(controller: TeamsConsoleController, state: ConsoleS
     const primary = element('strong', 'teams-list-primary')
     primary.textContent = notification.title
     const secondary = element('span', 'teams-list-secondary')
-    secondary.textContent = `${agentName(projection, notification.agentId, t)} · ${notification.state === 'pending' ? t.pending : t.resolved}`
-    append(main, kind, primary, secondary)
+    secondary.textContent = [
+      agentName(projection, notification.agentId, t),
+      notification.state === 'pending' ? t.pending : t.resolved,
+      notification.priority,
+      notification.occurredAt,
+    ].filter(value => value !== undefined).join(' · ')
+    const notificationDetail = notification.detail
+    let detail: HTMLElement | null = null
+    if (notificationDetail !== undefined) {
+      detail = element('span', 'teams-list-secondary')
+      detail.textContent = notificationDetail
+    }
+    append(main, kind, primary, secondary, detail)
     const actions = element('div', 'teams-list-actions')
-    if (notification.sessionId !== undefined) {
+    const sessionTargetExists = notification.sessionId !== undefined && projection.sessions.some(session => session.agentId === notification.agentId && session.sessionId === notification.sessionId)
+    if (sessionTargetExists) {
       append(actions, button(t.openSession, 'teams-button-secondary', () => {
         controller.openSession(notification.agentId, notification.sessionId as string)
-      }, actionDisabled(state)))
+      }, actionDisabled(state), `notification:${notification.notificationId}:session`))
     }
-    if (notification.kind === 'permission' && notification.state === 'pending' && notification.sessionId !== undefined && notification.permissionId !== undefined) {
+    if (notification.kind === 'permission' && notification.state === 'pending' && sessionTargetExists && notification.permissionId !== undefined) {
       append(actions,
         button(t.allowOnce, 'teams-button-primary', async () => { await controller.replyPermission(notification.agentId, notification.sessionId as string, notification.permissionId as string, 'once') }, actionDisabled(state)),
         button(t.alwaysAllow, 'teams-button-secondary', async () => { await controller.replyPermission(notification.agentId, notification.sessionId as string, notification.permissionId as string, 'always') }, actionDisabled(state)),
         button(t.reject, 'teams-button-danger', async () => { await controller.replyPermission(notification.agentId, notification.sessionId as string, notification.permissionId as string, 'reject') }, actionDisabled(state)),
       )
+    } else if (notification.kind === 'permission' && notification.state === 'pending' && !sessionTargetExists) {
+      const error = element('span', 'teams-inline-error')
+      error.textContent = t.invalidNotificationTarget
+      append(actions, error)
     }
     if (notification.state === 'pending') {
       append(actions, button(t.acknowledge, 'teams-button-secondary', async () => { await controller.acknowledge(notification.notificationId, notification.agentId) }, actionDisabled(state)))
@@ -285,7 +304,7 @@ function renderSearch(controller: TeamsConsoleController, state: ConsoleState, t
     secondary.textContent = result.detail
     append(main, primary, secondary)
     const actions = element('div', 'teams-list-actions')
-    if (result.sessionId !== undefined) append(actions, button(t.openSession, 'teams-button-primary', () => { controller.openSession(result.agentId, result.sessionId as string) }, actionDisabled(state)))
+    if (result.sessionId !== undefined) append(actions, button(t.openSession, 'teams-button-primary', () => { controller.openSession(result.agentId, result.sessionId as string) }, actionDisabled(state), `search:${result.agentId}:${result.sessionId}`))
     append(item, main, actions)
     append(list, item)
   }
@@ -320,10 +339,10 @@ function renderAgentDetail(controller: TeamsConsoleController, state: ConsoleSta
     append(actions, button(t.currentSession, 'teams-button-primary', async () => {
       controller.openSession(agent.agentId, agent.currentSessionId as string)
       await controller.openSessionCommand(agent.agentId, agent.currentSessionId as string)
-    }, actionDisabled(state)))
+    }, actionDisabled(state), `drawer-agent:${agent.agentId}:current-session`))
   }
   if (projection?.configs.some(config => config.agentId === agent.agentId) === true) {
-    append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state)))
+    append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state), `drawer-agent:${agent.agentId}:configure`))
   }
   append(value, title, intro, actions)
   return value
@@ -336,6 +355,47 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
   title.textContent = session?.title ?? t.sessionUntitled
   const description = element('p')
   description.textContent = `${agentName(state.projection, agentId, t)} · ${sessionId}`
+  const activity = element('section', 'teams-session-activity')
+  const activityTitle = element('h4')
+  activityTitle.textContent = t.activity
+  append(activity, activityTitle)
+  if (state.projection?.sessionEvents === undefined) {
+    append(activity, emptyState(t.activityUnavailable))
+  } else {
+    const events = projectSessionFlow(state.projection, agentId, sessionId)
+    if (events.length === 0) {
+      append(activity, emptyState(t.activityEmpty))
+    } else {
+      const timeline = element('ol', 'teams-session-timeline')
+      for (const event of events) {
+        const item = element('li', `teams-session-event teams-session-event-${event.kind}`)
+        const eventHeader = element('div', 'teams-session-event-header')
+        const kind = element('span', 'teams-notification-kind')
+        kind.textContent = event.kind
+        const eventTitle = element('strong')
+        eventTitle.textContent = event.title
+        append(eventHeader, kind, eventTitle, event.state === undefined ? null : statusPill(event.state), event.occurredAt === undefined ? null : statusPill(event.occurredAt))
+        const detailText = event.detail
+        let detail: HTMLElement | null = null
+        if (detailText !== undefined) {
+          detail = element('pre', 'teams-session-event-detail')
+          detail.textContent = detailText
+        }
+        const eventActions = element('div', 'teams-button-row')
+        if (event.kind === 'approval' && event.state === 'pending' && event.permissionId !== undefined) {
+          const permissionId = event.permissionId
+          append(eventActions,
+            button(t.allowOnce, 'teams-button-primary', async () => { await controller.replyPermission(agentId, sessionId, permissionId, 'once') }, actionDisabled(state)),
+            button(t.alwaysAllow, 'teams-button-secondary', async () => { await controller.replyPermission(agentId, sessionId, permissionId, 'always') }, actionDisabled(state)),
+            button(t.reject, 'teams-button-danger', async () => { await controller.replyPermission(agentId, sessionId, permissionId, 'reject') }, actionDisabled(state)),
+          )
+        }
+        append(item, eventHeader, detail, eventActions.childElementCount === 0 ? null : eventActions)
+        append(timeline, item)
+      }
+      append(activity, timeline)
+    }
+  }
   const label = element('label', 'teams-field')
   const labelText = element('span')
   labelText.textContent = t.message
@@ -364,7 +424,7 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
     event.preventDefault()
     await sendMessage()
   })
-  append(value, title, description, label, actions)
+  append(value, title, description, activity, label, actions)
   return value
 }
 
@@ -600,8 +660,11 @@ function renderDrawer(controller: TeamsConsoleController, state: ConsoleState, t
   subtitle.textContent = drawerTitle(drawer, state, t).subtitle
   append(titleGroup, title, subtitle)
   const actions = element('div', 'teams-header-actions')
+  if (state.drawerStack.length > 1) {
+    append(actions, button(t.back, 'teams-button-secondary', () => { controller.closeDrawer() }, false))
+  }
   append(actions,
-    button(state.drawerExpanded ? t.back : t.details, 'teams-button-secondary', () => { controller.toggleDrawerExpanded() }, actionDisabled(state)),
+    button(state.drawerExpanded ? t.collapse : t.expand, 'teams-button-secondary', () => { controller.toggleDrawerExpanded() }, actionDisabled(state)),
     button(t.close, 'teams-button-secondary', () => { controller.closeDrawer() }, false),
   )
   append(header, grip, titleGroup, actions)
@@ -642,7 +705,7 @@ export function renderConsole(root: HTMLElement, controller: TeamsConsoleControl
   root.className = 'teams-root'
   root.replaceChildren()
   if (!state.open) {
-    append(root, button(t.brand, 'teams-launch', () => { controller.openConsole() }))
+    append(root, button(t.brand, 'teams-launch', () => { controller.openConsole() }, false, 'console:launch'))
     return
   }
 
@@ -660,7 +723,7 @@ export function renderConsole(root: HTMLElement, controller: TeamsConsoleControl
   append(headerActions,
     button(state.locale === 'en' ? '中文' : 'EN', 'teams-icon-button', () => { controller.setLocale(state.locale === 'en' ? 'zh' : 'en') }, actionDisabled(state)),
     button(t.refresh, 'teams-button-secondary', async () => { await controller.refresh() }, actionDisabled(state)),
-    button(t.settings, 'teams-button-secondary', () => { controller.openSettings() }, actionDisabled(state)),
+    button(t.settings, 'teams-button-secondary', () => { controller.openSettings() }, actionDisabled(state), 'console:settings'),
     button(t.close, 'teams-button-secondary', () => { controller.closeConsole() }),
   )
   append(header, brand, headerActions)

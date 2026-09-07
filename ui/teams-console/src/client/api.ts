@@ -27,6 +27,7 @@ function isProjection(value: unknown): value is ConsoleProjectionV1 {
     && Array.isArray(value.sessions)
     && Array.isArray(value.notifications)
     && Array.isArray(value.configs)
+    && (value.sessionEvents === undefined || Array.isArray(value.sessionEvents))
 }
 
 function isCommandResult(value: unknown): value is ConsoleCommandResultV1 {

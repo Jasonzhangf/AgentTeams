@@ -26,9 +26,43 @@ export function mountTeamsConsole(root: HTMLElement, client: ConsoleClientV1, op
   installStyles()
   const controller = new TeamsConsoleController(client)
   if (options.locale !== undefined) controller.setLocale(options.locale)
-  const render = () => { renderConsole(root, controller, options) }
+  let renderedState = controller.getSnapshot()
+  let consoleFocusKey: string | undefined
+  const drawerFocusKeys: (string | undefined)[] = []
+  const activeFocusKey = (): string | undefined => document.activeElement instanceof HTMLElement ? document.activeElement.dataset.focusKey : undefined
+  const restoreFocus = (focusKey: string | undefined): void => {
+    if (focusKey === undefined) return
+    const target = [...root.querySelectorAll<HTMLElement>('[data-focus-key]')].find(candidate => candidate.dataset.focusKey === focusKey)
+    target?.focus()
+  }
+  const render = () => {
+    const nextState = controller.getSnapshot()
+    if (!renderedState.open && nextState.open) consoleFocusKey = activeFocusKey()
+    const drawerOpened = nextState.drawerStack.length > renderedState.drawerStack.length
+    if (drawerOpened) drawerFocusKeys.push(activeFocusKey())
+    let drawerFocusKey: string | undefined
+    while (drawerFocusKeys.length > nextState.drawerStack.length) drawerFocusKey = drawerFocusKeys.pop()
+    const restoreConsole = renderedState.open && !nextState.open
+    const restoreDrawer = nextState.open && nextState.drawerStack.length < renderedState.drawerStack.length
+    renderConsole(root, controller, options)
+    if (drawerOpened) root.querySelector<HTMLElement>('.teams-drawer-header')?.focus()
+    else if (restoreConsole) restoreFocus(consoleFocusKey)
+    else if (restoreDrawer) restoreFocus(drawerFocusKey)
+    renderedState = nextState
+  }
   const unsubscribe = controller.subscribe(render)
   const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Tab' && controller.getSnapshot().drawer !== null) {
+      const drawer = root.querySelector<HTMLElement>('.teams-drawer')
+      const focusable = drawer === null ? [] : [...drawer.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')]
+      const first = focusable[0]
+      const last = focusable.at(-1)
+      if (first !== undefined && last !== undefined && (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+        event.preventDefault()
+        ;(event.shiftKey ? last : first).focus()
+      }
+      return
+    }
     if (event.key !== 'Escape' || !controller.getSnapshot().open) return
     event.preventDefault()
     if (controller.getSnapshot().drawer !== null) controller.closeDrawer()
