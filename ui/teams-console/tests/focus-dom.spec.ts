@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -20,7 +20,7 @@ function chromeExecutable(): string {
 }
 
 describe('drawer keyboard focus in a real DOM', () => {
-  it('moves outside focus into the drawer and wraps forward and backward Tab', () => {
+  it('moves outside focus into the drawer and wraps forward and backward Tab', { timeout: 20_000 }, () => {
     const source = readFileSync(join(import.meta.dirname, '../src/client/focus.ts'), 'utf8')
       .replace('export function containDrawerTab', 'function containDrawerTab')
     if (process.env.TEAMS_CONSOLE_REAL_DOM !== '1') {
@@ -31,6 +31,9 @@ describe('drawer keyboard focus in a real DOM', () => {
       compilerOptions: { module: ModuleKind.None, target: ScriptTarget.ES2022 },
     }).outputText
     const directory = mkdtempSync(join(tmpdir(), 'teams-console-focus-'))
+    onTestFinished(() => {
+      rmSync(directory, { recursive: true, force: true })
+    })
     const page = join(directory, 'focus.html')
     writeFileSync(page, `<!doctype html>
 <html><body>
