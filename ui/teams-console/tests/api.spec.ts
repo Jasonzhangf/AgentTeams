@@ -79,6 +79,38 @@ describe('Console HTTP v1 adapter', () => {
     await expect(forkedClient.readProjection()).rejects.toThrow(/invalid v1 projection/)
   })
 
+  it('admits observe-only work and relation rows and still rejects unknown projection keys', async () => {
+    const work = {
+      agentId: 'provider', workId: 'offline-work', consumerAgentId: 'consumer', providerAgentId: 'provider',
+      capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1, state: 'closed' as const,
+    }
+    const observed: ConsoleProjectionV1 = {
+      ...projection,
+      works: [work],
+      relations: [{
+        agentId: 'provider', consumerAgentId: 'consumer', providerAgentId: 'provider',
+        capabilityId: 'file-search', capabilityVersion: '1', relationPermission: 'granted', workId: 'offline-work',
+      }],
+    }
+    const client = createConsoleHttpClient({
+      fetchImpl: async () => new Response(JSON.stringify(observed), { status: 200 }),
+    })
+    await expect(client.readProjection()).resolves.toEqual(observed)
+
+    const payloadClient = createConsoleHttpClient({
+      fetchImpl: async () => new Response(JSON.stringify({
+        ...observed,
+        works: [{ ...work, payload: { query: 'secret' } }],
+      }), { status: 200 }),
+    })
+    await expect(payloadClient.readProjection()).rejects.toThrow(/invalid v1 projection/)
+
+    const metadataClient = createConsoleHttpClient({
+      fetchImpl: async () => new Response(JSON.stringify({ ...observed, metadata: {} }), { status: 200 }),
+    })
+    await expect(metadataClient.readProjection()).rejects.toThrow(/invalid v1 projection/)
+  })
+
   it('supports host-specific versioned paths without changing the client contract', async () => {
     const requests: string[] = []
     const client = createConsoleHttpClient({
