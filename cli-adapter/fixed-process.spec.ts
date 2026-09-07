@@ -27,8 +27,9 @@ describe('fixed process runner', () => {
     const startedAt = Date.now()
     const output = await runFixedProcess({
       executable: process.execPath,
-      argv: ['-e', 'setInterval(() => {}, 10)'],
+      argv: ['-e', 'process.stdout.write("ready\\n", () => setInterval(() => {}, 10))'],
       timeoutMs: 100,
+      readyToken: 'ready\n',
       shell: false,
     })
 
@@ -37,11 +38,27 @@ describe('fixed process runner', () => {
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(100)
   })
 
+  it('forces a child that ignores SIGTERM to close after the grace period', async () => {
+    const startedAt = Date.now()
+    const output = await runFixedProcess({
+      executable: process.execPath,
+      argv: ['-e', 'process.on("SIGTERM", () => {}); process.stdout.write("ready\\n", () => setInterval(() => {}, 10))'],
+      timeoutMs: 100,
+      readyToken: 'ready\n',
+      shell: false,
+    })
+
+    expect(output.timedOut).toBe(true)
+    expect(output.signal).toBe('SIGKILL')
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(200)
+  })
+
   it('forces an output-limited child that ignores SIGTERM to close', async () => {
     const output = await runFixedProcess({
       executable: process.execPath,
       argv: ['-e', 'process.on("SIGTERM", () => {}); process.stdout.write("ready\\n", () => setInterval(() => process.stdout.write("x".repeat(1024)), 1))'],
       maxOutputBytes: 1_024,
+      readyToken: 'ready\n',
       shell: false,
     })
 

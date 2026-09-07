@@ -14,6 +14,7 @@ export interface FixedProcessSpec {
   readonly stdin?: string
   readonly timeoutMs?: number
   readonly maxOutputBytes?: number
+  readonly readyToken?: string
   readonly shell: false
 }
 
@@ -49,6 +50,9 @@ export function runFixedProcess(spec: FixedProcessSpec): Promise<FixedProcessRes
   }
   const timeoutMs = positiveInteger(spec.timeoutMs, defaultTimeoutMs, 'timeoutMs')
   const maxOutputBytes = positiveInteger(spec.maxOutputBytes, defaultMaxOutputBytes, 'maxOutputBytes')
+  if (spec.readyToken !== undefined && spec.readyToken.length === 0) {
+    throw new CliAdapterError({ code: 'INVALID_INPUT', message: 'readyToken must be a non-empty string' })
+  }
 
   return new Promise((resolve, reject) => {
     let child: ReturnType<typeof spawn>
@@ -85,6 +89,16 @@ export function runFixedProcess(spec: FixedProcessSpec): Promise<FixedProcessRes
     let settled = false
     let stdinError: Error | undefined
     let terminationTimer: ReturnType<typeof setTimeout> | undefined
+    let operationTimer: ReturnType<typeof setTimeout> | undefined
+    let readyWaitTimer: ReturnType<typeof setTimeout> | undefined
+    let ready = spec.readyToken === undefined
+    let readyFailed = false
+
+    const clearTimers = (): void => {
+      if (operationTimer !== undefined) clearTimeout(operationTimer)
+      if (readyWaitTimer !== undefined) clearTimeout(readyWaitTimer)
+      if (terminationTimer !== undefined) clearTimeout(terminationTimer)
+    }
 
     const requestTermination = (): void => {
       if (settled || terminationTimer !== undefined) return
@@ -95,29 +109,55 @@ export function runFixedProcess(spec: FixedProcessSpec): Promise<FixedProcessRes
       }, terminationGraceMs)
     }
 
+    const armOperationTimeout = (): void => {
+      if (operationTimer !== undefined) return
+      operationTimer = setTimeout(() => {
+        timedOut = true
+        requestTermination()
+      }, timeoutMs)
+    }
+
+    const markReady = (): void => {
+      if (ready) return
+      ready = true
+      if (readyWaitTimer !== undefined) {
+        clearTimeout(readyWaitTimer)
+        readyWaitTimer = undefined
+      }
+      armOperationTimeout()
+    }
+
     const append = (target: 'stdout' | 'stderr', chunk: Buffer): void => {
       outputBytes += chunk.byteLength
       if (outputBytes > maxOutputBytes) {
         outputLimitExceeded = true
+        if (!ready && spec.readyToken !== undefined && target === 'stdout') {
+          const preview = stdout + chunk.toString('utf8')
+          if (preview.includes(spec.readyToken)) markReady()
+        }
         requestTermination()
         return
       }
       if (target === 'stdout') stdout += stdoutDecoder.write(chunk)
       else stderr += stderrDecoder.write(chunk)
+      if (!ready && spec.readyToken !== undefined && stdout.includes(spec.readyToken)) markReady()
     }
 
-    const timer = setTimeout(() => {
-      timedOut = true
-      requestTermination()
-    }, timeoutMs)
+    if (ready) armOperationTimeout()
+    else {
+      readyWaitTimer = setTimeout(() => {
+        if (settled || ready) return
+        readyFailed = true
+        requestTermination()
+      }, defaultTimeoutMs)
+    }
 
     stdoutStream.on('data', chunk => append('stdout', Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
     stderrStream.on('data', chunk => append('stderr', Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
     child.once('error', error => {
       if (settled) return
       settled = true
-      clearTimeout(timer)
-      if (terminationTimer !== undefined) clearTimeout(terminationTimer)
+      clearTimers()
       reject(new CliAdapterError({
         code: 'PROCESS_ERROR',
         message: `${spec.executable} could not be spawned: ${error.message}`,
@@ -128,14 +168,25 @@ export function runFixedProcess(spec: FixedProcessSpec): Promise<FixedProcessRes
     child.once('close', (exitCode, signal) => {
       if (settled) return
       settled = true
-      clearTimeout(timer)
-      if (terminationTimer !== undefined) clearTimeout(terminationTimer)
+      clearTimers()
       stdout += stdoutDecoder.end()
       stderr += stderrDecoder.end()
+      if (!ready && spec.readyToken !== undefined && stdout.includes(spec.readyToken)) ready = true
       if (stdinError !== undefined) {
         reject(new CliAdapterError({
           code: 'PROCESS_ERROR',
           message: `${spec.executable} stdin failed: ${stdinError.message}`,
+          exitCode,
+          signal,
+          stdout,
+          stderr,
+        }))
+        return
+      }
+      if (readyFailed || (spec.readyToken !== undefined && !ready)) {
+        reject(new CliAdapterError({
+          code: 'PROCESS_ERROR',
+          message: `${spec.executable} did not signal ready`,
           exitCode,
           signal,
           stdout,
