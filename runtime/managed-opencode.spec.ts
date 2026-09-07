@@ -14,3 +14,14 @@ it('rejects child exit before readiness instead of reporting effective config', 
       resolveCredential: async () => { throw new Error('no credential expected') } })).rejects.toThrow(/exited/)
   } finally { await rm(directory, { recursive: true }) }
 })
+
+it('reports startup deadline while child remains alive without readiness', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-managed-test-'))
+  const executable = join(directory, 'sleep')
+  await writeFile(executable, '#!/bin/sh\nsleep 2\n'); await chmod(executable, 0o700)
+  try {
+    await expect(startManagedOpenCode({ executable, directory, port: 32146, startupTimeoutMs: 100, stopTimeoutMs: 1000,
+      compiled: { agentId: 'a', acceptedRevision: 1, primary: { provider: 'p', model: 'm', protocol: 'openai-chat', baseUrl: 'http://127.0.0.1:1/v1' } },
+      resolveCredential: async () => { throw new Error('no credential expected') } })).rejects.toThrow(/startup deadline/)
+  } finally { await rm(directory, { recursive: true }) }
+})

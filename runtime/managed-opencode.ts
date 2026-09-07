@@ -72,7 +72,10 @@ export async function startManagedOpenCode(options: ManagedOpenCodeOptions) {
       if (ready) break
       await delay(50)
     }
-    if (!ready) throw new Error('Managed OpenCode startup deadline')
+    if (!ready) {
+      if (ended) throw new Error('Managed OpenCode exited before readiness')
+      throw new Error('Managed OpenCode startup deadline')
+    }
     const response = await fetch(`${url}/config`, { headers: { authorization }, signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())) })
     if (!response.ok || !response.body) throw new Error('Managed OpenCode config readback failed')
     const reader = response.body.getReader()
