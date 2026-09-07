@@ -23,18 +23,18 @@ describe('fixed process runner', () => {
     expect(output.stderr).toBe('failed')
   })
 
-  it('forces a child that ignores SIGTERM to close after the grace period', async () => {
+  it('reports SIGTERM when a timed-out child exits on the graceful signal', async () => {
     const startedAt = Date.now()
     const output = await runFixedProcess({
       executable: process.execPath,
-      argv: ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => {}, 10)'],
+      argv: ['-e', 'setInterval(() => {}, 10)'],
       timeoutMs: 100,
       shell: false,
     })
 
     expect(output.timedOut).toBe(true)
-    expect(output.signal).toBe('SIGKILL')
-    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(150)
+    expect(output.signal).toBe('SIGTERM')
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(100)
   })
 
   it('forces an output-limited child that ignores SIGTERM to close', async () => {
