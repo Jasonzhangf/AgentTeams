@@ -461,6 +461,14 @@ describe('N1 relay server', () => {
     send(a, { kind: 'relay.connect', requestId: 'cross-scope', generation: 1, targetAgentId: 'agent-c', targetGeneration: 1 })
     await expect(nextJson(a)).resolves.toMatchObject({ kind: 'relay.error', requestId: 'cross-scope', error: { code: 'FORBIDDEN' } })
 
+    for (const [requestId, targetAgentId] of [
+      ['url-target', 'https://agent-b.example'],
+      ['wss-target', 'wss://agent-b.example'],
+    ] as const) {
+      send(a, { kind: 'relay.connect', requestId, generation: 1, targetAgentId, targetGeneration: 1 })
+      await expect(nextJson(a)).resolves.toMatchObject({ kind: 'relay.error', error: { code: 'INVALID_INPUT' } })
+    }
+
     send(a, { kind: 'relay.connect', requestId: 'grant-1', generation: 1, targetAgentId: 'agent-b', targetGeneration: 1 })
     const grantMessage = await nextJson(a)
     await expect(nextJson(b)).resolves.toMatchObject({ kind: 'relay.offer' })
