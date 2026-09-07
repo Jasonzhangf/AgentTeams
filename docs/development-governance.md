@@ -48,6 +48,13 @@ HTTP smoke 校验编译库与打包文件字节一致，使用已安装依赖执
 AppSDK review admission、freeze/Active 发布保留正式证据门禁，本轮不生成假候选、
 假 review record、假部署 receipt。普通 compile/verify 与发布准入是不同证据。
 
+正式候选提交后运行 `pnpm lifecycle:admission`。该 adapter 不接收 hash 参数：它从
+当前 clean worktree 和 Git 对象计算候选身份，先执行 `pnpm verify`，再执行隔离安装
+副本的 Relay/Agent 进程启动、Agent 重启与信号关闭，只有命令真实通过且源码未变化
+才生成 `.appsdk/records/` 的 fix-candidate、whitebox、install、restart、blackbox 和
+pre-review 记录；完整命令输出保存在 `.appsdk-control/lifecycle-adapter/`。这些本地
+记录不代表公网/NAT、managed OpenCode、跨设备或发布验收。
+
 公网/NAT/relay、daemon 自动登录、能力匹配、原子容量与一对多、Console 全关闭仍
 协作、多 provider apply/readback 仍是设计/待运行验证 gates。基础测试通过不能升级这些状态。
 

@@ -21,6 +21,7 @@ export interface ConsoleState {
   readonly open: boolean
   readonly entry: ConsoleEntry
   readonly drawer: DrawerState | null
+  readonly drawerStack: readonly DrawerState[]
   readonly drawerExpanded: boolean
   readonly projection: import('./protocol.ts').ConsoleProjectionV1 | null
   readonly status: 'idle' | 'loading' | 'ready' | 'error'
@@ -49,6 +50,7 @@ export const initialConsoleState: ConsoleState = {
   open: false,
   entry: 'topology',
   drawer: null,
+  drawerStack: [],
   drawerExpanded: false,
   projection: null,
   status: 'idle',
@@ -69,6 +71,10 @@ function errorText(error: unknown): string {
 
 function cloneDraft(draft: ProviderDraft): ProviderDraft {
   return { ...draft }
+}
+
+function actionResult(label: string, result: Extract<ConsoleCommandResultV1, { readonly ok: true }>): string {
+  return result.result === undefined ? `${label}: accepted by Agent` : `${label}: ${JSON.stringify(result.result)}`
 }
 
 export class TeamsConsoleController {
@@ -111,11 +117,11 @@ export class TeamsConsoleController {
   }
 
   closeConsole(): void {
-    this.update({ open: false, drawer: null, drawerExpanded: false, notice: null, error: null })
+    this.update({ open: false, drawer: null, drawerStack: [], drawerExpanded: false, notice: null, error: null })
   }
 
   selectEntry(entry: ConsoleEntry): void {
-    this.update({ entry, drawer: null, drawerExpanded: false, notice: null })
+    this.update({ entry, drawer: null, drawerStack: [], drawerExpanded: false, notice: null })
   }
 
   setLocale(locale: 'en' | 'zh'): void {
@@ -127,16 +133,19 @@ export class TeamsConsoleController {
   }
 
   openAgent(agentId: string): void {
-    this.update({ drawer: { kind: 'agent', agentId }, drawerExpanded: false, error: null })
+    this.pushDrawer({ kind: 'agent', agentId })
   }
 
   openSession(agentId: string, sessionId: string): void {
-    this.update({ drawer: { kind: 'session', agentId, sessionId }, drawerExpanded: false, error: null })
+    this.pushDrawer({ kind: 'session', agentId, sessionId })
   }
 
   openSettings(agentId?: string): void {
+    const drawer: DrawerState = { kind: 'settings', ...(agentId === undefined ? {} : { agentId }) }
+    const stack = [...this.state.drawerStack, drawer]
     this.update({
-      drawer: { kind: 'settings', ...(agentId === undefined ? {} : { agentId }) },
+      drawer,
+      drawerStack: stack,
       drawerExpanded: false,
       selectedAgentId: agentId ?? this.state.selectedAgentId,
       providerFormOpen: false,
@@ -147,7 +156,15 @@ export class TeamsConsoleController {
   }
 
   closeDrawer(): void {
-    this.update({ drawer: null, drawerExpanded: false, providerFormOpen: false, editingProviderId: undefined, providerDraft: emptyProviderDraft })
+    const stack = this.state.drawerStack.slice(0, -1)
+    this.update({
+      drawer: stack.at(-1) ?? null,
+      drawerStack: stack,
+      drawerExpanded: false,
+      providerFormOpen: false,
+      editingProviderId: undefined,
+      providerDraft: emptyProviderDraft,
+    })
   }
 
   toggleDrawerExpanded(): void {
@@ -156,6 +173,15 @@ export class TeamsConsoleController {
 
   selectAgent(agentId: string): void {
     this.update({ selectedAgentId: agentId, providerFormOpen: false, editingProviderId: undefined, providerDraft: emptyProviderDraft, error: null })
+  }
+
+  private pushDrawer(drawer: DrawerState): void {
+    this.update({
+      drawer,
+      drawerStack: [...this.state.drawerStack, drawer],
+      drawerExpanded: false,
+      error: null,
+    })
   }
 
   beginAddProvider(): void {
@@ -201,8 +227,8 @@ export class TeamsConsoleController {
     try {
       const result = await action()
       const failure = commandFailureMessage(result)
-      if (failure !== undefined) {
-        this.update({ busy: null, error: `${label}: ${failure}` })
+      if (result.ok === false) {
+        this.update({ busy: null, error: `${label}: ${failure ?? formatServiceError(result.error)}` })
         return false
       }
       const refreshed = await this.refreshAfterAction()
@@ -210,7 +236,7 @@ export class TeamsConsoleController {
         this.update({ busy: null, error: `${label} succeeded, but the host projection could not be refreshed.` })
         return false
       }
-      this.update({ busy: null, notice: `${label} complete` })
+      this.update({ busy: null, notice: actionResult(label, result) })
       return true
     } catch (error) {
       this.update({ busy: null, error: `${label}: ${errorText(error)}` })
@@ -235,11 +261,16 @@ export class TeamsConsoleController {
     try {
       const result = await this.client.sendSession({ agentId, sessionId }, payload)
       const failure = commandFailureMessage(result)
-      if (failure !== undefined) {
-        this.update({ busy: null, error: `Send message: ${failure}` })
+      if (result.ok === false) {
+        this.update({ busy: null, error: `Send message: ${failure ?? formatServiceError(result.error)}` })
         return false
       }
-      this.update({ busy: null, notice: 'Message sent' })
+      const refreshed = await this.refreshAfterAction()
+      if (!refreshed) {
+        this.update({ busy: null, error: 'Send message succeeded, but the host projection could not be refreshed.' })
+        return false
+      }
+      this.update({ busy: null, notice: actionResult('Send message', result) })
       return true
     } catch (error) {
       this.update({ busy: null, error: `Send message: ${errorText(error)}` })

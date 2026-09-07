@@ -14,8 +14,14 @@ export const fixtureProjection: ConsoleProjectionV1 = {
     { agentId: 'planner', sessionId: 'planner-history', title: 'Define notification flow' },
   ],
   notifications: [
-    { agentId: 'planner', notificationId: 'approval-1', sessionId: 'planner-current', kind: 'permission', state: 'pending', title: 'Apply runtime boundary', permissionId: 'permission-1' },
-    { agentId: 'reviewer', notificationId: 'notice-1', sessionId: 'reviewer-current', kind: 'notice', state: 'resolved', title: 'Adapter review complete' },
+    { agentId: 'planner', notificationId: 'approval-1', sessionId: 'planner-current', kind: 'permission', state: 'pending', title: 'Apply runtime boundary', permissionId: 'permission-1', priority: 'high', occurredAt: '2026-09-07T02:00:05Z', detail: 'Agent requests permission to continue.' },
+    { agentId: 'reviewer', notificationId: 'notice-1', sessionId: 'reviewer-current', kind: 'notice', state: 'resolved', title: 'Adapter review complete', priority: 'normal', occurredAt: '2026-09-07T01:50:00Z' },
+  ],
+  sessionEvents: [
+    { eventId: 'event-message-1', agentId: 'planner', sessionId: 'planner-current', kind: 'message', title: 'User message', occurredAt: '2026-09-07T02:00:00Z', state: 'succeeded', detail: 'Complete the Console projection.' },
+    { eventId: 'event-tool-1', agentId: 'planner', sessionId: 'planner-current', kind: 'tool', title: 'Read architecture maps', occurredAt: '2026-09-07T02:00:03Z', state: 'succeeded', detail: 'resource-map.json' },
+    { eventId: 'event-approval-1', agentId: 'planner', sessionId: 'planner-current', kind: 'approval', title: 'Apply runtime boundary', occurredAt: '2026-09-07T02:00:05Z', state: 'pending', detail: 'Agent requests permission to continue.', permissionId: 'permission-1' },
+    { eventId: 'event-notification-1', agentId: 'planner', sessionId: 'planner-current', kind: 'notification', title: 'Approval required', occurredAt: '2026-09-07T02:00:05Z', state: 'pending', permissionId: 'permission-1' },
   ],
   configs: [
     {
@@ -61,6 +67,7 @@ export function createFixtureClient(): ConsoleClientV1 & { readonly sentPayloads
         projection = {
           ...projection,
           notifications: projection.notifications.map(notification => notification.permissionId === command.permissionId ? { ...notification, state: 'resolved' } : notification),
+          sessionEvents: projection.sessionEvents?.map(event => event.permissionId === command.permissionId ? { ...event, state: 'resolved' } : event),
         }
         return success()
       }
@@ -134,6 +141,18 @@ export function createFixtureClient(): ConsoleClientV1 & { readonly sentPayloads
     async sendSession(target, payload) {
       if (!projection.sessions.some(session => session.agentId === target.agentId && session.sessionId === target.sessionId)) return failure('NOT_FOUND', 'Session not found')
       sentPayloads.push(clone(payload))
+      projection = {
+        ...projection,
+        sessionEvents: [...(projection.sessionEvents ?? []), {
+          eventId: `fixture-message-${sentPayloads.length}`,
+          agentId: target.agentId,
+          sessionId: target.sessionId,
+          kind: 'message',
+          title: 'Message accepted',
+          state: 'succeeded',
+          detail: JSON.stringify(payload),
+        }],
+      }
       return success({ accepted: true })
     },
   }

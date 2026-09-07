@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modelLabel, projectAgents, projectConfig, projectNotifications, projectSessions, providerLabel } from '../src/client/model.ts'
+import { modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerLabel } from '../src/client/model.ts'
 import type { ConsoleProjectionV1 } from '../src/client/protocol.ts'
 
 const projection: ConsoleProjectionV1 = {
@@ -26,12 +26,27 @@ describe('projection mapping', () => {
 
   it('projects session and notification arrays without UI-owned mutation', () => {
     const sessions = projectSessions({ ...projection, sessions: [{ agentId: 'a', sessionId: 's', title: 'S' }] })
-    const notifications = projectNotifications({ ...projection, notifications: [{ agentId: 'a', notificationId: 'n', kind: 'notice', state: 'pending', title: 'N' }] })
+    const notifications = projectNotifications({ ...projection, notifications: [{ agentId: 'a', notificationId: 'n', kind: 'notice', state: 'pending', title: 'N', priority: 'high', occurredAt: 'owner-time' }] })
     expect(sessions).toEqual([{ agentId: 'a', sessionId: 's', title: 'S' }])
-    expect(notifications).toEqual([{ agentId: 'a', notificationId: 'n', kind: 'notice', state: 'pending', title: 'N' }])
+    expect(notifications).toEqual([{ agentId: 'a', notificationId: 'n', kind: 'notice', state: 'pending', title: 'N', priority: 'high', occurredAt: 'owner-time' }])
   })
 
   it('uses provider id when a projected provider label is blank', () => {
     expect(providerLabel({ id: 'p', label: '  ', protocol: 'openai-chat', apiBaseUrl: 'https://example.invalid', enabled: true, authKind: 'none', catalogState: 'empty', models: [] })).toBe('p')
+  })
+
+  it('filters the owner-projected Session flow and links approvals to notifications without reordering it', () => {
+    const flow = projectSessionFlow({
+      ...projection,
+      notifications: [{ agentId: 'a', notificationId: 'n', sessionId: 's', kind: 'permission', state: 'pending', title: 'Approve', permissionId: 'p1' }],
+      sessionEvents: [
+        { eventId: 'message', agentId: 'a', sessionId: 's', kind: 'message', title: 'Message' },
+        { eventId: 'other', agentId: 'a', sessionId: 'other', kind: 'tool', title: 'Other tool' },
+        { eventId: 'approval', agentId: 'a', sessionId: 's', kind: 'approval', title: 'Approve', state: 'pending', permissionId: 'p1' },
+        { eventId: 'notification', agentId: 'a', sessionId: 's', kind: 'notification', title: 'Approval required' },
+      ],
+    }, 'a', 's')
+    expect(flow.map(event => event.kind)).toEqual(['message', 'approval', 'notification'])
+    expect(flow[1]).toMatchObject({ eventId: 'approval', notificationId: 'n', state: 'pending' })
   })
 })

@@ -7,8 +7,12 @@ const root = resolve(import.meta.dirname, '..')
 const project = JSON.parse(readFileSync(resolve(root, '.appsdk/project.json'), 'utf8'))
 const module = project.modules.find(item => item.module_id === 'teams-source')
 assert.ok(module, 'teams-source contract missing')
+process.stderr.write('Regression gate: TEAMS_CONSOLE_REAL_DOM=1 (real Chrome required)\n')
 const result = spawnSync('pnpm', ['exec', 'vitest', 'run', '--config', 'vitest.config.ts', '--reporter=json'], {
-  cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
+  cwd: root,
+  encoding: 'utf8',
+  env: { ...process.env, TEAMS_CONSOLE_REAL_DOM: '1' },
+  maxBuffer: 16 * 1024 * 1024,
 })
 if (result.error) throw result.error
 mkdirSync(resolve(root, 'generated/validation'), { recursive: true })

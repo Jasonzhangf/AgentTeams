@@ -20,13 +20,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const allowed = new Set(keys)
+  return Object.keys(value).every(key => allowed.has(key))
+}
+
 function isProjection(value: unknown): value is ConsoleProjectionV1 {
   return isRecord(value)
+    && hasOnlyKeys(value, ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents'])
     && value.version === 1
     && Array.isArray(value.agents)
     && Array.isArray(value.sessions)
     && Array.isArray(value.notifications)
     && Array.isArray(value.configs)
+    && (value.sessionEvents === undefined || Array.isArray(value.sessionEvents))
 }
 
 function isCommandResult(value: unknown): value is ConsoleCommandResultV1 {

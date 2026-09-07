@@ -565,6 +565,11 @@ export const teamsStyles = String.raw`
   color: oklch(0.9 0.05 25);
 }
 
+.teams-inline-error {
+  color: oklch(0.9 0.05 25);
+  font-size: 13px;
+}
+
 .teams-fixture-label {
   position: fixed;
   right: 12px;
@@ -587,24 +592,27 @@ export const teamsStyles = String.raw`
 
 .teams-drawer {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  top: 50%;
+  left: 50%;
   display: flex;
   flex-direction: column;
+  width: min(760px, calc(100% - 48px));
   max-height: 82%;
   overflow: hidden;
-  border-top: 1px solid var(--teams-border);
-  border-radius: 18px 18px 0 0;
+  border: 1px solid var(--teams-border);
+  border-radius: 18px;
   background: var(--teams-surface-soft);
-  box-shadow: 0 -20px 50px oklch(0.04 0.03 255 / 0.42);
+  box-shadow: 0 24px 70px oklch(0.04 0.03 255 / 0.52);
   pointer-events: auto;
-  transform: translateY(0);
+  transform: translate(-50%, -50%);
 }
 
 .teams-drawer.is-expanded {
+  inset: 0;
+  width: 100%;
   max-height: 100%;
   border-radius: 0;
+  transform: none;
 }
 
 .teams-drawer-header {
@@ -659,6 +667,54 @@ export const teamsStyles = String.raw`
   margin: 0;
   max-width: 68ch;
   color: var(--teams-muted);
+}
+
+.teams-session-activity {
+  display: grid;
+  gap: 10px;
+}
+
+.teams-session-activity h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.teams-session-timeline {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teams-session-event {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--teams-border);
+  border-radius: 10px;
+  background: var(--teams-surface-raised);
+}
+
+.teams-session-event-approval {
+  border-color: var(--teams-warning);
+}
+
+.teams-session-event-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.teams-session-event-detail {
+  max-width: 100%;
+  margin: 0;
+  overflow: auto;
+  color: var(--teams-muted);
+  font: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
 }
 
 .teams-root :where(button, input, select, textarea):focus-visible {
@@ -748,7 +804,23 @@ export const teamsStyles = String.raw`
   }
 
   .teams-drawer {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
     max-height: 92%;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+    transform: none;
+  }
+
+  .teams-drawer.is-expanded {
+    top: 0;
+    max-height: 100%;
+    border-radius: 0;
   }
 
   .teams-drawer-header,

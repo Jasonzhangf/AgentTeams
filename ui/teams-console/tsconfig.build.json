@@ -5,8 +5,8 @@
     "noEmitOnError": true,
     "declaration": true,
     "declarationMap": false,
-    "rootDir": "src",
-    "outDir": "lib",
+    "rootDir": "../..",
+    "outDir": ".ts-build",
     "rewriteRelativeImportExtensions": true
   },
   "include": ["src/**/*.ts"],
