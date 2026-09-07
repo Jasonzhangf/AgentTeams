@@ -105,7 +105,10 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   try {
     const httpClient = createConsoleHttpClient({ baseUrl: consoleUrl,
       fetchImpl: (url, init) => fetch(url, { ...init, headers: { ...init?.headers, authorization: 'console-test' } }) })
-    expect((await httpClient.readProjection()).agents[0].agentId).toBe('provider')
+    const projected = await (await fetch(`${consoleUrl}/api/v1/projection`, { headers: { authorization: 'console-test' } })).json() as { agents: { agentId: string }[]; works: unknown[]; relations: unknown[] }
+    expect(projected.agents[0].agentId).toBe('provider')
+    expect(projected.works).toEqual([])
+    expect(projected.relations).toEqual([])
     expect(await httpClient.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
     expect((await fetch(consoleUrl, { headers: { authorization: 'console-test' } })).status).toBe(200)
   } finally { await new Promise<void>(resolve => consoleServer.close(() => resolve())) }
@@ -123,6 +126,10 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   expect(await channel.request({ kind: 'work.request', control: { workId: 'work', requestId: 'request', operation: 'search', targetGeneration: 1, demands: [{ resourceId: 'search-slot', amount: 1 }] },
     payload: { query: 'process work needle' } })).toMatchObject({ control: { state: 'succeeded' }, payload: { matches: [expect.objectContaining({ text: 'process work needle\n' })] } })
   await channel.request({ kind: 'work.close', workId: 'work' })
+  expect(await management.readProjection()).toMatchObject({
+    works: [expect.objectContaining({ agentId: 'provider', workId: 'work', consumerAgentId: 'consumer', state: 'closed' })],
+    relations: [expect.objectContaining({ agentId: 'provider', workId: 'work', consumerAgentId: 'consumer', relationPermission: 'granted' })],
+  })
   first.process.kill('SIGTERM')
   expect((await first.exited).code).toBe(0)
 

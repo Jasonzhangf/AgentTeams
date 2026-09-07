@@ -9,10 +9,11 @@ import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 import { createWorkHost } from '../agent-host/work-host.ts'
 import { createWorkIngress } from '../agent-host/work-ingress.ts'
-import { createFileWorkStore, createTrustedWorkAuthority, createWorkLedger, currentWorkProcessStartToken, readFileWorkStoreLockProof, recover, recoverFileWorkStoreLock } from '../agent/work-resource.ts'
+import { createFileWorkStore, createTrustedWorkAuthority, createWorkLedger, currentWorkProcessStartToken, readFileWorkStoreLockProof, recover, recoverFileWorkStoreLock, type WorkLedger } from '../agent/work-resource.ts'
 import { createConsoleIngress } from '../agent-host/console-ingress.ts'
 import { acceptAgentData } from './agent-data.ts'
 import type { ConsoleClientV1 } from '../control-protocol/console-api.ts'
+import { projectConsoleWorkObservations } from './console-work-projection.ts'
 import type { RelayClientOptions } from '../network/relay-client.ts'
 import { startAgentDaemon, type AgentDaemon } from './agent-daemon.ts'
 import { createJsonFileConfigPersistence, createRuntimeConfigStore, RuntimeConfigError } from '../config/runtime-config.ts'
@@ -153,6 +154,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   try {
     const executor = createCliWorkExecutor(config.cli)
     let host!: ReturnType<typeof createWorkHost>
+    let ledger: WorkLedger | undefined
     configBinding = config.openCode === undefined ? undefined : (() => {
       const store = createRuntimeConfigStore(createJsonFileConfigPersistence(config.openCode.configFile))
       const owner = createManagedConfigOwner({ agentId: config.declaration.identity.agentId, executable: config.openCode.executable,
@@ -171,7 +173,8 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       readProjection: async () => ({ version: 1, agents: [{ agentId: config.declaration.identity.agentId,
         machineId: config.declaration.identity.machineId, label: config.declaration.identity.label,
         presence: daemon?.status().state === 'online' ? 'online' : 'offline', capabilities: executor.capabilities.map(item => item.capabilityId) }],
-        sessions: [], notifications: [], configs: configBinding === undefined ? [] : [configBinding.binding.readProjection()] }),
+        sessions: [], notifications: [], configs: configBinding === undefined ? [] : [configBinding.binding.readProjection()],
+        ...projectConsoleWorkObservations(config.declaration.identity.agentId, ledger?.snapshot.works ?? []) }),
       command: async command => command.kind.startsWith('config.') && configBinding !== undefined
         ? configBinding.binding.command(command as Extract<typeof command, { kind: `config.${string}` }>)
         : ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: configBinding === undefined ? 'Agent has no Session or model configuration owner' : 'Agent has no Session execution capability' } }),
@@ -209,7 +212,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       recoverFileWorkStoreLock(workFile, createTrustedWorkAuthority(), workLock, owner =>
         owner.pid === previousOwner.pid && owner.startToken === previousOwner.startToken)
     }
-    const ledger = createWorkLedger({ provider: { accountId: config.declaration.identity.accountId, scopeId: config.declaration.scopeId,
+    ledger = createWorkLedger({ provider: { accountId: config.declaration.identity.accountId, scopeId: config.declaration.scopeId,
       agentId: config.declaration.identity.agentId }, generation: daemon.network.generation, capabilities: executor.capabilities,
       store: createFileWorkStore(workFile) })
     const hasUnreconciledState = ledger.snapshot.allocations.some(allocation => allocation.state !== 'released') ||

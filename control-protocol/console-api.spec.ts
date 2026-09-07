@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseConsoleCommand } from './console-api.ts'
+import { parseConsoleCommand, parseConsoleWorkRelationProjection } from './console-api.ts'
 
 describe('Console control ingress', () => {
   it('admits each frozen command without changing it', () => {
@@ -36,5 +36,14 @@ describe('Console control ingress', () => {
       expect(() => parseConsoleCommand({ kind: 'config.putProvider', agentId: 'a', expectedRevision: 0, provider: { ...provider, auth } })).toThrow()
     }
     expect(() => parseConsoleCommand({ kind: 'config.putProvider', agentId: 'a', expectedRevision: 0, provider: { ...provider, auth: { kind: 'none' }, payload: {} } })).toThrow()
+  })
+
+  it('admits observe-only work and relation rows and rejects request payloads', () => {
+    const works = [{ agentId: 'a', workId: 'w', consumerAgentId: 'c', providerAgentId: 'a', capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1, state: 'closed' }]
+    const relations = [{ agentId: 'a', consumerAgentId: 'c', providerAgentId: 'a', capabilityId: 'file-search', capabilityVersion: '1', relationPermission: 'granted', workId: 'w' }]
+    expect(parseConsoleWorkRelationProjection({ works, relations })).toEqual({ works, relations })
+    expect(() => parseConsoleWorkRelationProjection({ works: [{ ...works[0], payload: { query: 'secret' } }], relations })).toThrow()
+    expect(() => parseConsoleWorkRelationProjection({ works, relations: [{ ...relations[0], metadata: {} }] })).toThrow()
+    expect(() => parseConsoleWorkRelationProjection({ agents: [], sessions: [], notifications: [], configs: [] })).toThrow()
   })
 })

@@ -1,4 +1,4 @@
-import type { JsonValue, ServiceError, ServiceErrorCode } from './agent-services.ts'
+import type { JsonValue, ServiceError, ServiceErrorCode, WorkState } from './agent-services.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
 export type { JsonValue } from './agent-services.ts'
 
@@ -57,6 +57,27 @@ export interface ConsoleProjectionV1 {
     readonly providers: readonly ConsoleProviderView[]; readonly error?: ConsoleServiceError
   }[]
   readonly sessionEvents?: readonly ConsoleSessionEventView[]
+  readonly works?: readonly ConsoleWorkView[]
+  readonly relations?: readonly ConsoleRelationView[]
+}
+export interface ConsoleWorkView {
+  readonly agentId: string
+  readonly workId: string
+  readonly consumerAgentId: string
+  readonly providerAgentId: string
+  readonly capabilityId: string
+  readonly capabilityVersion: string
+  readonly policyRevision: number
+  readonly state: WorkState
+}
+export interface ConsoleRelationView {
+  readonly agentId: string
+  readonly consumerAgentId: string
+  readonly providerAgentId: string
+  readonly capabilityId: string
+  readonly capabilityVersion: string
+  readonly relationPermission: 'requested' | 'granted' | 'revoked'
+  readonly workId?: string
 }
 export type ConsoleCommandV1 =
   | { readonly kind: 'session.open'; readonly agentId: string; readonly sessionId: string }
@@ -78,6 +99,45 @@ export interface ConsoleClientV1 {
   command(command: ConsoleCommandV1): Promise<ConsoleCommandResultV1>
   /** Dedicated Session data ingress; business content never enters a host command. */
   sendSession(target: { readonly agentId: string; readonly sessionId: string }, payload: JsonValue): Promise<ConsoleCommandResultV1>
+}
+
+const WORK_STATES: readonly WorkState[] = ['accepted', 'closing', 'closed', 'rejected']
+const RELATION_PERMISSIONS = ['requested', 'granted', 'revoked'] as const
+
+function object(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('Console control must be an object')
+  return value as Record<string, unknown>
+}
+function text(value: unknown): void {
+  if (typeof value !== 'string' || value.length === 0) throw new Error('Console control requires a non-empty string')
+}
+function revision(value: unknown): void {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) throw new Error('Invalid config revision')
+}
+
+function workView(value: unknown): ConsoleWorkView {
+  const work = object(value)
+  assertEnvelopeKeys(work, ['agentId', 'workId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'policyRevision', 'state'], 'Console work')
+  for (const key of ['agentId', 'workId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion']) text(work[key])
+  revision(work.policyRevision)
+  if (!WORK_STATES.includes(work.state as WorkState)) throw new Error('Invalid Console work state')
+  return work as unknown as ConsoleWorkView
+}
+
+function relationView(value: unknown): ConsoleRelationView {
+  const relation = object(value)
+  assertEnvelopeKeys(relation, ['agentId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'relationPermission', 'workId'], 'Console relation')
+  for (const key of ['agentId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion']) text(relation[key])
+  if (!RELATION_PERMISSIONS.includes(relation.relationPermission as typeof RELATION_PERMISSIONS[number])) throw new Error('Invalid Console relation permission')
+  if (relation.workId !== undefined) text(relation.workId)
+  return relation as unknown as ConsoleRelationView
+}
+
+/** Observe-only projection rows; request/Session payloads are rejected as undeclared fields. */
+export function parseConsoleWorkRelationProjection(value: unknown): { readonly works: readonly ConsoleWorkView[]; readonly relations: readonly ConsoleRelationView[] } {
+  const input = object(value)
+  if (!Array.isArray(input.works) || !Array.isArray(input.relations)) throw new Error('Console projection requires work and relation observations')
+  return { works: input.works.map(workView), relations: input.relations.map(relationView) }
 }
 
 /** Validate the closed control envelope before dispatch; authorization stays at the daemon. */
@@ -117,15 +177,4 @@ export function parseConsoleCommand(value: unknown): ConsoleCommandV1 {
   }
   assertEnvelopeKeys(command, ['kind', 'agentId', ...fields], 'Console command')
   return command as unknown as ConsoleCommandV1
-}
-
-function object(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('Console control must be an object')
-  return value as Record<string, unknown>
-}
-function text(value: unknown): void {
-  if (typeof value !== 'string' || value.length === 0) throw new Error('Console control requires a non-empty string')
-}
-function revision(value: unknown): void {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) throw new Error('Invalid config revision')
 }

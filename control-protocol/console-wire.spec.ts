@@ -18,10 +18,16 @@ it('validates replies and rejects undeclared or malformed projection fields', ()
     sessions: [{ agentId: 'a', sessionId: 's' }], notifications: [], configs: [{ agentId: 'a', acceptedRevision: 0, providers: [] }] }
   const frame = { kind: 'console.projection.result', correlationId: 'r', projection }
   expect(parseConsoleWireReply(JSON.stringify(frame))).toEqual(frame)
+  const observed = { ...projection, works: [{ agentId: 'a', workId: 'w', consumerAgentId: 'c', providerAgentId: 'a',
+    capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1, state: 'closed' }],
+    relations: [{ agentId: 'a', consumerAgentId: 'c', providerAgentId: 'a', capabilityId: 'file-search', capabilityVersion: '1',
+      relationPermission: 'granted', workId: 'w' }] }
+  expect(parseConsoleWireReply(JSON.stringify({ ...frame, projection: observed }))).toMatchObject({ projection: observed })
   const result = { kind: 'console.result', correlationId: 'r', result: { ok: false, error: { code: 'CREDENTIAL_UNAVAILABLE', message: 'missing', providerInstanceId: 'p' } } }
   expect(parseConsoleWireReply(JSON.stringify(result))).toEqual(result)
   for (const invalid of [
     { ...frame, projection: { ...projection, agents: [{ ...projection.agents[0], credential: 'secret' }] } },
+    { ...frame, projection: { ...observed, works: [{ ...observed.works[0], payload: { query: 'secret' } }] } },
     { ...frame, projection: { ...projection, configs: [{ agentId: 'a', acceptedRevision: -1, providers: [] }] } },
     { ...result, result: { ok: 'yes' } },
     { ...result, result: { ok: false, error: { code: 'invented', message: 'bad' } } },

@@ -1,5 +1,5 @@
 import type { JsonValue } from './agent-services.ts'
-import { parseConsoleCommand, type ConsoleCommandV1, type ConsoleCommandResultV1, type ConsoleProjectionV1 } from './console-api.ts'
+import { parseConsoleCommand, parseConsoleWorkRelationProjection, type ConsoleCommandV1, type ConsoleCommandResultV1, type ConsoleProjectionV1 } from './console-api.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
 import { parseServiceError, RelayProtocolError } from './relay-codec.ts'
 
@@ -78,7 +78,7 @@ function error(value: unknown): void {
   if (input.status !== undefined && (!Number.isSafeInteger(input.status) || (input.status as number) < 100 || (input.status as number) > 599)) throw new Error('Console response HTTP status invalid')
 }
 function projection(value: unknown): void {
-  const input = record(value, ['version', 'agents', 'sessions', 'notifications', 'configs'])
+  const input = record(value, ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations'])
   choice(input.version, [1])
   array(input.agents, item => {
     const agent = record(item, ['agentId', 'label', 'machineId', 'presence', 'capabilities', 'currentSessionId', 'providerId', 'modelId'])
@@ -110,6 +110,7 @@ function projection(value: unknown): void {
       array(provider.models, item => { const model = record(item, ['id', 'label']); string(model.id); optionalString(model.label) })
     })
   })
+  if (input.works !== undefined || input.relations !== undefined) parseConsoleWorkRelationProjection(input)
 }
 
 export function parseConsoleWireReply(text: string): ConsoleWireReply {
