@@ -40,13 +40,13 @@ describe('fixed process runner', () => {
   it('forces an output-limited child that ignores SIGTERM to close', async () => {
     const output = await runFixedProcess({
       executable: process.execPath,
-      argv: ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => process.stdout.write("x".repeat(1024)), 1)'],
-      timeoutMs: 1_000,
+      argv: ['-e', 'process.on("SIGTERM", () => {}); process.stdout.write("ready\\n", () => setInterval(() => process.stdout.write("x".repeat(1024)), 1))'],
       maxOutputBytes: 1_024,
       shell: false,
     })
 
     expect(output.outputLimitExceeded).toBe(true)
+    expect(output.timedOut).toBe(false)
     expect(output.signal).toBe('SIGKILL')
   })
 
