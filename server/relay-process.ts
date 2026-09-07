@@ -74,6 +74,15 @@ function requiredString(value: unknown, label: string): string {
   return value
 }
 
+function knownFields(value: Record<string, unknown>, fields: readonly string[], label: string): void {
+  try {
+    assertEnvelopeKeys(value, fields, label)
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : `${label} has unsupported fields`
+    throw new RelayProcessConfigError(message, cause)
+  }
+}
+
 function safeInteger(value: unknown, label: string): number {
   if (!Number.isSafeInteger(value)) {
     throw new RelayProcessConfigError(`${label} must be a safe integer`)
@@ -95,7 +104,7 @@ function port(value: unknown, label: string): number {
 
 function parseIdentity(value: unknown, label: string): AuthenticatedAgent {
   const input = record(value, label)
-  assertEnvelopeKeys(input, ['accountId', 'scopeId', 'agentId'], label)
+  knownFields(input, ['accountId', 'scopeId', 'agentId'], label)
   return {
     accountId: requiredString(input.accountId, `${label}.accountId`),
     scopeId: requiredString(input.scopeId, `${label}.scopeId`),
@@ -117,7 +126,7 @@ function parseCredentialBindings(value: unknown, env: NodeJS.ProcessEnv): {
   for (const [index, item] of value.entries()) {
     const label = `credentials[${index}]`
     const input = record(item, label)
-    assertEnvelopeKeys(input, ['credentialEnv', 'identity'], label)
+    knownFields(input, ['credentialEnv', 'identity'], label)
     const credentialEnv = requiredString(input.credentialEnv, `${label}.credentialEnv`)
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(credentialEnv)) {
       throw new RelayProcessConfigError(`${label}.credentialEnv is invalid`)
@@ -150,20 +159,20 @@ function parseCredentialBindings(value: unknown, env: NodeJS.ProcessEnv): {
 
 function parseConfigObject(value: unknown, env: NodeJS.ProcessEnv): ResolvedRelayProcessConfig {
   const input = record(value, 'relay config')
-  assertEnvelopeKeys(input, ['version', 'listen', 'tls', 'limits', 'credentials'], 'relay config')
+  knownFields(input, ['version', 'listen', 'tls', 'limits', 'credentials'], 'relay config')
   if (input.version !== RELAY_CONFIG_VERSION) {
     throw new RelayProcessConfigError(`relay config version must be ${RELAY_CONFIG_VERSION}`)
   }
 
   const listenInput = record(input.listen, 'listen')
-  assertEnvelopeKeys(listenInput, ['host', 'port'], 'listen')
+  knownFields(listenInput, ['host', 'port'], 'listen')
   const listen = {
     host: requiredString(listenInput.host, 'listen.host'),
     port: port(listenInput.port, 'listen.port'),
   }
 
   const tlsInput = record(input.tls, 'tls')
-  assertEnvelopeKeys(tlsInput, ['keyFile', 'certFile'], 'tls')
+  knownFields(tlsInput, ['keyFile', 'certFile'], 'tls')
   const tls = {
     keyFile: requiredString(tlsInput.keyFile, 'tls.keyFile'),
     certFile: requiredString(tlsInput.certFile, 'tls.certFile'),
@@ -179,7 +188,7 @@ function parseConfigObject(value: unknown, env: NodeJS.ProcessEnv): ResolvedRela
     'maxPendingBytes',
     'grantTtlMs',
   ]
-  assertEnvelopeKeys(limitsInput, limitNames, 'limits')
+  knownFields(limitsInput, limitNames, 'limits')
   const limits = {
     maxPayload: positiveSafeInteger(limitsInput.maxPayload, 'limits.maxPayload'),
     maxConnections: positiveSafeInteger(limitsInput.maxConnections, 'limits.maxConnections'),
@@ -256,18 +265,23 @@ export async function startRelayProcess(configPath: string, env: NodeJS.ProcessE
   } catch (cause) {
     throw new RelayProcessConfigError('relay TLS key or certificate could not be read', cause)
   }
-  const server = await createRelayServer({
-    host: loaded.resolved.config.listen.host,
-    port: loaded.resolved.config.listen.port,
-    key,
-    cert,
-    ...loaded.resolved.config.limits,
-    authenticate: credential => {
-      if (credential === undefined) return null
-      const identity = loaded.resolved.credentials.get(credential)
-      return identity === undefined ? null : { ...identity }
-    },
-  })
+  let server: RelayServer
+  try {
+    server = await createRelayServer({
+      host: loaded.resolved.config.listen.host,
+      port: loaded.resolved.config.listen.port,
+      key,
+      cert,
+      ...loaded.resolved.config.limits,
+      authenticate: credential => {
+        if (credential === undefined) return null
+        const identity = loaded.resolved.credentials.get(credential)
+        return identity === undefined ? null : { ...identity }
+      },
+    })
+  } catch (cause) {
+    throw new RelayProcessConfigError('relay server could not start', cause)
+  }
   return {
     configPath: loaded.configPath,
     config: structuredClone(loaded.resolved.config),

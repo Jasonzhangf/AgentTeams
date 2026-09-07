@@ -7,7 +7,9 @@ import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import { connectWss, type WssConnection } from '../network/wss-connection.ts'
 import { loginRelay } from '../network/relay-login.ts'
-import { parseRelayProcessArgs, parseRelayProcessConfig, startRelayProcess } from './relay-process.ts'
+import { createRelayClient, type RelayClient, type RelayClientOptions } from '../network/relay-client.ts'
+import type { RelayGrant } from '../control-protocol/agent-services.ts'
+import { RelayProcessConfigError, parseRelayProcessArgs, parseRelayProcessConfig, startRelayProcess } from './relay-process.ts'
 
 const entryPath = resolve(import.meta.dirname, 'relay-process.ts')
 const repoRoot = resolve(import.meta.dirname, '..')
@@ -18,6 +20,7 @@ let tempDirectory: string
 let cert: Buffer
 const children: ChildProcessWithoutNullStreams[] = []
 const connections: WssConnection[] = []
+const relayClients: RelayClient[] = []
 
 beforeAll(() => {
   tempDirectory = mkdtempSync(join(tmpdir(), 'agentteams-relay-process-'))
@@ -30,6 +33,9 @@ beforeAll(() => {
 })
 
 afterEach(async () => {
+  for (const client of relayClients.splice(0).reverse()) {
+    await client.close().catch(() => undefined)
+  }
   for (const connection of connections.splice(0).reverse()) {
     await connection.close().catch(() => undefined)
   }
@@ -161,6 +167,33 @@ async function login(endpoint: string, agentId: string, credential: string): Pro
   return admitted.transport
 }
 
+async function relayClient(
+  endpoint: string,
+  agentId: string,
+  credential: string,
+  onEvent?: RelayClientOptions['onEvent'],
+): Promise<RelayClient> {
+  const client = await createRelayClient({
+    transport: {
+      endpoint,
+      credential,
+      ca: cert,
+      connectTimeoutMs: 1000,
+      maxMessageBytes: 65536,
+      maxBufferedBytes: 65536,
+      maxPendingFrames: 8,
+    },
+    declaration: declaration(agentId),
+    admissionTimeoutMs: 2000,
+    requestTimeoutMs: 2000,
+    maxPendingRequests: 8,
+    maxDataConnections: 4,
+    onEvent,
+  })
+  relayClients.push(client)
+  return client
+}
+
 async function directory(connection: WssConnection): Promise<readonly string[]> {
   await connection.send({
     bytes: Buffer.from(JSON.stringify({ kind: 'relay.directory', requestId: 'directory-process', subscribe: false })),
@@ -207,7 +240,35 @@ it('rejects missing, duplicate, and plaintext credential or identity bindings', 
     ...valid,
     credentials: [{ ...valid.credentials[0], credential: credentialA }, valid.credentials[1]],
   }
-  expect(() => parseRelayProcessConfig(JSON.stringify(plaintext), env)).toThrow(/unsupported field credential/)
+  try {
+    parseRelayProcessConfig(JSON.stringify(plaintext), env)
+    throw new Error('expected relay process config validation to fail')
+  } catch (error) {
+    expect(error).toBeInstanceOf(RelayProcessConfigError)
+    expect(error).toHaveProperty('message', expect.stringMatching(/unsupported field credential/))
+    expect((error as Error).cause).toBeInstanceOf(Error)
+  }
+})
+
+it('reports invalid TLS material as an owned process startup error with its cause', async () => {
+  const invalidKey = join(tempDirectory, 'invalid-key.pem')
+  const invalidCert = join(tempDirectory, 'invalid-cert.pem')
+  const invalidConfig = join(tempDirectory, 'invalid-relay.json')
+  writeFileSync(invalidKey, 'not a private key')
+  writeFileSync(invalidCert, 'not a certificate')
+  writeFileSync(invalidConfig, JSON.stringify({
+    ...config(),
+    tls: { keyFile: invalidKey, certFile: invalidCert },
+  }))
+
+  const error = await startRelayProcess(invalidConfig, {
+    ...process.env,
+    RELAY_PROCESS_A: credentialA,
+    RELAY_PROCESS_B: credentialB,
+  }).then(() => undefined, failure => failure as unknown)
+  expect(error).toBeInstanceOf(RelayProcessConfigError)
+  expect(error).toHaveProperty('message', 'relay server could not start')
+  expect((error as Error).cause).toBeInstanceOf(Error)
 })
 
 it('isolates the public config snapshot from the live authentication identity map', async () => {
@@ -222,6 +283,35 @@ it('isolates the public config snapshot from the live authentication identity ma
     const admitted = await login(handle.server.url, 'a', credentialA)
     expect(await directory(admitted)).toEqual(['a'])
   } finally {
+    await handle.close()
+  }
+})
+
+it('uses the shared admission codec and relays opaque data through the process server', async () => {
+  const handle = await startRelayProcess(writeConfig(), {
+    ...process.env,
+    RELAY_PROCESS_A: credentialA,
+    RELAY_PROCESS_B: credentialB,
+  })
+  try {
+    let resolveOffer!: (grant: RelayGrant) => void
+    const offered = new Promise<RelayGrant>(resolvePromise => { resolveOffer = resolvePromise })
+    const a = await relayClient(handle.server.url, 'a', credentialA)
+    const b = await relayClient(handle.server.url, 'b', credentialB, event => {
+      if (event.kind === 'relay.offer') resolveOffer(event.grant)
+    })
+    const grant = await a.connect('b', b.generation)
+    await expect(offered).resolves.toEqual(grant)
+
+    const [source, target] = await Promise.all([a.openData(grant), b.openData(grant)])
+    const payload = Buffer.from([0, 1, 2, 255])
+    await source.send({ bytes: payload, binary: true })
+    const received = await target.read()
+    expect(received).toEqual({ bytes: payload, binary: true })
+  } finally {
+    for (const client of relayClients.splice(0).reverse()) {
+      await client.close().catch(() => undefined)
+    }
     await handle.close()
   }
 })

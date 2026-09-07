@@ -74,6 +74,9 @@ change the live credential map.
 The only supported command-line form is `--config <file>` (the equivalent
 `--config=<file>` form is accepted). Startup fails explicitly if the argument,
 JSON, TLS files, environment credential, identity, or limit is invalid.
+All process-owned configuration and startup failures use
+`RelayProcessConfigError` and retain the original error as `cause`; callers can
+distinguish this boundary without losing the TLS or listener failure.
 
 `SIGTERM` and `SIGINT` call the handle returned by `createRelayServer` and
 await its `close()`. That closes this process's WSS sockets, grants, and HTTPS
@@ -98,5 +101,7 @@ pnpm exec vitest run server/relay-process.spec.ts
 
 That test is the evidence for the real entrypoint, relative certificate/key
 resolution, exact credential/identity admission, listener shutdown, and
-same-config restart. It is separate from library-level Relay tests and does
-not use a health endpoint as a login or shutdown proof.
+same-config restart. It also opens a granted data connection through the shared
+admission/client codec and verifies opaque binary delivery in both process
+clients. It is separate from library-level Relay tests and does not use a
+health endpoint as a login or shutdown proof.
