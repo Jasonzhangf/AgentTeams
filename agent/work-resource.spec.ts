@@ -233,6 +233,28 @@ describe('Agent Work resource admission', () => {
     expect(state.snapshot.allocations.find(allocation => allocation.resourceId === 'request-slot')?.state).toBe('released')
   })
 
+  it('does not reuse an unknown work allocation before trusted reconciliation', () => {
+    const state = ledger()
+    accept(state, 'work-a')
+    requestWork(state, { authenticatedConsumer: consumer, request: request('work-a', 'request-a'), policy: policy() })
+    const authority = createTrustedWorkAuthority()
+    completeRequest(state, authority, 'work-a', 'request-a', { outcome: 'unknown' })
+    recover(state, authority, [{
+      workId: 'work-a',
+      requestId: 'request-a',
+      completion: { outcome: 'succeeded', payload: { contextId: 'ctx-1' } },
+    }])
+
+    const blocked = requestWork(state, {
+      authenticatedConsumer: consumer,
+      request: request('work-a', 'request-b', 'snapshot'),
+      policy: policy(),
+    })
+    expect(blocked.executionAllowed).toBe(false)
+    expect(blocked.request.error?.code).toBe('RESULT_UNKNOWN')
+    expect(state.snapshot.allocations.find(allocation => allocation.resourceId === 'browser-context')?.state).toBe('unknown')
+  })
+
   it('holds work-scoped context through request completion and releases only after destroy confirmation', () => {
     const state = ledger()
     accept(state, 'work-a')
@@ -244,6 +266,23 @@ describe('Agent Work resource admission', () => {
     expect(() => confirmWorkDestroyed(state, authority, 'work-a')).not.toThrow()
     expect(state.snapshot.works[0]?.state).toBe('closed')
     expect(state.snapshot.allocations.find(allocation => allocation.resourceId === 'browser-context')?.state).toBe('released')
+  })
+
+  it('requires explicit destroy confirmation to release a work-scoped allocation during recovery', () => {
+    const state = ledger()
+    accept(state, 'work-a')
+    requestWork(state, { authenticatedConsumer: consumer, request: request('work-a', 'request-a'), policy: policy() })
+    const authority = createTrustedWorkAuthority()
+    completeRequest(state, authority, 'work-a', 'request-a', { outcome: 'succeeded' })
+    closeWork(state, consumer, 'work-a')
+    const allocationId = state.snapshot.allocations.find(allocation => allocation.resourceId === 'browser-context')?.allocationId
+    expect(allocationId).toBeDefined()
+
+    expect(() => recover(state, authority, [{
+      workId: 'work-a',
+      allocations: [{ allocationId: allocationId as string, state: 'released' }],
+    }])).toThrowError(/confirmWorkDestroyed/)
+    expect(state.snapshot.allocations.find(allocation => allocation.allocationId === allocationId)?.state).toBe('held')
   })
 
   it('recovers persisted in-flight requests as unknown and never clears corrupt state', () => {
@@ -319,5 +358,27 @@ describe('Agent Work resource admission', () => {
     }), 'utf8')
     expect(() => createWorkLedger({ provider, generation: 4, capabilities: [capability], store: createFileWorkStore(file) })).toThrowError(/INVALID_INPUT/)
     expect(readFileSync(file, 'utf8')).toContain('missing-work')
+  })
+
+  it('rejects persisted allocations released before request completion or work destruction', () => {
+    const state = ledger()
+    accept(state, 'work-a')
+    requestWork(state, { authenticatedConsumer: consumer, request: request('work-a', 'request-a'), policy: policy() })
+    const snapshot = JSON.parse(JSON.stringify(state.snapshot))
+    snapshot.allocations = snapshot.allocations.map((allocation: { resourceId: string }) => ({
+      ...allocation,
+      state: 'released',
+    }))
+    const directory = mkdtempSync(join(tmpdir(), 'teams-work-premature-release-'))
+    tempDirs.push(directory)
+    const file = join(directory, 'work.json')
+    writeFileSync(file, JSON.stringify(snapshot), 'utf8')
+
+    expect(() => createWorkLedger({
+      provider,
+      generation: 4,
+      capabilities: [capability],
+      store: createFileWorkStore(file),
+    })).toThrowError(/released before/)
   })
 })
