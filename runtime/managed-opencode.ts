@@ -62,18 +62,21 @@ export async function startManagedOpenCode(options: ManagedOpenCodeOptions) {
     })()
     return stopping
   }
+  const hasEnded = () => ended || child.exitCode !== null || child.signalCode !== null
   try {
     const deadline = Date.now() + options.startupTimeoutMs
     let ready = false
     while (Date.now() < deadline) {
-      if (ended) throw new Error('Managed OpenCode exited before readiness')
-      try { ready = (await fetch(`${url}/global/health`, { headers: { authorization }, signal: AbortSignal.timeout(Math.max(1, Math.min(300, deadline - Date.now()))) })).ok }
-      catch { /* Connection refusal before listen is expected; the startup deadline still applies. */ }
+      if (hasEnded()) throw new Error('Managed OpenCode exited before readiness')
+      try {
+        ready = (await fetch(`${url}/global/health`, { headers: { authorization }, signal: AbortSignal.timeout(Math.max(1, Math.min(300, deadline - Date.now()))) })).ok
+      } catch { /* Connection refusal before listen is expected; the startup deadline still applies. */ }
+      if (!ready && hasEnded()) throw new Error('Managed OpenCode exited before readiness')
       if (ready) break
       await delay(50)
     }
     if (!ready) {
-      if (ended) throw new Error('Managed OpenCode exited before readiness')
+      if (hasEnded()) throw new Error('Managed OpenCode exited before readiness')
       throw new Error('Managed OpenCode startup deadline')
     }
     const response = await fetch(`${url}/config`, { headers: { authorization }, signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())) })
