@@ -1,7 +1,11 @@
 import type { CapabilityDeclaration, OperationDeclaration } from '../control-protocol/agent-services.ts'
+import { closeSync, fsyncSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { mkdirSync } from 'node:fs'
 
 export type CapabilityUseState = 'discovered' | 'requested' | 'allowed' | 'denied' | 'using' | 'stopped' | 'expired'
 export type RelationClassification = 'master-slave' | 'peer'
+export type RelationAvailability = 'online' | 'offline'
 
 export interface CapabilityMatchRequest {
   readonly capabilityId: string
@@ -24,6 +28,87 @@ export interface CapabilityUseReport {
   readonly relationPermission: 'requested' | 'granted' | 'revoked'
   readonly reportedAt: string
   readonly reportRevision: number
+}
+
+export interface AgentRelation {
+  readonly relationId: string
+  readonly consumer: string
+  readonly provider: string
+  readonly classification: RelationClassification
+  readonly capabilityId: string
+  readonly capabilityVersion: string
+  readonly permission: 'requested' | 'granted' | 'revoked'
+  readonly availability: RelationAvailability
+  readonly revision: number
+}
+
+export interface RelationSnapshot {
+  readonly version: 1
+  readonly revision: number
+  readonly relations: readonly AgentRelation[]
+}
+
+export interface RelationStore {
+  load(): RelationSnapshot | undefined
+  save(expectedRevision: number, snapshot: RelationSnapshot): void
+}
+
+export interface RelationConflict {
+  readonly code: 'REVISION_CONFLICT' | 'PAIR_CONFLICT'
+  readonly expectedRevision?: number
+  readonly actualRevision?: number
+  readonly relationId?: string
+}
+
+function relationError(conflict: RelationConflict): Error {
+  const error = new Error(`${conflict.code}: relation update rejected`)
+  Object.defineProperty(error, 'conflict', { value: conflict, enumerable: true })
+  return error
+}
+
+export function createRelationStore(filePath: string): RelationStore {
+  return {
+    load: () => {
+      try { return JSON.parse(readFileSync(filePath, 'utf8')) as RelationSnapshot }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined; throw error }
+    },
+    save: (expectedRevision, snapshot) => {
+      const current = (() => { try { return JSON.parse(readFileSync(filePath, 'utf8')) as RelationSnapshot } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined; throw error } })()
+      const actualRevision = current?.revision ?? 0
+      if (actualRevision !== expectedRevision || snapshot.revision !== expectedRevision + 1) {
+        throw relationError({ code: 'REVISION_CONFLICT', expectedRevision, actualRevision })
+      }
+      mkdirSync(dirname(filePath), { recursive: true })
+      const temporary = `${filePath}.${process.pid}.tmp`
+      const fd = openSync(temporary, 'w', 0o600)
+      try { writeSync(fd, JSON.stringify(snapshot)); fsyncSync(fd) } finally { closeSync(fd) }
+      renameSync(temporary, filePath)
+    },
+  }
+}
+
+export function updateRelation(store: RelationStore, relation: AgentRelation): AgentRelation {
+  const current = store.load() ?? { version: 1 as const, revision: 0, relations: [] }
+  const pair = current.relations.find(item => item.consumer === relation.consumer && item.provider === relation.provider && item.capabilityId === relation.capabilityId && item.capabilityVersion === relation.capabilityVersion && item.relationId !== relation.relationId)
+  if (pair !== undefined) throw relationError({ code: 'PAIR_CONFLICT', relationId: pair.relationId })
+  const relations = current.relations.filter(item => item.relationId !== relation.relationId)
+  const next = { version: 1 as const, revision: current.revision + 1, relations: [...relations, { ...relation, revision: current.revision + 1 }] }
+  store.save(current.revision, next)
+  return next.relations[next.relations.length - 1]
+}
+
+export function revokeRelation(store: RelationStore, relationId: string): AgentRelation {
+  const current = store.load()
+  const relation = current?.relations.find(item => item.relationId === relationId)
+  if (relation === undefined) throw new Error(`agent: relation ${relationId} not found`)
+  return updateRelation(store, { ...relation, permission: 'revoked' })
+}
+
+export function setRelationAvailability(store: RelationStore, relationId: string, availability: RelationAvailability): AgentRelation {
+  const current = store.load()
+  const relation = current?.relations.find(item => item.relationId === relationId)
+  if (relation === undefined) throw new Error(`agent: relation ${relationId} not found`)
+  return updateRelation(store, { ...relation, availability })
 }
 
 export interface CapabilityUseGraphEdge {
