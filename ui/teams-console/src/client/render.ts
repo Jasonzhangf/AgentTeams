@@ -648,6 +648,7 @@ function renderDrawer(controller: TeamsConsoleController, state: ConsoleState, t
   value.setAttribute('role', 'dialog')
   value.setAttribute('aria-modal', 'true')
   value.setAttribute('aria-label', drawerTitle(drawer, state, t).title)
+  value.tabIndex = -1
   const header = element('header', 'teams-drawer-header')
   header.tabIndex = 0
   const grip = element('span', 'teams-drawer-grip')
@@ -750,8 +751,12 @@ export function renderConsole(root: HTMLElement, controller: TeamsConsoleControl
     if (state.entry === 'memory') append(content, renderMemory(t))
   }
   const drawer = renderDrawer(controller, state, t)
-  append(panel, header, tabs, content, renderStatus(state, t), drawer)
-  append(overlay, backdrop, panel)
+  append(panel, header, tabs, content, renderStatus(state, t))
+  if (drawer !== null) {
+    panel.inert = true
+    panel.setAttribute('aria-hidden', 'true')
+  }
+  append(overlay, backdrop, panel, drawer)
   append(root, overlay)
   if (options.fixtureLabel !== undefined) {
     const flag = element('div', 'teams-fixture-label')

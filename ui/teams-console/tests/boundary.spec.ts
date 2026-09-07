@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 const sourceRoot = join(import.meta.dirname, '../src')
 const sourceFiles = [
-  'client/api.ts', 'client/controller.ts', 'client/index.ts', 'client/model.ts', 'client/protocol.ts', 'client/render.ts', 'client/styles.ts', 'fixture.ts', 'index.ts',
+  'client/api.ts', 'client/controller.ts', 'client/focus.ts', 'client/index.ts', 'client/model.ts', 'client/protocol.ts', 'client/render.ts', 'client/styles.ts', 'fixture.ts', 'index.ts',
 ]
 
 describe('independent UI boundary', () => {
@@ -44,9 +44,11 @@ describe('independent UI boundary', () => {
 
   it('renders owner-projected Session activity without creating a UI transcript ledger', () => {
     const protocol = readFileSync(join(sourceRoot, 'client/protocol.ts'), 'utf8')
+    const canonicalProtocol = readFileSync(join(sourceRoot, '../../../control-protocol/console-api.ts'), 'utf8')
     const controller = readFileSync(join(sourceRoot, 'client/controller.ts'), 'utf8')
     const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
-    expect(protocol).toContain('readonly sessionEvents?')
+    expect(canonicalProtocol).toContain('readonly sessionEvents?')
+    expect(protocol).not.toContain('interface ConsoleProjectionV1')
     expect(render).toContain('projectSessionFlow(state.projection, agentId, sessionId)')
     expect(controller).not.toMatch(/sessionEvents\s*:/)
     expect(controller).not.toMatch(/transcript|session\.history/)
@@ -61,7 +63,10 @@ describe('independent UI boundary', () => {
     expect(index).toContain('restoreFocus(drawerFocusKey)')
     expect(index).toContain("event.key === 'Tab'")
     expect(index).toContain("querySelector<HTMLElement>('.teams-drawer-header')?.focus()")
+    expect(index).toContain('containDrawerTab(root, event)')
     expect(render.match(/function renderDrawer/g)).toHaveLength(1)
+    expect(render).toContain('panel.inert = true')
+    expect(render).toContain("panel.setAttribute('aria-hidden', 'true')")
     expect(styles).toContain('@media (max-width: 780px)')
     expect(styles).toContain('.teams-drawer.is-expanded')
   })

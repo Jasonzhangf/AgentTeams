@@ -1,5 +1,6 @@
 import type { ConsoleClientV1 } from './protocol.ts'
 import { TeamsConsoleController } from './controller.ts'
+import { containDrawerTab } from './focus.ts'
 import { renderConsole } from './render.ts'
 import { teamsStyles } from './styles.ts'
 
@@ -53,14 +54,7 @@ export function mountTeamsConsole(root: HTMLElement, client: ConsoleClientV1, op
   const unsubscribe = controller.subscribe(render)
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Tab' && controller.getSnapshot().drawer !== null) {
-      const drawer = root.querySelector<HTMLElement>('.teams-drawer')
-      const focusable = drawer === null ? [] : [...drawer.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')]
-      const first = focusable[0]
-      const last = focusable.at(-1)
-      if (first !== undefined && last !== undefined && (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
-        event.preventDefault()
-        ;(event.shiftKey ? last : first).focus()
-      }
+      containDrawerTab(root, event)
       return
     }
     if (event.key !== 'Escape' || !controller.getSnapshot().open) return

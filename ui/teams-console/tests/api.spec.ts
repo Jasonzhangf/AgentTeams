@@ -74,6 +74,9 @@ describe('Console HTTP v1 adapter', () => {
 
     const activityClient = createConsoleHttpClient({ fetchImpl: async () => new Response(JSON.stringify({ ...projection, sessionEvents: {} }), { status: 200 }) })
     await expect(activityClient.readProjection()).rejects.toThrow(/invalid v1 projection/)
+
+    const forkedClient = createConsoleHttpClient({ fetchImpl: async () => new Response(JSON.stringify({ ...projection, uiSessionLedger: [] }), { status: 200 }) })
+    await expect(forkedClient.readProjection()).rejects.toThrow(/invalid v1 projection/)
   })
 
   it('supports host-specific versioned paths without changing the client contract', async () => {

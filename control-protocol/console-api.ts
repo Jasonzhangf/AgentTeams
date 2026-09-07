@@ -1,5 +1,6 @@
 import type { JsonValue, ServiceError, ServiceErrorCode } from './agent-services.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
+export type { JsonValue } from './agent-services.ts'
 
 /** Console config errors retain their owning service's code and provider/status context. */
 export interface ConsoleServiceError extends Omit<ServiceError, 'code'> {
@@ -21,6 +22,17 @@ export interface ConsoleProviderView {
   readonly models: readonly { readonly id: string; readonly label?: string }[]
   readonly error?: ConsoleServiceError
 }
+export interface ConsoleSessionEventView {
+  readonly eventId: string
+  readonly agentId: string
+  readonly sessionId: string
+  readonly kind: 'message' | 'tool' | 'approval' | 'notification'
+  readonly title: string
+  readonly occurredAt?: string
+  readonly state?: 'pending' | 'running' | 'succeeded' | 'failed' | 'resolved' | 'unknown'
+  readonly detail?: string
+  readonly permissionId?: string
+}
 export interface ConsoleProjectionV1 {
   readonly version: 1
   readonly agents: readonly {
@@ -37,12 +49,14 @@ export interface ConsoleProjectionV1 {
   readonly notifications: readonly {
     readonly agentId: string; readonly notificationId: string; readonly sessionId?: string
     readonly kind: 'notice' | 'permission'; readonly state: 'pending' | 'resolved'; readonly title: string
-    readonly permissionId?: string
+    readonly permissionId?: string; readonly priority?: 'low' | 'normal' | 'high' | 'critical'
+    readonly occurredAt?: string; readonly detail?: string
   }[]
   readonly configs: readonly {
     readonly agentId: string; readonly acceptedRevision: number; readonly effectiveRevision?: number
     readonly providers: readonly ConsoleProviderView[]; readonly error?: ConsoleServiceError
   }[]
+  readonly sessionEvents?: readonly ConsoleSessionEventView[]
 }
 export type ConsoleCommandV1 =
   | { readonly kind: 'session.open'; readonly agentId: string; readonly sessionId: string }

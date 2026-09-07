@@ -17,8 +17,8 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json && node scripts/finalize-build.mjs",
+    "test": "TEAMS_CONSOLE_REAL_DOM=1 vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "license": "MIT",
