@@ -10,6 +10,6 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["agent/**/*.ts", "agent-host/**/*.ts", "cli-adapter/**/*.ts", "config/**/*.ts", "control-protocol/**/*.ts", "network/**/*.ts", "runtime/**/*.ts", "server/**/*.ts", "memory-plugin/**/*.ts", "search-plugin/**/*.ts"],
+  "include": ["agent/**/*.ts", "agent-host/**/*.ts", "cli-adapter/**/*.ts", "endpoint/**/*.ts", "config/**/*.ts", "control-protocol/**/*.ts", "network/**/*.ts", "runtime/**/*.ts", "server/**/*.ts", "memory-plugin/**/*.ts", "search-plugin/**/*.ts"],
   "exclude": ["**/*.spec.ts", "**/vitest.config.ts"]
 }

@@ -5,6 +5,7 @@
   "external_boundaries": [],
   "scope": "Current product architecture. Legacy source remains captured by the AppSDK source module until separately removed.",
   "modules": [
+    {"module_id":"endpoint","owner":"endpoint","status":"partial","owned_paths":["endpoint/**"],"forbidden_paths":["network/**","server/**","ui/**","config/**"],"note":"Owns logical Endpoint identity, descriptor, capability/resource attachment and endpoint lifecycle; E1 registry is implemented. Does not own routes, transport or Work ledger"},
     {"module_id":"cli-adapter","owner":"cli-adapter","status":"partial","owned_paths":["cli-adapter/**"],"forbidden_paths":["agent/**","runtime/**","network/**","config/**"],"note":"Fixed CLI execution and local browser handles; no provider resource ledger or daemon ownership"},
     {"module_id":"development-governance","owner":"development-governance","status":"implemented","owned_paths":["scripts/**","package.json","pnpm-lock.yaml","pnpm-workspace.yaml","tsconfig.json","tsconfig.runtime.json","vitest.config.ts",".appsdk/project.json",".appsdk/goal.json"],"forbidden_paths":["agent/**","network/**","server/**","config/**"]},
     {
