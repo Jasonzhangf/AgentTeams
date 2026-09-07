@@ -369,9 +369,14 @@ function validateSnapshot(value: unknown): WorkLedgerSnapshot {
     allocationIds.add(allocation.allocationId)
   }
   const requestsByKey = new Map(snapshot.requests.map(request => [requestKey(request.control.workId, request.control.requestId), request]))
+  const worksById = new Map(snapshot.works.map(work => [work.workId, work]))
   const referencedAllocationIds = new Map<string, number>()
   for (const request of snapshot.requests) {
     if (!workIds.has(request.control.workId)) fail('INVALID_INPUT', `request references missing work ${request.control.workId}`)
+    const owningWork = worksById.get(request.control.workId)
+    if (owningWork?.state === 'closed' && request.state !== 'succeeded' && request.state !== 'failed' && request.state !== 'cancelled') {
+      fail('INVALID_INPUT', `work ${request.control.workId} was destroyed before request ${request.control.requestId} completed`)
+    }
     for (const allocationId of request.allocationIds) {
       const allocation = snapshot.allocations.find(candidate => candidate.allocationId === allocationId)
       if (allocation === undefined) fail('INVALID_INPUT', `request references missing allocation ${allocationId}`)
@@ -393,6 +398,15 @@ function validateSnapshot(value: unknown): WorkLedgerSnapshot {
       if (referencedAllocationIds.get(allocation.allocationId) !== 1) {
         fail('INVALID_INPUT', `request allocation ${allocation.allocationId} is linked more than once`)
       }
+      const terminal = request.state === 'succeeded' || request.state === 'failed' || request.state === 'cancelled'
+      if (terminal && allocation.state !== 'released') {
+        fail('INVALID_INPUT', `request allocation ${allocation.allocationId} remains occupied after completion`)
+      }
+      if (!terminal && allocation.state === 'released') {
+        fail('INVALID_INPUT', `request allocation ${allocation.allocationId} was released before completion`)
+      }
+    } else if (allocation.state === 'released' && worksById.get(allocation.workId)?.state !== 'closed') {
+      fail('INVALID_INPUT', `work allocation ${allocation.allocationId} was released before work destruction`)
     }
   }
   return snapshot
@@ -797,6 +811,12 @@ export function requestWork(
   if (ledger.snapshot.requests.some(request => request.control.workId === work.workId && request.state === 'unknown')) {
     return rejectRequest(ledger, request, { code: 'RESULT_UNKNOWN', message: 'work has an unresolved request result' })
   }
+  if (ledger.snapshot.allocations.some(allocation =>
+    allocation.workId === work.workId
+    && allocation.scope === 'work'
+    && allocation.state === 'unknown')) {
+    return rejectRequest(ledger, request, { code: 'RESULT_UNKNOWN', message: 'work has an unresolved resource allocation' })
+  }
   const demands = validateDemands(capability, request.control.demands)
   const workAllocations = new Map(ledger.snapshot.allocations
     .filter(allocation => allocation.workId === work.workId && allocation.scope === 'work' && allocation.state !== 'released')
@@ -1064,8 +1084,8 @@ export function recover(ledger: WorkLedger, authority: TrustedWorkAuthority, obs
       if (allocation.state === 'released' && observedAllocation.state !== 'released') {
         fail('CONFLICT', `recovery cannot resurrect released allocation ${observedAllocation.allocationId}`)
       }
-      if (observedAllocation.state === 'released' && allocation.scope === 'work' && work.state !== 'closing' && work.state !== 'closed') {
-        fail('CONFLICT', `work allocation ${observedAllocation.allocationId} requires close before release`)
+      if (observedAllocation.state === 'released' && allocation.scope === 'work' && allocation.state !== 'released') {
+        fail('CONFLICT', `work allocation ${observedAllocation.allocationId} requires confirmWorkDestroyed before release`)
       }
       if (observedAllocation.state === 'released' && allocation.scope === 'request') {
         const request = findRequest(ledger, allocation.workId, allocation.requestId as string)
