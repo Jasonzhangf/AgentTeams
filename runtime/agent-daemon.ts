@@ -57,6 +57,7 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
     let registered!: DirectWssTarget
     registered = {
       ...target,
+      get state() { return target.state },
       close: async reason => {
         await target.close(reason)
         targets.delete(registered)
@@ -89,7 +90,9 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
     const record = (cause: unknown) => {
       if (!cleanupError) cleanupError = cause instanceof Error ? cause : new Error('daemon: peer cleanup failed')
     }
-    await Promise.all([...connecting].map(attempt => attempt.then(target => target.close(reason), record).catch(record)))
+    await Promise.all([...connecting].map(attempt => attempt.then(target => {
+      if (!targets.has(target)) return target.close(reason)
+    }, record).catch(record)))
     await Promise.all([...targets].map(target => target.close(reason).catch(record)))
     return cleanupError
   }

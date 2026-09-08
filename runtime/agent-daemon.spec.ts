@@ -95,6 +95,7 @@ describe('Agent daemon peer route lifecycle', () => {
     expect(peer.state.state).toBe('ready')
     await daemonInstance.stop()
     expect(closeCalls.value).toBe(1)
+    expect(peer.state.state).toBe('closed')
     expect((await daemonInstance.closed).state).toBe('stopped')
   })
 
