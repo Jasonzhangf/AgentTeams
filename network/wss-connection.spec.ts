@@ -6,6 +6,8 @@ import { createServer } from 'node:https'
 import { once } from 'node:events'
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import { WebSocketServer } from 'ws'
+import { connectDirectWssTarget } from './direct-route.ts'
+import { buildRoutePlan, type RoutePlan } from './route-plan.ts'
 import { connectWss, type WssConnection } from './wss-connection.ts'
 import { loginRelay } from './relay-login.ts'
 import { createRelayClient } from './relay-client.ts'
@@ -51,6 +53,134 @@ async function client(endpoint: string, limits = {}) {
   cleanup.push(() => connection.close())
   return connection
 }
+
+function directRoutePlan(endpoint: string): RoutePlan {
+  return buildRoutePlan({
+    hostId: 'host-a',
+    directoryGeneration: 1,
+    policy: 'manual',
+    candidates: [{
+      candidateId: 'direct-1',
+      kind: 'lan',
+      endpoint,
+      port: 8443,
+      authRequired: true,
+      lastSeenAt: '2026-09-04T00:00:00.000Z',
+    }],
+    targetCandidateId: 'direct-1',
+  })
+}
+
+const directHello = {
+  hostId: 'host-a',
+  agentId: 'agent-a',
+  targetGeneration: 7,
+  protocolVersion: 1,
+  capabilitiesRevision: 'cap-1',
+}
+
+it('dials a direct WSS target through hello ack and keeps generation isolated', async () => {
+  const host = await server()
+  host.wss.on('connection', socket => {
+    socket.on('message', data => {
+      const message = JSON.parse(data.toString())
+      expect(message).toMatchObject({ kind: 'transport.hello', targetGeneration: 7 })
+      socket.send(JSON.stringify({ kind: 'transport.hello_ack', targetGeneration: message.targetGeneration }))
+    })
+  })
+  const target = await connectDirectWssTarget({
+    transport: options(host.endpoint),
+    hello: directHello,
+    plan: directRoutePlan(host.endpoint),
+    helloTimeoutMs: 1000,
+  })
+  cleanup.push(() => target.close())
+  expect(target.plan.state).toBe('succeeded')
+  expect(target.state.state).toBe('ready')
+  expect(target.state.targetGeneration).toBe(7)
+  expect(() => target.assertGeneration(7)).not.toThrow()
+  expect(() => target.assertGeneration(8)).toThrow(/STALE_GENERATION/)
+  await target.close()
+  await target.closed
+})
+
+it('closes the direct socket and retires the route on hello error', async () => {
+  const host = await server()
+  let peerClosed!: Promise<unknown>
+  host.wss.on('connection', socket => {
+    peerClosed = once(socket, 'close')
+    socket.on('message', () => socket.send(JSON.stringify({ kind: 'transport.error', targetGeneration: 7, code: 'FORBIDDEN', message: 'peer denied' })))
+  })
+  await expect(connectDirectWssTarget({
+    transport: options(host.endpoint),
+    hello: directHello,
+    plan: directRoutePlan(host.endpoint),
+    helloTimeoutMs: 1000,
+  })).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'peer denied', plan: { state: 'failed', lastError: 'peer denied' } })
+  await peerClosed
+})
+
+it('never claims direct readiness when hello times out', async () => {
+  const host = await server()
+  let peerClosed!: Promise<unknown>
+  host.wss.on('connection', socket => {
+    peerClosed = once(socket, 'close')
+    socket.on('message', () => { /* withhold hello ack */ })
+  })
+  await expect(connectDirectWssTarget({
+    transport: options(host.endpoint),
+    hello: directHello,
+    plan: directRoutePlan(host.endpoint),
+    helloTimeoutMs: 25,
+  })).rejects.toMatchObject({ code: 'RESULT_UNKNOWN', plan: { state: 'failed' } })
+  await peerClosed
+})
+
+it('rejects a stale hello ack generation explicitly', async () => {
+  const host = await server()
+  let peerClosed!: Promise<unknown>
+  host.wss.on('connection', socket => {
+    peerClosed = once(socket, 'close')
+    socket.on('message', () => socket.send(JSON.stringify({ kind: 'transport.hello_ack', targetGeneration: 8 })))
+  })
+  await expect(connectDirectWssTarget({
+    transport: options(host.endpoint),
+    hello: directHello,
+    plan: directRoutePlan(host.endpoint),
+    helloTimeoutMs: 1000,
+  })).rejects.toMatchObject({ code: 'STALE_GENERATION', plan: { state: 'failed' } })
+  await peerClosed
+})
+
+it('isolates direct WSS target connections per route plan', async () => {
+  const host = await server()
+  let connections = 0
+  host.wss.on('connection', socket => {
+    connections++
+    socket.on('message', data => {
+      const message = JSON.parse(data.toString())
+      socket.send(JSON.stringify({ kind: 'transport.hello_ack', targetGeneration: message.targetGeneration }))
+    })
+  })
+  const first = await connectDirectWssTarget({
+    transport: options(host.endpoint),
+    hello: { ...directHello, targetGeneration: 1 },
+    plan: directRoutePlan(host.endpoint),
+    helloTimeoutMs: 1000,
+  })
+  cleanup.push(() => first.close())
+  const second = await connectDirectWssTarget({
+    transport: options(host.endpoint),
+    hello: { ...directHello, targetGeneration: 2 },
+    plan: directRoutePlan(host.endpoint),
+    helloTimeoutMs: 1000,
+  })
+  cleanup.push(() => second.close())
+  expect(connections).toBe(2)
+  expect(second.state.state).toBe('ready')
+  await first.close()
+  expect(second.state.state).toBe('ready')
+})
 
 it('uses a verified TLS socket, sends credential only as a header, and preserves frame bytes/type', async () => {
   const host = await server()

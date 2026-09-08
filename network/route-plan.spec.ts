@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  activeDirectWssCandidate,
   beginRouteCandidate,
+  buildDirectWssRoutePlan,
   buildRoutePlan,
   failRouteCandidate,
   succeedRouteCandidate,
@@ -21,6 +23,17 @@ const candidates = [
     endpoint: 'http://10.0.0.2:1234',
     port: 1234,
     authRequired: false,
+    lastSeenAt: '2026-09-04T00:00:00.000Z',
+  },
+]
+
+const directCandidates = [
+  {
+    candidateId: 'direct-1',
+    kind: 'lan' as const,
+    endpoint: 'wss://10.0.0.2:8443',
+    port: 8443,
+    authRequired: true,
     lastSeenAt: '2026-09-04T00:00:00.000Z',
   },
 ]
@@ -81,5 +94,45 @@ describe('Teams explicit route plan', () => {
     const failed = failRouteCandidate(beginRouteCandidate(plan), 'candidate-1', 'all down')
     expect(failed.state).toBe('failed')
     expect(failed.lastError).toBe('all down')
+  })
+
+  it('builds a typed direct WSS route and rejects relay or non-WSS candidates', () => {
+    const plan = buildDirectWssRoutePlan({
+      hostId: 'host-a',
+      directoryGeneration: 1,
+      policy: 'manual',
+      candidates: directCandidates,
+      targetCandidateId: 'direct-1',
+    })
+    expect(activeDirectWssCandidate(plan)).toMatchObject({ candidateId: 'direct-1', endpoint: 'wss://10.0.0.2:8443' })
+    expect(() => buildDirectWssRoutePlan({
+      hostId: 'host-a',
+      directoryGeneration: 1,
+      policy: 'manual',
+      candidates: [{ ...directCandidates[0], kind: 'relay-ws' }],
+      targetCandidateId: 'direct-1',
+    })).toThrow(/relay candidate/)
+    expect(() => buildDirectWssRoutePlan({
+      hostId: 'host-a',
+      directoryGeneration: 1,
+      policy: 'manual',
+      candidates: [{ ...directCandidates[0], endpoint: 'https://10.0.0.2:8443' }],
+      targetCandidateId: 'direct-1',
+    })).toThrow(/wss/)
+  })
+
+  it('retires direct WSS candidates only while the active route is still explicit', () => {
+    const plan = buildDirectWssRoutePlan({
+      hostId: 'host-a',
+      directoryGeneration: 1,
+      policy: 'manual',
+      candidates: directCandidates,
+      targetCandidateId: 'direct-1',
+    })
+    const active = beginRouteCandidate(plan)
+    const failed = failRouteCandidate(active, 'direct-1', 'handshake failed')
+    expect(failed.state).toBe('failed')
+    expect(failed.lastError).toBe('handshake failed')
+    expect(() => succeedRouteCandidate(failed, 'direct-1')).toThrow()
   })
 })
