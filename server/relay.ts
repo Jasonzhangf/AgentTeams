@@ -132,7 +132,7 @@ function endpointsFor(declaration: AgentDeclaration): RelayPeer['endpoints'] {
 }
 
 function peerWithEndpoints(peer: Omit<RelayPeer, 'endpoints'> & { endpoints?: RelayPeer['endpoints'] }): RelayPeer {
-  return { ...peer, endpoints: peer.endpoints ?? endpointsFor(peer.declaration) }
+  return { ...peer, endpoints: endpointsFor(peer.declaration) }
 }
 
 function positiveInteger(value: unknown, label: string): number {

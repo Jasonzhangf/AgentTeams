@@ -442,8 +442,30 @@ describe('N1 relay server', () => {
     if (aDirectory.kind === 'relay.directory') expect(aDirectory.peers.map((item) => item.declaration.scopeId)).toEqual(['scope-a', 'scope-a'])
     if (cDirectory.kind === 'relay.directory') expect(cDirectory.peers.map((item) => item.declaration.scopeId)).toEqual(['scope-b'])
 
-    send(b, { kind: 'relay.publish', generation: 1, declaration: declaration('agent-b', 'scope-a', 2) })
-    await expect(nextJson(a)).resolves.toMatchObject({ kind: 'relay.changed', peer: { declaration: { revision: 2 } } })
+    send(b, {
+      kind: 'relay.publish',
+      generation: 1,
+      declaration: {
+        ...declaration('agent-b', 'scope-a', 2),
+        capabilities: [{
+          capabilityId: 'published-capability',
+          version: 'v2',
+          operations: [{ operation: 'invoke', inputSchema: {}, outputSchema: {}, cancellation: 'unsupported' }],
+          resources: [{ resourceId: 'published-slot', capacity: 1, unit: 'slot', sharing: 'exclusive', allocationScope: 'work' }],
+        }],
+      },
+    })
+    await expect(nextJson(a)).resolves.toMatchObject({
+      kind: 'relay.changed',
+      peer: {
+        declaration: { revision: 2 },
+        endpoints: [{
+          revision: 2,
+          capabilities: [{ capabilityId: 'published-capability' }],
+          resources: [{ resourceId: 'published-slot' }],
+        }],
+      },
+    })
     await expectNoMessage(c)
   })
 

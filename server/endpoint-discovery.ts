@@ -29,7 +29,7 @@ export function compileDeclarationEndpoints(declaration: AgentDeclaration): Endp
       ownerAgentId: compiled.ownerAgentId,
       scopeId: declaration.scopeId,
       kind: compiled.kind,
-      revision: compiled.revision,
+      revision: declaration.revision,
       lifecycle: compiled.lifecycle,
       capabilities: compiled.capabilities.map(capability => ({
         capabilityId: capability.capabilityId,

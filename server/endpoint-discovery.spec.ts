@@ -48,6 +48,14 @@ describe('legacy declaration compile admission', () => {
     }).capabilities[0]?.capabilityId).toBe('file-search')
   })
 
+  it('binds discovery revision to the published declaration revision', () => {
+    const views = compileDeclarationEndpoints(declaration({ revision: 2 }))
+    expect(views[0]?.revision).toBe(2)
+    expect(() => admitEndpointReference(views, { agentId: 'agent-b', scopeId: 'scope-a' }, {
+      providerAgentId: 'agent-a', endpointId: 'agent-a', revision: 1,
+    })).toThrow(/REVISION_CONFLICT/)
+  })
+
   it('does not leak other-scope Endpoint summaries on projected directory peers', () => {
     const peer: RelayPeer = {
       declaration: declaration(),
