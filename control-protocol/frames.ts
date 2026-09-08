@@ -1,5 +1,5 @@
-import { AgentMessage, validateAgentMessage } from './agent-message.ts'
-import { RelationReport, validateRelationReport } from './relation-report.ts'
+import { type AgentMessage, validateAgentMessage } from './agent-message.ts'
+import { type RelationReport, validateRelationReport } from './relation-report.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
 
 export type AgentKind = 'opencode' | 'acp' | 'custom'
