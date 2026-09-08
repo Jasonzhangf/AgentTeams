@@ -119,6 +119,17 @@ describe('Agent daemon peer route lifecycle', () => {
     expect(closeCalls.value).toBe(1)
   })
 
+  it('preserves a direct peer cleanup failure when relay terminates', async () => {
+    const closeCalls = { value: 0 }
+    const daemonInstance = await daemon(async () => fakeTarget(closeCalls, new Error('PEER_CLOSE_FAILED')))
+    await daemonInstance.connectPeer(targetOptions())
+    await daemonInstance.network.close()
+    await expect(daemonInstance.closed).resolves.toMatchObject({
+      state: 'failed', error: expect.objectContaining({ message: expect.stringContaining('PEER_CLOSE_FAILED') }),
+    })
+    expect(closeCalls.value).toBe(1)
+  })
+
   it('finishes shutdown when an in-flight peer rejects cleanup', async () => {
     const closeCalls = { value: 0 }
     let resolveTarget!: (target: DirectWssTarget) => void

@@ -125,7 +125,11 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
     signal?.removeEventListener('abort', abort)
     if (state === 'online') { state = 'failed'; error = reason }
     if (state === 'stopping') state = 'stopped'
-    await closeTargets(reason.message)
+    const cleanupError = await closeTargets(reason.message)
+    if (cleanupError) {
+      state = 'failed'
+      error = error ? new Error(`${error.message}; direct peer cleanup failed: ${cleanupError.message}`) : cleanupError
+    }
     return status()
   })
   if (signal?.aborted) await stop()
