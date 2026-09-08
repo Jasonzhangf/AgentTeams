@@ -58,7 +58,8 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
     registered = {
       ...target,
       close: async reason => {
-        try { await target.close(reason) } finally { targets.delete(registered) }
+        await target.close(reason)
+        targets.delete(registered)
       },
       reconnect: () => connectTarget(() => target.reconnect()),
     }
@@ -83,9 +84,14 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
   }
   const connectPeer = (peerOptions: DirectWssTargetOptions): Promise<DirectWssTarget> =>
     connectTarget(() => directPeerConnector(peerOptions))
-  const closeTargets = async (reason: string): Promise<void> => {
-    await Promise.all([...connecting].map(attempt => attempt.then(target => target.close(reason), () => undefined).catch(() => undefined)))
-    await Promise.all([...targets].map(target => target.close(reason).catch(() => undefined)))
+  const closeTargets = async (reason: string): Promise<Error | undefined> => {
+    let cleanupError: Error | undefined
+    const record = (cause: unknown) => {
+      if (!cleanupError) cleanupError = cause instanceof Error ? cause : new Error('daemon: peer cleanup failed')
+    }
+    await Promise.all([...connecting].map(attempt => attempt.then(target => target.close(reason), record).catch(record)))
+    await Promise.all([...targets].map(target => target.close(reason).catch(record)))
+    return cleanupError
   }
   const presence = setInterval(() => {
     if (state !== 'online' || presencePending) return
@@ -94,7 +100,8 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
       if (state !== 'online') return
       error = cause instanceof Error ? cause : new Error('daemon: presence write failed')
       state = 'failed'
-      await closeTargets(error.message)
+      const cleanupError = await closeTargets(error.message)
+      if (cleanupError) error = new Error(`${error.message}; direct peer cleanup failed: ${cleanupError.message}`)
       await network.close()
     }).finally(() => { presencePending = false })
   }, presenceIntervalMs)
@@ -103,7 +110,12 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
     if (state === 'online') state = 'stopping'
     clearInterval(presence)
     signal?.removeEventListener('abort', abort)
-    stopping = closeTargets('daemon: stopped').then(() => network.close()).then(() => { if (state !== 'failed') state = 'stopped' })
+    stopping = (async () => {
+      const cleanupError = await closeTargets('daemon: stopped')
+      if (cleanupError) { state = 'failed'; error = cleanupError }
+      await network.close()
+      if (state !== 'failed') state = 'stopped'
+    })()
     return stopping
   }
   const abort = () => { void stop() }

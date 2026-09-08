@@ -129,7 +129,7 @@ describe('Agent daemon peer route lifecycle', () => {
     resolveTarget(fakeTarget(closeCalls, new Error('PEER_CLOSE_FAILED')))
     await expect(connecting).rejects.toThrow('PEER_CLOSE_FAILED')
     await expect(stopping).resolves.toBeUndefined()
-    await expect(daemonInstance.closed).resolves.toMatchObject({ state: 'stopped' })
+    await expect(daemonInstance.closed).resolves.toMatchObject({ state: 'failed', error: expect.objectContaining({ message: 'PEER_CLOSE_FAILED' }) })
     expect(closeCalls.value).toBe(1)
   })
 })
