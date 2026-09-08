@@ -52,8 +52,16 @@ function assertNoBusinessPayload(input: HostDirectoryInput): void {
 function normalizeRouteCandidates(candidates: readonly RouteCandidate[]): RouteCandidate[] {
   return candidates.map((candidate) => {
     requiredString(candidate.candidateId, 'candidateId')
-    if (candidate.endpoint !== undefined && !candidate.endpoint.startsWith('http://') && !candidate.endpoint.startsWith('https://')) {
-      throw new Error('directory: route endpoint must use http:// or https://')
+    if (candidate.endpoint !== undefined) {
+      let endpoint: URL
+      try {
+        endpoint = new URL(candidate.endpoint)
+      } catch {
+        throw new Error('directory: route endpoint must be a valid URL')
+      }
+      if (!['http:', 'https:', 'wss:'].includes(endpoint.protocol) || !endpoint.hostname || endpoint.username || endpoint.password || endpoint.hash) {
+        throw new Error('directory: route endpoint must use http://, https://, or wss:// without credentials or fragment')
+      }
     }
     if (candidate.port !== undefined && (!Number.isInteger(candidate.port) || candidate.port < 1 || candidate.port > 65535)) {
       throw new Error('directory: route port must be between 1 and 65535')

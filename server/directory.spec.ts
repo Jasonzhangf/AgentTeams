@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildDirectWssRoutePlan } from '../network/route-plan.ts'
 import {
   createHostDirectory,
   listDirectoryHosts,
@@ -38,6 +39,31 @@ describe('Teams server host directory', () => {
   it('rejects business payload fields in directory input', () => {
     const polluted = Object.assign({}, baseHost, { sessionId: 'ses-1' }) as never
     expect(() => upsertDirectoryHost(createHostDirectory(), polluted)).toThrow(/business payload field/)
+  })
+
+  it('passes a direct WSS candidate from directory input into the route plan', () => {
+    const directory = upsertDirectoryHost(createHostDirectory(), {
+      ...baseHost,
+      routeCandidates: [{
+        ...baseHost.routeCandidates[0],
+        kind: 'lan',
+        endpoint: 'wss://agent.test:8443/ws',
+      }],
+    }, '2026-09-04T00:00:00.000Z')
+    const candidate = directory.hosts.get('host-a')!.routeCandidates
+    expect(buildDirectWssRoutePlan({
+      hostId: 'host-a',
+      directoryGeneration: directory.generation,
+      policy: 'manual',
+      candidates: candidate,
+      targetCandidateId: 'candidate-1',
+    }).candidateOrder).toEqual(['candidate-1'])
+    for (const endpoint of ['wss://user:pass@agent.test/ws', 'wss://agent.test/ws#fragment', 'wss://']) {
+      expect(() => upsertDirectoryHost(createHostDirectory(), {
+        ...baseHost,
+        routeCandidates: [{ ...baseHost.routeCandidates[0], kind: 'lan', endpoint }],
+      })).toThrow(/route endpoint/)
+    }
   })
 
   it('refreshes presence and marks stale hosts explicitly', () => {
