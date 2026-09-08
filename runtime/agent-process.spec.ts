@@ -63,6 +63,16 @@ function child(configPath: string, credential = 'Bearer provider') {
   return { process, ready, exited, output: () => output }
 }
 
+it('loads control-protocol frames through a raw Node transform-types child', () => {
+  const output = execFileSync(process.execPath, ['--experimental-transform-types', '--input-type=module', '-e', `
+    import { parseTargetControlFrame } from './control-protocol/frames.ts'
+    const frame = parseTargetControlFrame({ kind: 'transport.ping', targetGeneration: 1, nonce: 'raw-child' })
+    if (frame.kind !== 'transport.ping' || frame.nonce !== 'raw-child') throw new Error('raw frame import failed')
+    process.stdout.write(frame.nonce)
+  `], { cwd: resolve('.'), encoding: 'utf8' })
+  expect(output).toBe('raw-child')
+})
+
 it('executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state', async () => {
   relay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
     maxPayload: 65536, maxConnections: 16, maxGrants: 8, maxBufferedAmount: 65536, maxPendingMessages: 16, maxPendingBytes: 131072, grantTtlMs: 10000,
