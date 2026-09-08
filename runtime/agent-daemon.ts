@@ -63,6 +63,9 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
       reconnect: () => connectTarget(() => target.reconnect()),
     }
     targets.add(registered)
+    void target.closed.then(() => {
+      if (registered.state.state === 'closed' || registered.state.state === 'failed') targets.delete(registered)
+    })
     return registered
   }
   const connectTarget = async (factory: () => Promise<DirectWssTarget>): Promise<DirectWssTarget> => {
@@ -105,11 +108,12 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
   }
   const abort = () => { void stop() }
   signal?.addEventListener('abort', abort, { once: true })
-  const closed = network.closed.then(reason => {
+  const closed = network.closed.then(async reason => {
     clearInterval(presence)
     signal?.removeEventListener('abort', abort)
     if (state === 'online') { state = 'failed'; error = reason }
     if (state === 'stopping') state = 'stopped'
+    await closeTargets(reason.message)
     return status()
   })
   if (signal?.aborted) await stop()

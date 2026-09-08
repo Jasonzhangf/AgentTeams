@@ -66,6 +66,7 @@ function fakeTarget(closeCalls: { value: number }): DirectWssTarget {
 }
 
 async function daemon(connector: (options: DirectWssTargetOptions) => Promise<DirectWssTarget>) {
+  await relay?.close()
   relay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key, maxPayload: 4096,
     maxConnections: 4, maxGrants: 4, maxBufferedAmount: 4096, maxPendingMessages: 4,
     maxPendingBytes: 8192, grantTtlMs: 5000,
@@ -106,5 +107,14 @@ describe('Agent daemon peer route lifecycle', () => {
     await daemonInstance.stop()
     expect(closeCalls.value).toBe(2)
     await expect(daemonInstance.connectPeer(targetOptions())).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+  })
+
+  it('closes direct peers when the relay control connection terminates', async () => {
+    const closeCalls = { value: 0 }
+    const daemonInstance = await daemon(async () => fakeTarget(closeCalls))
+    await daemonInstance.connectPeer(targetOptions())
+    await daemonInstance.network.close()
+    await expect(daemonInstance.closed).resolves.toMatchObject({ state: 'failed' })
+    expect(closeCalls.value).toBe(1)
   })
 })
