@@ -70,21 +70,21 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
   }
   const connectTarget = async (factory: () => Promise<DirectWssTarget>): Promise<DirectWssTarget> => {
     if (state !== 'online') throw unavailable()
-    const attempt = factory()
-    connecting.add(attempt)
-    try {
-      const target = await attempt
+    const attempt = (async () => {
+      const target = await factory()
       if (state !== 'online') {
         await target.close('daemon: peer connection cancelled during shutdown')
         throw unavailable()
       }
       return registerTarget(target)
-    } finally { connecting.delete(attempt) }
+    })()
+    connecting.add(attempt)
+    try { return await attempt } finally { connecting.delete(attempt) }
   }
   const connectPeer = (peerOptions: DirectWssTargetOptions): Promise<DirectWssTarget> =>
     connectTarget(() => directPeerConnector(peerOptions))
   const closeTargets = async (reason: string): Promise<void> => {
-    await Promise.all([...connecting].map(attempt => attempt.then(target => target.close(reason), () => undefined)))
+    await Promise.all([...connecting].map(attempt => attempt.then(target => target.close(reason), () => undefined).catch(() => undefined)))
     await Promise.all([...targets].map(target => target.close(reason).catch(() => undefined)))
   }
   const presence = setInterval(() => {

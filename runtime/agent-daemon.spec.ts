@@ -43,7 +43,7 @@ function targetOptions(): DirectWssTargetOptions {
   }
 }
 
-function fakeTarget(closeCalls: { value: number }): DirectWssTarget {
+function fakeTarget(closeCalls: { value: number }, closeError?: Error): DirectWssTarget {
   let state: TargetTransportState = {
     state: 'ready', hostId: 'peer-host', agentId: 'peer-agent', targetGeneration: 3,
     protocolVersion: 1, capabilitiesRevision: '7',
@@ -59,6 +59,7 @@ function fakeTarget(closeCalls: { value: number }): DirectWssTarget {
     close: async () => {
       closeCalls.value += 1
       state = { ...state, state: 'closed' }
+      if (closeError) throw closeError
     },
     reconnect: async () => fakeTarget(closeCalls),
   }
@@ -115,6 +116,20 @@ describe('Agent daemon peer route lifecycle', () => {
     await daemonInstance.connectPeer(targetOptions())
     await daemonInstance.network.close()
     await expect(daemonInstance.closed).resolves.toMatchObject({ state: 'failed' })
+    expect(closeCalls.value).toBe(1)
+  })
+
+  it('finishes shutdown when an in-flight peer rejects cleanup', async () => {
+    const closeCalls = { value: 0 }
+    let resolveTarget!: (target: DirectWssTarget) => void
+    const pending = new Promise<DirectWssTarget>(resolve => { resolveTarget = resolve })
+    const daemonInstance = await daemon(async () => pending)
+    const connecting = daemonInstance.connectPeer(targetOptions())
+    const stopping = daemonInstance.stop()
+    resolveTarget(fakeTarget(closeCalls, new Error('PEER_CLOSE_FAILED')))
+    await expect(connecting).rejects.toThrow('PEER_CLOSE_FAILED')
+    await expect(stopping).resolves.toBeUndefined()
+    await expect(daemonInstance.closed).resolves.toMatchObject({ state: 'stopped' })
     expect(closeCalls.value).toBe(1)
   })
 })
