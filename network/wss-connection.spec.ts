@@ -209,6 +209,7 @@ it('reconnects an explicitly closed direct target without reusing its socket', a
   expect(second.plan.state).toBe('succeeded')
   expect(second.state).toMatchObject({ state: 'ready', targetGeneration: directHello.targetGeneration })
 })
+
 it('uses a verified TLS socket, sends credential only as a header, and preserves frame bytes/type', async () => {
   const host = await server()
   let credential: string | undefined
