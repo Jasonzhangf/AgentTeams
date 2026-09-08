@@ -1,10 +1,14 @@
 import { createRelayClient, type RelayClient, type RelayClientOptions } from '../network/relay-client.ts'
+import { connectDirectWssTarget, type DirectWssTarget, type DirectWssTargetOptions } from '../network/direct-route.ts'
 import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
+
+export type DirectPeerConnector = (options: DirectWssTargetOptions) => Promise<DirectWssTarget>
 
 export interface AgentDaemonOptions {
   readonly relay: RelayClientOptions
   readonly presenceIntervalMs: number
   readonly signal?: AbortSignal
+  readonly directPeerConnector?: DirectPeerConnector
 }
 export interface AgentDaemonStatus {
   readonly state: 'online' | 'stopping' | 'stopped' | 'failed'
@@ -17,6 +21,7 @@ export interface AgentDaemon {
   readonly network: RelayClient
   readonly closed: Promise<AgentDaemonStatus>
   status(): AgentDaemonStatus
+  connectPeer(options: DirectWssTargetOptions): Promise<DirectWssTarget>
   stop(): Promise<void>
 }
 
@@ -43,7 +48,42 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
   let error: Error | undefined
   let stopping: Promise<void> | undefined
   let presencePending = false
+  const directPeerConnector = options.directPeerConnector ?? connectDirectWssTarget
+  const targets = new Set<DirectWssTarget>()
+  const connecting = new Set<Promise<DirectWssTarget>>()
   const status = (): AgentDaemonStatus => ({ state, agentId, generation: network.generation, ...(error ? { error } : {}) })
+  const unavailable = () => new RelayProtocolError('UNAVAILABLE', 'daemon: peer connections are unavailable')
+  const registerTarget = (target: DirectWssTarget): DirectWssTarget => {
+    let registered!: DirectWssTarget
+    registered = {
+      ...target,
+      close: async reason => {
+        try { await target.close(reason) } finally { targets.delete(registered) }
+      },
+      reconnect: () => connectTarget(() => target.reconnect()),
+    }
+    targets.add(registered)
+    return registered
+  }
+  const connectTarget = async (factory: () => Promise<DirectWssTarget>): Promise<DirectWssTarget> => {
+    if (state !== 'online') throw unavailable()
+    const attempt = factory()
+    connecting.add(attempt)
+    try {
+      const target = await attempt
+      if (state !== 'online') {
+        await target.close('daemon: peer connection cancelled during shutdown')
+        throw unavailable()
+      }
+      return registerTarget(target)
+    } finally { connecting.delete(attempt) }
+  }
+  const connectPeer = (peerOptions: DirectWssTargetOptions): Promise<DirectWssTarget> =>
+    connectTarget(() => directPeerConnector(peerOptions))
+  const closeTargets = async (reason: string): Promise<void> => {
+    await Promise.all([...connecting].map(attempt => attempt.then(target => target.close(reason), () => undefined)))
+    await Promise.all([...targets].map(target => target.close(reason).catch(() => undefined)))
+  }
   const presence = setInterval(() => {
     if (state !== 'online' || presencePending) return
     presencePending = true
@@ -51,6 +91,7 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
       if (state !== 'online') return
       error = cause instanceof Error ? cause : new Error('daemon: presence write failed')
       state = 'failed'
+      await closeTargets(error.message)
       await network.close()
     }).finally(() => { presencePending = false })
   }, presenceIntervalMs)
@@ -59,7 +100,7 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
     if (state === 'online') state = 'stopping'
     clearInterval(presence)
     signal?.removeEventListener('abort', abort)
-    stopping = network.close().then(() => { if (state !== 'failed') state = 'stopped' })
+    stopping = closeTargets('daemon: stopped').then(() => network.close()).then(() => { if (state !== 'failed') state = 'stopped' })
     return stopping
   }
   const abort = () => { void stop() }
@@ -72,5 +113,5 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
     return status()
   })
   if (signal?.aborted) await stop()
-  return { network, closed, status, stop }
+  return { network, closed, status, connectPeer, stop }
 }
