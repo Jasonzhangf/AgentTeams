@@ -182,6 +182,34 @@ it('isolates direct WSS target connections per route plan', async () => {
   expect(second.state.state).toBe('ready')
 })
 
+it('reconnects an explicitly closed direct target without reusing its socket', async () => {
+  const host = await server()
+  const sockets: Array<{ close(): void }> = []
+  host.wss.on('connection', socket => {
+    sockets.push(socket)
+    socket.on('message', data => {
+      const message = JSON.parse(data.toString())
+      socket.send(JSON.stringify({ kind: 'transport.hello_ack', targetGeneration: message.targetGeneration }))
+    })
+  })
+  const first = await connectDirectWssTarget({
+    transport: options(host.endpoint),
+    hello: directHello,
+    plan: directRoutePlan(host.endpoint),
+    helloTimeoutMs: 1000,
+  })
+  await expect(first.reconnect()).rejects.toMatchObject({ code: 'CONFLICT' })
+  sockets[0].close()
+  await first.closed
+  expect(first.state.state).toBe('closed')
+  const second = await first.reconnect()
+  cleanup.push(() => second.close())
+  expect(second).not.toBe(first)
+  expect(second.connection).not.toBe(first.connection)
+  expect(second.plan.state).toBe('succeeded')
+  expect(second.state).toMatchObject({ state: 'ready', targetGeneration: directHello.targetGeneration })
+})
+
 it('uses a verified TLS socket, sends credential only as a header, and preserves frame bytes/type', async () => {
   const host = await server()
   let credential: string | undefined

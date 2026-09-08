@@ -45,6 +45,7 @@ export interface DirectWssTarget {
   readonly closed: Promise<Error>
   assertGeneration(generation: number): void
   close(reason?: string): Promise<void>
+  reconnect(): Promise<DirectWssTarget>
 }
 
 function codeFromTransport(code: string): ServiceErrorCode {
@@ -132,16 +133,23 @@ export async function connectDirectWssTarget(input: DirectWssTargetOptions): Pro
       markClosed(error.message)
       return error
     })
+    const reconnect = async (): Promise<DirectWssTarget> => {
+      if (state.state !== 'closed') {
+        throw new DirectWssRouteError('CONFLICT', 'direct-route: reconnect requires a closed target', plan)
+      }
+      return connectDirectWssTarget(input)
+    }
     return {
       connection: established,
       plan,
-      state,
+      get state() { return state },
       closed,
       assertGeneration: generation => assertTargetGeneration(state, generation),
       close: async (reason = 'direct route closed') => {
         markClosed(reason)
         await established.close()
       },
+      reconnect,
     }
   } catch (error) {
     try { await connection?.close() } catch { /* socket cleanup is best-effort */ }
