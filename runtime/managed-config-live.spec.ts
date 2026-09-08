@@ -9,7 +9,7 @@ import { createManagedConfigOwner } from './managed-config-owner.ts'
 const startupTimeoutMs = 10_000
 const stopTimeoutMs = 3_000
 
-it('applies accepted Teams config to a real isolated OpenCode child and reads effective revision', async () => {
+it('applies accepted Teams config to a real isolated OpenCode child and reads effective revision', { timeout: 18_000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-managed-live-'))
   const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(directory, 'teams-config.json')))
   let managed: ReturnType<typeof createManagedConfigOwner> | undefined
@@ -31,4 +31,4 @@ it('applies accepted Teams config to a real isolated OpenCode child and reads ef
     try { await managed?.stop() }
     finally { await rm(directory, { recursive: true }) }
   }
-}, startupTimeoutMs + stopTimeoutMs + 5_000)
+})
