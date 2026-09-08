@@ -2,6 +2,12 @@ import type { RouteCandidate } from '../server/directory.ts'
 
 export type RoutePlanPolicy = 'manual' | 'auto'
 export type RoutePlanState = 'pending' | 'active' | 'succeeded' | 'failed'
+export type DirectWssRouteKind = Exclude<RouteCandidate['kind'], 'relay-ws' | 'relay-webrtc'>
+
+export interface DirectWssRouteCandidate extends RouteCandidate {
+  readonly kind: DirectWssRouteKind
+  readonly endpoint: string
+}
 
 export interface RoutePlan {
   readonly hostId: string
@@ -24,6 +30,42 @@ export interface BuildRoutePlanInput {
 
 function containsEndpoint(candidate: RouteCandidate): boolean {
   return candidate.endpoint !== undefined
+}
+
+function isDirectWssEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint)
+    return url.protocol === 'wss:' && url.username === '' && url.password === '' && url.hash === ''
+  } catch {
+    return false
+  }
+}
+
+export function buildDirectWssRoutePlan(
+  input: Omit<BuildRoutePlanInput, 'candidates'> & { readonly candidates: readonly RouteCandidate[] },
+): RoutePlan {
+  for (const candidate of input.candidates) {
+    if (candidate.kind === 'relay-ws' || candidate.kind === 'relay-webrtc') {
+      throw new Error('route-plan: direct WSS route cannot select a relay candidate')
+    }
+    if (typeof candidate.endpoint !== 'string' || !isDirectWssEndpoint(candidate.endpoint)) {
+      throw new Error('route-plan: direct WSS route requires an explicit wss:// endpoint without credentials')
+    }
+  }
+  return buildRoutePlan(input)
+}
+
+export function activeDirectWssCandidate(plan: RoutePlan): DirectWssRouteCandidate {
+  const candidateId = plan.candidateOrder[plan.cursor]
+  const candidate = plan.candidates.find((item) => item.candidateId === candidateId)
+  if (!candidate) throw new Error('route-plan: active route candidate is missing')
+  if (candidate.kind === 'relay-ws' || candidate.kind === 'relay-webrtc') {
+    throw new Error('route-plan: active route is not direct WSS')
+  }
+  if (!isDirectWssEndpoint(candidate.endpoint ?? '')) {
+    throw new Error('route-plan: active route requires an explicit wss:// endpoint without credentials')
+  }
+  return candidate as DirectWssRouteCandidate
 }
 
 export function buildRoutePlan(input: BuildRoutePlanInput): RoutePlan {
@@ -68,6 +110,7 @@ export function beginRouteCandidate(plan: RoutePlan): RoutePlan {
 }
 
 export function succeedRouteCandidate(plan: RoutePlan, candidateId: string): RoutePlan {
+  if (plan.state !== 'active') throw new Error('route-plan: only an active route can succeed')
   if (plan.candidateOrder[plan.cursor] !== candidateId) throw new Error('route-plan: candidate is not the active route')
   return { ...plan, state: 'succeeded' }
 }
