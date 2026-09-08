@@ -4,6 +4,16 @@ import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
 
 export type DirectPeerConnector = (options: DirectWssTargetOptions) => Promise<DirectWssTarget>
 
+class PeerCleanupError extends Error {
+  constructor(readonly cause: Error) {
+    super(cause.message)
+  }
+}
+
+function asError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error('daemon: peer cleanup failed')
+}
+
 export interface AgentDaemonOptions {
   readonly relay: RelayClientOptions
   readonly presenceIntervalMs: number
@@ -75,7 +85,9 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
     const attempt = (async () => {
       const target = await factory()
       if (state !== 'online') {
-        await target.close('daemon: peer connection cancelled during shutdown')
+        try { await target.close('daemon: peer connection cancelled during shutdown') } catch (cause) {
+          throw new PeerCleanupError(asError(cause))
+        }
         throw unavailable()
       }
       return registerTarget(target)
@@ -88,11 +100,11 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
   const closeTargets = async (reason: string): Promise<Error | undefined> => {
     let cleanupError: Error | undefined
     const record = (cause: unknown) => {
-      if (!cleanupError) cleanupError = cause instanceof Error ? cause : new Error('daemon: peer cleanup failed')
+      if (!cleanupError) cleanupError = cause instanceof PeerCleanupError ? cause.cause : asError(cause)
     }
     await Promise.all([...connecting].map(attempt => attempt.then(target => {
       if (!targets.has(target)) return target.close(reason)
-    }, record).catch(record)))
+    }, cause => { if (cause instanceof PeerCleanupError) record(cause) }).catch(record)))
     await Promise.all([...targets].map(target => target.close(reason).catch(record)))
     return cleanupError
   }

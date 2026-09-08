@@ -144,4 +144,16 @@ describe('Agent daemon peer route lifecycle', () => {
     await expect(daemonInstance.closed).resolves.toMatchObject({ state: 'failed', error: expect.objectContaining({ message: 'PEER_CLOSE_FAILED' }) })
     expect(closeCalls.value).toBe(1)
   })
+
+  it('does not fail shutdown when a pending connector is cancelled', async () => {
+    let rejectConnector!: (cause: Error) => void
+    const pending = new Promise<DirectWssTarget>((_, reject) => { rejectConnector = reject })
+    const daemonInstance = await daemon(async () => pending)
+    const connecting = daemonInstance.connectPeer(targetOptions())
+    const stopping = daemonInstance.stop()
+    rejectConnector(new Error('CONNECTOR_CANCELLED'))
+    await expect(connecting).rejects.toThrow('CONNECTOR_CANCELLED')
+    await expect(stopping).resolves.toBeUndefined()
+    await expect(daemonInstance.closed).resolves.toMatchObject({ state: 'stopped' })
+  })
 })
