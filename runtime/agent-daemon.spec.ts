@@ -43,11 +43,19 @@ function targetOptions(): DirectWssTargetOptions {
   }
 }
 
-function fakeTarget(closeCalls: { value: number }, closeError?: Error): DirectWssTarget {
+function fakeTarget(closeCalls: { value: number }, closeError?: Error, reconnect?: () => Promise<DirectWssTarget>): DirectWssTarget {
   let state: TargetTransportState = {
     state: 'ready', hostId: 'peer-host', agentId: 'peer-agent', targetGeneration: 3,
     protocolVersion: 1, capabilitiesRevision: '7',
   }
+  const ownReconnect = (() => {
+    let calling = false
+    return async () => {
+      if (calling) throw new Error('ONLY_ONE_RECONNECT')
+      calling = true
+      return reconnect ? reconnect() : fakeTarget(closeCalls)
+    }
+  })()
   const target: DirectWssTarget = {
     connection: {} as WssConnection,
     plan: targetOptions().plan,
@@ -61,7 +69,7 @@ function fakeTarget(closeCalls: { value: number }, closeError?: Error): DirectWs
       state = { ...state, state: 'closed' }
       if (closeError) throw closeError
     },
-    reconnect: async () => fakeTarget(closeCalls),
+    reconnect: ownReconnect,
   }
   return target
 }
@@ -109,6 +117,23 @@ describe('Agent daemon peer route lifecycle', () => {
     await daemonInstance.stop()
     expect(closeCalls.value).toBe(2)
     await expect(daemonInstance.connectPeer(targetOptions())).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+  })
+
+  it('deduplicates concurrent reconnect registration for one source target', async () => {
+    const closeCalls = { value: 0 }
+    let resolveSuccessor!: (target: DirectWssTarget) => void
+    const successor = new Promise<DirectWssTarget>(resolve => { resolveSuccessor = resolve })
+    const daemonInstance = await daemon(async () => fakeTarget(closeCalls, undefined, () => successor))
+    const first = await daemonInstance.connectPeer(targetOptions())
+    await first.close()
+
+    const reconnects = Promise.all([first.reconnect(), first.reconnect()])
+    resolveSuccessor(fakeTarget(closeCalls))
+    const [left, right] = await reconnects
+
+    expect(left).toBe(right)
+    await daemonInstance.stop()
+    expect(closeCalls.value).toBe(2)
   })
 
   it('closes direct peers when the relay control connection terminates', async () => {

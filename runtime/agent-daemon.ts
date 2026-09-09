@@ -61,9 +61,13 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
   const directPeerConnector = options.directPeerConnector ?? connectDirectWssTarget
   const targets = new Set<DirectWssTarget>()
   const connecting = new Set<Promise<DirectWssTarget>>()
+  const reconnecting = new WeakMap<DirectWssTarget, Promise<DirectWssTarget>>()
+  const registeredSources = new WeakMap<DirectWssTarget, DirectWssTarget>()
   const status = (): AgentDaemonStatus => ({ state, agentId, generation: network.generation, ...(error ? { error } : {}) })
   const unavailable = () => new RelayProtocolError('UNAVAILABLE', 'daemon: peer connections are unavailable')
   const registerTarget = (target: DirectWssTarget): DirectWssTarget => {
+    const existing = registeredSources.get(target)
+    if (existing) return existing
     let registered!: DirectWssTarget
     registered = {
       ...target,
@@ -71,16 +75,31 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
       close: async reason => {
         await target.close(reason)
         targets.delete(registered)
+        if (registeredSources.get(target) === registered) registeredSources.delete(target)
       },
-      reconnect: () => connectTarget(() => target.reconnect()),
+      reconnect: () => {
+        const inFlight = reconnecting.get(target)
+        if (inFlight) return inFlight
+        let shared!: Promise<DirectWssTarget>
+        shared = connectTarget(() => target.reconnect(), target).finally(() => {
+          if (reconnecting.get(target) === shared) reconnecting.delete(target)
+        })
+        reconnecting.set(target, shared)
+        return shared
+      },
     }
+    registeredSources.set(target, registered)
     targets.add(registered)
     void target.closed.then(() => {
       if (registered.state.state === 'closed' || registered.state.state === 'failed') targets.delete(registered)
     })
     return registered
   }
-  const connectTarget = async (factory: () => Promise<DirectWssTarget>): Promise<DirectWssTarget> => {
+  const connectTarget = async (factory: () => Promise<DirectWssTarget>, source?: DirectWssTarget): Promise<DirectWssTarget> => {
+    if (source) {
+      const existing = reconnecting.get(source)
+      if (existing) return existing
+    }
     if (state !== 'online') throw unavailable()
     const attempt = (async () => {
       const target = await factory()
