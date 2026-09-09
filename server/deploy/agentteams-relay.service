@@ -1,0 +1,19 @@
+[Unit]
+Description=AgentTeams Relay
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=agentteams
+Group=agentteams
+WorkingDirectory=/opt/agentteams
+EnvironmentFile=/etc/agentteams/relay.env
+ExecStart=/usr/bin/node --experimental-transform-types /opt/agentteams/server/relay-process.ts --config /etc/agentteams/relay.json
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target
