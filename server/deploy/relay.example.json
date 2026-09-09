@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "listen": {
+    "host": "0.0.0.0",
+    "port": 8443
+  },
+  "tls": {
+    "keyFile": "/etc/agentteams/tls/relay-key.pem",
+    "certFile": "/etc/agentteams/tls/relay-cert.pem"
+  },
+  "limits": {
+    "maxPayload": 65536,
+    "maxConnections": 64,
+    "maxGrants": 32,
+    "maxBufferedAmount": 65536,
+    "maxPendingMessages": 32,
+    "maxPendingBytes": 65536,
+    "grantTtlMs": 10000
+  },
+  "credentials": [
+    {
+      "credentialEnv": "TEAMS_RELAY_AGENT_A",
+      "identity": {
+        "accountId": "example-account",
+        "scopeId": "example-scope",
+        "agentId": "example-agent-a"
+      }
+    }
+  ]
+}
