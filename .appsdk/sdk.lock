@@ -1,6 +1,6 @@
 {
-  "bundle_digest": "sha256:cb54d8aacb6debffb202422307d67e6a1ea562e97e123a8a4240c4bf32a28591",
-  "bundle_manifest_digest": "sha256:5e1977d7ee1d8ac2effc92bab780bdaf8c616782940f92177793e2be8751b3df",
+  "bundle_digest": "sha256:612a11fb36dafebd5a60b27bd991c724c4926b1b3d7e8b5f2b1f99e32aad4c97",
+  "bundle_manifest_digest": "sha256:28ef0950599c04eb9e045b2ee30d3e878d09ff07faef6dc1b287c47ea377b1f0",
   "bundle_resources": {
     "contracts": [
       "contracts/sdk-bundle.manifest.json",
@@ -25,6 +25,7 @@
       "contracts/records/reproduction-record.schema.json",
       "contracts/records/evidence-record.schema.json",
       "contracts/records/fix-candidate-record.schema.json",
+      "contracts/records/goal-clarification-record.schema.json",
       "contracts/records/review-record.schema.json",
       "contracts/records/effectiveness-record.schema.json",
       "contracts/records/pre-review-validation-record.schema.json",
@@ -69,7 +70,7 @@
     ]
   },
   "contract_schema": 1,
-  "previous_bundle_digest": "sha256:e775e955c2a2b8b6a36404d68b8a9151a2e643e2d38ac264e1316798525a47db",
+  "previous_bundle_digest": "sha256:cb54d8aacb6debffb202422307d67e6a1ea562e97e123a8a4240c4bf32a28591",
   "sdk": "appsdk",
   "version": "0.1.6"
 }

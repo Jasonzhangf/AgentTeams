@@ -4,6 +4,21 @@ AppSDK is an external governance implementation. A new project consumes its CLI/
 
 ## Repository boundary
 
+### Module dependency artifacts
+
+Declare modules in dependency-first order. During development, `compile-module`
+requires each dependency's compiled artifact to exist and match its current
+module contract, source, output bytes and transitive dependency hashes. Missing
+or stale dependency artifacts fail explicitly; compile the dependency first, or
+use the ordered project `compile` command. Admission uses the same freshness
+owner without building or repairing artifacts. Self-dependencies and reverse
+dependency edges fail before recursive hashing.
+
+Development admission is not publication. `freeze` requires every dependency
+to be frozen before it reads or creates publication records. Frozen dependencies
+retain the existing immutable artifact verification; development compilation
+does not manufacture a FreezeRecord or alter Active/Protected.
+
 ```text
 external AppSDK installation
   -> versioned Bundle: CLI / compiler / contracts / docs / rules / skills
@@ -300,6 +315,8 @@ is:
 
 ```text
 clean owner worktree + candidate commit
+  -> appsdk produce-lifecycle-records --module <id> --input <declaration.json>
+  -> WorktreeRecord + ReproductionRecord + baseline EvidenceRecord
   -> lifecycle adapter binds FixCandidateRecord
   -> whitebox adapter runs and records the actual whitebox result
   -> deployment adapter performs module.deployment_operations and records applicable receipts
@@ -313,6 +330,20 @@ record. A changed candidate, artifact, environment, entrypoint, or input starts
 a new evidence set and invalidates the old one. No adapter may accept a
 hand-entered hash, relabel whitebox output as blackbox output, or use an
 artifact from another worktree/project/version.
+
+`produce-lifecycle-records` accepts a declaration containing the confirmed
+`goal_id`, the module and issue scope, bug-triage evidence, and a baseline
+command with a non-zero expected exit status plus an `expected_error_token`.
+It observes the current branch, HEAD, base ref, commit ancestry, complete Git
+cleanliness, and registered worktree path; the command runs in a temporary
+checkout of the declared base commit. The exit status and error token must both
+match, and its output is hashed, before the three records are written. The
+caller’s result, timestamps, record IDs, input hashes, producer identity, and
+Git fields are never trusted: timestamps, input hashes, path-safe IDs, and the
+fixed `appsdk-lifecycle-record-producer` identity are generated after those
+observations. Existing targets fail with `LIFECYCLE_RECORD_EXISTS`. Records
+are installed with create-new semantics as a group; validation, command, or
+installation failure leaves no newly published record.
 
 For an upgrade, run `appsdk prepare`/`init` idempotently, inspect and snapshot
 the old project and legacy roots, obtain explicit ownership-transfer approval,
