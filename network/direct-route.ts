@@ -133,11 +133,27 @@ export async function connectDirectWssTarget(input: DirectWssTargetOptions): Pro
       markClosed(error.message)
       return error
     })
+    let reconnecting: Promise<DirectWssTarget> | undefined
+    let successor: DirectWssTarget | undefined
     const reconnect = async (): Promise<DirectWssTarget> => {
       if (state.state !== 'closed') {
         throw new DirectWssRouteError('CONFLICT', 'direct-route: reconnect requires a closed target', plan)
       }
-      return connectDirectWssTarget(input)
+      if (successor) return successor
+      if (reconnecting) return reconnecting
+      const attempt = connectDirectWssTarget(input)
+      reconnecting = attempt
+      void attempt.then(
+        target => {
+          if (reconnecting === attempt) reconnecting = undefined
+          successor = target
+          void target.closed.then(() => {
+            if (successor === target) successor = undefined
+          })
+        },
+        () => { if (reconnecting === attempt) reconnecting = undefined },
+      )
+      return attempt
     }
     return {
       connection: established,

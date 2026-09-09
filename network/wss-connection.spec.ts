@@ -210,6 +210,42 @@ it('reconnects an explicitly closed direct target without reusing its socket', a
   expect(second.state).toMatchObject({ state: 'ready', targetGeneration: directHello.targetGeneration })
 })
 
+it('bounds concurrent reconnect calls to one observable connection attempt', async () => {
+  const host = await server()
+  let connections = 0
+  host.wss.on('connection', socket => {
+    connections++
+    socket.on('message', data => {
+      const message = JSON.parse(data.toString())
+      socket.send(JSON.stringify({ kind: 'transport.hello_ack', targetGeneration: message.targetGeneration }))
+    })
+  })
+  const first = await connectDirectWssTarget({
+    transport: options(host.endpoint),
+    hello: directHello,
+    plan: directRoutePlan(host.endpoint),
+    helloTimeoutMs: 1000,
+  })
+  const peer = [...host.wss.clients][0]
+  peer.close()
+  await first.closed
+
+  const [second, third] = await Promise.all([first.reconnect(), first.reconnect()])
+  cleanup.push(() => second.close())
+  expect(second).toBe(third)
+  expect(await first.reconnect()).toBe(second)
+  expect(connections).toBe(2)
+
+  const successorPeer = [...host.wss.clients][0]
+  successorPeer.close()
+  await second.closed
+  const fourth = await first.reconnect()
+  cleanup.push(() => fourth.close())
+  expect(fourth).not.toBe(second)
+  expect(fourth.connection).not.toBe(second.connection)
+  expect(connections).toBe(3)
+})
+
 it('uses a verified TLS socket, sends credential only as a header, and preserves frame bytes/type', async () => {
   const host = await server()
   let credential: string | undefined
