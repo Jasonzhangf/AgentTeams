@@ -15,11 +15,21 @@ describe('N1 relay deployment contract', () => {
     expect(unit).toContain('WorkingDirectory=/opt/agentteams')
     expect(unit).toContain('EnvironmentFile=/etc/agentteams/relay.env')
     expect(unit).toContain(
-      'ExecStart=/usr/bin/node --experimental-transform-types /opt/agentteams/server/relay-process.ts --config /etc/agentteams/relay.json',
+      'ExecStart=/usr/bin/node /opt/agentteams/runtime/server/relay-process.js --config /etc/agentteams/relay.json',
     )
     expect(unit).toContain('Restart=on-failure')
     expect(unit).toContain('KillSignal=SIGTERM')
     expect(unit).toContain('TimeoutStopSec=30s')
+  })
+
+  it('binds the service to the compiled artifact staging contract', async () => {
+    const unit = await readDeployFile('agentteams-relay.service')
+    const installer = await readDeployFile('install-relay.sh')
+
+    expect(unit).toContain('/opt/agentteams/runtime/server/relay-process.js')
+    expect(unit).not.toContain('/opt/agentteams/server/relay-process.ts')
+    expect(installer).toContain('runtime/server/relay-process.js')
+    expect(installer).toContain('pnpm install --prod --ignore-scripts')
   })
 
   it('keeps the example config strict and free of credential values', async () => {
