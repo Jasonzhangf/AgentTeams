@@ -123,6 +123,10 @@ _Empty._
 - tags: `N3`, `ai-reviewed`, `human-unreviewed`, `network`
 - details: [L2/memory-292786e443571d6d.md](L2/memory-292786e443571d6d.md)
 
+### n3-d4a-relay-directory-projection-20260910
+- tags: `N3`, `ai-reviewed`, `directory`, `human-unreviewed`, `network`
+- details: [L2/memory-4c4d9e4feeed0c89.md](L2/memory-4c4d9e4feeed0c89.md)
+
 ### 9b10ed3 consumer Work runtime delivery
 - tags: `9b10ed3`, `V1`, `ai-reviewed`, `consumer-work`, `human-unreviewed`, `runtime`
 - details: [L2/memory-6b1f2792d105d9d8.md](L2/memory-6b1f2792d105d9d8.md)
@@ -168,10 +172,6 @@ _Empty._
 ### Superseded memory write for 41f0ea2
 - tags: `41f0ea2`, `superseded`
 - details: [L3/memory-45d66e4888339c10.md](L3/memory-45d66e4888339c10.md)
-
-### n3-d4a-relay-directory-projection-20260910
-- tags: `N3`, `ai-reviewed`, `directory`, `human-unreviewed`, `network`
-- details: [L3/memory-4c4d9e4feeed0c89.md](L3/memory-4c4d9e4feeed0c89.md)
 
 ## Skill description candidates
 
