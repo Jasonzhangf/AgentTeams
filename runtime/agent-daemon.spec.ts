@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createRelayServer, type RelayServer } from '../server/relay.ts'
 import { buildDirectWssRoutePlan } from '../network/route-plan.ts'
+import type { DirectPeerRouteInput } from '../network/peer-route.ts'
 import type { DirectWssTarget, DirectWssTargetOptions } from '../network/direct-route.ts'
 import type { TargetTransportState } from '../network/target-transport.ts'
 import type { WssConnection } from '../network/wss-connection.ts'
@@ -40,6 +41,22 @@ function targetOptions(): DirectWssTargetOptions {
       candidateId: 'direct', kind: 'ipv4', endpoint: 'wss://peer.test', authRequired: true, lastSeenAt: new Date(0).toISOString(),
     }] }),
     helloTimeoutMs: 1000,
+  }
+}
+
+function peerRouteInput(overrides: Partial<DirectPeerRouteInput> = {}): DirectPeerRouteInput {
+  return {
+    directory: {
+      accountId: 'account', generation: 4, confirmedGeneration: 4,
+      hosts: [{ hostId: 'peer-host', machineId: 'machine', agentId: 'peer-agent', agentKind: 'custom', accountId: 'account',
+        capabilitiesRevision: '7', health: 'ready', updatedAt: new Date(0).toISOString(), lastSeenAt: new Date(0).toISOString(),
+        routeCandidates: [{ candidateId: 'direct', kind: 'ipv4', endpoint: 'wss://peer.test', authRequired: true, lastSeenAt: new Date(0).toISOString() }] }],
+    },
+    hostId: 'peer-host', targetCandidateId: 'direct', targetGeneration: 3, protocolVersion: 1,
+    binding: { connectionId: 'connection-1', connectionGeneration: 2 },
+    transport: { credential: 'opaque', connectTimeoutMs: 1000, maxMessageBytes: 4096, maxBufferedBytes: 4096, maxPendingFrames: 4 },
+    helloTimeoutMs: 1000,
+    ...overrides,
   }
 }
 
@@ -94,6 +111,42 @@ async function daemon(connector: (options: DirectWssTargetOptions) => Promise<Di
 }
 
 describe('Agent daemon peer route lifecycle', () => {
+  it('assembles a typed peer route before registering its direct target lifecycle', async () => {
+    const closeCalls = { value: 0 }
+    let received!: DirectWssTargetOptions
+    const daemonInstance = await daemon(async options => { received = options; return fakeTarget(closeCalls) })
+    const peer = await daemonInstance.connectPeerRoute(peerRouteInput())
+    expect(received).toMatchObject({
+      transport: { endpoint: 'wss://peer.test' },
+      hello: { hostId: 'peer-host', agentId: 'peer-agent', targetGeneration: 3, capabilitiesRevision: '7' },
+      peerRoute: { kind: 'direct-wss', connectionId: 'connection-1', connectionGeneration: 2, directoryGeneration: 4, targetGeneration: 3, candidateId: 'direct' },
+    })
+    expect(peer.state.state).toBe('ready')
+    await daemonInstance.stop()
+    expect(closeCalls.value).toBe(1)
+  })
+
+  it('rejects a stale typed directory before creating a target', async () => {
+    let connectorCalls = 0
+    const daemonInstance = await daemon(async () => { connectorCalls += 1; return fakeTarget({ value: 0 }) })
+    await expect(daemonInstance.connectPeerRoute(peerRouteInput({ directory: { ...peerRouteInput().directory, confirmedGeneration: 3 } })))
+      .rejects.toMatchObject({ code: 'STALE_GENERATION' })
+    expect(connectorCalls).toBe(0)
+    await daemonInstance.stop()
+  })
+
+  it('does not send a relay candidate through the direct lifecycle entry', async () => {
+    let connectorCalls = 0
+    const daemonInstance = await daemon(async () => { connectorCalls += 1; return fakeTarget({ value: 0 }) })
+    const input = peerRouteInput({ targetCandidateId: 'relay', directory: {
+      ...peerRouteInput().directory,
+      hosts: [{ ...peerRouteInput().directory.hosts[0], routeCandidates: [{ candidateId: 'relay', kind: 'relay-ws', authRequired: true, lastSeenAt: new Date(0).toISOString() }] }],
+    } })
+    await expect(daemonInstance.connectPeerRoute(input)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+    expect(connectorCalls).toBe(0)
+    await daemonInstance.stop()
+  })
+
   it('connects a typed direct peer and closes it before daemon shutdown', async () => {
     const closeCalls = { value: 0 }
     let received!: DirectWssTargetOptions

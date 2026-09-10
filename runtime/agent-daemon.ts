@@ -1,5 +1,6 @@
 import { createRelayClient, type RelayClient, type RelayClientOptions } from '../network/relay-client.ts'
 import { connectDirectWssTarget, type DirectWssTarget, type DirectWssTargetOptions } from '../network/direct-route.ts'
+import { assembleDirectWssTargetOptions, type DirectPeerRouteInput } from '../network/peer-route.ts'
 import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
 
 export type DirectPeerConnector = (options: DirectWssTargetOptions) => Promise<DirectWssTarget>
@@ -32,6 +33,7 @@ export interface AgentDaemon {
   readonly closed: Promise<AgentDaemonStatus>
   status(): AgentDaemonStatus
   connectPeer(options: DirectWssTargetOptions): Promise<DirectWssTarget>
+  connectPeerRoute(input: DirectPeerRouteInput): Promise<DirectWssTarget>
   stop(): Promise<void>
 }
 
@@ -116,6 +118,8 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
   }
   const connectPeer = (peerOptions: DirectWssTargetOptions): Promise<DirectWssTarget> =>
     connectTarget(() => directPeerConnector(peerOptions))
+  const connectPeerRoute = (input: DirectPeerRouteInput): Promise<DirectWssTarget> =>
+    connectTarget(() => directPeerConnector(assembleDirectWssTargetOptions(input)))
   const closeTargets = async (reason: string): Promise<Error | undefined> => {
     let cleanupError: Error | undefined
     const record = (cause: unknown) => {
@@ -167,5 +171,5 @@ export async function startAgentDaemon(options: AgentDaemonOptions): Promise<Age
     return status()
   })
   if (signal?.aborted) await stop()
-  return { network, closed, status, connectPeer, stop }
+  return { network, closed, status, connectPeer, connectPeerRoute, stop }
 }
