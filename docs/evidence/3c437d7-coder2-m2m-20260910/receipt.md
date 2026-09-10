@@ -21,6 +21,17 @@
 - Provider ledger readback: `node` JSON projection of `provider-data2/work.json` on Claw; both Work records and both resource allocations were checked after the replay.
 - Cleanup checks: exact-PID stop, `systemctl is-active/is-enabled agentteams-relay.service`, `ss` listener checks, `docker ps -a`, and temporary-directory existence checks.
 
+### Integration candidate validation
+
+- Integration worktree: `playground/3c437d7-coder2-m2m-integration-20260910`, based on `origin/main@cf62442c74c22c387e7058d99fb397b34ca9b91a`.
+- First `pnpm test` attempt exited `1` because the fresh worktree had no dependencies (`tsdown: command not found`; `node_modules` missing). This failure is retained as setup evidence, not as a source regression.
+- `pnpm install --frozen-lockfile` exited `0`; no lockfile or source path changed.
+- Second `pnpm test` exited `0`: `70` files / `397` tests passed. The exact output was captured in `/tmp/agentteams-3c437d7-integration-test.log` during validation.
+- `pnpm typecheck` exited `0`.
+- `appsdk compile` exited `0`; artifact hash `sha256:7ea874ee3f7de08b5d3f1c7084ab9a61fe06b24fd77d086aa209f2ced6cd3789`.
+- `appsdk verify` exited `0`: `{"ok":true,"project_id":"agentteams","stage":"contract_bound"}`.
+- `git diff --check` exited `0`; the integration worktree was clean after validation.
+
 ## Exact review
 
 - Reviewer: `consumer_work_exact_review` (independent agent), timestamp `2026-09-10T05:59:47-07:00`.
