@@ -232,12 +232,35 @@ it('creates and closes an explicitly configured direct listener with the Agent p
   try {
     firstProcess = await startAgentProcess(configPath, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer direct-process', TEAMS_DIRECT_AUTH: 'Bearer direct-listener' })
     expect(firstProcess.daemon.network.generation).toBe(1)
+    const firstProvider = (await firstProcess.daemon.network.directory(false)).find(peer => peer.declaration.identity.agentId === 'direct-process')
+    expect(firstProvider?.declaration.revision).toBe(2)
+    expect(firstProvider?.declaration.routes).toHaveLength(1)
+    expect(firstProvider?.declaration.routes[0]).toMatchObject({
+      candidateId: 'direct',
+      kind: 'lan',
+      endpoint: `wss://127.0.0.1:${directPort}`,
+      port: directPort,
+      authRequired: true,
+      lastSeenAt: expect.any(String),
+    })
+    expect(JSON.stringify(firstProvider?.declaration)).not.toContain('Bearer direct-listener')
     firstTarget = await connect(1)
     await firstProcess.stop()
     await expect(firstTarget.closed).resolves.toMatchObject({ code: 'UNAVAILABLE' })
 
     secondProcess = await startAgentProcess(configPath, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer direct-process', TEAMS_DIRECT_AUTH: 'Bearer direct-listener' })
     expect(secondProcess.daemon.network.generation).toBe(2)
+    const secondProvider = (await secondProcess.daemon.network.directory(false)).find(peer => peer.declaration.identity.agentId === 'direct-process')
+    expect(secondProvider?.declaration.revision).toBe(2)
+    expect(secondProvider?.declaration.routes).toHaveLength(1)
+    expect(secondProvider?.declaration.routes[0]).toMatchObject({
+      candidateId: 'direct',
+      kind: 'lan',
+      endpoint: `wss://127.0.0.1:${directPort}`,
+      port: directPort,
+      authRequired: true,
+      lastSeenAt: expect.any(String),
+    })
     secondTarget = await connect(2)
     await expect(connect(1)).rejects.toMatchObject({ code: 'STALE_GENERATION' })
     await secondProcess.stop()

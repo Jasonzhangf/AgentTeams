@@ -237,7 +237,20 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       recoverFileWorkStoreLock(workFile, createTrustedWorkAuthority(), workLock, owner =>
         owner.pid === previousOwner.pid && owner.startToken === previousOwner.startToken)
     }
-    const publishedDeclaration = { ...config.declaration, revision: 2, capabilities: executor.capabilities }
+    const directRoute = directListener === undefined ? undefined : {
+      candidateId: 'direct',
+      kind: 'lan' as const,
+      endpoint: directListener.url,
+      port: directListener.port,
+      authRequired: true,
+      lastSeenAt: new Date().toISOString(),
+    }
+    const publishedDeclaration = {
+      ...config.declaration,
+      revision: 2,
+      capabilities: executor.capabilities,
+      ...(directRoute === undefined ? {} : { routes: [directRoute] }),
+    }
     ledger = createWorkLedger({ provider: { accountId: config.declaration.identity.accountId, scopeId: config.declaration.scopeId,
       agentId: config.declaration.identity.agentId }, generation: daemon.network.generation, capabilities: executor.capabilities,
       endpointCatalog: compileDeclarationEndpoints(publishedDeclaration), store: createFileWorkStore(workFile) })
