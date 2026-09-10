@@ -47,6 +47,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `recovery`
 - details: [L2/agentteams-runtime-stale-lock-recovery-20260906.md](L2/agentteams-runtime-stale-lock-recovery-20260906.md)
 
+### AppSDK 0.1.6 contract lock alignment
+- tags: `ai-reviewed`, `appsdk`, `governance`, `human-unreviewed`
+- details: [L2/appsdk-0-1-6-lock-alignment-20260909.md](L2/appsdk-0-1-6-lock-alignment-20260909.md)
+
 ### Capability matching and shared resource capacity
 - tags: `ai-reviewed`, `capability`, `human-unreviewed`, `relations`, `resource`, `work`
 - details: [L2/capability-relation-capacity-20260906.md](L2/capability-relation-capacity-20260906.md)
