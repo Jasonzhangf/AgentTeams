@@ -108,6 +108,20 @@ describe('Agent Work resource admission', () => {
       .toThrowError(/FORBIDDEN/)
   })
 
+  it('keeps an exact Endpoint proposal idempotent after the catalog changes', () => {
+    const state = endpointLedger()
+    const proposal = { ...workProposal('endpoint-replay'), endpoint: { workId: 'endpoint-replay', providerAgentId: provider.agentId,
+      endpointId: 'browser-endpoint', revision: 3, capabilityId: capability.capabilityId, capabilityVersion: capability.version, operation: 'open' } }
+    const accepted = proposeWork(state, consumer, proposal, policy())
+    state.endpointCatalog = state.endpointCatalog?.map(endpoint => endpoint.endpointId === 'browser-endpoint'
+      ? { ...endpoint, revision: 4, lifecycle: 'disabled' as const }
+      : endpoint)
+
+    expect(proposeWork(state, consumer, proposal, policy())).toBe(accepted)
+    expect(() => proposeWork(state, consumer, { ...proposal, endpoint: { ...proposal.endpoint, revision: 4 } }, policy()))
+      .toThrowError(/CONFLICT/)
+  })
+
   it('rejects unauthenticated identity claims and incompatible capability versions', () => {
     const state = ledger()
     expect(() => proposeWork(state, { ...consumer, agentId: 'other-agent' }, workProposal('work-identity'), policy())).toThrowError(/FORBIDDEN/)

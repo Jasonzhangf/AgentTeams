@@ -786,7 +786,6 @@ export function proposeWork(
   const normalizedProposal = parseProposal(proposal, 'proposal')
   assertProvider(normalizedProposal, ledger.provider)
   if (normalizedProposal.consumerAgentId !== consumer.agentId) fail('FORBIDDEN', 'work proposal consumer is not the authenticated agent')
-  validateEndpointBinding(ledger, consumer, normalizedProposal)
   const existing = ledger.snapshot.works.find(work => work.workId === normalizedProposal.workId)
   if (existing !== undefined) {
     const existingProposal: WorkProposal = {
@@ -802,6 +801,7 @@ export function proposeWork(
     if (!sameProposal) fail('CONFLICT', `work ${normalizedProposal.workId} already exists with different parameters`)
     return existing
   }
+  validateEndpointBinding(ledger, consumer, normalizedProposal)
   if (normalizedProposal.policyRevision !== policy.revision) fail('REVISION_CONFLICT', 'work policy revision is stale')
   const capability = ledger.capabilities.find(candidate => candidate.capabilityId === normalizedProposal.capabilityId)
   if (capability === undefined) fail('NOT_FOUND', `unknown capability ${normalizedProposal.capabilityId}`)
