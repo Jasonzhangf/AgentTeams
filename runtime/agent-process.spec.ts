@@ -7,6 +7,8 @@ import { once } from 'node:events'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { createRelayServer, type RelayServer } from '../server/relay.ts'
 import { createRelayClient, type RelayClient } from '../network/relay-client.ts'
+import { connectDirectWssTarget } from '../network/direct-route.ts'
+import { buildDirectWssRoutePlan } from '../network/route-plan.ts'
 import { createWorkChannel } from '../network/work-channel.ts'
 import { createRelayConsoleClient } from './relay-console-client.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
@@ -190,6 +192,63 @@ process.once('SIGINT', () => server.close(() => process.exit(0)))
   third.process.kill('SIGINT')
   expect((await third.exited).code).toBe(0)
   expect(first.output()).not.toContain('Bearer provider')
+}, 15000)
+
+it('creates and closes an explicitly configured direct listener with the Agent process', async () => {
+  const localRelay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
+    maxPayload: 65536, maxConnections: 4, maxGrants: 4, maxBufferedAmount: 65536, maxPendingMessages: 16, maxPendingBytes: 131072,
+    grantTtlMs: 5000, authenticate: credential => credential === 'Bearer direct-process'
+      ? { accountId: 'account', scopeId: 'scope', agentId: 'direct-process' } : null })
+  const directPort = await availablePort()
+  const configPath = join(directory, 'direct-process.json')
+  writeFileSync(configPath, JSON.stringify({
+    version: 1,
+    identity: { hostId: 'direct-process-host', machineId: 'test', agentId: 'direct-process', accountId: 'account', agentKind: 'custom', label: 'Direct Process' },
+    scopeId: 'scope', dataDirectory: './direct-process-data', leasePort: await availablePort(), presenceIntervalMs: 1000,
+    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+    cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './search', profilePrefix: 'teams-direct-process' },
+    relay: { endpoint: localRelay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: './cert.pem', connectTimeoutMs: 1000,
+      admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536,
+      maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
+    directListener: { host: '127.0.0.1', port: directPort, keyFile: './key.pem', certFile: './cert.pem', credentialEnv: 'TEAMS_DIRECT_AUTH',
+      target: { hostId: 'direct-process-host', agentId: 'direct-process', protocolVersion: 1, capabilitiesRevision: 'direct-cap-1' },
+      maxPayload: 65536, maxConnections: 4, maxMessageBytes: 4096, maxBufferedBytes: 8192, maxPendingFrames: 4, helloTimeoutMs: 1000 },
+  }))
+  let firstProcess: Awaited<ReturnType<typeof startAgentProcess>> | undefined
+  let secondProcess: Awaited<ReturnType<typeof startAgentProcess>> | undefined
+  let firstTarget: Awaited<ReturnType<typeof connectDirectWssTarget>> | undefined
+  let secondTarget: Awaited<ReturnType<typeof connectDirectWssTarget>> | undefined
+  const connect = (generation: number) => {
+    const endpoint = `wss://127.0.0.1:${directPort}`
+    const hello = { hostId: 'direct-process-host', agentId: 'direct-process', targetGeneration: generation, protocolVersion: 1, capabilitiesRevision: 'direct-cap-1' }
+    return connectDirectWssTarget({
+      transport: { endpoint, credential: 'Bearer direct-listener', ca: cert, connectTimeoutMs: 1000, maxMessageBytes: 4096, maxBufferedBytes: 8192, maxPendingFrames: 4 },
+      hello, helloTimeoutMs: 1000,
+      plan: buildDirectWssRoutePlan({ hostId: hello.hostId, directoryGeneration: 1, policy: 'manual', targetCandidateId: 'direct', candidates: [
+        { candidateId: 'direct', kind: 'lan', endpoint, port: directPort, authRequired: true, lastSeenAt: new Date().toISOString() },
+      ] }),
+    })
+  }
+  try {
+    firstProcess = await startAgentProcess(configPath, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer direct-process', TEAMS_DIRECT_AUTH: 'Bearer direct-listener' })
+    expect(firstProcess.daemon.network.generation).toBe(1)
+    firstTarget = await connect(1)
+    await firstProcess.stop()
+    await expect(firstTarget.closed).resolves.toMatchObject({ code: 'UNAVAILABLE' })
+
+    secondProcess = await startAgentProcess(configPath, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer direct-process', TEAMS_DIRECT_AUTH: 'Bearer direct-listener' })
+    expect(secondProcess.daemon.network.generation).toBe(2)
+    secondTarget = await connect(2)
+    await expect(connect(1)).rejects.toMatchObject({ code: 'STALE_GENERATION' })
+    await secondProcess.stop()
+    await expect(secondTarget.closed).resolves.toMatchObject({ code: 'UNAVAILABLE' })
+  } finally {
+    await firstTarget?.close().catch(() => undefined)
+    await secondTarget?.close().catch(() => undefined)
+    await firstProcess?.stop().catch(() => undefined)
+    await secondProcess?.stop().catch(() => undefined)
+    await localRelay.close()
+  }
 }, 15000)
 
 it('completes Agent-to-Agent Work between two independently started daemons without Console', async () => {

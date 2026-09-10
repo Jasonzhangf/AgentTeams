@@ -3,7 +3,7 @@ import { readFile, mkdir, open, link, unlink, rename } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { object, text, number, loadRelayConfig } from './process-config.ts'
+import { object, text, number, loadDirectListenerConfig, loadRelayConfig, type DirectListenerConfig } from './process-config.ts'
 import { parseAgentDeclaration, RelayProtocolError } from '../control-protocol/relay-codec.ts'
 import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
@@ -22,6 +22,7 @@ import { createConsoleConfigBinding } from './console-config.ts'
 import { createManagedConfigOwner } from './managed-config-owner.ts'
 import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
 import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
+import { createDirectWssListener, type DirectWssListener } from '../network/direct-listener.ts'
 
 export interface AgentProcessConfig {
   readonly declaration: AgentDeclaration
@@ -34,6 +35,7 @@ export interface AgentProcessConfig {
   readonly allowedManagers: readonly string[]
   readonly cli: { readonly camoExecutable: string; readonly searchExecutable: string; readonly searchRoot: string; readonly profilePrefix: string }
   readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs: number; readonly stopTimeoutMs: number }
+  readonly directListener?: DirectListenerConfig
 }
 
 interface RuntimeOwnerRecord {
@@ -65,7 +67,7 @@ async function readRuntimeOwner(path: string): Promise<RuntimeOwnerRecord | unde
 export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcessConfig> {
   const configPath = resolve(path)
   const input = object(JSON.parse(await readFile(configPath, 'utf8')),
-    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli', 'openCode'], 'Agent config')
+    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli', 'openCode', 'directListener'], 'Agent config')
   if (input.version !== 1) throw new RelayProtocolError('UNSUPPORTED_VERSION', 'Agent config version must be 1')
   const location = (value: unknown, label: string) => resolve(dirname(configPath), text(value, label))
   const cli = object(input.cli, ['camoExecutable', 'searchExecutable', 'searchRoot', 'profilePrefix'], 'cli')
@@ -84,6 +86,7 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
       configFile: location(value.configFile, 'openCode.configFile'), port: number(value.port, 'openCode.port', 65535),
       startupTimeoutMs: number(value.startupTimeoutMs, 'openCode.startupTimeoutMs'), stopTimeoutMs: number(value.stopTimeoutMs, 'openCode.stopTimeoutMs') }
   }
+  const directListener = input.directListener === undefined ? undefined : loadDirectListenerConfig(input.directListener, declaration, configPath, env)
   return {
     declaration, dataDirectory: location(input.dataDirectory, 'dataDirectory'), leasePort: number(input.leasePort, 'leasePort', 65535),
     presenceIntervalMs: number(input.presenceIntervalMs, 'presenceIntervalMs'), policyRevision: number(policy.revision, 'policy.revision'),
@@ -92,6 +95,7 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
     cli: { camoExecutable: location(cli.camoExecutable, 'camoExecutable'), searchExecutable: location(cli.searchExecutable, 'searchExecutable'),
       searchRoot: location(cli.searchRoot, 'searchRoot'), profilePrefix: text(cli.profilePrefix, 'profilePrefix') },
     ...(openCode === undefined ? {} : { openCode }),
+    ...(directListener === undefined ? {} : { directListener }),
     relay: await loadRelayConfig(input.relay, declaration, configPath, env),
   }
 }
@@ -149,6 +153,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   const ownership = await ownDataDirectory(config)
   const lease = ownership.server
   let daemon: AgentDaemon | undefined
+  let directListener: DirectWssListener | undefined
   let consumerWork: AgentWorkClient | undefined
   let configBinding: { binding: ReturnType<typeof createConsoleConfigBinding>; owner: ReturnType<typeof createManagedConfigOwner> } | undefined
   let readyResolve!: () => void
@@ -206,6 +211,22 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         })
       },
     } })
+    if (config.directListener !== undefined) {
+      directListener = await createDirectWssListener({
+        host: config.directListener.host,
+        port: config.directListener.port,
+        key: await readFile(config.directListener.keyFile),
+        cert: await readFile(config.directListener.certFile),
+        credential: config.directListener.credential,
+        target: { ...config.directListener.target, targetGeneration: daemon.network.generation },
+        maxPayload: config.directListener.maxPayload,
+        maxConnections: config.directListener.maxConnections,
+        maxMessageBytes: config.directListener.maxMessageBytes,
+        maxBufferedBytes: config.directListener.maxBufferedBytes,
+        maxPendingFrames: config.directListener.maxPendingFrames,
+        helloTimeoutMs: config.directListener.helloTimeoutMs,
+      })
+    }
     const workFile = resolve(config.dataDirectory, 'work.json')
     const workLock = readFileWorkStoreLockProof(workFile)
     if (workLock !== undefined) {
@@ -244,6 +265,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       stopping = (async () => {
         try {
           await consumerWork?.dispose()
+          await directListener?.close()
           await live.stop()
           await configBinding?.owner.stop()
           const results = await Promise.allSettled(ledger.snapshot.works.filter(work => work.state !== 'closed' && work.state !== 'rejected').map(work =>
@@ -261,7 +283,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     return { daemon: live, consumerWork: consumerWork!, stop, closed }
   } catch (error) {
     readyReject(error)
-    try { await daemon?.stop(); await configBinding?.owner.stop() } finally { await closeLease(lease) }
+    try { await directListener?.close(); await daemon?.stop(); await configBinding?.owner.stop() } finally { await closeLease(lease) }
     throw error
   }
 }

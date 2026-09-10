@@ -22,3 +22,55 @@ it('loads an optional managed OpenCode owner without putting credentials in the 
     expect(loaded.openCode).toEqual({ executable: '/opt/opencode', directory: join(directory, 'opencode'), configFile: join(directory, 'config.json'), port: 48002, startupTimeoutMs: 5000, stopTimeoutMs: 2000 })
   } finally { await rm(directory, { recursive: true }) }
 })
+
+it('loads an explicit Agent-owned direct listener without mixing relay configuration', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-agent-direct-config-'))
+  const configPath = join(directory, 'agent.json')
+  await writeFile(configPath, JSON.stringify({
+    version: 1,
+    identity: { hostId: 'host', machineId: 'machine', agentId: 'agent', accountId: 'account', agentKind: 'custom', label: 'Agent' },
+    scopeId: 'scope', dataDirectory: './data', leasePort: 48001, presenceIntervalMs: 1000,
+    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+    cli: { camoExecutable: '/opt/camo', searchExecutable: '/opt/rg', searchRoot: './search', profilePrefix: 'teams' },
+    relay: { endpoint: 'wss://relay.example', credentialEnv: 'RELAY_AUTH', connectTimeoutMs: 1000,
+      admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536,
+      maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
+    directListener: {
+      host: '127.0.0.1', port: 8443, keyFile: './direct-key.pem', certFile: './direct-cert.pem', credentialEnv: 'DIRECT_AUTH',
+      target: { hostId: 'host', agentId: 'agent', protocolVersion: 1, capabilitiesRevision: 'cap-3' },
+      maxPayload: 65536, maxConnections: 8, maxMessageBytes: 32768, maxBufferedBytes: 65536,
+      maxPendingFrames: 16, helloTimeoutMs: 1000,
+    },
+  }))
+  try {
+    const loaded = await loadAgentProcessConfig(configPath, { RELAY_AUTH: 'Bearer relay', DIRECT_AUTH: 'Bearer direct' })
+    expect(loaded.directListener).toEqual({
+      host: '127.0.0.1', port: 8443, keyFile: join(directory, 'direct-key.pem'), certFile: join(directory, 'direct-cert.pem'),
+      credential: 'Bearer direct',
+      target: { hostId: 'host', agentId: 'agent', protocolVersion: 1, capabilitiesRevision: 'cap-3' },
+      maxPayload: 65536, maxConnections: 8, maxMessageBytes: 32768, maxBufferedBytes: 65536,
+      maxPendingFrames: 16, helloTimeoutMs: 1000,
+    })
+  } finally { await rm(directory, { recursive: true }) }
+})
+
+it('rejects a direct listener target identity that differs from the Agent declaration', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-agent-direct-identity-'))
+  const configPath = join(directory, 'agent.json')
+  await writeFile(configPath, JSON.stringify({
+    version: 1,
+    identity: { hostId: 'host', machineId: 'machine', agentId: 'agent', accountId: 'account', agentKind: 'custom', label: 'Agent' },
+    scopeId: 'scope', dataDirectory: './data', leasePort: 48001, presenceIntervalMs: 1000,
+    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+    cli: { camoExecutable: '/opt/camo', searchExecutable: '/opt/rg', searchRoot: './search', profilePrefix: 'teams' },
+    relay: { endpoint: 'wss://relay.example', credentialEnv: 'RELAY_AUTH', connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
+      requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
+    directListener: { host: '127.0.0.1', port: 8443, keyFile: './key.pem', certFile: './cert.pem', credentialEnv: 'DIRECT_AUTH',
+      target: { hostId: 'other-host', agentId: 'agent', protocolVersion: 1, capabilitiesRevision: 'cap-1' },
+      maxPayload: 1024, maxConnections: 1, maxMessageBytes: 1024, maxBufferedBytes: 1024, maxPendingFrames: 1, helloTimeoutMs: 1000 },
+  }))
+  try {
+    await expect(loadAgentProcessConfig(configPath, { RELAY_AUTH: 'relay', DIRECT_AUTH: 'direct' }))
+      .rejects.toMatchObject({ code: 'INVALID_INPUT' })
+  } finally { await rm(directory, { recursive: true }) }
+})
