@@ -127,6 +127,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `network`, `restart`
 - details: [L2/memory-7a956be82fe1bd17.md](L2/memory-7a956be82fe1bd17.md)
 
+### N3-D1 Agent-owned direct WSS listener delivery
+- tags: `N3`, `ai-reviewed`, `direct`, `human-unreviewed`, `network`
+- details: [L2/memory-a1fda2256f280a34.md](L2/memory-a1fda2256f280a34.md)
+
 ### P0业务JSON保真与外层控制边界
 - tags: `ai-reviewed`, `human-unreviewed`, `protocol`
 - details: [L2/p0-business-json-20260906.md](L2/p0-business-json-20260906.md)

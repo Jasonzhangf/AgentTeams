@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-09-10T15:29:29.610923+00:00","id":"memory-a1fda2256f280a34","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["N3","ai-reviewed","direct","human-unreviewed","network"],"updated_at":"2026-09-10T15:29:29.610923+00:00"} -->
+
+# N3-D1 Agent-owned direct WSS listener delivery
+
+Issue 8ea5f7c delivery reached remote main de1a9eb9e2f557eb52f5321c6e29f3f9a940cf05 after exact worker and integration review PASS. network/direct-listener.ts now owns TLS/WSS listener admission, Authorization, typed transport.hello/hello_ack, generation and identity checks, bounded inbound/outbound frames, isolated connection queues, typed RESOURCE_EXHAUSTED/STALE_GENERATION errors, and explicit cleanup. Focused network regression passed 5 files/44 tests; full source regression passed 71 files/404 tests; typecheck, build:runtime, AppSDK compile/verify and diff-check passed. Runtime/config/registration assembly, route publication, public/NAT/dual-NAT, device/mobile, production install/restart and Console-offline acceptance remain open under issue 8ea5f7c. Tags: N3, network, direct, ai-reviewed, human-unreviewed. Review evidence: final exact review PASS and docs/evidence/8ea5f7c-n3-direct-listener-20260910/receipt.md.
+<!-- project-memory:end -->
