@@ -119,6 +119,10 @@ _Empty._
 - tags: `9b10ed3`, `V1`, `ai-reviewed`, `consumer-work`, `human-unreviewed`, `runtime`
 - details: [L2/memory-6b1f2792d105d9d8.md](L2/memory-6b1f2792d105d9d8.md)
 
+### Current candidate coder2 restart isolates stale generations
+- tags: `ai-reviewed`, `human-unreviewed`, `network`, `restart`
+- details: [L2/memory-7a956be82fe1bd17.md](L2/memory-7a956be82fe1bd17.md)
+
 ### P0业务JSON保真与外层控制边界
 - tags: `ai-reviewed`, `human-unreviewed`, `protocol`
 - details: [L2/p0-business-json-20260906.md](L2/p0-business-json-20260906.md)
