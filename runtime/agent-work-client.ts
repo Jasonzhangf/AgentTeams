@@ -82,6 +82,12 @@ function result(reply: WorkWireReply): WorkReply {
   return { control: reply.control, ...(reply.payload === undefined ? {} : { payload: reply.payload }) }
 }
 
+function sameEndpointReference(left: WorkEndpointReference, right: WorkEndpointReference): boolean {
+  const fields = ['workId', 'providerAgentId', 'endpointId', 'revision', 'capabilityId', 'capabilityVersion', 'operation'] as const
+  return Object.keys(left).length === fields.length && Object.keys(right).length === fields.length &&
+    fields.every(field => left[field] === right[field])
+}
+
 export function createAgentWorkClient(
   relay: RelayClient,
   consumerIdentity: AuthenticatedAgent,
@@ -133,7 +139,7 @@ export function createAgentWorkClient(
           workId: proposal.workId,
           ...target.endpoint,
         }
-        if (proposal.endpoint !== undefined && JSON.stringify(proposal.endpoint) !== JSON.stringify(endpoint)) {
+        if (proposal.endpoint !== undefined && (endpoint === undefined || !sameEndpointReference(proposal.endpoint, endpoint))) {
           throw new RelayProtocolError('CONFLICT', 'Work proposal Endpoint does not match the selected target')
         }
         return state(await wire.request({ kind: 'work.propose', proposal: {

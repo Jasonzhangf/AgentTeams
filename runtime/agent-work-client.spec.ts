@@ -120,6 +120,18 @@ it('exposes the full consumer channel and carries target generation only in cont
   await expect(channel.closed).resolves.toBeInstanceOf(Error)
 })
 
+it('accepts an equivalent Endpoint reference regardless of property order', async () => {
+  const { socket } = fakeSocket()
+  const channel = await createAgentWorkClient(relayForSocket(socket), identity, { timeoutMs: 1000, maxPending: 2 }).open({
+    providerAgentId: 'provider', generation: 7, capabilityId: 'file-search', capabilityVersion: '1', operation: 'search',
+    endpoint: { providerAgentId: 'provider', endpointId: 'search-endpoint', revision: 2, capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' },
+  })
+  await expect(channel.propose({ workId: 'work', capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1,
+    endpoint: { providerAgentId: 'provider', endpointId: 'search-endpoint', revision: 2, capabilityId: 'file-search', capabilityVersion: '1', operation: 'search', workId: 'work' },
+  })).resolves.toMatchObject({ state: 'accepted' })
+  await channel.dispose()
+})
+
 it('maps provider work errors and rejected proposals to explicit protocol errors', async () => {
   const rejected = await createAgentWorkClient(relayForSocket(fakeSocket('rejected').socket), identity, { timeoutMs: 1000, maxPending: 2 })
     .open({ providerAgentId: 'provider', generation: 7, capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' })
