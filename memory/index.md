@@ -169,6 +169,10 @@ _Empty._
 - tags: `41f0ea2`, `superseded`
 - details: [L3/memory-45d66e4888339c10.md](L3/memory-45d66e4888339c10.md)
 
+### n3-d4a-relay-directory-projection-20260910
+- tags: `N3`, `ai-reviewed`, `directory`, `human-unreviewed`, `network`
+- details: [L3/memory-4c4d9e4feeed0c89.md](L3/memory-4c4d9e4feeed0c89.md)
+
 ## Skill description candidates
 
 Base budget: 8 lines. Copy the compact lines into the project Skill `description` after manual architecture deduplication. Fill level 1 first; use level 2, then level 3, only for remaining slots.
