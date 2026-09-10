@@ -137,6 +137,15 @@ it('correlates concurrent directory requests and preserves scoped broadcasts', a
   expect(events).toContain('b')
 })
 
+it('retains the relay directory revision in the typed snapshot API', async () => {
+  await start()
+  const a = await peer('a')
+  const snapshot = await a.directorySnapshot(false)
+  expect(snapshot.revision).toBe(1)
+  expect(snapshot.peers.map(peer => peer.declaration.identity.agentId)).toEqual(['a'])
+  expect((await a.directory(false)).map(peer => peer.declaration.identity.agentId)).toEqual(['a'])
+})
+
 it('publishes a snapshot with advancing revision and rejects identity changes and concurrent publication', async () => {
   await start()
   const a = await peer('a')

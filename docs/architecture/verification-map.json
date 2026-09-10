@@ -76,6 +76,9 @@
       "required": true,
       "checks": [
         "Master maintains an account directory control connection",
+        "Relay directory revision and peer generation are projected into a typed account snapshot",
+        "initial revision zero remains unconfirmed and cannot select a route",
+        "cross-account or cross-scope peers and backwards revisions fail explicitly",
         "confirmed directory generation is required before route resolution",
         "directory refresh only affects future transports"
       ]

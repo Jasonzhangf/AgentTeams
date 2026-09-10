@@ -15,10 +15,15 @@ export interface RelayClientOptions extends RelayLoginOptions {
   /** Receiver owns execution admission/capacity; failures close this control connection. */
   readonly onEvent?: (event: Event) => void | Promise<void>
 }
+export interface RelayDirectorySnapshot {
+  readonly revision: number
+  readonly peers: readonly RelayPeer[]
+}
 export interface RelayClient {
   readonly generation: number
   readonly closed: Promise<Error>
   directory(subscribe: boolean): Promise<readonly RelayPeer[]>
+  directorySnapshot(subscribe: boolean): Promise<RelayDirectorySnapshot>
   connect(targetAgentId: string, targetGeneration: number): Promise<RelayGrant>
   openData(grant: RelayGrant): Promise<WssConnection>
   presence(): Promise<void>
@@ -141,14 +146,19 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
       })().catch(error => stop(error instanceof Error ? error : new Error('relay: control write failed')))
     })
   }
+  const directorySnapshot = async (subscribe: boolean): Promise<RelayDirectorySnapshot> => {
+    const response = await request('relay.directory', { kind: 'relay.directory', requestId: randomUUID(), subscribe })
+    if (response.kind !== 'relay.directory') throw new RelayProtocolError('INVALID_INPUT', 'relay: directory response expected')
+    if (!Number.isSafeInteger(response.revision) || response.revision < 0) {
+      throw new RelayProtocolError('INVALID_INPUT', 'relay: directory revision is invalid')
+    }
+    return { revision: response.revision, peers: response.peers }
+  }
   return {
     generation: login.receipt.generation,
     closed,
-    directory: async subscribe => {
-      const response = await request('relay.directory', { kind: 'relay.directory', requestId: randomUUID(), subscribe })
-      if (response.kind !== 'relay.directory') throw new RelayProtocolError('INVALID_INPUT', 'relay: directory response expected')
-      return response.peers
-    },
+    directorySnapshot,
+    directory: async subscribe => (await directorySnapshot(subscribe)).peers,
     connect: async (targetAgentId, targetGeneration) => {
       const response = await request('relay.grant', { kind: 'relay.connect', requestId: randomUUID(), generation: login.receipt.generation, targetAgentId, targetGeneration })
       if (response.kind !== 'relay.grant') throw new RelayProtocolError('INVALID_INPUT', 'relay: grant response expected')
