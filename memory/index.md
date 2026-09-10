@@ -111,6 +111,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `mainline`, `merge`
 - details: [L2/managed-runtime-delivery-20260906.md](L2/managed-runtime-delivery-20260906.md)
 
+### 9b10ed3 consumer Work runtime delivery
+- tags: `9b10ed3`, `V1`, `ai-reviewed`, `consumer-work`, `human-unreviewed`, `runtime`
+- details: [L2/memory-6b1f2792d105d9d8.md](L2/memory-6b1f2792d105d9d8.md)
+
 ### P0业务JSON保真与外层控制边界
 - tags: `ai-reviewed`, `human-unreviewed`, `protocol`
 - details: [L2/p0-business-json-20260906.md](L2/p0-business-json-20260906.md)
@@ -151,3 +155,4 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: Installed runtime replay (knowledge) [agentteams,ai-reviewed,artifact,human-unreviewed,install,restart] -> L2/agentteams-installed-runtime-20260906.md
 - L2: AgentTeams 长程交付与阶段L2记忆 (plan) [ai-reviewed,delivery,governance,human-unreviewed,memory-l2] -> L2/agentteams-long-running-delivery-20260906.md
 - L2: Packaged Relay process replay (knowledge) [agentteams,ai-reviewed,deployment,human-unreviewed,relay,restart] -> L2/agentteams-relay-process-packaged-20260906.md
+
