@@ -74,11 +74,40 @@ function ledger(fileName = 'work.json') {
   })
 }
 
+function endpointLedger(fileName = 'endpoint-work.json') {
+  const directory = mkdtempSync(join(tmpdir(), 'teams-endpoint-work-'))
+  tempDirs.push(directory)
+  return createWorkLedger({
+    provider,
+    generation: 4,
+    capabilities: [capability],
+    endpointCatalog: [{ endpointId: 'browser-endpoint', ownerAgentId: provider.agentId, scopeId: provider.scopeId, kind: 'browser',
+      revision: 3, lifecycle: 'active', capabilities: [{ capabilityId: capability.capabilityId, version: capability.version, operations: ['open', 'snapshot'] }],
+      resources: [{ resourceId: 'browser-context', capacity: 2, unit: 'context' }, { resourceId: 'request-slot', capacity: 2, unit: 'slot' }] }],
+    store: createFileWorkStore(join(directory, fileName)),
+  })
+}
+
 function accept(ledgerState: ReturnType<typeof ledger>, workId: string, actor = consumer) {
   return proposeWork(ledgerState, actor, workProposal(workId, actor.agentId), policy())
 }
 
 describe('Agent Work resource admission', () => {
+  it('admits a visible Endpoint revision and binds its operation', () => {
+    const state = endpointLedger()
+    const proposal = { ...workProposal('endpoint-work'), endpoint: { workId: 'endpoint-work', providerAgentId: provider.agentId,
+      endpointId: 'browser-endpoint', revision: 3, capabilityId: capability.capabilityId, capabilityVersion: capability.version, operation: 'open' } }
+    expect(proposeWork(state, consumer, proposal, policy())).toMatchObject({ state: 'accepted', endpoint: proposal.endpoint })
+    const restarted = createWorkLedger({ provider, generation: 5, capabilities: [capability], endpointCatalog: state.endpointCatalog, store: state.store })
+    expect(restarted.snapshot.works[0]?.endpoint).toEqual(proposal.endpoint)
+    expect(() => requestWork(state, { authenticatedConsumer: consumer, request: request('endpoint-work', 'wrong-op', 'snapshot'), policy: policy() }))
+      .toThrowError(/UNSUPPORTED_OPERATION/)
+    expect(() => proposeWork(state, consumer, { ...workProposal('stale-endpoint'), endpoint: { ...proposal.endpoint, workId: 'stale-endpoint', revision: 2 } }, policy()))
+      .toThrowError(/REVISION_CONFLICT/)
+    expect(() => proposeWork(state, consumer, { ...workProposal('wrong-endpoint'), endpoint: { ...proposal.endpoint, workId: 'wrong-endpoint', providerAgentId: 'other-provider' } }, policy()))
+      .toThrowError(/FORBIDDEN/)
+  })
+
   it('rejects unauthenticated identity claims and incompatible capability versions', () => {
     const state = ledger()
     expect(() => proposeWork(state, { ...consumer, agentId: 'other-agent' }, workProposal('work-identity'), policy())).toThrowError(/FORBIDDEN/)

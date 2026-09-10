@@ -24,6 +24,14 @@ it('validates Work state, result, proposal, query and error envelopes', () => {
   expect(() => parseWorkWireFrame(JSON.stringify({ ...frames[5], error: { code: 'invented', message: 'denied' } }))).toThrow()
 })
 
+it('carries Endpoint admission as typed Work control and rejects extra fields', () => {
+  const proposal = { workId: 'w', consumerAgentId: 'a', providerAgentId: 'b', capabilityId: 'search', capabilityVersion: '1', policyRevision: 1,
+    endpoint: { workId: 'w', providerAgentId: 'b', endpointId: 'search-endpoint', revision: 2, capabilityId: 'search', capabilityVersion: '1', operation: 'search' } }
+  expect(parseWorkWireFrame(JSON.stringify({ kind: 'work.propose', correlationId: 'c', proposal }))).toMatchObject({ proposal })
+  expect(() => parseWorkWireFrame(JSON.stringify({ kind: 'work.propose', correlationId: 'c', proposal: { ...proposal,
+    endpoint: { ...proposal.endpoint, metadata: 'payload' } } }))).toThrow()
+})
+
 it('keeps CLI error details in typed control and rejects malformed or additional error fields', () => {
   const execution = { kind: 'cli', code: 'PROCESS_ERROR', message: 'external command failed',
     exitCode: null, signal: 'SIGTERM', stdout: '', stderr: 'detail\n' }

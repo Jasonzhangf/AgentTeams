@@ -9,6 +9,7 @@ import type {
   WorkProposal,
   WorkReply,
 } from '../control-protocol/agent-services.ts'
+import type { WorkEndpointReference } from '../control-protocol/endpoint-ref.ts'
 import type { WorkWireReply } from '../control-protocol/work-wire.ts'
 import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
 import type { RelayClient } from '../network/relay-client.ts'
@@ -25,6 +26,7 @@ export interface AgentWorkTarget {
   readonly capabilityId: string
   readonly capabilityVersion: string
   readonly operation: string
+  readonly endpoint?: Omit<WorkEndpointReference, 'workId'>
 }
 
 export interface AgentWorkChannel {
@@ -50,6 +52,17 @@ export interface AgentWorkClient {
 
 function capability(peer: RelayPeer, capabilityId: string): CapabilityDeclaration | undefined {
   return peer.declaration.capabilities.find(candidate => candidate.capabilityId === capabilityId)
+}
+
+function endpointTarget(peer: RelayPeer, capabilityId: string, capabilityVersion: string, operation: string): AgentWorkTarget['endpoint'] | undefined {
+  for (const endpoint of peer.endpoints ?? []) {
+    const capability = endpoint.capabilities.find(candidate => candidate.capabilityId === capabilityId && candidate.version === capabilityVersion)
+    if (capability?.operations.includes(operation)) {
+      return { providerAgentId: endpoint.ownerAgentId, endpointId: endpoint.endpointId, revision: endpoint.revision,
+        capabilityId, capabilityVersion, operation }
+    }
+  }
+  return undefined
 }
 
 function asError(reply: Extract<WorkWireReply, { kind: 'work.error' }>): RelayProtocolError {
@@ -88,16 +101,21 @@ export function createAgentWorkClient(
     readonly operation: string
   }): Promise<AgentWorkTarget> => {
     const peers = await relay.directory(false)
-    const capabilityPeers = peers.filter(peer => capability(peer, capabilityId) !== undefined)
+    const capabilityPeers = peers.filter(peer => capability(peer, capabilityId) !== undefined || (peer.endpoints ?? []).some(endpoint =>
+      endpoint.capabilities.some(candidate => candidate.capabilityId === capabilityId)))
     if (capabilityPeers.length === 0) throw new RelayProtocolError('NOT_FOUND', `Capability ${capabilityId} was not found`)
-    const versionPeers = capabilityPeers.filter(peer => capability(peer, capabilityId)!.version === capabilityVersion)
+    const versionPeers = capabilityPeers.filter(peer => capability(peer, capabilityId)?.version === capabilityVersion || (peer.endpoints ?? []).some(endpoint =>
+      endpoint.capabilities.some(candidate => candidate.capabilityId === capabilityId && candidate.version === capabilityVersion)))
     if (versionPeers.length === 0) throw new RelayProtocolError('UNSUPPORTED_VERSION', `Capability ${capabilityId} version ${capabilityVersion} is unsupported`)
-    const operationPeers = versionPeers.filter(peer => capability(peer, capabilityId)!.operations.some(item => item.operation === operation))
+    const operationPeers = versionPeers.filter(peer => capability(peer, capabilityId)?.operations.some(item => item.operation === operation) || (peer.endpoints ?? []).some(endpoint =>
+      endpoint.capabilities.some(candidate => candidate.capabilityId === capabilityId && candidate.version === capabilityVersion && candidate.operations.includes(operation))))
     if (operationPeers.length === 0) throw new RelayProtocolError('UNSUPPORTED_OPERATION', `Capability ${capabilityId} does not support ${operation}`)
     const peer = operationPeers.find(candidate => candidate.presence === 'online' &&
       candidate.declaration.identity.agentId !== consumerIdentity.agentId)
     if (peer === undefined) throw new RelayProtocolError('UNAVAILABLE', `Capability ${capabilityId} is offline`)
-    return { providerAgentId: peer.declaration.identity.agentId, generation: peer.generation, capabilityId, capabilityVersion, operation }
+    const endpoint = endpointTarget(peer, capabilityId, capabilityVersion, operation)
+    return { providerAgentId: peer.declaration.identity.agentId, generation: peer.generation, capabilityId, capabilityVersion, operation,
+      ...(endpoint === undefined ? {} : { endpoint }) }
   }
 
   const open = async (target: AgentWorkTarget): Promise<AgentWorkChannel> => {
@@ -111,8 +129,16 @@ export function createAgentWorkClient(
         if (proposal.capabilityId !== target.capabilityId || proposal.capabilityVersion !== target.capabilityVersion) {
           throw new RelayProtocolError('INVALID_INPUT', 'Work proposal does not match the selected capability target')
         }
+        const endpoint = target.endpoint === undefined ? undefined : {
+          workId: proposal.workId,
+          ...target.endpoint,
+        }
+        if (proposal.endpoint !== undefined && JSON.stringify(proposal.endpoint) !== JSON.stringify(endpoint)) {
+          throw new RelayProtocolError('CONFLICT', 'Work proposal Endpoint does not match the selected target')
+        }
         return state(await wire.request({ kind: 'work.propose', proposal: {
           ...proposal,
+          ...(endpoint === undefined ? {} : { endpoint }),
           consumerAgentId: consumerIdentity.agentId,
           providerAgentId: target.providerAgentId,
         } }))

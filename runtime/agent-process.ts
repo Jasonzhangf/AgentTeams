@@ -21,6 +21,7 @@ import { createOpenAIModelCatalogClient } from '../config/provider-model-client.
 import { createConsoleConfigBinding } from './console-config.ts'
 import { createManagedConfigOwner } from './managed-config-owner.ts'
 import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
+import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
 
 export interface AgentProcessConfig {
   readonly declaration: AgentDeclaration
@@ -215,9 +216,10 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       recoverFileWorkStoreLock(workFile, createTrustedWorkAuthority(), workLock, owner =>
         owner.pid === previousOwner.pid && owner.startToken === previousOwner.startToken)
     }
+    const publishedDeclaration = { ...config.declaration, revision: 2, capabilities: executor.capabilities }
     ledger = createWorkLedger({ provider: { accountId: config.declaration.identity.accountId, scopeId: config.declaration.scopeId,
       agentId: config.declaration.identity.agentId }, generation: daemon.network.generation, capabilities: executor.capabilities,
-      store: createFileWorkStore(workFile) })
+      endpointCatalog: compileDeclarationEndpoints(publishedDeclaration), store: createFileWorkStore(workFile) })
     const hasUnreconciledState = ledger.snapshot.allocations.some(allocation => allocation.state !== 'released') ||
       ledger.snapshot.requests.some(request => ['running', 'cancel_requested', 'unknown'].includes(request.state))
     if (hasUnreconciledState) {
@@ -228,7 +230,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       throw new RelayProtocolError('RESULT_UNKNOWN', 'persisted resources require trusted reconciliation before serving Work')
     }
     host = createWorkHost({ ledger, policy: () => policy, executor })
-    await daemon.network.publish({ ...config.declaration, revision: 2, capabilities: executor.capabilities })
+    await daemon.network.publish(publishedDeclaration)
     consumerWork = createAgentWorkClient(daemon.network, {
       accountId: config.declaration.identity.accountId,
       scopeId: config.declaration.scopeId,

@@ -1,4 +1,4 @@
-import type { EndpointDiscoveryView } from './endpoint-ref.ts'
+import type { EndpointDiscoveryView, WorkEndpointReference } from './endpoint-ref.ts'
 import type { HostIdentity, RouteCandidate } from './frames.ts'
 
 /** Shared service contracts, revision 1. Declarations do not implement transport or authorization. */
@@ -79,6 +79,8 @@ export interface WorkProposal {
   readonly capabilityId: string
   readonly capabilityVersion: string
   readonly policyRevision: number
+  /** Optional control reference to the admitted provider Endpoint. */
+  readonly endpoint?: WorkEndpointReference
 }
 export type WorkState = 'accepted' | 'closing' | 'closed' | 'rejected'
 export interface AgentWork extends WorkProposal { readonly state: WorkState }

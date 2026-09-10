@@ -30,6 +30,14 @@ it('matches an online provider by capability, version, and operation', async () 
   })
 })
 
+it('selects a visible Endpoint and carries its revision into the Work proposal', async () => {
+  const endpointPeer = { ...peer('endpoint-provider', 'online'), endpoints: [{ endpointId: 'browser-endpoint', ownerAgentId: 'endpoint-provider', scopeId: 'scope', kind: 'browser' as const, revision: 4,
+    lifecycle: 'active' as const, capabilities: [{ capabilityId: 'file-search', version: '1', operations: ['search'] }], resources: [] }] }
+  directory.push(endpointPeer)
+  const target = await client.findProvider({ capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' })
+  expect(target.endpoint).toMatchObject({ providerAgentId: 'endpoint-provider', endpointId: 'browser-endpoint', revision: 4 })
+})
+
 it.each([
   ['missing capability', [], 'NOT_FOUND'],
   ['unsupported version', [peer('provider', 'online', '2')], 'UNSUPPORTED_VERSION'],
@@ -98,12 +106,16 @@ it('exposes the full consumer channel and carries target generation only in cont
   const { socket, sent } = fakeSocket()
   const channel = await createAgentWorkClient(relayForSocket(socket), identity, { timeoutMs: 1000, maxPending: 2 }).open({
     providerAgentId: 'provider', generation: 7, capabilityId: 'file-search', capabilityVersion: '1', operation: 'search',
+    endpoint: { providerAgentId: 'provider', endpointId: 'search-endpoint', revision: 2, capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' },
   })
   await expect(channel.propose({ workId: 'work', capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1 })).resolves.toMatchObject({ state: 'accepted' })
   await expect(channel.request({ workId: 'work', requestId: 'request', operation: 'search', demands: [], payload: { query: 'x' } })).resolves.toMatchObject({ control: { state: 'succeeded' } })
   await expect(channel.get('work', 'request')).resolves.toMatchObject({ control: { state: 'succeeded' } })
   await expect(channel.close('work')).resolves.toMatchObject({ state: 'closed' })
   expect(sent.find(item => (item as { kind: string }).kind === 'work.request')).toMatchObject({ control: { targetGeneration: 7 } })
+  expect(sent.find(item => (item as { kind: string }).kind === 'work.propose')).toMatchObject({ proposal: {
+    endpoint: { workId: 'work', providerAgentId: 'provider', endpointId: 'search-endpoint', revision: 2, operation: 'search' },
+  } })
   await channel.dispose()
   await expect(channel.closed).resolves.toBeInstanceOf(Error)
 })

@@ -1,4 +1,5 @@
 import type { AgentWork, ServiceError, WorkProposal, WorkReply, WorkRequest } from './agent-services.ts'
+import { parseWorkEndpointReference } from './endpoint-ref.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
 import { parseServiceError, RelayProtocolError } from './relay-codec.ts'
 
@@ -28,9 +29,10 @@ function error(value: unknown): void {
 }
 function proposal(value: unknown, state: boolean): void {
   const fields = object(value)
-  assertEnvelopeKeys(fields, ['workId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'policyRevision', ...(state ? ['state'] : [])], 'Work proposal')
+  assertEnvelopeKeys(fields, ['workId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'policyRevision', 'endpoint', ...(state ? ['state'] : [])], 'Work proposal')
   for (const key of ['workId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion']) string(fields[key])
   positive(fields.policyRevision)
+  if (fields.endpoint !== undefined) parseWorkEndpointReference(fields.endpoint)
   if (state && !['accepted', 'closing', 'closed', 'rejected'].includes(fields.state as string)) throw new Error('invalid Work state')
 }
 export function parseWorkWireFrame(text: string): WorkWireFrame {

@@ -13,6 +13,7 @@ import {
 import { dirname } from 'node:path'
 import { assertJsonValue } from '../control-protocol/json-value.ts'
 import { parseServiceError } from '../control-protocol/relay-codec.ts'
+import { admitWorkEndpointReference, parseWorkEndpointReference, type EndpointDiscoveryView, type WorkEndpointReference } from '../control-protocol/endpoint-ref.ts'
 import type {
   AgentWork,
   AuthenticatedAgent,
@@ -65,12 +66,14 @@ export interface WorkLedgerOptions {
   readonly provider: AuthenticatedAgent
   readonly generation: number
   readonly capabilities: readonly CapabilityDeclaration[]
+  readonly endpointCatalog?: readonly EndpointDiscoveryView[]
   readonly store: WorkStore
 }
 
 export interface WorkLedger {
   readonly provider: AuthenticatedAgent
   readonly capabilities: readonly CapabilityDeclaration[]
+  readonly endpointCatalog: readonly EndpointDiscoveryView[]
   readonly store: WorkStore
   currentGeneration: number
   snapshot: WorkLedgerSnapshot
@@ -167,6 +170,16 @@ function requiredString(value: unknown, label: string): string {
   return value
 }
 
+function endpointReference(value: unknown, label: string): WorkEndpointReference {
+  try {
+    return parseWorkEndpointReference(value)
+  } catch (error) {
+    const code = typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: ServiceErrorCode }).code : 'INVALID_INPUT'
+    fail(code, error instanceof Error ? error.message : `${label} is invalid`)
+  }
+}
+
 function positiveInteger(value: unknown, label: string): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     fail('INVALID_INPUT', `${label} must be a positive integer`)
@@ -244,6 +257,7 @@ function allocationScope(value: unknown, path: string): ResourceAllocation['scop
 
 function parseWork(value: unknown, index: number): AgentWork {
   if (!isRecord(value)) fail('INVALID_INPUT', `works[${index}] must be an object`)
+  const endpoint = value.endpoint === undefined ? undefined : endpointReference(value.endpoint, `works[${index}].endpoint`)
   return {
     workId: requiredString(value.workId, `works[${index}].workId`),
     consumerAgentId: requiredString(value.consumerAgentId, `works[${index}].consumerAgentId`),
@@ -252,11 +266,13 @@ function parseWork(value: unknown, index: number): AgentWork {
     capabilityVersion: requiredString(value.capabilityVersion, `works[${index}].capabilityVersion`),
     policyRevision: positiveInteger(value.policyRevision, `works[${index}].policyRevision`),
     state: workState(value.state, `works[${index}].state`),
+    ...(endpoint === undefined ? {} : { endpoint }),
   }
 }
 
 function parseProposal(value: unknown, path: string): WorkProposal {
   if (!isRecord(value)) fail('INVALID_INPUT', `${path} must be an object`)
+  const endpoint = value.endpoint === undefined ? undefined : endpointReference(value.endpoint, `${path}.endpoint`)
   return {
     workId: requiredString(value.workId, `${path}.workId`),
     consumerAgentId: requiredString(value.consumerAgentId, `${path}.consumerAgentId`),
@@ -264,6 +280,7 @@ function parseProposal(value: unknown, path: string): WorkProposal {
     capabilityId: requiredString(value.capabilityId, `${path}.capabilityId`),
     capabilityVersion: requiredString(value.capabilityVersion, `${path}.capabilityVersion`),
     policyRevision: positiveInteger(value.policyRevision, `${path}.policyRevision`),
+    ...(endpoint === undefined ? {} : { endpoint }),
   }
 }
 
@@ -635,7 +652,14 @@ export function createWorkLedger(options: WorkLedgerOptions): WorkLedger {
     requests: [],
     allocations: [],
   }
-  return { provider, currentGeneration: generation, capabilities: options.capabilities, store: options.store, snapshot }
+  return {
+    provider,
+    currentGeneration: generation,
+    capabilities: options.capabilities,
+    endpointCatalog: options.endpointCatalog ?? [],
+    store: options.store,
+    snapshot,
+  }
 }
 
 function commit(ledger: WorkLedger, snapshot: WorkLedgerSnapshot): void {
@@ -704,6 +728,25 @@ function assertProvider(work: WorkProposal, provider: AuthenticatedAgent): void 
   if (work.providerAgentId !== provider.agentId) fail('FORBIDDEN', 'work proposal does not target the local provider')
 }
 
+function validateEndpointBinding(ledger: WorkLedger, consumer: AuthenticatedAgent, proposal: WorkProposal): void {
+  const endpoint = proposal.endpoint
+  if (endpoint === undefined) return
+  if (endpoint.workId !== proposal.workId) fail('CONFLICT', 'Endpoint reference workId does not match the Work proposal')
+  if (endpoint.providerAgentId !== proposal.providerAgentId) fail('FORBIDDEN', 'Endpoint reference provider does not match the Work proposal')
+  if (endpoint.capabilityId !== proposal.capabilityId || endpoint.capabilityVersion !== proposal.capabilityVersion) {
+    fail('CONFLICT', 'Endpoint reference capability does not match the Work proposal')
+  }
+  try {
+    const view = admitWorkEndpointReference(ledger.endpointCatalog, consumer, endpoint)
+    if (view.ownerAgentId !== ledger.provider.agentId) fail('FORBIDDEN', 'Endpoint reference is not owned by the local provider')
+  } catch (error) {
+    if (isWorkServiceError(error)) throw error
+    const code = typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: ServiceErrorCode }).code : 'INVALID_INPUT'
+    fail(code, error instanceof Error ? error.message : 'Endpoint reference admission failed')
+  }
+}
+
 function validateDemands(capability: CapabilityDeclaration, demands: readonly ResourceDemand[]): Map<string, ResourceDemand> {
   const declarations = new Map(capability.resources.map(resource => [resource.resourceId, resource]))
   const result = new Map<string, ResourceDemand>()
@@ -743,6 +786,7 @@ export function proposeWork(
   const normalizedProposal = parseProposal(proposal, 'proposal')
   assertProvider(normalizedProposal, ledger.provider)
   if (normalizedProposal.consumerAgentId !== consumer.agentId) fail('FORBIDDEN', 'work proposal consumer is not the authenticated agent')
+  validateEndpointBinding(ledger, consumer, normalizedProposal)
   const existing = ledger.snapshot.works.find(work => work.workId === normalizedProposal.workId)
   if (existing !== undefined) {
     const existingProposal: WorkProposal = {
@@ -752,6 +796,7 @@ export function proposeWork(
       capabilityId: existing.capabilityId,
       capabilityVersion: existing.capabilityVersion,
       policyRevision: existing.policyRevision,
+      ...(existing.endpoint === undefined ? {} : { endpoint: existing.endpoint }),
     }
     const sameProposal = stableJson(existingProposal) === stableJson(normalizedProposal)
     if (!sameProposal) fail('CONFLICT', `work ${normalizedProposal.workId} already exists with different parameters`)
@@ -802,6 +847,9 @@ export function requestWork(
   }
   if (request.control.targetGeneration !== ledger.currentGeneration) {
     fail('STALE_GENERATION', `request targets generation ${request.control.targetGeneration}, current is ${ledger.currentGeneration}`)
+  }
+  if (work.endpoint !== undefined && request.control.operation !== work.endpoint.operation) {
+    fail('UNSUPPORTED_OPERATION', `operation ${request.control.operation} is not bound to Endpoint ${work.endpoint.endpointId}`)
   }
   const capability = capabilityFor(ledger, work)
   const operation = operationFor(ledger, work, request.control.operation)
