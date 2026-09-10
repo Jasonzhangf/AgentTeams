@@ -131,6 +131,10 @@ _Empty._
 - tags: `N3`, `ai-reviewed`, `direct`, `human-unreviewed`, `network`
 - details: [L2/memory-a1fda2256f280a34.md](L2/memory-a1fda2256f280a34.md)
 
+### N3-D2 runtime direct-listener assembly delivery
+- tags: `N3`, `N3,ai-reviewed,human-unreviewed,direct,runtime`, `ai-reviewed`, `direct`, `human-unreviewed`, `runtime`
+- details: [L2/n3-d2-runtime-listener-assembly-20260910.md](L2/n3-d2-runtime-listener-assembly-20260910.md)
+
 ### P0业务JSON保真与外层控制边界
 - tags: `ai-reviewed`, `human-unreviewed`, `protocol`
 - details: [L2/p0-business-json-20260906.md](L2/p0-business-json-20260906.md)
