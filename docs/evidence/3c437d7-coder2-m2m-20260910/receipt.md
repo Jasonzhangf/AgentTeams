@@ -49,4 +49,14 @@ This is real cross-host/public-relay Agent Work evidence for the current candida
 - Provider PID was stopped by exact PID; Claw temporary directory was removed and no `48083` lease remained.
 - The coder2new one-shot Docker container had already exited with `--rm`; its temporary directory was removed and no `48082` listener remained.
 - Claw `agentteams-relay.service` remained `active` and `enabled`, with only its formal `0.0.0.0:9443` listener present.
-- Local replay worktree and branch remain until this receipt is committed and integrated; no other worktree or branch is owned by this delivery unit.
+- Owned candidate worktree `playground/3c437d7-coder2-m2m-20260910` and branch `codex/3c437d7-coder2-m2m-20260910` were removed after integration.
+- Owned integration worktree `playground/3c437d7-coder2-m2m-integration-20260910` and branch `codex/3c437d7-coder2-m2m-integration-20260910` were removed after the remote push.
+- External `/Users/fanzhang/.codex/worktrees/**` entries and all other branches/worktrees were left untouched.
+
+## Final cleanup receipt
+
+- Receipt ID: `cleanup-3c437d7-coder2-m2m-20260910`.
+- Cleanup was performed only after review PASS, integration, mainline verification, and remote push.
+- Remote main at cleanup start: `3538dff03aa0343fd6938fd6eb71248da2a593e3`.
+- Claw and coder2new replay processes, container, temporary directories, and replay listeners were already absent; the formal Claw relay remained `active` and `enabled`.
+- This cleanup worktree is the sole remaining owned resource for the receipt amendment and will be removed after its commit is pushed; no other resource is retained.
