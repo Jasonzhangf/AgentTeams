@@ -20,6 +20,7 @@ import { createJsonFileConfigPersistence, createRuntimeConfigStore, RuntimeConfi
 import { createOpenAIModelCatalogClient } from '../config/provider-model-client.ts'
 import { createConsoleConfigBinding } from './console-config.ts'
 import { createManagedConfigOwner } from './managed-config-owner.ts'
+import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
 
 export interface AgentProcessConfig {
   readonly declaration: AgentDeclaration
@@ -138,6 +139,7 @@ async function ownDataDirectory(config: AgentProcessConfig): Promise<{ readonly 
 
 export interface AgentProcess {
   readonly daemon: AgentDaemon
+  readonly consumerWork: AgentWorkClient
   readonly closed: Promise<void>
   stop(): Promise<void>
 }
@@ -146,6 +148,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   const ownership = await ownDataDirectory(config)
   const lease = ownership.server
   let daemon: AgentDaemon | undefined
+  let consumerWork: AgentWorkClient | undefined
   let configBinding: { binding: ReturnType<typeof createConsoleConfigBinding>; owner: ReturnType<typeof createManagedConfigOwner> } | undefined
   let readyResolve!: () => void
   let readyReject!: (error: unknown) => void
@@ -226,6 +229,11 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     }
     host = createWorkHost({ ledger, policy: () => policy, executor })
     await daemon.network.publish({ ...config.declaration, revision: 2, capabilities: executor.capabilities })
+    consumerWork = createAgentWorkClient(daemon.network, {
+      accountId: config.declaration.identity.accountId,
+      scopeId: config.declaration.scopeId,
+      agentId: config.declaration.identity.agentId,
+    }, { timeoutMs: config.relay.requestTimeoutMs, maxPending: config.relay.maxPendingRequests })
     readyResolve()
     const live = daemon
     let stopping: Promise<void> | undefined
@@ -233,6 +241,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       if (stopping) return stopping
       stopping = (async () => {
         try {
+          await consumerWork?.dispose()
           await live.stop()
           await configBinding?.owner.stop()
           const results = await Promise.allSettled(ledger.snapshot.works.filter(work => work.state !== 'closed' && work.state !== 'rejected').map(work =>
@@ -247,7 +256,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       return stopping
     }
     const closed = live.closed.then(async state => { await stop(); if (state.state === 'failed') throw state.error ?? new Error('Agent network failed') })
-    return { daemon: live, stop, closed }
+    return { daemon: live, consumerWork: consumerWork!, stop, closed }
   } catch (error) {
     readyReject(error)
     try { await daemon?.stop(); await configBinding?.owner.stop() } finally { await closeLease(lease) }

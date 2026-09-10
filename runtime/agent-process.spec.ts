@@ -220,19 +220,18 @@ it('completes Agent-to-Agent Work between two independently started daemons with
   try {
     provider = await startAgentProcess(providerConfig, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer provider2' })
     consumerAgent = await startAgentProcess(consumerConfig, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer consumer2' })
-    const providerPeer = (await consumerAgent.daemon.network.directory(false)).find(peer => peer.declaration.identity.agentId === 'provider2')
-    expect(providerPeer).toBeDefined()
-    const channel = createWorkChannel(await consumerAgent.daemon.network.openData(
-      await consumerAgent.daemon.network.connect('provider2', provider!.daemon.network.generation)),
-      { timeoutMs: 3000, maxPending: 4, maxIncoming: 4 })
+    const target = await consumerAgent.consumerWork.findProvider({ capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' })
+    expect(target.providerAgentId).toBe('provider2')
+    const channel = await consumerAgent.consumerWork.open(target)
     try {
-      await expect(channel.request({ kind: 'work.propose', proposal: { workId: 'direct-work', consumerAgentId: 'consumer2', providerAgentId: 'provider2',
-        capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1 } })).resolves.toMatchObject({ work: { state: 'accepted' } })
-      await expect(channel.request({ kind: 'work.request', control: { workId: 'direct-work', requestId: 'direct-request', operation: 'search',
-        targetGeneration: provider!.daemon.network.generation, demands: [{ resourceId: 'search-slot', amount: 1 }] }, payload: { query: 'direct daemon work needle' } }))
-        .resolves.toMatchObject({ control: { state: 'succeeded' }, payload: { matches: [expect.objectContaining({ text: 'direct daemon work needle\n' })] } })
-      await expect(channel.request({ kind: 'work.close', workId: 'direct-work' })).resolves.toMatchObject({ work: { state: 'closed' } })
-    } finally { await channel.close() }
+      await expect(channel.propose({ workId: 'direct-work', capabilityId: target.capabilityId, capabilityVersion: target.capabilityVersion,
+        policyRevision: 1 })).resolves.toMatchObject({ state: 'accepted' })
+      const request = { workId: 'direct-work', requestId: 'direct-request', operation: 'search',
+        demands: [{ resourceId: 'search-slot', amount: 1 }], payload: { query: 'direct daemon work needle' } } as const
+      await expect(channel.request(request)).resolves.toMatchObject({ control: { state: 'succeeded' }, payload: { matches: [expect.objectContaining({ text: 'direct daemon work needle\n' })] } })
+      await expect(channel.request(request)).resolves.toMatchObject({ control: { state: 'succeeded' } })
+      await expect(channel.close('direct-work')).resolves.toMatchObject({ state: 'closed' })
+    } finally { await channel.dispose() }
   } finally {
     await consumerAgent?.stop()
     await provider?.stop()
