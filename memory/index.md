@@ -91,6 +91,10 @@ _Empty._
 - tags: `ai-reviewed`, `daemon`, `human-unreviewed`, `relay-client`
 - details: [L2/daemon-library-integration-20260906.md](L2/daemon-library-integration-20260906.md)
 
+### E3 Endpoint Work binding delivery
+- tags: `41f0ea2`, `ai-reviewed`, `endpoint`, `human-unreviewed`
+- details: [L2/e3-endpoint-work-binding.md](L2/e3-endpoint-work-binding.md)
+
 ### 第一波PR7合并和主集成树关闭回执
 - tags: `ai-reviewed`, `cleanup`, `delivery`, `human-unreviewed`
 - details: [L2/first-wave-delivery-20260906.md](L2/first-wave-delivery-20260906.md)
@@ -141,7 +145,9 @@ _Empty._
 
 ## Level 3 — new or unreviewed
 
-_Empty._
+### Superseded memory write for 41f0ea2
+- tags: `41f0ea2`, `superseded`
+- details: [L3/memory-45d66e4888339c10.md](L3/memory-45d66e4888339c10.md)
 
 ## Skill description candidates
 

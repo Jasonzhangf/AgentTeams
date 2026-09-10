@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"lesson","created_at":"2026-09-10T11:30:53.624609+00:00","id":"e3-endpoint-work-binding","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["41f0ea2","ai-reviewed","endpoint","human-unreviewed"],"updated_at":"2026-09-10T11:30:53.624609+00:00"} -->
+
+# E3 Endpoint Work binding delivery
+
+Issue 41f0ea2 delivery closed through the engineering loop. Root cause fixed: duplicate proposals now return the stored Work before mutable Endpoint admission, preserving idempotency after endpoint revision or lifecycle changes. Consumer Endpoint reference comparison is field based and independent of JavaScript property order while retaining strict field count. Candidate f70941482ebad87704af42abf60d21e11f341939 passed independent Codex review task 41f0ea2-e3-review-20260910-r4. Integration tree 97d5b8ca154eb29d1aaec316c231df650046d7c3 passed focused 44/44, regression 397 tests, typecheck, governance compile, packaged local smoke, git diff check, and appsdk verify. Remote main is 8ddaa15ddc9351d1712d0c61412d505e93800bfd. Evidence proves typed control binding and local/runtime relay smoke only; it does not prove public NAT, dual NAT, devices, or deployment acceptance. This record is ai-reviewed and human-unreviewed.
+<!-- project-memory:end -->
