@@ -42,7 +42,8 @@
     {"chain_id": "daemon-start-v1", "owner": "runtime", "caller": "startDaemonRuntime", "callee": "connectLink", "path": "runtime/daemon-runtime.ts", "status": "partial", "note": "connectLink currently returns state without network I/O"},
     {"chain_id": "daemon-start-v1", "owner": "runtime", "caller": "startDaemonRuntime", "callee": "registerRuntimeConnection", "path": "runtime/daemon-runtime.ts", "status": "partial"},
     {"chain_id": "daemon-start-v1", "owner": "runtime", "caller": "startDaemonRuntime", "callee": "syncSharedRuntimeConfig", "path": "runtime/daemon-runtime.ts", "status": "partial"},
-    {"chain_id": "agent-host-registration-v2", "owner": "network", "caller": "registerAgentHost", "callee": "upsertDirectoryHost", "path": "network/host-registration.ts", "status": "partial"}
+    {"chain_id": "agent-host-registration-v2", "owner": "network", "caller": "registerAgentHost", "callee": "upsertDirectoryHost", "path": "network/host-registration.ts", "status": "partial"},
+    {"chain_id":"daemon-relay-bootstrap-v2","owner":"network","caller":"connectDirectPeerRoute","callee":"assembleDirectWssTargetOptions -> resolveHostFromDirectory -> buildDirectWssRoutePlan -> activeDirectWssCandidate -> connectDirectWssTarget","path":"network/peer-route.ts","status":"implemented","note":"A confirmed account directory snapshot selects exactly one direct WSS candidate and binds directory, target, and connection generations. Relay candidates use assembleRelayPeerRoute and never enter the direct target transport."}
   ],
   "planned_bindings": [
     {"chain_id":"daemon-relay-bootstrap-v2","owner":"runtime","allowed_paths":["runtime/**"],"required_gates":["teams-daemon-relay-bootstrap"]},

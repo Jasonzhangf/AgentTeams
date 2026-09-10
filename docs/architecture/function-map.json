@@ -146,6 +146,28 @@
       ]
     },
     {
+      "function_id": "peer_route_assembly",
+      "owner": "network",
+      "status": "implemented",
+      "paths": [
+        "network/peer-route.ts",
+        "network/peer-route.spec.ts"
+      ],
+      "entry_symbols": [
+        "assemblePeerRoute",
+        "assembleDirectWssTargetOptions",
+        "assembleRelayPeerRoute",
+        "connectDirectPeerRoute",
+        "assertPeerRouteBinding"
+      ],
+      "required_gates": [
+        "teams-network-control-boundary",
+        "teams-explicit-route-no-fallback",
+        "teams-peer-route-contract"
+      ],
+      "note": "Resolves a confirmed account directory into an explicitly direct-WSS or relay route. Connection and target generations remain bound to the selected route; mismatches fail explicitly and no candidate fallback is performed."
+    },
+    {
       "function_id": "agent_host_target_transport",
       "owner": "network",
       "status": "implemented",
