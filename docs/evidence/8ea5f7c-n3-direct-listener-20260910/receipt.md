@@ -37,3 +37,13 @@ This receipt does not claim a runnable daemon direct endpoint, route
 registration, dual-NAT traversal, public deployment, mobile acceptance, or
 Console-offline acceptance. Those remain open under issue `8ea5f7c` and later
 delivery units.
+
+## Push and cleanup receipt
+
+- Remote push: `origin/main` = `2a1f1524f440176570fa8412455ba2bb557123cf`.
+- Cleanup time: `2026-09-10T15:26:04Z`.
+- Worker and integration worktrees were clean and removed after push.
+- Branches `codex/8ea5f7c-n3-direct-listener-20260910` and
+  `codex/8ea5f7c-n3-direct-listener-integration-20260910` were removed locally.
+- No delivery-owned process, listener, relay, port, lock, or claim remained.
+- Evidence is retained on `main`; no external worktree was modified.
