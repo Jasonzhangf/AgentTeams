@@ -61,9 +61,14 @@ This proves restart generation isolation and a fresh cross-host/public-relay Age
 
 ## Validation
 
-- `pnpm build:runtime`: PASS.
+- `pnpm build:runtime`: PASS; the two runtime hashes above match the replay artifacts.
 - Exact replay: PASS as recorded above.
-- Integration must rerun the mapped full test, typecheck, AppSDK compile/verify and diff checks against the integration SHA.
+- Fresh integration worktree installed with `pnpm install --frozen-lockfile`: PASS.
+- Integration `pnpm test`: PASS, `70` files / `397` tests.
+- Integration `pnpm typecheck`: PASS.
+- Integration `appsdk compile`: PASS.
+- Integration `appsdk verify`: PASS, `{"ok":true,"project_id":"agentteams","stage":"contract_bound"}`.
+- Integration `git diff --check`: PASS; the integration worktree was clean before this receipt amendment.
 
 ## Cleanup
 
