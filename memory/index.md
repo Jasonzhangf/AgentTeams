@@ -15,6 +15,10 @@ _Empty._
 
 ## Level 2 — reviewed reusable
 
+### N3 peer route contract delivery
+- tags: `N3`, `ai-reviewed`, `human-unreviewed`, `network`
+- details: [L2/8ea5f7c-n3-peer-route-contract-20260910.md](L2/8ea5f7c-n3-peer-route-contract-20260910.md)
+
 ### AgentBrowser icon admission
 - tags: `agentbrowser`, `ai-reviewed`, `human-unreviewed`, `icon`, `ui-evidence`
 - details: [L2/agentbrowser-icon-20260906.md](L2/agentbrowser-icon-20260906.md)
@@ -135,6 +139,7 @@ _Empty._
 
 Base budget: 8 lines. Copy the compact lines into the project Skill `description` after manual architecture deduplication. Fill level 1 first; use level 2, then level 3, only for remaining slots.
 
+- L2: N3 peer route contract delivery (knowledge) [N3,ai-reviewed,human-unreviewed,network] -> L2/8ea5f7c-n3-peer-route-contract-20260910.md
 - L2: AgentBrowser icon admission (knowledge) [agentbrowser,ai-reviewed,human-unreviewed,icon,ui-evidence] -> L2/agentbrowser-icon-20260906.md
 - L2: Active recovery boundary remains runtime-owned (lesson) [agentteams,ai-reviewed,human-unreviewed,recovery,runtime,work] -> L2/agentteams-active-recovery-boundary-20260906.md
 - L2: Agent-to-Agent daemon Work replay (knowledge) [agentteams,ai-reviewed,daemon,human-unreviewed,relay,work] -> L2/agentteams-cross-daemon-work-20260906.md
@@ -142,5 +147,4 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: AgentTeams 长程交付与阶段L2记忆 (plan) [ai-reviewed,delivery,governance,human-unreviewed,memory-l2] -> L2/agentteams-long-running-delivery-20260906.md
 - L2: Packaged Relay process replay (knowledge) [agentteams,ai-reviewed,deployment,human-unreviewed,relay,restart] -> L2/agentteams-relay-process-packaged-20260906.md
 - L2: Runtime active-work recovery boundary (knowledge) [agentteams,ai-reviewed,human-unreviewed,recovery,runtime,work] -> L2/agentteams-runtime-recovery-unknown-20260906.md
-- L2: Runtime stale Work lock recovery (knowledge) [agentteams,ai-reviewed,human-unreviewed,recovery] -> L2/agentteams-runtime-stale-lock-recovery-20260906.md
 
