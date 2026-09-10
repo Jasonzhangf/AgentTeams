@@ -40,7 +40,7 @@ delivery units.
 
 ## Push and cleanup receipt
 
-- Remote push: `origin/main` = `2a1f1524f440176570fa8412455ba2bb557123cf`.
+- Remote push: `origin/main` = `de1a9eb9e2f557eb52f5321c6e29f3f9a940cf05` (cleanup receipt commit; the preceding integration candidate was `2a1f1524f440176570fa8412455ba2bb557123cf`).
 - Cleanup time: `2026-09-10T15:26:04Z`.
 - Worker and integration worktrees were clean and removed after push.
 - Branches `codex/8ea5f7c-n3-direct-listener-20260910` and
