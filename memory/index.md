@@ -115,6 +115,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `mainline`, `merge`
 - details: [L2/managed-runtime-delivery-20260906.md](L2/managed-runtime-delivery-20260906.md)
 
+### N3 direct transport is blocked at Agent endpoint publication
+- tags: `N3`, `ai-reviewed`, `human-unreviewed`, `network`
+- details: [L2/memory-292786e443571d6d.md](L2/memory-292786e443571d6d.md)
+
 ### 9b10ed3 consumer Work runtime delivery
 - tags: `9b10ed3`, `V1`, `ai-reviewed`, `consumer-work`, `human-unreviewed`, `runtime`
 - details: [L2/memory-6b1f2792d105d9d8.md](L2/memory-6b1f2792d105d9d8.md)
