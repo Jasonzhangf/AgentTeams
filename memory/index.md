@@ -43,6 +43,10 @@ _Empty._
 - tags: `ai-reviewed`, `delivery`, `governance`, `human-unreviewed`, `memory-l2`
 - details: [L2/agentteams-long-running-delivery-20260906.md](L2/agentteams-long-running-delivery-20260906.md)
 
+### AgentTeams relay-first MVP goal governance
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `mvp`, `relay`
+- details: [L2/agentteams-mvp-goal-relay-first-20260910.md](L2/agentteams-mvp-goal-relay-first-20260910.md)
+
 ### Packaged Relay process replay
 - tags: `agentteams`, `ai-reviewed`, `deployment`, `human-unreviewed`, `relay`, `restart`
 - details: [L2/agentteams-relay-process-packaged-20260906.md](L2/agentteams-relay-process-packaged-20260906.md)
@@ -188,5 +192,5 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: Agent-to-Agent daemon Work replay (knowledge) [agentteams,ai-reviewed,daemon,human-unreviewed,relay,work] -> L2/agentteams-cross-daemon-work-20260906.md
 - L2: Installed runtime replay (knowledge) [agentteams,ai-reviewed,artifact,human-unreviewed,install,restart] -> L2/agentteams-installed-runtime-20260906.md
 - L2: AgentTeams 长程交付与阶段L2记忆 (plan) [ai-reviewed,delivery,governance,human-unreviewed,memory-l2] -> L2/agentteams-long-running-delivery-20260906.md
-- L2: Packaged Relay process replay (knowledge) [agentteams,ai-reviewed,deployment,human-unreviewed,relay,restart] -> L2/agentteams-relay-process-packaged-20260906.md
+- L2: AgentTeams relay-first MVP goal governance (knowledge) [agentteams,ai-reviewed,human-unreviewed,mvp,relay] -> L2/agentteams-mvp-goal-relay-first-20260910.md
 
