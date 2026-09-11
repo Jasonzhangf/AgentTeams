@@ -19,7 +19,8 @@
 2. 绑定受影响 feature/owner/路径/调用边/验收。先定位真源，比较删除、复用与直接实现。
 3. 关键行为先红测后最小修改；同步受影响 maps。探索与验证写本任务独占 run notes。
 4. 根目录安装 `pnpm install --frozen-lockfile`；定向验证后执行 `pnpm verify`。
-5. 完成适用实际入口证据，再用 AGY Review 审查精确候选。变更后重跑受影响验证和 review。
+5. 完成适用实际入口证据，再按本目标已获用户选择的独立 Codex exact review 路由
+   审查精确候选；AGY Review 不属于本目标的 review gate。变更后重跑受影响验证和 review。
 6. commit、push、合并、安装、发布分别按授权执行；review PASS 不等于这些动作完成。
 
 `pnpm verify` 顺序执行全量测试、类型检查、Guidance compile、AppSDK compile、编译
@@ -55,8 +56,10 @@ AppSDK review admission、freeze/Active 发布保留正式证据门禁，本轮�
 pre-review 记录；完整命令输出保存在 `.appsdk-control/lifecycle-adapter/`。这些本地
 记录不代表公网/NAT、managed OpenCode、跨设备或发布验收。
 
-公网/NAT/relay、daemon 自动登录、能力匹配、原子容量与一对多、Console 全关闭仍
-协作、多 provider apply/readback 仍是设计/待运行验证 gates。基础测试通过不能升级这些状态。
+公网 Relay、至少一端真实 NAT 出站、daemon 自动登录、能力匹配、原子容量与一对多、
+Console 全关闭协作、多 provider apply/readback 是当前 MVP 的必需 live gates；它们
+在真实证据齐备前保持 open，基础测试通过不能升级这些状态。direct、NAT-to-NAT、
+手机蜂窝和完整 UI 属于 post-MVP，不进入本轮 closeout。
 
 Guidance 使用声明的项目 AGENTS 和官方治理 Skill，保持 advisory；它帮助计划，
 不重复保存质量 PASS。Collab 自动注册保留；无 tmux 时 pending，不阻断独立工作。

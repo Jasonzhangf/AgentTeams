@@ -1,20 +1,20 @@
 {
   "goal_id": "agentteams-parallel-service-development",
-  "raw_request": "确认Luna配置后开启三个长期辅助session并发开发，主任务负责主开发、审核与合并",
-  "understood_objective": "Establish shared service contracts, then implement isolated relay, provider/OpenCode and Agent Work modules with three Luna sessions; the primary task owns daemon/network integration, validation and merge.",
+  "raw_request": "按既有 AgentTeams 长期目标收敛为最小 MVP relay-first closeout；不创建第二个 goal 或 subscription。",
+  "understood_objective": "Deliver a minimal relay-first AgentTeams MVP: two real daemons bootstrap through the public Relay, publish and discover a passive capability/resource, complete Agent Work across a public/NAT egress path without Console, persist multi-provider OpenCode configuration with explicit RCC and goaichat instances, and close every delivery unit with exact review, integration, remote push, memory and cleanup evidence.",
   "acceptance_criteria": [
-    "Shared contracts have one owner before parallel implementation; no duplicate configuration, routing or resource truth.",
-    "Three Luna sessions implement server, config/OpenCode and agent paths in separate clean worktrees; primary task owns shared interfaces and integration.",
-    "Each candidate passes affected tests, typecheck/build, applicable public-entrypoint validation and review before integration.",
-    "Service deployment operations and cross-device evidence are bound before service delivery; type declarations do not prove runtime implementation.",
-    "Preserve main and peer worktrees; integrate reviewed candidates through explicit Git evidence."
+    "The Relay-first daemon path is proven on a real public service with at least one daemon behind NAT egress: login, directory, capability/resource publication, matching, Work proposal/request/close and re-login.",
+    "A fixed-root passive file-search capability completes real Work; allocation capacity, idempotent duplicate requests, release and stale-generation rejection are proven.",
+    "Teams owns multiple provider instances and model catalogs; RCC at 127.0.0.1:4444 and canonical instance goaichat-openai (from the goaichat_openai configuration) are explicit OpenCode provider bindings with catalog/apply/readback and restart persistence; no implicit failover.",
+    "All Console processes can exit while Agent Work completes; reopening a Console reads accepted/effective config, Work state and allocation state.",
+    "Each delivery unit passes applicable focused/regression gates, exact independent review, integration verification, remote main push, Level 2 memory and owned-resource cleanup; no live direct, full Endpoint, mobile or UI-completeness claim is required for this MVP."
   ],
-  "non_goals": ["Claim runtime readiness from type declarations or unit tests.", "Publish to production without deployment authorization.", "Reuse the retired host UI as the new Console.", "Modify upstream providers or disclose credentials."],
-  "assumptions": ["One source admission unit contains existing code; semantic ownership stays in docs/architecture/module-registry.json.", "Console is optional; passive capability Agents and one-to-many work are first-class.", "First release includes public network, NAT and relay; live runtime gates remain pending."],
+  "non_goals": ["Claim runtime readiness from type declarations or unit tests.", "Publish to production without deployment authorization.", "Create a second goal or subscription.", "Require live direct/STUN/ICE or NAT-to-NAT direct in this MVP.", "Complete Endpoint E1/E2, master/slave relations, browser multi-profile/mobile replay or full Console/UI polish in this MVP.", "Add implicit provider failover, modify upstream providers or disclose credentials."],
+  "assumptions": ["One source admission unit contains existing code; semantic ownership stays in docs/architecture/module-registry.json.", "Console is optional and never an Agent-to-Agent transport; passive capability Agents and one-to-many resource semantics remain first-class.", "Relay-first public/NAT egress is the MVP transport; direct listener and route contracts remain post-MVP live work.", "RCC 4444 is the primary provider and canonical goaichat-openai is an explicit backup instance sourced from goaichat_openai; selection and errors remain visible.", "Existing mapped source regression gates remain applicable when their owned paths are affected; post-MVP scope removes only their live acceptance claims."],
   "ambiguities": [],
   "questions": [],
   "status": "confirmed",
   "confirmed_by": "user",
-  "confirmed_at": "2026-09-06T00:00:00Z",
+  "confirmed_at": "2026-09-11T04:20:58Z",
   "created_at": "2026-09-06T00:00:00Z"
 }

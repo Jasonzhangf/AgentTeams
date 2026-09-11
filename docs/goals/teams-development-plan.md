@@ -6,6 +6,12 @@
 基准与计划已通过PR #1合并，公共类型契约已通过PR #2合并（不代表P0所有行为已实现）。
 每个实现任务从最新 origin/main 建立独立 clean worktree。
 
+当前执行 profile 是 [长程交付任务](teams-long-running-delivery.md) 定义的
+relay-first MVP；它覆盖公网 Relay、至少一端真实 NAT 出站、双 daemon Work、
+多 provider 配置和 Console 离线读回。本文件的旧 V1 场景表只保留为依赖参考，
+不得把 direct、NAT-to-NAT、手机蜂窝或完整 UI 当作本轮 MVP 退出条件；这些能力
+属于同一目标的 post-MVP backlog。
+
 ## 审查结论
 
 原 M1→M2→M3 串行方案存在四个依赖问题，改为“公共契约→并行模块→统一装配→真实验收”：
@@ -27,9 +33,9 @@
 
 - 一个 Agent 对应一个 daemon 和稳定身份。推理型 Agent 首版由 daemon 独占启动/停止
   自己的 OpenCode 子进程及派生配置目录；附着任意外部实例延期，避免进程/配置双 owner。
-- 先打通显式 WSS 流量 relay，随后实现可达地址的 direct。跨 NAT 先以双方出站 relay
-  满足首版；STUN/打洞声明真实支持状态，不把映射成功当直连成功。选成熟实现后才启用
-  穿透能力；不可用时显式 unavailable。route plan 预先授权候选切换，不重放未知结果请求。
+- 先打通显式 WSS 流量 relay，跨 NAT 先以出站 relay 满足 MVP；可达地址 direct、
+  STUN/打洞和 route plan 候选切换属于 post-MVP。未实现能力声明 unavailable，
+  不把映射成功当直连成功，也不重放未知结果请求。
 - 单一账号/项目作用域内的多设备先行，保留身份、目标授权、撤销与隔离；首版不建组织
   计费/复杂角色系统。relay 管连接准入，能力方独立管 work 和资源授权。
 - 首版包含 browser CLI、固定目录只读文件检索 CLI 和 OpenCode 推理 Agent；不包含
@@ -50,8 +56,8 @@
 | U1 独立 Console | presentation owner：独立构建、投影订阅、配置、真实 Session/审批入口、手机布局 | `ui/`；不写 runtime、网络或配置台账 | P0 投影/命令契约稳定 | B1；可提前开发契约组件，真实联调依赖 I1 |
 | I1 主线装配 | 唯一集成 owner：接通 N1/N2/C1/W1/B1/U1，Console HTTP 原型退出生产主线 | `runtime/`、`agent-host/`、`console-host/`、集成测试；跨模块修复回原 owner | 相关模块验证与 review 通过 | 同一集成候选串行 |
 | R1 关系与观测 | agent owner：持久化授权关系、report revision/pair 冲突、撤销与离线状态；UI 仅投影 | `agent/`；UI 配套由 U1 owner 单独提交 | I1 已证明独立 Agent Work | N3，前提文件 claim 不重叠 |
-| N3 direct 与网络韧性 | network owner：direct 路径、显式连接策略、断线重登、旧 generation 拒绝与连接隔离 | `network/`、`server/`、所属网络测试 | relay 主线 I1 | R1 |
-| V1 首版验收 | 集成负责人：双设备/双 NAT、手机蜂窝、部署重启、失败与恢复证据 | 集成/部署测试及 maps/evidence | I1、R1、N3 | 独立环境的场景可并行；最终候选串行收口 |
+| N3 direct 与网络韧性 | network owner：direct 路径、显式连接策略、断线重登、旧 generation 拒绝与连接隔离；本轮只维护 source contract，真实 direct 回放属 post-MVP | `network/`、`server/`、所属网络测试 | relay 主线 I1 | R1 |
+| V1 MVP 验收 | 集成负责人：公网 Relay、至少一端真实 NAT 出站、双 daemon Work、部署重启、失败与恢复证据 | 集成/部署测试及 maps/evidence | I1；N3 source contract 可复用 | 独立环境的 relay 场景可并行；最终候选串行收口 |
 
 P0 同时修业务 JSON 数组误拒绝，并定义当前 Session 的明确选择/未知状态契约。
 C1 修 SDK 错误传播；I1 移除 Console 猜测首个 Session 的路径，不把不相干修复混进配置 store。
@@ -81,10 +87,11 @@ adapter，模块 worker 不另写第二套 daemon。关闭全部 Console 后 wor
 无隐式 failover。RCC 模型目录为空的既有异常须先按当时真源定位，不能以配置 expose_models
 代替实际目录或推理证据。远端 daemon 的 localhost 不等于 Console 所在设备。
 
-**R1/N3/V1：** 两处 NAT 的显式 relay、可达地址 direct 各自留证；真实手机蜂窝与桌面
-观察同一组 Agent。Console 全关闭、另一设备重开后能读回 config/work/relation；master
-离线不自动选举或提权。撤销、进程崩溃、断网、重复请求、重启对账均不超卖/重复副作用。
-NAT-to-NAT 直连只在实际穿透实现与回放通过后宣称支持。
+**R1/N3/V1 MVP：** 公网 Relay 与至少一端真实 NAT 出站留证；两个 daemon 在无
+Console 条件下完成登录、目录、能力/resource、匹配和 file-search Work。Console 全
+关闭、另一设备重开后能读回 config/work/allocation；旧 generation、重复请求、释放
+和容量边界均显式验证。可达地址 direct、两处 NAT 直连、真实手机蜂窝和关系治理
+保留为 post-MVP，不得从本轮证据推断支持。
 
 ## 并发与集成规则
 
@@ -102,5 +109,6 @@ NAT-to-NAT 直连只在实际穿透实现与回放通过后宣称支持。
 
 用户已授权三个Luna辅助session、主任务开发审核与合并，以及每阶段L2记忆和资源收尾。
 提交/集成依照长程交付合同与真实候选证据执行，不跳过适用review和主线验证。
-公网地址、两处 NAT 设备、手机、测试凭据在 V1 前绑定实际环境；当前文档不假定可用。
+公网 Relay、至少一端 NAT 出站和测试凭据在 MVP 前绑定实际环境；两处 NAT 设备、
+手机蜂窝和 direct 环境属于 post-MVP，不作为本轮前置条件。
 审批不自动授权生产变更、外部发布或任意凭据读取。

@@ -3,17 +3,73 @@
 授权：用户要求主任务主导完成整个 AgentTeams，监督/分配子任务，负责进度、冲突、
 协作、提交合并、工作树关闭和资源清理；每阶段执行记忆管理、二级审核并更新 AppSDK memory。
 主任务：`01a07497-8e08-7e90-be56-c9f69d72bb26`。本文件定义执行责任和收尾条件，
-阶段顺序与验收唯一入口仍为 [开发计划](teams-development-plan.md)。不另建重复任务图。
+阶段依赖参考 [开发计划](teams-development-plan.md)；当前 MVP 收口的唯一验收入口是本文件
+的 MVP profile。不另建重复任务图。
+
+## 当前收口 profile：MVP relay-first
+
+当前长期目标只执行这一份最小 MVP 收口 profile，不创建第二个 goal 或第二个
+subscription。该 profile 保留 AgentTeams 的控制面和扩展边界，但把首个可用版本收敛
+为一条能在公网和 NAT 环境工作的 relay-first Agent-to-Agent 纵向闭环。Direct、完整
+Endpoint E1/E2、复杂关系治理、完整 Console/UI 和真实移动端扩展保留在同一目标的
+post-MVP backlog，不得混入本轮 live acceptance；受影响源码仍必须通过既有 mapped
+regression gates。
+
+MVP 的传输选择是显式 relay：daemon 从配置登录公网 Relay，发布 capability/resource，
+consumer 从目录发现 provider，建立 Agent-to-Agent Work，并在 Console 完全退出时继续
+执行。这样同时覆盖公网入口与 NAT 出站路径；direct listener 和 route contract 可以
+继续保留并通过单元测试维护，但 direct 实际回放不属于本轮 MVP 的必要条件。
+
+### MVP 完成条件
+
+以下条件全部满足才允许关闭本轮 profile；任何单项缺失都保留为 open 或
+cleanup-pending：
+
+1. **真实 Relay/daemon 主链**：同一集成候选在 Claw Relay 和第二环境启动两个 daemon；
+   至少一端处于真实 NAT 出站网络。两端完成登录、身份/代际建立、目录查询、能力与
+   resource 广播、匹配、Work proposal/request/close 和重新登录。不能用 mock、loopback、
+   HTTP health、Tailscale-only 或历史日志替代。
+2. **最小被动能力**：至少一个 passive capability Agent 声明能力和容量，并通过固定
+   CLI operation 完成一次真实请求。MVP 采用固定目录 `file-search` 作为确定性验收能力；
+   browser capability/adapter 必须保持可编译和受测试，真实多 profile 浏览器回放列入
+   post-MVP。
+3. **资源与幂等**：provider 的容量分配不能超卖；重复 request 不重复执行；成功、取消
+   或确认销毁后释放 allocation；provider 重启后旧 generation 明确拒绝，新 generation
+   重新发现并完成 Work。至少保留一对多容量的 focused regression，真实回放至少覆盖
+   两次独立 Work。
+4. **Provider 配置最小闭环**：Teams 自己保存多个 provider instance、模型目录、accepted
+   revision 和 effective revision。RCC `127.0.0.1:4444` 是主 provider，canonical instance
+   `goaichat-openai`（来自 `goaichat_openai` 配置）是显式 backup provider；两者都通过真实 OpenCode 入口完成 catalog/apply/readback 和
+   重启读回。不得加入隐式 failover，凭据不得进入业务 payload、metadata 或声明。
+5. **Console 退出不影响 Work**：Console 只观察和配置，不进入 Agent-to-Agent 数据路径。
+   所有 Console 进程关闭后 Work 仍完成；重新打开一个 Console 能读回 accepted/effective
+   config、Work 状态和 allocation 结果。UI 视觉增强、关系图和移动布局不属于本轮门禁。
+6. **工程交付闭环**：每个 delivery unit 具备 issue、独立 worktree/branch、candidate
+   测试、独立 exact review、integration SHA、mainline 验证、远端 push receipt、memory
+   Level 2（`ai-reviewed`,`human-unreviewed`）和 cleanup receipt。目标关闭前根树干净，
+   自有工作树、进程、监听、临时目录和 branch 均已安全回收。
+
+### 明确的 post-MVP backlog
+
+- direct route 的真实公网回放、STUN/ICE、NAT-to-NAT direct 和 direct/relay 自动候选编排；
+- Endpoint E1/E2 完整注册、发现、AppSDK admission 和 Work 绑定；
+- master/slave 与关系治理、撤销、离线关系投影；
+- browser 多 profile、真实桌面/手机蜂窝回放和更完整 CLI 能力；
+- Console 完整 UI 可访问性、移动布局和关系/Work 深度投影；
+- provider 自动 failover、复杂模型策略、组织/计费和生产平台能力。
 
 ## 范围与完成定义
 
-推进公共契约及剩余语义修复、relay、daemon/network、provider/OpenCode、Agent Work/
-资源、真实 CLI 能力、独立 Console、关系组织、direct/网络韧性及首版真实验收。
-完成必须同时具备：
+推进上述 MVP profile 所需的公共契约、relay、daemon/network、provider/OpenCode、
+Agent Work/资源、最小 passive CLI 和 Console 离线读回。原有 direct、Endpoint、关系、
+移动端和完整 UI 的 live acceptance 保留为 post-MVP backlog；它们不能被 MVP receipt
+伪装成已完成，但适用的 source regression gate 仍然执行。
+MVP 完成必须同时具备：
 
-- 已确认功能逐项通过当前候选的适用测试、构建、部署/重启和真实入口验收；桌面与手机、
-  direct 与双 NAT relay 分别留证，Console 全离线后 Agent Work 继续。
-- 主任务审核、AGY Review、集成候选验证通过，已授权提交与合并具有远端主线 receipt。
+- 已确认 MVP 功能逐项通过当前候选的适用测试、构建、部署/重启和真实入口验收；公网
+  Relay 与真实 NAT 出站路径留证，Console 全离线后 Agent Work 继续。
+- 主任务审核、用户选择的独立 Codex exact review（本目标不使用 AGY Review）、集成候选验证通过，已授权提交与合并具有远端
+  主线 receipt。
 - 每阶段的有效结论经过 memory Level 2 审核并由官方 memory CLI 更新/verify。
 - 本任务及子任务拥有的工作树、临时服务/端口、锁和协作claim已逐项安全收尾；保留对象
   必须有明确用途和后续责任，不能把仍有保留义务的资源写成已清理。
@@ -31,7 +87,8 @@
 | C1 Luna/max | `01a074db-feaf-7010-9f58-cd4763fc3837` | `config/**`、`opencode-adapter/**` |
 | W1 Luna/max | `01a074db-feaf-7010-9f58-cd8e8e3ef7cf` | `agent/**` |
 
-辅助session按里程碑复用，不无限扩大单次任务；后续可转配B1/U1/R1等有界任务。
+这些已有辅助 session 只按当前 MVP delivery unit 复用，不创建新的 goal/subscription；B1/U1/R1
+等后续波次不属于本轮收口。
 主任务使用紧凑状态查询和结果通知检查进度，优先解决首次阻断，不反复让辅助任务全仓探索。
 分屏查看使用已有独立任务入口；创建/显示界面与实际执行状态分别核实。
 
@@ -44,7 +101,7 @@
 1. 查当前主线、阶段依赖、已有L2记忆和实际子任务状态；绑定owner、路径、工作树、验收。
 2. 从最新origin/main建立clean工作树。实现前读受影响maps；红测→最小实现→定向验证。
 3. 补齐适用回归、typecheck/build和真实入口。服务验证前声明实际部署操作。
-4. 主任务审查候选、证据真伪和消融；AGY独立代码review通过后，执行精确集成候选验证。
+4. 主任务审查候选、证据真伪和消融；用户选择的独立 Codex exact review 通过后，执行精确集成候选验证；本目标不使用 AGY Review。
 5. 候选稳定后，主任务从worker run notes提取最小阶段记忆，去重并写为L3；主任务复核
    实际测试及来源证据后通过官方promote升为L2，标记AI已复核、尚未经人类复核并verify。
    无需另一个agent审核；代码review不自动等于memory事实复核。
