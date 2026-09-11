@@ -123,6 +123,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `mainline`, `merge`
 - details: [L2/managed-runtime-delivery-20260906.md](L2/managed-runtime-delivery-20260906.md)
 
+### 2026-09-11 AgentTeams current candidate public relay blocker
+- tags: `9b10ed3`, `AgentTeams`, `ai-reviewed`, `blocker`, `human-unreviewed`, `public-relay`
+- details: [L2/memory-05be8e398937d34c.md](L2/memory-05be8e398937d34c.md)
+
 ### N3-D3 runtime direct-route publication
 - tags: `N3`, `ai-reviewed`, `direct`, `human-unreviewed`, `network`, `runtime`
 - details: [L2/memory-09b59a6c81bd5b97.md](L2/memory-09b59a6c81bd5b97.md)
@@ -154,6 +158,10 @@ _Empty._
 ### Current candidate Claw Relay Work replay 2026-09-11
 - tags: `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `live`, `mvp`, `relay`
 - details: [L2/memory-cb5acec8e8378ea8.md](L2/memory-cb5acec8e8378ea8.md)
+
+### 2026-09-11 AgentTeams partial provider backup delivery
+- tags: `AgentTeams`, `ai-reviewed`, `c5708f3`, `human-unreviewed`, `partial-delivery`
+- details: [L2/memory-e0a93852ce3565fb.md](L2/memory-e0a93852ce3565fb.md)
 
 ### AgentTeams MVP network-first blocker closure 2026-09-11
 - tags: `ai-reviewed`, `human-unreviewed`
