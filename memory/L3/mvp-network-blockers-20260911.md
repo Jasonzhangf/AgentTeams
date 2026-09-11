@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"lesson","created_at":"2026-09-11T13:30:11.949095+00:00","id":"mvp-network-blockers-20260911","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["ai-reviewed","human-unreviewed"],"updated_at":"2026-09-11T13:30:11.949095+00:00"} -->
+
+# AgentTeams MVP network-first blocker closure 2026-09-11
+
+AI-reviewed, human-unreviewed. Candidate 3c7dfb94226547fc60bbd9e299f931abbd680c2f was revalidated and the three current MVP delivery units were independently reviewed, integrated, pushed, and cleaned. Cross-host issue 3c437d7d remains BLOCKED because this environment denied Claw/coder2new SSH and relay DNS/TCP; provider issue c5708f3 remains BLOCKED because RCC 127.0.0.1:4444 was unreachable and no backup inference was exercised; Console-offline issue 9b10ed3 remains BLOCKED for current public/NAT replay because only historical loopback evidence exists. Local pnpm verify, appsdk compile, and appsdk verify passed on each clean integration candidate. Remote main is 61a44cc8837e7ad02898c7db099d06c51c7306c8. These receipts do not claim public relay, NAT, provider live, or Console-offline live acceptance.
+<!-- project-memory:end -->

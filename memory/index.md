@@ -155,6 +155,10 @@ _Empty._
 - tags: `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `live`, `mvp`, `relay`
 - details: [L2/memory-cb5acec8e8378ea8.md](L2/memory-cb5acec8e8378ea8.md)
 
+### AgentTeams MVP network-first blocker closure 2026-09-11
+- tags: `ai-reviewed`, `human-unreviewed`
+- details: [L2/mvp-network-blockers-20260911.md](L2/mvp-network-blockers-20260911.md)
+
 ### N3-D2 runtime direct-listener assembly delivery
 - tags: `N3`, `N3,ai-reviewed,human-unreviewed,direct,runtime`, `ai-reviewed`, `direct`, `human-unreviewed`, `runtime`
 - details: [L2/n3-d2-runtime-listener-assembly-20260910.md](L2/n3-d2-runtime-listener-assembly-20260910.md)
