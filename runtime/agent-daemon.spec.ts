@@ -48,6 +48,7 @@ function peerRouteInput(overrides: Partial<DirectPeerRouteInput> = {}): DirectPe
   return {
     directory: {
       accountId: 'account', generation: 4, confirmedGeneration: 4,
+      peerStates: [{ hostId: 'peer-host', agentId: 'peer-agent', scopeId: 'scope', generation: 3, presence: 'online' }],
       hosts: [{ hostId: 'peer-host', machineId: 'machine', agentId: 'peer-agent', agentKind: 'custom', accountId: 'account',
         capabilitiesRevision: '7', health: 'ready', updatedAt: new Date(0).toISOString(), lastSeenAt: new Date(0).toISOString(),
         routeCandidates: [{ candidateId: 'direct', kind: 'ipv4', endpoint: 'wss://peer.test', authRequired: true, lastSeenAt: new Date(0).toISOString() }] }],
