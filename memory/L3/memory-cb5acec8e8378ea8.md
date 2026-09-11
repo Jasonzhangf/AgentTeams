@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"lesson","created_at":"2026-09-11T12:03:08.861789+00:00","id":"memory-cb5acec8e8378ea8","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["AgentTeams","ai-reviewed","human-unreviewed","live","mvp","relay"],"updated_at":"2026-09-11T12:03:08.861789+00:00"} -->
+
+# Current candidate Claw Relay Work replay 2026-09-11
+
+Live evidence: source main e508f45 built a runtime artifact whose relay-process.js SHA256 18350ff027735c5cd2d61a9bb7a4f1cda0b9dc6cd2206fc03a3acbf7c5d78697 matched Claw /opt/agentteams runtime. Claw agentteams-relay.service was active/enabled on 0.0.0.0:9443. A temporary current-candidate provider daemon on Claw logged in to wss://claw.codewhisper.cc:9443 as claw-test-b generation 39 and broadcast browser/file-search. Consumer claw-test-a found file-search/search, proposed live-work-06bcd9d, received succeeded search for the unique needle, closed Work, and provider ledger readback showed request succeeded and search-slot allocation released. Exact receipt: .agent-collab/review/agentteams-live-relay-20260911/receipt.md. ai-reviewed; human-unreviewed. Boundary: same-host public Relay replay only; local Mac endpoint timed out and coder2new SSH credentials were unavailable, so dual-NAT/coder2new replay remains open.
+<!-- project-memory:end -->
