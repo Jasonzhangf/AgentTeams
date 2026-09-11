@@ -1,11 +1,18 @@
+import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
+
 export type TargetTransportStateName = 'connecting' | 'ready' | 'closed' | 'failed'
 
-export interface TargetTransportHello {
+export interface TargetTransportTarget {
   readonly hostId: string
   readonly agentId: string
   readonly targetGeneration: number
   readonly protocolVersion: number
   readonly capabilitiesRevision: string
+}
+
+export interface TargetTransportHello extends TargetTransportTarget {
+  readonly source: AuthenticatedAgent
+  readonly admissionRef: string
 }
 
 export interface TargetTransportState {
@@ -15,6 +22,8 @@ export interface TargetTransportState {
   readonly agentId: string
   readonly protocolVersion: number
   readonly capabilitiesRevision: string
+  readonly source: AuthenticatedAgent
+  readonly admissionRef: string
   readonly error?: string
 }
 
@@ -29,7 +38,8 @@ function assertState(state: TargetTransportState, expected: TargetTransportState
 export function beginTargetTransport(hello: TargetTransportHello): TargetTransportState {
   positiveInteger(hello.targetGeneration, 'generation')
   positiveInteger(hello.protocolVersion, 'protocol_version')
-  if (hello.hostId.length === 0 || hello.agentId.length === 0 || hello.capabilitiesRevision.length === 0) {
+  if (hello.hostId.length === 0 || hello.agentId.length === 0 || hello.capabilitiesRevision.length === 0 ||
+    hello.admissionRef.length === 0 || hello.source.accountId.length === 0 || hello.source.scopeId.length === 0 || hello.source.agentId.length === 0) {
     throw new Error('transport: hello identity fields are required')
   }
   return { state: 'connecting', ...hello }

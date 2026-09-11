@@ -4,7 +4,7 @@ import { createServer } from 'node:https'
 import type { IncomingMessage } from 'node:http'
 import WebSocket, { WebSocketServer, type RawData } from 'ws'
 import { parseTargetControlFrame, type TargetControlFrame } from '../control-protocol/frames.ts'
-import type { ServiceErrorCode } from '../control-protocol/agent-services.ts'
+import type { AuthenticatedAgent, ServiceErrorCode } from '../control-protocol/agent-services.ts'
 import {
   assertTargetGeneration,
   beginTargetTransport,
@@ -12,6 +12,7 @@ import {
   failTargetTransport,
   receiveHelloAck,
   type TargetTransportHello,
+  type TargetTransportTarget,
   type TargetTransportState,
 } from './target-transport.ts'
 import { WssConnectionError, type WssFrame } from './wss-connection.ts'
@@ -23,8 +24,8 @@ export interface DirectWssListenerOptions {
   readonly port: number
   readonly key: string | Buffer
   readonly cert: string | Buffer
-  readonly credential: string
-  readonly target: TargetTransportHello
+  readonly admissions: readonly DirectWssAdmission[]
+  readonly target: TargetTransportTarget
   readonly maxPayload: number
   readonly maxConnections: number
   readonly maxMessageBytes: number
@@ -34,9 +35,18 @@ export interface DirectWssListenerOptions {
   readonly onConnection?: (connection: DirectWssAcceptedConnection) => MaybePromise<void>
 }
 
+/** Local admission truth. The reference may be published; the credential never is. */
+export interface DirectWssAdmission {
+  readonly admissionRef: string
+  readonly peer: AuthenticatedAgent
+  readonly credential: string
+}
+
 export interface DirectWssAcceptedConnection {
   readonly connectionId: string
-  readonly hello: TargetTransportHello
+  readonly hello: TargetTransportTarget
+  readonly peer: AuthenticatedAgent
+  readonly admissionRef: string
   readonly connection: {
     readonly closed: Promise<WssConnectionError>
     read(): Promise<WssFrame>
@@ -71,10 +81,14 @@ function frameError(code: ServiceErrorCode, message: string, cause?: unknown): W
   return new WssConnectionError(code, message, cause)
 }
 
-function sameHello(actual: TargetTransportHello, expected: TargetTransportHello): boolean {
+function sameHello(actual: TargetTransportHello, expected: TargetTransportTarget): boolean {
   return actual.hostId === expected.hostId && actual.agentId === expected.agentId &&
     actual.targetGeneration === expected.targetGeneration && actual.protocolVersion === expected.protocolVersion &&
     actual.capabilitiesRevision === expected.capabilitiesRevision
+}
+
+function samePeer(actual: AuthenticatedAgent, expected: AuthenticatedAgent): boolean {
+  return actual.accountId === expected.accountId && actual.scopeId === expected.scopeId && actual.agentId === expected.agentId
 }
 
 function writeHttpError(socket: import('node:net').Socket, status: number, text: string): void {
@@ -83,8 +97,20 @@ function writeHttpError(socket: import('node:net').Socket, status: number, text:
 
 export async function createDirectWssListener(options: DirectWssListenerOptions): Promise<DirectWssListener> {
   if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) throw new Error('direct-listener: port is invalid')
-  if (typeof options.credential !== 'string' || options.credential.length === 0 || /[\r\n]/.test(options.credential)) {
-    throw new Error('direct-listener: a valid authorization credential is required')
+  if (options.admissions.length === 0) throw new Error('direct-listener: at least one admission is required')
+  const admissionRefs = new Set<string>()
+  const credentials = new Set<string>()
+  const peers = new Set<string>()
+  for (const admission of options.admissions) {
+    if (admissionRefs.has(admission.admissionRef) || admission.admissionRef.length === 0) throw new Error('direct-listener: admission references must be unique')
+    admissionRefs.add(admission.admissionRef)
+    if (admission.credential.length === 0 || /[\r\n]/.test(admission.credential) || admission.peer.accountId.length === 0 || admission.peer.scopeId.length === 0 || admission.peer.agentId.length === 0) {
+      throw new Error('direct-listener: admission is invalid')
+    }
+    const peerKey = `${admission.peer.accountId}\u0000${admission.peer.scopeId}\u0000${admission.peer.agentId}`
+    if (credentials.has(admission.credential) || peers.has(peerKey)) throw new Error('direct-listener: credentials and peers must be unique per admission')
+    credentials.add(admission.credential)
+    peers.add(peerKey)
   }
   validLimit(options.maxPayload, 'maxPayload')
   validLimit(options.maxConnections, 'maxConnections')
@@ -92,20 +118,19 @@ export async function createDirectWssListener(options: DirectWssListenerOptions)
   validLimit(options.maxBufferedBytes, 'maxBufferedBytes')
   validLimit(options.maxPendingFrames, 'maxPendingFrames')
   validLimit(options.helloTimeoutMs, 'helloTimeoutMs', true)
-  const expected = beginTargetTransport(options.target)
   const httpsServer = createServer({ key: options.key, cert: options.cert })
   const wsServer = new WebSocketServer({ noServer: true, maxPayload: options.maxPayload })
   const active = new Map<string, DirectWssAcceptedConnection>()
   let closing = false
   let closePromise: Promise<void> | undefined
 
-  const accept = (socket: WebSocket, request: IncomingMessage): void => {
+  const accept = (socket: WebSocket, request: IncomingMessage, admitted: DirectWssAdmission): void => {
     if (closing || active.size >= options.maxConnections) {
       socket.close(1013, 'direct listener connection limit')
       return
     }
     const connectionId = randomUUID()
-    let state: TargetTransportState = expected
+    let state: TargetTransportState = beginTargetTransport({ ...options.target, source: admitted.peer, admissionRef: admitted.admissionRef })
     let terminal: WssConnectionError | undefined
     let resolveClosed!: (error: WssConnectionError) => void
     const closed = new Promise<WssConnectionError>(resolve => { resolveClosed = resolve })
@@ -115,6 +140,7 @@ export async function createDirectWssListener(options: DirectWssListenerOptions)
     let handshake = true
     let timer: ReturnType<typeof setTimeout> | undefined
     let accepted!: DirectWssAcceptedConnection
+    const admission = admitted
 
     const terminate = (error: WssConnectionError, stateName: 'closed' | 'failed' = 'failed'): void => {
       if (!terminal) {
@@ -188,7 +214,7 @@ export async function createDirectWssListener(options: DirectWssListenerOptions)
       close: () => close(),
     }
     accepted = {
-      connectionId, hello: options.target, connection,
+      connectionId, hello: options.target, get peer() { return admission.peer }, get admissionRef() { return admission.admissionRef }, connection,
       closed, get state() { return state },
       assertGeneration: generation => assertTargetGeneration(state, generation),
       close,
@@ -227,6 +253,9 @@ export async function createDirectWssListener(options: DirectWssListenerOptions)
       if (parsed.kind !== 'transport.hello') { await fail(frameError('INVALID_INPUT', 'direct-listener: expected transport.hello')); return }
       if (parsed.targetGeneration !== options.target.targetGeneration) { await fail(frameError('STALE_GENERATION', 'direct-listener: hello generation is stale')); return }
       if (!sameHello(parsed, options.target)) { await fail(frameError('FORBIDDEN', 'direct-listener: hello identity is not accepted')); return }
+      if (!samePeer(parsed.source, admission.peer) || parsed.admissionRef !== admission.admissionRef) {
+        await fail(frameError('FORBIDDEN', 'direct-listener: source admission is not accepted')); return
+      }
       state = receiveHelloAck(beginTargetTransport(parsed))
       handshake = false
       if (timer !== undefined) clearTimeout(timer)
@@ -255,9 +284,13 @@ export async function createDirectWssListener(options: DirectWssListenerOptions)
 
   const upgrade = (request: IncomingMessage, socket: import('node:net').Socket, head: Buffer): void => {
     const authorization = request.headers.authorization
-    if (authorization !== options.credential) { writeHttpError(socket, 401, 'Unauthorized'); return }
+    const match = options.admissions.find(admission => admission.credential === authorization)
+    if (!match) { writeHttpError(socket, 401, 'Unauthorized'); return }
     if (closing || active.size >= options.maxConnections) { writeHttpError(socket, 503, 'Unavailable'); return }
-    wsServer.handleUpgrade(request, socket, head, client => { accept(client, request) })
+    wsServer.handleUpgrade(request, socket, head, client => {
+      // Bind the HTTP admission to this socket before parsing any control frame.
+      accept(client, request, match)
+    })
   }
   httpsServer.on('upgrade', upgrade)
   const listening = once(httpsServer, 'listening')

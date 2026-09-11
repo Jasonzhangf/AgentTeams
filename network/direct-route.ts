@@ -87,6 +87,8 @@ export async function connectDirectWssTarget(input: DirectWssTargetOptions): Pro
     hostId: input.hello.hostId,
     agentId: input.hello.agentId,
     capabilitiesRevision: input.hello.capabilitiesRevision,
+    source: input.hello.source,
+    admissionRef: input.hello.admissionRef,
   })
 
   let connection: WssConnection | undefined

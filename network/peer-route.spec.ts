@@ -65,6 +65,8 @@ const common = {
   hostId: 'peer-host',
   targetGeneration: 12,
   protocolVersion: 1,
+  source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer-a' },
+  admissionRef: 'direct:consumer-a',
   binding,
 }
 

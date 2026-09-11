@@ -1,6 +1,7 @@
 import { type AgentMessage, validateAgentMessage } from './agent-message.ts'
 import { type RelationReport, validateRelationReport } from './relation-report.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
+import type { AuthenticatedAgent } from './agent-services.ts'
 
 export type AgentKind = 'opencode' | 'acp' | 'custom'
 export type HealthState = 'starting' | 'ready' | 'error'
@@ -75,6 +76,8 @@ export interface TargetControlFrameMap {
     hostId: string
     agentId: string
     capabilitiesRevision: string
+    source: AuthenticatedAgent
+    admissionRef: string
   }
   'transport.hello_ack': {
     kind: 'transport.hello_ack'
@@ -331,7 +334,7 @@ export function parseTargetControlFrame(value: unknown): TargetControlFrame {
 }
 
 const targetControlFields: { [K in keyof TargetControlFrameMap]: readonly (keyof TargetControlFrameMap[K])[] } = {
-  'transport.hello': ['protocolVersion', 'hostId', 'agentId', 'capabilitiesRevision'],
+  'transport.hello': ['protocolVersion', 'hostId', 'agentId', 'capabilitiesRevision', 'source', 'admissionRef'],
   'transport.hello_ack': [],
   'transport.ping': ['nonce'],
   'transport.pong': ['nonce'],
@@ -356,6 +359,11 @@ const targetControlValidators: {
     stringValue(input.hostId, 'hostId')
     stringValue(input.agentId, 'agentId')
     stringValue(input.capabilitiesRevision, 'capabilitiesRevision')
+    const source = record(input.source, 'source')
+    stringValue(source.accountId, 'source.accountId')
+    stringValue(source.scopeId, 'source.scopeId')
+    stringValue(source.agentId, 'source.agentId')
+    stringValue(input.admissionRef, 'admissionRef')
   },
   'transport.hello_ack': (input) => positiveInteger(input.targetGeneration, 'targetGeneration'),
   'transport.ping': (input) => {
