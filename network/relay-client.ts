@@ -34,7 +34,7 @@ interface Pending {
   readonly kind: Reply['kind']
   readonly resolve: (value: Reply) => void
   readonly reject: (error: Error) => void
-  readonly timer: ReturnType<typeof setTimeout>
+  timer?: ReturnType<typeof setTimeout>
 }
 
 export async function createRelayClient(input: RelayClientOptions): Promise<RelayClient> {
@@ -134,16 +134,24 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
     if (stopped) return Promise.reject(stopped)
     if (pending.size >= options.maxPendingRequests) return Promise.reject(new RelayProtocolError('RESOURCE_EXHAUSTED', 'relay: pending request capacity exhausted'))
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        // A timed-out mutation can have an unknown remote result. Never retry it.
-        void stop(new RelayProtocolError('RESULT_UNKNOWN', 'relay: request deadline elapsed'))
-      }, options.requestTimeoutMs)
-      pending.set(message.requestId, { kind, resolve, reject, timer })
+      const request: Pending = { kind, resolve, reject }
+      pending.set(message.requestId, request)
       void (async () => {
-        // Reserve the correlated readback slot before sending its publication mutation.
-        if (publication) await send(publication)
-        await send(message)
-      })().catch(error => stop(error instanceof Error ? error : new Error('relay: control write failed')))
+        try {
+          // Reserve the correlated readback slot before sending its publication mutation.
+          if (publication) await send(publication)
+          await send(message)
+          // The deadline covers reply latency only. Starting it before send lets a delayed
+          // outbound write leave the remote owner unstarted while reporting RESULT_UNKNOWN.
+          if (pending.get(message.requestId) !== request) return
+          request.timer = setTimeout(() => {
+            // A timed-out mutation can have an unknown remote result. Never retry it.
+            void stop(new RelayProtocolError('RESULT_UNKNOWN', 'relay: request deadline elapsed'))
+          }, options.requestTimeoutMs)
+        } catch (error) {
+          await stop(error instanceof Error ? error : new Error('relay: control write failed'))
+        }
+      })
     })
   }
   const directorySnapshot = async (subscribe: boolean): Promise<RelayDirectorySnapshot> => {
