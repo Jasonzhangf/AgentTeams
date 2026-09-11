@@ -46,7 +46,7 @@ export async function startManagedOpenCode(options: ManagedOpenCodeOptions) {
   })
   let ended = false
   const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-    child.once('error', () => { ended = true; reject(new Error('Managed OpenCode spawn failed')) })
+    child.once('error', error => { ended = true; reject(error) })
     child.once('exit', (code, signal) => { ended = true; resolve({ code, signal }) })
   })
   void closed.catch(() => undefined)
@@ -76,6 +76,7 @@ export async function startManagedOpenCode(options: ManagedOpenCodeOptions) {
       await delay(50)
     }
     if (!ready) {
+      await new Promise<void>(resolve => setImmediate(resolve))
       if (hasEnded()) throw new Error('Managed OpenCode exited before readiness')
       throw new Error('Managed OpenCode startup deadline')
     }
