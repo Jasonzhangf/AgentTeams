@@ -164,17 +164,18 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     const executor = createCliWorkExecutor(config.cli)
     let host!: ReturnType<typeof createWorkHost>
     let ledger: WorkLedger | undefined
+    const resolveCredentialValue = async (reference: string) => {
+      const value = env[reference]
+      if (typeof value !== 'string' || value.length === 0) throw new RuntimeConfigError({ code: 'CREDENTIAL_UNAVAILABLE', message: `credential ${reference} is unavailable` })
+      return value
+    }
     configBinding = config.openCode === undefined ? undefined : (() => {
       const store = createRuntimeConfigStore(createJsonFileConfigPersistence(config.openCode.configFile))
       const owner = createManagedConfigOwner({ agentId: config.declaration.identity.agentId, executable: config.openCode.executable,
         directory: config.openCode.directory, port: config.openCode.port, startupTimeoutMs: config.openCode.startupTimeoutMs,
-        stopTimeoutMs: config.openCode.stopTimeoutMs, resolveCredential: async reference => {
-          const value = env[reference]
-          if (typeof value !== 'string' || value.length === 0) throw new RuntimeConfigError({ code: 'CREDENTIAL_UNAVAILABLE', message: `credential ${reference} is unavailable` })
-          return value
-        } })
+        stopTimeoutMs: config.openCode.stopTimeoutMs, resolveCredential: resolveCredentialValue })
       return { binding: createConsoleConfigBinding({ agentId: config.declaration.identity.agentId, store,
-        models: createOpenAIModelCatalogClient(), applier: owner }), owner }
+        models: createOpenAIModelCatalogClient(), credentials: { resolve: async reference => ({ kind: 'bearer', value: await resolveCredentialValue(reference) }) }, applier: owner }), owner }
     })()
     const allowed = (consumer: { agentId: string }) => config.allowedConsumers.includes(consumer.agentId)
     const policy = { revision: config.policyRevision, authorizeWork: allowed, authorizeRequest: allowed }

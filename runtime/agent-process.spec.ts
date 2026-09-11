@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createServer } from 'node:net'
+import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { once } from 'node:events'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { createRelayServer, type RelayServer } from '../server/relay.ts'
@@ -45,9 +46,9 @@ async function availablePort() {
   await new Promise<void>(resolve => listener.close(() => resolve()))
   return address.port
 }
-function child(configPath: string, credential = 'Bearer provider') {
+function child(configPath: string, credential = 'Bearer provider', extraEnv: NodeJS.ProcessEnv = {}) {
   const process = spawn(globalThis.process.execPath, ['--experimental-transform-types', resolve('runtime/agent-process.ts'), '--config', configPath],
-    { env: { ...globalThis.process.env, TEAMS_AGENT_TEST_AUTH: credential }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+    { env: { ...globalThis.process.env, TEAMS_AGENT_TEST_AUTH: credential, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
   children.push(process)
   let output = ''
   process.stderr!.on('data', chunk => { output += chunk.toString() })
@@ -161,23 +162,42 @@ process.once('SIGTERM', () => server.close(() => process.exit(0)))
 process.once('SIGINT', () => server.close(() => process.exit(0)))
 `, { mode: 0o700 })
   chmodSync(managedExecutable, 0o700)
+  let catalogAuthSeen = false
+  const catalogServer: HttpServer = createHttpServer((request, response) => {
+    catalogAuthSeen = request.headers.authorization === 'Bearer provider-catalog'
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ data: [{ id: 'catalog-model' }] }))
+  })
+  await new Promise<void>(resolve => catalogServer.listen(0, '127.0.0.1', resolve))
+  const catalogPort = (catalogServer.address() as { port: number }).port
   const managedData = join(directory, 'managed-data')
   const managedConfigPath = join(directory, 'managed-runtime.json')
   writeFileSync(managedConfigPath, JSON.stringify({ revision: 3, acceptedRevision: 3,
-    providers: { probe: { id: 'probe', label: 'Probe', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:1/v1', enabled: true, auth: { kind: 'none' } } },
-    catalogs: { probe: { state: 'ready', entries: [{ ref: { providerInstanceId: 'probe', modelId: 'probe-model' }, origin: 'manual', base: {}, overrides: {} }] } },
+    providers: {
+      probe: { id: 'probe', label: 'Probe', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:1/v1', enabled: true, auth: { kind: 'none' } },
+      catalog: { id: 'catalog', label: 'Catalog', protocol: 'openai-chat', apiBaseUrl: `http://127.0.0.1:${catalogPort}/v1`, enabled: true, auth: { kind: 'bearer', credentialRef: 'TEAMS_PROVIDER_TEST_CREDENTIAL' } },
+    },
+    catalogs: {
+      probe: { state: 'ready', entries: [{ ref: { providerInstanceId: 'probe', modelId: 'probe-model' }, origin: 'manual', base: {}, overrides: {} }] },
+      catalog: { state: 'stale', entries: [] },
+    },
     agents: { managed: { primary: { providerInstanceId: 'probe', modelId: 'probe-model' } } } }))
   const managedAgentConfig = join(directory, 'managed-agent.json')
   writeFileSync(managedAgentConfig, JSON.stringify({ ...config, identity: { ...config.identity, hostId: 'managed-host', agentId: 'managed', label: 'Managed Agent' },
     dataDirectory: managedData, leasePort: await availablePort(), policy: { revision: 1, allowedConsumers: ['consumer'], allowedManagers: ['consumer'] },
     openCode: { executable: managedExecutable, directory: join(directory, 'managed-opencode-data'), configFile: managedConfigPath, port: await availablePort(), startupTimeoutMs: 5000, stopTimeoutMs: 2000 } }))
-  const managedChild = child(managedAgentConfig, 'Bearer managed')
+  const managedChild = child(managedAgentConfig, 'Bearer managed', { TEAMS_PROVIDER_TEST_CREDENTIAL: 'Bearer provider-catalog' })
   expect(await managedChild.ready).toMatchObject({ agentId: 'managed' })
   const managedConsole = createRelayConsoleClient(consumer, 'managed', 3000)
+  expect(await managedConsole.command({ kind: 'config.refreshModels', agentId: 'managed', expectedRevision: 3, providerId: 'catalog' })).toEqual({ ok: true })
+  expect((await managedConsole.readProjection()).configs[0]).toMatchObject({ acceptedRevision: 4,
+    providers: expect.arrayContaining([expect.objectContaining({ id: 'catalog', catalogState: 'ready', models: [{ id: 'catalog-model' }] })]) })
+  expect(catalogAuthSeen).toBe(true)
   expect(await managedConsole.command({ kind: 'config.apply', agentId: 'managed' })).toEqual({ ok: true })
-  expect((await managedConsole.readProjection()).configs[0]).toMatchObject({ acceptedRevision: 3, effectiveRevision: 3 })
+  expect((await managedConsole.readProjection()).configs[0]).toMatchObject({ acceptedRevision: 4, effectiveRevision: 4 })
   managedChild.process.kill('SIGTERM')
   expect((await managedChild.exited).code).toBe(0)
+  await new Promise<void>(resolve => catalogServer.close(() => resolve()))
 
   writeFileSync(path, JSON.stringify({ ...config, policy: { ...config.policy, allowedManagers: [] } }))
   const second = child(path)
