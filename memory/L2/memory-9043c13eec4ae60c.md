@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"lesson","created_at":"2026-09-11T22:39:35.710785+00:00","id":"memory-9043c13eec4ae60c","importance":0,"memory_level":2,"review_evidence":["docs/evidence/a5caff2-provider-resolver-20260911/review-receipt.md"],"review_status":"reviewed","source_refs":[],"tags":["agentteams","ai-reviewed","provider-config"],"updated_at":"2026-09-11T22:40:02.320358+00:00"} -->
+
+# a5caff2 provider credential resolver integration
+
+At mainline 2ffbd9899246e207d7c18d46ff4a057d9f019d3c, issue a5caff2 is integrated and pushed. runtime/agent-process.ts now reuses one environment credential resolver for the managed OpenCode owner and the console config binding, adapting the value to the typed bearer resolver required by RuntimeConfigStore. Focused config tests passed (20), AppSDK compile and verify passed, and review/integration/cleanup receipts are in docs/evidence/a5caff2-provider-resolver-20260911/. Current agent-process WSS replay remains blocked by a local TLS handshake reaching secureConnect without HTTP upgrade; this does not prove public Relay, NAT, RCC, or Console-offline acceptance. Status is ai-reviewed, human-unreviewed; issue remains open pending current-SHA runtime replay.
+<!-- project-memory:end -->
