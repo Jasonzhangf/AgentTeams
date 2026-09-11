@@ -118,6 +118,19 @@ describe('Teams config owner', () => {
     expect(result.config.catalogs[rcc.id]?.entries.filter(entry => entry.ref.modelId === 'manual-model')).toHaveLength(1)
   })
 
+  it('keeps a manually configured model usable when the real catalog is empty', async () => {
+    const persistence = new MemoryPersistence()
+    const store = createRuntimeConfigStore(persistence)
+    let state = store.putProviderInstance(0, rcc)
+    state = store.putModelEntry(state.acceptedRevision, manualModel)
+
+    const result = await store.refreshProviderModels(state.acceptedRevision, rcc.id, { listModels: async () => [] })
+
+    expect(result).toMatchObject({ status: 'ready' })
+    expect(result.config.catalogs[rcc.id]).toMatchObject({ state: 'ready', entries: [manualModel] })
+    expect(createRuntimeConfigStore(persistence).read().catalogs[rcc.id]).toMatchObject({ state: 'ready', entries: [manualModel] })
+  })
+
   it('keeps refresh failure explicit and never converts it to an empty catalog', async () => {
     const store = createRuntimeConfigStore(new MemoryPersistence())
     let state = store.putProviderInstance(0, rcc)
@@ -176,6 +189,37 @@ describe('Teams config owner', () => {
       apply: async () => { throw new Error('apply failed') },
     })
     expect(failed).toEqual({ status: 'failed', error: { code: 'UNAVAILABLE', message: 'apply failed' } })
+  })
+
+  it('persists accepted and effective revisions for the explicit RCC primary and GoAIChat backup binding', async () => {
+    const persistence = new MemoryPersistence()
+    const store = createRuntimeConfigStore(persistence)
+    let state = store.putProviderInstance(0, rcc)
+    state = store.putProviderInstance(state.acceptedRevision, goaichat)
+    state = store.putModelEntry(state.acceptedRevision, {
+      ref: { providerInstanceId: rcc.id, modelId: 'gpt-5.5' },
+      origin: 'manual', base: { label: 'RCC configured model' }, overrides: {},
+    })
+    state = store.putModelEntry(state.acceptedRevision, {
+      ref: { providerInstanceId: goaichat.id, modelId: 'qwen3.8-max' },
+      origin: 'manual', base: { label: 'GoAIChat configured model' }, overrides: {},
+    })
+    state = store.bindAgentModel(state.acceptedRevision, 'planner', {
+      primary: { providerInstanceId: rcc.id, modelId: 'gpt-5.5' },
+      backup: { providerInstanceId: goaichat.id, modelId: 'qwen3.8-max' },
+    })
+
+    await expect(store.applyAcceptedConfig({
+      apply: async config => ({ status: 'applied', effectiveRevision: config.acceptedRevision }),
+    })).resolves.toEqual({ status: 'applied', effectiveRevision: state.acceptedRevision })
+
+    expect(store.readEffective()).toEqual({ acceptedRevision: state.acceptedRevision, effectiveRevision: state.acceptedRevision })
+    const restarted = createRuntimeConfigStore(persistence)
+    expect(restarted.read().agents.planner).toEqual({
+      primary: { providerInstanceId: rcc.id, modelId: 'gpt-5.5' },
+      backup: { providerInstanceId: goaichat.id, modelId: 'qwen3.8-max' },
+    })
+    expect(restarted.readEffective()).toEqual({ acceptedRevision: state.acceptedRevision, effectiveRevision: state.acceptedRevision })
   })
 
   it('protects provider removal while an Agent binding still references it', () => {

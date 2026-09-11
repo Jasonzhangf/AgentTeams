@@ -416,7 +416,7 @@ function mergeCatalog(
     })
   }
   return {
-    state: descriptors.length === 0 ? 'empty' : 'ready',
+    state: descriptors.length === 0 && !entries.some(entry => entry.origin === 'manual') ? 'empty' : 'ready',
     entries,
     refreshedAt: new Date().toISOString(),
   }
