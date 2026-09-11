@@ -30,9 +30,9 @@ The local TLS Relay listener was `wss://127.0.0.1:61909`. Recorded PIDs were:
 | Console 1 | 50651 |
 | Console 2 | 50720 |
 
-Console 1 returned HTTP `200` from `/api/v1/projection`, observed the provider online, and read an empty `works`/`relations` projection from the fresh provider data directory. The replay then shut down Console 1; the retained child exit was code `0` with no signal field. While Console 1 was absent, the consumer runtime discovered `file-search/search`, proposed `console-offline-live-work` with `state=accepted`, executed `console offline needle`, received `state=succeeded` with one match, and closed the Work. The provider ledger persisted `state=closed`; the request was `succeeded`; the `search-slot` allocation was `released`.
+Console 1 read a projection showing the provider online and empty `works`/`relations` from the fresh provider data directory. The replay then shut down Console 1; the retained child exit was code `0` with no signal field. While Console 1 was absent, the consumer runtime discovered `file-search/search`, proposed `console-offline-live-work` with `state=accepted`, executed `console offline needle`, received `state=succeeded` with one match, and closed the Work. The provider ledger persisted `state=closed`; the request was `succeeded`; the `search-slot` allocation was `released`.
 
-Console 2 started with a distinct identity and returned HTTP `200` from the real `/api/v1/projection` entrypoint. It read back:
+Console 2 started with a distinct identity and read back:
 
 ```text
 works[workId=console-offline-live-work].state = closed
