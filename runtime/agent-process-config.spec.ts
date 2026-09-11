@@ -47,6 +47,7 @@ it('loads an explicit Agent-owned direct listener without mixing relay configura
     expect(loaded.directListener).toEqual({
       host: '127.0.0.1', port: 8443, keyFile: join(directory, 'direct-key.pem'), certFile: join(directory, 'direct-cert.pem'),
       credential: 'Bearer direct',
+      admissions: [],
       target: { hostId: 'host', agentId: 'agent', protocolVersion: 1, capabilitiesRevision: 'cap-3' },
       maxPayload: 65536, maxConnections: 8, maxMessageBytes: 32768, maxBufferedBytes: 65536,
       maxPendingFrames: 16, helloTimeoutMs: 1000,
@@ -72,5 +73,36 @@ it('rejects a direct listener target identity that differs from the Agent declar
   try {
     await expect(loadAgentProcessConfig(configPath, { RELAY_AUTH: 'relay', DIRECT_AUTH: 'direct' }))
       .rejects.toMatchObject({ code: 'INVALID_INPUT' })
+  } finally { await rm(directory, { recursive: true }) }
+})
+
+it('loads peer-specific admissions without requiring the legacy shared credential', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-agent-direct-admissions-'))
+  const configPath = join(directory, 'agent.json')
+  await writeFile(configPath, JSON.stringify({
+    version: 1,
+    identity: { hostId: 'host', machineId: 'machine', agentId: 'agent', accountId: 'account', agentKind: 'custom', label: 'Agent' },
+    scopeId: 'scope', dataDirectory: './data', leasePort: 48001, presenceIntervalMs: 1000,
+    policy: { revision: 1, allowedConsumers: ['consumer-a', 'consumer-b'], allowedManagers: [] },
+    cli: { camoExecutable: '/opt/camo', searchExecutable: '/opt/rg', searchRoot: './search', profilePrefix: 'teams' },
+    relay: { endpoint: 'wss://relay.example', credentialEnv: 'RELAY_AUTH', connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
+      requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
+    directListener: {
+      host: '127.0.0.1', port: 8443, keyFile: './direct-key.pem', certFile: './direct-cert.pem',
+      admissions: [
+        { admissionRef: 'direct-a', agentId: 'consumer-a', credentialEnv: 'DIRECT_A' },
+        { admissionRef: 'direct-b', agentId: 'consumer-b', credentialEnv: 'DIRECT_B' },
+      ],
+      target: { hostId: 'host', agentId: 'agent', protocolVersion: 1, capabilitiesRevision: 'cap-3' },
+      maxPayload: 65536, maxConnections: 8, maxMessageBytes: 32768, maxBufferedBytes: 65536,
+      maxPendingFrames: 16, helloTimeoutMs: 1000,
+    },
+  }))
+  try {
+    const loaded = await loadAgentProcessConfig(configPath, { RELAY_AUTH: 'Bearer relay', DIRECT_A: 'Bearer a', DIRECT_B: 'Bearer b' })
+    expect(loaded.directListener).toMatchObject({ credential: '', admissions: [
+      { admissionRef: 'direct-a', agentId: 'consumer-a', credential: 'Bearer a' },
+      { admissionRef: 'direct-b', agentId: 'consumer-b', credential: 'Bearer b' },
+    ] })
   } finally { await rm(directory, { recursive: true }) }
 })

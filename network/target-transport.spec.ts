@@ -13,6 +13,8 @@ const hello = {
   targetGeneration: 7,
   protocolVersion: 1,
   capabilitiesRevision: 'cap-1',
+  source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer-a' },
+  admissionRef: 'direct:consumer-a',
 }
 
 describe('Teams target transport lifecycle', () => {

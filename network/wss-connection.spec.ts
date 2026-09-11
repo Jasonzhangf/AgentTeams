@@ -77,6 +77,8 @@ const directHello = {
   targetGeneration: 7,
   protocolVersion: 1,
   capabilitiesRevision: 'cap-1',
+  source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer-a' },
+  admissionRef: 'direct:consumer-a',
 }
 
 it('dials a direct WSS target through hello ack and keeps generation isolated', async () => {

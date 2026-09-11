@@ -31,6 +31,11 @@ export interface DirectListenerConfig {
   readonly keyFile: string
   readonly certFile: string
   readonly credential: string
+  readonly admissions: readonly {
+    readonly admissionRef: string
+    readonly agentId: string
+    readonly credential: string
+  }[]
   readonly target: {
     readonly hostId: string
     readonly agentId: string
@@ -59,7 +64,7 @@ export async function loadRelayConfig(input: unknown, declaration: AgentDeclarat
 }
 
 export function loadDirectListenerConfig(input: unknown, declaration: AgentDeclaration, configPath: string, env: NodeJS.ProcessEnv): DirectListenerConfig {
-  const direct = object(input, ['host', 'port', 'keyFile', 'certFile', 'credentialEnv', 'target', 'maxPayload', 'maxConnections',
+  const direct = object(input, ['host', 'port', 'keyFile', 'certFile', 'credentialEnv', 'admissions', 'target', 'maxPayload', 'maxConnections',
     'maxMessageBytes', 'maxBufferedBytes', 'maxPendingFrames', 'helloTimeoutMs'], 'directListener')
   const target = object(direct.target, ['hostId', 'agentId', 'protocolVersion', 'capabilitiesRevision'], 'directListener.target')
   const parsedTarget = {
@@ -71,12 +76,28 @@ export function loadDirectListenerConfig(input: unknown, declaration: AgentDecla
   if (parsedTarget.hostId !== declaration.identity.hostId || parsedTarget.agentId !== declaration.identity.agentId) {
     throw new RelayProtocolError('INVALID_INPUT', 'directListener.target identity must match Agent identity')
   }
+  const admissions: Array<{ admissionRef: string; agentId: string; credential: string }> = []
+  if (direct.admissions !== undefined) {
+    if (!Array.isArray(direct.admissions) || direct.admissions.length === 0) throw new RelayProtocolError('INVALID_INPUT', 'directListener.admissions must be a non-empty array')
+    const refs = new Set<string>()
+    const agents = new Set<string>()
+    for (const [index, value] of direct.admissions.entries()) {
+      const admission = object(value, ['admissionRef', 'agentId', 'credentialEnv'], `directListener.admissions[${index}]`)
+      const admissionRef = text(admission.admissionRef, `directListener.admissions[${index}].admissionRef`)
+      const agentId = text(admission.agentId, `directListener.admissions[${index}].agentId`)
+      if (refs.has(admissionRef) || agents.has(agentId)) throw new RelayProtocolError('INVALID_INPUT', 'directListener admissions must have unique references and Agent IDs')
+      refs.add(admissionRef); agents.add(agentId)
+      admissions.push({ admissionRef, agentId, credential: credential(admission.credentialEnv, env) })
+    }
+  }
+  const legacyCredential = direct.admissions === undefined ? credential(direct.credentialEnv, env) : ''
   return {
     ...(direct.host === undefined ? {} : { host: text(direct.host, 'directListener.host') }),
     port: number(direct.port, 'directListener.port', 65535),
     keyFile: resolve(dirname(configPath), text(direct.keyFile, 'directListener.keyFile')),
     certFile: resolve(dirname(configPath), text(direct.certFile, 'directListener.certFile')),
-    credential: credential(direct.credentialEnv, env),
+    credential: legacyCredential,
+    admissions,
     target: parsedTarget,
     maxPayload: number(direct.maxPayload, 'directListener.maxPayload'),
     maxConnections: number(direct.maxConnections, 'directListener.maxConnections'),

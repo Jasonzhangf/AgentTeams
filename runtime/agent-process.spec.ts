@@ -205,7 +205,7 @@ it('creates and closes an explicitly configured direct listener with the Agent p
     version: 1,
     identity: { hostId: 'direct-process-host', machineId: 'test', agentId: 'direct-process', accountId: 'account', agentKind: 'custom', label: 'Direct Process' },
     scopeId: 'scope', dataDirectory: './direct-process-data', leasePort: await availablePort(), presenceIntervalMs: 1000,
-    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+    policy: { revision: 1, allowedConsumers: ['consumer-a'], allowedManagers: [] },
     cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './search', profilePrefix: 'teams-direct-process' },
     relay: { endpoint: localRelay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: './cert.pem', connectTimeoutMs: 1000,
       admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536,
@@ -220,7 +220,7 @@ it('creates and closes an explicitly configured direct listener with the Agent p
   let secondTarget: Awaited<ReturnType<typeof connectDirectWssTarget>> | undefined
   const connect = (generation: number) => {
     const endpoint = `wss://127.0.0.1:${directPort}`
-    const hello = { hostId: 'direct-process-host', agentId: 'direct-process', targetGeneration: generation, protocolVersion: 1, capabilitiesRevision: 'direct-cap-1' }
+    const hello = { hostId: 'direct-process-host', agentId: 'direct-process', targetGeneration: generation, protocolVersion: 1, capabilitiesRevision: 'direct-cap-1', source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer-a' }, admissionRef: 'direct:consumer-a' }
     return connectDirectWssTarget({
       transport: { endpoint, credential: 'Bearer direct-listener', ca: cert, connectTimeoutMs: 1000, maxMessageBytes: 4096, maxBufferedBytes: 8192, maxPendingFrames: 4 },
       hello, helloTimeoutMs: 1000,

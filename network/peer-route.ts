@@ -1,4 +1,5 @@
 import type { ServiceErrorCode } from '../control-protocol/agent-services.ts'
+import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
 import { resolveHostFromDirectory, type AccountDirectorySnapshot } from './account-directory.ts'
 import { activeDirectWssCandidate, buildDirectWssRoutePlan, type RoutePlan } from './route-plan.ts'
 import { connectDirectWssTarget, type DirectWssTarget, type DirectWssTargetOptions } from './direct-route.ts'
@@ -44,6 +45,8 @@ export interface DirectPeerRouteInput {
   readonly binding: PeerRouteConnectionBinding
   readonly transport: Omit<WssConnectionOptions, 'endpoint'>
   readonly helloTimeoutMs: number
+  readonly source: AuthenticatedAgent
+  readonly admissionRef: string
 }
 
 export interface RelayPeerRouteInput {
@@ -173,6 +176,9 @@ export function assembleDirectWssTargetOptions(input: DirectPeerRouteInput): Dir
     throw new PeerRouteError('INVALID_INPUT', 'peer-route: selected target candidate is a relay candidate')
   }
   validateProtocolAndTimeout(input.protocolVersion, input.helloTimeoutMs)
+  if (!input.admissionRef || !input.source.accountId || !input.source.scopeId || !input.source.agentId) {
+    throw new PeerRouteError('INVALID_INPUT', 'peer-route: direct admission source and reference are required')
+  }
   validateTransport(input.transport)
   let plan: RoutePlan
   let candidate: ReturnType<typeof activeDirectWssCandidate>
@@ -197,6 +203,8 @@ export function assembleDirectWssTargetOptions(input: DirectPeerRouteInput): Dir
       targetGeneration: input.targetGeneration,
       protocolVersion: input.protocolVersion,
       capabilitiesRevision: peer.capabilitiesRevision,
+      source: input.source,
+      admissionRef: input.admissionRef,
     },
     plan,
     helloTimeoutMs: input.helloTimeoutMs,

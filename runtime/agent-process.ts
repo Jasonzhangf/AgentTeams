@@ -212,12 +212,24 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       },
     } })
     if (config.directListener !== undefined) {
+      const admissions = config.directListener.admissions.length > 0
+        ? config.directListener.admissions
+        : config.allowedConsumers.length === 1
+          ? [{ admissionRef: `direct:${config.allowedConsumers[0]}`, agentId: config.allowedConsumers[0], credential: config.directListener.credential }]
+          : (() => { throw new RelayProtocolError('INVALID_INPUT', 'directListener requires peer-specific admissions when multiple consumers are allowed') })()
+      if (admissions.some(admission => !config.allowedConsumers.includes(admission.agentId))) {
+        throw new RelayProtocolError('FORBIDDEN', 'directListener admission is not present in allowedConsumers')
+      }
       directListener = await createDirectWssListener({
         host: config.directListener.host,
         port: config.directListener.port,
         key: await readFile(config.directListener.keyFile),
         cert: await readFile(config.directListener.certFile),
-        credential: config.directListener.credential,
+        admissions: admissions.map(admission => ({
+          admissionRef: admission.admissionRef,
+          peer: { accountId: config.declaration.identity.accountId, scopeId: config.declaration.scopeId, agentId: admission.agentId },
+          credential: admission.credential,
+        })),
         target: { ...config.directListener.target, targetGeneration: daemon.network.generation },
         maxPayload: config.directListener.maxPayload,
         maxConnections: config.directListener.maxConnections,

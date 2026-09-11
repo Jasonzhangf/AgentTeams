@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { parseSessionChannelFrame, parseTargetControlFrame } from './frames.ts'
 
 describe('target control frames', () => {
+  it('requires direct transport source admission in the control frame', () => {
+    expect(() => parseTargetControlFrame({
+      kind: 'transport.hello', targetGeneration: 1, protocolVersion: 1,
+      hostId: 'host-1', agentId: 'agent-1', capabilitiesRevision: 'cap-1',
+    })).toThrow(/source/)
+    expect(parseTargetControlFrame({
+      kind: 'transport.hello', targetGeneration: 1, protocolVersion: 1,
+      hostId: 'host-1', agentId: 'agent-1', capabilitiesRevision: 'cap-1',
+      source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer-1' }, admissionRef: 'direct:consumer-1',
+    })).toMatchObject({ kind: 'transport.hello', admissionRef: 'direct:consumer-1' })
+  })
+
   it('accepts known target control frames', () => {
     expect(
       parseTargetControlFrame({

@@ -36,7 +36,7 @@ function targetOptions(): DirectWssTargetOptions {
       endpoint: 'wss://peer.test', credential: 'opaque', connectTimeoutMs: 1000,
       maxMessageBytes: 4096, maxBufferedBytes: 4096, maxPendingFrames: 4,
     },
-    hello: { hostId: 'peer-host', agentId: 'peer-agent', targetGeneration: 3, protocolVersion: 1, capabilitiesRevision: '7' },
+    hello: { hostId: 'peer-host', agentId: 'peer-agent', targetGeneration: 3, protocolVersion: 1, capabilitiesRevision: '7', source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer' }, admissionRef: 'direct:consumer' },
     plan: buildDirectWssRoutePlan({ hostId: 'peer-host', directoryGeneration: 4, policy: 'manual', targetCandidateId: 'direct', candidates: [{
       candidateId: 'direct', kind: 'ipv4', endpoint: 'wss://peer.test', authRequired: true, lastSeenAt: new Date(0).toISOString(),
     }] }),
@@ -56,6 +56,8 @@ function peerRouteInput(overrides: Partial<DirectPeerRouteInput> = {}): DirectPe
     binding: { connectionId: 'connection-1', connectionGeneration: 2 },
     transport: { credential: 'opaque', connectTimeoutMs: 1000, maxMessageBytes: 4096, maxBufferedBytes: 4096, maxPendingFrames: 4 },
     helloTimeoutMs: 1000,
+    source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer' },
+    admissionRef: 'direct:consumer',
     ...overrides,
   }
 }
@@ -63,7 +65,7 @@ function peerRouteInput(overrides: Partial<DirectPeerRouteInput> = {}): DirectPe
 function fakeTarget(closeCalls: { value: number }, closeError?: Error, reconnect?: () => Promise<DirectWssTarget>): DirectWssTarget {
   let state: TargetTransportState = {
     state: 'ready', hostId: 'peer-host', agentId: 'peer-agent', targetGeneration: 3,
-    protocolVersion: 1, capabilitiesRevision: '7',
+    protocolVersion: 1, capabilitiesRevision: '7', source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer' }, admissionRef: 'direct:consumer',
   }
   const ownReconnect = (() => {
     let calling = false
@@ -118,7 +120,7 @@ describe('Agent daemon peer route lifecycle', () => {
     const peer = await daemonInstance.connectPeerRoute(peerRouteInput())
     expect(received).toMatchObject({
       transport: { endpoint: 'wss://peer.test' },
-      hello: { hostId: 'peer-host', agentId: 'peer-agent', targetGeneration: 3, capabilitiesRevision: '7' },
+      hello: { hostId: 'peer-host', agentId: 'peer-agent', targetGeneration: 3, capabilitiesRevision: '7', source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer' }, admissionRef: 'direct:consumer' },
       peerRoute: { kind: 'direct-wss', connectionId: 'connection-1', connectionGeneration: 2, directoryGeneration: 4, targetGeneration: 3, candidateId: 'direct' },
     })
     expect(peer.state.state).toBe('ready')

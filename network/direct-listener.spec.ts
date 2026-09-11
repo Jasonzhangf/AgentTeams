@@ -33,6 +33,8 @@ const hello = {
   targetGeneration: 7,
   protocolVersion: 1,
   capabilitiesRevision: 'cap-1',
+  source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer-a' },
+  admissionRef: 'direct:consumer-a',
 }
 
 function clientOptions(endpoint: string, credential = 'Bearer direct-test') {
@@ -53,7 +55,7 @@ function directRoutePlan(endpoint: string): RoutePlan {
 
 async function listener(onConnection?: (connection: DirectWssAcceptedConnection) => void, limits: { maxPayload?: number; maxMessageBytes?: number } = {}) {
   const value = await createDirectWssListener({
-    host: '127.0.0.1', port: 0, key, cert, credential: 'Bearer direct-test',
+    host: '127.0.0.1', port: 0, key, cert, admissions: [{ admissionRef: 'direct:consumer-a', peer: hello.source, credential: 'Bearer direct-test' }],
     target: hello, maxPayload: limits.maxPayload ?? 1024, maxConnections: 4, maxMessageBytes: limits.maxMessageBytes ?? 1024,
     maxBufferedBytes: 2048, maxPendingFrames: 4, helloTimeoutMs: 500,
     onConnection,
@@ -70,6 +72,8 @@ describe('Agent-owned direct WSS listener', () => {
       plan: directRoutePlan(host.url), helloTimeoutMs: 1000 })
     cleanup.push(() => target.close())
     expect(accepted.state).toMatchObject({ state: 'ready', targetGeneration: hello.targetGeneration })
+    expect(accepted.peer).toEqual(hello.source)
+    expect(accepted.admissionRef).toBe('direct:consumer-a')
     expect(target.state).toMatchObject({ state: 'ready', targetGeneration: hello.targetGeneration })
     const serverFrame = Buffer.from('{"kind":"direct.test","value":1}')
     await accepted.connection.send({ bytes: serverFrame, binary: false })
@@ -94,6 +98,13 @@ describe('Agent-owned direct WSS listener', () => {
   it('rejects unauthorized clients before the target handshake', async () => {
     const host = await listener()
     await expect(connectWss(clientOptions(host.url, 'Bearer wrong'))).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+  })
+
+  it('rejects a valid credential when the source identity is not the admitted peer', async () => {
+    const host = await listener()
+    const mismatched = { ...hello, source: { accountId: 'account', scopeId: 'scope', agentId: 'consumer-b' }, admissionRef: 'direct:consumer-b' }
+    await expect(connectDirectWssTarget({ transport: clientOptions(host.url), hello: mismatched,
+      plan: directRoutePlan(host.url), helloTimeoutMs: 1000 })).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 
   it('returns a typed error for an invalid hello and closes the connection', async () => {
