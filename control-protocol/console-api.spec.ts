@@ -9,6 +9,9 @@ describe('Console control ingress', () => {
       { kind: 'notification.ack', agentId: 'a', notificationId: 'n' },
       { kind: 'config.refreshModels', agentId: 'a', expectedRevision: 0, providerId: 'p' },
       { kind: 'config.bindModel', agentId: 'a', expectedRevision: 1, providerId: 'p', modelId: 'm' },
+      { kind: 'config.model.put', agentId: 'a', expectedRevision: 2, entry: {
+        ref: { providerInstanceId: 'p', modelId: 'manual' }, origin: 'manual', base: { label: 'Manual', contextWindow: 4096 }, overrides: {},
+      } },
       { kind: 'config.apply', agentId: 'a' },
       { kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: 4, backup: { providerInstanceId: 'b', modelId: 'm' } },
       { kind: 'config.putProvider', agentId: 'a', expectedRevision: 0, provider: {
@@ -32,6 +35,9 @@ describe('Console control ingress', () => {
       { kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: 1, backup: { providerInstanceId: 'b' } },
       { kind: 'config.agent.selectBackup', agentId: 'a', expectedRevision: 1, backup: { providerInstanceId: 'b', modelId: 'm' } },
       { kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'yes' },
+      { kind: 'config.model.put', agentId: 'a', expectedRevision: 0, entry: { ref: { providerInstanceId: 'p', modelId: 'm' }, origin: 'discovered', base: {}, overrides: {} } },
+      { kind: 'config.model.put', agentId: 'a', expectedRevision: 0, entry: { ref: { providerInstanceId: 'p', modelId: 'm' }, origin: 'manual', base: { contextWindow: 0 }, overrides: {} } },
+      { kind: 'config.model.put', agentId: 'a', expectedRevision: 0, entry: { ref: { providerInstanceId: 'p', modelId: 'm' }, origin: 'manual', base: {}, overrides: {}, extra: true } },
     ]) expect(() => parseConsoleCommand(command)).toThrow()
   })
 

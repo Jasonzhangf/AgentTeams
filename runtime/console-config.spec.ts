@@ -37,6 +37,24 @@ it('routes config CAS to durable owner and retains apply failure without effecti
   expect(binding.readProjection()).not.toHaveProperty('effectiveRevision')
   await expect(binding.command({ kind: 'config.apply', agentId: 'other' })).resolves.toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
 })
+it('puts a manual model through the typed console binding with CAS and projection readback', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'teams-console-model-put-')); directories.push(directory)
+  const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(directory, 'config.json')))
+  const binding = createConsoleConfigBinding({ agentId: 'a', store,
+    models: { listModels: async () => [] },
+    applier: { apply: async config => ({ status: 'applied', effectiveRevision: config.acceptedRevision }) },
+  })
+  await binding.command({ kind: 'config.putProvider', agentId: 'a', expectedRevision: 0, provider: {
+    id: 'p', label: 'P', protocol: 'openai-chat', apiBaseUrl: 'https://example.test/v1', enabled: true, auth: { kind: 'none' },
+  } })
+  const entry = { ref: { providerInstanceId: 'p', modelId: 'manual' }, origin: 'manual' as const,
+    base: { label: 'Manual', contextWindow: 4096 }, overrides: { label: 'Pinned' } }
+  await expect(binding.command({ kind: 'config.model.put', agentId: 'a', expectedRevision: 0, entry })).resolves.toMatchObject({ ok: false, error: { code: 'REVISION_CONFLICT' } })
+  await expect(binding.command({ kind: 'config.model.put', agentId: 'a', expectedRevision: 1, entry })).resolves.toEqual({ ok: true })
+  expect(store.read().acceptedRevision).toBe(2)
+  expect(binding.readProjection()).toMatchObject({ acceptedRevision: 2, providers: [{ id: 'p', catalogState: 'ready', models: [{ id: 'manual', label: 'Pinned' }] }] })
+  expect(JSON.stringify(binding.readProjection())).not.toContain('credential')
+})
 it('selects explicit backup through console binding, advances accepted revision, and readback survives restart after apply', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'teams-console-backup-')); directories.push(directory)
   const file = join(directory, 'config.json')

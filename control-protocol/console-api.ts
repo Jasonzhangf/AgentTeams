@@ -22,6 +22,23 @@ export interface ConsoleProviderView {
   readonly models: readonly { readonly id: string; readonly label?: string }[]
   readonly error?: ConsoleServiceError
 }
+export interface ConsoleModelMetadata {
+  readonly label?: string
+  readonly contextWindow?: number
+  readonly maxOutputTokens?: number
+  readonly tools?: boolean
+  readonly streaming?: boolean
+  readonly reasoning?: boolean
+  readonly inputModalities?: readonly string[]
+  readonly outputModalities?: readonly string[]
+}
+export interface ConsoleManualModelEntry {
+  readonly ref: { readonly providerInstanceId: string; readonly modelId: string }
+  readonly origin: 'manual'
+  readonly base: ConsoleModelMetadata
+  readonly overrides: ConsoleModelMetadata
+  readonly availability?: 'available' | 'unavailable'
+}
 export interface ConsoleSessionEventView {
   readonly eventId: string
   readonly agentId: string
@@ -85,6 +102,7 @@ export type ConsoleCommandV1 =
   | { readonly kind: 'notification.ack'; readonly agentId: string; readonly notificationId: string }
   | { readonly kind: 'config.refreshModels'; readonly agentId: string; readonly expectedRevision: number; readonly providerId: string }
   | { readonly kind: 'config.bindModel'; readonly agentId: string; readonly expectedRevision: number; readonly providerId: string; readonly modelId: string }
+  | { readonly kind: 'config.model.put'; readonly agentId: string; readonly expectedRevision: number; readonly entry: ConsoleManualModelEntry }
   | { readonly kind: 'config.apply'; readonly agentId: string }
   | { readonly kind: 'config.agent.select-backup'; readonly agentId: string; readonly expectedRevision: number;
       readonly backup: { readonly providerInstanceId: string; readonly modelId: string } }
@@ -161,6 +179,29 @@ export function parseConsoleCommand(value: unknown): ConsoleCommandV1 {
     case 'config.bindModel':
       fields = ['expectedRevision', 'providerId', 'modelId']
       revision(command.expectedRevision); text(command.providerId); text(command.modelId); break
+    case 'config.model.put': {
+      fields = ['expectedRevision', 'entry']; revision(command.expectedRevision)
+      const entry = object(command.entry)
+      assertEnvelopeKeys(entry, ['ref', 'origin', 'base', 'overrides', 'availability'], 'Console model entry')
+      if (entry.origin !== 'manual') throw new Error('Console model entry must be manual')
+      const ref = object(entry.ref)
+      assertEnvelopeKeys(ref, ['providerInstanceId', 'modelId'], 'Console model reference')
+      text(ref.providerInstanceId); text(ref.modelId)
+      const parseMetadata = (value: unknown, label: string) => {
+        const metadata = object(value)
+        assertEnvelopeKeys(metadata, ['label', 'contextWindow', 'maxOutputTokens', 'tools', 'streaming', 'reasoning', 'inputModalities', 'outputModalities'], label)
+        if (metadata.label !== undefined) text(metadata.label)
+        for (const key of ['contextWindow', 'maxOutputTokens']) if (metadata[key] !== undefined) {
+          if (!Number.isSafeInteger(metadata[key]) || (metadata[key] as number) < 1) throw new Error(`Invalid ${label} numeric metadata`)
+        }
+        for (const key of ['tools', 'streaming', 'reasoning']) if (metadata[key] !== undefined && typeof metadata[key] !== 'boolean') throw new Error(`Invalid ${label} boolean metadata`)
+        for (const key of ['inputModalities', 'outputModalities']) if (metadata[key] !== undefined && (!Array.isArray(metadata[key]) || (metadata[key] as unknown[]).some(item => typeof item !== 'string' || item.length === 0))) throw new Error(`Invalid ${label} modalities`)
+      }
+      parseMetadata(entry.base, 'Console model base')
+      parseMetadata(entry.overrides, 'Console model overrides')
+      if (entry.availability !== undefined && entry.availability !== 'available' && entry.availability !== 'unavailable') throw new Error('Invalid Console model availability')
+      break
+    }
     case 'config.apply': fields = []; break
     case 'config.agent.select-backup': {
       fields = ['expectedRevision', 'backup']; revision(command.expectedRevision)

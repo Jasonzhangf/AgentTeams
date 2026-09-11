@@ -1,4 +1,4 @@
-import { RuntimeConfigError, type CredentialResolver, type ProviderModelClient, type RuntimeConfigApplier, type RuntimeConfigStore } from '../config/runtime-config.ts'
+import { RuntimeConfigError, type CredentialResolver, type ModelEntry, type ProviderModelClient, type RuntimeConfigApplier, type RuntimeConfigStore } from '../config/runtime-config.ts'
 import { parseConsoleCommand, type ConsoleCommandV1, type ConsoleCommandResultV1, type ConsoleProjectionV1 } from '../control-protocol/console-api.ts'
 
 type ConfigCommand = Extract<ConsoleCommandV1, { kind: `config.${string}` }>
@@ -28,6 +28,9 @@ export function createConsoleConfigBinding(options: {
           })
           return
         }
+        case 'config.model.put':
+          store.putModelEntry(command.expectedRevision, command.entry as ModelEntry)
+          return
         case 'config.agent.select-backup':
           store.selectAgentBackup(command.expectedRevision, agentId, command.backup)
           return
