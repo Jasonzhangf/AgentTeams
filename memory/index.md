@@ -143,6 +143,10 @@ _Empty._
 - tags: `N3`, `N3,ai-reviewed,human-unreviewed,direct,runtime`, `ai-reviewed`, `direct`, `human-unreviewed`, `runtime`
 - details: [L2/n3-d2-runtime-listener-assembly-20260910.md](L2/n3-d2-runtime-listener-assembly-20260910.md)
 
+### N3 D4-B direct peer admission contract
+- tags: `D4-B`, `N3`, `ai-reviewed`, `direct`, `human-unreviewed`, `network`
+- details: [L2/n3-d4b-direct-admission-contract-20260911.md](L2/n3-d4b-direct-admission-contract-20260911.md)
+
 ### P0业务JSON保真与外层控制边界
 - tags: `ai-reviewed`, `human-unreviewed`, `protocol`
 - details: [L2/p0-business-json-20260906.md](L2/p0-business-json-20260906.md)
