@@ -1,0 +1,290 @@
+{
+  "startedAt": "2026-09-11T07:04:07.233Z",
+  "pids": {
+    "relay": 50495,
+    "provider": 50555,
+    "consumer": 50440,
+    "console1": 50651,
+    "console2": 50720
+  },
+  "events": [
+    "relay:stdout:relay listening wss://127.0.0.1:61909",
+    "console1:exit:{\"code\":0,\"signal\":null}",
+    "console2:exit:{\"code\":0,\"signal\":null}",
+    "provider:exit:{\"code\":0,\"signal\":null}",
+    "relay:exit:{\"code\":0,\"signal\":null}"
+  ],
+  "endpoint": "wss://127.0.0.1:61909",
+  "providerReady": {
+    "kind": "daemon.registered",
+    "agentId": "provider",
+    "generation": 1
+  },
+  "consumerReady": {
+    "kind": "daemon.registered",
+    "agentId": "consumer",
+    "generation": 1
+  },
+  "console1Ready": {
+    "kind": "console.listening",
+    "url": "http://127.0.0.1:61918"
+  },
+  "console1Projection": {
+    "agents": [
+      {
+        "agentId": "provider",
+        "machineId": "provider-machine",
+        "label": "Provider",
+        "presence": "online",
+        "capabilities": [
+          "browser",
+          "file-search"
+        ]
+      }
+    ],
+    "works": [],
+    "relations": []
+  },
+  "console1Exit": {
+    "code": 0,
+    "signal": null
+  },
+  "target": {
+    "providerAgentId": "provider",
+    "generation": 1,
+    "capabilityId": "file-search",
+    "capabilityVersion": "1",
+    "operation": "search",
+    "endpoint": {
+      "providerAgentId": "provider",
+      "endpointId": "provider",
+      "revision": 2,
+      "capabilityId": "file-search",
+      "capabilityVersion": "1",
+      "operation": "search"
+    }
+  },
+  "proposal": {
+    "workId": "console-offline-live-work",
+    "consumerAgentId": "consumer",
+    "providerAgentId": "provider",
+    "capabilityId": "file-search",
+    "capabilityVersion": "1",
+    "policyRevision": 1,
+    "endpoint": {
+      "workId": "console-offline-live-work",
+      "providerAgentId": "provider",
+      "endpointId": "provider",
+      "revision": 2,
+      "capabilityId": "file-search",
+      "capabilityVersion": "1",
+      "operation": "search"
+    },
+    "state": "accepted"
+  },
+  "request": {
+    "control": {
+      "workId": "console-offline-live-work",
+      "requestId": "console-offline-live-request",
+      "state": "succeeded"
+    },
+    "payload": {
+      "query": "console offline needle",
+      "status": "matched",
+      "exitCode": 0,
+      "matches": [
+        {
+          "path": "./sample.txt",
+          "line": 1,
+          "text": "console offline needle\n",
+          "raw": {
+            "type": "match",
+            "data": {
+              "path": {
+                "text": "./sample.txt"
+              },
+              "lines": {
+                "text": "console offline needle\n"
+              },
+              "line_number": 1,
+              "absolute_offset": 0,
+              "submatches": [
+                {
+                  "match": {
+                    "text": "console offline needle"
+                  },
+                  "start": 0,
+                  "end": 22
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "truncated": false,
+      "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./sample.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./sample.txt\"},\"lines\":{\"text\":\"console offline needle\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"console offline needle\"},\"start\":0,\"end\":22}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./sample.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":247042,\"human\":\"0.000247s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":23,\"bytes_printed\":272,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.002083s\",\"nanos\":2083375,\"secs\":0},\"stats\":{\"bytes_printed\":272,\"bytes_searched\":23,\"elapsed\":{\"human\":\"0.000247s\",\"nanos\":247042,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+      "stderr": ""
+    }
+  },
+  "close": {
+    "workId": "console-offline-live-work",
+    "consumerAgentId": "consumer",
+    "providerAgentId": "provider",
+    "capabilityId": "file-search",
+    "capabilityVersion": "1",
+    "policyRevision": 1,
+    "endpoint": {
+      "workId": "console-offline-live-work",
+      "providerAgentId": "provider",
+      "endpointId": "provider",
+      "revision": 2,
+      "capabilityId": "file-search",
+      "capabilityVersion": "1",
+      "operation": "search"
+    },
+    "state": "closed"
+  },
+  "providerLedger": {
+    "version": 1,
+    "revision": 5,
+    "provider": {
+      "accountId": "account",
+      "scopeId": "scope",
+      "agentId": "provider"
+    },
+    "works": [
+      {
+        "workId": "console-offline-live-work",
+        "consumerAgentId": "consumer",
+        "providerAgentId": "provider",
+        "capabilityId": "file-search",
+        "capabilityVersion": "1",
+        "policyRevision": 1,
+        "endpoint": {
+          "workId": "console-offline-live-work",
+          "providerAgentId": "provider",
+          "endpointId": "provider",
+          "revision": 2,
+          "capabilityId": "file-search",
+          "capabilityVersion": "1",
+          "operation": "search"
+        },
+        "state": "closed"
+      }
+    ],
+    "requests": [
+      {
+        "control": {
+          "workId": "console-offline-live-work",
+          "requestId": "console-offline-live-request",
+          "operation": "search",
+          "targetGeneration": 1,
+          "demands": [
+            {
+              "resourceId": "search-slot",
+              "amount": 1
+            }
+          ]
+        },
+        "payload": {
+          "query": "console offline needle"
+        },
+        "state": "succeeded",
+        "allocationIds": [
+          "allocation-e769bc36-b43e-4f17-b3c8-0187e022f927"
+        ],
+        "response": {
+          "query": "console offline needle",
+          "status": "matched",
+          "exitCode": 0,
+          "matches": [
+            {
+              "path": "./sample.txt",
+              "line": 1,
+              "text": "console offline needle\n",
+              "raw": {
+                "type": "match",
+                "data": {
+                  "path": {
+                    "text": "./sample.txt"
+                  },
+                  "lines": {
+                    "text": "console offline needle\n"
+                  },
+                  "line_number": 1,
+                  "absolute_offset": 0,
+                  "submatches": [
+                    {
+                      "match": {
+                        "text": "console offline needle"
+                      },
+                      "start": 0,
+                      "end": 22
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "truncated": false,
+          "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./sample.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./sample.txt\"},\"lines\":{\"text\":\"console offline needle\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"console offline needle\"},\"start\":0,\"end\":22}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./sample.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":247042,\"human\":\"0.000247s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":23,\"bytes_printed\":272,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.002083s\",\"nanos\":2083375,\"secs\":0},\"stats\":{\"bytes_printed\":272,\"bytes_searched\":23,\"elapsed\":{\"human\":\"0.000247s\",\"nanos\":247042,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+          "stderr": ""
+        }
+      }
+    ],
+    "allocations": [
+      {
+        "allocationId": "allocation-e769bc36-b43e-4f17-b3c8-0187e022f927",
+        "workId": "console-offline-live-work",
+        "requestId": "console-offline-live-request",
+        "resourceId": "search-slot",
+        "amount": 1,
+        "scope": "request",
+        "state": "released"
+      }
+    ]
+  },
+  "console2Ready": {
+    "kind": "console.listening",
+    "url": "http://127.0.0.1:61925"
+  },
+  "console2Projection": {
+    "agents": [
+      {
+        "agentId": "provider",
+        "machineId": "provider-machine",
+        "label": "Provider",
+        "presence": "online",
+        "capabilities": [
+          "browser",
+          "file-search"
+        ]
+      }
+    ],
+    "works": [
+      {
+        "agentId": "provider",
+        "workId": "console-offline-live-work",
+        "consumerAgentId": "consumer",
+        "providerAgentId": "provider",
+        "capabilityId": "file-search",
+        "capabilityVersion": "1",
+        "policyRevision": 1,
+        "state": "closed"
+      }
+    ],
+    "relations": [
+      {
+        "agentId": "provider",
+        "consumerAgentId": "consumer",
+        "providerAgentId": "provider",
+        "capabilityId": "file-search",
+        "capabilityVersion": "1",
+        "relationPermission": "granted",
+        "workId": "console-offline-live-work"
+      }
+    ]
+  },
+  "result": "PASS",
+  "finishedAt": "2026-09-11T07:04:07.859Z"
+}

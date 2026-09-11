@@ -40,7 +40,7 @@ relations[workId=console-offline-live-work].relationPermission = granted
 agents[provider].presence = online
 ```
 
-The replay result was `PASS`. The full controller evidence was captured at `/tmp/agentteams-console-offline-live-9b10ed3-fresh-20260911/evidence.json`; it contains no credential values.
+The replay result was `PASS`. The full controller evidence is retained at `docs/evidence/9b10ed3-console-offline-live-20260911/evidence.json`; it contains no credential values.
 
 ## Boundary
 
