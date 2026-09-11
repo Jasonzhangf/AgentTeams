@@ -31,6 +31,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `recovery`, `runtime`, `work`
 - details: [L2/agentteams-active-recovery-boundary-20260906.md](L2/agentteams-active-recovery-boundary-20260906.md)
 
+### AgentTeams af5c167 current-SHA relay replay
+- tags: `af5c167`, `agentteams`, `ai-reviewed`, `human-unreviewed`, `mvp`, `relay`
+- details: [L2/agentteams-af5c167-relay-replay-20260910.md](L2/agentteams-af5c167-relay-replay-20260910.md)
+
 ### Agent-to-Agent daemon Work replay
 - tags: `agentteams`, `ai-reviewed`, `daemon`, `human-unreviewed`, `relay`, `work`
 - details: [L2/agentteams-cross-daemon-work-20260906.md](L2/agentteams-cross-daemon-work-20260906.md)
@@ -189,8 +193,8 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: N3 typed runtime peer-route assembly (knowledge) [N3,ai-reviewed,human-unreviewed,network,runtime] -> L2/8ea5f7c-n3-runtime-assembly-20260910.md
 - L2: AgentBrowser icon admission (knowledge) [agentbrowser,ai-reviewed,human-unreviewed,icon,ui-evidence] -> L2/agentbrowser-icon-20260906.md
 - L2: Active recovery boundary remains runtime-owned (lesson) [agentteams,ai-reviewed,human-unreviewed,recovery,runtime,work] -> L2/agentteams-active-recovery-boundary-20260906.md
+- L2: AgentTeams af5c167 current-SHA relay replay (knowledge) [af5c167,agentteams,ai-reviewed,human-unreviewed,mvp,relay] -> L2/agentteams-af5c167-relay-replay-20260910.md
 - L2: Agent-to-Agent daemon Work replay (knowledge) [agentteams,ai-reviewed,daemon,human-unreviewed,relay,work] -> L2/agentteams-cross-daemon-work-20260906.md
 - L2: Installed runtime replay (knowledge) [agentteams,ai-reviewed,artifact,human-unreviewed,install,restart] -> L2/agentteams-installed-runtime-20260906.md
 - L2: AgentTeams 长程交付与阶段L2记忆 (plan) [ai-reviewed,delivery,governance,human-unreviewed,memory-l2] -> L2/agentteams-long-running-delivery-20260906.md
-- L2: AgentTeams relay-first MVP goal governance (knowledge) [agentteams,ai-reviewed,human-unreviewed,mvp,relay] -> L2/agentteams-mvp-goal-relay-first-20260910.md
 
