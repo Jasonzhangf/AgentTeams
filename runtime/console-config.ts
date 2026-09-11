@@ -28,6 +28,9 @@ export function createConsoleConfigBinding(options: {
           })
           return
         }
+        case 'config.agent.select-backup':
+          store.selectAgentBackup(command.expectedRevision, agentId, command.backup)
+          return
         case 'config.refreshModels': {
           const result = await store.refreshProviderModels(command.expectedRevision, command.providerId, models, credentials)
           if (result.status === 'error') throw new RuntimeConfigError(result.error!)

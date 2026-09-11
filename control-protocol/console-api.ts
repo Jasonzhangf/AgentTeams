@@ -86,6 +86,8 @@ export type ConsoleCommandV1 =
   | { readonly kind: 'config.refreshModels'; readonly agentId: string; readonly expectedRevision: number; readonly providerId: string }
   | { readonly kind: 'config.bindModel'; readonly agentId: string; readonly expectedRevision: number; readonly providerId: string; readonly modelId: string }
   | { readonly kind: 'config.apply'; readonly agentId: string }
+  | { readonly kind: 'config.agent.select-backup'; readonly agentId: string; readonly expectedRevision: number;
+      readonly backup: { readonly providerInstanceId: string; readonly modelId: string } }
   | { readonly kind: 'config.putProvider'; readonly agentId: string; readonly expectedRevision: number;
       readonly provider: { readonly id: string; readonly label: string; readonly protocol: ConsoleProviderView['protocol']; readonly apiBaseUrl: string; readonly enabled: boolean;
         readonly auth: { readonly kind: 'none' } | { readonly kind: 'bearer'; readonly credentialRef: string } } }
@@ -160,6 +162,13 @@ export function parseConsoleCommand(value: unknown): ConsoleCommandV1 {
       fields = ['expectedRevision', 'providerId', 'modelId']
       revision(command.expectedRevision); text(command.providerId); text(command.modelId); break
     case 'config.apply': fields = []; break
+    case 'config.agent.select-backup': {
+      fields = ['expectedRevision', 'backup']; revision(command.expectedRevision)
+      const backup = object(command.backup)
+      assertEnvelopeKeys(backup, ['providerInstanceId', 'modelId'], 'Backup model reference')
+      text(backup.providerInstanceId); text(backup.modelId)
+      break
+    }
     case 'config.putProvider': {
       fields = ['expectedRevision', 'provider']; revision(command.expectedRevision)
       const provider = object(command.provider)

@@ -37,6 +37,78 @@ it('routes config CAS to durable owner and retains apply failure without effecti
   expect(binding.readProjection()).not.toHaveProperty('effectiveRevision')
   await expect(binding.command({ kind: 'config.apply', agentId: 'other' })).resolves.toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
 })
+it('selects explicit backup through console binding, advances accepted revision, and readback survives restart after apply', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'teams-console-backup-')); directories.push(directory)
+  const file = join(directory, 'config.json')
+  const store = createRuntimeConfigStore(createJsonFileConfigPersistence(file))
+  const binding = createConsoleConfigBinding({ agentId: 'a', store,
+    models: { listModels: async ({ provider }) => provider.id === 'goaichat'
+      ? [{ modelId: 'qwen3.8-max', metadata: {} }]
+      : [{ modelId: 'gpt-5.5', metadata: {} }] },
+    credentials: { resolve: async () => ({ kind: 'bearer', value: 'secret-not-projected' }) },
+    applier: { apply: async config => ({ status: 'applied', effectiveRevision: config.acceptedRevision }) },
+  })
+  await binding.command({ kind: 'config.putProvider', agentId: 'a', expectedRevision: 0, provider: {
+    id: 'rcc', label: 'RCC', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:4444/v1', enabled: true, auth: { kind: 'none' },
+  } })
+  await binding.command({ kind: 'config.putProvider', agentId: 'a', expectedRevision: 1, provider: {
+    id: 'goaichat', label: 'GoAIChat', protocol: 'openai-chat', apiBaseUrl: 'https://llm.goaichat.top/v1', enabled: true,
+    auth: { kind: 'bearer', credentialRef: 'cred:goaichat' },
+  } })
+  await binding.command({ kind: 'config.refreshModels', agentId: 'a', expectedRevision: 2, providerId: 'rcc' })
+  await binding.command({ kind: 'config.refreshModels', agentId: 'a', expectedRevision: 3, providerId: 'goaichat' })
+  await binding.command({ kind: 'config.bindModel', agentId: 'a', expectedRevision: 4, providerId: 'rcc', modelId: 'gpt-5.5' })
+  expect(store.read().agents.a).toEqual({ primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } })
+
+  await binding.command({ kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: 5, backup: { providerInstanceId: 'goaichat', modelId: 'qwen3.8-max' } })
+  expect(store.read().acceptedRevision).toBe(6)
+  expect(store.read().agents.a).toEqual({
+    primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' },
+    backup: { providerInstanceId: 'goaichat', modelId: 'qwen3.8-max' },
+  })
+  expect(store.readEffective()).toEqual({ acceptedRevision: 6 })
+  await binding.command({ kind: 'config.apply', agentId: 'a' })
+  expect(store.readEffective()).toEqual({ acceptedRevision: 6, effectiveRevision: 6 })
+
+  const restarted = createConsoleConfigBinding({ agentId: 'a', store: createRuntimeConfigStore(createJsonFileConfigPersistence(file)),
+    models: { listModels: async () => [] },
+    applier: { apply: async config => ({ status: 'applied', effectiveRevision: config.acceptedRevision }) },
+  })
+  expect(restarted.readProjection()).toMatchObject({
+    agentId: 'a', acceptedRevision: 6, effectiveRevision: 6,
+    providers: [
+      { id: 'rcc', authKind: 'none', catalogState: 'ready', models: [{ id: 'gpt-5.5' }] },
+      { id: 'goaichat', authKind: 'bearer', catalogState: 'ready', models: [{ id: 'qwen3.8-max' }] },
+    ],
+  })
+  expect(JSON.stringify(restarted.readProjection())).not.toContain('secret-not-projected')
+  expect(JSON.stringify(restarted.readProjection())).not.toContain('cred:goaichat')
+})
+it('rejects stale, missing, conflicting, and wrong-target backup selection without mutating config', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'teams-console-backup-errors-')); directories.push(directory)
+  const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(directory, 'config.json')))
+  store.putProviderInstance(0, { id: 'rcc', label: 'RCC', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:4444/v1', enabled: true,
+    auth: { kind: 'none' } })
+  store.putModelEntry(1, { ref: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' }, origin: 'manual', base: {}, overrides: {} })
+  store.bindAgentModel(2, 'a', { primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } })
+  const binding = createConsoleConfigBinding({ agentId: 'a', store,
+    models: { listModels: async () => [] },
+    applier: { apply: async () => ({ status: 'unsupported', error: { code: 'UNSUPPORTED_OPERATION', message: 'not invoked' } }) },
+  })
+  const current = store.read().acceptedRevision
+  await expect(binding.command({ kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: current - 1,
+    backup: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } })).resolves.toMatchObject({ ok: false, error: { code: 'REVISION_CONFLICT' } })
+  await expect(binding.command({ kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: current,
+    backup: { providerInstanceId: 'missing', modelId: 'm' } })).resolves.toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
+  await expect(binding.command({ kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: current,
+    backup: { providerInstanceId: 'rcc', modelId: 'missing' } })).resolves.toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
+  await expect(binding.command({ kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: current,
+    backup: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } })).resolves.toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
+  await expect(binding.command({ kind: 'config.agent.select-backup', agentId: 'other', expectedRevision: current,
+    backup: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } })).resolves.toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(store.read().acceptedRevision).toBe(current)
+  expect(store.read().agents.a).toEqual({ primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } })
+})
 it('carries credential error context through real HTTP to the UI client without converting it to success', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'teams-console-errors-')); directories.push(directory)
   const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(directory, 'config.json')))

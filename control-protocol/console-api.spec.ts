@@ -10,6 +10,7 @@ describe('Console control ingress', () => {
       { kind: 'config.refreshModels', agentId: 'a', expectedRevision: 0, providerId: 'p' },
       { kind: 'config.bindModel', agentId: 'a', expectedRevision: 1, providerId: 'p', modelId: 'm' },
       { kind: 'config.apply', agentId: 'a' },
+      { kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: 4, backup: { providerInstanceId: 'b', modelId: 'm' } },
       { kind: 'config.putProvider', agentId: 'a', expectedRevision: 0, provider: {
         id: 'p', label: 'P', protocol: 'openai-responses', apiBaseUrl: 'https://example.test/v1', enabled: true,
         auth: { kind: 'bearer', credentialRef: 'provider/p' },
@@ -26,6 +27,10 @@ describe('Console control ingress', () => {
       { kind: 'config.apply', agentId: 'a', metadata: {} },
       { kind: 'config.bindModel', agentId: 'a', expectedRevision: -1, providerId: 'p', modelId: 'm' },
       { kind: 'config.refreshModels', agentId: 'a', expectedRevision: 0.5, providerId: 'p' },
+      { kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: -1, backup: { providerInstanceId: 'b', modelId: 'm' } },
+      { kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: 1, backup: { providerInstanceId: 'b', modelId: 'm', credentialRef: 'secret' } },
+      { kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: 1, backup: { providerInstanceId: 'b' } },
+      { kind: 'config.agent.selectBackup', agentId: 'a', expectedRevision: 1, backup: { providerInstanceId: 'b', modelId: 'm' } },
       { kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'yes' },
     ]) expect(() => parseConsoleCommand(command)).toThrow()
   })
