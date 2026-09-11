@@ -10,6 +10,13 @@ const snapshot = {
   accountId: 'account-a',
   generation: 7,
   confirmedGeneration: 7,
+  peerStates: [{
+    hostId: 'peer-host',
+    agentId: 'peer-agent',
+    scopeId: 'scope',
+    generation: 12,
+    presence: 'online' as const,
+  }],
   hosts: [{
     hostId: 'peer-host',
     machineId: 'peer-machine',
@@ -119,6 +126,54 @@ describe('network peer route contract', () => {
       transport,
       helloTimeoutMs: 900,
     })).toThrow(/relay candidate/)
+  })
+
+  it('binds relay target generation to the confirmed directory peer state', () => {
+    expect(() => assembleRelayPeerRoute({
+      ...common,
+      targetCandidateId: 'relay-1',
+      targetGeneration: 13,
+    })).toThrow(PeerRouteError)
+    expect(() => assembleRelayPeerRoute({
+      ...common,
+      targetCandidateId: 'relay-1',
+      targetGeneration: 13,
+    })).toThrowError(new PeerRouteError('STALE_GENERATION', 'peer-route: target generation is stale for host peer-host'))
+  })
+
+  it('rejects a relay route that cannot bind its target generation', () => {
+    expect(() => assembleRelayPeerRoute({
+      ...common,
+      directory: {
+        ...snapshot,
+        peerStates: [],
+      },
+      targetCandidateId: 'relay-1',
+    })).toThrowError(new PeerRouteError('STALE_GENERATION', 'peer-route: confirmed directory peer generation is missing for host peer-host'))
+  })
+
+  it('rejects stale direct target generation when the directory carries peer generations', () => {
+    expect(() => assembleDirectWssTargetOptions({
+      ...common,
+      targetCandidateId: 'direct-1',
+      targetGeneration: 13,
+      transport,
+      helloTimeoutMs: 900,
+    })).toThrowError(new PeerRouteError('STALE_GENERATION', 'peer-route: target generation is stale for host peer-host'))
+  })
+
+  it('rejects a direct route that cannot bind its target generation', () => {
+    expect(() => assembleDirectWssTargetOptions({
+      ...common,
+      directory: {
+        ...snapshot,
+        peerStates: undefined,
+      },
+      targetCandidateId: 'direct-1',
+      targetGeneration: 12,
+      transport,
+      helloTimeoutMs: 900,
+    })).toThrowError(new PeerRouteError('STALE_GENERATION', 'peer-route: confirmed directory peer generation is missing for host peer-host'))
   })
 
   it('rejects a direct candidate in the relay route and stale or foreign bindings', () => {

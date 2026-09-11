@@ -99,6 +99,25 @@ function confirmedDirectoryGeneration(directory: AccountDirectorySnapshot): numb
   return directory.confirmedGeneration
 }
 
+function assertTargetGeneration(
+  directory: AccountDirectorySnapshot,
+  hostId: string,
+  targetGeneration: number,
+): number {
+  const requestedGeneration = positiveSafeInteger(targetGeneration, 'targetGeneration')
+  const peerState = directory.peerStates?.find(peer => peer.hostId === hostId)
+  if (!peerState) {
+    throw new PeerRouteError('STALE_GENERATION', `peer-route: confirmed directory peer generation is missing for host ${hostId}`)
+  }
+  if (peerState.presence !== 'online') {
+    throw new PeerRouteError('UNAVAILABLE', `peer-route: target host is not online (${peerState.presence})`)
+  }
+  if (peerState.generation !== requestedGeneration) {
+    throw new PeerRouteError('STALE_GENERATION', `peer-route: target generation is stale for host ${hostId}`)
+  }
+  return requestedGeneration
+}
+
 function readyPeer(directory: AccountDirectorySnapshot, hostId: string): HostDirectoryEntry {
   const resolvedHostId = requiredString(hostId, 'hostId')
   let peer: HostDirectoryEntry
@@ -171,6 +190,7 @@ function relayKind(candidate: RouteCandidate): RelayCandidateKind {
 export function assembleDirectWssTargetOptions(input: DirectPeerRouteInput): DirectPeerRouteOptions {
   const directoryGeneration = confirmedDirectoryGeneration(input.directory)
   const peer = readyPeer(input.directory, input.hostId)
+  const targetGeneration = assertTargetGeneration(input.directory, peer.hostId, input.targetGeneration)
   const targetCandidate = selectedCandidate(peer, input.targetCandidateId)
   if (targetCandidate.kind === 'relay-ws' || targetCandidate.kind === 'relay-webrtc') {
     throw new PeerRouteError('INVALID_INPUT', 'peer-route: selected target candidate is a relay candidate')
@@ -200,7 +220,7 @@ export function assembleDirectWssTargetOptions(input: DirectPeerRouteInput): Dir
     hello: {
       hostId: peer.hostId,
       agentId: peer.agentId,
-      targetGeneration: input.targetGeneration,
+      targetGeneration,
       protocolVersion: input.protocolVersion,
       capabilitiesRevision: peer.capabilitiesRevision,
       source: input.source,
@@ -208,16 +228,17 @@ export function assembleDirectWssTargetOptions(input: DirectPeerRouteInput): Dir
     },
     plan,
     helloTimeoutMs: input.helloTimeoutMs,
-    peerRoute: bindingFor(directoryGeneration, input.targetGeneration, input.binding, 'direct-wss', targetCandidate.candidateId) as PeerRouteBinding & { readonly kind: 'direct-wss' },
+    peerRoute: bindingFor(directoryGeneration, targetGeneration, input.binding, 'direct-wss', targetCandidate.candidateId) as PeerRouteBinding & { readonly kind: 'direct-wss' },
   }
 }
 
 export function assembleRelayPeerRoute(input: RelayPeerRouteInput): RelayPeerRouteOptions {
   const directoryGeneration = confirmedDirectoryGeneration(input.directory)
   const peer = readyPeer(input.directory, input.hostId)
+  const targetGeneration = assertTargetGeneration(input.directory, peer.hostId, input.targetGeneration)
   const candidate = selectedCandidate(peer, input.targetCandidateId)
   const kind = relayKind(candidate)
-  const peerRoute = bindingFor(directoryGeneration, input.targetGeneration, input.binding, kind, candidate.candidateId)
+  const peerRoute = bindingFor(directoryGeneration, targetGeneration, input.binding, kind, candidate.candidateId)
   return {
     kind: 'relay',
     peerRoute: peerRoute as PeerRouteBinding & { readonly kind: RelayCandidateKind },
@@ -225,7 +246,7 @@ export function assembleRelayPeerRoute(input: RelayPeerRouteInput): RelayPeerRou
       hostId: peer.hostId,
       agentId: peer.agentId,
       capabilitiesRevision: peer.capabilitiesRevision,
-      targetGeneration: input.targetGeneration,
+      targetGeneration,
     },
   }
 }
