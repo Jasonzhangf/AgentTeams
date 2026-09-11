@@ -4,6 +4,7 @@
 - Candidate source commit: `27417e3`
 - Integration receipt commit: `f212833`
 - Remote main verification before cleanup receipt: `f2128330546045eb825767fc1ab0abf1f2dec742`
+- Final remote main verification: `b556ff21afb2adfa8d7cf143a19d61b38a2a4856`
 - Owned implementation worktree removed: `playground/6d2f49f-config-model-put-20260911`
 - Owned integration worktree removed: `playground/6d2f49f-integration-20260911`
 - Owned GCM worker home removed: `/tmp/codex-worker-home/6d2f49f-impl-20260911`
