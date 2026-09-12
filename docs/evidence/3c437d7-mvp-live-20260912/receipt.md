@@ -89,6 +89,20 @@ The provider ledger after the run showed:
 The duplicate request returned the prior succeeded result; the capacity demand
 of three units was rejected explicitly without an additional allocation.
 
+The coder2new host observation captured during this run was:
+
+```text
+eth0             UP             10.0.136.3/24
+default via 10.0.136.1 dev eth0
+tailscale0       100.77.236.86/32
+public IPv4 egress from coder2new: 154.40.58.131
+TLS from coder2new to claw.codewhisper.cc:9443: TLSv1.3, CN=claw.codewhisper.cc, Verification=OK
+```
+
+The daemon container used host networking on that host. The private `eth0`
+address and default gateway, together with the distinct public egress address,
+bind this replay to a real NAT outbound path; it is not a Tailscale-only claim.
+
 ## Restart and generation isolation
 
 The Claw provider was stopped by its recorded PID `3449182` and restarted from
@@ -105,13 +119,26 @@ the old generation was not retried as success.
 ## Console-offline replay
 
 On coder2new, a Console runtime using the same exact artifact and relay
-identity `claw-test-a` read the provider projection, shut down completely, and
-left the Agent Work path running. While Console was absent, a fresh consumer
-daemon completed `file-search` Work and closed it. A second Console runtime
-then read the durable projection over the public Relay. The exact replay
-returned `projection-status 200`, proposal `accepted`, request `succeeded`,
-close `closed`, and the reopened projection contained the new Work in `state:
-closed` with `relationPermission: granted` and provider presence `online`.
+identity `claw-test-a` read the provider projection in Docker container
+`cce065b5acbf62a47ea05637d8a4cc8602023b5ea18fbde39a920f2bf30df379`. Its
+container state was `running`, PID `1133936`, and the projection became HTTP
+200 on attempt 4. It was stopped with `docker stop -t 10` at
+`2026-09-12T09:10:49Z`; the container left the running set and
+`ss -lntp sport = :61991` returned no listener. An authenticated HTTP probe
+failed as expected during that interval.
+
+While the Console container and listener were absent, a fresh consumer daemon
+started at `2026-09-12T09:11:05.893Z` and completed at
+`2026-09-12T09:11:08.617Z`:
+
+```json
+{"status":"passed","targetGeneration":3,"proposal":"accepted","request":"succeeded","closed":"closed","matches":1}
+```
+
+A second Console container (`1b00ef7e24cd3628602691e35b635096a7c9b0c782e58a49d0a9a526fbfbcf14`,
+started `2026-09-12T09:11:23.511596351Z`) then returned HTTP 200 on attempt 1.
+Its projection contained the new Work with `state: closed`, the matching
+relation with `relationPermission: granted`, and provider presence `online`.
 
 This proves the Console is an observation/configuration surface for this path;
 it was not a required hop for Agent-to-Agent Work.
@@ -126,11 +153,12 @@ configured RCC primary exposes a real model and both RCC and the explicit
 `goaichat-openai` backup are exercised through OpenCode. No implicit failover
 was configured.
 
-## Cleanup pending
+## Cleanup
 
-Before delivery close, stop the provider PID `3450673` by exact PID, verify no
-owned replay container or listener remains, remove the Claw and coder2new
-temporary replay trees and the coder2new staging tree, retain the Claw backup
-tree for rollback, verify `agentteams-relay.service` remains active/enabled,
-and record the resulting cleanup receipt. The owned candidate worktree remains
-until review, integration, push, and cleanup are complete.
+The owned replay provider PID `3450673` was stopped by exact PID. Both Console
+containers were stopped and removed; no owned replay container or port 61991
+listener remains. The Claw and coder2new temporary replay trees, scripts, and
+coder2new staging tree were removed with targeted path checks. The Claw
+rollback tree `/opt/agentteams.backup-20260912-0145` is intentionally retained
+for rollback. The formal Claw `agentteams-relay.service` remains active and
+enabled on `0.0.0.0:9443`. See the dedicated cleanup receipt in this directory.
