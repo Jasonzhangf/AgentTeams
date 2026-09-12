@@ -54,8 +54,6 @@ function waitForExit(child: ChildProcess, deadlineMs: number): Promise<void> {
 
 async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'], deadlineMs: number): Promise<void> {
   const output = { stdout: '', stderr: '' }
-  child.stdout?.on('data', chunk => { output.stdout += chunk.toString() })
-  child.stderr?.on('data', chunk => { output.stderr += chunk.toString() })
   await new Promise<void>((resolveReady, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const finish = (error?: Error) => {
@@ -63,17 +61,25 @@ async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'],
       child.off('error', onError)
       child.off('exit', onExit)
       child.off('message', onMessage)
+      child.stdout?.off('data', onStdout)
+      child.stderr?.off('data', onStderr)
       if (error) reject(error); else resolveReady()
     }
     const onError = (error: Error) => finish(error)
     const onExit = (code: number | null, signal: NodeJS.Signals | null) => finish(new Error(`local ${kind} exited before readiness code=${code ?? 'null'} signal=${signal ?? 'null'} stderr=${output.stderr}`))
+    const onStdout = (chunk: Buffer | string) => {
+      output.stdout += chunk.toString()
+      if (kind === 'relay' && output.stdout.includes('relay listening ')) finish()
+    }
+    const onStderr = (chunk: Buffer | string) => { output.stderr += chunk.toString() }
     const onMessage = (message: unknown) => {
       if (kind === 'agent' && typeof message === 'object' && message !== null && (message as { kind?: unknown }).kind === 'daemon.registered') finish()
     }
     child.once('error', onError)
     child.once('exit', onExit)
-    if (kind === 'relay') child.stdout?.on('data', chunk => { if (chunk.toString().includes('relay listening ')) finish() })
-    else child.on('message', onMessage)
+    child.stdout?.on('data', onStdout)
+    child.stderr?.on('data', onStderr)
+    if (kind === 'agent') child.on('message', onMessage)
     timer = setTimeout(() => finish(new Error(`local ${kind} startup deadline stderr=${output.stderr}`)), deadlineMs)
   })
 }
