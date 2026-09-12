@@ -10,8 +10,10 @@ const source = resolve(root, 'generated/modules/teams-source/lib')
 const install = mkdtempSync(join(tmpdir(), 'agentteams-installed-'))
 let relay
 let agent
+let launcher
 let relayOutput = ''
 let agentOutput = ''
+let launcherOutput = ''
 
 function run(command, args, options) {
   return new Promise((resolvePromise, reject) => {
@@ -106,10 +108,34 @@ try {
   })
   await stop(agent, 'SIGINT')
   await stop(relay, 'SIGTERM')
+  const launcherRelayPort = Number((await run(process.execPath, ['-e', "const s=require('node:net').createServer();s.listen(0,'127.0.0.1',()=>{console.log(s.address().port);s.close()})"], { cwd: install })).stdout.trim())
+  const launcherRelay = JSON.parse(readFileSync(relayConfig, 'utf8'))
+  launcherRelay.listen.port = launcherRelayPort
+  writeFileSync(relayConfig, JSON.stringify(launcherRelay))
+  const launcherAgent = JSON.parse(readFileSync(agentConfig, 'utf8'))
+  launcherAgent.relay.endpoint = `wss://127.0.0.1:${launcherRelayPort}`
+  writeFileSync(agentConfig, JSON.stringify(launcherAgent))
+  const localConfig = join(install, 'config.toml')
+  writeFileSync(localConfig, `version = 1
+
+[relay]
+config = "./relay.json"
+
+[daemons.installed-agent]
+config = "./agent.json"
+`)
+  launcher = spawn(process.execPath, ['runtime/runtime/local-process.js', '--config', localConfig],
+    { cwd: install, env: { ...process.env, TEAMS_RELAY_AGENT: 'Bearer install-agent' }, stdio: ['ignore', 'pipe', 'pipe'] })
+  launcher.stdout?.on('data', chunk => { launcherOutput += chunk.toString() })
+  launcher.stderr?.on('data', chunk => { launcherOutput += chunk.toString() })
+  await waitForLine(launcher, () => launcherOutput, /local supervisor ready config=.* daemons=installed-agent/)
+  await stop(launcher, 'SIGTERM')
   assert.equal(relayOutput.includes('Bearer install-agent'), false)
   assert.equal(agentOutput.includes('Bearer install-agent'), false)
-  console.log('Installed runtime smoke passed: isolated pnpm install, Relay and Agent startup, restart, and signal shutdown.')
+  assert.equal(launcherOutput.includes('Bearer install-agent'), false)
+  console.log('Installed runtime smoke passed: isolated pnpm install, Relay and Agent startup, restart, local TOML launcher, and signal shutdown.')
 } finally {
+  if (launcher) await stop(launcher, 'SIGKILL').catch(() => undefined)
   if (agent) await stop(agent, 'SIGKILL').catch(() => undefined)
   if (relay) await stop(relay, 'SIGKILL').catch(() => undefined)
   rmSync(install, { recursive: true, force: true })
