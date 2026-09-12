@@ -1,0 +1,58 @@
+{
+  "version": 3,
+  "candidate": {
+    "head": "f1982cf9611e0a5e8b3b531bbcb1bfca5407969d",
+    "base": "4a5572620ca1a32c0b50aa10a2a3c49b086fceb2",
+    "tree": "0fc06157bb32d4e4e3cd45693a691d234f8aba22",
+    "diffHash": "sha256:5a7abd57c90ef5eb61c42e93e7fa5e3e80400054aea3fd483754792ba667b7b9",
+    "scopeHash": "sha256:802329a025ebbfe192b365534df5909a530fe8a310a8b662f8ed4c606e60a5ac",
+    "changedPaths": [
+      "runtime/agent-process.spec.ts"
+    ]
+  },
+  "stages": {
+    "pnpm-verify": {
+      "stageId": "pnpm-verify",
+      "status": "passed",
+      "fingerprint": "sha256:20664656cc983772555d1a16bf1c8f8e6554644933c15be9d4e1be3cc259a5a1",
+      "command": [
+        "pnpm",
+        "verify"
+      ],
+      "startedAt": "2026-09-12T16:47:08.776Z",
+      "logPath": "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk-control/lifecycle-adapter/attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5/commands/pnpm-verify.log",
+      "receiptId": "stage-pnpm-verify-1789231646035",
+      "completedAt": "2026-09-12T16:47:26.233Z",
+      "expiresAt": "2026-09-13T16:47:26.035Z",
+      "receiptPath": "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-verify-1789231646035.json",
+      "logHash": "sha256:9a1b2e2791217f032977e18df445095e55eb97de1875fe0cfa1a842387112e4e",
+      "requiredPathHashes": {
+        "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/generated/modules/teams-source/module.compiled.json": "sha256:01051d0af80602db11e31ab41b9e81d8280d4b5972ccf4dde80509cf212b3391"
+      }
+    },
+    "pnpm-smoke-installed": {
+      "stageId": "pnpm-smoke-installed",
+      "status": "passed",
+      "fingerprint": "sha256:681aea59773a6bb066f1d9e3edfca73bf2893c40a116dc95b25a49479d323aff",
+      "command": [
+        "pnpm",
+        "smoke:installed"
+      ],
+      "startedAt": "2026-09-12T16:47:26.429Z",
+      "logPath": "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk-control/lifecycle-adapter/attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5/commands/pnpm-smoke-installed.log",
+      "receiptId": "stage-pnpm-smoke-installed-1789231652924",
+      "completedAt": "2026-09-12T16:47:33.120Z",
+      "expiresAt": "2026-09-13T16:47:32.924Z",
+      "receiptPath": "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-smoke-installed-1789231652924.json",
+      "logHash": "sha256:e5c3b4936b2f23b515a0a69bd03d65bc2458f60e55d81bd48404c2c3ee168d6c",
+      "requiredPathHashes": {
+        "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/generated/modules/teams-source/module.compiled.json": "sha256:01051d0af80602db11e31ab41b9e81d8280d4b5972ccf4dde80509cf212b3391",
+        "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/scripts/installed-runtime-smoke.mjs": "sha256:194385a5a05ac0423f9a5dbeb7ff89f8ecd5d702a454c42410a69e3edaa58e20",
+        "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/package.json": "sha256:f178dd59e46ca43fe3d0afb01fdab7db320365dfe5e4f8fcef5d692068f574f8",
+        "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/pnpm-workspace.yaml": "sha256:5108d12e298135821bd364087e01e14ef5b79d0ce770c095a96e780a9ddfdf62"
+      }
+    }
+  },
+  "reuseReceipts": [],
+  "invalidationHistory": []
+}

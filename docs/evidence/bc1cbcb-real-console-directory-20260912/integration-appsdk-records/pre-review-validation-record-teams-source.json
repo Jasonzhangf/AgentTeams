@@ -1,0 +1,45 @@
+{
+  "validation_id": "validation-attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5",
+  "issue_id": "teams-lifecycle-admission",
+  "module_id": "teams-source",
+  "fix_candidate_id": "fix-f1982cf9611e-attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5",
+  "candidate_commit": "f1982cf9611e0a5e8b3b531bbcb1bfca5407969d",
+  "candidate_tree_hash": "0fc06157bb32d4e4e3cd45693a691d234f8aba22",
+  "artifact_hash": "sha256:d2ba55868d3e9a525e77c62a95c820dc41b9ef52c44d0b3e8bb3539493dade3d",
+  "whitebox_producer": {
+    "adapter": "agentteams::lifecycle-adapter:v1",
+    "identity": "agentteams::lifecycle-adapter:v1/whitebox"
+  },
+  "whitebox_evidence_ids": [
+    "attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5-whitebox"
+  ],
+  "blackbox_evidence_ids": [
+    "attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5-blackbox"
+  ],
+  "deployment": {
+    "environment_id": "sha256:b3beac37aac975759ed8e6bf24b1e40ae7d592f4a46b1954396fcc46e76881ee",
+    "install_receipt_id": "attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5-install",
+    "restart_receipt_id": "attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5-restart",
+    "entrypoint": "pnpm smoke:installed -> installed runtime/server/relay-process.js + runtime/runtime/agent-process.js",
+    "producer": {
+      "adapter": "agentteams::lifecycle-adapter:v1",
+      "identity": "agentteams::lifecycle-adapter:v1/deployment"
+    },
+    "observed_at": "2026-09-12T16:47:33.184Z"
+  },
+  "stage_execution": {
+    "pnpm-verify": {
+      "mode": "executed",
+      "receipt_id": "stage-pnpm-verify-1789231646035",
+      "receipt_path": "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-verify-1789231646035.json"
+    },
+    "pnpm-smoke-installed": {
+      "mode": "executed",
+      "receipt_id": "stage-pnpm-smoke-installed-1789231652924",
+      "receipt_path": "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-smoke-installed-1789231652924.json"
+    }
+  },
+  "source_unchanged": true,
+  "result": "pass",
+  "created_at": "2026-09-12T16:47:33.203Z"
+}

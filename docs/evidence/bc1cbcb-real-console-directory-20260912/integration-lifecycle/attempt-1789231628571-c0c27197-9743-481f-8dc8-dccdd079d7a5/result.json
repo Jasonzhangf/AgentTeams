@@ -1,0 +1,26 @@
+{
+  "attempt": "attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5",
+  "state": "committed",
+  "candidate": {
+    "head": "f1982cf9611e0a5e8b3b531bbcb1bfca5407969d",
+    "base": "4a5572620ca1a32c0b50aa10a2a3c49b086fceb2",
+    "tree": "0fc06157bb32d4e4e3cd45693a691d234f8aba22",
+    "diffHash": "sha256:5a7abd57c90ef5eb61c42e93e7fa5e3e80400054aea3fd483754792ba667b7b9",
+    "scopeHash": "sha256:802329a025ebbfe192b365534df5909a530fe8a310a8b662f8ed4c606e60a5ac",
+    "changedPaths": [
+      "runtime/agent-process.spec.ts"
+    ]
+  },
+  "artifact_hash": "sha256:d2ba55868d3e9a525e77c62a95c820dc41b9ef52c44d0b3e8bb3539493dade3d",
+  "environment_id": "sha256:b3beac37aac975759ed8e6bf24b1e40ae7d592f4a46b1954396fcc46e76881ee",
+  "records": [
+    "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk/records/fix-candidate-record-teams-source.json",
+    "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk/records/pre-review-validation-record-teams-source.json",
+    "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk/records/evidence/teams-source/attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5-whitebox.json",
+    "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk/records/evidence/teams-source/attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5-artifact.json",
+    "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk/records/evidence/teams-source/attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5-install.json",
+    "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk/records/evidence/teams-source/attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5-restart.json",
+    "/Volumes/extension/code/AgentTeams/playground/integration-bc1cbcb-20260912/.appsdk/records/evidence/teams-source/attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5-blackbox.json"
+  ],
+  "completed_at": "2026-09-12T16:47:33.204Z"
+}

@@ -1,0 +1,17 @@
+{
+  "attempt": "attempt-1789231628571-c0c27197-9743-481f-8dc8-dccdd079d7a5",
+  "module_id": "teams-source",
+  "issue_id": "teams-lifecycle-admission",
+  "candidate": {
+    "head": "f1982cf9611e0a5e8b3b531bbcb1bfca5407969d",
+    "base": "4a5572620ca1a32c0b50aa10a2a3c49b086fceb2",
+    "tree": "0fc06157bb32d4e4e3cd45693a691d234f8aba22",
+    "diffHash": "sha256:5a7abd57c90ef5eb61c42e93e7fa5e3e80400054aea3fd483754792ba667b7b9",
+    "scopeHash": "sha256:802329a025ebbfe192b365534df5909a530fe8a310a8b662f8ed4c606e60a5ac",
+    "changedPaths": [
+      "runtime/agent-process.spec.ts"
+    ]
+  },
+  "state": "running",
+  "created_at": "2026-09-12T16:47:08.571Z"
+}
