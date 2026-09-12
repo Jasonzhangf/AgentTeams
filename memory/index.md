@@ -160,7 +160,7 @@ _Empty._
 - details: [L2/memory-7a956be82fe1bd17.md](L2/memory-7a956be82fe1bd17.md)
 
 ### a5caff2 provider credential resolver integration
-- tags: `agentteams`, `ai-reviewed`, `provider-config`
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `provider-config`
 - details: [L2/memory-9043c13eec4ae60c.md](L2/memory-9043c13eec4ae60c.md)
 
 ### N3-D1 Agent-owned direct WSS listener delivery
