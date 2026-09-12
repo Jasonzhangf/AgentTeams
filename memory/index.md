@@ -167,6 +167,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `provider-config`
 - details: [L2/memory-5020de602062f883.md](L2/memory-5020de602062f883.md)
 
+### M1 local Relay bridge replay
+- tags: `2745502`, `M1`, `ai-reviewed`, `human-unreviewed`, `local-network`, `relay`
+- details: [L2/memory-58f7fefea08eead1.md](L2/memory-58f7fefea08eead1.md)
+
 ### 9b10ed3 consumer Work runtime delivery
 - tags: `9b10ed3`, `V1`, `ai-reviewed`, `consumer-work`, `human-unreviewed`, `runtime`
 - details: [L2/memory-6b1f2792d105d9d8.md](L2/memory-6b1f2792d105d9d8.md)
