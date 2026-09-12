@@ -73,6 +73,7 @@ function parseLocalConfigText(text: string, configPath: string): LocalConfig {
   const daemons: LocalDaemonSpec[] = []
   for (const [id, value] of Object.entries(daemonTable)) {
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)) throw new LocalConfigError(`daemons.${id} is not a valid daemon id`)
+    if (id === 'relay') throw new LocalConfigError('daemons.relay is reserved for the local Relay process')
     const input = object(value, `daemons.${id}`)
     fields(input, ['enabled', 'config'], `daemons.${id}`)
     daemons.push({ id, enabled: boolean(input.enabled, true, `daemons.${id}.enabled`), configPath: localPath(requiredString(input.config, `daemons.${id}.config`), baseDirectory) })

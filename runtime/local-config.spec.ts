@@ -48,3 +48,12 @@ it('rejects a launcher config with no enabled daemon or unknown fields', async (
     await expect(loadLocalConfig(path)).rejects.toThrow(/unknown|enabled daemon/i)
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
+
+it('rejects the reserved relay daemon id before process planning can overwrite ownership', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-local-config-reserved-'))
+  const path = join(directory, 'config.toml')
+  try {
+    await writeLocalConfig(path, 'version = 1\n[relay]\nconfig = "relay.json"\n[daemons.relay]\nconfig = "relay-agent.json"\n')
+    await expect(loadLocalConfig(path)).rejects.toThrow(/reserved.*Relay/i)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
