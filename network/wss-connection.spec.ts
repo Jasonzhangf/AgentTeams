@@ -409,7 +409,12 @@ it('stops an in-flight data handshake without waiting for its configured connect
   const stalled = new Promise<void>(resolve => { stalledReady = resolve })
   https.on('upgrade', (request, socket, head) => {
     if (++upgradeCount === 1) wss.handleUpgrade(request, socket, head, connection => {
-      connection.on('message', () => connection.send(JSON.stringify({ kind: 'relay.admitted', connectionId: 'c', generation: 1 })))
+      connection.on('message', data => {
+        const message = JSON.parse(data.toString()) as { kind?: string; requestId?: string }
+        connection.send(JSON.stringify(message.kind === 'relay.logout'
+          ? { kind: 'relay.logged-out', requestId: message.requestId }
+          : { kind: 'relay.admitted', connectionId: 'c', generation: 1 }))
+      })
     })
     else { releaseStalled = () => socket.destroy(); stalledReady() }
   })

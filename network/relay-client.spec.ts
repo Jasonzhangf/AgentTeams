@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
-import { createRelayServer, type RelayServer } from '../server/relay.ts'
+import { createRelayServer, type RelayServer, type RelayServerOptions } from '../server/relay.ts'
 import type { RelayGrant } from '../control-protocol/agent-services.ts'
 import { createRelayClient, type RelayClient, type RelayClientOptions } from './relay-client.ts'
 import { startAgentDaemon } from '../runtime/agent-daemon.ts'
@@ -30,10 +30,11 @@ beforeAll(() => {
 afterEach(async () => { await Promise.all(clients.splice(0).map(client => client.close())); await relay?.close() })
 afterAll(() => rmSync(directory, { recursive: true, force: true }))
 
-async function start() {
+async function start(authorizeTarget?: RelayServerOptions['authorizeTarget']) {
   relay = await createRelayServer({ host: '127.0.0.1', port: 0, key, cert,
     maxPayload: 65536, maxConnections: 16, maxGrants: 8, maxBufferedAmount: 65536,
     maxPendingMessages: 16, maxPendingBytes: 131072, grantTtlMs: 10000,
+    authorizeTarget,
     authenticate: credential => credential?.startsWith('Bearer ')
       ? { agentId: credential.slice(7), accountId: 'account', scopeId: 'scope' } : null,
   })
@@ -217,6 +218,36 @@ it('owns daemon stop and re-registration with a fresh server generation', async 
   expect(second.status().generation).toBe(2)
   await relay.close()
   expect(await second.closed).toMatchObject({ state: 'failed' })
+})
+
+it('publishes a peer offline before local close completes', async () => {
+  await start()
+  const stopped = await peer('stopped')
+  const observer = await peer('observer')
+  const closing = stopped.close()
+  await expect(stopped.presence()).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+  await closing
+  expect((await observer.directory(false)).find(peer => peer.declaration.identity.agentId === 'stopped'))
+    .toMatchObject({ presence: 'offline' })
+})
+
+it('reserves shutdown logout when ordinary request capacity is full', async () => {
+  let releaseAuthorization!: () => void
+  let authorizeStarted!: () => void
+  const authorizationStarted = new Promise<void>(resolve => { authorizeStarted = resolve })
+  const authorization = new Promise<boolean>(resolve => { releaseAuthorization = () => resolve(true) })
+  await start(async () => { authorizeStarted(); return authorization })
+  const stopped = await createRelayClient({ ...clientOptions('stopped'), maxPendingRequests: 1 })
+  clients.push(stopped)
+  const target = await peer('target')
+  const pending = stopped.connect('target', target.generation)
+  await authorizationStarted
+  const closing = stopped.close()
+  expect(await Promise.race([closing.then(() => 'closed', () => 'failed'), new Promise<'waiting'>(resolve => setTimeout(() => resolve('waiting'), 25))]))
+    .toBe('waiting')
+  releaseAuthorization()
+  await pending.catch(() => undefined)
+  await closing
 })
 
 it('does not publish a daemon when startup was cancelled', async () => {

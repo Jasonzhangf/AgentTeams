@@ -249,6 +249,10 @@ export function parseRelayServerControl(text: string): RelayServerControl {
       stringValue(input.connectionId, 'connectionId')
       positiveInteger(input.generation, 'generation')
       return input as unknown as RelayServerControl
+    case 'relay.logged-out':
+      knownFields(input, ['kind', 'requestId'], kind)
+      stringValue(input.requestId, 'requestId')
+      return input as unknown as RelayServerControl
     case 'relay.directory':
       knownFields(input, ['kind', 'requestId', 'revision', 'peers'], kind)
       stringValue(input.requestId, 'requestId')

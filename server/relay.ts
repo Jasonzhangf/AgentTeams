@@ -166,6 +166,7 @@ function parseControlMessage(data: RawData, isBinary: boolean): Record<string, u
     'relay.login': ['kind', 'protocolVersion', 'declaration'],
     'relay.publish': ['kind', 'generation', 'declaration'],
     'relay.presence': ['kind', 'generation'],
+    'relay.logout': ['kind', 'requestId', 'generation'],
     'relay.directory': ['kind', 'requestId', 'subscribe'],
     'relay.connect': ['kind', 'requestId', 'generation', 'targetAgentId', 'targetGeneration'],
     'relay.open': ['kind', 'requestId', 'grantId', 'generation'],
@@ -399,6 +400,9 @@ class RelayServerImpl implements RelayServer {
       case 'relay.presence':
         this.presence(state, input)
         return
+      case 'relay.logout':
+        this.logout(state, input)
+        return
       case 'relay.directory':
         this.directory(state, input)
         return
@@ -445,6 +449,19 @@ class RelayServerImpl implements RelayServer {
     const previous = this.peers.get(key)
     if (!previous) throw new RelayFailure('NOT_FOUND', 'authenticated peer is not published')
     this.setPeer({ ...previous, lastSeenAt: this.now().toISOString(), presence: 'online', connectionId: state.connectionId, generation: state.generation ?? previous.generation })
+  }
+
+  private logout(state: RelaySocketState, input: Record<string, unknown>): void {
+    const requestId = string(input.requestId, 'requestId')
+    this.assertCurrentGeneration(state, input.generation, 'generation')
+    const key = state.identityKey
+    if (!key) throw new RelayFailure('UNAUTHENTICATED', 'control identity is unavailable', requestId)
+    const previous = this.peers.get(key)
+    if (!previous) throw new RelayFailure('NOT_FOUND', 'authenticated peer is not published', requestId)
+    if (previous.presence === 'online') {
+      this.setPeer({ ...previous, lastSeenAt: this.now().toISOString(), presence: 'offline', connectionId: state.connectionId, generation: state.generation ?? previous.generation })
+    }
+    this.send(state.socket, { kind: 'relay.logged-out', requestId })
   }
 
   private directory(state: RelaySocketState, input: Record<string, unknown>): void {
@@ -630,7 +647,7 @@ class RelayServerImpl implements RelayServer {
     this.activeByIdentity.delete(state.identityKey)
     this.invalidateGrantsForConnection(state.connectionId, { code: 'UNAVAILABLE', message: 'control connection closed' })
     const previous = this.peers.get(state.identityKey)
-    if (previous) this.setPeer({ ...previous, connectionId: state.connectionId, generation: state.generation ?? previous.generation, presence: 'offline', lastSeenAt: this.now().toISOString() })
+    if (previous?.presence === 'online') this.setPeer({ ...previous, connectionId: state.connectionId, generation: state.generation ?? previous.generation, presence: 'offline', lastSeenAt: this.now().toISOString() })
   }
 
   private closeGrant(grantId: string, error?: ServiceError): void {

@@ -117,11 +117,13 @@ export type RelayClientControl =
   | { readonly kind: 'relay.login'; readonly protocolVersion: 2; readonly declaration: AgentDeclaration }
   | { readonly kind: 'relay.publish'; readonly generation: number; readonly declaration: AgentDeclaration }
   | { readonly kind: 'relay.presence'; readonly generation: number }
+  | { readonly kind: 'relay.logout'; readonly requestId: string; readonly generation: number }
   | { readonly kind: 'relay.directory'; readonly requestId: string; readonly subscribe: boolean }
   | { readonly kind: 'relay.connect'; readonly requestId: string; readonly generation: number; readonly targetAgentId: string; readonly targetGeneration: number }
   | { readonly kind: 'relay.open'; readonly requestId: string; readonly grantId: string; readonly generation: number }
 export type RelayServerControl =
   | { readonly kind: 'relay.admitted'; readonly connectionId: string; readonly generation: number }
+  | { readonly kind: 'relay.logged-out'; readonly requestId: string }
   | { readonly kind: 'relay.directory'; readonly requestId: string; readonly revision: number; readonly peers: readonly RelayPeer[] }
   | { readonly kind: 'relay.changed'; readonly revision: number; readonly peer: RelayPeer }
   | { readonly kind: 'relay.grant'; readonly requestId: string; readonly grant: RelayGrant }
