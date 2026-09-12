@@ -122,9 +122,13 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         try {
           if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
           await waitForExit(child, stopTimeoutMs)
-        } catch (error) { failures.push(error) }
-        unwatch.get(spec.id)?.()
-        unwatch.delete(spec.id)
+          unwatch.get(spec.id)?.()
+          unwatch.delete(spec.id)
+        } catch (error) {
+          failures.push(error)
+          lastFailure = error instanceof Error ? error : new Error('local daemon cleanup remains unconfirmed')
+          lifecycle = 'failed'
+        }
       }
       if (failures.length > 0) throw new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
       children.clear()
@@ -139,6 +143,8 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   }
 
   const start = (): Promise<void> => {
+    if (stopping) return Promise.reject(new Error('local daemon cannot start while cleanup is in progress'))
+    if (lifecycle === 'failed') return Promise.reject(lastFailure ?? new Error('local daemon requires cleanup before restart'))
     if (lifecycle === 'running') return Promise.resolve()
     if (starting) return starting
     starting = (async () => {
