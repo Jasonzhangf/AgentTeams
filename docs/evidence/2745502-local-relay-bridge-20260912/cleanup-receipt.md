@@ -5,4 +5,4 @@
 - Candidate branch: `codex/2745502-local-relay-bridge-20260912`; removed after worktree removal.
 - AppSDK lifecycle records are retained under `appsdk-records/`.
 - No other worker worktree, branch, claim, daemon, Relay, or process was modified or removed.
-- Remote main at cleanup: `6052e0bdaa1468a7765ff53aadb14bd516a1a1d1`.
+- Remote main at cleanup: `fcbf0c22cf66caaf26344d5a17efbfc41b62dbe3`.
