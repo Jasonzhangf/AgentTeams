@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createLocalSupervisor } from './local-supervisor.ts'
+import { createLocalSupervisor, type LocalSupervisor } from './local-supervisor.ts'
 import { loadLocalConfig, defaultLocalConfigPath } from './local-config.ts'
 
 export function parseLocalProcessArgs(argv: readonly string[]): string {
@@ -12,9 +12,14 @@ export function parseLocalProcessArgs(argv: readonly string[]): string {
   throw new Error('usage: local-process [--config <file>]')
 }
 
-export async function runLocalProcess(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
+export type LocalSupervisorFactory = (config: Awaited<ReturnType<typeof loadLocalConfig>>) => LocalSupervisor
+
+export async function runLocalProcess(
+  argv: readonly string[] = process.argv.slice(2),
+  createSupervisor: LocalSupervisorFactory = createLocalSupervisor,
+): Promise<void> {
   const config = await loadLocalConfig(parseLocalProcessArgs(argv))
-  const supervisor = createLocalSupervisor(config)
+  const supervisor = createSupervisor(config)
   let stopping: Promise<void> | undefined
   const stop = () => {
     if (stopping) return
@@ -27,9 +32,18 @@ export async function runLocalProcess(argv: readonly string[] = process.argv.sli
   process.once('SIGTERM', stop)
   await supervisor.start()
   console.log(`local supervisor ready config=${config.configPath} daemons=${config.daemons.filter(daemon => daemon.enabled).map(daemon => daemon.id).join(',')}`)
+  let runtimeFailure: Error | undefined
   await new Promise<void>(resolveStopped => {
     const poll = () => {
       if (stopping) void stopping.finally(resolveStopped)
+      else if (supervisor.state() === 'failed') {
+        runtimeFailure = supervisor.failure() ?? new Error('local supervisor failed')
+        stopping = supervisor.stop().catch(error => {
+          process.exitCode = 1
+          console.error(error instanceof Error ? error.message : String(error))
+        })
+        void stopping.finally(resolveStopped)
+      }
       else setTimeout(poll, 50)
     }
     poll()
@@ -37,6 +51,10 @@ export async function runLocalProcess(argv: readonly string[] = process.argv.sli
   process.removeListener('SIGINT', stop)
   process.removeListener('SIGTERM', stop)
   if (supervisor.state() !== 'stopped') throw new Error('local supervisor did not stop')
+  if (runtimeFailure) {
+    process.exitCode = 1
+    throw runtimeFailure
+  }
 }
 
 const invokedPath = process.argv[1] === undefined ? undefined : resolve(process.argv[1])

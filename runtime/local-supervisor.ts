@@ -1,7 +1,6 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { once } from 'node:events'
 import type { LocalConfig } from './local-config.ts'
 
 export interface LocalProcessSpec {
@@ -46,10 +45,16 @@ function timeout(value: number | undefined, fallback: number, label: string): nu
 
 function waitForExit(child: ChildProcess, deadlineMs: number): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
-  return Promise.race([
-    once(child, 'exit').then(() => undefined),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('local daemon exit remains unconfirmed')), deadlineMs)),
-  ])
+  return new Promise<void>((resolveExit, reject) => {
+    const timer = setTimeout(() => finish(new Error('local daemon exit remains unconfirmed')), deadlineMs)
+    const onExit = () => finish()
+    const finish = (error?: Error) => {
+      clearTimeout(timer)
+      child.off('exit', onExit)
+      if (error) reject(error); else resolveExit()
+    }
+    child.once('exit', onExit)
+  })
 }
 
 async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'], deadlineMs: number): Promise<void> {
