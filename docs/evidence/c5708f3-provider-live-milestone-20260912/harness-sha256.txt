@@ -1,2 +1,2 @@
-0f5ca0be9c814d70ecfd4fd2f6f96dd81e91a4e96e171baa98b964e6509a76c9  docs/evidence/c5708f3-provider-live-milestone-20260912/live-harness.mjs
-e8cf59af90ee13aeb272a0e104decc32bd9c4e7dae95910808acd28d0c788a02  docs/evidence/c5708f3-provider-live-milestone-20260912/opencode-harness.mjs
+00cfd72f6905c8bbe45a32bac84cdbbbd211ae94158aab6dd2675b4fc61664a1  docs/evidence/c5708f3-provider-live-milestone-20260912/live-harness.mjs
+4b447be53bdfd7b83d204d83cf2d40da712be492f9fab62afc55bc650483ca02  docs/evidence/c5708f3-provider-live-milestone-20260912/opencode-harness.mjs

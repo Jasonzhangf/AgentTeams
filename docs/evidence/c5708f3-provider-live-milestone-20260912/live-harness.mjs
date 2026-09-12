@@ -94,9 +94,20 @@ try {
     restart:{acceptedRevision:afterRestart.configs[0]?.acceptedRevision,effectiveRevision:afterRestart.configs[0]?.effectiveRevision}
   }))
 } finally {
-  if (restarted) await restarted.stop().catch(()=>{})
-  if (agent) await agent.stop().catch(()=>{})
-  await consumer?.close().catch(()=>{})
-  await relay?.close().catch(()=>{})
+  let cleanupFailure
+  const cleanup = async (label, action) => {
+    try { await action() } catch (error) {
+      console.error(`cleanup failed: ${label}: ${error instanceof Error ? error.message : String(error)}`)
+      cleanupFailure ??= error
+    }
+  }
+  if (restarted) await cleanup('restarted agent stop', () => restarted.stop())
+  if (agent) await cleanup('agent stop', () => agent.stop())
+  await cleanup('console relay client close', () => consumer?.close())
+  await cleanup('relay close', () => relay?.close())
+  if (cleanupFailure) {
+    console.error(`cleanup incomplete; preserving evidence runtime directory: ${root}`)
+    throw cleanupFailure
+  }
   await rm(root,{recursive:true,force:true})
 }

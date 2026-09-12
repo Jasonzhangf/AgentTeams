@@ -16,7 +16,7 @@
     "openCodeDispatch": { "httpStatus": 200, "marker": "teams-rcc-open-code" }
   },
   "goaichat": {
-    "catalog": { "httpStatus": 200, "entryCount": 18, "configuredModel": "qwen3.8-max" },
+    "catalog": { "httpStatus": 200, "discoveredEntryCount": 18, "mergedEntryCount": 18, "configuredModel": "qwen3.8-max" },
     "openCodeDispatch": { "httpStatus": 200, "marker": "teams-goaichat-open-code" }
   },
   "agentRelay": {
@@ -25,8 +25,9 @@
     "apply": "ok",
     "acceptedRevision": 5,
     "effectiveRevision": 5,
-    "restartAcceptedRevision": 5,
-    "restartEffectiveRevision": 5
+    "runtimeStopStartAcceptedRevision": 5,
+    "runtimeStopStartEffectiveRevision": 5,
+    "osRestart": "not claimed"
   },
   "automaticFailover": false,
   "responseModelUsedAsConfigTruth": false

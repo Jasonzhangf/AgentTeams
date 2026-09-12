@@ -27,8 +27,10 @@ Direct RCC dispatch used `POST /v1/chat/completions` with `model=gpt-5.5` and
 `teams-rcc-explicit-model`. The upstream response field `model=glm-5.3` was retained
 as provider output and was not used as Teams configuration truth.
 
-Credentialed GoAIChat discovery returned 18 entries, including the explicitly
-configured backup `goaichat-openai/qwen3.8-max`.
+The credentialed GoAIChat probe returned 18 discovered entries, including the
+explicitly configured backup `goaichat-openai/qwen3.8-max`. The Agent-side merged
+catalog also contained 18 entries after deduplication. The raw credentialed probe is
+retained in `rcc-probes.log`.
 
 ## Agent and Relay apply/readback
 
@@ -52,8 +54,10 @@ effectiveRevision=5
 ```
 
 The persisted Agent config contained `acceptedRevision=5` and
-`effectiveRevision=5`. After stopping and starting the Agent again, the Relay
-projection read the same `acceptedRevision=5` and `effectiveRevision=5`.
+`effectiveRevision=5`. After stopping and starting the Agent runtime again in the
+harness, the Relay projection read the same `acceptedRevision=5` and
+`effectiveRevision=5`. This is runtime stop/start persistence evidence; an OS-level
+daemon restart remains a separate deployment gate.
 
 An empty RCC discovery result therefore did not block explicit manual model use and
 did not trigger backup selection. The same log records the persisted config summary
@@ -93,5 +97,5 @@ the configured reference only and are not stored in this receipt.
 
 This receipt closes the provider live milestone candidate. The parent issue remains
 open until the primary integration owner reconciles this receipt with the remaining
-MVP gates (public Relay deployment, real NAT egress, daemon Work replay and Console
-offline Work) and records an independent milestone review.
+MVP gates (public Relay deployment, real NAT egress, daemon Work replay, Console
+offline Work and OS-level daemon restart) and records an independent milestone review.

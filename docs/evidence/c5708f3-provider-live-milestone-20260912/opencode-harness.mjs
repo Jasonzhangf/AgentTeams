@@ -23,4 +23,9 @@ try{
  const primary=await run('rcc',compiled.primary)
  const backup=await run('goaichat',compiled.backup)
  console.log(JSON.stringify({primary,backup,acceptedRevision:compiled.acceptedRevision}))
-}finally{await managed?.stop().catch(()=>{});await rm(root,{recursive:true,force:true})}
+}finally{
+ let cleanupFailure
+ try { await managed?.stop() } catch (error) { console.error(`cleanup failed: managed OpenCode stop: ${error instanceof Error ? error.message : String(error)}`); cleanupFailure=error }
+ if (cleanupFailure) { console.error(`cleanup incomplete; preserving evidence runtime directory: ${root}`); throw cleanupFailure }
+ await rm(root,{recursive:true,force:true})
+}
