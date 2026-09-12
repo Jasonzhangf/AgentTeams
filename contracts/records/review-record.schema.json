@@ -1,29 +1,114 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://appsdk.local/contracts/records/review-record.schema.json",
-  "type": "object",
-  "required": ["review_id", "review_kind", "issue_id", "promotion_id", "fix_candidate_id", "pre_review_validation_id", "reviewer", "verdict", "evidence_ids", "reviewed_commit", "reviewed_tree_hash", "reviewed_diff_hash", "reviewed_artifact_hash", "reviewed_scope_hash", "resource_map_hash", "function_map_hash", "mainline_call_map_hash", "verification_map_hash", "created_at"],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
-    "review_id": {"type": "string"},
-    "review_kind": {"const": "architecture"},
-    "issue_id": {"type": "string"},
-    "promotion_id": {"type": "string"},
-    "fix_candidate_id": {"type": "string"},
-    "pre_review_validation_id": {"type": "string"},
-    "reviewer": {"type": "object", "required": ["adapter", "identity"], "properties": {"adapter": {"type": "string"}, "identity": {"type": "string"}}},
-    "verdict": {"enum": ["pass", "fail", "new_version_required", "manual_auth_required"]},
-    "evidence_ids": {"type": "array", "items": {"type": "string"}},
-    "reviewed_commit": {"type": "string"},
-    "reviewed_tree_hash": {"type": "string"},
-    "reviewed_diff_hash": {"type": "string"},
-    "reviewed_artifact_hash": {"type": "string"},
-    "reviewed_scope_hash": {"type": "string"},
-    "resource_map_hash": {"type": "string"},
-    "function_map_hash": {"type": "string"},
-    "mainline_call_map_hash": {"type": "string"},
-    "verification_map_hash": {"type": "string"},
-    "ai_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-    "confidence_rationale": {"type": "string"},
-    "created_at": {"type": "string"}
-  }
+    "ai_confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number"
+    },
+    "confidence_rationale": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "evidence_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "fix_candidate_id": {
+      "type": "string"
+    },
+    "function_map_hash": {
+      "type": "string"
+    },
+    "issue_id": {
+      "type": "string"
+    },
+    "mainline_call_map_hash": {
+      "type": "string"
+    },
+    "pre_review_validation_id": {
+      "type": "string"
+    },
+    "promotion_id": {
+      "type": "string"
+    },
+    "resource_map_hash": {
+      "type": "string"
+    },
+    "review_id": {
+      "type": "string"
+    },
+    "review_kind": {
+      "const": "architecture"
+    },
+    "reviewed_artifact_hash": {
+      "type": "string"
+    },
+    "reviewed_commit": {
+      "type": "string"
+    },
+    "reviewed_diff_hash": {
+      "type": "string"
+    },
+    "reviewed_scope_hash": {
+      "type": "string"
+    },
+    "reviewed_tree_hash": {
+      "type": "string"
+    },
+    "reviewer": {
+      "properties": {
+        "adapter": {
+          "type": "string"
+        },
+        "identity": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "adapter",
+        "identity"
+      ],
+      "type": "object"
+    },
+    "verdict": {
+      "enum": [
+        "pass",
+        "fail",
+        "unknown",
+        "new_version_required",
+        "manual_auth_required"
+      ]
+    },
+    "verification_map_hash": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "review_id",
+    "review_kind",
+    "issue_id",
+    "promotion_id",
+    "fix_candidate_id",
+    "pre_review_validation_id",
+    "reviewer",
+    "verdict",
+    "evidence_ids",
+    "reviewed_commit",
+    "reviewed_tree_hash",
+    "reviewed_diff_hash",
+    "reviewed_artifact_hash",
+    "reviewed_scope_hash",
+    "resource_map_hash",
+    "function_map_hash",
+    "mainline_call_map_hash",
+    "verification_map_hash",
+    "created_at"
+  ],
+  "type": "object"
 }

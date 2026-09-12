@@ -131,7 +131,10 @@
         "contracts/transitions/**"
       ],
       "dependency_modules": [],
-      "deployment_operations": ["install", "restart"],
+      "deployment_operations": [
+        "install",
+        "restart"
+      ],
       "generated_outputs": [
         "generated/modules/teams-source/**"
       ],

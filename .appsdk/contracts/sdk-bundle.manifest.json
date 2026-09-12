@@ -7,6 +7,9 @@
     "contracts": [
       "contracts/sdk-bundle.manifest.json",
       "contracts/project.schema.json",
+      "contracts/communication/communication-request.schema.json",
+      "contracts/communication/communication-event.schema.json",
+      "contracts/communication/communication-capabilities.schema.json",
       "contracts/development-scenarios.manifest.json",
       "contracts/guidance/guidance-manifest.schema.json",
       "contracts/guidance/tour-review.schema.json",
@@ -47,13 +50,15 @@
     ],
     "docs": [
       "docs/design/appsdk-project-integration.md",
+      "docs/design/apps-sdk-communication.md",
       "docs/design/fix-lifecycle-v2.md",
       "docs/design/development-scenarios.md",
       "docs/design/appsdk-guidance-framework.md",
       "docs/test-design/appsdk-guidance-framework.md",
       "docs/architecture/development-process-control-harness.md",
       "docs/architecture/appsdk-governance-architecture.md",
-      "docs/design/project-memory.md"
+      "docs/design/project-memory.md",
+      "docs/design/appsdk-global-registry.md"
     ],
     "rules": [
       "skills/appsdk-project-governance/SKILL.md"
@@ -68,6 +73,7 @@
       "skills/appsdk-project-governance/references/goal-prompt.md",
       "skills/appsdk-project-governance/references/process-control-harness.md",
       "skills/appsdk-project-governance/references/review-delivery.md",
+      "skills/appsdk-migration/SKILL.md",
       "skills/project-memory/SKILL.md"
     ]
   },
