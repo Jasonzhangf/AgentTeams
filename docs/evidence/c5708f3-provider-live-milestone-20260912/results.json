@@ -1,0 +1,24 @@
+{
+  "issue": "c5708f3",
+  "candidate": "f9e90dbd3e721abed38cafb482f240de6e004137",
+  "rcc": {
+    "catalog": { "httpStatus": 200, "dataCount": 0, "modelsCount": 0 },
+    "explicitDispatch": { "model": "gpt-5.5", "httpStatus": 200, "finishReason": "stop", "marker": "teams-rcc-explicit-model" },
+    "openCodeDispatch": { "httpStatus": 200, "marker": "teams-rcc-open-code" }
+  },
+  "goaichat": {
+    "catalog": { "httpStatus": 200, "entryCount": 18, "configuredModel": "qwen3.8-max" },
+    "openCodeDispatch": { "httpStatus": 200, "marker": "teams-goaichat-open-code" }
+  },
+  "agentRelay": {
+    "refreshPrimary": "ok",
+    "refreshBackup": "ok",
+    "apply": "ok",
+    "acceptedRevision": 5,
+    "effectiveRevision": 5,
+    "restartAcceptedRevision": 5,
+    "restartEffectiveRevision": 5
+  },
+  "automaticFailover": false,
+  "responseModelUsedAsConfigTruth": false
+}
