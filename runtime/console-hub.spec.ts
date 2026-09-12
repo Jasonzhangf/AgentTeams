@@ -85,3 +85,32 @@ it('rejects mixed static and discovery bindings', () => {
     command: async () => ({ ok: true }), sendSession: async () => ({ ok: true }),
   } }], async () => ({ peers: [], client: () => { throw new Error('unused') } }))).toThrow(/combine static bindings/)
 })
+
+it('routes discovery commands and Session ingress only through online peers', async () => {
+  const online = directoryPeer('browser', 'online', 9, ['browser'])
+  const command = vi.fn(async () => ({ ok: true as const }))
+  const sendSession = vi.fn(async () => ({ ok: true as const }))
+  const client = createConsoleHub([], async () => ({ peers: [online, directoryPeer('worker', 'offline', 2, ['file-search'])],
+    client: peer => {
+      if (peer.declaration.identity.agentId !== 'browser') throw new Error('unexpected offline client')
+      return { readProjection: async () => ({ version: 1 as const, agents: [], sessions: [], configs: [], notifications: [], works: [], relations: [] }),
+        command, sendSession }
+    } }))
+  await expect(client.command({ kind: 'config.apply', agentId: 'browser' })).resolves.toEqual({ ok: true })
+  await expect(client.sendSession({ agentId: 'browser', sessionId: 's' }, [{ text: 'business' }])).resolves.toEqual({ ok: true })
+  expect(command).toHaveBeenCalledTimes(1)
+  expect(sendSession).toHaveBeenCalledWith({ agentId: 'browser', sessionId: 's' }, [{ text: 'business' }])
+  await expect(client.command({ kind: 'config.apply', agentId: 'missing' })).rejects.toMatchObject({ code: 'NOT_FOUND' })
+})
+
+it('propagates stale generation failures from the relay binding', async () => {
+  const online = directoryPeer('browser', 'online', 3, ['browser'])
+  const client = createConsoleHub([], async () => ({ peers: [online],
+    client: () => ({
+      readProjection: async () => ({ version: 1 as const, agents: [], sessions: [], configs: [], notifications: [], works: [], relations: [] }),
+      command: async () => { throw Object.assign(new Error('stale'), { code: 'STALE_GENERATION' }) },
+      sendSession: async () => { throw Object.assign(new Error('stale'), { code: 'STALE_GENERATION' }) },
+    }) }))
+  await expect(client.command({ kind: 'config.apply', agentId: 'browser' })).rejects.toMatchObject({ code: 'STALE_GENERATION' })
+  await expect(client.sendSession({ agentId: 'browser', sessionId: 's' }, { text: 'x' })).rejects.toMatchObject({ code: 'STALE_GENERATION' })
+})

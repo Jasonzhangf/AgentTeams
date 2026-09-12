@@ -111,6 +111,23 @@ describe('Console HTTP v1 adapter', () => {
     await expect(metadataClient.readProjection()).rejects.toThrow(/invalid v1 projection/)
   })
 
+  it('carries directory generation on Agent rows and rejects invalid generation values', async () => {
+    const withGeneration = {
+      ...projection,
+      agents: [{ agentId: 'worker', label: 'Worker', machineId: 'Build', generation: 8, presence: 'offline', capabilities: ['file-search'] }],
+    }
+    const client = createConsoleHttpClient({ fetchImpl: async () => new Response(JSON.stringify(withGeneration), { status: 200 }) })
+    await expect(client.readProjection()).resolves.toEqual(withGeneration)
+
+    for (const generation of [0, -1, 1.5, '8']) {
+      const invalid = createConsoleHttpClient({ fetchImpl: async () => new Response(JSON.stringify({
+        ...projection,
+        agents: [{ agentId: 'worker', label: 'Worker', machineId: 'Build', generation, presence: 'offline', capabilities: ['file-search'] }],
+      }), { status: 200 }) })
+      await expect(invalid.readProjection()).rejects.toThrow(/invalid v1 projection/)
+    }
+  })
+
   it('supports host-specific versioned paths without changing the client contract', async () => {
     const requests: string[] = []
     const client = createConsoleHttpClient({
