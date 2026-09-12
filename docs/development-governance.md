@@ -18,15 +18,60 @@
 1. 获取最新 origin/main，在主仓库 `playground/` 下创建独立 clean worktree；保持主线只读。
 2. 绑定受影响 feature/owner/路径/调用边/验收。先定位真源，比较删除、复用与直接实现。
 3. 关键行为先红测后最小修改；同步受影响 maps。探索与验证写本任务独占 run notes。
-4. 根目录安装 `pnpm install --frozen-lockfile`；定向验证后执行 `pnpm verify`。
+4. 根目录安装 `pnpm install --frozen-lockfile`；先执行当前阶段需要的定向验证，再按
+   重入规则决定是否需要全量 `pnpm verify`。
 5. 完成适用实际入口证据，再按本目标已获用户选择的独立 Codex exact review 路由
    审查精确候选；AGY Review 不属于本目标的 review gate。变更后重跑受影响验证和 review。
 6. commit、push、合并、安装、发布分别按授权执行；review PASS 不等于这些动作完成。
 
 `pnpm verify` 顺序执行全量测试、类型检查、Guidance compile、AppSDK compile、编译
-产物 HTTP smoke、AppSDK verify；任何命令失败即停止。`pnpm test` 先构建被依赖的
-OpenCode adapter，再运行现有全部 53 个测试文件；从 module contract 读取最少
-304 测试门槛，拒绝 skip、TODO 和 `.only`。报告落在 `generated/validation/`。
+产物 HTTP smoke、AppSDK verify；任何命令失败即停止。它是新候选、依赖/契约漂移或
+无法证明证据仍有效时的全量门禁，不是每次恢复或每个阶段都必须重复执行的固定步骤。
+`pnpm test` 先构建被依赖的 OpenCode adapter，再运行现有全部 53 个测试文件；从
+module contract 读取最少 304 测试门槛，拒绝 skip、TODO 和 `.only`。报告落在
+`generated/validation/`。
+
+## 阶段性可重入门禁
+
+每个 delivery unit 维护自己的阶段记录。阶段至少使用
+`pending → running → passed | blocked`，恢复时允许 `passed → reused`；输入漂移时先
+标记 `invalidated`，再回到 `running`。`reused` 是新的审计结果，不是把旧的 PASS
+复制到当前阶段。
+
+阶段记录必须保存一个 evidence fingerprint，至少包含：基线 commit、候选 commit/tree
+hash、允许修改路径与实际 changed paths、依赖 lockfile 与工具版本、受影响 maps/契约
+hash、测试或构建命令及参数、配置/环境/设备入口标识、产物 hash，以及原始 evidence
+receipt。凭“上次跑过”或日志存在不能跳过门禁。
+
+恢复时按以下顺序处理：
+
+1. 读取当前阶段记录和原始 receipt，重新计算 fingerprint；记录不存在、字段缺失、
+   receipt 过期或任一指纹不一致时，阶段为 `invalidated`。
+2. 指纹完全相同且依赖的环境、配置、产物和入口仍可验证时，写一条 `reuse receipt`，
+   引用原始 receipt、逐项列出复用的 gate 和复核命令，阶段转为 `reused`，不重新执行
+   该 gate。
+3. 指纹变化只使依赖它的 gate 失效。未受影响的 gate 保留 `passed/reused`；不得因为
+   一个 focused test 或文档阶段变化而重跑无关的全量网络、UI 或部署门禁。
+4. 受影响 gate 先执行最小定向命令；只有变更触及跨模块契约、依赖、maps、构建入口、
+   产物或全量回归约束时，才执行 `pnpm verify`。命令成功后写入新的 fingerprint，
+   不覆盖旧 receipt。
+
+最小失效矩阵如下：
+
+| 变更或漂移 | 必须重跑 | 可以复用（指纹不变） |
+| --- | --- | --- |
+| 业务源码、测试或 public API | 受影响 focused/regression、typecheck、build、review | 不相关模块的 focused gate、已完成的环境探测 |
+| lockfile、依赖、编译器或构建配置 | 受影响测试、typecheck、build、AppSDK compile/verify、review | 与依赖无关且有独立 fingerprint 的外部探测 |
+| `.appsdk/`、architecture maps、治理规则或协议契约 | maps/contract gate、AppSDK compile/verify、review | 只读且输入完全相同的运行时探测 |
+| runtime 配置、凭据引用、设备、网络、服务或入口环境 | 对应 live/install/restart/replay gate | 源码 focused/typecheck 证据 |
+| 仅阶段记录、receipt 索引或 memory projection | 记录完整性与 memory verify | 业务测试、build、live evidence |
+
+每次跳过必须留下可审计的 `reuse receipt`：`unit_id`、`stage_id`、当前 fingerprint、
+原始 receipt、复用 gate、复核时间、有效期、跳过理由和仍需执行的 gate。没有该记录
+就按未执行处理。阶段失败只阻断依赖它的后续阶段；没有依赖的阶段可以继续，不能把
+失败写成复用或全量成功。由 lifecycle adapter 生成的后续 evidence 还必须标记
+`execution.mode=executed|reused`，并在复用时引用原始 stage receipt，避免把复用误报为
+当前重新执行。
 增加功能时补测试并按真实基线更新门槛，不靠降低门槛消除回归。
 
 类型检查覆盖核心源码、Console/OpenCode 与独立 UI workspace。独立 UI 的 5 个测试
@@ -50,8 +95,10 @@ AppSDK review admission、freeze/Active 发布保留正式证据门禁，本轮�
 假 review record、假部署 receipt。普通 compile/verify 与发布准入是不同证据。
 
 正式候选提交后运行 `pnpm lifecycle:admission`。该 adapter 不接收 hash 参数：它从
-当前 clean worktree 和 Git 对象计算候选身份，先执行 `pnpm verify`，再执行隔离安装
-副本的 Relay/Agent 进程启动、Agent 重启与信号关闭，只有命令真实通过且源码未变化
+当前 clean worktree 和 Git 对象计算候选身份，按候选 fingerprint 读取自己的阶段状态；
+同一候选已经通过且原始日志、产物和环境指纹仍有效的阶段写 reuse receipt 并跳过，
+只有缺失或失效的阶段才执行 `pnpm verify`、隔离安装副本的 Relay/Agent 进程启动、
+Agent 重启与信号关闭。只有命令真实通过且源码未变化
 才生成 `.appsdk/records/` 的 fix-candidate、whitebox、install、restart、blackbox 和
 pre-review 记录；完整命令输出保存在 `.appsdk-control/lifecycle-adapter/`。这些本地
 记录不代表公网/NAT、managed OpenCode、跨设备或发布验收。

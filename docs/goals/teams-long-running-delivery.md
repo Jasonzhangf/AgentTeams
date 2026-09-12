@@ -109,8 +109,19 @@ MVP 完成必须同时具备：
 7. 归档必要证据，确认没有唯一未合并改动/未跟踪工作，停本任务服务、释放claim和工作树。
    有依赖时先保留并记录，实际移除后才记closed；完成清理记忆后阶段才closed。
 
-代码/依赖/配置/产物/环境相同可复用有效证据；改变后重跑受影响门禁。阶段收尾记忆
-可作为独立小提交，不为增加一条已核实的receipt重复整个产品运行回放。
+代码/依赖/配置/产物/环境相同可复用有效证据；改变后只重跑受影响门禁。每个 delivery unit
+按阶段记录 `pending/running/passed/reused/invalidated/blocked`，并用基线、候选
+commit/tree、changed paths、lockfile/工具、maps/契约、配置/环境/入口和产物组成
+evidence fingerprint。恢复时先重算指纹：完全相同且原始 receipt 仍有效，写
+`reuse receipt` 并跳过该 gate；任何字段漂移只使依赖该字段的 gate 失效，其他阶段
+保持原状态。跳过没有 receipt、指纹不完整或环境有效性未经复核时，一律按未执行处理。
+阶段收尾记忆可作为独立小提交，不为增加一条已核实的 receipt 重复整个产品运行回放。
+
+阶段性门禁采用最小验证集：源码/测试变更重跑受影响 focused/regression、typecheck、
+build 和 exact review；依赖、maps、契约或治理规则变更才扩大到 AppSDK compile/verify
+或 `pnpm verify`；网络、凭据、设备、安装或服务漂移只重跑对应 live/install/restart
+入口。未受影响且 fingerprint 未变的 gate 通过 `reuse receipt` 保留，不能因为恢复
+任务、切换阶段名称或重新打开 Console 就全量重跑。
 
 ## 每阶段 AppSDK memory / Level 2
 
