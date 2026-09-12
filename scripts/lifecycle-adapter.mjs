@@ -348,7 +348,9 @@ function main() {
       if (name.startsWith(candidateValidationPrefix)) existingValidationPaths.push(join(recordsRoot, name))
     }
   }
-  let validationPath = canonicalValidationPath
+  let validationPath = Object.keys(stageState.stages).length > 0
+    ? join(recordsRoot, `${candidateValidationPrefix}${attempt}.json`)
+    : canonicalValidationPath
   for (const existingValidationPath of [...new Set(existingValidationPaths)]) {
     if (!existsSync(existingValidationPath)) continue
     try {
