@@ -5,7 +5,15 @@
 - Command: `git push origin main`
 - Remote result: `68aacf7..27dd03a main -> main`
 - Verification: `git ls-remote origin refs/heads/main`
-- Remote main SHA: `27dd03ac307123c1f6adc9833487fd452b3c596f`
+- First remote main SHA after integration: `27dd03ac307123c1f6adc9833487fd452b3c596f`
 
-The remote ref matches the locally verified integration commit. No force push,
+The receipt itself was then added as a documentation-only commit and pushed
+through the same fast-forward path. Final verification:
+
+```text
+final remote main SHA: 511397c303d262e6f3a2a35d97f15ce7bf3438b8
+```
+
+The remote ref matched the locally verified integration commit before the
+receipt-only follow-up. No force push,
 hook bypass, or unrelated branch deletion was used.
