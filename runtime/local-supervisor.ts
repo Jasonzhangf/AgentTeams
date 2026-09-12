@@ -21,7 +21,7 @@ export interface LocalSupervisorOptions {
   readonly spawn?: typeof nodeSpawn
 }
 
-export type LocalSupervisorState = 'stopped' | 'starting' | 'running' | 'stopping'
+export type LocalSupervisorState = 'stopped' | 'starting' | 'running' | 'stopping' | 'failed'
 
 function defaultEntry(name: 'relay-process' | 'agent-process'): string {
   const runtimeDirectory = dirname(fileURLToPath(import.meta.url))
@@ -86,6 +86,7 @@ async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'],
 
 export interface LocalSupervisor {
   readonly state: () => LocalSupervisorState
+  readonly failure: () => Error | undefined
   readonly processes: () => readonly LocalProcessSpec[]
   start(): Promise<void>
   stop(): Promise<void>
@@ -98,7 +99,9 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   const spawnProcess = options.spawn ?? nodeSpawn
   const specs = planLocalProcesses(config, options)
   const children = new Map<string, ChildProcess>()
+  const unwatch = new Map<string, () => void>()
   let lifecycle: LocalSupervisorState = 'stopped'
+  let lastFailure: Error | undefined
   let starting: Promise<void> | undefined
   let stopping: Promise<void> | undefined
 
@@ -115,13 +118,16 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
           await waitForExit(child, stopTimeoutMs)
         } catch (error) { failures.push(error) }
+        unwatch.get(spec.id)?.()
+        unwatch.delete(spec.id)
       }
       if (failures.length > 0) throw new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
       children.clear()
       lifecycle = 'stopped'
+      lastFailure = undefined
     })()
     stopping = operation
-    void operation.catch(() => { lifecycle = 'running' }).finally(() => {
+    void operation.catch(() => { if (lifecycle === 'stopping') lifecycle = lastFailure ? 'failed' : 'running' }).finally(() => {
       if (stopping === operation) stopping = undefined
     })
     return operation
@@ -134,10 +140,29 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       lifecycle = 'starting'
       try {
         for (const spec of specs) {
-          if (lifecycle !== 'starting') throw new Error('local daemon startup was cancelled')
+          if (lifecycle !== 'starting') {
+            if (lifecycle === 'failed') throw lastFailure ?? new Error('local daemon failed during startup')
+            throw new Error('local daemon startup was cancelled')
+          }
           const child = spawnProcess(nodeExecutable, [spec.entry, ...spec.args], { env: { ...process.env, ...options.env }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
           children.set(spec.id, child)
           await waitForReady(child, spec.kind, startupTimeoutMs)
+          if (child.exitCode !== null || child.signalCode !== null) {
+            throw new Error(`local ${spec.kind} exited immediately after readiness code=${child.exitCode ?? 'null'} signal=${child.signalCode ?? 'null'}`)
+          }
+          const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+            if (lifecycle === 'stopping' || lifecycle === 'stopped') return
+            lastFailure = new Error(`local ${spec.kind} exited unexpectedly code=${code ?? 'null'} signal=${signal ?? 'null'}`)
+            lifecycle = 'failed'
+          }
+          const onError = (error: Error) => {
+            if (lifecycle === 'stopping' || lifecycle === 'stopped') return
+            lastFailure = error
+            lifecycle = 'failed'
+          }
+          child.once('exit', onExit)
+          child.once('error', onError)
+          unwatch.set(spec.id, () => { child.off('exit', onExit); child.off('error', onError) })
         }
         lifecycle = 'running'
       } catch (error) {
@@ -148,5 +173,5 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
     return starting
   }
 
-  return { state: () => lifecycle, processes: () => specs, start, stop }
+  return { state: () => lifecycle, failure: () => lastFailure, processes: () => specs, start, stop }
 }

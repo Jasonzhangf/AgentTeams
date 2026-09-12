@@ -42,7 +42,7 @@ it('starts relay before enabled daemons and stops the owned children reentrantly
   try {
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
-    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
     await writeFile(agent, "process.send?.({kind:'daemon.registered'}); process.once('SIGTERM', () => process.exit(0))\n")
     const supervisor = createLocalSupervisor(config(root), { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 2000, stopTimeoutMs: 2000 })
     await supervisor.start()
@@ -62,11 +62,28 @@ it('reports startup failure after cleaning only children it started', async () =
   try {
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
-    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
     await writeFile(agent, "process.stderr.write('agent failed\\n'); process.exit(3)\n")
     const supervisor = createLocalSupervisor(config(root), { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 2000, stopTimeoutMs: 2000 })
     await expect(supervisor.start()).rejects.toThrow(/exited before readiness/)
     expect(supervisor.state()).toBe('stopped')
     await supervisor.stop()
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('does not report running when a child exits immediately after readiness', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-local-supervisor-exit-'))
+  try {
+    const relay = join(root, 'relay.mjs')
+    const agent = join(root, 'agent.mjs')
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); process.exit(3)\n")
+    const supervisor = createLocalSupervisor(config(root), { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 2000, stopTimeoutMs: 2000 })
+    await supervisor.start()
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(supervisor.state()).toBe('failed')
+    expect(supervisor.failure()?.message).toMatch(/exited unexpectedly/)
+    await supervisor.stop()
+    expect(supervisor.state()).toBe('stopped')
   } finally { await rm(root, { recursive: true, force: true }) }
 })
