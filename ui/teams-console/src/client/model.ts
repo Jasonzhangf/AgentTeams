@@ -7,6 +7,7 @@ export interface AgentRow {
   readonly agentId: string
   readonly label: string
   readonly machineId: string
+  readonly generation?: number
   readonly presence: UiStatus
   readonly capabilities: readonly string[]
   readonly currentSessionId?: string

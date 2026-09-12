@@ -28,7 +28,14 @@ export async function startConsoleRuntime(options: ConsoleRuntimeOptions) {
   const daemon = await startAgentDaemon(options.daemon)
   let server: ReturnType<typeof createConsoleServer> | undefined
   try {
-    const client = createConsoleHub(agentIds.map(agentId => ({ agentId, client: createRelayConsoleClient(daemon.network, agentId, options.daemon.relay.requestTimeoutMs) })))
+    const client = createConsoleHub(
+      agentIds.map(agentId => ({ agentId, client: createRelayConsoleClient(daemon.network, agentId, options.daemon.relay.requestTimeoutMs) })),
+      agentIds.length === 0 ? async () => ({
+        peers: (await daemon.network.directory(false)).filter(peer =>
+          peer.declaration.identity.agentId !== options.daemon.relay.declaration.identity.agentId),
+        client: peer => createRelayConsoleClient(daemon.network, peer.declaration.identity.agentId, options.daemon.relay.requestTimeoutMs),
+      }) : undefined,
+    )
     server = createConsoleServer({ staticRoot, uiRoot, tls: options.tls,
       authenticationChallenge: 'Basic realm="AgentTeams", charset="UTF-8"',
       authorize: createConsoleAuthorization({ username, password, origin, client }) })

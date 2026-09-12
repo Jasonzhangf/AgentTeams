@@ -29,6 +29,7 @@ it('validates replies and rejects undeclared or malformed projection fields', ()
     { ...frame, projection: { ...projection, agents: [{ ...projection.agents[0], credential: 'secret' }] } },
     { ...frame, projection: { ...observed, works: [{ ...observed.works[0], payload: { query: 'secret' } }] } },
     { ...frame, projection: { ...projection, configs: [{ agentId: 'a', acceptedRevision: -1, providers: [] }] } },
+    { ...frame, projection: { ...projection, agents: [{ ...projection.agents[0], generation: 0 }] } },
     { ...result, result: { ok: 'yes' } },
     { ...result, result: { ok: false, error: { code: 'invented', message: 'bad' } } },
   ]) expect(() => parseConsoleWireReply(JSON.stringify(invalid))).toThrow()

@@ -56,6 +56,8 @@ export interface ConsoleProjectionV1 {
     readonly agentId: string
     readonly label: string
     readonly machineId: string
+    /** Current admitted Relay generation; optional for legacy owner projections. */
+    readonly generation?: number
     readonly presence: 'online' | 'offline' | 'unknown'
     readonly capabilities: readonly string[]
     readonly currentSessionId?: string
