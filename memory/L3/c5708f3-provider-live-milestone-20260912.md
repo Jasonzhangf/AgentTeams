@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-09-12T11:26:04.221763+00:00","id":"c5708f3-provider-live-milestone-20260912","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["ai-reviewed","human-unreviewed","milestone","provider"],"updated_at":"2026-09-12T11:26:04.221763+00:00"} -->
+
+# Provider live milestone accepts explicit models with empty RCC catalog
+
+On source candidate f9e90dbd3e721abed38cafb482f240de6e004137, RCC /v1/models returned HTTP 200 with empty data/models, while explicit model gpt-5.5 through direct chat and managed OpenCode returned HTTP 200. Credentialed GoAIChat /v1/models returned 18 entries including qwen3.8-max, and managed OpenCode explicit backup dispatch returned HTTP 200. A real TLS Relay and Agent runtime accepted both provider bindings, refreshModels and config.apply returned ok, acceptedRevision/effectiveRevision reached 5/5, persisted config and same-process Agent runtime stop/start projection read 5/5. Evidence: docs/evidence/c5708f3-provider-live-milestone-20260912/milestone-receipt.md, agent-relay-harness.log, opencode-harness.log, rcc-probes.log, push-receipt.md, cleanup-receipt.md. This does not establish OS daemon restart, public deployment, NAT, or full Work MVP.
+<!-- project-memory:end -->

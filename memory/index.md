@@ -79,6 +79,10 @@ _Empty._
 - tags: `ai-reviewed`, `appsdk`, `governance`, `human-unreviewed`
 - details: [L2/appsdk-0-1-6-lock-alignment-20260909.md](L2/appsdk-0-1-6-lock-alignment-20260909.md)
 
+### Provider live milestone accepts explicit models with empty RCC catalog
+- tags: `ai-reviewed`, `human-unreviewed`, `milestone`, `provider`
+- details: [L2/c5708f3-provider-live-milestone-20260912.md](L2/c5708f3-provider-live-milestone-20260912.md)
+
 ### Capability matching and shared resource capacity
 - tags: `ai-reviewed`, `capability`, `human-unreviewed`, `relations`, `resource`, `work`
 - details: [L2/capability-relation-capacity-20260906.md](L2/capability-relation-capacity-20260906.md)
