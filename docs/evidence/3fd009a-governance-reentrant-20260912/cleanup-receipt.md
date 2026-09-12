@@ -6,4 +6,4 @@
 - temporary dependency symlinks: removed after compile
 - worker processes/daemons: none started by this unit
 - evidence: integration and push receipts in this directory
-- cleanup status: pending worktree and branch removal after this receipt commit
+- cleanup status: complete; owned worktrees and branches were removed after the receipt commit
