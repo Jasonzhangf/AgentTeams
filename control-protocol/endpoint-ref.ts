@@ -194,6 +194,9 @@ export function admitWorkEndpointReference(
 ): EndpointDiscoveryView {
   const parsed = parseWorkEndpointReference(ref)
   const view = admitEndpointReference(catalog, viewer, parsed)
+  if (view.lifecycle !== 'active') {
+    fail('FORBIDDEN', `Endpoint ${parsed.endpointId} lifecycle ${view.lifecycle} is not active`)
+  }
   const capability = view.capabilities.find(item => item.capabilityId === parsed.capabilityId && item.version === parsed.capabilityVersion)
   if (!capability) fail('NOT_FOUND', `capability ${parsed.capabilityId} is not mounted on Endpoint ${parsed.endpointId}`)
   if (!capability.operations.includes(parsed.operation)) fail('NOT_FOUND', `operation ${parsed.operation} is not on ${parsed.capabilityId}`)
