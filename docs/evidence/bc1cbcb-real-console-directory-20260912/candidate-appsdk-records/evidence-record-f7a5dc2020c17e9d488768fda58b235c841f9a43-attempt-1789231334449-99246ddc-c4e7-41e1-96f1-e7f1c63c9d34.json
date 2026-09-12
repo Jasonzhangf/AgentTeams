@@ -1,0 +1,33 @@
+{
+  "evidence_id": "attempt-1789231334449-99246ddc-c4e7-41e1-96f1-e7f1c63c9d34-whitebox",
+  "issue_id": "teams-lifecycle-admission",
+  "experiment_id": "teams-lifecycle-admission",
+  "phase": "development_whitebox",
+  "kind": "gate",
+  "source_commit": "f7a5dc2020c17e9d488768fda58b235c841f9a43",
+  "scope": {
+    "module_id": "teams-source",
+    "entrypoint": "pnpm verify"
+  },
+  "producer": {
+    "adapter": "agentteams::lifecycle-adapter:v1",
+    "identity": "agentteams::lifecycle-adapter:v1/whitebox"
+  },
+  "result": "pass",
+  "created_at": "2026-09-12T16:42:39.844Z",
+  "expires_at": "2026-09-13T16:42:39.650Z",
+  "input_hashes": [
+    "sha256:12103a8ed91da735d9588dd6cb4915065a3bd1511e8eae96fba1ac6df7d7fb26",
+    "sha256:89c9aff8078462208b6125f5d34e3b162bf207e80df1e35e9f9ad82291704f1f"
+  ],
+  "scope_hash": "sha256:802329a025ebbfe192b365534df5909a530fe8a310a8b662f8ed4c606e60a5ac",
+  "artifact_hash": "sha256:d2ba55868d3e9a525e77c62a95c820dc41b9ef52c44d0b3e8bb3539493dade3d",
+  "entrypoint": "pnpm verify",
+  "execution_surface": "development_whitebox",
+  "execution": {
+    "mode": "executed",
+    "receipt_id": "stage-pnpm-verify-1789231359650",
+    "receipt_path": "/Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-verify-1789231359650.json"
+  },
+  "command": "pnpm verify"
+}

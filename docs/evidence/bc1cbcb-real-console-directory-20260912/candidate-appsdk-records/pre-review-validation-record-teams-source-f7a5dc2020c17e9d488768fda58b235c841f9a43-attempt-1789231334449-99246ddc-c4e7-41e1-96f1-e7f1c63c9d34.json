@@ -1,0 +1,45 @@
+{
+  "validation_id": "validation-attempt-1789231334449-99246ddc-c4e7-41e1-96f1-e7f1c63c9d34",
+  "issue_id": "teams-lifecycle-admission",
+  "module_id": "teams-source",
+  "fix_candidate_id": "fix-f7a5dc2020c1-attempt-1789231334449-99246ddc-c4e7-41e1-96f1-e7f1c63c9d34",
+  "candidate_commit": "f7a5dc2020c17e9d488768fda58b235c841f9a43",
+  "candidate_tree_hash": "0fc06157bb32d4e4e3cd45693a691d234f8aba22",
+  "artifact_hash": "sha256:d2ba55868d3e9a525e77c62a95c820dc41b9ef52c44d0b3e8bb3539493dade3d",
+  "whitebox_producer": {
+    "adapter": "agentteams::lifecycle-adapter:v1",
+    "identity": "agentteams::lifecycle-adapter:v1/whitebox"
+  },
+  "whitebox_evidence_ids": [
+    "attempt-1789231334449-99246ddc-c4e7-41e1-96f1-e7f1c63c9d34-whitebox"
+  ],
+  "blackbox_evidence_ids": [
+    "attempt-1789231334449-99246ddc-c4e7-41e1-96f1-e7f1c63c9d34-blackbox"
+  ],
+  "deployment": {
+    "environment_id": "sha256:b3beac37aac975759ed8e6bf24b1e40ae7d592f4a46b1954396fcc46e76881ee",
+    "install_receipt_id": "attempt-1789231334449-99246ddc-c4e7-41e1-96f1-e7f1c63c9d34-install",
+    "restart_receipt_id": "attempt-1789231334449-99246ddc-c4e7-41e1-96f1-e7f1c63c9d34-restart",
+    "entrypoint": "pnpm smoke:installed -> installed runtime/server/relay-process.js + runtime/runtime/agent-process.js",
+    "producer": {
+      "adapter": "agentteams::lifecycle-adapter:v1",
+      "identity": "agentteams::lifecycle-adapter:v1/deployment"
+    },
+    "observed_at": "2026-09-12T16:42:46.801Z"
+  },
+  "stage_execution": {
+    "pnpm-verify": {
+      "mode": "executed",
+      "receipt_id": "stage-pnpm-verify-1789231359650",
+      "receipt_path": "/Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-verify-1789231359650.json"
+    },
+    "pnpm-smoke-installed": {
+      "mode": "executed",
+      "receipt_id": "stage-pnpm-smoke-installed-1789231366543",
+      "receipt_path": "/Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-smoke-installed-1789231366543.json"
+    }
+  },
+  "source_unchanged": true,
+  "result": "pass",
+  "created_at": "2026-09-12T16:42:46.819Z"
+}

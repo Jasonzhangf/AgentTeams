@@ -1,0 +1,51 @@
+
+> agentteams@0.1.0 smoke:installed /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912
+> pnpm build:governance && node scripts/installed-runtime-smoke.mjs
+
+
+> agentteams@0.1.0 build:governance /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912
+> pnpm build && node scripts/package-artifact.mjs
+
+
+> agentteams@0.1.0 build /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912
+> pnpm --dir opencode-adapter build && pnpm --dir console-host build && pnpm --dir ui/teams-console build && pnpm build:runtime
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    16.95 kB │ gzip: 4.25 kB
+ℹ lib/index.d.mts  12.28 kB │ gzip: 2.84 kB
+ℹ 2 files, total: 29.23 kB
+✔ Build complete in 591ms
+
+> @deepseek-ai/teams-console-host@0.1.0 build /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/console-host
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/console-host/package.json 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    14.20 kB │ gzip: 4.26 kB
+ℹ lib/index.d.mts   9.00 kB │ gzip: 2.43 kB
+ℹ 2 files, total: 23.20 kB
+✔ Build complete in 529ms
+
+> @deepseek-ai/teams-console@0.1.0 build /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/ui/teams-console
+> tsc -p tsconfig.build.json && node scripts/finalize-build.mjs
+
+
+> agentteams@0.1.0 build:runtime /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+Installed runtime smoke passed: isolated pnpm install, Relay and Agent startup, restart, local TOML launcher, and signal shutdown.

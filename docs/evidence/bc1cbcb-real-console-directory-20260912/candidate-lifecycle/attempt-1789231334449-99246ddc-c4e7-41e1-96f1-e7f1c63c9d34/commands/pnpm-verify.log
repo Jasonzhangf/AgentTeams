@@ -1,0 +1,1185 @@
+
+> agentteams@0.1.0 verify /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912
+> pnpm test && pnpm typecheck && appsdk guide compile && appsdk compile && pnpm smoke && appsdk verify
+
+
+> agentteams@0.1.0 test /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912
+> pnpm --dir opencode-adapter build && node scripts/regression.mjs
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    16.95 kB │ gzip: 4.25 kB
+ℹ lib/index.d.mts  12.28 kB │ gzip: 2.84 kB
+ℹ 2 files, total: 29.23 kB
+✔ Build complete in 741ms
+Test Files 75 passed
+Tests 447 passed
+
+> agentteams@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912
+> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    16.95 kB │ gzip: 4.25 kB
+ℹ lib/index.d.mts  12.28 kB │ gzip: 2.84 kB
+ℹ 2 files, total: 29.23 kB
+✔ Build complete in 865ms
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/opencode-adapter
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/console-host
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912/ui/teams-console
+> tsc -p tsconfig.json --noEmit
+
+{
+  "enforcement": "advisory",
+  "harness": "appsdk-development-process-control",
+  "manifest_hash": "sha256:84461a80e4f769d511225adee2ae451dbf6460204eb21ae0c34345935c00d158",
+  "project_contract_digest": "sha256:86407ecbbad07f82e32046ac1d89d56fb3a74356b943ba0368e4b85a2bab5393",
+  "rules": [
+    {
+      "description": "Read only rule sources declared by the project contract.",
+      "rule_id": "use-declared-sources",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Execute only the projected node and adjacent workflow edges.",
+      "rule_id": "adjacent-transition",
+      "severity": "forbidden"
+    },
+    {
+      "description": "A passing required step must bind evidence.",
+      "rule_id": "evidence-required",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Revise the plan after project, goal, source, scope, owner, or rule-context drift.",
+      "rule_id": "context-drift",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Do not overwrite or delete plan revisions and execution events.",
+      "rule_id": "append-only-history",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Do not claim lifecycle completion before canonical AppSDK gates pass.",
+      "rule_id": "lifecycle-truth",
+      "severity": "forbidden"
+    },
+    {
+      "description": "New or changed control and configuration behavior must use declared typed control resources, error chains, or project configuration sources, never payloads, metadata, debug logs, or implicit context.",
+      "rule_id": "changed-scope-control-truth",
+      "severity": "forbidden"
+    },
+    {
+      "description": "New or changed behavior must retain one semantic owner and one implementation, with no duplicate path, fallback, or temporary bypass.",
+      "rule_id": "changed-scope-single-owner",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Preserve fixed operation/hook/gate boundaries only where the project declares them. Missing required capabilities fail explicitly; never mock success.",
+      "rule_id": "changed-scope-configured-orchestration",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Compare deletion, reuse and direct implementation by actual complexity. Optional simplification does not block; concrete quality, safety or ownership regressions remain forbidden.",
+      "rule_id": "changed-scope-ablation-and-sharing",
+      "severity": "advisory"
+    },
+    {
+      "description": "Report untouched historical violations as recommendations; do not block the candidate unless they enter changed scope or affect safety, ownership, evidence truth, or required delivery.",
+      "rule_id": "historical-architecture-debt",
+      "severity": "advisory"
+    },
+    {
+      "description": "Locate feature and debug work in the declared function and verification maps before implementation.",
+      "rule_id": "project-context-binding",
+      "severity": "warning"
+    },
+    {
+      "description": "During debug exploration, append observations, hypotheses, and evidence to the active run notes before resolution.",
+      "rule_id": "debug-notes-required",
+      "severity": "warning"
+    },
+    {
+      "description": "Update function ownership and verification gates in the same change when the implementation changes them.",
+      "rule_id": "map-gate-update",
+      "severity": "advisory"
+    },
+    {
+      "description": "Record requirement, architecture, and detailed-design closure before feature implementation.",
+      "rule_id": "recommended-design",
+      "severity": "warning"
+    },
+    {
+      "description": "Check prior verified successes and failures before repeating exploration.",
+      "rule_id": "prior-record-search",
+      "severity": "advisory"
+    }
+  ],
+  "schema_version": 1,
+  "sources": [
+    {
+      "digest": "sha256:2452d66dfd707fdf320fbf61fa53bd4d46bebc7ac147fb7ebe2efa2d71876497",
+      "kind": "agents",
+      "path": "AGENTS.md",
+      "precedence": 100,
+      "present": true,
+      "required": true,
+      "source_id": "project-agents"
+    },
+    {
+      "contract_digest": "sha256:d1ef60799f60327cf6af6e22db0dab1cc1f849ba2d24eec7e1141ec6096bf317",
+      "contract_path": ".appsdk/skills/appsdk-project-governance/appsdk-guidance.json",
+      "digest": "sha256:d96320c2ed0b9159bb882cb1b2e209fbe4af16b693baa1b39fe027c71519851a",
+      "kind": "skill",
+      "path": ".appsdk/skills/appsdk-project-governance/SKILL.md",
+      "precedence": 200,
+      "present": true,
+      "required": true,
+      "source_id": "appsdk-governance-skill"
+    }
+  ],
+  "workflows": [
+    {
+      "domain": "bootstrap",
+      "edges": [
+        {
+          "from": "prepare",
+          "to": "initialize"
+        },
+        {
+          "from": "initialize",
+          "to": "baseline_verify"
+        }
+      ],
+      "entry_node": "prepare",
+      "nodes": [
+        {
+          "evidence": [
+            "preparation-record"
+          ],
+          "instruction": "Run prepare and confirm scope, roots, boundaries, and acceptance.",
+          "node_id": "prepare",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "initialized-layout"
+          ],
+          "instruction": "Run idempotent initialization for the confirmed project root.",
+          "node_id": "initialize",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "verify-result"
+          ],
+          "instruction": "Verify the initialized governance baseline.",
+          "node_id": "baseline_verify",
+          "owner": "project"
+        }
+      ],
+      "objective": "Enter AppSDK governance without destroying existing project truth."
+    },
+    {
+      "domain": "migration",
+      "edges": [
+        {
+          "from": "inspect_legacy",
+          "to": "choose_route"
+        },
+        {
+          "from": "choose_route",
+          "to": "apply_route"
+        },
+        {
+          "from": "apply_route",
+          "to": "migration_verify"
+        }
+      ],
+      "entry_node": "inspect_legacy",
+      "nodes": [
+        {
+          "evidence": [
+            "legacy-inventory"
+          ],
+          "instruction": "Inventory old governance truth and disposable runtime state.",
+          "node_id": "inspect_legacy",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "migration-route"
+          ],
+          "instruction": "Choose preserve-and-migrate or the explicitly authorized fresh-init/reset route for the named legacy control plane.",
+          "node_id": "choose_route",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "migration-record"
+          ],
+          "instruction": "Execute the canonical migration once, or for a clean non-main existing project run appsdk init --fresh --discard-legacy once.",
+          "node_id": "apply_route",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "verify-result"
+          ],
+          "instruction": "Verify the resulting single governance truth.",
+          "node_id": "migration_verify",
+          "owner": "project"
+        }
+      ],
+      "objective": "Reconcile or reset legacy governance through an explicit, auditable route."
+    },
+    {
+      "domain": "governance-preflight",
+      "edges": [
+        {
+          "from": "goal_scope",
+          "to": "architecture_maps"
+        },
+        {
+          "from": "architecture_maps",
+          "to": "owner_worktree"
+        },
+        {
+          "from": "owner_worktree",
+          "to": "preflight_verify"
+        }
+      ],
+      "entry_node": "goal_scope",
+      "nodes": [
+        {
+          "evidence": [
+            "goal-record"
+          ],
+          "instruction": "Confirm objective, scope, acceptance, non-goals, and owner.",
+          "node_id": "goal_scope",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "map-check"
+          ],
+          "instruction": "Bind resource, function, mainline, verification, and module maps.",
+          "node_id": "architecture_maps",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "worktree-record"
+          ],
+          "instruction": "Create the clean owner worktree from latest origin/main.",
+          "node_id": "owner_worktree",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "verify-result"
+          ],
+          "instruction": "Run the applicable AppSDK and project preflight checks.",
+          "node_id": "preflight_verify",
+          "owner": "project"
+        }
+      ],
+      "objective": "Bind goal, module, owner, maps, worktree, and required gates before code work."
+    },
+    {
+      "domain": "develop",
+      "edges": [
+        {
+          "from": "requirements",
+          "to": "map_check"
+        },
+        {
+          "from": "map_check",
+          "to": "architecture"
+        },
+        {
+          "from": "map_check",
+          "to": "implementation"
+        },
+        {
+          "from": "architecture",
+          "to": "detailed_design"
+        },
+        {
+          "from": "architecture",
+          "to": "implementation"
+        },
+        {
+          "from": "detailed_design",
+          "to": "implementation"
+        },
+        {
+          "from": "implementation",
+          "to": "candidate"
+        },
+        {
+          "from": "candidate",
+          "to": "validation"
+        },
+        {
+          "from": "validation",
+          "to": "map_update"
+        },
+        {
+          "from": "validation",
+          "to": "review"
+        },
+        {
+          "from": "map_update",
+          "to": "review"
+        },
+        {
+          "from": "review",
+          "to": "effectiveness"
+        },
+        {
+          "from": "effectiveness",
+          "to": "integration"
+        },
+        {
+          "from": "integration",
+          "to": "promotion"
+        },
+        {
+          "from": "integration",
+          "to": "cleanup"
+        },
+        {
+          "from": "promotion",
+          "to": "cleanup"
+        }
+      ],
+      "entry_node": "requirements",
+      "nodes": [
+        {
+          "evidence": [
+            "requirements"
+          ],
+          "instruction": "Define the user-visible contract, scope, non-goals, acceptance, and required evidence; reuse an existing confirmed decision when present.",
+          "node_id": "requirements",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "function-map-binding",
+            "verification-map-binding"
+          ],
+          "instruction": "Read the declared function and verification maps, bind the owner, allowed and forbidden paths, required gates, and prior records, and note any map entry that the change must add.",
+          "node_id": "map_check",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "architecture-design"
+          ],
+          "instruction": "For a new project or meaningful cross-module or semantic change, close top-down modules, resources, boundaries, and mainline flow; otherwise record why existing architecture is sufficient.",
+          "node_id": "architecture",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "detailed-design"
+          ],
+          "instruction": "When the change introduces non-trivial behavior, close calls, data, errors, and verification mapping before implementation.",
+          "node_id": "detailed_design",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "source-diff",
+            "worktree-record"
+          ],
+          "instruction": "Implement the smallest change through the mapped owner in a clean owner worktree.",
+          "node_id": "implementation",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "candidate-record"
+          ],
+          "instruction": "Create and bind the exact candidate commit and tree.",
+          "node_id": "candidate",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "validation-record"
+          ],
+          "instruction": "Run focused tests and mapped gates, then add build, install, restart, and same-entry replay only when the change affects those surfaces.",
+          "node_id": "validation",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "function-map-binding",
+            "verification-map-binding"
+          ],
+          "instruction": "Update declared function ownership, paths, call edges, and verification gates when the validated change altered them.",
+          "node_id": "map_update",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "architecture-conformance",
+            "review-record"
+          ],
+          "instruction": "Review the validated candidate against applicable quality, safety, evidence and owner contracts. Block concrete regressions; optional simplification and unrelated historical debt are advisory.",
+          "node_id": "review",
+          "owner": "project",
+          "reminders": [
+            {
+              "blocking": false,
+              "command": "project-memory review --run <run-id>",
+              "kind": "memory_review"
+            }
+          ]
+        },
+        {
+          "evidence": [
+            "effectiveness-record"
+          ],
+          "instruction": "Check effectiveness identity and freshness; reuse valid unchanged candidate evidence and rerun only affected checks on drift.",
+          "node_id": "effectiveness",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "mainline-receipt"
+          ],
+          "instruction": "Integrate on latest main and verify the exact integration tree.",
+          "node_id": "integration",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "freeze-record"
+          ],
+          "instruction": "Compile, publish Active, archive Protected, and freeze when required.",
+          "node_id": "promotion",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "cleanup-record"
+          ],
+          "instruction": "Record actual retained resources and owner or verified authorized removal. Delivery can complete with retention; do not claim Collab resource close before its cleanup requirements pass.",
+          "node_id": "cleanup",
+          "owner": "project"
+        }
+      ],
+      "objective": "Develop features through project context, proportionate design, exact validation, and verified cleanup."
+    },
+    {
+      "domain": "debug",
+      "edges": [
+        {
+          "from": "orient",
+          "to": "explore"
+        },
+        {
+          "from": "explore",
+          "to": "resolve"
+        },
+        {
+          "from": "resolve",
+          "to": "candidate"
+        },
+        {
+          "from": "candidate",
+          "to": "validation"
+        },
+        {
+          "from": "validation",
+          "to": "review"
+        },
+        {
+          "from": "review",
+          "to": "integration"
+        },
+        {
+          "from": "integration",
+          "to": "cleanup"
+        }
+      ],
+      "entry_node": "orient",
+      "nodes": [
+        {
+          "evidence": [
+            "orientation-record",
+            "function-map-binding",
+            "verification-map-binding"
+          ],
+          "instruction": "Read project AGENTS, declared function and verification maps, and existing run notes and records; bind the failing request to an owner and required gates.",
+          "node_id": "orient",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "exploration-record",
+            "debug-notes"
+          ],
+          "instruction": "Append observations, one active hypothesis, confirmation and falsification signals, and evidence to run notes; reproduce when feasible and locate the first semantic divergence.",
+          "node_id": "explore",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "resolution-record",
+            "red-green-test"
+          ],
+          "instruction": "After causal evidence, fix the unique mapped owner, add proportionate regression coverage, and update maps or gates when their truth changed.",
+          "node_id": "resolve",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "candidate-record"
+          ],
+          "instruction": "Create and bind the exact fix candidate.",
+          "node_id": "candidate",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "validation-record"
+          ],
+          "instruction": "Run focused tests and mapped gates, then choose build, install, restart, and original-input replay according to runtime impact.",
+          "node_id": "validation",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "architecture-conformance",
+            "review-record"
+          ],
+          "instruction": "Review the validated fix against applicable quality, safety, evidence and owner contracts. Block concrete regressions; optional simplification and unrelated historical debt are advisory.",
+          "node_id": "review",
+          "owner": "project",
+          "reminders": [
+            {
+              "blocking": false,
+              "command": "project-memory review --run <run-id>",
+              "kind": "memory_review"
+            }
+          ]
+        },
+        {
+          "evidence": [
+            "mainline-receipt"
+          ],
+          "instruction": "Integrate on latest main and verify the exact tree.",
+          "node_id": "integration",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "cleanup-record"
+          ],
+          "instruction": "Record evidence and actual retained resources or verified authorized removal; delivery and resource closure are separate.",
+          "node_id": "cleanup",
+          "owner": "project"
+        }
+      ],
+      "objective": "Orient to project truth, record evidence while exploring, and resolve through the unique mapped owner."
+    },
+    {
+      "domain": "review",
+      "edges": [
+        {
+          "from": "review_admission",
+          "to": "architecture_review"
+        },
+        {
+          "from": "architecture_review",
+          "to": "unchanged_effectiveness"
+        }
+      ],
+      "entry_node": "review_admission",
+      "nodes": [
+        {
+          "evidence": [
+            "pre-review-validation"
+          ],
+          "instruction": "Pass AppSDK review admission for the exact candidate.",
+          "node_id": "review_admission",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "architecture-conformance",
+            "review-record"
+          ],
+          "instruction": "Run the user-selected or configured review route. Block concrete quality, safety, contract and material structural regressions; optional simplifications are advisory.",
+          "node_id": "architecture_review",
+          "owner": "project",
+          "reminders": [
+            {
+              "blocking": false,
+              "command": "project-memory review --run <run-id>",
+              "kind": "memory_review"
+            }
+          ]
+        },
+        {
+          "evidence": [
+            "effectiveness-record"
+          ],
+          "instruction": "Replay effectiveness without source drift.",
+          "node_id": "unchanged_effectiveness",
+          "owner": "project"
+        }
+      ],
+      "objective": "Admit and review the exact evidence-bound candidate."
+    },
+    {
+      "domain": "delivery",
+      "edges": [
+        {
+          "from": "whitebox",
+          "to": "build"
+        },
+        {
+          "from": "build",
+          "to": "install"
+        },
+        {
+          "from": "build",
+          "to": "restart"
+        },
+        {
+          "from": "build",
+          "to": "blackbox"
+        },
+        {
+          "from": "install",
+          "to": "restart"
+        },
+        {
+          "from": "install",
+          "to": "blackbox"
+        },
+        {
+          "from": "restart",
+          "to": "blackbox"
+        },
+        {
+          "from": "blackbox",
+          "to": "bind_validation"
+        }
+      ],
+      "entry_node": "whitebox",
+      "nodes": [
+        {
+          "evidence": [
+            "whitebox-evidence"
+          ],
+          "instruction": "Run project-owned internal validation.",
+          "node_id": "whitebox",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "artifact"
+          ],
+          "instruction": "Build the exact candidate artifact.",
+          "node_id": "build",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "install-receipt"
+          ],
+          "instruction": "Install the exact artifact into the declared environment.",
+          "node_id": "install",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "restart-receipt"
+          ],
+          "instruction": "Restart the declared runtime when required.",
+          "node_id": "restart",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "blackbox-evidence"
+          ],
+          "instruction": "Replay through the public deployed entrypoint.",
+          "node_id": "blackbox",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "pre-review-validation"
+          ],
+          "instruction": "Bind whitebox, artifact, deployment, and blackbox evidence.",
+          "node_id": "bind_validation",
+          "owner": "project"
+        }
+      ],
+      "objective": "Prove the candidate through its real deployed entrypoint."
+    },
+    {
+      "domain": "integration",
+      "edges": [
+        {
+          "from": "refresh_main",
+          "to": "integration_verify"
+        },
+        {
+          "from": "integration_verify",
+          "to": "merge_push"
+        },
+        {
+          "from": "merge_push",
+          "to": "remote_receipt"
+        }
+      ],
+      "entry_node": "refresh_main",
+      "nodes": [
+        {
+          "evidence": [
+            "main-base"
+          ],
+          "instruction": "Fetch latest origin/main and refresh the integration base.",
+          "node_id": "refresh_main",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "integration-record"
+          ],
+          "instruction": "Verify the exact integrated tree and affected gates.",
+          "node_id": "integration_verify",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "merge-record"
+          ],
+          "instruction": "Merge and push through the protected mainline route.",
+          "node_id": "merge_push",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "mainline-receipt"
+          ],
+          "instruction": "Observe the remote main ref and bind its receipt.",
+          "node_id": "remote_receipt",
+          "owner": "project"
+        }
+      ],
+      "objective": "Merge only an exact candidate verified against latest main."
+    },
+    {
+      "domain": "promotion",
+      "edges": [
+        {
+          "from": "regression",
+          "to": "compile"
+        },
+        {
+          "from": "compile",
+          "to": "publish"
+        }
+      ],
+      "entry_node": "regression",
+      "nodes": [
+        {
+          "evidence": [
+            "regression-report"
+          ],
+          "instruction": "Run and bind the required merged-source regression suite.",
+          "node_id": "regression",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "compiled-artifact"
+          ],
+          "instruction": "Compile the canonical merged project artifact.",
+          "node_id": "compile",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "promotion-record"
+          ],
+          "instruction": "Publish the immutable Active artifact.",
+          "node_id": "publish",
+          "owner": "project"
+        }
+      ],
+      "objective": "Turn a verified mainline source into immutable consumable output."
+    },
+    {
+      "domain": "freeze",
+      "edges": [
+        {
+          "from": "archive",
+          "to": "freeze_record"
+        },
+        {
+          "from": "freeze_record",
+          "to": "freeze_verify"
+        }
+      ],
+      "entry_node": "archive",
+      "nodes": [
+        {
+          "evidence": [
+            "protected-archive"
+          ],
+          "instruction": "Create the canonical Protected archive.",
+          "node_id": "archive",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "freeze-record"
+          ],
+          "instruction": "Bind source, artifact, API, regression, and promotion truth.",
+          "node_id": "freeze_record",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "verify-result"
+          ],
+          "instruction": "Verify Active and Protected immutability.",
+          "node_id": "freeze_verify",
+          "owner": "project"
+        }
+      ],
+      "objective": "Protect the exact published source, contracts, and artifact."
+    },
+    {
+      "domain": "cleanup",
+      "edges": [
+        {
+          "from": "cleanup_record",
+          "to": "remove_worktree"
+        },
+        {
+          "from": "remove_worktree",
+          "to": "release_claim"
+        }
+      ],
+      "entry_node": "cleanup_record",
+      "nodes": [
+        {
+          "evidence": [
+            "cleanup-record"
+          ],
+          "instruction": "Record retained evidence and disposable state.",
+          "node_id": "cleanup_record",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "worktree-removal"
+          ],
+          "instruction": "Remove the merged clean owner worktree and branch.",
+          "node_id": "remove_worktree",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "claim-release"
+          ],
+          "instruction": "Release the task claim after worktree cleanup.",
+          "node_id": "release_claim",
+          "owner": "project"
+        }
+      ],
+      "objective": "Release only resources whose delivery and retention evidence is complete."
+    }
+  ]
+}
+{
+  "artifact_hash": "sha256:d2ba55868d3e9a525e77c62a95c820dc41b9ef52c44d0b3e8bb3539493dade3d",
+  "artifact_paths": [
+    "opencode-adapter/index.mjs",
+    "opencode-adapter/index.d.mts",
+    "console-host/index.mjs",
+    "console-host/index.d.mts",
+    "static/console.html",
+    "static/console-entry.js",
+    "runtime/network/wss-connection.js",
+    "runtime/network/relay-login.js",
+    "runtime/runtime/console-runtime.js",
+    "runtime/runtime/console-process.js",
+    "runtime/runtime/local-config.js",
+    "runtime/runtime/local-process.js",
+    "runtime/runtime/local-supervisor.js",
+    "runtime/server/relay.js",
+    "runtime/server/relay-process.js",
+    "runtime/runtime/agent-process.js",
+    "runtime/agent/work-resource.js",
+    "runtime/config/runtime-config.js"
+  ],
+  "artifact_schema": 1,
+  "artifacts": [
+    {
+      "hash": "sha256:0f6c343e95b128ab613a0ed9149590be8b45cbb510503dffabce9e9827dc73ff",
+      "path": "opencode-adapter/index.mjs"
+    },
+    {
+      "hash": "sha256:3d4c01d669fd3970c5b6f27f92b483d2d2be36a99f27ca84123967a015d987f3",
+      "path": "opencode-adapter/index.d.mts"
+    },
+    {
+      "hash": "sha256:5649b9da614b75aaa5556239c695088854ac45c736f1571e5d2fa39876b5f034",
+      "path": "console-host/index.mjs"
+    },
+    {
+      "hash": "sha256:7c799c1555333e50fed378d6b546db3e2cf315415b6454f263203529622e0a5f",
+      "path": "console-host/index.d.mts"
+    },
+    {
+      "hash": "sha256:2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21",
+      "path": "static/console.html"
+    },
+    {
+      "hash": "sha256:da3abef3af6da4d6119bff1e195a1b4bfca83982981e0f093943b544836f0b15",
+      "path": "static/console-entry.js"
+    },
+    {
+      "hash": "sha256:33fdd0abdebbc00597c547014a5b501300ea487c5d76db6ef219af23e47e00c3",
+      "path": "runtime/network/wss-connection.js"
+    },
+    {
+      "hash": "sha256:2542c4bcd0333a79b5f218c8a1e1f1526052f1f927582116447e9cbd09991f8b",
+      "path": "runtime/network/relay-login.js"
+    },
+    {
+      "hash": "sha256:49d83acbe1889cfe7d393fc504e57c28404851880994d54287e6634c75039c97",
+      "path": "runtime/runtime/console-runtime.js"
+    },
+    {
+      "hash": "sha256:4b795bacfb5204cc6b94e8efa9e573fe3d4de51fbba5dbe3da9fb6d672800947",
+      "path": "runtime/runtime/console-process.js"
+    },
+    {
+      "hash": "sha256:73b00c24ee72fa44afdbbca09760743b0fc8d584c5bb4fa63da48794e3e89d74",
+      "path": "runtime/runtime/local-config.js"
+    },
+    {
+      "hash": "sha256:4646b3e1100769f8f8ff5757f3a4710a41f256646728ac035833396567ec4000",
+      "path": "runtime/runtime/local-process.js"
+    },
+    {
+      "hash": "sha256:15f4361cda2170310c93fb674afbf676729a62dfd58b21ec26c92cd074d37be0",
+      "path": "runtime/runtime/local-supervisor.js"
+    },
+    {
+      "hash": "sha256:797a0cbc31bcb30a3a9767f475277d805b723c6480b86bdccd1ad53e341c8ed7",
+      "path": "runtime/server/relay.js"
+    },
+    {
+      "hash": "sha256:18350ff027735c5cd2d61a9bb7a4f1cda0b9dc6cd2206fc03a3acbf7c5d78697",
+      "path": "runtime/server/relay-process.js"
+    },
+    {
+      "hash": "sha256:8e9a24f78fb28ea2376a3ce70fb6f3dc4d31cdb75da2f45cf33ac3e8a4798521",
+      "path": "runtime/runtime/agent-process.js"
+    },
+    {
+      "hash": "sha256:c86065ecf8128ac0c5c427803bbb135e35ea804069912d8e8f26d3acb9396902",
+      "path": "runtime/agent/work-resource.js"
+    },
+    {
+      "hash": "sha256:63f8711506ddfae9ea78316e461601603579a770156ea7665a0e5bf644b26b24",
+      "path": "runtime/config/runtime-config.js"
+    }
+  ],
+  "build": {
+    "args": [
+      "build:governance"
+    ],
+    "program": "pnpm",
+    "working_directory": "."
+  },
+  "contract_hash": "sha256:25d07fd251efd9f247b0f7b2ec3413257d2a05441d92e72891d7b669b6df02c4",
+  "dependency_hashes": [],
+  "deployment_operations": [
+    "install",
+    "restart"
+  ],
+  "module_id": "teams-source",
+  "public_api_hash": "sha256:420f61f5532fcd4f0221ad2390a7b8d35ac5a5c643724a143f376bf7027d2918",
+  "source_hash": "sha256:58d68f7cb7c94baf0656846ba28ed7163e0569c26039fb5ef242a225a77b0976",
+  "stage": "source_implemented"
+}
+{
+  "artifact_hash": "sha256:eb17d64a2afd7ca1123acadd74d60358311bd43211f63c7099b94384bc481fde",
+  "artifact_schema": 1,
+  "modules": [
+    {
+      "active_artifact": "active/lib/teams-source/**",
+      "generated_outputs": [
+        "generated/modules/teams-source/**"
+      ],
+      "module_id": "teams-source",
+      "owned_paths": [
+        "agent/**",
+        "agent-host/**",
+        "cli-adapter/**",
+        "endpoint/**",
+        "config/**",
+        "control-protocol/**",
+        "network/**",
+        "runtime/**",
+        "server/**",
+        "opencode-adapter/src/**",
+        "opencode-adapter/tests/**",
+        "opencode-adapter/separator.spec.ts",
+        "opencode-adapter/package.json",
+        "opencode-adapter/tsconfig.json",
+        "opencode-adapter/tsdown.config.ts",
+        "console-host/src/**",
+        "console-host/tests/**",
+        "console-host/static/**",
+        "console-host/package.json",
+        "console-host/tsconfig.json",
+        "console-host/vitest.config.ts",
+        "ui/teams-console/src/**",
+        "ui/teams-console/tests/**",
+        "ui/teams-console/package.json",
+        "ui/teams-console/tsconfig.json",
+        "ui/teams-console/vitest.config.ts",
+        "ui/teams-console/tsconfig.build.json",
+        "ui/teams-console/fixture/**",
+        "ui/teams-console/assets/**",
+        "dsh-adapter/**",
+        "memory-plugin/**",
+        "search-plugin/**",
+        "docs/**",
+        "scripts/**",
+        "AGENTS.md",
+        "README.md",
+        "package.json",
+        "pnpm-workspace.yaml",
+        "pnpm-lock.yaml",
+        "tsconfig.json",
+        "tsconfig.runtime.json",
+        "vitest.config.ts",
+        ".gitignore"
+      ],
+      "regression": {
+        "allow_skipped": false,
+        "command": {
+          "args": [
+            "test"
+          ],
+          "program": "pnpm",
+          "working_directory": "."
+        },
+        "input_paths": [
+          "agent/**",
+          "agent-host/**",
+          "endpoint/**",
+          "config/**",
+          "control-protocol/**",
+          "network/**",
+          "runtime/**",
+          "server/**",
+          "opencode-adapter/src/**",
+          "opencode-adapter/tests/**",
+          "opencode-adapter/separator.spec.ts",
+          "opencode-adapter/package.json",
+          "opencode-adapter/tsconfig.json",
+          "opencode-adapter/tsdown.config.ts",
+          "console-host/src/**",
+          "console-host/tests/**",
+          "console-host/static/**",
+          "console-host/package.json",
+          "console-host/tsconfig.json",
+          "console-host/vitest.config.ts",
+          "ui/teams-console/src/**",
+          "ui/teams-console/tests/**",
+          "ui/teams-console/package.json",
+          "ui/teams-console/tsconfig.json",
+          "ui/teams-console/vitest.config.ts",
+          "ui/teams-console/tsconfig.build.json",
+          "ui/teams-console/fixture/**",
+          "ui/teams-console/assets/**",
+          "dsh-adapter/**",
+          "memory-plugin/**",
+          "search-plugin/**",
+          "scripts/**",
+          "package.json",
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          "tsconfig.json",
+          "tsconfig.runtime.json",
+          "vitest.config.ts",
+          "docs/architecture/**"
+        ],
+        "minimum_test_count": 304,
+        "ordinary_mode_after_freeze": "disabled",
+        "reenable_on": [
+          "source_change",
+          "contract_change",
+          "public_api_change",
+          "artifact_change",
+          "dependency_change"
+        ],
+        "required_before_freeze": true,
+        "suite_id": "teams-source-regression"
+      },
+      "source_owner": "teams-source",
+      "stage": "source_implemented"
+    }
+  ],
+  "project_id": "agentteams",
+  "sdk": {
+    "bundle_manifest": ".appsdk/contracts/sdk-bundle.manifest.json",
+    "name": "appsdk",
+    "resource_record": ".appsdk/sdk-resources.json",
+    "version": "0.1.6"
+  }
+}
+
+> agentteams@0.1.0 smoke /Volumes/extension/code/AgentTeams/playground/bc1cbcb-real-console-directory-20260912
+> node scripts/artifact-smoke.mjs && node scripts/runtime-smoke.mjs
+
+Packaged Console smoke passed: authenticated UI/API, legacy routes absent, owner denial and exact Session JSON. No provider or cross-device claim.
+Packaged runtime smoke passed: real TLS Relay, daemon library admission/directory, stop and fresh generation. No OS process deployment, executor or NAT claim.
+{"ok":true,"project_id":"agentteams","stage":"contract_bound"}
+Regression gate: TEAMS_CONSOLE_REAL_DOM=1 (real Chrome required)
+(node:18473) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
