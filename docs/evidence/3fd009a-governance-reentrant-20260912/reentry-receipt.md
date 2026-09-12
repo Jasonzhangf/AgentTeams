@@ -1,7 +1,7 @@
 # Reentry receipt: 3fd009a
 
-- clean candidate: `b8bd9490b5097fd79818913365a359f4b1003194`
-- first admission: `pnpm lifecycle:admission` passed; verify, installed smoke, Relay/Agent restart and signal shutdown ran
+- baseline clean candidate: `b8bd9490b5097fd79818913365a359f4b1003194`; `pnpm lifecycle:admission` passed with verify, installed smoke, Relay/Agent restart and signal shutdown
+- reentry candidate: `5ffbd0725391a6776e68c057278dd5722b2d916c`; first `pnpm lifecycle:admission` passed with the same gates
 - interrupted recovery simulation: removed the first validation record while retaining stage state and receipts
 - second admission: passed in about 1.1s; `pnpm-verify` and `pnpm-smoke-installed` both reported `status=reused`
 - reuse receipts: `2`
