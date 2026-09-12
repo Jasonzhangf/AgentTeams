@@ -157,10 +157,6 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           }
           const child = spawnProcess(nodeExecutable, [spec.entry, ...spec.args], { env: { ...process.env, ...options.env }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
           children.set(spec.id, child)
-          await waitForReady(child, spec.kind, startupTimeoutMs)
-          if (child.exitCode !== null || child.signalCode !== null) {
-            throw new Error(`local ${spec.kind} exited immediately after readiness code=${child.exitCode ?? 'null'} signal=${child.signalCode ?? 'null'}`)
-          }
           const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
             if (lifecycle === 'stopping' || lifecycle === 'stopped') return
             lastFailure = new Error(`local ${spec.kind} exited unexpectedly code=${code ?? 'null'} signal=${signal ?? 'null'}`)
@@ -174,6 +170,10 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           child.once('exit', onExit)
           child.once('error', onError)
           unwatch.set(spec.id, () => { child.off('exit', onExit); child.off('error', onError) })
+          await waitForReady(child, spec.kind, startupTimeoutMs)
+          if (child.exitCode !== null || child.signalCode !== null) {
+            throw new Error(`local ${spec.kind} exited immediately after readiness code=${child.exitCode ?? 'null'} signal=${child.signalCode ?? 'null'}`)
+          }
         }
         lifecycle = 'running'
       } catch (error) {
