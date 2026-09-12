@@ -81,8 +81,9 @@ function projection(value: unknown): void {
   const input = record(value, ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations'])
   choice(input.version, [1])
   array(input.agents, item => {
-    const agent = record(item, ['agentId', 'label', 'machineId', 'presence', 'capabilities', 'currentSessionId', 'providerId', 'modelId'])
+    const agent = record(item, ['agentId', 'label', 'machineId', 'generation', 'presence', 'capabilities', 'currentSessionId', 'providerId', 'modelId'])
     string(agent.agentId); string(agent.machineId); string(agent.label)
+    if (agent.generation !== undefined && (!Number.isSafeInteger(agent.generation) || (agent.generation as number) < 1)) throw new Error('Console agent generation invalid')
     choice(agent.presence, ['online', 'offline', 'unknown']); array(agent.capabilities, string)
     optionalString(agent.currentSessionId); optionalString(agent.providerId); optionalString(agent.modelId)
   })

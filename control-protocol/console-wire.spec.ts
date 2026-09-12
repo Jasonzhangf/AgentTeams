@@ -18,6 +18,7 @@ it('validates replies and rejects undeclared or malformed projection fields', ()
     sessions: [{ agentId: 'a', sessionId: 's' }], notifications: [], configs: [{ agentId: 'a', acceptedRevision: 0, providers: [] }] }
   const frame = { kind: 'console.projection.result', correlationId: 'r', projection }
   expect(parseConsoleWireReply(JSON.stringify(frame))).toEqual(frame)
+  expect(parseConsoleWireReply(JSON.stringify({ ...frame, projection: { ...projection, agents: [{ ...projection.agents[0], generation: 3 }] } }))).toMatchObject({ projection: { agents: [{ generation: 3 }] } })
   const observed = { ...projection, works: [{ agentId: 'a', workId: 'w', consumerAgentId: 'c', providerAgentId: 'a',
     capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1, state: 'closed' }],
     relations: [{ agentId: 'a', consumerAgentId: 'c', providerAgentId: 'a', capabilityId: 'file-search', capabilityVersion: '1',
@@ -29,6 +30,7 @@ it('validates replies and rejects undeclared or malformed projection fields', ()
     { ...frame, projection: { ...projection, agents: [{ ...projection.agents[0], credential: 'secret' }] } },
     { ...frame, projection: { ...observed, works: [{ ...observed.works[0], payload: { query: 'secret' } }] } },
     { ...frame, projection: { ...projection, configs: [{ agentId: 'a', acceptedRevision: -1, providers: [] }] } },
+    { ...frame, projection: { ...projection, agents: [{ ...projection.agents[0], generation: 0 }] } },
     { ...result, result: { ok: 'yes' } },
     { ...result, result: { ok: false, error: { code: 'invented', message: 'bad' } } },
   ]) expect(() => parseConsoleWireReply(JSON.stringify(invalid))).toThrow()

@@ -476,7 +476,8 @@
         "projectAgentCard"
       ],
       "required_gates": [
-        "teams-projection-no-truth-ownership"
+        "teams-projection-no-truth-ownership",
+        "teams-console-directory-discovery"
       ]
     },
     {

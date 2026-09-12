@@ -26,6 +26,7 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): b
 }
 
 const PROJECTION_KEYS = ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations'] as const
+const AGENT_KEYS = ['agentId', 'label', 'machineId', 'generation', 'presence', 'capabilities', 'currentSessionId', 'providerId', 'modelId'] as const
 const WORK_KEYS = ['agentId', 'workId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'policyRevision', 'state'] as const
 const RELATION_KEYS = ['agentId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'relationPermission', 'workId'] as const
 
@@ -38,6 +39,8 @@ function isProjection(value: unknown): value is ConsoleProjectionV1 {
     && hasOnlyKeys(value, PROJECTION_KEYS)
     && value.version === 1
     && Array.isArray(value.agents)
+    && value.agents.every(item => isRecord(item) && hasOnlyKeys(item, AGENT_KEYS)
+      && (item.generation === undefined || (typeof item.generation === 'number' && Number.isSafeInteger(item.generation) && item.generation >= 1)))
     && Array.isArray(value.sessions)
     && Array.isArray(value.notifications)
     && Array.isArray(value.configs)

@@ -10,7 +10,11 @@ The version 1 JSON file has these fields:
 
 - `identity`, `scopeId`, `presenceIntervalMs`, `relay`: same runtime bootstrap declaration and
   relay settings as [Agent process](agent-process.md). Shared parser: `process-config.ts`.
-- `agentIds`: unique target IDs, including passive Agents when desired.
+- `agentIds`: unique target IDs, including passive Agents when desired. An empty array enables
+  Relay directory discovery on every projection/command request; the Console identity itself is
+  excluded. Directory presence/generation/capabilities remain authoritative, while online daemon
+  projections supply sessions and configuration. Offline rows are observation-only and commands
+  fail explicitly.
 - `listen`: `host`, `port`, exact browser `origin` (scheme, hostname, optional port), and optional
   `certFile` / `keyFile` pair. Non-loopback listeners require TLS. Port 0 is available for test
   allocation; deployed browser origin must match the actual access URL.
