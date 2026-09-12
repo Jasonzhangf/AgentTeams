@@ -21,5 +21,5 @@ writeFileSync(resolve(output, 'package.json'), `${JSON.stringify({
   version: '0.1.0',
   private: true,
   type: 'module',
-  dependencies: { ws: '8.21.3' },
+  dependencies: { toml: '4.3.0', ws: '8.21.3' },
 }, null, 2)}\n`)
