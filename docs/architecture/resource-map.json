@@ -462,6 +462,22 @@
       ]
     },
     {
+      "resource_id": "local-launcher-config",
+      "owner": "runtime",
+      "kind": "control_resource",
+      "truth_store": "versioned ~/.agentteams/config.toml plus referenced child config paths",
+      "allowed_operations": ["read", "validate", "persist", "resolve"],
+      "forbidden_relations": ["business_payload", "session_payload", "credential_value"]
+    },
+    {
+      "resource_id": "local-supervisor-lifecycle",
+      "owner": "runtime",
+      "kind": "control_resource",
+      "truth_store": "LocalSupervisor child registry, lifecycle state and retained failure",
+      "allowed_operations": ["plan", "start", "observe", "stop", "report_error"],
+      "forbidden_relations": ["business_payload", "agent_work_state", "ui_truth"]
+    },
+    {
       "resource_id": "session-channel-registry",
       "owner": "network",
       "kind": "control_resource",
