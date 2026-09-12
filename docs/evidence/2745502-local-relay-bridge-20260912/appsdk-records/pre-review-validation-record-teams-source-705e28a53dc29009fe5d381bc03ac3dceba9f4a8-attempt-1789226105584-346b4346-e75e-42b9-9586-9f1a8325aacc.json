@@ -1,0 +1,45 @@
+{
+  "validation_id": "validation-attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc",
+  "issue_id": "teams-lifecycle-admission",
+  "module_id": "teams-source",
+  "fix_candidate_id": "fix-705e28a53dc2-attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc",
+  "candidate_commit": "705e28a53dc29009fe5d381bc03ac3dceba9f4a8",
+  "candidate_tree_hash": "edb574b20993ba9028c00271b045682edd55c29c",
+  "artifact_hash": "sha256:aef38869f1760aa2f1ae7c3fb50ec445f41c3e4193f3445e8ba63431c0cf44dc",
+  "whitebox_producer": {
+    "adapter": "agentteams::lifecycle-adapter:v1",
+    "identity": "agentteams::lifecycle-adapter:v1/whitebox"
+  },
+  "whitebox_evidence_ids": [
+    "attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc-whitebox"
+  ],
+  "blackbox_evidence_ids": [
+    "attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc-blackbox"
+  ],
+  "deployment": {
+    "environment_id": "sha256:af5a2a518a42b9a66556f45437005402079ea3fc232dfa6095817e2beaff477b",
+    "install_receipt_id": "attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc-install",
+    "restart_receipt_id": "attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc-restart",
+    "entrypoint": "pnpm smoke:installed -> installed runtime/server/relay-process.js + runtime/runtime/agent-process.js",
+    "producer": {
+      "adapter": "agentteams::lifecycle-adapter:v1",
+      "identity": "agentteams::lifecycle-adapter:v1/deployment"
+    },
+    "observed_at": "2026-09-12T15:15:31.951Z"
+  },
+  "stage_execution": {
+    "pnpm-verify": {
+      "mode": "executed",
+      "receipt_id": "stage-pnpm-verify-1789226124837",
+      "receipt_path": "/Volumes/extension/code/AgentTeams/playground/2745502-local-relay-bridge-20260912/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-verify-1789226124837.json"
+    },
+    "pnpm-smoke-installed": {
+      "mode": "executed",
+      "receipt_id": "stage-pnpm-smoke-installed-1789226131691",
+      "receipt_path": "/Volumes/extension/code/AgentTeams/playground/2745502-local-relay-bridge-20260912/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-smoke-installed-1789226131691.json"
+    }
+  },
+  "source_unchanged": true,
+  "result": "pass",
+  "created_at": "2026-09-12T15:15:31.970Z"
+}

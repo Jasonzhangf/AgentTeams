@@ -1,0 +1,14 @@
+{
+  "worktree_id": "worktree-705e28a53dc2",
+  "issue_id": "teams-lifecycle-admission",
+  "module_id": "teams-source",
+  "base_ref": "origin/main",
+  "base_commit": "7a9f25df61089e8ed658e7aabfe166ff6d61d87a",
+  "branch": "codex/2745502-local-relay-bridge-20260912",
+  "head_commit": "705e28a53dc29009fe5d381bc03ac3dceba9f4a8",
+  "initial_clean": true,
+  "final_clean": true,
+  "isolation_mode": "isolated_worktree",
+  "scope_hash": "sha256:65c224c619a907f2fa3f9f38e25ef69cfc4d7d1cc2945a3d094592d0a82f68d6",
+  "created_at": "2026-09-12T15:15:05.586Z"
+}

@@ -1,0 +1,28 @@
+{
+  "fix_candidate_id": "fix-705e28a53dc2-attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc",
+  "issue_id": "teams-lifecycle-admission",
+  "module_id": "teams-source",
+  "worktree_id": "worktree-705e28a53dc2",
+  "base_commit": "7a9f25df61089e8ed658e7aabfe166ff6d61d87a",
+  "head_commit": "705e28a53dc29009fe5d381bc03ac3dceba9f4a8",
+  "tree_hash": "edb574b20993ba9028c00271b045682edd55c29c",
+  "diff_hash": "sha256:220251ff9beb534339976f05908579b4ddbb3ab7e59d2e9c7173c838a6055275",
+  "design_id": "teams-lifecycle-admission",
+  "owner": "agentteams::lifecycle-adapter:v1",
+  "scope_hash": "sha256:65c224c619a907f2fa3f9f38e25ef69cfc4d7d1cc2945a3d094592d0a82f68d6",
+  "changed_paths": [
+    "docs/architecture/function-map.json",
+    "docs/architecture/mainline-call-map.json",
+    "docs/architecture/verification-map.json",
+    "runtime/local-relay-bridge.spec.ts",
+    "runtime/local-supervisor.ts"
+  ],
+  "verification_evidence_ids": [
+    "attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc-whitebox",
+    "attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc-artifact",
+    "attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc-install",
+    "attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc-restart",
+    "attempt-1789226105584-346b4346-e75e-42b9-9586-9f1a8325aacc-blackbox"
+  ],
+  "created_at": "2026-09-12T15:15:05.586Z"
+}
