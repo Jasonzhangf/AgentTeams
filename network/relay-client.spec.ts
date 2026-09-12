@@ -137,6 +137,12 @@ it('correlates concurrent directory requests and preserves scoped broadcasts', a
   expect(events).toContain('b')
 })
 
+it('dispatches the first directory request after login', async () => {
+  await start()
+  const a = await peer('first-directory')
+  expect((await a.directory(false)).map(peer => peer.declaration.identity.agentId)).toEqual(['first-directory'])
+})
+
 it('retains the relay directory revision in the typed snapshot API', async () => {
   await start()
   const a = await peer('a')

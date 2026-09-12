@@ -151,7 +151,7 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
         } catch (error) {
           await stop(error instanceof Error ? error : new Error('relay: control write failed'))
         }
-      })
+      })()
     })
   }
   const directorySnapshot = async (subscribe: boolean): Promise<RelayDirectorySnapshot> => {
