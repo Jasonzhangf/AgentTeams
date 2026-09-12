@@ -281,6 +281,19 @@ describe('N1 relay server', () => {
     if (directory.kind === 'relay.directory') expect(directory.peers).toHaveLength(1)
   })
 
+  it('acknowledges logout only after publishing the peer offline', async () => {
+    const stopped = await openSocket(peer('agent-a').token)
+    await expect(login(stopped, peer('agent-a'))).resolves.toMatchObject({ kind: 'relay.admitted', generation: 1 })
+    const observer = await openSocket(peer('agent-b').token)
+    await login(observer, peer('agent-b'))
+    send(stopped, { kind: 'relay.logout', requestId: 'logout-1', generation: 1 })
+    await expect(nextJson(stopped)).resolves.toEqual({ kind: 'relay.logged-out', requestId: 'logout-1' })
+    send(observer, { kind: 'relay.directory', requestId: 'logout-directory', subscribe: false })
+    const directory = await nextJson(observer)
+    if (directory.kind !== 'relay.directory') throw new Error('logout directory snapshot was not returned')
+    expect(directory.peers.find(item => item.declaration.identity.agentId === 'agent-a')).toMatchObject({ presence: 'offline' })
+  })
+
   it('closes malformed control connections with an explicit input error', async () => {
     const socket = await openSocket(peer('agent-a').token)
     socket.send('{')

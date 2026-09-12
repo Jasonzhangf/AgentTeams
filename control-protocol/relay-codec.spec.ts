@@ -46,6 +46,7 @@ const grant = {
 
 const serverFrames: readonly RelayServerControl[] = [
   { kind: 'relay.admitted', connectionId: 'connection-a', generation: 4 },
+  { kind: 'relay.logged-out', requestId: 'logout-a' },
   { kind: 'relay.directory', requestId: 'directory-a', revision: 5, peers: [peer] },
   { kind: 'relay.changed', revision: 6, peer },
   { kind: 'relay.grant', requestId: 'connect-a', grant },
@@ -86,7 +87,7 @@ describe('relay protocol codec', () => {
 
   it('accepts only admitted or error frames as relay admission', () => {
     expect(parseRelayAdmission(JSON.stringify(serverFrames[0]))).toMatchObject({ kind: 'relay.admitted' })
-    expect(parseRelayAdmission(JSON.stringify(serverFrames[7]))).toMatchObject({ kind: 'relay.error' })
+    expect(parseRelayAdmission(JSON.stringify(serverFrames[8]))).toMatchObject({ kind: 'relay.error' })
     expect(() => parseRelayAdmission(JSON.stringify(serverFrames[1]))).toThrow(/invalid admission response/)
   })
 })

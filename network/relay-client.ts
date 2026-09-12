@@ -7,7 +7,7 @@ import { loginRelay, type RelayLoginOptions } from './relay-login.ts'
 import { connectWss, type WssConnection } from './wss-connection.ts'
 
 type Event = Extract<RelayServerControl, { kind: 'relay.changed' | 'relay.offer' | 'relay.closed' }>
-type Reply = Extract<RelayServerControl, { kind: 'relay.directory' | 'relay.grant' }>
+type Reply = Extract<RelayServerControl, { kind: 'relay.directory' | 'relay.grant' | 'relay.logged-out' }>
 export interface RelayClientOptions extends RelayLoginOptions {
   readonly requestTimeoutMs: number
   readonly maxPendingRequests: number
@@ -59,7 +59,9 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
   let resolveClosed!: (error: Error) => void
   const closed = new Promise<Error>(resolve => { resolveClosed = resolve })
   let shutdown: Promise<void> | undefined
+  let gracefulShutdown: Promise<void> | undefined
   let publishing = false
+  let closing = false
   let declarationRevision = options.declaration.revision
   const stop = (error: Error): Promise<void> => {
     if (shutdown) return shutdown
@@ -75,8 +77,9 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
     })()
     return shutdown
   }
-  const send = (message: RelayClientControl) => {
+  const send = (message: RelayClientControl, allowDuringClose = false) => {
     if (stopped) return Promise.reject(stopped)
+    if (closing && !allowDuringClose) return Promise.reject(new RelayProtocolError('UNAVAILABLE', 'relay: client is closing'))
     return login.transport.send({ bytes: Buffer.from(JSON.stringify(message)), binary: false })
   }
   const checkGrant = (grant: RelayGrant) => {
@@ -100,14 +103,14 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
           pending.delete(message.requestId!)
           clearTimeout(request.timer)
           request.reject(error)
-        } else if (message.kind === 'relay.directory' || message.kind === 'relay.grant') {
+        } else if (message.kind === 'relay.directory' || message.kind === 'relay.grant' || message.kind === 'relay.logged-out') {
           const request = pending.get(message.requestId)
           if (!request || request.kind !== message.kind) throw new RelayProtocolError('INVALID_INPUT', 'relay: unexpected response correlation')
           if (message.kind === 'relay.directory') {
             if (message.peers.some(peer => peer.declaration.identity.accountId !== identity.accountId || peer.declaration.scopeId !== scopeId)) {
               throw new RelayProtocolError('FORBIDDEN', 'relay: directory contains an out-of-scope peer')
             }
-          } else checkGrant(message.grant)
+          } else if (message.kind === 'relay.grant') checkGrant(message.grant)
           pending.delete(message.requestId)
           clearTimeout(request.timer)
           request.resolve(message)
@@ -130,17 +133,18 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
   }
   void pump()
   const request = (kind: Reply['kind'], message: RelayClientControl & { requestId: string },
-    publication?: Extract<RelayClientControl, { kind: 'relay.publish' }>): Promise<Reply> => {
+    publication?: Extract<RelayClientControl, { kind: 'relay.publish' }>, allowDuringClose = false): Promise<Reply> => {
     if (stopped) return Promise.reject(stopped)
-    if (pending.size >= options.maxPendingRequests) return Promise.reject(new RelayProtocolError('RESOURCE_EXHAUSTED', 'relay: pending request capacity exhausted'))
+    if (closing && !allowDuringClose) return Promise.reject(new RelayProtocolError('UNAVAILABLE', 'relay: client is closing'))
+    if (!allowDuringClose && pending.size >= options.maxPendingRequests) return Promise.reject(new RelayProtocolError('RESOURCE_EXHAUSTED', 'relay: pending request capacity exhausted'))
     return new Promise((resolve, reject) => {
       const request: Pending = { kind, resolve, reject }
       pending.set(message.requestId, request)
       void (async () => {
         try {
           // Reserve the correlated readback slot before sending its publication mutation.
-          if (publication) await send(publication)
-          await send(message)
+          if (publication) await send(publication, allowDuringClose)
+          await send(message, allowDuringClose)
           // The deadline covers reply latency only. Starting it before send lets a delayed
           // outbound write leave the remote owner unstarted while reporting RESULT_UNKNOWN.
           if (pending.get(message.requestId) !== request) return
@@ -178,6 +182,7 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
     },
     openData: async input => {
       if (stopped) throw stopped
+      if (closing) throw new RelayProtocolError('UNAVAILABLE', 'relay: client is closing')
       const grant = structuredClone(input)
       checkGrant(grant)
       if (opening.has(grant.grantId) || data.has(grant.grantId)) throw new RelayProtocolError('CONFLICT', 'relay: grant already has a local data connection')
@@ -230,6 +235,22 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
         declarationRevision = value.revision
       } finally { publishing = false }
     },
-    close: () => stop(new RelayProtocolError('UNAVAILABLE', 'relay: client stopped locally')),
+    close: () => {
+      if (gracefulShutdown) return gracefulShutdown
+      closing = true
+      gracefulShutdown = (async () => {
+        if (!stopped) {
+          try {
+            const response = await request('relay.logged-out', { kind: 'relay.logout', requestId: randomUUID(), generation: login.receipt.generation }, undefined, true)
+            if (response.kind !== 'relay.logged-out') throw new RelayProtocolError('INVALID_INPUT', 'relay: logout acknowledgement expected')
+          } catch (error) {
+            await stop(error instanceof Error ? error : new Error('relay: logout failed'))
+            throw error
+          }
+        }
+        await stop(new RelayProtocolError('UNAVAILABLE', 'relay: client stopped locally'))
+      })()
+      return gracefulShutdown
+    },
   }
 }
