@@ -1,0 +1,11 @@
+cwd=/Volumes/extension/code/AgentTeams (source candidate f9e90dbd3e721abed38cafb482f240de6e004137)
+$ pnpm exec vitest run config/runtime-config.spec.ts config/provider-model-client.spec.ts opencode-adapter/tests/managed-config.spec.ts runtime/managed-opencode-session.spec.ts
+
+ RUN  v4.1.11 /Volumes/extension/code/AgentTeams
+
+
+ Test Files  4 passed (4)
+      Tests  34 passed (34)
+   Start at  04:14:33
+   Duration  3.64s (transform 122ms, setup 0ms, import 234ms, tests 3.52s, environment 0ms)
+

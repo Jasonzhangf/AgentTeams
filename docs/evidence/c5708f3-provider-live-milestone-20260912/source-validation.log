@@ -1,0 +1,20 @@
+$ node --check live-harness.mjs
+$ node --check opencode-harness.mjs
+$ git diff --check
+$ node --version
+v22.22.2
+$ pnpm --version
+10.31.0
+$ opencode --version
+1.18.23
+$ git diff --check
+$ git status --short
+?? docs/evidence/c5708f3-provider-live-milestone-20260912/agent-relay-harness.log
+?? docs/evidence/c5708f3-provider-live-milestone-20260912/appsdk-verify.log
+?? docs/evidence/c5708f3-provider-live-milestone-20260912/focused-tests.log
+?? docs/evidence/c5708f3-provider-live-milestone-20260912/harness-sha256.txt
+?? docs/evidence/c5708f3-provider-live-milestone-20260912/live-harness.mjs
+?? docs/evidence/c5708f3-provider-live-milestone-20260912/opencode-harness.log
+?? docs/evidence/c5708f3-provider-live-milestone-20260912/opencode-harness.mjs
+?? docs/evidence/c5708f3-provider-live-milestone-20260912/rcc-probes.log
+?? docs/evidence/c5708f3-provider-live-milestone-20260912/source-validation.log

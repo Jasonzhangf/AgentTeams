@@ -1,6 +1,15 @@
 {
   "issue": "c5708f3",
   "candidate": "f9e90dbd3e721abed38cafb482f240de6e004137",
+  "evidence": {
+    "agentRelayLog": "agent-relay-harness.log",
+    "openCodeLog": "opencode-harness.log",
+    "rccProbeLog": "rcc-probes.log",
+    "focusedTestsLog": "focused-tests.log",
+    "sourceValidationLog": "source-validation.log",
+    "appSdkVerifyLog": "appsdk-verify.log",
+    "harnessSha256": "harness-sha256.txt"
+  },
   "rcc": {
     "catalog": { "httpStatus": 200, "dataCount": 0, "modelsCount": 0 },
     "explicitDispatch": { "model": "gpt-5.5", "httpStatus": 200, "finishReason": "stop", "marker": "teams-rcc-explicit-model" },

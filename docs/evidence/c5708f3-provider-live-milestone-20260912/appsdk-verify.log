@@ -1,0 +1,3 @@
+cwd=/Volumes/extension/code/AgentTeams/playground/c5708f3-provider-live-milestone-20260912
+$ appsdk verify
+{"ok":true,"project_id":"agentteams","stage":"contract_bound"}

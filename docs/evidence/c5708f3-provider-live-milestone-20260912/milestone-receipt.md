@@ -6,6 +6,16 @@
 - Candidate tree: clean worktree `codex/c5708f3-provider-live-milestone-20260912`
 - Scope: explicit primary/backup provider dispatch, Agent/Relay configuration apply and readback, restart persistence
 - Non-scope: automatic failover, inferred model IDs, public deployment, NAT-to-NAT/direct transport
+- Source validation identity: `source-validation.log` records the candidate source SHA, Node `v22.22.2`, pnpm `10.31.0`, OpenCode `1.18.23`, syntax checks and `git diff --check`.
+
+The original command output is retained beside this receipt. The executable
+harnesses are `live-harness.mjs` and `opencode-harness.mjs`; their SHA-256 values
+are in `harness-sha256.txt`. They accept `GOAICHAT_TOKEN` through the environment
+and never read or write a credential file. The exact Agent/Relay command requests,
+responses, projections, persisted revisions and restart readback are in
+`agent-relay-harness.log`; the managed OpenCode request/response summaries are in
+`opencode-harness.log`; the raw RCC request/status/body probes are in
+`rcc-probes.log`.
 
 ## Discovery and explicit dispatch
 
@@ -30,7 +40,8 @@ primary: rcc-4444/gpt-5.5
 backup:  goaichat-openai/qwen3.8-max
 ```
 
-Remote Console commands over Relay produced:
+Remote Console commands over Relay produced (the `requests` and `projections`
+objects are retained in `agent-relay-harness.log`):
 
 ```text
 config.refreshModels(rcc-4444, expectedRevision=3) -> ok
@@ -45,13 +56,16 @@ The persisted Agent config contained `acceptedRevision=5` and
 projection read the same `acceptedRevision=5` and `effectiveRevision=5`.
 
 An empty RCC discovery result therefore did not block explicit manual model use and
-did not trigger backup selection.
+did not trigger backup selection. The same log records the persisted config summary
+and the post-restart projection, so the restart claim does not rely on the in-memory
+pre-stop projection.
 
 ## Real OpenCode provider replay
 
 OpenCode `1.18.23` was started through the managed OpenCode owner with the same
 primary and backup targets. Each target was selected explicitly in a real Session
-message request:
+message request. The sanitized request target, HTTP status, response marker and
+response-body prefix are retained in `opencode-harness.log`:
 
 ```text
 rcc-4444/gpt-5.5          -> HTTP 200, assistant=teams-rcc-open-code
@@ -68,6 +82,9 @@ pnpm exec vitest run config/runtime-config.spec.ts config/provider-model-client.
   opencode-adapter/tests/managed-config.spec.ts runtime/managed-opencode-session.spec.ts
 4 files passed; 34 tests passed
 ```
+
+The complete test output is retained in `focused-tests.log`. AppSDK contract
+verification is retained in `appsdk-verify.log`.
 
 The root source tree was unchanged by the live probes. Credentials were read through
 the configured reference only and are not stored in this receipt.

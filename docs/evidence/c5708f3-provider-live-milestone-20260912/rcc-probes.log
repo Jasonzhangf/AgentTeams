@@ -1,0 +1,10 @@
+$ curl POST http://127.0.0.1:4444/v1/chat/completions model=gpt-5.5 stream=false
+http_status=200
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"teams-rcc-explicit-model","reasoning_content":"We need to reply with exactly \"teams-rcc-explicit-model\". The user says: \"Reply with exactly teams-rcc-explicit-model\". So just output that.","role":"assistant"}}],"id":"00f40857-da85-4438-9bf8-021f89ed872c","model":"glm-5.3","object":"chat.completion","usage":{"completion_tokens":43,"prompt_tokens":111,"total_tokens":154}}
+$ curl GET http://127.0.0.1:4444/v1/models
+HTTP/1.1 200 OK
+content-type: application/json
+content-length: 39
+date: Sat, 12 Sep 2026 11:14:22 GMT
+
+{"data":[],"models":[],"object":"list"}
