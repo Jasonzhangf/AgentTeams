@@ -1,7 +1,7 @@
 {
   "enforcement": "advisory",
   "harness": "appsdk-development-process-control",
-  "manifest_hash": "sha256:af132169545ce02decfa2dd75b52a0d9d605ff32b45b11bb3c19ae8593b4d3c8",
+  "manifest_hash": "sha256:a5d19c371fe3326647da74374b1eb733616d00f10f2c6ba9b8de496140fcc3f0",
   "project_contract_digest": "sha256:914a9d72a974d5272caf1cdb7d4ed33f53413ca92f28b7c6daca6ad193c1322c",
   "rules": [
     {
@@ -97,9 +97,9 @@
       "source_id": "project-agents"
     },
     {
-      "contract_digest": "sha256:7aeb917c5f2a8a54c4ce53a3b6025027032a18c74cc4d337b567aef711790d99",
+      "contract_digest": "sha256:d1ef60799f60327cf6af6e22db0dab1cc1f849ba2d24eec7e1141ec6096bf317",
       "contract_path": ".appsdk/skills/appsdk-project-governance/appsdk-guidance.json",
-      "digest": "sha256:62f6e9d673cfb1dce90291fb94e64533bafb2677e41dda4279d2070d6cdf3625",
+      "digest": "sha256:d96320c2ed0b9159bb882cb1b2e209fbe4af16b693baa1b39fe027c71519851a",
       "kind": "skill",
       "path": ".appsdk/skills/appsdk-project-governance/SKILL.md",
       "precedence": 200,
@@ -180,7 +180,7 @@
           "evidence": [
             "migration-route"
           ],
-          "instruction": "Choose preserve-and-migrate or authorized reset-and-reinitialize.",
+          "instruction": "Choose preserve-and-migrate or the explicitly authorized fresh-init/reset route for the named legacy control plane.",
           "node_id": "choose_route",
           "owner": "project"
         },
@@ -188,7 +188,7 @@
           "evidence": [
             "migration-record"
           ],
-          "instruction": "Execute the canonical migration or authorized reset once.",
+          "instruction": "Execute the canonical migration once, or for a clean non-main existing project run appsdk init --fresh --discard-legacy once.",
           "node_id": "apply_route",
           "owner": "project"
         },

@@ -1,11 +1,14 @@
 {
   "binary_ref": "project-sdk",
-  "bundle_digest": "sha256:ac5c0c6bd95638641884c7fae2dca6dc40183ac4f0ddb3d19d7702efc3eaef3f",
-  "bundle_manifest_digest": "sha256:28ef0950599c04eb9e045b2ee30d3e878d09ff07faef6dc1b287c47ea377b1f0",
+  "bundle_digest": "sha256:e9a816589ce03740b30bf847be4fbb6c4203c70d39b11ada2b723dc966d0a091",
+  "bundle_manifest_digest": "sha256:e83eb63aceb3673920948f8e04dd57cd7b121343c7e004f611aa3c774c5387e9",
   "bundle_resources": {
     "contracts": [
       "contracts/sdk-bundle.manifest.json",
       "contracts/project.schema.json",
+      "contracts/communication/communication-request.schema.json",
+      "contracts/communication/communication-event.schema.json",
+      "contracts/communication/communication-capabilities.schema.json",
       "contracts/development-scenarios.manifest.json",
       "contracts/guidance/guidance-manifest.schema.json",
       "contracts/guidance/tour-review.schema.json",
@@ -46,13 +49,15 @@
     ],
     "docs": [
       "docs/design/appsdk-project-integration.md",
+      "docs/design/apps-sdk-communication.md",
       "docs/design/fix-lifecycle-v2.md",
       "docs/design/development-scenarios.md",
       "docs/design/appsdk-guidance-framework.md",
       "docs/test-design/appsdk-guidance-framework.md",
       "docs/architecture/development-process-control-harness.md",
       "docs/architecture/appsdk-governance-architecture.md",
-      "docs/design/project-memory.md"
+      "docs/design/project-memory.md",
+      "docs/design/appsdk-global-registry.md"
     ],
     "rules": [
       "skills/appsdk-project-governance/SKILL.md"
@@ -67,12 +72,13 @@
       "skills/appsdk-project-governance/references/goal-prompt.md",
       "skills/appsdk-project-governance/references/process-control-harness.md",
       "skills/appsdk-project-governance/references/review-delivery.md",
+      "skills/appsdk-migration/SKILL.md",
       "skills/project-memory/SKILL.md"
     ]
   },
-  "compiler_digest": "sha256:5c533078964fa53fa42e4ddbae7a8517a8d466f9175c590832a3cd558435f4b2",
+  "compiler_digest": "sha256:9f2cd1e78b88c36019f893b2d06d634a0b51518ef24600a9ca1fe78971e5c8fb",
   "contract_schema": 1,
-  "digest": "sha256:5c533078964fa53fa42e4ddbae7a8517a8d466f9175c590832a3cd558435f4b2",
+  "digest": "sha256:9f2cd1e78b88c36019f893b2d06d634a0b51518ef24600a9ca1fe78971e5c8fb",
   "sdk": "appsdk",
   "version": "0.1.6"
 }

@@ -263,6 +263,26 @@ AI 使用 `.appsdk-prepare.json` 模板向用户确认：这是新项目、模�
 创建 preparation record，也不覆盖项目合同或 lifecycle truth。新建、迁移到新 root、
 或通过 `--project-root` 创建尚不存在的治理根仍必须走 confirmed preparation。
 
+如果旧 migration witness、reset receipt 或 control-plane 记录已经阻断当前 `verify`，
+且用户明确选择“忽略历史包袱、按当前版本重新开始”，使用显式 fresh 初始化入口：
+
+```bash
+appsdk init ./existing-project --fresh --discard-legacy
+```
+
+这不是普通 `init` 的隐式行为。它只接受已有 `.appsdk/project.json` 的项目，并且必须在
+clean、非 `main`/`master` worktree 执行；缺少 `--discard-legacy`、项目不存在、主分支或
+dirty worktree 都 fail-closed，拒绝写入。命令只通过 AppSDK 的 canonical reset owner
+移除 `.appsdk/`、`.appsdk-control/` 和声明的 generated root，保留业务源码、runtime、
+`active/`、`protected/` 与人类文档，随后重建当前 `.appsdk` contract 和
+`contracts/records/**`、`contracts/transitions/**` projection，并写入
+`.appsdk/records/reset-governance-record.json`（`mode: "fresh_init"`）。
+
+fresh 初始化不会复制旧 migration witness、reset receipt、PASS、hash、review 或
+lifecycle record；新的 `verify`、`guide compile`、`compile` 和下游 candidate evidence
+必须从当前版本重新产生。重复执行仍然是一次新的、明确授权的 reset，普通 `init` 和
+`reset-governance --discard-legacy` 的既有幂等语义不变。
+
 对已有工作区，confirmed preparation 后必须先进入旧状态迁移预检：
 
 ```text
@@ -327,9 +347,52 @@ clean owner worktree + candidate commit
 
 Each adapter is rerunnable for the same candidate without changing a PASS
 record. A changed candidate, artifact, environment, entrypoint, or input starts
-a new evidence set and invalidates the old one. No adapter may accept a
-hand-entered hash, relabel whitebox output as blackbox output, or use an
-artifact from another worktree/project/version.
+a new evidence set and invalidates the old one. A valid PASS projection skips
+the external action that produced it; the adapter still performs the lightweight
+identity, scope, integrity, and freshness checks required to trust the record.
+No adapter may accept a hand-entered hash, relabel whitebox output as blackbox
+output, or use an artifact from another worktree/project/version.
+
+For the downstream lifecycle records, the typed AppSDK adapter is
+`produce-lifecycle-chain`. It is invoked once per phase (`architecture`,
+`effectiveness`, `merge`, or `promotion`) with an observation declaration. The
+adapter reads the already-produced candidate/evidence records, rechecks their
+commit, tree, scope, expiry, and real Git/mainline identity, and computes the
+new record IDs and cross-record bindings. It does not execute a review, invent
+evidence, or treat the observation declaration as evidence. A missing or stale
+upstream record fails closed. Freeze and Active publication remain owned by the
+existing lifecycle adapter, which performs their real artifact and VCS gates.
+
+#### Stage execution, re-entry, and reuse
+
+The chain is a sequence of independently persisted phases. A phase has one
+projection and an input identity covering the candidate/tree, module scope,
+dependency records, artifact and environment bindings, map hashes, evidence
+references, and (where applicable) the mainline or cleanup identity.
+
+On every invocation AppSDK first validates the current projection and the
+upstream graph. If the projection is PASS, the identity is unchanged, and all
+referenced evidence is still valid, it returns `"reused": true` and skips the
+external phase action. This is a cache hit for that exact phase identity; it is
+not a claim that tests or deployment were executed again. `verify` remains a
+read-only integrity/freshness check and may read the whole graph without
+rerunning those external actions.
+
+If an input, dependency, map, artifact, environment, or evidence freshness
+changes, the current phase and its downstream phases are no longer reusable.
+The immutable PASS projection is retained and the adapter fails closed until a
+new candidate-bound projection is produced. A non-PASS projection is never a
+PASS cache entry: the same identity returns `LIFECYCLE_CHAIN_STAGE_NOT_PASS`,
+while a changed identity archives the old attempt and permits a new phase
+attempt. Attempts are append-only under
+`.appsdk/records/attempts/<module>/<phase>.jsonl`; malformed or conflicting
+entries fail closed.
+
+The initial `produce-lifecycle-records` phase follows the same rule for its
+Worktree, Reproduction, and baseline EvidenceRecord set. All three records
+must be present and match the complete declaration, identity, command, and
+freshness checks before the baseline command is skipped. A partial set is an
+explicit error; it is never silently completed from a cache.
 
 `produce-lifecycle-records` accepts a declaration containing the confirmed
 `goal_id`, the module and issue scope, bug-triage evidence, and a baseline
@@ -341,9 +404,10 @@ match, and its output is hashed, before the three records are written. The
 caller’s result, timestamps, record IDs, input hashes, producer identity, and
 Git fields are never trusted: timestamps, input hashes, path-safe IDs, and the
 fixed `appsdk-lifecycle-record-producer` identity are generated after those
-observations. Existing targets fail with `LIFECYCLE_RECORD_EXISTS`. Records
-are installed with create-new semantics as a group; validation, command, or
-installation failure leaves no newly published record.
+observations. Records are installed with create-new semantics as a group. A
+complete matching set is reused; a partial set, identity drift, expired
+evidence, validation failure, or installation failure remains an explicit error
+and does not publish a new record.
 
 For an upgrade, run `appsdk prepare`/`init` idempotently, inspect and snapshot
 the old project and legacy roots, obtain explicit ownership-transfer approval,
