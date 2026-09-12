@@ -107,6 +107,10 @@ _Empty._
 - tags: `41f0ea2`, `ai-reviewed`, `endpoint`, `human-unreviewed`
 - details: [L2/e3-endpoint-work-binding.md](L2/e3-endpoint-work-binding.md)
 
+### AgentTeams f66499f relay shutdown race delivery
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `relay`, `stale-peer`
+- details: [L2/f66499f-stale-peer-20260912.md](L2/f66499f-stale-peer-20260912.md)
+
 ### 第一波PR7合并和主集成树关闭回执
 - tags: `ai-reviewed`, `cleanup`, `delivery`, `human-unreviewed`
 - details: [L2/first-wave-delivery-20260906.md](L2/first-wave-delivery-20260906.md)
