@@ -43,7 +43,7 @@ it('starts relay before enabled daemons and stops the owned children reentrantly
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
     await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
-    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
     const supervisor = createLocalSupervisor(config(root), { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 2000, stopTimeoutMs: 2000 })
     await supervisor.start()
     expect(supervisor.state()).toBe('running')
@@ -77,13 +77,22 @@ it('does not report running when a child exits immediately after readiness', asy
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
     await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
-    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); process.exit(3)\n")
+    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); setTimeout(() => process.exit(3), 50)\n")
     const supervisor = createLocalSupervisor(config(root), { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 2000, stopTimeoutMs: 2000 })
-    await supervisor.start()
-    await new Promise(resolve => setTimeout(resolve, 100))
-    expect(supervisor.state()).toBe('failed')
-    expect(supervisor.failure()?.message).toMatch(/exited unexpectedly/)
-    await supervisor.stop()
+    await expect(supervisor.start()).rejects.toThrow(/exited unexpectedly|exited during startup/)
+    expect(supervisor.state()).toBe('stopped')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('rejects startup when an earlier ready child exits during a later child startup', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-local-supervisor-startup-exit-'))
+  try {
+    const relay = join(root, 'relay.mjs')
+    const agent = join(root, 'agent.mjs')
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setTimeout(() => process.exit(3), 20)\n")
+    await writeFile(agent, "setTimeout(() => process.send?.({kind:'daemon.registered'}), 100); process.once('SIGTERM', () => process.exit(0))\n")
+    const supervisor = createLocalSupervisor(config(root), { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 1000, stopTimeoutMs: 1000 })
+    await expect(supervisor.start()).rejects.toThrow(/exited unexpectedly|failed during startup/)
     expect(supervisor.state()).toBe('stopped')
   } finally { await rm(root, { recursive: true, force: true }) }
 })

@@ -171,9 +171,15 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           child.once('error', onError)
           unwatch.set(spec.id, () => { child.off('exit', onExit); child.off('error', onError) })
           await waitForReady(child, spec.kind, startupTimeoutMs)
+          if (lifecycle !== 'starting') throw lastFailure ?? new Error(`local ${spec.kind} failed during startup`)
           if (child.exitCode !== null || child.signalCode !== null) {
             throw new Error(`local ${spec.kind} exited immediately after readiness code=${child.exitCode ?? 'null'} signal=${child.signalCode ?? 'null'}`)
           }
+        }
+        await new Promise<void>(resolveReady => { setImmediate(resolveReady) })
+        if (lifecycle !== 'starting') throw lastFailure ?? new Error('local daemon failed during startup')
+        for (const child of children.values()) {
+          if (child.exitCode !== null || child.signalCode !== null) throw new Error('local daemon exited during startup')
         }
         lifecycle = 'running'
       } catch (error) {

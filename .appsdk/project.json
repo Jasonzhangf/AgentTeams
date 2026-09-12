@@ -112,7 +112,12 @@
         "runtime/network/relay-login.js",
         "runtime/runtime/console-runtime.js",
         "runtime/runtime/console-process.js",
+        "runtime/runtime/local-config.js",
+        "runtime/runtime/local-process.js",
+        "runtime/runtime/local-supervisor.js",
         "runtime/server/relay.js",
+        "runtime/server/relay-process.js",
+        "runtime/runtime/agent-process.js",
         "runtime/agent/work-resource.js",
         "runtime/config/runtime-config.js"
       ],
