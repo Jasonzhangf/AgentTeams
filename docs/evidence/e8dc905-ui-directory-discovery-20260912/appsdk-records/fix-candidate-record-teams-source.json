@@ -1,0 +1,37 @@
+{
+  "fix_candidate_id": "fix-07baf9ac8454-attempt-1789229518136-cc9ac333-6ed1-467f-858c-24d25caa4551",
+  "issue_id": "teams-lifecycle-admission",
+  "module_id": "teams-source",
+  "worktree_id": "worktree-07baf9ac8454",
+  "base_commit": "74cb6f25d2b68a0d9b28682bc04153d74f9dc91d",
+  "head_commit": "07baf9ac8454b458f971eaf0c95060c903cf686f",
+  "tree_hash": "e735690f15f975bf81e3d86d867257a0b2213734",
+  "diff_hash": "sha256:49f34baa2a10998c8503a7d6e016cb61dc52f22e1ce3bc73221b172606c980e2",
+  "design_id": "teams-lifecycle-admission",
+  "owner": "agentteams::lifecycle-adapter:v1",
+  "scope_hash": "sha256:5462fdb80163164713e0d4007f3b42ce3d6e50055a60b3811ea9b278a5525570",
+  "changed_paths": [
+    "control-protocol/console-api.ts",
+    "control-protocol/console-wire.spec.ts",
+    "control-protocol/console-wire.ts",
+    "docs/architecture/function-map.json",
+    "docs/architecture/mainline-call-map.json",
+    "docs/architecture/verification-map.json",
+    "runtime/console-hub.spec.ts",
+    "runtime/console-hub.ts",
+    "runtime/console-process.md",
+    "runtime/console-runtime.ts",
+    "ui/teams-console/src/client/api.ts",
+    "ui/teams-console/src/client/model.ts",
+    "ui/teams-console/tests/api.spec.ts",
+    "ui/teams-console/tests/model.spec.ts"
+  ],
+  "verification_evidence_ids": [
+    "attempt-1789229518136-cc9ac333-6ed1-467f-858c-24d25caa4551-whitebox",
+    "attempt-1789229518136-cc9ac333-6ed1-467f-858c-24d25caa4551-artifact",
+    "attempt-1789229518136-cc9ac333-6ed1-467f-858c-24d25caa4551-install",
+    "attempt-1789229518136-cc9ac333-6ed1-467f-858c-24d25caa4551-restart",
+    "attempt-1789229518136-cc9ac333-6ed1-467f-858c-24d25caa4551-blackbox"
+  ],
+  "created_at": "2026-09-12T16:11:58.138Z"
+}

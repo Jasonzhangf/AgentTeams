@@ -1,0 +1,14 @@
+{
+  "worktree_id": "worktree-07baf9ac8454",
+  "issue_id": "teams-lifecycle-admission",
+  "module_id": "teams-source",
+  "base_ref": "origin/main",
+  "base_commit": "74cb6f25d2b68a0d9b28682bc04153d74f9dc91d",
+  "branch": "codex/integration-e8dc905-20260912",
+  "head_commit": "07baf9ac8454b458f971eaf0c95060c903cf686f",
+  "initial_clean": true,
+  "final_clean": true,
+  "isolation_mode": "isolated_worktree",
+  "scope_hash": "sha256:5462fdb80163164713e0d4007f3b42ce3d6e50055a60b3811ea9b278a5525570",
+  "created_at": "2026-09-12T16:11:58.138Z"
+}
