@@ -101,6 +101,12 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   const duplicate = child(path)
   await expect(duplicate.ready).rejects.toThrow(/EADDRINUSE/)
   expect((await duplicate.exited).code).toBe(1)
+  const secondConfigPath = join(directory, 'agent-two.json')
+  writeFileSync(secondConfigPath, JSON.stringify({ ...config,
+    identity: { ...config.identity, hostId: 'provider-two', agentId: 'provider2', label: 'Provider Two' },
+    dataDirectory: './data-provider-two', leasePort: await availablePort() }))
+  const secondProvider = child(secondConfigPath, 'Bearer provider2')
+  expect(await secondProvider.ready).toMatchObject({ agentId: 'provider2', generation: 1 })
   const provider = (await consumer.directory(false)).find(peer => peer.declaration.identity.agentId === 'provider')!
   expect(provider.declaration.revision).toBe(2)
   expect(provider.declaration.capabilities.map(item => item.capabilityId)).toContain('file-search')
@@ -112,36 +118,46 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   const management = createRelayConsoleClient(consumer, 'provider', 2000)
   expect((await management.readProjection()).agents[0]).toMatchObject({ agentId: 'provider', presence: 'online', capabilities: ['browser', 'file-search'] })
   expect(await management.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+  const directoryPeers = await consumer.directory(false)
+  expect(directoryPeers.some(peer => peer.declaration.identity.agentId === 'consumer')).toBe(true)
   const dynamicHub = createConsoleHub([], async () => ({
     peers: (await consumer.directory(false)).filter(peer => peer.declaration.identity.agentId !== 'consumer'),
-    client: peer => createRelayConsoleClient(consumer, peer.declaration.identity.agentId, 2000),
+    client: peer => {
+      const remote = createRelayConsoleClient(consumer, peer.declaration.identity.agentId, 2000)
+      return { ...remote, readProjection: async () => {
+        const projection = await remote.readProjection()
+        return { ...projection, agents: projection.agents.map(agent => ({ ...agent, capabilities: [] })) }
+      } }
+    },
   }))
   const consoleServer = createConsoleServer({ staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
     authorize: async request => request.headers.authorization === 'console-test' ? dynamicHub : undefined })
   await new Promise<void>(resolve => consoleServer.listen(0, '127.0.0.1', resolve))
   const consoleUrl = `http://127.0.0.1:${(consoleServer.address() as { port: number }).port}`
+  const connect = async (generation: number) => {
+    const grant = await consumer.connect('provider', generation)
+    return createWorkChannel(await consumer.openData(grant), { timeoutMs: 2000, maxPending: 4, maxIncoming: 4 })
+  }
   try {
     const httpClient = createConsoleHttpClient({ baseUrl: consoleUrl,
       fetchImpl: (url, init) => fetch(url, { ...init, headers: { ...init?.headers, authorization: 'console-test' } }) })
     const projected = await (await fetch(`${consoleUrl}/api/v1/projection`, { headers: { authorization: 'console-test' } })).json() as {
       agents: { agentId: string; generation: number; presence: string; capabilities: string[] }[]; works: unknown[]; relations: unknown[]
     }
-    expect(projected.agents).toHaveLength(1)
-    expect(projected.agents[0]).toMatchObject({ agentId: 'provider', generation: 1, presence: 'online', capabilities: ['browser', 'file-search'] })
+    expect(projected.agents).toHaveLength(2)
+    expect(projected.agents.map(agent => agent.agentId)).toEqual(expect.arrayContaining(['provider', 'provider2']))
+    expect(projected.agents.every(agent => agent.agentId !== 'consumer')).toBe(true)
+    expect(projected.agents.find(agent => agent.agentId === 'provider')).toMatchObject({ generation: 1, presence: 'online', capabilities: ['browser', 'file-search'] })
+    expect(projected.agents.find(agent => agent.agentId === 'provider2')).toMatchObject({ generation: 1, presence: 'online', capabilities: ['browser', 'file-search'] })
     expect(projected.works).toEqual([])
     expect(projected.relations).toEqual([])
     expect(await httpClient.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
     expect((await fetch(consoleUrl, { headers: { authorization: 'console-test' } })).status).toBe(200)
-  } finally { await new Promise<void>(resolve => consoleServer.close(() => resolve())) }
   const malformedGrant = await consumer.connect('provider', 1)
   const malformed = await consumer.openData(malformedGrant)
   await malformed.send({ bytes: Buffer.from('{"kind":"unrecognized"}'), binary: false })
   await malformed.closed
   expect((await management.readProjection()).agents[0].presence).toBe('online')
-  const connect = async (generation: number) => {
-    const grant = await consumer.connect('provider', generation)
-    return createWorkChannel(await consumer.openData(grant), { timeoutMs: 2000, maxPending: 4, maxIncoming: 4 })
-  }
   const channel = await connect(1)
   expect(await channel.request({ kind: 'work.propose', proposal: { workId: 'work', consumerAgentId: 'consumer', providerAgentId: 'provider', capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1 } })).toMatchObject({ work: { state: 'accepted' } })
   expect(await channel.request({ kind: 'work.request', control: { workId: 'work', requestId: 'request', operation: 'search', targetGeneration: 1, demands: [{ resourceId: 'search-slot', amount: 1 }] },
@@ -151,6 +167,15 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
     works: [expect.objectContaining({ agentId: 'provider', workId: 'work', consumerAgentId: 'consumer', state: 'closed' })],
     relations: [expect.objectContaining({ agentId: 'provider', workId: 'work', consumerAgentId: 'consumer', relationPermission: 'granted' })],
   })
+  const projectedAfterWork = await (await fetch(`${consoleUrl}/api/v1/projection`, { headers: { authorization: 'console-test' } })).json() as {
+    agents: { agentId: string }[]; works: Record<string, unknown>[]; relations: Record<string, unknown>[]
+  }
+  expect(projectedAfterWork.works).toEqual([expect.objectContaining({ agentId: 'provider', workId: 'work', state: 'closed' })])
+  expect(projectedAfterWork.relations).toEqual([expect.objectContaining({ agentId: 'provider', workId: 'work', relationPermission: 'granted' })])
+  expect(JSON.stringify(projectedAfterWork)).not.toContain('process work needle')
+  } finally { await new Promise<void>(resolve => consoleServer.close(() => resolve())) }
+  secondProvider.process.kill('SIGTERM')
+  expect((await secondProvider.exited).code).toBe(0)
   first.process.kill('SIGTERM')
   expect((await first.exited).code).toBe(0)
 
