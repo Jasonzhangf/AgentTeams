@@ -12,6 +12,7 @@ import { connectDirectWssTarget } from '../network/direct-route.ts'
 import { buildDirectWssRoutePlan } from '../network/route-plan.ts'
 import { createWorkChannel } from '../network/work-channel.ts'
 import { createRelayConsoleClient } from './relay-console-client.ts'
+import { createConsoleHub } from './console-hub.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
 import { createConsoleHttpClient } from '../ui/teams-console/src/client/api.ts'
 import { startAgentProcess } from './agent-process.ts'
@@ -111,15 +112,22 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   const management = createRelayConsoleClient(consumer, 'provider', 2000)
   expect((await management.readProjection()).agents[0]).toMatchObject({ agentId: 'provider', presence: 'online', capabilities: ['browser', 'file-search'] })
   expect(await management.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+  const dynamicHub = createConsoleHub([], async () => ({
+    peers: (await consumer.directory(false)).filter(peer => peer.declaration.identity.agentId !== 'consumer'),
+    client: peer => createRelayConsoleClient(consumer, peer.declaration.identity.agentId, 2000),
+  }))
   const consoleServer = createConsoleServer({ staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
-    authorize: async request => request.headers.authorization === 'console-test' ? management : undefined })
+    authorize: async request => request.headers.authorization === 'console-test' ? dynamicHub : undefined })
   await new Promise<void>(resolve => consoleServer.listen(0, '127.0.0.1', resolve))
   const consoleUrl = `http://127.0.0.1:${(consoleServer.address() as { port: number }).port}`
   try {
     const httpClient = createConsoleHttpClient({ baseUrl: consoleUrl,
       fetchImpl: (url, init) => fetch(url, { ...init, headers: { ...init?.headers, authorization: 'console-test' } }) })
-    const projected = await (await fetch(`${consoleUrl}/api/v1/projection`, { headers: { authorization: 'console-test' } })).json() as { agents: { agentId: string }[]; works: unknown[]; relations: unknown[] }
-    expect(projected.agents[0].agentId).toBe('provider')
+    const projected = await (await fetch(`${consoleUrl}/api/v1/projection`, { headers: { authorization: 'console-test' } })).json() as {
+      agents: { agentId: string; generation: number; presence: string; capabilities: string[] }[]; works: unknown[]; relations: unknown[]
+    }
+    expect(projected.agents).toHaveLength(1)
+    expect(projected.agents[0]).toMatchObject({ agentId: 'provider', generation: 1, presence: 'online', capabilities: ['browser', 'file-search'] })
     expect(projected.works).toEqual([])
     expect(projected.relations).toEqual([])
     expect(await httpClient.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
