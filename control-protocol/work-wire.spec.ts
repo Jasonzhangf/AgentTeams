@@ -10,6 +10,17 @@ it('preserves arbitrary business JSON while rejecting misplaced control', () => 
   expect(() => parseWorkWireFrame(JSON.stringify({ ...value, control: { ...value.control, targetGeneration: 1e100 } }))).toThrow()
 })
 
+it('keeps Endpoint identity and session metadata out of Work request control', () => {
+  expect(() => parseWorkWireFrame(JSON.stringify({ kind: 'work.request', correlationId: 'c', control: {
+    workId: 'w', requestId: 'r', operation: 'search', targetGeneration: 1, demands: [],
+    endpoint: { workId: 'w', providerAgentId: 'b', endpointId: 'search-endpoint', revision: 1,
+      capabilityId: 'search', capabilityVersion: '1', operation: 'search' },
+  }, payload: null }))).toThrow(/unsupported field endpoint/)
+  expect(() => parseWorkWireFrame(JSON.stringify({ kind: 'work.request', correlationId: 'c', control: {
+    workId: 'w', requestId: 'r', operation: 'search', targetGeneration: 1, demands: [], metadata: { sessionId: 's' },
+  }, payload: null }))).toThrow(/unsupported field metadata/)
+})
+
 it('validates Work state, result, proposal, query and error envelopes', () => {
   const work = { workId: 'w', consumerAgentId: 'a', providerAgentId: 'b', capabilityId: 'search', capabilityVersion: '1', policyRevision: 1 }
   const frames = [

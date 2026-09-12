@@ -122,6 +122,28 @@ describe('Agent Work resource admission', () => {
       .toThrowError(/CONFLICT/)
   })
 
+  it('rejects Work proposals when the Endpoint lifecycle is not active', () => {
+    const state = endpointLedger()
+    state.endpointCatalog = state.endpointCatalog?.map(endpoint => ({ ...endpoint, lifecycle: 'draining' as const }))
+    expect(() => proposeWork(state, consumer, {
+      ...workProposal('endpoint-draining'),
+      endpoint: { workId: 'endpoint-draining', providerAgentId: provider.agentId, endpointId: 'browser-endpoint', revision: 3,
+        capabilityId: capability.capabilityId, capabilityVersion: capability.version, operation: 'open' },
+    }, policy())).toThrowError(/FORBIDDEN/)
+  })
+
+  it('rejects Work proposals when the bound Endpoint does not mount the capability resources', () => {
+    const state = endpointLedger()
+    state.endpointCatalog = state.endpointCatalog?.map(endpoint => endpoint.endpointId === 'browser-endpoint'
+      ? { ...endpoint, resources: [{ resourceId: 'browser-context', capacity: 2, unit: 'context' as const }] }
+      : endpoint)
+    expect(() => proposeWork(state, consumer, {
+      ...workProposal('endpoint-mismatch'),
+      endpoint: { workId: 'endpoint-mismatch', providerAgentId: provider.agentId, endpointId: 'browser-endpoint', revision: 3,
+        capabilityId: capability.capabilityId, capabilityVersion: capability.version, operation: 'open' },
+    }, policy())).toThrowError(/NOT_FOUND/)
+  })
+
   it('rejects unauthenticated identity claims and incompatible capability versions', () => {
     const state = ledger()
     expect(() => proposeWork(state, { ...consumer, agentId: 'other-agent' }, workProposal('work-identity'), policy())).toThrowError(/FORBIDDEN/)

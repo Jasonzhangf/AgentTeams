@@ -728,9 +728,13 @@ function assertProvider(work: WorkProposal, provider: AuthenticatedAgent): void 
   if (work.providerAgentId !== provider.agentId) fail('FORBIDDEN', 'work proposal does not target the local provider')
 }
 
-function validateEndpointBinding(ledger: WorkLedger, consumer: AuthenticatedAgent, proposal: WorkProposal): void {
+function validateEndpointBinding(
+  ledger: WorkLedger,
+  consumer: AuthenticatedAgent,
+  proposal: WorkProposal,
+): EndpointDiscoveryView | undefined {
   const endpoint = proposal.endpoint
-  if (endpoint === undefined) return
+  if (endpoint === undefined) return undefined
   if (endpoint.workId !== proposal.workId) fail('CONFLICT', 'Endpoint reference workId does not match the Work proposal')
   if (endpoint.providerAgentId !== proposal.providerAgentId) fail('FORBIDDEN', 'Endpoint reference provider does not match the Work proposal')
   if (endpoint.capabilityId !== proposal.capabilityId || endpoint.capabilityVersion !== proposal.capabilityVersion) {
@@ -739,11 +743,21 @@ function validateEndpointBinding(ledger: WorkLedger, consumer: AuthenticatedAgen
   try {
     const view = admitWorkEndpointReference(ledger.endpointCatalog, consumer, endpoint)
     if (view.ownerAgentId !== ledger.provider.agentId) fail('FORBIDDEN', 'Endpoint reference is not owned by the local provider')
+    return view
   } catch (error) {
     if (isWorkServiceError(error)) throw error
     const code = typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
       ? (error as { code: ServiceErrorCode }).code : 'INVALID_INPUT'
     fail(code, error instanceof Error ? error.message : 'Endpoint reference admission failed')
+  }
+}
+
+function validateEndpointResources(view: EndpointDiscoveryView, capability: CapabilityDeclaration): void {
+  const mounted = new Set(view.resources.map(resource => resource.resourceId))
+  for (const resource of capability.resources) {
+    if (!mounted.has(resource.resourceId)) {
+      fail('NOT_FOUND', `resource ${resource.resourceId} is not mounted on Endpoint ${view.endpointId}`)
+    }
   }
 }
 
@@ -801,11 +815,12 @@ export function proposeWork(
     if (!sameProposal) fail('CONFLICT', `work ${normalizedProposal.workId} already exists with different parameters`)
     return existing
   }
-  validateEndpointBinding(ledger, consumer, normalizedProposal)
+  const endpointView = validateEndpointBinding(ledger, consumer, normalizedProposal)
   if (normalizedProposal.policyRevision !== policy.revision) fail('REVISION_CONFLICT', 'work policy revision is stale')
   const capability = ledger.capabilities.find(candidate => candidate.capabilityId === normalizedProposal.capabilityId)
   if (capability === undefined) fail('NOT_FOUND', `unknown capability ${normalizedProposal.capabilityId}`)
   if (capability.version !== normalizedProposal.capabilityVersion) fail('UNSUPPORTED_VERSION', `unsupported capability version ${normalizedProposal.capabilityVersion}`)
+  if (endpointView !== undefined) validateEndpointResources(endpointView, capability)
   const state: AgentWork['state'] = policy.authorizeWork(consumer, normalizedProposal) ? 'accepted' : 'rejected'
   const work: AgentWork = { ...normalizedProposal, state }
   commit(ledger, nextSnapshot(ledger, { works: [...ledger.snapshot.works, work] }))

@@ -76,4 +76,16 @@ describe('Endpoint/Capability/Operation/Work admission', () => {
       workId: 'work-1', ...ref, capabilityId: 'browser-control', capabilityVersion: 'v1', operation: 'click',
     }))).toBe('NOT_FOUND')
   })
+
+  it('rejects non-active Endpoint lifecycles for Work admission', () => {
+    const catalog = [view({ lifecycle: 'draining' }), view({ endpointId: 'profile-b', lifecycle: 'disabled' })]
+    expect(codeOf(() => admitWorkEndpointReference(catalog, viewer, {
+      workId: 'work-1', providerAgentId: 'agent-a', endpointId: 'profile-a', revision: 2,
+      capabilityId: 'browser-control', capabilityVersion: 'v1', operation: 'navigate',
+    }))).toBe('FORBIDDEN')
+    expect(codeOf(() => admitWorkEndpointReference(catalog, viewer, {
+      workId: 'work-1', providerAgentId: 'agent-a', endpointId: 'profile-b', revision: 2,
+      capabilityId: 'browser-control', capabilityVersion: 'v1', operation: 'navigate',
+    }))).toBe('FORBIDDEN')
+  })
 })
