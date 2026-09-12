@@ -28,5 +28,8 @@ agentteams-relay.service: enabled
 The Claw rollback tree `/opt/agentteams.backup-20260912-0145` remains as the
 explicit retained rollback obligation. No unrelated process, service, DNS,
 Nginx route, firewall rule, credential file, or other worktree was changed.
-The owned candidate worktree remains until exact review, integration, push, and
-its final worktree cleanup are complete.
+After the final memory receipt push at remote main
+`20f26837e85b92240002c324b70c45463be183fc`, the owned candidate,
+integration, and finalization worktrees were verified clean and removed with
+their delivery branches. No active claim, process, listener, or unique
+evidence remained in those worktrees at removal time.
