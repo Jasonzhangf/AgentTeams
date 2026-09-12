@@ -12,6 +12,8 @@ export interface LocalProcessSpec {
 
 export interface LocalSupervisorOptions {
   readonly nodeExecutable?: string
+  /** Runtime flags are explicit so source and packaged entrypoints share the same child contract. */
+  readonly nodeArguments?: readonly string[]
   readonly relayEntry?: string
   readonly agentEntry?: string
   readonly env?: NodeJS.ProcessEnv
@@ -135,11 +137,15 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       lifecycle = 'stopped'
       lastFailure = undefined
     })()
-    stopping = operation
-    void operation.catch(() => { if (lifecycle === 'stopping') lifecycle = lastFailure ? 'failed' : 'running' }).finally(() => {
-      if (stopping === operation) stopping = undefined
+    let completion!: Promise<void>
+    completion = operation.catch(error => {
+      if (lifecycle === 'stopping') lifecycle = lastFailure ? 'failed' : 'running'
+      throw error
+    }).finally(() => {
+      if (stopping === completion) stopping = undefined
     })
-    return operation
+    stopping = completion
+    return completion
   }
 
   const start = (): Promise<void> => {
@@ -155,7 +161,7 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
             if (lifecycle === 'failed') throw lastFailure ?? new Error('local daemon failed during startup')
             throw new Error('local daemon startup was cancelled')
           }
-          const child = spawnProcess(nodeExecutable, [spec.entry, ...spec.args], { env: { ...process.env, ...options.env }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+          const child = spawnProcess(nodeExecutable, [...(options.nodeArguments ?? []), spec.entry, ...spec.args], { env: { ...process.env, ...options.env }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
           children.set(spec.id, child)
           const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
             if (lifecycle === 'stopping' || lifecycle === 'stopped') return
