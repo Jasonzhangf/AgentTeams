@@ -1,11 +1,13 @@
-# Integration receipt: Local MVP goal refresh
+# Integration receipt
 
-- Delivery unit: `2cbc522`.
-- Integration worktree: `playground/2cbc522-goal-refresh-integration-20260913`.
-- Integration base: `origin/main@412fc5fbc7bba328d9916906122192d4e7e60e2b`.
-- Source candidate integrated: `b03c3626f39d9585e1dc0f2368c533c078a72695`.
-- Scope: only the goal documents and this delivery unit's evidence directory.
-- Mainline verification: `pnpm verify` PASS; 77 test files and 458 tests passed, typecheck, AppSDK guide compile, AppSDK compile, packaged Console smoke, packaged runtime smoke, and AppSDK verify passed.
-- Raw output: `docs/evidence/2cbc522-goal-refresh-20260913/integration-pnpm-verify.log`.
-- `git diff --check`: PASS after normalizing two generated-log trailing spaces.
-- Scope boundary: this integration receipt does not claim runtime OS process deployment, public Relay/NAT, complete Agent Work MVP, or Console-offline live replay.
+- source candidate: `fdd3ef9`
+- integration base: `f0197f78582278c99cd0eb513893f942be69189e`
+- integration worktree: `playground/2cbc522-goal-refresh-integration-20260913`
+- integrated candidate before this receipt: `bb41798`
+- changed paths remain limited to the goal documents and this unit's evidence receipts.
+- mainline verification: `pnpm install --frozen-lockfile`, `git diff --check`, and `pnpm verify` PASS.
+- `pnpm verify`: 77 test files, 458 tests, typecheck, Guidance compile, AppSDK compile/verify,
+  packaged Console smoke and packaged runtime smoke.
+- no runtime, network, agent, config, UI, package or lockfile source changed.
+- product status: this is a documentation and dispatch-plan integration; it does not close the Local
+  Network MVP or prove live/public deployment.
