@@ -1,0 +1,129 @@
+diff --git a/docs/goals/teams-local-mvp-execution-plan.md b/docs/goals/teams-local-mvp-execution-plan.md
+index d023925..386ffc8 100644
+--- a/docs/goals/teams-local-mvp-execution-plan.md
++++ b/docs/goals/teams-local-mvp-execution-plan.md
+@@ -10 +10,2 @@
+-对应 AppSDK issue：`2cbc522`（本次目标指针刷新）。上一轮文档刷新 `8186534` 已关闭；上一轮治理 `c4387e4` 已关闭；U0 `159b78b` 已关闭；当前首个待调度单元是 runtime
++对应 AppSDK issue：`3aa1d61`（本次目标指针刷新）。上一轮指针刷新 `2cbc522`、文档刷新
++`8186534` 和治理 `c4387e4` 已关闭；U0 `159b78b` 已关闭；当前首个待调度单元是 runtime
+@@ -20 +21 @@
+-  本次文档刷新观察到的输入基线是 `e59d83170688f5e072c20a6508cc36050044dcf3`；这个 SHA
++  本次文档刷新观察到的输入基线是 `b619ff21ed0bfce5992bc59602faf022f8d67842`；这个 SHA
+@@ -25 +26 @@
+-- 本轮文档候选从 `e59d831` 建立；此前 U0 worktree/branch 已回收，每次恢复仍须重读现场。
++- 本轮文档候选从 `b619ff2` 建立；此前 U0 与上一轮文档 worktree/branch 已回收，每次恢复仍须重读现场。
+@@ -31,6 +32,8 @@
+-  ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。当前可见
+-  的 `playground/3742b9a-runtime-r3-20260913` 仍 dirty，HEAD 与 `e59d831` 相同，尚无 candidate
+-  commit；socket-backed gates 当前复现 `listen EPERM`。必须先确认唯一 owner 停止写入，在允许真实
+-  local socket 的执行环境从最新 `origin/main` 形成 clean candidate，重跑 focused/full gate、完成
+-  独立 Codex review 后才可集成；不能把旧候选或 dirty tree 当作当前 candidate，也不能重派同一
+-  runtime unit。
++  ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。当前唯一活动
++  候选 `playground/3742b9a-runtime-r4-20260913` 从 `b619ff2` 重建，仍 dirty，尚无 candidate
++  commit；当前 r4 evidence 已记录 focused runtime、`agent-process`/`local-relay-bridge` socket
++  gate、typecheck 和 build 通过；`local-two-agent` 的 exact receipt、full `pnpm verify` 尚未在
++  r4 evidence 中记录，且 r4 run-notes 仍错误指向 r3 worktree/branch，必须由 runtime owner 修正后
++  才能作为 r4 candidate evidence。必须先完成 local-two-agent exact receipt、full verify、exact
++  Codex review、candidate commit、clean integration、push、memory 和 cleanup；不能把旧候选
++  或 dirty tree 当作当前 candidate，也不能重派同一 runtime unit。
+@@ -38 +41 @@
+-  `codex/776fcad-c1-r2-20260913`，基线为 `e59d831` 且 worktree dirty。它只修改
++  `codex/776fcad-c1-r2-20260913`，基于旧主线且 worktree dirty。它只修改
+@@ -46 +49,3 @@
+-| `playground/3742b9a-runtime-r3-20260913` | dirty，HEAD=`e59d831`，socket gate 为环境 `listen EPERM`，无 candidate commit | 保留红测/evidence；在允许真实 local socket 的环境形成 clean candidate，再跑 focused/full gate 与独立 Codex review |
++| `playground/3742b9a-runtime-r4-20260913` | dirty，HEAD=`b619ff2`，focused 与 `agent-process`/`local-relay-bridge` socket gates、typecheck/build 已记录通过；`local-two-agent` exact receipt、full `pnpm verify` 未记录；run-notes 仍指向 r3，无 candidate commit | runtime owner 先修正 r4 evidence identity 并补 local-two-agent/full verify；再运行 exact Codex review，PASS 后提交 candidate，再做 integration、push、memory 和 cleanup |
++| `playground/3742b9a-runtime-r3-20260913` | dirty，旧候选，包含历史 `listen EPERM` 证据和未提交 runtime diff | 只保留审计责任；不得 reset/delete，确认 owner、唯一证据和进程后再决定回收 |
++| `playground/3742b9a-runtime-rebind-r2-20260913` | dirty，旧 runtime rebind，HEAD=`7e82b8a`，含未提交 runtime diff 和独立 evidence | 只保留审计责任；不得 reset/delete，确认 owner、唯一证据和进程后再决定回收 |
+@@ -50 +55 @@
+-| `playground/776fcad-c1-r2-20260913` | dirty，基线 `e59d831`，仅属 config/OpenCode | 继续 focused gate/review；不得碰 runtime/network |
++| `playground/776fcad-c1-r2-20260913` | dirty，基于旧主线，仅属 config/OpenCode | 继续 focused gate/review；不得碰 runtime/network；candidate 前须从最新 main 重建 |
+@@ -58,3 +63,3 @@
+-- **下一单元**：继续推进 runtime issue `3742b9a` 的 rebind candidate 验证，解除 L1-CLI 的跨进程生命周期/API
+-  blocker；C1 Config/OpenCode 只有在自身 worktree 从最新 main 重建后才可并行。runtime
+-  receipt 后重新绑定 L1-CLI；取得 L1 receipt 后才推进 W1，
++- **下一单元**：收口 runtime issue `3742b9a` 的 r4 candidate：full verify → exact review → commit
++  → clean integration → push → memory → cleanup，解除 L1-CLI 的跨进程生命周期/API blocker；C1
++  Config/OpenCode 只有在自身 worktree 从最新 main 重建后才可并行。runtime receipt 后重新绑定 L1-CLI；取得 L1 receipt 后才推进 W1，
+@@ -64 +69,2 @@
+-- **可并发**：runtime unit 与 C1 可并发；runtime receipt 后的 L1-CLI 与 C1 可并发；`W1` 在 L1
++- **可并发**：runtime unit 与 C1 仅在 C1 worktree 从当前 `origin/main` 重建并完成 admission/fingerprint
++  检查后并发；否则只派 runtime。runtime receipt 后的 L1-CLI 与已满足该条件的 C1 可并发；`W1` 在 L1
+@@ -108 +114 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
+-  `origin/main=e59d83170688f5e072c20a6508cc36050044dcf3`，下一 unit 仍须重新读取远端。
++  `origin/main=b619ff21ed0bfce5992bc59602faf022f8d67842`，下一 unit 仍须重新读取远端。
+@@ -189 +195,2 @@ canonical 文档为准。
+-AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI 与 C1 在各自路径不重叠时并行；W1
++AppSDK compile/verify、真实入口和 exact review。runtime receipt 前只允许 runtime 与已从最新 main
++重建的 C1 并行；runtime receipt 后才允许 L1-CLI 与 C1 在各自路径不重叠时并行；W1
+@@ -219 +226,2 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI
+-  当前只可派首个满足依赖的 L1-CLI/C1；没有 L1 receipt 时不得派 W1，没有 W1 receipt 时不得派 B1；
++  runtime receipt 前只可派 runtime 或从最新 main 重建后的 C1；runtime receipt 后才可派 L1-CLI/C1；
++  没有 L1 receipt 时不得派 W1，没有 W1 receipt 时不得派 B1；
+@@ -237 +245 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI
+-| runtime local launcher | `3742b9a` | r3 worktree dirty，HEAD=`e59d831`，socket gate 为环境 `listen EPERM`，无 candidate commit | 保留红测/evidence；换到允许真实 socket 的环境后形成 clean candidate，再重跑 focused/full gate → Codex review → candidate receipt → integration/push |
++| runtime local launcher | `3742b9a` | r4 worktree dirty，HEAD=`b619ff2`；focused 与 `agent-process`/`local-relay-bridge` socket gates、typecheck/build 已记录通过；`local-two-agent` exact receipt、full `pnpm verify` 未记录；run-notes 仍指向 r3，无 candidate commit | 修正 evidence identity → local-two-agent exact receipt → full verify → exact Codex review → candidate commit → integration/push → memory → cleanup |
+@@ -239 +247 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI
+-| C1 provider/OpenCode | `776fcad` | r2 worktree dirty，基线=`e59d831`，未完成 focused gate/review | 继续 config/opencode focused gate → evidence → Codex review；不碰 runtime/network |
++| C1 provider/OpenCode | `776fcad` | r2 worktree dirty，基于旧主线，未完成 focused gate/review | 从最新 main 重建后继续 config/opencode focused gate → evidence → Codex review；不碰 runtime/network |
+@@ -242 +250 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI
+-本次文档刷新 worktree 是 `playground/2cbc522-goal-refresh-20260913`，只拥有
++本次文档刷新 worktree 是 `playground/3aa1d61-goal-refresh-20260913`，只拥有
+diff --git a/docs/goals/teams-local-mvp-goal-prompt.md b/docs/goals/teams-local-mvp-goal-prompt.md
+index 079e47e..bb1fed3 100644
+--- a/docs/goals/teams-local-mvp-goal-prompt.md
++++ b/docs/goals/teams-local-mvp-goal-prompt.md
+@@ -28 +28 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除
+-  `e59d83170688f5e072c20a6508cc36050044dcf3`；root `main` 与远端均为该 SHA 且 clean。该 SHA
++  `b619ff21ed0bfce5992bc59602faf022f8d67842`；root `main` 与远端均为该 SHA 且 clean。该 SHA
+@@ -32,2 +32,2 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除
+-- 本次目标刷新 issue 是 `2cbc522`，当前仍是唯一 open 的目标刷新 issue；上一轮文档刷新
+-  `8186534` 已关闭。不得创建第二个 goal、第二个 subscription 或第二套任务图。
++- 本次目标刷新 issue 是 `3aa1d61`；前一轮指针刷新 `2cbc522` 与更早的 `8186534` 均已关闭。
++  不得创建第二个 goal、第二个 subscription 或第二套任务图。
+@@ -36,7 +36,9 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除
+-  status/stop 和 configured Work API。当前候选 worktree 是
+-  `playground/3742b9a-runtime-r3-20260913`，基线为 `e59d831`，仍 dirty，尚无 candidate
+-  commit；socket-backed gates 在当前环境复现 `listen EPERM`，这是执行环境 blocker，不能改成
+-  mock 或绕过。必须在允许真实 local socket 的环境形成 clean candidate，并重新验证 startup
+-  reservation、PID-0 stop guard、concurrent-start、internal state merge、configuredWork generation
+-  binding 和 supervisor start-token ownership。没有当前 candidate 的 focused/full gate、Codex exact
+-  review、integration 或 push 前，不得推进 CLI，也不得把 CLI 做成第二套 supervisor/Work ledger。
++  status/stop 和 configured Work API。当前唯一活动候选是
++  `playground/3742b9a-runtime-r4-20260913`，从 `b619ff2` 重建，仍 dirty，尚无 candidate
++  commit；当前 r4 evidence 已记录 focused runtime、`agent-process`/`local-relay-bridge` socket
++  gate、typecheck 和 build 通过；`local-two-agent` 的 exact receipt、full `pnpm verify` 尚未在
++  r4 evidence 中记录。r4 run-notes 仍错误指向 r3 worktree/branch，必须由 runtime owner 修正后
++  才能作为 r4 candidate evidence。exact Codex review、integration、push、memory 和 cleanup 也尚未
++  完成。必须先补齐这些 receipts；没有
++  当前 candidate 的 review/integration/push 前，不得推进 CLI，也不得把 CLI 做成第二套 supervisor
++  或 Work ledger。
+@@ -46 +48 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除
+-  `playground/776fcad-c1-r2-20260913` 基于 `e59d831` 仍 dirty，只能写
++  `playground/776fcad-c1-r2-20260913` 基于旧主线仍 dirty，只能写
+@@ -51 +53,2 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除
+-  → I1/L5 本地真实回放；C1 可与 runtime/L1 并行，但不得写 runtime/network/agent/UI。
++  → I1/L5 本地真实回放；C1 从最新 main 重建并完成其 focused gate 后，才可与 runtime/L1 并行，且不得写
++  runtime/network/agent/UI。
+@@ -53,2 +56,2 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除
+-资源接手快照：runtime r3、C1 r2 和 L1 红测 worktree 都有未完成交付义务，保留并审计，不删除、不
+-reset。旧 runtime worktree 只作历史参考；任何残留 daemon/relay 先按显式 PID 和 owner 核对，再
++资源接手快照：runtime r4、runtime r3 历史候选、runtime rebind-r2、C1 r2 和 L1 红测 worktree 都有未完成交付义务，保留并
++审计，不删除、不 reset。旧 runtime worktree 即使是历史候选也要先审计 dirty 内容、唯一证据和 owner；任何残留 daemon/relay 先按显式 PID 和 owner 核对，再
+diff --git a/docs/goals/teams-user-mvp-delivery.md b/docs/goals/teams-user-mvp-delivery.md
+index 61da789..ae183e0 100644
+--- a/docs/goals/teams-user-mvp-delivery.md
++++ b/docs/goals/teams-user-mvp-delivery.md
+@@ -75 +75 @@ failover 和生产部署继续属于 canonical 计划中的 post-MVP 阶段。
+-当前主线（本次接手复核为 `e59d831`）已包含 internal.toml 真源迁移（U0/`159b78b`）及本机双 daemon 基础；
++当前主线（本次接手复核为 `b619ff2`）已包含 internal.toml 真源迁移（U0/`159b78b`）及本机双 daemon 基础；
+@@ -78,4 +78,5 @@ projection 和最终 Console-offline/restart 真实收口仍未完成。runtime
+-rebind-r3 worktree 仍 dirty，尚无 candidate commit；socket-backed gates 在当前环境复现
+-`listen EPERM`，不能用 mock 或旧候选替代。startup reservation/PID-0/concurrent-start、generation
+-binding 和 start-token 修复必须在允许真实 local socket 的环境、最新主线形成的当前 candidate 上重新
+-验证、review 和集成；这不是 CLI 的重复实现范围。
++r4 worktree 仍 dirty，尚无 candidate commit；当前 r4 evidence 已记录 focused runtime、
++`agent-process`/`local-relay-bridge` socket gate、typecheck 和 build 通过，`local-two-agent` exact
++receipt 与 full `pnpm verify` 尚未记录；r4 run-notes 仍错误指向 r3 worktree/branch，exact review、
++integration、push、memory 和 cleanup 也尚未完成。这些 receipts
++必须绑定当前 r4 candidate；这不是 CLI 的重复实现范围。

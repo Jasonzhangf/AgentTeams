@@ -25,33 +25,36 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除�
 
 当前接手指针（2026-09-13）：
 - 本次文档刷新观察到的实现输入基线为
-  `e59d83170688f5e072c20a6508cc36050044dcf3`；root `main` 与远端均为该 SHA 且 clean。该 SHA
+  `b619ff21ed0bfce5992bc59602faf022f8d67842`；root `main` 与远端均为该 SHA 且 clean。该 SHA
   只作现场快照，启动时仍必须重新读取 root `main`、工作树和远端 `origin/main`，所有实现单元
   从届时最新的远端主线建立。
   每次唤醒仍必须重新读取 `git status`、`git rev-parse`、`git ls-remote`，不得把快照当作新基线。
-- 本次目标刷新 issue 是 `2cbc522`，当前仍是唯一 open 的目标刷新 issue；上一轮文档刷新
-  `8186534` 已关闭。不得创建第二个 goal、第二个 subscription 或第二套任务图。
+- 本次目标刷新 issue 是 `3aa1d61`；前一轮指针刷新 `2cbc522` 与更早的 `8186534` 均已关闭。
+  不得创建第二个 goal、第二个 subscription 或第二套任务图。
 - U0 internal.toml 真源 issue 159b78b 已关闭，只复用其 receipts，不重开、不重复实现。
 - 首个实现单元是 runtime issue `3742b9a`：detached launcher、runtime-owned supervisor
-  status/stop 和 configured Work API。当前候选 worktree 是
-  `playground/3742b9a-runtime-r3-20260913`，基线为 `e59d831`，仍 dirty，尚无 candidate
-  commit；socket-backed gates 在当前环境复现 `listen EPERM`，这是执行环境 blocker，不能改成
-  mock 或绕过。必须在允许真实 local socket 的环境形成 clean candidate，并重新验证 startup
-  reservation、PID-0 stop guard、concurrent-start、internal state merge、configuredWork generation
-  binding 和 supervisor start-token ownership。没有当前 candidate 的 focused/full gate、Codex exact
-  review、integration 或 push 前，不得推进 CLI，也不得把 CLI 做成第二套 supervisor/Work ledger。
+  status/stop 和 configured Work API。当前唯一活动候选是
+  `playground/3742b9a-runtime-r4-20260913`，从 `b619ff2` 重建，仍 dirty，尚无 candidate
+  commit；当前 r4 evidence 已记录 focused runtime、`agent-process`/`local-relay-bridge` socket
+  gate、typecheck 和 build 通过；`local-two-agent` 的 exact receipt、full `pnpm verify` 尚未在
+  r4 evidence 中记录。r4 run-notes 仍错误指向 r3 worktree/branch，必须由 runtime owner 修正后
+  才能作为 r4 candidate evidence。exact Codex review、integration、push、memory 和 cleanup 也尚未
+  完成。必须先补齐这些 receipts；没有
+  当前 candidate 的 review/integration/push 前，不得推进 CLI，也不得把 CLI 做成第二套 supervisor
+  或 Work ledger。
 - runtime receipt 后从最新 origin/main 重建 L1 issue `fdec042` 的 worktree，实现
   init/start/status/work/stop；旧 worktree 只保留红测，不得直接集成。C1 issue `776fcad` 只能在
   `config/**` 与 `opencode-adapter/**` 范围内并行；当前
-  `playground/776fcad-c1-r2-20260913` 基于 `e59d831` 仍 dirty，只能写
+  `playground/776fcad-c1-r2-20260913` 基于旧主线仍 dirty，只能写
   `config/runtime-config.ts` 与 `config/runtime-config.spec.ts`；candidate 前必须从当前
   `origin/main` 重建并重新验证 fingerprint；candidate 前必须完成 focused test、typecheck、evidence
   和独立 Codex review，再进入 integration。
 - 依赖顺序：3742b9a → fdec042 → W1 Agent Work → B1 fixed capability CLI → U1 Console projection
-  → I1/L5 本地真实回放；C1 可与 runtime/L1 并行，但不得写 runtime/network/agent/UI。
+  → I1/L5 本地真实回放；C1 从最新 main 重建并完成其 focused gate 后，才可与 runtime/L1 并行，且不得写
+  runtime/network/agent/UI。
 
-资源接手快照：runtime r3、C1 r2 和 L1 红测 worktree 都有未完成交付义务，保留并审计，不删除、不
-reset。旧 runtime worktree 只作历史参考；任何残留 daemon/relay 先按显式 PID 和 owner 核对，再
+资源接手快照：runtime r4、runtime r3 历史候选、runtime rebind-r2、C1 r2 和 L1 红测 worktree 都有未完成交付义务，保留并
+审计，不删除、不 reset。旧 runtime worktree 即使是历史候选也要先审计 dirty 内容、唯一证据和 owner；任何残留 daemon/relay 先按显式 PID 和 owner 核对，再
 停止。超过 24 小时未活动的 playground 也必须先完成 owner、证据、进程和 bug/review 义务审计。
 
 每个 delivery unit 必须独立完成：查重或复用 AppSDK issue → 从最新 origin/main 建立
