@@ -11,8 +11,10 @@
   — PASS, no P0/P1 findings.
 - Integration: `fc841ca58b8ba5809d1e90c522e114add6393b64` with verification in
   `integration-receipt.md`.
-- Remote main: `33c9f3215b47f7e79aa9ba33d04373e002632a20` verified by
-  `push-receipt.md`.
+- Remote main: initial integration evidence reached
+  `33c9f3215b47f7e79aa9ba33d04373e002632a20`; final evidence/memory/cleanup
+  commit reached `a5da180c8dbdf11c67db089c25a7250b1b9898cc`, with the latter
+  recorded in `final-push-receipt.md`.
 - Memory: `memory-050a719871964218` promoted to Level 2 and verified, tagged
   `ai-reviewed` and `human-unreviewed`.
 - Cleanup: `cleanup-receipt.md`; owned processes absent and only this unit's
