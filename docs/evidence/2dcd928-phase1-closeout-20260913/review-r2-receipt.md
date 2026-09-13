@@ -12,6 +12,6 @@
 {"contract_version":"1","scope":{"mode":"commit","commit":"94df06b5b603ce7004584f7ca591a71c8583c469","base":"3354271d4ddc72c270f2d6304e2430558c0c6eaa"},"module_boundary_evidence":[],"findings":[]}
 ```
 
-This review supersedes the prior receipt for `9bc1b483`; the only intervening
-change normalized whitespace in captured logs and did not alter the audit
-conclusions or product source.
+This review supersedes the prior receipt for `9bc1b483`; the intervening changes
+normalized whitespace in captured logs and added the prior exact review receipt.
+They did not alter the audit conclusions or product source.
