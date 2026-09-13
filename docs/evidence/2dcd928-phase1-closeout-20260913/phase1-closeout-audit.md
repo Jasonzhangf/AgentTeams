@@ -18,8 +18,11 @@ delivery unit only records evidence and does not change runtime source.
 - Unit: `2dcd928-phase1-closeout-20260913`
 - Base commit: `3354271d4ddc72c270f2d6304e2430558c0c6eaa`
 - Base tree: `3394031b78a0ad1642ae6379e0f92b393b80fad9`
-- Evidence candidate commit: `99a3437314b5a80183eb91d63a0269615fb1cec4`
-- Evidence candidate tree: `ced75c1f1f25bc040614e2791ee817f6c32ed82a`
+- Evidence snapshot commit (fingerprint capture): `99a3437314b5a80183eb91d63a0269615fb1cec4`
+- Evidence snapshot tree: `ced75c1f1f25bc040614e2791ee817f6c32ed82a`
+- The current exact candidate is the commit supplied to the Codex review
+  controller and recorded in its review result; the snapshot above binds the
+  source-gate inputs and is not a second candidate identity.
 - Allowed paths: `docs/evidence/2dcd928-phase1-closeout-20260913/**`
 - Actual changed paths: `diff-check.log`, `focused-command.txt`,
   `focused-tests-rerun.log`, `focused-tests.log`,
@@ -50,7 +53,7 @@ Gate artifacts are bound to this fingerprint by their hashes:
 | Gate artifact | SHA-256 | Bound source |
 | --- | --- | --- |
 | `focused-command.txt` | `e376a7b96012a5fb621a2a9614c568e3f83af556df0331e43dd332ec620f9bd0` | exact command for current focused replay |
-| `focused-tests-rerun.log` | `011f9a3ff980216568daa039dfe2c1db757469b87385c55d1b4891a353aa1ce9` | base commit/tree above |
+| `focused-tests-rerun.log` | `d9f0d56e7653bdb270d2b31b0eb2b1fcf48a7d0ec2d43e49813603fae5e73f2a` | base commit/tree above |
 | `focused-tests.log` | `a73abb40149420350b3bb53951ed9a1ac32ef0abfb438540e1e75983333c8ce9` | historical focused receipt; superseded by rerun above |
 | `pnpm-verify.log` | `3ce3d935cec53f8560180fc08cfa18901c49ba2e81bd5325c1f64f0284219cfc` | base commit/tree above |
 | `diff-check.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | evidence candidate tree above |

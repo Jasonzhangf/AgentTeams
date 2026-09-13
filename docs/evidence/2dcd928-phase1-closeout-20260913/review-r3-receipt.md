@@ -1,4 +1,4 @@
-# Exact review receipt: corrected Phase 1 closeout evidence
+# Historical exact review receipt: corrected Phase 1 closeout evidence
 
 - Reviewer: independent Codex exact reviewer (`codex exec --profile oauth`)
 - Review task: `20260913T070547Z-review-5112-eilt7u`
