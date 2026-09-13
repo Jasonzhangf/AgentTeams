@@ -15,6 +15,11 @@
 - retained resources are unchanged: runtime `3742b9a`, L1 `fdec042`, and C1 `776fcad` remain under their
   owners; no other worktree or branch was deleted, reset or overwritten.
 
+## Re-entry wording correction cleanup
+
+- candidate `30bcb26f094eaca5b26009cee0cf4253950fc3c2` started no process or service and changed no owned
+  worktree. Root main remained clean; all runtime, L1 and C1 resources stayed retained.
+
 ## Current re-entry cleanup
 
 - current integrated remote before this receipt: `5445d9d30dcaf4d4a8c0cd4da55cdbe22d8befec`;

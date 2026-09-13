@@ -37,3 +37,14 @@
   without a final result. It is recorded as protocol/environment failure, not as PASS.
 - final status: this unit has persisted the reentrant Local MVP goal and management contract; runtime, CLI,
   Agent Work, provider/OpenCode, Console projection and real local replay remain open downstream.
+
+## Re-entry wording correction
+
+- candidate: `30bcb26f094eaca5b26009cee0cf4253950fc3c2`.
+- correction: the goal documents now describe `948d564` as an implementation input baseline and require
+  every wake-up to reread the live root/remote state, so later receipt-only commits cannot make the handoff
+  snapshot false.
+- validation: `git diff --check` and `pnpm exec project-memory verify` PASS; no product source or retained
+  worker resource changed.
+- push: `git push origin main` PASS; `git ls-remote origin refs/heads/main` returned
+  `30bcb26f094eaca5b26009cee0cf4253950fc3c2` before this receipt-only follow-up.

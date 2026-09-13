@@ -26,3 +26,10 @@
   `aeba5cdc87e93168a5394445bcabf89027cdfcc6`, matching local `HEAD`.
 - scope: the live goal prompt/execution plan pointers and official project-memory L2 projection; no runtime,
   network, UI or retained worktree changes.
+
+## Re-entry wording correction push
+
+- candidate: `30bcb26f094eaca5b26009cee0cf4253950fc3c2`.
+- command: `git push origin main`.
+- verification: `git ls-remote origin refs/heads/main` returned the same SHA before this receipt-only
+  follow-up; the follow-up itself contains only the durable evidence update.
