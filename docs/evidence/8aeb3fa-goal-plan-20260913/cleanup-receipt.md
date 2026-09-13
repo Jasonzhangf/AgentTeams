@@ -8,4 +8,5 @@
   are removed before that commit is pushed.
 - Mainline before cleanup commit: `3c9bd4d08f60c7be77bd063f2d03c5b343d69291`; remote matched
   this SHA at the pre-cleanup checkpoint.
+- Final cleanup receipt commit and remote `origin/main`: `7ca3b190a50476849566a9cb7a00c8d5dccb17c7`.
 - Runtime issue `159b78b` worktree is retained because it is an active, unmerged worker candidate.
