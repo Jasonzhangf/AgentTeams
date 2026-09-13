@@ -16,7 +16,7 @@ NAT/STUN、NAT-to-NAT、手机蜂窝、direct 或完整 UI 当作本阶段退出
 
 | 波次/任务 | 交付与 owner | 允许修改范围 | 前置依赖 | 可并发 |
 |---|---|---|---|---|
-| G0 治理 profile | 主任务：更新 goal/profile、移除当前 dsh 说明、绑定 gate | `.appsdk/goal.json`、`docs/goals/**`、当前治理说明 | 最新 origin/main | 先串行 |
+| G0 治理 profile | 主任务：更新 goal/profile、清理过时宿主说明、绑定 gate | `.appsdk/goal.json`、`docs/goals/**`、当前治理说明 | 最新 origin/main | 先串行 |
 | L1 本地 launcher | runtime owner：`~/.agentteams/config.toml`、多 daemon 启停/重启/状态 | `runtime/local-config.ts`、`runtime/local-process.ts`、`runtime/local-supervisor.ts` 及对应测试 | G0 | L3 |
 | L2 本地 bridge/Work | network/runtime/agent owner：真实 socket discovery、broadcast、connect、negotiate、Work | `network/**`、`agent/**`、`agent-host/**`、`runtime/agent-daemon.ts`、`runtime/agent-process.ts`、`runtime/agent-work-client.ts`、`runtime/local-relay-bridge.spec.ts` | G0；L1 配置入口 receipt | L3 |
 | L3 provider/OpenCode | config/adaptor owner：多 provider、catalog/apply/readback、显式 RCC/goaichat | `config/**`、`opencode-adapter/**` | 公共 config contract | L1、L2 |

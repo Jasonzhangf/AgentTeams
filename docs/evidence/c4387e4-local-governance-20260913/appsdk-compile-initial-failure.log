@@ -1,0 +1,8 @@
+Initial attempt before dependency installation:
+
+MODULE_BUILD_FAILED:teams-source
+sh: tsdown: command not found
+
+Cause: this newly-created clean worktree had no node_modules. The candidate was
+unchanged. `pnpm install --frozen-lockfile` was then run and appsdk compile was
+rerun successfully; the final result is in appsdk-compile.log.

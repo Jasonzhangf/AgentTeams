@@ -23,13 +23,15 @@
   daemon durably owns its accepted config revision; Console submits changes.
   OpenCode config is derived adapter output, not a second editable source.
   See `docs/design/teams-provider-config.md`.
-- First release includes public networks, NAT and relay. Agent-to-Agent traffic
-  can use direct or explicit relay transport; Console is never a required relay.
-- Every daemon bootstraps from its configured relay-service address/identity:
-  login, publish capability/resource declarations, discover peers, then connect.
-  Relay service owns directory, scoped broadcast and connection assistance,
-  including traversal/STUN and traffic relay when supported. Agent work policy
-  and actual resource admission remain at the provider Agent.
+- Phase 1 uses a local network bridge. Agent-to-Agent traffic uses the explicit
+  local socket path; Console is never a required relay or data path. Public
+  Relay, NAT/STUN, direct internet transport and mobile entrypoints are later
+  phases.
+- Every daemon bootstraps from its configured local bridge/endpoint:
+  register, publish capability/resource declarations, discover peers, negotiate,
+  then connect. A later Relay service may own scoped directory, broadcast and
+  connection assistance, but it does not own Agent Work policy or resource
+  admission. Those remain at the provider Agent.
 
 ## Semantic invariants
 

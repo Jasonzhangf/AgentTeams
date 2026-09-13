@@ -19,22 +19,22 @@ Console 与 relation 中的 master 是不同概念；master 是一个 Agent 的�
 能力方可在容量内服务多个 Host，Host 可同时使用多个不同能力。
 协议唯一设计见 [Agent Work](../design/teams-agent-relation-communication-v1.md)。
 
-## 首版公网、NAT 与 relay
+## Phase 1 本地网络 bridge
 
-每个 daemon 启动即按本地配置连接 relay 服务、登录、发布能力/资源声明和 presence，
-再通过广播订阅、目录查询发现对端并请求连接辅助。此流程无需 Console 在线。
-relay 服务是目录、广播和辅助连接服务，可提供 STUN、内网穿透与流量 relay。
-详细启动、服务能力与失败边界以 [v2 协议](../design/teams-control-protocol-v2-master-agent-host.md) 为准。
+每个 daemon 启动即按本地配置注册网络端点、发布能力/资源声明和 presence，
+再通过本地广播、目录查询发现对端并建立连接。此流程无需 Console 在线。
+本地 bridge 只提供目录、广播和连接辅助；详细启动、服务能力与失败边界以
+[v2 协议](../design/teams-control-protocol-v2-master-agent-host.md) 为准。
 
 Agent Host 既能接受授权的目标连接，也能主动连接另一 Agent Host。
-有可达地址时使用显式 direct route；NAT 无入站可达性时，两侧主动出站到公网
-relay，再建立 Agent-to-Agent 逻辑 target/channel。Console 不在该数据路径中。
-其中流量 relay 只转发授权流量；目录和连接辅助同属 relay 服务，但不承担任务
-调度、provider 选择或 relation 决策。
+本阶段使用显式本地 socket route 建立 Agent-to-Agent 逻辑 target/channel。
+Console 不在该数据路径中。公网 Relay、NAT 穿透和流量中继只在后续阶段启用，
+并且不承担任务调度、provider 选择或 relation 决策。
 
 物理连接与逻辑 target 分离。每对通信身份在一代连接中复用 target/channel；
-多个 Session 或协作 channel 不分别创建 socket。首版可先验证 relay 路径，
-随后验证 direct；按服务声明验证 STUN/穿透能力，不要求 WebRTC 或透明自动切换。
+多个 Session 或协作 channel 不分别创建 socket。Phase 1 先验证本地 socket 路径；
+公网 direct、Relay 和 STUN/穿透能力在后续阶段按服务声明单独验证，不要求 WebRTC
+或透明自动切换。
 所有路由选择显式，切换前结束旧 target 并更换 generation。
 公网入口必须真实认证、校验目标授权；未收到 mutation 结果不得自动重放。
 
@@ -79,9 +79,10 @@ Settings 按 config/network owner 分发，Search/Memory 接入后才显示可�
 
 ## 验收与尚未决定事项
 
-必须验证两个不同 NAT 的 daemon、direct 与 relay、手机蜂窝网络、桌面、权限
-允许/拒绝、旧 generation 拒绝、配置生效，以及关闭 Console 后继续协作并在
-另一设备重新观察。历史截图或 HTTP health 不替代该证据。
+Phase 1 必须验证两个独立 daemon 的本地 socket discovery、connect、negotiate、
+权限允许/拒绝、旧 generation 拒绝、配置生效，以及关闭 Console 后继续协作并重新
+观察。公网/NAT、手机蜂窝和跨设备入口属于后续阶段；历史截图或 HTTP health 不替代
+真实 socket 证据。
 
 各 adapter 必须声明启动受管服务还是附着已有服务，避免两个 owner 管同一实例。
 OpenCode adapter 的具体启动模式仍待确定；浏览器能力以明确 CLI/service contract

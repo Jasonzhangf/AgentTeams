@@ -7,10 +7,11 @@
 
 OpenCode 只作为推理型 Agent 的执行基座，承载 Session、消息、工具与审批执行。
 Teams 拥有独立 UI 和多 LLM provider 配置；被动能力 Agent 不要求配置模型。
-首版覆盖公网、NAT 与 relay，Console 不充当必经业务中继。
+Phase 1 先覆盖本地网络 bridge，Console 不充当必经业务中继。公网 Relay、NAT、STUN
+和移动端属于后续阶段。
 
-每个 daemon 启动后按配置登录 relay 服务，发布能力/资源、查询目录并连接对端。
-relay 服务提供目录、广播和连接辅助，可扩展 STUN、内网穿透及流量中继。
+每个 daemon 启动后按配置注册本地网络端点，发布能力/资源、查询目录并连接对端。
+本地 bridge 可提供目录、广播和连接辅助；后续公网 Relay 可扩展 STUN、内网穿透及流量中继。
 
 ## 设计入口
 

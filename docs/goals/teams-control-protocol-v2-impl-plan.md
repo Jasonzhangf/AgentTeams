@@ -22,7 +22,8 @@
 Console 只观察和配置，不是必经 master/relay。Agent 可被动提供 capability/resource；
 Host Agent 匹配后请求，能力方执行，在资源容量内支持双方一对多。
 OpenCode 仅用于推理型 Agent；Teams 独立管理多 LLM provider，参考 OpenMinis
-配置接口。首版验证公网/NAT/relay 与 Console 离线后的 Agent Work。
+配置接口。Phase 1 验证本地网络 bridge 与 Console 离线后的 Agent Work；公网/NAT/relay
+属于后续阶段。
 
 不再沿旧 Phase 字母把纯状态组件记作网络完成。下一步按当前计划 P0、并行模块、I1 和 V1，
 分别绑定源码、真实产物、适用测试、入口证据和 review。

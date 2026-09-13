@@ -14,28 +14,28 @@ Console Host 是观察/配置客户端，可以常驻但不要求常驻。关闭
 能力、资源、匹配和 work 以 [协作协议](teams-agent-relation-communication-v1.md)
 为唯一语义真源；LLM 配置以 [provider 设计](teams-provider-config.md) 为准。
 
-## 2. Daemon 启动与 relay 服务
+## 2. Daemon 启动与本地 bridge
 
-每个 Agent daemon 启动即从本地配置获取 relay 服务入口、身份与凭据引用，
-无需 Console 在场配置连接或代为登录。启动主线固定为：
+每个 Agent daemon 启动即从本地配置获取 local bridge/endpoint、身份与凭据引用，
+无需 Console 在场配置连接或代为注册。Phase 1 启动主线固定为：
 
 ```text
 load daemon bootstrap config
-  -> connect configured relay service
-  -> login / identity admission
+  -> connect configured local bridge
+  -> local identity admission
   -> register identity + publish capability/resource descriptors + presence
-  -> subscribe scoped broadcasts / query directory
-  -> request peer connection assistance / obtain permitted candidates
-  -> establish authenticated Agent-to-Agent target
+  -> subscribe scoped broadcasts / query local directory
+  -> negotiate permitted peer endpoint
+  -> establish authenticated local Agent-to-Agent target
   -> capability match / Agent Work
 ```
 
-bootstrap 至少包含 relayServiceUrl、Agent identity、credentialRef 和显式连接
-策略。初始服务地址来自 daemon 配置，不能反过来依赖尚未登录的目录寻找它自己。
-network 读取和校验 bootstrap 并连接；runtime 编排启动；server 执行登录准入。
-登录失败不发布声明、不伪造在线；连接状态与 Agent 本地服务状态分别呈现。
+bootstrap 至少包含 localBridgeEndpoint、Agent identity、credentialRef 和显式连接
+策略。初始 endpoint 来自 daemon 配置，不能反过来依赖尚未注册的目录寻找它自己。
+network 读取和校验 bootstrap 并连接；runtime 编排启动；bridge 执行本地准入。
+注册失败不发布声明、不伪造在线；连接状态与 Agent 本地服务状态分别呈现。
 
-“Relay 服务”是统一的服务角色，不仅指业务流量转发器：
+后续 Relay 服务是统一的服务角色，不仅指业务流量转发器：
 
 | 服务能力 | server 职责 | 客户端 network 职责 |
 |---|---|---|
@@ -45,9 +45,9 @@ network 读取和校验 bootstrap 并连接；runtime 编排启动；server 执�
 | STUN | 提供已声明的 STUN 服务/地址 | 探测映射地址，随后验证实际双向可达性 |
 | 流量 relay | 提供授权的中继路径与连接生命周期 | 通过中继建立 Agent-to-Agent 逻辑连接 |
 
-目录/广播/连接辅助是启动服务主线。STUN、具体穿透方式和中继端点通过服务能力
-声明暴露；未部署的能力明确 unavailable，不假造成功。首版公网/NAT 的中继路径
-仍须交付。STUN 只辅助地址发现，不保证打洞成功，也不等于 TURN 或流量中继。
+目录/广播/连接辅助是启动服务主线。Phase 1 先使用本地 bridge；STUN、具体穿透
+方式和中继端点属于后续服务能力。未部署的能力明确 unavailable，不假造成功。
+STUN 只辅助地址发现，不保证打洞成功，也不等于 TURN 或流量中继。
 具体 STUN/穿透实现与认证方案在网络里程碑选定，当前不预设必须新增 WebRTC。
 
 能力与资源的广播仅发布描述、版本和可见状态，不预留资源；即使目录显示空闲，
@@ -58,21 +58,22 @@ network 读取和校验 bootstrap 并连接；runtime 编排启动；server 执�
 
 | resource | owner | 用途 |
 |---|---|---|
-| directory connection | network；目录声明由 server 保存 | daemon 启动后登录 relay 服务，发布能力/资源/地址并查询、订阅对端 |
-| target transport | network | 两个明确端点之间的逻辑通信；经 direct 或 relay 建立 |
+| directory connection | network；目录声明由 bridge 保存 | Phase 1 daemon 启动后连接本地 bridge，发布能力/资源/地址并查询、订阅对端 |
+| target transport | network | Phase 1 经本地 socket 建立；后续可经 direct 或 public Relay 建立 |
 | logical channel | network | 在 target 上复用 Session、Agent Work、观察/配置流 |
 
-directory 刷新不关闭健康 target。一个物理 relay 出站连接可承载多个 target；
+directory 刷新不关闭健康 target。Phase 1 一个本地 bridge 连接可承载多个 target；
+后续 public Relay 出站连接也可承载多个 target；
 每个 target generation 下的 channel 独立校验。不能把“每对 Agent 一个 target”
 理解成“一台 Agent 只能连接一个 Host”。
 
 server 负责账号范围、身份认证、连接准入和地址/能力声明发布。目标 Agent
 仍需校验 capability policy 与资源准入；网络已连通不等于获准执行。
 
-## 4. 公网/NAT 首版路径
+## 4. 后续公网/NAT 路径
 
-首版包含 direct 与 relay。直连有可达目标地址时由显式 route 发起；NAT 场景
-两端主动出站 WSS 到公网 relay，relay 将已授权 target 转发至目标 Agent。
+Phase 1 不要求公网或 NAT 入口。后续阶段直连有可达目标地址时由显式 route
+发起；NAT 场景两端主动出站 WSS 到公网 relay，relay 将已授权 target 转发至目标 Agent。
 任一 Agent 都可成为发起方；Console 不在 Agent-to-Agent 请求数据路径。
 relay 服务可提供 STUN 和穿透辅助；实际路径由显式策略选择并验证。
 不要求所有候选路径同时竞速，不以后台静默换路掩盖失败。
@@ -119,10 +120,12 @@ CLI/browser Agent 没有 LLM provider 也是合法配置。
 
 ## 7. 验证
 
-- 没有 Console 在线时，daemon 仅凭 bootstrap 配置完成 relay 登录、声明发布、目录查询与连接。
+- 没有 Console 在线时，daemon 仅凭 bootstrap 配置完成 local bridge 注册、声明发布、
+  目录查询、协商与连接。
 - 广播范围遵守授权；声明变化与离线/stale 可观察，重新登录/注册不产生重复身份。
 - 服务能力缺失显式报告；STUN 映射发现与实际 target 建立分别验证。
-- 两个不同 NAT 的 daemon 经 relay 匹配并完成请求；direct 独立验证。
+- 两个本地 daemon 经 socket bridge 匹配并完成请求；公网 Relay、NAT 和 direct 在后续阶段
+  独立验证。
 - 被动浏览器 CLI 与两个 consumer 的一对多；Host 同时连接多种 capability。
 - 关闭所有 Console 后协作继续，另一设备重新连接能观察真实状态。
 - 未认证、跨账号未授权、capability 不匹配、资源耗尽均显式拒绝。

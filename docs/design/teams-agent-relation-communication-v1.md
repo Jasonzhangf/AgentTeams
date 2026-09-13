@@ -15,8 +15,9 @@ provider Agent；Host 不是 Console Host，一个 Agent 也可同时承担两�
 
 ## 2. 主线
 
-daemon 首先按本地配置登录 relay 服务，再通过该服务发布声明、订阅广播和
-查询目录；无需 Console 代为发现或连接。Relay 服务启动与穿透边界见 v2 协议。
+daemon 首先按本地配置连接本地 bridge，再通过该 bridge 发布声明、订阅广播和
+查询目录；无需 Console 代为发现或连接。公网 Relay 与穿透边界属于后续阶段，
+详见 v2 协议。
 
 ```text
 能力方声明 capability + resource descriptor
@@ -31,8 +32,8 @@ daemon 首先按本地配置登录 relay 服务，再通过该服务发布声明
 ```
 
 发布不等于授权或资源预留，匹配不等于无限执行权。目录只展示声明和 freshness；
-资源可用性与实际准入始终以能力方为准。首版声明中的广播指 authenticated
-directory publication/subscription，不要求 LAN multicast、gossip 或广播风暴。
+资源可用性与实际准入始终以能力方为准。Phase 1 的广播指 authenticated local
+bridge publication/subscription，不要求 LAN multicast、gossip 或广播风暴。
 
 ## 3. Typed control resources
 
@@ -108,5 +109,6 @@ Host A 同时与浏览器 B、搜索 S 建立两个独立 work。B 可同时服�
 - 不兼容接口、未授权、旧 revision/generation、未知 work/request 明确拒绝。
 - 两个 Host 并发使用同一能力；第三个超容量拒绝；释放后可再申请。
 - 一个 Host 同时使用两类能力；资源与错误彼此隔离。
-- direct 与 NAT relay 各自回放；断线、取消、重复 request 与 daemon 重启不超卖。
+- Phase 1 回放本地 socket；direct 与 NAT relay 在后续阶段分别回放。断线、取消、重复
+  request 与 daemon 重启均不得超卖。
 - peer 与 master/slave 图可在另一 Console 重开后观察，关系分类不改变权限。
