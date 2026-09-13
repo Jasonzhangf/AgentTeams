@@ -465,9 +465,17 @@
       "resource_id": "local-launcher-config",
       "owner": "runtime",
       "kind": "control_resource",
-      "truth_store": "versioned ~/.agentteams/config.toml plus referenced child config paths",
-      "allowed_operations": ["read", "validate", "persist", "resolve"],
+      "truth_store": "~/.agentteams/config.toml user intent only; internal.toml owns resolved endpoint/Relay config, ports, credential references, child launch parameters, PID, generation, revision and lifecycle state",
+      "allowed_operations": ["read", "validate", "persist", "compile", "resolve"],
       "forbidden_relations": ["business_payload", "session_payload", "credential_value"]
+    },
+    {
+      "resource_id": "local-child-config-projection",
+      "owner": "runtime",
+      "kind": "control_projection",
+      "truth_store": "internal.toml resolved relay/daemon config",
+      "allowed_operations": ["project", "write", "delete"],
+      "forbidden_relations": ["reverse_config_input", "user_edit_source"]
     },
     {
       "resource_id": "local-supervisor-lifecycle",
