@@ -17,29 +17,42 @@
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次接手复核时的主线是 `dcb3bdc41284f7efccf4ffd477fd0731fa25c2c0`；这个 SHA 只是快照，不能
+  本次接手复核时的主线是 `bc2b209d2806c0a9f95199acd3de0988ac6b6bbe`；这个 SHA 只是快照，不能
   替代下一轮启动时的现场检查。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 当前根树与远端主线均为 `dcb3bdc`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
+- 当前根树与远端主线均为 `bc2b209d`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
   的 worker 已停止写入并回报了明确的 runtime API 缺口：候选 worktree
   `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测 `cli/agentteams.spec.ts`，没有 candidate
   commit；不得把它标记为完成或删除其红测。
 - 根据该发现已建立独立 runtime delivery unit `3742b9a`，负责 detached launcher、持久 supervisor
-  ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。runtime
-  candidate `d040885` 已通过 focused tests、typecheck 和 diff check，但基线仍为旧的 `3668b32`；
-  必须从最新 main 重建或 rebase 后重新验证和 review，旧 candidate evidence 不能直接集成。
+  ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。rebind
+  worktree 已有 `f99089f`、`88b8716`、`ffc1c0c` 三个候选提交，当前仍有 startup reservation、
+  PID-0 stop guard 和 concurrent-start regression 的未提交修复；先在该 worktree 完成 focused
+  gate、exact review 和 candidate commit，不能重派同一 runtime unit。
 - C1 issue `776fcad` 保留在独立 worktree `playground/776fcad-c1-20260913`、branch
-  `codex/776fcad-c1-20260913` 上，当前 worktree 基线仍是旧的 `a71615a`。它只拥有 `config/**`
-  与 `opencode-adapter/**`，不得修改 runtime lifecycle；下一次恢复必须先从当前
-  `origin/main=dcb3bdc` rebase 或重建 worktree，再重新验证 candidate fingerprint，不能直接复用
+  `codex/776fcad-c1-20260913` 上，当前 worktree 基线仍是旧的 `a71615a` 且有 dirty 修改。它只
+  拥有 `config/**` 与 `opencode-adapter/**`，不得修改 runtime lifecycle；下一次恢复必须先从当前
+  `origin/main=bc2b209d` rebase 或重建 worktree，再重新验证 candidate fingerprint，不能直接复用
   旧基线的测试、review 或集成证据。
+
+### 当前资源与处理动作
+
+| 资源 | 当前事实 | 调度动作 |
+|---|---|---|
+| `playground/3742b9a-runtime-rebind-20260913` | runtime rebind，`ffc1c0c` 后有未提交 race 修复 | 继续同一 unit；focused gate → exact review → candidate commit |
+| `playground/3742b9a-runtime-20260913` | 旧基线 candidate `d040885` | 只作历史参考；不得直接集成或 reset |
+| `playground/fdec042-l1-cli-20260913` | 旧基线，仅保留未跟踪红测 | runtime receipt 后从最新 main 重建；先不删除红测 |
+| `playground/776fcad-c1-20260913` | dirty，基线 `a71615a`，仅属 config/OpenCode | 从最新 main 重建后才恢复；不得碰 runtime/network |
+
+这些资源均不属于本次目标文档刷新单元；调度主任务只清理自己创建的 worktree。任何超过 24 小时未
+活动的资源，先核对 owner、claim、证据和未提交内容，再决定保留、合并或丢弃。
 
 ## 当前交付指针
 
 - **已关闭**：U0 Internal Config Compiler（`159b78b`）。
-- **下一单元**：继续推进已有旧基线 candidate、等待从当前 `origin/main` 重建/rebase 的 runtime issue
-  `3742b9a`，解除 L1-CLI 的跨进程生命周期/API blocker；C1 Config/OpenCode 可继续并行。runtime
+- **下一单元**：继续推进 runtime issue `3742b9a` 的 rebind 修复，解除 L1-CLI 的跨进程生命周期/API
+  blocker；C1 Config/OpenCode 只有在自身 worktree 从最新 main 重建后才可并行。runtime
   receipt 后重新绑定 L1-CLI；取得 L1 receipt 后才推进 W1，
   再推进 B1；不得用 CLI 自己实现第二套 supervisor 或 Work ledger。
   每项先查重/复用 AppSDK issue，再从最新 `origin/main` 建立
@@ -61,7 +74,7 @@
 派发 gcm worker，审查 exact candidate，执行 integration/push，写 memory L2，并回收自己拥有的
 worker、进程、端口、锁、worktree 和 branch。worker 只改合同范围，不得合并、推送或删除他人资源。
 
-当前顺序为 `runtime-3742b9a → L1-CLI → W1 → B1`，`C1` 可与 runtime/L1 在自身路径不重叠时并行，`U1` 等待 B1 与
+当前顺序为 `runtime-3742b9a → L1-CLI → W1 → B1`，`C1` 只有在从最新 main 重建后才可与 runtime/L1 在自身路径不重叠时并行，`U1` 等待 B1 与
 projection review，`I1/L5` 最后串行收口。每个 unit 均执行红测、最小实现、适用 gate、真实入口、
 独立 Codex exact review、candidate commit、clean integration、远端 push、memory L2、cleanup；
 只从第一个失效 gate 重跑，稳定 fingerprint 的证据写 reuse receipt。
@@ -88,7 +101,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮接手时可用基线为
-  `dcb3bdc41284f7efccf4ffd477fd0731fa25c2c0`，下一 unit 仍须重新读取远端。
+  `bc2b209d2806c0a9f95199acd3de0988ac6b6bbe`，下一 unit 仍须重新读取远端。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
@@ -217,12 +230,12 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI �
 | unit | issue | 当前状态 | 下一动作 |
 | --- | --- | --- | --- |
 | U0 internal config compiler | `159b78b` | closed；receipt 可复用 | 不重开、不重复派发 |
-| runtime local launcher | `3742b9a` | candidate `d040885` ready；旧基线 `3668b32` | 不重复派发；从当前远端 main 重建/rebase，重跑 focused gate，再 exact review、integration 和 push |
+| runtime local launcher | `3742b9a` | rebind commits `f99089f`/`88b8716`/`ffc1c0c`，未提交 race 修复 | 继续同一 worktree；focused gate → exact review → candidate commit → integration/push |
 | L1 CLI | `fdec042` | awaiting-runtime-unit；仅有红测，无 candidate | runtime receipt 后 rebase 到最新 main，再实现 `init/start/status/work/stop` |
-| C1 provider/OpenCode | `776fcad` | retained；旧基线 worktree | 可与 runtime/L1 并行；从当前 `origin/main=dcb3bdc` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
+| C1 provider/OpenCode | `776fcad` | retained；旧基线 dirty worktree | 先从当前 `origin/main=bc2b209d` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
 | W1/B1/U1/I1-L5 | canonical downstream | pending | 按依赖顺序启动，禁止提前共享写入 |
 
-本次调度 worktree 是 `playground/local-mvp-goal-handoff-r2-20260913`；runtime、L1 红测和 C1
+本次调度 worktree 是 `playground/local-mvp-dispatch-refresh-20260913`；runtime、L1 红测和 C1
 worktree 属于各自 delivery unit，不删除、不覆盖。任何 worker 结束后先确认停止写入、证据已
 转存和远端候选责任，再回收其自有进程、端口、锁、worktree 与 branch；根 `main` 始终保持 clean。
 

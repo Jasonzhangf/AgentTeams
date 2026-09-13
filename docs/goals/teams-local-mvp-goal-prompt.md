@@ -18,24 +18,25 @@ Console 后 Agent-to-Agent Work 仍然成功。
 - docs/goals/teams-long-running-delivery.md
 - docs/goals/teams-development-plan.md
 
-调度角色：当前 Desktop 主任务只负责目标编译、依赖排序、issue 查重、gcm worker 派单、范围
-冲突、独立 review、integration、push、memory L2 和自有资源回收。不要依赖或冒充其他 scope 的
+调度角色：当前 Desktop 主任务负责目标编译、依赖排序、issue 查重、gcm worker 派单、范围冲突、
+独立 Codex review、integration、push、memory L2 和资源回收。不要依赖或冒充其他 scope 的
 master。worker 只修改自己的 delivery unit，不合并、推送或删除他人资源；主任务不把产品实现
-偷偷移入调度文档。
+偷偷移入调度文档。不使用 AGY Review；milestone 才使用 Astra。
 
 当前接手指针：
 - 本次接手复核时 root `main` 与远端 `origin/main` 均为
-  `dcb3bdc41284f7efccf4ffd477fd0731fa25c2c0`，root clean；该 SHA 只作本次快照。
+  `bc2b209d2806c0a9f95199acd3de0988ac6b6bbe`，root clean；该 SHA 只作本次快照。
   每次唤醒仍必须重新读取 `git status`、`git rev-parse`、`git ls-remote`，不得把快照当作新基线。
 - U0 internal.toml 真源 issue 159b78b 已关闭，只复用其 receipts，不重开、不重复实现。
 - 首个实现单元是 runtime issue 3742b9a：detached launcher、runtime-owned supervisor
-  status/stop 和 configured Work API；gcm worker 已提交 candidate `d040885`，但它基于旧
-  `3668b32`，必须从当前远端 main 重新绑定后再 review/integrate。不得重复派发、重启或把 CLI
-  做成第二套 supervisor/Work ledger。
-- runtime receipt 后重建 L1 issue fdec042 的 worktree，从最新 origin/main 实现
-  init/start/status/work/stop；C1 issue 776fcad 可在 config/** 与 opencode-adapter/** 范围内并行，
-  但其现有 worktree 基于旧的 a71615a，candidate 前必须从当前 origin/main=dcb3bdc rebase/重建并
-  重新验证 fingerprint。
+  status/stop 和 configured Work API。rebind worktree 已有 candidate commits `f99089f`、
+  `88b8716`、`ffc1c0c`，当前仍有 startup reservation、PID-0 stop guard 和 concurrent-start
+  修复未提交；继续同一 delivery unit，先完成 focused gate、exact review 和 candidate commit，
+  不得重复派发或把 CLI 做成第二套 supervisor/Work ledger。
+- runtime receipt 后从最新 origin/main 重建 L1 issue fdec042 的 worktree，实现
+  init/start/status/work/stop；旧 worktree 只保留红测，不得直接集成。C1 issue 776fcad 只能在
+  config/** 与 opencode-adapter/** 范围内并行；其旧 worktree 有 dirty 修改，candidate 前必须
+  从当前 origin/main 重建并重新验证 fingerprint。
 - 依赖顺序：3742b9a → fdec042 → W1 Agent Work → B1 fixed capability CLI → U1 Console projection
   → I1/L5 本地真实回放；C1 可与 runtime/L1 并行，但不得写 runtime/network/agent/UI。
 
@@ -54,7 +55,8 @@ gate 及其下游重跑，稳定且仍有效的 PASS 写 reuse receipt。没有 
 资源规则：只回收本主任务或本 delivery unit 自己拥有的 worker、进程、端口、锁、临时目录、
 worktree 和 branch。超过 24 小时未活动的 playground 先检查 owner、claim、未提交内容、唯一证据、
 进程和 bug/review 义务，再决定合并、保留或丢弃；不得批量删除其他 unit、dirty tree 或唯一证据。
-根 main 永远不得作为开发工作树。
+当前保留的 runtime、L1、C1 worktree 不属于本次文档刷新单元，不能删除或 reset。根 main 永远不得
+作为开发工作树。
 
 MVP 完成 iff：用户路径可在 disposable HOME 中真实执行；两个 daemon 的 socket replay 包含
 discovery/broadcast/connect/negotiate/proposal/request/result/close；status 展示 endpoint、role、

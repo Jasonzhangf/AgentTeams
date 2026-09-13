@@ -1,0 +1,12 @@
+docs/goals/teams-local-mvp-execution-plan.md
+docs/goals/teams-local-mvp-goal-prompt.md
+docs/goals/teams-user-mvp-delivery.md
+docs/evidence/local-mvp-dispatch-refresh-20260913/base.txt
+docs/evidence/local-mvp-dispatch-refresh-20260913/changed-paths.txt
+docs/evidence/local-mvp-dispatch-refresh-20260913/pnpm-verify.log
+docs/evidence/local-mvp-dispatch-refresh-20260913/candidate-receipt.md
+docs/evidence/local-mvp-dispatch-refresh-20260913/review-receipt.md
+docs/evidence/local-mvp-dispatch-refresh-20260913/integration-receipt.md
+docs/evidence/local-mvp-dispatch-refresh-20260913/push-receipt.md
+docs/evidence/local-mvp-dispatch-refresh-20260913/cleanup-receipt.md
+docs/evidence/local-mvp-dispatch-refresh-20260913/solution-receipt.md
