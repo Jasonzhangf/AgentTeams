@@ -21,17 +21,3 @@ Raw controller result:
 This receipt is the durable owner for the finding. The memory record must be
 rebound to this tracked receipt before a replacement exact review and Level 2
 promotion. No live replay claim is promoted by this failed review.
-
-## Replacement review attempt
-
-- Review task: `3c437d7-exact-codex-review-20260912-r3`
-- Candidate: `2da31b34dce3fd1bba4c90df7fa88e132fdf04b3`
-- Base: `9a2934c15999b5c14613e8496625a326664fc3ea`
-- Controller result: **FAIL**, P1.
-- Durable raw result: `.agent-collab/review/3c437d7-exact-codex-review-20260912-r3/review.final.md`
-
-The replacement attempt correctly detected that the L2 metadata still claimed
-`memory_level=2` and `review_status=reviewed` while its only tracked receipt
-contained a failed review and no passing replacement result. The L2 record is
-not eligible for promotion or integration until its effective project-memory
-state is corrected and a new exact review passes.
