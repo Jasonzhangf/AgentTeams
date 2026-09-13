@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"plan","created_at":"2026-09-13T18:56:40.486502+00:00","id":"2cbc522-goal-refresh-20260913","importance":0,"memory_level":2,"review_evidence":["docs/evidence/2cbc522-goal-refresh-20260913/solution-receipt.md"],"review_status":"reviewed","source_refs":[],"tags":["2cbc522","agentteams","ai-reviewed","goal","human-unreviewed","local-mvp"],"updated_at":"2026-09-13T18:56:50.483806+00:00"} -->
+
+# Local MVP goal pointer refreshed at 018d1ca
+
+Delivery unit 2cbc522 refreshed the single AgentTeams Local Network MVP execution pointer, user delivery path, and copy-paste /goal prompt. The user contract remains config.toml as intent, runtime-owned internal.toml, local socket bridge, two-daemon Work, Console observation/config only, and no public Relay/NAT/mobile claim. Evidence: Codex exact semantic review 2cbc522-goal-refresh-review-r9 PASS; final evidence-tip review 2cbc522-goal-refresh-review-r13 PASS; integration verification 77 test files and 458 tests, typecheck, AppSDK compile/verify, and packaged smoke; first push 311efb8 and final remote tip 018d1caf05a8d93ac6c6b9d9596c1879cd10ca8; owned goal-refresh worktrees and branches were removed. Runtime candidate 546e77f remains a separate pending unit. This fact is ai-reviewed and human-unreviewed.
+<!-- project-memory:end -->
