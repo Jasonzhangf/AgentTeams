@@ -6,4 +6,5 @@
   and removed.
 - Both local branches were removed after the integrated content was present on `main`.
 - Only the clean root `main` worktree remains.
-- Remote `origin/main` was verified at the final push SHA recorded by the dispatch task.
+- Remote `origin/main` was verified at `e2e24a144f141dfae7391c28b639e6f279681714` after the
+  receipt commit.
