@@ -139,6 +139,10 @@ _Empty._
 - tags: `ai-reviewed`, `backup`, `goaichat`, `human-unreviewed`, `live-replay`, `provider`
 - details: [L2/goaichat-backup-live-20260906.md](L2/goaichat-backup-live-20260906.md)
 
+### Local MVP dispatch checkpoint refreshed
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`
+- details: [L2/local-mvp-dispatch-3eee987.md](L2/local-mvp-dispatch-3eee987.md)
+
 ### Local MVP goal plan is resumable after U0
 - tags: `agentteams`, `ai-reviewed`, `local-mvp`
 - details: [L2/local-mvp-goal-plan-20260913.md](L2/local-mvp-goal-plan-20260913.md)
