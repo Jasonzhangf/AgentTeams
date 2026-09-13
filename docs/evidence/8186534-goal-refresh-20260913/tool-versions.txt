@@ -1,0 +1,6 @@
+Usage: appsdk <command> [project] [options]
+
+Project-scoped commands default to the current working directory. An explicit project path remains optional.
+Managed child compatibility entry: appsdk subworker <start|list|status|snapshot|send|close> ...
+v22.22.2
+10.31.0

@@ -1,0 +1,2 @@
+warning: legacy SDK migration history retained for ordinary development (./.appsdk/migrations/0.1.5-to-0.1.6)
+{"ok":true,"project_id":"agentteams","stage":"contract_bound"}

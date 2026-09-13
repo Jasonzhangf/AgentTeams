@@ -1,0 +1,8 @@
+issue=8186534
+base_commit=3668b324af228218a99f39cc979ee34947dfc387
+base_tree=854d0651fb61c63dc2f0e84eb61957d9ad44d1f1
+candidate_staged_tree_before_fingerprint=c2c5336f8bb2666f7846f6264c3aa10b4b6269e2
+goal_source_diff_sha256=db21a2b1b5f870252b7fda0920ac4106afe320e60972dfdf4494b3bd81570c13
+changed_source_paths=docs/goals/teams-local-mvp-goal-prompt.md,docs/goals/teams-local-mvp-execution-plan.md,docs/goals/teams-user-mvp-delivery.md
+evidence_paths=docs/evidence/8186534-goal-refresh-20260913/**
+captured_at=2026-09-13T15:00:45Z

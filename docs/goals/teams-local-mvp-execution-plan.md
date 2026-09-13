@@ -7,7 +7,7 @@
 [teams-development-plan.md](teams-development-plan.md)。三者仍是设计、治理和阶段顺序的真源；
 本文件只把下一次 `/goal` 的执行范围收敛成可重入的调度合同。
 
-对应 AppSDK issue：`c4387e4`。U0 `159b78b` 已关闭；当前首个待调度单元是 runtime
+对应 AppSDK issue：`8186534`（本次交接/目标刷新）。上一轮治理 `c4387e4` 已关闭；U0 `159b78b` 已关闭；当前首个待调度单元是 runtime
 `3742b9a`，随后按 canonical receipt 在 `L1-CLI/W1/C1/B1/U1/I1` 中取首个未完成项。
 本计划不得创建第二个 goal、第二个 subscription 或第二套任务图。
 
@@ -17,11 +17,11 @@
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次文档刷新时的主线是 `e078d4d4fc40ba63bb611bdffe925714c853407d`；这个 SHA 只是快照，不能
+  本次文档刷新时的主线是 `3668b324af228218a99f39cc979ee34947dfc387`；这个 SHA 只是快照，不能
   替代下一轮启动时的现场检查。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 当前根树与远端主线均为 `e078d4d4`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
+- 当前根树与远端主线均为 `3668b324`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
   的 worker 已停止写入并回报了明确的 runtime API 缺口：候选 worktree
   `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测 `cli/agentteams.spec.ts`，没有 candidate
   commit；不得把它标记为完成或删除其红测。
@@ -32,13 +32,13 @@
 - C1 issue `776fcad` 保留在独立 worktree `playground/776fcad-c1-20260913`、branch
   `codex/776fcad-c1-20260913` 上，当前 worktree 基线仍是旧的 `a71615a`。它只拥有 `config/**`
   与 `opencode-adapter/**`，不得修改 runtime lifecycle；下一次恢复必须先从当前
-  `origin/main=e078d4d4` rebase 或重建 worktree，再重新验证 candidate fingerprint，不能直接复用
+  `origin/main=3668b32` rebase 或重建 worktree，再重新验证 candidate fingerprint，不能直接复用
   旧基线的测试、review 或集成证据。
 
 ## 当前交付指针
 
 - **已关闭**：U0 Internal Config Compiler（`159b78b`）。
-- **下一单元**：先推进 runtime issue `3742b9a`，解除 L1-CLI 的跨进程生命周期/API blocker；
+- **下一单元**：继续推进正在运行的 runtime issue `3742b9a`，解除 L1-CLI 的跨进程生命周期/API blocker；
   C1 Config/OpenCode 可继续并行。runtime receipt 后重新绑定 L1-CLI；取得 L1 receipt 后才推进 W1，
   再推进 B1；不得用 CLI 自己实现第二套 supervisor 或 Work ledger。
   每项先查重/复用 AppSDK issue，再从最新 `origin/main` 建立
@@ -87,7 +87,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮当前可用基线为
-  `e078d4d4fc40ba63bb611bdffe925714c853407d`。
+  `3668b324af228218a99f39cc979ee34947dfc387`。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
@@ -216,9 +216,9 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI �
 | unit | issue | 当前状态 | 下一动作 |
 | --- | --- | --- | --- |
 | U0 internal config compiler | `159b78b` | closed；receipt 可复用 | 不重开、不重复派发 |
-| runtime local launcher | `3742b9a` | queued | 从 `origin/main=e078d4d4` 建立 clean worktree，先补 detached lifecycle/status/stop 与 configured Work API |
+| runtime local launcher | `3742b9a` | running；gcm worker 分析中，暂无 candidate commit | 保持当前独立 worktree；收到 candidate 后只跑首个失效 gate，再做 exact review、integration 和 push |
 | L1 CLI | `fdec042` | awaiting-runtime-unit；仅有红测，无 candidate | runtime receipt 后 rebase 到最新 main，再实现 `init/start/status/work/stop` |
-| C1 provider/OpenCode | `776fcad` | retained；旧基线 worktree | 先从 `origin/main=e078d4d4` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
+| C1 provider/OpenCode | `776fcad` | retained；旧基线 worktree | runtime 资源稳定后，从 `origin/main=3668b32` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
 | W1/B1/U1/I1-L5 | canonical downstream | pending | 按依赖顺序启动，禁止提前共享写入 |
 
 当前自有资源只有调度文档 worktree；L1 红测 worktree与 C1 worktree 属于各自 worker，不删除、不
