@@ -17,36 +17,34 @@
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次接手复核时的主线是 `412fc5fbc7bba328d9916906122192d4e7e60e2b`；这个 SHA 只是快照，不能
+  本次接手复核时的主线是 `f0197f78582278c99cd0eb513893f942be69189e`；这个 SHA 只是快照，不能
   替代下一轮启动时的现场检查。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 当前根树与远端主线均为 `412fc5f`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
+- 当前根树与远端主线均为 `f0197f7`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
   的 worker 已停止写入并回报了明确的 runtime API 缺口：候选 worktree
   `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测 `cli/agentteams.spec.ts`，没有 candidate
   commit；不得把它标记为完成或删除其红测。
 - 根据该发现已建立独立 runtime delivery unit `3742b9a`，负责 detached launcher、持久 supervisor
   ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。当前
-  rebind worktree 已有候选提交 `546e77f`，worktree clean；其与当前 `origin/main@412fc5f` 的
-  merge-base 就是 `412fc5f`，因此候选包含当前主线而不是 stale-base；该候选包含 startup reservation、
-  PID-0 stop guard、concurrent-start、internal state merge、configuredWork generation binding 和
-  supervisor start-token ownership 修复，但仍必须在 exact candidate 上重跑 focused/full gate、
-  完成 Codex review 后才可集成，不能重派同一 runtime unit。
+  rebind worktree 有候选提交 `546e77f`，worktree clean，但其 merge-base 是旧的 `412fc5f`，
+  当前 `origin/main` 已是 `f0197f7`；因此必须先从最新主线重建或重绑定，再重跑 focused/full gate、
+  完成 Codex review 后才可集成，不能把旧候选当作当前 candidate，也不能重派同一 runtime unit。
 - C1 issue `776fcad` 保留在独立 worktree `playground/776fcad-c1-20260913`、branch
   `codex/776fcad-c1-20260913` 上，当前 worktree 基线仍是旧的 `a71615a` 且有 dirty 修改。它只
   修改 `config/runtime-config.ts` 与 `config/runtime-config.spec.ts`，不得由本单元覆盖或删除；它只
   拥有 `config/**` 与 `opencode-adapter/**`，不得修改 runtime lifecycle；下一次恢复必须先从当前
-  `origin/main=412fc5f` rebase 或重建 worktree，再重新验证 candidate fingerprint，不能直接复用
+  `origin/main=f0197f7` rebase 或重建 worktree，再重新验证 candidate fingerprint，不能直接复用
   旧基线的测试、review 或集成证据。
 
 ### 当前资源与处理动作
 
 | 资源 | 当前事实 | 调度动作 |
 |---|---|---|
-| `playground/3742b9a-runtime-rebind-20260913` | runtime rebind candidate `546e77f`，clean；merge-base=`412fc5f` | 当前 exact candidate 重跑 focused/full gate → Codex review → integration/push |
-| `playground/3742b9a-runtime-20260913` | 旧基线 candidate `d040885` | 只作历史参考；不得直接集成或 reset |
-| `playground/fdec042-l1-cli-20260913` | 旧基线，仅保留未跟踪红测 | runtime receipt 后从最新 main 重建；先不删除红测 |
-| `playground/776fcad-c1-20260913` | dirty，基线 `a71615a`，仅属 config/OpenCode | 从最新 main 重建后才恢复；不得碰 runtime/network |
+| `playground/3742b9a-runtime-rebind-20260913` | clean，candidate `546e77f`，merge-base=`412fc5f`，落后当前 main | 先从 `f0197f7` 重建/重绑定，再验证、review、集成、push |
+| `playground/3742b9a-runtime-20260913` | clean，旧 candidate `d040885` | 只作历史参考；不得直接集成或 reset |
+| `playground/fdec042-l1-cli-20260913` | 仅保留未跟踪红测 `cli/`，无 candidate commit | runtime receipt 后从最新 main 重建；红测迁移前不删除 |
+| `playground/776fcad-c1-20260913` | dirty，基线 `a71615a`，仅属 config/OpenCode | 由其 owner 从最新 main 重建后恢复；不得碰 runtime/network |
 
 这些资源均不属于本次目标文档刷新单元；调度主任务只清理自己创建的 worktree。任何超过 24 小时未
 活动的资源，先核对 owner、claim、证据和未提交内容，再决定保留、合并或丢弃。
@@ -104,7 +102,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮接手时可用基线为
-  `412fc5fbc7bba328d9916906122192d4e7e60e2b`，下一 unit 仍须重新读取远端。
+  `f0197f78582278c99cd0eb513893f942be69189e`，下一 unit 仍须重新读取远端。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
@@ -177,7 +175,7 @@ canonical 文档为准。
 | --- | --- | --- | --- | --- |
 | U0 | runtime | `runtime/local-config.ts`、`runtime/local-supervisor.ts`、`runtime/local-process.ts`、必要的 `runtime/agent-process.ts` projection、对应 specs、`docs/evidence/159b78b-*/`；architecture-map 变更只作为候选绑定提交给集成 owner | `network/**`、`server/**`、`agent/**` 语义、`config/**`、`docs/architecture/**` 公共真源、UI、package/lock | `pnpm exec vitest run runtime/local-config.spec.ts runtime/local-supervisor.spec.ts runtime/local-two-agent.spec.ts` |
 | 3742b9a | runtime local-launcher owner | `runtime/local-config.ts`、`runtime/local-process.ts`、`runtime/local-supervisor.ts`、必要的 `runtime/agent-process.ts` projection、对应 specs/evidence | `network/**`、`agent/**` 语义、`config/**` 真源、UI、CLI dispatch、package/lock | `pnpm exec vitest run runtime/local-process.spec.ts runtime/local-supervisor.spec.ts runtime/local-two-agent.spec.ts`；必须证明跨进程 status/stop 与 configured Work 复用 |
-| L1-CLI | CLI + runtime local-launcher owner | `cli/agentteams.mjs`、`cli/agentteams.spec.ts`、root `package.json` 的 `bin` 绑定、`runtime/local-config.ts`、`runtime/local-process.ts`、`runtime/local-supervisor.ts`、对应 evidence；runtime API 缺失时另建 unit | `network/**`、`agent/**`、`config/**` 真源、UI、`cli-adapter/**` capability implementation、generated output | `pnpm exec vitest run cli/agentteams.spec.ts runtime/local-config.spec.ts runtime/local-supervisor.spec.ts runtime/local-process.spec.ts`；其中 CLI spec 必须真实执行 `init/start/status/work/stop` |
+| L1-CLI | CLI owner | `cli/agentteams.mjs`、`cli/agentteams.spec.ts`、root `package.json` 的 `bin` 绑定、对应 evidence | `runtime/**`、`network/**`、`agent/**`、`config/**` 真源、UI、`cli-adapter/**` capability implementation、generated output | `pnpm exec vitest run cli/agentteams.spec.ts runtime/local-config.spec.ts runtime/local-supervisor.spec.ts runtime/local-process.spec.ts`；其中 CLI spec 必须真实执行 `init/start/status/work/stop`；runtime API 缺失时另建或复用 runtime unit |
 | B1 | cli-adapter | `cli-adapter/**` 及对应 CLI evidence；需要 runtime API 时另建 runtime unit | `runtime/**`、`agent/**`、`network/**`、`config/**`、UI | `pnpm exec vitest run cli-adapter/cli.spec.ts cli-adapter/fixed-process.spec.ts` |
 | W1 | agent | `agent/**` 及对应 Work/resource specs；跨 `agent-host/**` 或 `runtime/**` 需另建 unit | `network/**`、`config/**`、`opencode-adapter/**`、UI | `pnpm exec vitest run agent/**/*.spec.ts runtime/agent-work-client.spec.ts` |
 | C1 | config + opencode-adapter | `config/**`、`opencode-adapter/**` 及对应 specs/evidence | `agent/**`、`network/**`、UI；不把 RCC/goaichat 结果写进业务 payload | `pnpm exec vitest run runtime/managed-config-owner.spec.ts runtime/managed-config-live.spec.ts runtime/managed-opencode-session.spec.ts` |
@@ -233,14 +231,15 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI �
 | unit | issue | 当前状态 | 下一动作 |
 | --- | --- | --- | --- |
 | U0 internal config compiler | `159b78b` | closed；receipt 可复用 | 不重开、不重复派发 |
-| runtime local launcher | `3742b9a` | candidate `546e77f` clean；当前验证和 exact review 尚未绑定 | 在 exact candidate 上重跑 focused/full gate → Codex review → candidate receipt → integration/push |
+| runtime local launcher | `3742b9a` | candidate `546e77f` clean 但 merge-base=`412fc5f`，落后当前 main；当前验证和 exact review 尚未绑定 | 从 `f0197f7` 重建/重绑定后重跑 focused/full gate → Codex review → candidate receipt → integration/push |
 | L1 CLI | `fdec042` | awaiting-runtime-unit；仅有红测，无 candidate | runtime receipt 后 rebase 到最新 main，再实现 `init/start/status/work/stop` |
-| C1 provider/OpenCode | `776fcad` | retained；旧基线 dirty worktree | 先从当前 `origin/main=412fc5f` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
+| C1 provider/OpenCode | `776fcad` | retained；旧基线 dirty worktree | 先从当前 `origin/main=f0197f7` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
 | W1/B1/U1/I1-L5 | canonical downstream | pending | 按依赖顺序启动，禁止提前共享写入 |
 
-本次文档刷新 worktree 是 `playground/2cbc522-goal-refresh-20260913`；runtime、L1 红测和 C1
-worktree 属于各自 delivery unit，不删除、不覆盖。任何 worker 结束后先确认停止写入、证据已
-转存和远端候选责任，再回收其自有进程、端口、锁、worktree 与 branch；根 `main` 始终保持 clean。
+本次文档刷新 worktree 是 `playground/2cbc522-goal-refresh-20260913`，只拥有
+`docs/goals/**` 与本单元 evidence；runtime、L1 红测和 C1 worktree 属于各自 delivery unit，
+不删除、不覆盖。任何 worker 结束后先确认停止写入、证据已转存和远端候选责任，再回收其自有进程、
+端口、锁、worktree 与 branch；根 `main` 始终保持 clean。
 
 ## MVP 退出条件与非目标
 
