@@ -72,13 +72,13 @@ failover 和生产部署继续属于 canonical 计划中的 post-MVP 阶段。
 | 本地真实回放 | L5 | 两个独立 daemon 经 socket bridge 完成 discovery、协商、Work、stop/restart |
 | Console 观察面 | L4，随后由 L5 收口 | UI 展示 directory projection，Console 关闭不影响 Work |
 
-当前主线（本次接手复核为 `7e82b8a`）已包含 internal.toml 真源迁移（U0/`159b78b`）及本机双 daemon 基础；
+当前主线（本次接手复核为 `e59d831`）已包含 internal.toml 真源迁移（U0/`159b78b`）及本机双 daemon 基础；
 用户 CLI、完整 passive provider/receiver Work、OpenCode 多 provider、Console directory
 projection 和最终 Console-offline/restart 真实收口仍未完成。runtime issue `3742b9a` 的当前
-rebind-r2 worktree 仍 dirty，尚无 candidate commit；旧 `546e77f` 基于旧的
-`origin/main@412fc5f`，不能直接复用。startup reservation/PID-0/concurrent-start、generation
-binding 和 start-token 修复必须在最新主线形成的当前 candidate 上重新验证、review 和集成；这不是
-CLI 的重复实现范围。
+rebind-r3 worktree 仍 dirty，尚无 candidate commit；socket-backed gates 在当前环境复现
+`listen EPERM`，不能用 mock 或旧候选替代。startup reservation/PID-0/concurrent-start、generation
+binding 和 start-token 修复必须在允许真实 local socket 的环境、最新主线形成的当前 candidate 上重新
+验证、review 和集成；这不是 CLI 的重复实现范围。
 
 ## 用户 MVP 验收路径
 
