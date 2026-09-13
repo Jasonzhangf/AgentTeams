@@ -1,9 +1,11 @@
 # Candidate fingerprint: Local MVP goal refresh
 
 - Delivery unit: `2cbc522`.
-- Candidate state: uncommitted exact working tree; commit is intentionally deferred until review PASS.
+- Candidate state: committed evidence tip; semantic source candidate and evidence-only follow-ups are separated below.
 - Base commit: `412fc5fbc7bba328d9916906122192d4e7e60e2b`.
 - Candidate identity: see the per-file SHA-256 values below; the fingerprint excludes this receipt itself to avoid a self-referential hash.
+- Source candidate commit: `de56c0b1f5415181f43cd40ac30488a5c85b7f7f`; evidence tip commit: `f65b938a8dba0a7e185ddb0b14f5ba2370003e62`.
+- Evidence tip tree: `724d847cb33771d5ea1a2af6da795ac8991c543c`; canonical tree below excludes this fingerprint receipt only.
 - Allowed paths: `docs/goals/**`, `docs/evidence/2cbc522-goal-refresh-20260913/**`.
 - Forbidden paths: runtime, network, server, agent, agent-host, config, opencode-adapter, console-host, UI, package/lock, architecture maps, generated or active artifacts.
 - Actual changed paths:
@@ -17,7 +19,7 @@
 - Base architecture-map tree: `e4e2dd23ebadf544497eee5c351b715c02bc350a`.
 - Base AppSDK tree: `f8b7f0c7253c3dc95df78992d7c6d760d8781265`.
 - Runtime candidate baseline proof: `merge-base(546e77f, origin/main@412fc5f)=412fc5fbc7bba328d9916906122192d4e7e60e2b`.
-- Canonical candidate tree (staged index, excluding this self-referential receipt): `5d125fe6d421c63bb9654e9895af6a427ed0e77b`.
+- Canonical candidate tree (staged index, excluding this self-referential receipt): `c2f31d2453cea6be03a056cb729781eaa3cb20b9`.
 - Tree rule: copy the staged index, remove only `candidate-fingerprint.md`, then run `git write-tree`; all other staged paths remain included.
 - Commands: `git diff --check`; `pnpm verify`.
 - Raw evidence: `pnpm-verify.log`; result summary: `validation-receipt.md`.
@@ -32,4 +34,4 @@
 - `docs/evidence/2cbc522-goal-refresh-20260913/changed-paths.txt`: `45bfeb0601c6760a8d9e9f04e6000e83301cce708ba2671364fbf3da086da75c`
 - `docs/evidence/2cbc522-goal-refresh-20260913/validation-receipt.md`: `b2522ba19d6fe0f4b32fef463830862dfab85711b8a14a42e73cc65542d19a69`
 - `docs/evidence/2cbc522-goal-refresh-20260913/pnpm-verify.log`: `7b3445b0cba74c7b3f55e20d3ee7ec8766fa410594bec0ebb693dff0d5d45353`
-- `docs/evidence/2cbc522-goal-refresh-20260913/candidate-receipt.md`: `4b54f01aa999dc4374d29b03c4557e96fc9de66e612340e93e57c5d12530f9b8`
+- `docs/evidence/2cbc522-goal-refresh-20260913/candidate-receipt.md`: `0060206136d383026e9db1e3602bec31627ed61c468844449045deaa2bf3920c`
