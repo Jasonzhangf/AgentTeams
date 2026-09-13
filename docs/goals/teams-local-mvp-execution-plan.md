@@ -7,7 +7,7 @@
 [teams-development-plan.md](teams-development-plan.md)。三者仍是设计、治理和阶段顺序的真源；
 本文件只把下一次 `/goal` 的执行范围收敛成可重入的调度合同。
 
-对应 AppSDK issue：`3eee987`。U0 `159b78b` 已关闭；当前首个待调度单元是 runtime
+对应 AppSDK issue：`c4387e4`。U0 `159b78b` 已关闭；当前首个待调度单元是 runtime
 `3742b9a`，随后按 canonical receipt 在 `L1-CLI/W1/C1/B1/U1/I1` 中取首个未完成项。
 本计划不得创建第二个 goal、第二个 subscription 或第二套任务图。
 
@@ -17,11 +17,11 @@
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次文档落盘时的主线是 `a71615a17e565be9b8eab837e6ee0896a000b118`；这个 SHA 只是快照，不能
+  本次文档落盘时的主线是 `ba23514d27572a08c31a41c35f43e874c458b7e5`；这个 SHA 只是快照，不能
   替代下一轮启动时的现场检查。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 当前根树与远端主线均为 `a71615a`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
+- 当前根树与远端主线均为 `ba23514d`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
   的 worker 已停止写入并回报了明确的 runtime API 缺口：候选 worktree
   `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测 `cli/agentteams.spec.ts`，没有 candidate
   commit；不得把它标记为完成或删除其红测。
@@ -29,10 +29,11 @@
   ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。L1 在该
   runtime receipt 前保持 `awaiting-runtime-unit`，取得 receipt 后必须从最新 `origin/main` 重建或
   rebase，再继续实现和验证；旧的 `94919f7` 基线不能直接集成。
-- C1 issue `776fcad` 正在独立 worktree `playground/776fcad-c1-20260913`、branch
-  `codex/776fcad-c1-20260913` 上执行，基线为 `a71615a`。它只拥有 `config/**` 与
-  `opencode-adapter/**`，不得修改 runtime lifecycle；下一次恢复先复核 worker 是否仍在写入和
-  当前候选 fingerprint，不重复派发。
+- C1 issue `776fcad` 保留在独立 worktree `playground/776fcad-c1-20260913`、branch
+  `codex/776fcad-c1-20260913` 上，当前 worktree 基线仍是旧的 `a71615a`。它只拥有 `config/**`
+  与 `opencode-adapter/**`，不得修改 runtime lifecycle；下一次恢复必须先从当前
+  `origin/main=ba23514d` rebase 或重建 worktree，再重新验证 candidate fingerprint，不能直接复用
+  旧基线的测试、review 或集成证据。
 
 ## 当前交付指针
 
@@ -86,7 +87,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮当前可用基线为
-  `a71615a17e565be9b8eab837e6ee0896a000b118`。
+  `ba23514d27572a08c31a41c35f43e874c458b7e5`。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
@@ -215,9 +216,9 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI �
 | unit | issue | 当前状态 | 下一动作 |
 | --- | --- | --- | --- |
 | U0 internal config compiler | `159b78b` | closed；receipt 可复用 | 不重开、不重复派发 |
-| runtime local launcher | `3742b9a` | queued | 从 `origin/main=a71615a` 建立 clean worktree，先补 detached lifecycle/status/stop 与 configured Work API |
+| runtime local launcher | `3742b9a` | queued | 从 `origin/main=ba23514d` 建立 clean worktree，先补 detached lifecycle/status/stop 与 configured Work API |
 | L1 CLI | `fdec042` | awaiting-runtime-unit；仅有红测，无 candidate | runtime receipt 后 rebase 到最新 main，再实现 `init/start/status/work/stop` |
-| C1 provider/OpenCode | `776fcad` | running；独立 worktree | 继续 config/opencode focused gate；不碰 runtime/network |
+| C1 provider/OpenCode | `776fcad` | retained；旧基线 worktree | 先从 `origin/main=ba23514d` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
 | W1/B1/U1/I1-L5 | canonical downstream | pending | 按依赖顺序启动，禁止提前共享写入 |
 
 当前自有资源只有调度文档 worktree；L1 红测 worktree与 C1 worktree 属于各自 worker，不删除、不
@@ -246,30 +247,6 @@ Console 完整无障碍/移动布局/关系深度投影、browser 多 profile、
 
 ## 目标提示词
 
-```text
-/goal
-目标：按现有 AgentTeams Local Network MVP 合同，完成用户可执行的本地双 daemon 路径：用户只维护 ~/.agentteams/config.toml，运行 agentteams init/start/status/work/stop；runtime 由 internal.toml 管理内部真源；两个独立 daemon 经真实本地 socket bridge 完成发现、广播、连接、协商和一次 Agent Work；Console 仅观察/配置且离线不阻断 Agent-to-Agent Work。
-
-说明：本任务不再生成新的提示词，直接按实现文档执行。当前 Desktop 会话是唯一的调度与资源管理 owner，负责调度、依赖、worker、review、integration、push、memory 和自有资源回收；不依赖外部 master，不创建第二个 goal、subscription 或 task graph。worker 只实现自己的 delivery unit，不能替主任务合并、推送或删除他人资源。
-
-实现文档：
-docs/goals/teams-local-mvp-execution-plan.md
-docs/goals/teams-long-running-delivery.md
-docs/goals/teams-user-mvp-delivery.md
-docs/goals/teams-development-plan.md
-
-执行规范：
-- 每次唤醒先检查当前 goal、issue、worker、worktree、branch、进程、端口和远端 main；U0 已关闭，
-  只复核其 receipt，不重开；按 `runtime-3742b9a → L1-CLI → W1 → B1`、`C1`、`U1`、`I1/L5` 的 canonical 依赖查重，
-  只有确认没有同语义 unit 后，才从当前 origin/main 建立对应独立 clean worktree。
-- 默认使用新的 codex exec --profile gcm worker；worker 只改合同范围。普通 exact review 用独立 Codex Review，milestone 用 Astra，不使用 AGY Review。
-- U0 internal.toml 真源已完成；下一步先推进 runtime-3742b9a，C1 可继续按自身 contract 并行；取得 runtime receipt 后重建并推进 L1-CLI，取得 L1 receipt 后推进 W1，
-  再推进 B1；取得 B1 receipt、projection contract 和 L3 review PASS 后完成 U1 Console
-  directory projection，最后由 I1/L5 完成本地真实回放、重启隔离与统一装配。
-- 遵守红测→最小修复→适用 regression/typecheck/build/AppSDK gate→真实入口→exact review→独立 integration→push→memory L2→cleanup 闭环；根据 fingerprint 只重跑首个失效 gate及其下游。L1 的当前 blocker 是 runtime API 缺口，不允许通过 CLI 复制 supervisor、status/stop 或 Work ledger 绕过。
-- 禁止 fallback、silent repair、第二配置真源、Console 数据转发、直接修改 dirty main、复用旧候选证据或删除他人资源。公网 Relay/NAT/手机/关系治理属于 post-MVP。
-
-完成标准：
-- 所有 MVP 退出条件、每个 delivery unit 的 review/integration/push/memory/cleanup receipt 全部齐备；远端 main SHA 已核实，根 main clean，自有 worker/进程/监听/worktree/branch 已安全回收。
-- 不能把测试、merge 或本地 replay写成公网部署、push 或完整 V1；缺证据时保留为 open/blocked/cleanup-pending 并写明解除条件。
-```
+可直接复制的唯一 `/goal` 输入已独立落盘于
+[teams-local-mvp-goal-prompt.md](teams-local-mvp-goal-prompt.md)。本计划只维护执行指针，避免在
+计划正文复制第二份提示词。
