@@ -24,14 +24,14 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除�
 偷偷移入调度文档。
 
 当前接手指针：
-- origin/main=ba23514d27572a08c31a41c35f43e874c458b7e5，根 main 必须保持 clean；该 SHA 只作为
-  当前快照，每次唤醒都重新读取现场。
+- 当前 root `main` 与远端 `origin/main` 在本次文档刷新时均为 `e078d4d4fc40ba63bb611bdffe925714c853407d`；
+  该 SHA 只作历史快照，每次唤醒必须重新读取现场，根 main 必须保持 clean。
 - U0 internal.toml 真源 issue 159b78b 已关闭，只复用其 receipts，不重开、不重复实现。
 - 首个实现单元是 runtime issue 3742b9a：detached launcher、runtime-owned supervisor
   status/stop 和 configured Work API；禁止 CLI 自己复制 supervisor 或 Work ledger。
 - runtime receipt 后重建 L1 issue fdec042 的 worktree，从最新 origin/main 实现
   init/start/status/work/stop；C1 issue 776fcad 可在 config/** 与 opencode-adapter/** 范围内并行，
-  但其现有 worktree 基于旧的 a71615a，candidate 前必须从当前 origin/main=ba23514d rebase/重建并
+  但其现有 worktree 基于旧的 a71615a，candidate 前必须从当前 origin/main=e078d4d rebase/重建并
   重新验证 fingerprint。
 - 依赖顺序：3742b9a → fdec042 → W1 Agent Work → B1 fixed capability CLI → U1 Console projection
   → I1/L5 本地真实回放；C1 可与 runtime/L1 并行，但不得写 runtime/network/agent/UI。
