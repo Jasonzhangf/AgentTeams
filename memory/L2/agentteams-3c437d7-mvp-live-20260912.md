@@ -1,4 +1,4 @@
-<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-09-12T09:26:12.242035+00:00","id":"agentteams-3c437d7-mvp-live-20260912","importance":0,"memory_level":2,"review_evidence":["/Volumes/extension/code/AgentTeams/playground/3c437d7-mvp-live-20260912-integration/.agent-collab/review/3c437d7-mvp-live-20260912-integration-review/review.final.md"],"review_status":"reviewed","source_refs":[],"tags":["agentteams","ai-reviewed","human-unreviewed","mvp","relay"],"updated_at":"2026-09-12T09:26:26.924416+00:00"} -->
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-09-12T09:26:12.242035+00:00","id":"agentteams-3c437d7-mvp-live-20260912","importance":0,"memory_level":2,"review_evidence":["docs/evidence/3c437d7-mvp-live-20260912/review-receipt.md"],"review_status":"reviewed","source_refs":[],"tags":["agentteams","ai-reviewed","human-unreviewed","mvp","relay"],"updated_at":"2026-09-13T01:53:36.074203+00:00"} -->
 
 # AgentTeams current-candidate relay MVP replay
 
