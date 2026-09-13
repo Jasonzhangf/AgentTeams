@@ -1,0 +1,24 @@
+
+> agentteams@0.1.0 test /Volumes/extension/code/AgentTeams/playground/288af52-local-config-two-agent-20260913
+> pnpm --dir opencode-adapter build && node scripts/regression.mjs
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/extension/code/AgentTeams/playground/288af52-local-config-two-agent-20260913/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/288af52-local-config-two-agent-20260913/opencode-adapter/tsdown.config.ts
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    16.95 kB │ gzip: 4.25 kB
+ℹ lib/index.d.mts  12.28 kB │ gzip: 2.84 kB
+ℹ 2 files, total: 29.23 kB
+✔ Build complete in 999ms
+Regression gate: TEAMS_CONSOLE_REAL_DOM=1 (real Chrome required)
+(node:6702) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Test Files 77 passed
+Tests 454 passed

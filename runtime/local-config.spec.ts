@@ -2,7 +2,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { defaultLocalConfigPath, loadLocalConfig, writeLocalConfig } from './local-config.ts'
+import { defaultLocalConfigPath, loadLocalConfig, writeLocalConfig, writeLocalInternalState } from './local-config.ts'
+import { parse as parseToml } from 'toml'
 
 it('loads a persisted TOML launcher config and resolves paths relative to the file', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-local-config-'))
@@ -55,5 +56,89 @@ it('rejects the reserved relay daemon id before process planning can overwrite o
   try {
     await writeLocalConfig(path, 'version = 1\n[relay]\nconfig = "relay.json"\n[daemons.relay]\nconfig = "relay-agent.json"\n')
     await expect(loadLocalConfig(path)).rejects.toThrow(/reserved.*Relay/i)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('loads v2 endpoint intent from config.toml and materializes only derived endpoint files', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-endpoint-config-'))
+  const path = join(directory, '.agentteams', 'config.toml')
+  try {
+    await writeLocalConfig(path, `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.provider]
+enabled = true
+role = "provider"
+identity = { hostId = "provider-host", machineId = "machine", agentId = "provider", accountId = "account", agentKind = "custom", label = "Provider" }
+scopeId = "scope"
+dataDirectory = "data/provider"
+leasePort = 48011
+presenceIntervalMs = 500
+policy = { revision = 1, allowedConsumers = ["consumer"], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-provider" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "PROVIDER_AUTH", caFile = "relay.pem", connectTimeoutMs = 1000, admissionTimeoutMs = 1000, requestTimeoutMs = 1000, maxMessageBytes = 65536, maxBufferedBytes = 65536, maxPendingFrames = 8, maxPendingRequests = 4, maxDataConnections = 4 }
+
+[endpoints.consumer]
+enabled = true
+role = "receiver"
+identity = { hostId = "consumer-host", machineId = "machine", agentId = "consumer", accountId = "account", agentKind = "custom", label = "Consumer" }
+scopeId = "scope"
+dataDirectory = "data/consumer"
+leasePort = 48012
+presenceIntervalMs = 500
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-consumer" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "CONSUMER_AUTH", caFile = "relay.pem", connectTimeoutMs = 1000, admissionTimeoutMs = 1000, requestTimeoutMs = 1000, maxMessageBytes = 65536, maxBufferedBytes = 65536, maxPendingFrames = 8, maxPendingRequests = 4, maxDataConnections = 4 }
+
+[endpoints.consumer.connect]
+targetAgentId = "provider"
+capabilityId = "file-search"
+capabilityVersion = "1"
+operation = "search"
+workId = "configured-search"
+requestId = "configured-search-1"
+demands = [{ resourceId = "search-slot", amount = 1 }]
+payload = { query = "needle" }
+`)
+    const loaded = await loadLocalConfig(path)
+    expect(loaded.internalPath).toBe(join(directory, '.agentteams', 'internal.toml'))
+    expect(loaded.daemons.map(item => item.id)).toEqual(['provider', 'consumer'])
+    expect(loaded.daemons[0]?.role).toBe('provider')
+    expect(loaded.daemons[1]?.role).toBe('receiver')
+    expect(loaded.daemons[1]?.connection).toMatchObject({ targetAgentId: 'provider', capabilityId: 'file-search', operation: 'search' })
+    const materialized = await readFile(loaded.daemons[0]!.configPath, 'utf8')
+    expect(JSON.parse(materialized)).toMatchObject({ version: 1, endpoint: { role: 'provider' } })
+    expect(materialized).toContain('provider-host')
+    expect(materialized).not.toContain('internal')
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('rejects a v2 disabled relay instead of silently launching it', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-endpoint-relay-disabled-'))
+  const path = join(directory, 'config.toml')
+  try {
+    await writeLocalConfig(path, 'version = 2\n[relay]\nenabled = false\nconfig = "relay.json"\n[endpoints.provider]\nrole = "provider"\nidentity = { hostId = "host", machineId = "machine", agentId = "provider", accountId = "account", agentKind = "custom", label = "Provider" }\nscopeId = "scope"\ndataDirectory = "data"\nleasePort = 48021\npresenceIntervalMs = 100\npolicy = { revision = 1, allowedConsumers = [], allowedManagers = [] }\ncli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-provider" }\nrelay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }\n')
+    await expect(loadLocalConfig(path)).rejects.toThrow(/relay.enabled/i)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('rejects a v2 endpoint named relay before process planning creates duplicate identities', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-endpoint-reserved-'))
+  const path = join(directory, 'config.toml')
+  try {
+    await writeLocalConfig(path, 'version = 2\n[relay]\nconfig = "relay.json"\n[endpoints.relay]\nrole = "provider"\n')
+    await expect(loadLocalConfig(path)).rejects.toThrow(/endpoints\.relay.*reserved/i)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('quotes dotted daemon ids in internal.toml so the persisted key remains exact', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-internal-state-'))
+  const path = join(directory, 'internal.toml')
+  try {
+    await writeLocalInternalState(path, { 'a.b': { pid: 42, generation: 3, state: 'online' } })
+    const parsed = parseToml(await readFile(path, 'utf8')) as { daemon?: Record<string, { pid?: number }> }
+    expect(parsed.daemon?.['a.b']?.pid).toBe(42)
   } finally { await rm(directory, { recursive: true, force: true }) }
 })

@@ -1,7 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import type { LocalConfig } from './local-config.ts'
+import { writeLocalInternalState, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
 
 export interface LocalProcessSpec {
   readonly id: string
@@ -59,18 +59,18 @@ function waitForExit(child: ChildProcess, deadlineMs: number): Promise<void> {
   })
 }
 
-async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'], deadlineMs: number): Promise<void> {
+async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'], deadlineMs: number): Promise<Record<string, unknown> | undefined> {
   const output = { stdout: '', stderr: '' }
-  await new Promise<void>((resolveReady, reject) => {
+  return await new Promise<Record<string, unknown> | undefined>((resolveReady, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
-    const finish = (error?: Error) => {
+    const finish = (error?: Error, value?: Record<string, unknown>) => {
       if (timer !== undefined) clearTimeout(timer)
       child.off('error', onError)
       child.off('exit', onExit)
       child.off('message', onMessage)
       child.stdout?.off('data', onStdout)
       child.stderr?.off('data', onStderr)
-      if (error) reject(error); else resolveReady()
+      if (error) reject(error); else resolveReady(value)
     }
     const onError = (error: Error) => finish(error)
     const onExit = (code: number | null, signal: NodeJS.Signals | null) => finish(new Error(`local ${kind} exited before readiness code=${code ?? 'null'} signal=${signal ?? 'null'} stderr=${output.stderr}`))
@@ -80,7 +80,9 @@ async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'],
     }
     const onStderr = (chunk: Buffer | string) => { output.stderr += chunk.toString() }
     const onMessage = (message: unknown) => {
-      if (kind === 'agent' && typeof message === 'object' && message !== null && (message as { kind?: unknown }).kind === 'daemon.registered') finish()
+      if (kind === 'agent' && typeof message === 'object' && message !== null && (message as { kind?: unknown }).kind === 'daemon.registered') {
+        finish(undefined, message as Record<string, unknown>)
+      }
     }
     child.once('error', onError)
     child.once('exit', onExit)
@@ -106,6 +108,7 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   const spawnProcess = options.spawn ?? nodeSpawn
   const specs = planLocalProcesses(config, options)
   const children = new Map<string, ChildProcess>()
+  const states = new Map<string, LocalInternalDaemonState>()
   const unwatch = new Map<string, () => void>()
   let lifecycle: LocalSupervisorState = 'stopped'
   let lastFailure: Error | undefined
@@ -132,8 +135,13 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           lifecycle = 'failed'
         }
       }
+      if (config.internalPath !== undefined) {
+        const persisted: Record<string, LocalInternalDaemonState> = Object.fromEntries([...states.entries()].map(([id, state]) => [id, { ...state, state: lifecycle === 'failed' ? 'failed' : 'stopped' as const }]))
+        try { await writeLocalInternalState(config.internalPath, persisted) } catch (error) { failures.push(error) }
+      }
       if (failures.length > 0) throw new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
       children.clear()
+      states.clear()
       lifecycle = 'stopped'
       lastFailure = undefined
     })()
@@ -176,17 +184,25 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           child.once('exit', onExit)
           child.once('error', onError)
           unwatch.set(spec.id, () => { child.off('exit', onExit); child.off('error', onError) })
-          await waitForReady(child, spec.kind, startupTimeoutMs)
+          const ready = await waitForReady(child, spec.kind, startupTimeoutMs)
+          if (spec.kind === 'agent') {
+            const generation = ready?.generation
+            states.set(spec.id, { pid: child.pid ?? 0, state: 'online', ...(typeof generation === 'number' ? { generation } : {}) })
+          }
           if (lifecycle !== 'starting') throw lastFailure ?? new Error(`local ${spec.kind} failed during startup`)
           if (child.exitCode !== null || child.signalCode !== null) {
             throw new Error(`local ${spec.kind} exited immediately after readiness code=${child.exitCode ?? 'null'} signal=${child.signalCode ?? 'null'}`)
           }
         }
-        await new Promise<void>(resolveReady => { setImmediate(resolveReady) })
+        // A readiness IPC frame is not proof that the child stayed alive. Keep the
+        // startup gate open for one bounded stability window so an immediate post-ready
+        // exit is reported before the supervisor claims running.
+        await new Promise<void>(resolveReady => { setTimeout(resolveReady, 75) })
         if (lifecycle !== 'starting') throw lastFailure ?? new Error('local daemon failed during startup')
         for (const child of children.values()) {
           if (child.exitCode !== null || child.signalCode !== null) throw new Error('local daemon exited during startup')
         }
+        if (config.internalPath !== undefined) await writeLocalInternalState(config.internalPath, Object.fromEntries(states.entries()))
         lifecycle = 'running'
       } catch (error) {
         try { await stop() } catch (cleanupError) { throw new AggregateError([error, cleanupError], 'local daemon startup and cleanup failed') }

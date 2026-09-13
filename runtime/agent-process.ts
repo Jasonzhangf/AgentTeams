@@ -23,6 +23,23 @@ import { createManagedConfigOwner } from './managed-config-owner.ts'
 import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
 import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
 import { createDirectWssListener, type DirectWssListener } from '../network/direct-listener.ts'
+import type { JsonValue, ResourceDemand } from '../control-protocol/agent-services.ts'
+
+export interface AgentConnectionIntent {
+  readonly targetAgentId: string
+  readonly capabilityId: string
+  readonly capabilityVersion: string
+  readonly operation: string
+  readonly workId: string
+  readonly requestId: string
+  readonly demands: readonly ResourceDemand[]
+  readonly payload: JsonValue
+}
+
+export interface AgentEndpointConfig {
+  readonly role: 'provider' | 'receiver' | 'hybrid'
+  readonly connect?: AgentConnectionIntent
+}
 
 export interface AgentProcessConfig {
   readonly declaration: AgentDeclaration
@@ -36,6 +53,7 @@ export interface AgentProcessConfig {
   readonly cli: { readonly camoExecutable: string; readonly searchExecutable: string; readonly searchRoot: string; readonly profilePrefix: string }
   readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs: number; readonly stopTimeoutMs: number }
   readonly directListener?: DirectListenerConfig
+  readonly endpoint?: AgentEndpointConfig
 }
 
 interface RuntimeOwnerRecord {
@@ -67,7 +85,7 @@ async function readRuntimeOwner(path: string): Promise<RuntimeOwnerRecord | unde
 export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcessConfig> {
   const configPath = resolve(path)
   const input = object(JSON.parse(await readFile(configPath, 'utf8')),
-    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli', 'openCode', 'directListener'], 'Agent config')
+    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli', 'openCode', 'directListener', 'endpoint'], 'Agent config')
   if (input.version !== 1) throw new RelayProtocolError('UNSUPPORTED_VERSION', 'Agent config version must be 1')
   const location = (value: unknown, label: string) => resolve(dirname(configPath), text(value, label))
   const cli = object(input.cli, ['camoExecutable', 'searchExecutable', 'searchRoot', 'profilePrefix'], 'cli')
@@ -87,6 +105,26 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
       startupTimeoutMs: number(value.startupTimeoutMs, 'openCode.startupTimeoutMs'), stopTimeoutMs: number(value.stopTimeoutMs, 'openCode.stopTimeoutMs') }
   }
   const directListener = input.directListener === undefined ? undefined : loadDirectListenerConfig(input.directListener, declaration, configPath, env)
+  let endpoint: AgentEndpointConfig | undefined
+  if (input.endpoint !== undefined) {
+    const endpointInput = object(input.endpoint, ['role', 'connect'], 'endpoint')
+    if (endpointInput.role !== 'provider' && endpointInput.role !== 'receiver' && endpointInput.role !== 'hybrid') throw new RelayProtocolError('INVALID_INPUT', 'endpoint.role is invalid')
+    let connect: AgentConnectionIntent | undefined
+    if (endpointInput.connect !== undefined) {
+      const connection = object(endpointInput.connect, ['targetAgentId', 'capabilityId', 'capabilityVersion', 'operation', 'workId', 'requestId', 'demands', 'payload'], 'endpoint.connect')
+      const field = (key: string) => text(connection[key], `endpoint.connect.${key}`)
+      if (!Array.isArray(connection.demands) || connection.demands.length === 0) throw new RelayProtocolError('INVALID_INPUT', 'endpoint.connect.demands must be non-empty')
+      const demands = connection.demands.map((item, index) => {
+        const demand = object(item, ['resourceId', 'amount'], `endpoint.connect.demands[${index}]`)
+        return { resourceId: text(demand.resourceId, `endpoint.connect.demands[${index}].resourceId`), amount: number(demand.amount, `endpoint.connect.demands[${index}].amount`) }
+      })
+      if (!Object.hasOwn(connection, 'payload')) throw new RelayProtocolError('INVALID_INPUT', 'endpoint.connect.payload is required')
+      connect = { targetAgentId: field('targetAgentId'), capabilityId: field('capabilityId'), capabilityVersion: field('capabilityVersion'), operation: field('operation'),
+        workId: field('workId'), requestId: field('requestId'), demands, payload: connection.payload as JsonValue }
+    }
+    if ((endpointInput.role === 'receiver' || endpointInput.role === 'hybrid') && connect === undefined) throw new RelayProtocolError('INVALID_INPUT', 'receiver endpoint requires endpoint.connect')
+    endpoint = { role: endpointInput.role, ...(connect === undefined ? {} : { connect }) }
+  }
   return {
     declaration, dataDirectory: location(input.dataDirectory, 'dataDirectory'), leasePort: number(input.leasePort, 'leasePort', 65535),
     presenceIntervalMs: number(input.presenceIntervalMs, 'presenceIntervalMs'), policyRevision: number(policy.revision, 'policy.revision'),
@@ -96,6 +134,7 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
       searchRoot: location(cli.searchRoot, 'searchRoot'), profilePrefix: text(cli.profilePrefix, 'profilePrefix') },
     ...(openCode === undefined ? {} : { openCode }),
     ...(directListener === undefined ? {} : { directListener }),
+    ...(endpoint === undefined ? {} : { endpoint }),
     relay: await loadRelayConfig(input.relay, declaration, configPath, env),
   }
 }
@@ -145,8 +184,25 @@ async function ownDataDirectory(config: AgentProcessConfig): Promise<{ readonly 
 export interface AgentProcess {
   readonly daemon: AgentDaemon
   readonly consumerWork: AgentWorkClient
+  readonly configuredWork?: Promise<void>
   readonly closed: Promise<void>
   stop(): Promise<void>
+}
+
+export async function runConfiguredWork(client: AgentWorkClient, intent: AgentConnectionIntent, policyRevision: number): Promise<void> {
+  const target = await client.findProvider({ providerAgentId: intent.targetAgentId, capabilityId: intent.capabilityId, capabilityVersion: intent.capabilityVersion, operation: intent.operation })
+  const channel = await client.open(target)
+  let workId: string | undefined
+  try {
+    const work = await channel.propose({ workId: intent.workId, capabilityId: intent.capabilityId, capabilityVersion: intent.capabilityVersion, policyRevision })
+    workId = work.workId
+    const result = await channel.request({ workId, requestId: intent.requestId, operation: intent.operation, demands: intent.demands, payload: intent.payload })
+    if (result.control.state !== 'succeeded') {
+      if (result.control.state === 'failed' || result.control.state === 'cancelled') await channel.close(workId)
+      throw new RelayProtocolError(result.control.error?.code ?? 'RESULT_UNKNOWN', result.control.error?.message ?? 'configured Work did not succeed')
+    }
+    await channel.close(workId)
+  } finally { await channel.dispose() }
 }
 export async function startAgentProcess(configPath: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcess> {
   const config = await loadAgentProcessConfig(configPath, env)
@@ -283,6 +339,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       scopeId: config.declaration.scopeId,
       agentId: config.declaration.identity.agentId,
     }, { timeoutMs: config.relay.requestTimeoutMs, maxPending: config.relay.maxPendingRequests })
+    const configuredWork = config.endpoint?.connect === undefined ? undefined : runConfiguredWork(consumerWork, config.endpoint.connect, config.policyRevision)
     readyResolve()
     const live = daemon
     let stopping: Promise<void> | undefined
@@ -306,7 +363,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       return stopping
     }
     const closed = live.closed.then(async state => { await stop(); if (state.state === 'failed') throw state.error ?? new Error('Agent network failed') })
-    return { daemon: live, consumerWork: consumerWork!, stop, closed }
+    return { daemon: live, consumerWork: consumerWork!, ...(configuredWork === undefined ? {} : { configuredWork }), stop, closed }
   } catch (error) {
     readyReject(error)
     try { await directListener?.close(); await daemon?.stop(); await configBinding?.owner.stop() } finally { await closeLease(lease) }
@@ -319,6 +376,9 @@ export async function runAgentProcess(argv = process.argv.slice(2)): Promise<voi
   const handle = await startAgentProcess(argv[1])
   const stop = () => { void handle.stop().catch(error => { process.exitCode = 1; console.error(error.message) }) }
   process.once('SIGINT', stop); process.once('SIGTERM', stop)
+  if (handle.configuredWork !== undefined) {
+    try { await handle.configuredWork } catch (error) { await handle.stop(); throw error }
+  }
   process.send?.({ kind: 'daemon.registered', agentId: handle.daemon.status().agentId, generation: handle.daemon.network.generation })
   try { await handle.closed } finally { process.off('SIGINT', stop); process.off('SIGTERM', stop) }
 }

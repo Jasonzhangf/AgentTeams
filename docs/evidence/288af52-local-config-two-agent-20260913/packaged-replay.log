@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Volumes/extension/code/AgentTeams/playground/288af52-local-config-two-agent-20260913
+
+·
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  01:32:58
+   Duration  791ms (transform 35ms, setup 0ms, import 53ms, tests 616ms, environment 0ms)

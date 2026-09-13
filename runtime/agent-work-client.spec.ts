@@ -30,6 +30,12 @@ it('matches an online provider by capability, version, and operation', async () 
   })
 })
 
+it('honors an explicitly configured provider when multiple peers advertise the same operation', async () => {
+  directory.push(peer('first-provider', 'online'), peer('configured-provider', 'online'))
+  await expect(client.findProvider({ providerAgentId: 'configured-provider', capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' }))
+    .resolves.toMatchObject({ providerAgentId: 'configured-provider' })
+})
+
 it('selects a visible Endpoint and carries its revision into the Work proposal', async () => {
   const endpointPeer = { ...peer('endpoint-provider', 'online'), endpoints: [{ endpointId: 'browser-endpoint', ownerAgentId: 'endpoint-provider', scopeId: 'scope', kind: 'browser' as const, revision: 4,
     lifecycle: 'active' as const, capabilities: [{ capabilityId: 'file-search', version: '1', operations: ['search'] }], resources: [] }] }

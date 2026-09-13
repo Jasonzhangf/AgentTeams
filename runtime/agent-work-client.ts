@@ -45,7 +45,7 @@ export interface AgentWorkChannel {
 }
 
 export interface AgentWorkClient {
-  findProvider(input: { readonly capabilityId: string; readonly capabilityVersion: string; readonly operation: string }): Promise<AgentWorkTarget>
+  findProvider(input: { readonly capabilityId: string; readonly capabilityVersion: string; readonly operation: string; readonly providerAgentId?: string }): Promise<AgentWorkTarget>
   open(target: AgentWorkTarget): Promise<AgentWorkChannel>
   dispose(): Promise<void>
 }
@@ -101,13 +101,15 @@ export function createAgentWorkClient(
     throw new RelayProtocolError('INVALID_INPUT', 'Invalid Agent Work limits')
   }
   const channels = new Set<AgentWorkChannel>()
-  const findProvider = async ({ capabilityId, capabilityVersion, operation }: {
+  const findProvider = async ({ capabilityId, capabilityVersion, operation, providerAgentId }: {
     readonly capabilityId: string
     readonly capabilityVersion: string
     readonly operation: string
+    readonly providerAgentId?: string
   }): Promise<AgentWorkTarget> => {
     const peers = await relay.directory(false)
-    const capabilityPeers = peers.filter(peer => capability(peer, capabilityId) !== undefined || (peer.endpoints ?? []).some(endpoint =>
+    const scopedPeers = peers.filter(peer => providerAgentId === undefined || peer.declaration.identity.agentId === providerAgentId)
+    const capabilityPeers = scopedPeers.filter(peer => capability(peer, capabilityId) !== undefined || (peer.endpoints ?? []).some(endpoint =>
       endpoint.capabilities.some(candidate => candidate.capabilityId === capabilityId)))
     if (capabilityPeers.length === 0) throw new RelayProtocolError('NOT_FOUND', `Capability ${capabilityId} was not found`)
     const versionPeers = capabilityPeers.filter(peer => capability(peer, capabilityId)?.version === capabilityVersion || (peer.endpoints ?? []).some(endpoint =>
@@ -117,7 +119,8 @@ export function createAgentWorkClient(
       endpoint.capabilities.some(candidate => candidate.capabilityId === capabilityId && candidate.version === capabilityVersion && candidate.operations.includes(operation))))
     if (operationPeers.length === 0) throw new RelayProtocolError('UNSUPPORTED_OPERATION', `Capability ${capabilityId} does not support ${operation}`)
     const peer = operationPeers.find(candidate => candidate.presence === 'online' &&
-      candidate.declaration.identity.agentId !== consumerIdentity.agentId)
+      candidate.declaration.identity.agentId !== consumerIdentity.agentId &&
+      (providerAgentId === undefined || candidate.declaration.identity.agentId === providerAgentId))
     if (peer === undefined) throw new RelayProtocolError('UNAVAILABLE', `Capability ${capabilityId} is offline`)
     const endpoint = endpointTarget(peer, capabilityId, capabilityVersion, operation)
     return { providerAgentId: peer.declaration.identity.agentId, generation: peer.generation, capabilityId, capabilityVersion, operation,

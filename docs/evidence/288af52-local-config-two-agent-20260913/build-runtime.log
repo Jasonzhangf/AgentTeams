@@ -1,0 +1,2 @@
+> agentteams@0.1.0 build:runtime /Volumes/extension/code/AgentTeams/playground/288af52-local-config-two-agent-20260913
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
