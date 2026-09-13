@@ -1,6 +1,6 @@
 # AgentTeams Local MVP 执行计划
 
-状态：执行指针，非新的 goal、subscription 或 task graph。
+状态：唯一可重入执行指针，非新的 goal、subscription 或 task graph。
 
 本计划绑定现有长程目标 [teams-long-running-delivery.md](teams-long-running-delivery.md)，
 产品路径见 [teams-user-mvp-delivery.md](teams-user-mvp-delivery.md)，阶段依赖见
@@ -9,6 +9,21 @@
 
 对应 AppSDK issue：`8aeb3fa`。当前正在执行的实现单元是 `159b78b`；本计划不得创建第二个
 goal、第二个 subscription 或第二套任务图。
+
+## 当前接手状态（启动时必须复核）
+
+- Desktop 主任务是本项目当前唯一的调度与资源管理 owner：负责拆分、依赖、worker 派单、独立
+  review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
+  worker 的实现范围扩大到主任务。
+- 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
+  本次文档落盘时的主线是 `81b7dd58226cfb37404745a27e0065f56e74c1dd`；这个 SHA 只是快照，不能
+  替代下一轮启动时的现场检查。
+- 当前已存在的 U0 issue `159b78b` 候选 worktree 必须先检查并复用，不得重复派单或创建同语义
+  delivery unit。它尚未取得 exact review PASS、集成、远端推送和 cleanup receipt；本地 socket
+  replay 曾受 `listen EPERM: operation not permitted 127.0.0.1` 阻塞，因此不能把 focused
+  测试或编译结果写成 MVP 完成。
+- 每次恢复只从第一个失效 gate 继续：先处理 U0 的 review/集成条件，再按 U1 → U2a/U2b → U4
+  → U3 推进。无独立安全任务时记录等待原因，不为填满 worker 槽位制造并行工作。
 
 ## 目标
 
@@ -155,7 +170,7 @@ Console 完整无障碍/移动布局/关系深度投影、browser 多 profile、
 /goal
 目标：按现有 AgentTeams Local Network MVP 合同，完成用户可执行的本地双 daemon 路径：用户只维护 ~/.agentteams/config.toml，运行 agentteams init/start/status/work/stop；runtime 由 internal.toml 管理内部真源；两个独立 daemon 经真实本地 socket bridge 完成发现、广播、连接、协商和一次 Agent Work；Console 仅观察/配置且离线不阻断 Agent-to-Agent Work。
 
-说明：本任务不再生成新的提示词，直接按实现文档执行。当前 Desktop 会话负责调度、依赖、worker、review、integration、push、memory 和资源回收；不依赖外部 master，不创建第二个 goal、subscription 或 task graph。
+说明：本任务不再生成新的提示词，直接按实现文档执行。当前 Desktop 会话是唯一的调度与资源管理 owner，负责调度、依赖、worker、review、integration、push、memory 和自有资源回收；不依赖外部 master，不创建第二个 goal、subscription 或 task graph。worker 只实现自己的 delivery unit，不能替主任务合并、推送或删除他人资源。
 
 实现文档：
 docs/goals/teams-local-mvp-execution-plan.md
@@ -164,7 +179,7 @@ docs/goals/teams-user-mvp-delivery.md
 docs/goals/teams-development-plan.md
 
 执行规范：
-- 每次唤醒先检查当前 goal、issue、worker、worktree、branch、进程、端口和远端 main；从当前 origin/main 为每个 delivery unit 建立独立 clean worktree。
+- 每次唤醒先检查当前 goal、issue、worker、worktree、branch、进程、端口和远端 main；先复用现有 `159b78b` U0 候选并从第一个失效 gate 重入，只有查重确认没有同语义 unit 后，才从当前 origin/main 为新 delivery unit 建立独立 clean worktree。
 - 默认使用新的 codex exec --profile gcm worker；worker 只改合同范围。普通 exact review 用独立 Codex Review，milestone 用 Astra，不使用 AGY Review。
 - 先完成 U0 internal.toml 真源；U1 CLI、U2a provider/receiver Work、U2b 多 provider/OpenCode 按各自依赖并行；随后完成 U4 Console directory projection，最后由 U3 完成本地真实回放/重启隔离与 L5 收口。
 - 遵守红测→最小修复→适用 regression/typecheck/build/AppSDK gate→真实入口→exact review→独立 integration→push→memory L2→cleanup 闭环；根据 fingerprint 只重跑首个失效 gate及其下游。
