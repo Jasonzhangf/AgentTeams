@@ -1,0 +1,38 @@
+docs/architecture/function-map.json
+docs/architecture/mainline-call-map.json
+docs/architecture/module-registry.json
+docs/architecture/resource-map.json
+docs/architecture/verification-map.json
+docs/evidence/goal-plan-refresh-20260913/candidate-fingerprint.txt
+docs/evidence/goal-plan-refresh-20260913/diff-check.log
+docs/evidence/goal-plan-refresh-20260913/environment.log
+docs/evidence/goal-plan-refresh-20260913/map-parse.log
+docs/evidence/goal-plan-refresh-20260913/pnpm-verify.log
+docs/evidence/goal-plan-refresh-20260913/reconciliation-receipt.md
+docs/goals/teams-local-mvp-execution-plan.md
+docs/goals/teams-user-mvp-delivery.md
+--- diff-stat ---
+ docs/architecture/function-map.json                |    1 +
+ docs/architecture/mainline-call-map.json           |    2 +
+ docs/architecture/module-registry.json             |    1 +
+ docs/architecture/resource-map.json                |    1 +
+ docs/architecture/verification-map.json            |    1 +
+ .../candidate-fingerprint.txt                      |   14 +
+ .../goal-plan-refresh-20260913/diff-check.log      |    2 +
+ .../goal-plan-refresh-20260913/environment.log     |   11 +
+ .../goal-plan-refresh-20260913/map-parse.log       |    1 +
+ .../goal-plan-refresh-20260913/pnpm-verify.log     | 1180 ++++++++++++++++++++
+ .../reconciliation-receipt.md                      |   67 ++
+ docs/goals/teams-local-mvp-execution-plan.md       |  112 +-
+ docs/goals/teams-user-mvp-delivery.md              |   11 +-
+ 13 files changed, 1360 insertions(+), 44 deletions(-)
+--- worktree-head ---
+f38b6d90d8d4cc312a92da21e666196f8327b9b5
+--- candidate-diff-sha256-excluding-manifest ---
+f52108280dc860df5614ac2eba152ff52dcb01b018897ad2923ba3519e78891a  -
+--- evidence-sha256-excluding-manifest ---
+712c6d3903aaa2ec6e780cddfb3b76c2728dfc6bed3d49bfea2693ae6b16a815  docs/evidence/goal-plan-refresh-20260913/diff-check.log
+a0d95f0cd7c50531bb9578bf062ec7b435922bb95e3d03d6bf55c0c0edb2c2d5  docs/evidence/goal-plan-refresh-20260913/environment.log
+69c0b19bb5c82287f2a146e4c2568be9f7358c2d97b6309d52b8e2376f848196  docs/evidence/goal-plan-refresh-20260913/map-parse.log
+8e0cceb33ece6d10965410d3a8af342a2d659db32e68a931b13467f085b6e4c1  docs/evidence/goal-plan-refresh-20260913/pnpm-verify.log
+744e49be653bb0dfb3cadbf85478db29031a688fc2ecf11de31dc10e0ffdb96f  docs/evidence/goal-plan-refresh-20260913/reconciliation-receipt.md

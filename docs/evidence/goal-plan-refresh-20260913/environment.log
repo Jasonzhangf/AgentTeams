@@ -1,0 +1,11 @@
+repo=/Volumes/extension/code/AgentTeams/playground/goal-plan-refresh-20260913
+head=f38b6d90d8d4cc312a92da21e666196f8327b9b5
+origin_main=f38b6d90d8d4cc312a92da21e666196f8327b9b5
+branch=codex/goal-plan-refresh-20260913
+node=v22.22.2
+pnpm=10.31.0
+appsdk=Usage: appsdk <command> [project] [options]
+
+Project-scoped commands default to the current working directory. An explicit project path remains optional.
+Managed child compatibility entry: appsdk subworker <start|list|status|snapshot|send|close> ...
+platform=Darwin Macstudio.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:18:53 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T6031 arm64

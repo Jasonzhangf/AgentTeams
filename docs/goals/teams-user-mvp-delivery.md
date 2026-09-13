@@ -56,9 +56,9 @@ failover 和生产部署继续属于 canonical 计划中的 post-MVP 阶段。
 - config revision、启动时间、最近错误和恢复状态。
 
 如果 child JSON 仍被进程入口需要，它只能从 `internal.toml` 临时投影，不能成为第二个可编辑
-配置源，也不能反向覆盖 `config.toml`。实现这个边界前，必须先按 canonical 流程更新
-resource/function/module/mainline/verification maps，明确 child-config owner、调用边和
-适用 gate；当前 open issue `159b78b` 只记录这个待治理迁移，不代表迁移已经完成。
+配置源，也不能反向覆盖 `config.toml`。这个边界已由 issue `159b78b` 交付并关闭；当前
+权威证据见 `docs/evidence/159b78b-internal-config-20260913/`，后续 CLI/Work/Console 不得
+重复派单或把该 receipt 当作完整 MVP 验收。
 
 ## 产品检查点与 canonical 阶段映射
 
@@ -72,8 +72,9 @@ resource/function/module/mainline/verification maps，明确 child-config owner�
 | 本地真实回放 | L5 | 两个独立 daemon 经 socket bridge 完成 discovery、协商、Work、stop/restart |
 | Console 观察面 | L4，随后由 L5 收口 | UI 展示 directory projection，Console 关闭不影响 Work |
 
-当前已完成的 288af52 是 L1/L2 的 runtime 基础和本机双 daemon replay 证据；它尚未完成
-internal.toml 真源迁移、用户 CLI 入口或完整 Console 用户路径。
+当前主线 `f38b6d9` 已包含 internal.toml 真源迁移（U0/`159b78b`）及本机双 daemon 基础；
+用户 CLI、完整 passive provider/receiver Work、OpenCode 多 provider、Console directory
+projection 和最终 Console-offline/restart 真实收口仍未完成。
 
 ## 用户 MVP 验收路径
 

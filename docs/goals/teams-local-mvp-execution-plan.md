@@ -7,8 +7,9 @@
 [teams-development-plan.md](teams-development-plan.md)。三者仍是设计、治理和阶段顺序的真源；
 本文件只把下一次 `/goal` 的执行范围收敛成可重入的调度合同。
 
-对应 AppSDK issue：`8aeb3fa`。当前正在执行的实现单元是 `159b78b`；本计划不得创建第二个
-goal、第二个 subscription 或第二套任务图。
+对应 AppSDK issue：`8aeb3fa`。U0 `159b78b` 已关闭；当前首个待调度单元按 canonical
+receipt 在 `L1-CLI/W1/C1/B1/U1/I1` 中取首个未完成项。
+本计划不得创建第二个 goal、第二个 subscription 或第二套任务图。
 
 ## 当前接手状态（启动时必须复核）
 
@@ -16,14 +17,29 @@ goal、第二个 subscription 或第二套任务图。
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次文档落盘时的主线是 `81b7dd58226cfb37404745a27e0065f56e74c1dd`；这个 SHA 只是快照，不能
+  本次文档落盘时的主线是 `f38b6d90d8d4cc312a92da21e666196f8327b9b5`；这个 SHA 只是快照，不能
   替代下一轮启动时的现场检查。
-- 当前已存在的 U0 issue `159b78b` 候选 worktree 必须先检查并复用，不得重复派单或创建同语义
-  delivery unit。它尚未取得 exact review PASS、集成、远端推送和 cleanup receipt；本地 socket
-  replay 曾受 `listen EPERM: operation not permitted 127.0.0.1` 阻塞，因此不能把 focused
-  测试或编译结果写成 MVP 完成。
-- 每次恢复只从第一个失效 gate 继续：先处理 U0 的 review/集成条件，再按 U1 → U2a/U2b → U4
-  → U3 推进。无独立安全任务时记录等待原因，不为填满 worker 槽位制造并行工作。
+- U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
+  重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
+- 当前根树与远端主线均为 `f38b6d9`，此前 U0 worktree/branch 已回收；下一次恢复按 canonical
+  阶段 receipt 从 `L1-CLI/W1/C1/B1/U1/I1` 的首个失效 gate 开始。无独立安全任务时记录等待原因，
+  不为填满 worker 槽位制造并行工作。
+
+## 当前交付指针
+
+- **已关闭**：U0 Internal Config Compiler（`159b78b`）。
+- **下一单元**：先推进 `L1-CLI` 用户入口；`C1` Config/OpenCode 可在公共 config contract 稳定时
+  并行；`W1` Agent Work 必须等待 L1 配置入口 receipt；`B1` 能力 CLI 必须等待 W1 接口 receipt。
+  每项先查重/复用 AppSDK issue，再从最新 `origin/main` 建立
+  `playground/<issue-or-task>-<date>` 的独立 clean worktree。
+- **可并发**：`L1-CLI` 与满足自身合同的 `C1` 可并发；`W1` 在 L1 receipt 后开始；`B1` 依赖 W1 接口稳定；`U1` Console
+  必须等待 B1 receipt、projection contract 和 L3 review；`I1/L5` 最终串行收口。
+- **资源基线**：本任务只回收自己启动的 worker、进程、端口、锁、临时目录、worktree 和
+  branch；根 `main` 必须始终 clean。U0 的证据已转存到
+  `docs/evidence/159b78b-internal-config-20260913/`，可供后续复核，不依赖已删除的 worktree。
+- **N1/N2 边界**：`teams-development-plan.md` 中 relay-first 表的 N1/N2 是公网 Relay/NAT
+  后续参考，不是本地 MVP 的前置，也没有被本计划伪装成已完成。Phase 1 使用 canonical
+  `L1` 本地 launcher 与 `L2` 本地 bridge/daemon；I1/L5 只消费本地 L1-L4 receipts。
 
 ## 目标
 
@@ -34,12 +50,13 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 
 ## 当前基线与已知状态
 
-- 基线主线：目标建立时的 `origin/main`；启动本计划时为 `3447fc43314d2a517601e988df644660f862eca9`。
+- 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；当前可用基线为
+  `f38b6d90d8d4cc312a92da21e666196f8327b9b5`。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
-- 当前执行单元 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；worker
-  只能修改其合同内的 runtime、测试和 evidence，并提交 map-binding candidate；公共 maps 由
-  integration owner 在集成 worktree 单写，必须先红测、再实现、再回报候选。
+- 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
+  集成、远端推送、memory 与 cleanup 证据位于
+  `docs/evidence/159b78b-internal-config-20260913/`。
 - 根 `main` 必须保持 clean；任何实现只能在 `playground/<issue-or-task>` 独立 worktree。
 
 ## 交付顺序与并发边界
@@ -48,64 +65,74 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 commit、唯一写入范围和精确验收命令。实现 worker 与 reviewer 必须不同；主任务负责调度、依赖、
 冲突、集成、推送、记忆和资源回收。
 
-1. **U0 Internal Config Compiler（当前 `159b78b`）**
+1. **U0 Internal Config Compiler（已关闭：`159b78b`）**
    - `config.toml` 只保留用户意图。
    - `internal.toml` 原子保存 resolved endpoint/Relay、child 启动投影、端口/证书/凭据引用、
      PID、generation、revision、state、错误和恢复信息。
    - child JSON 若仍需要，只能从 `internal.toml` 派生，不能反向成为第二真源。
-   - 先形成受影响 architecture-map 的绑定候选，由 integration owner 单写公共 maps，再改 runtime；需有迁移、原子写入、重启和错误路径测试。
+   - 已完成受影响 architecture-map 绑定、迁移、原子写入、重启和错误路径测试；后续不得把
+     U0 的证据当作 U1 或完整 MVP 的证据。
 
-2. **U1 用户 CLI**（U0 exact review/integration PASS 后）
+2. **L1-CLI 用户入口**（U0 exact review/integration PASS 后）
    - 提供 `init/start/status/work/stop` 稳定入口。
    - 用户不调用 `generated/runtime-lib`，不手写 child JSON、Relay JSON、PID、动态端口或证书路径。
    - CLI 只调用已绑定的 runtime owner，不复制配置或网络台账。
+   - 入口与 packaging 必须由本单元拥有；测试必须在 disposable home 中真实调用五个命令，并覆盖
+     stop/start 后的 status/generation 变化。runtime API 缺失时另建 runtime unit，不在 CLI 单元越界修复。
 
-3. **U2 Provider/Receiver 与 OpenCode adapter 产品检查点**（按 owner 拆为两个 delivery unit；遵循 canonical L2/L3 依赖）
-   - **U2a Agent Work owner**：`agent/**`；必要的 `agent-host/**` 或
-     `runtime/agent-process.ts` 变更必须另建对应 owner 的 delivery unit，不能由 U2a 越界代改。
-     U2a 在 L1 配置入口 receipt 后开始。
+3. **W1/C1 Provider/Receiver 与 OpenCode 产品检查点**（两个 canonical delivery unit）
+   - **W1 Agent Work owner**：`agent/**`；必要的 `agent-host/**` 或
+     `runtime/agent-process.ts` 变更必须另建对应 owner 的 delivery unit，不能由 W1 越界代改。
+     W1 在 L1 配置入口 receipt 后开始。
    - provider 是可被动提供 capability/resource 的 Agent；receiver 声明连接意图并请求 Work。
    - provider 负责 admission、容量分配和释放；重复 request、超卖、取消和旧 generation 必须显式处理。
-   - **U2b Config/OpenCode owner**：`config/**`、`opencode-adapter/**`；不得写 `agent/**`、
+   - **C1 Config/OpenCode owner**：`config/**`、`opencode-adapter/**`；不得写 `agent/**`、
      `network/**` 或 UI 台账。
-     U2b 在公共 config contract 稳定后即可开始，可与 U1/U2a 并行。
+     C1 在公共 config contract 稳定后即可开始，可与 W1 并行。
    - 支持多个 provider instance；RCC `127.0.0.1:4444` 为主 provider，`goaichat-openai` 为显式
      backup provider。backup 不等于隐式 failover；catalog/apply/readback 必须走真实 OpenCode 入口。
 
-4. **U4 Console daemon discovery**
+   - **B1 固定能力 CLI**：`cli-adapter/**`；依赖 W1 接口稳定，提供 file-search/browser 等固定
+     operation/argv/schema，不执行任意远端 shell。
+
+4. **U1 Console daemon discovery**（B1 receipt、projection contract 和 L3 review PASS 后）
    - UI 只读取权威 directory projection：identity、presence、generation、capability、resource。
    - UI 不拥有 runtime/network 台账，不经 Console 转发 Agent-to-Agent payload。
-   - 依赖 L2 projection contract 和 L3 review PASS；UI polish、关系图和移动布局不阻断本地 MVP。
+   - 依赖 B1 receipt、L2 projection contract 和 L3 review PASS；UI polish、关系图和移动布局不阻断本地 MVP。
 
-5. **U3 本地真实回放与重启隔离**（U4/L4 review PASS 后的 L5 串行收口）
+5. **I1/L5 本地真实回放与重启隔离**（U1/L4 review PASS 后的串行收口）
    - 在干净临时 home 中从用户配置启动两个独立 daemon 和 bridge。
    - 真实 socket 完成 register、directory、broadcast、connect、negotiate、Work proposal/request/
      result/close；Console 关闭时仍成功。
    - stop/start 后 `generation` 增长，旧 generation 被拒绝，新 generation 可重新完成 Work；
      resource allocation、幂等和释放均留证。
 
-U0 未通过时，不并发修改共享 `runtime/` 或 child-config 边界。U1、U2a、U2b 在各自依赖满足、
-owner 路径明确且不共享写入时并行；U4 在 L2 projection contract 和 L3 review PASS 后收口；
-U3 是等 U4/L4 review PASS 后的 L5 串行集成点。任何跨 owner 的语义冲突退回原 owner，主任务只在独立 integration worktree 解决
+U0 已通过，不再阻断后续阶段。L1-CLI 先产生配置入口 receipt；C1 在自身公共 config contract 稳定后可并行；
+W1 只在 L1 receipt 后开始；
+B1 依赖 W1 接口稳定；U1 只有在 B1 receipt、L2 projection contract 和 L3 review PASS 后收口；I1/L5 是等
+U1/L4 review PASS 后的串行集成点。任何跨 owner 的语义冲突退回原 owner，主任务只在独立 integration worktree 解决
 机械冲突和装配，不新增兼容层。
 
-这些 U 编号只是本产品路径的 delivery-unit 标签，不是第二套阶段图：U0/U1 映射 canonical
-`G0/L1`，U2a 映射 `L2`，U2b 映射 `L3`，U4 映射 `L4`，U3 映射 `L5`。阶段 gate、owner
-和关闭条件仍以 canonical 文档为准。
+这些标签直接复用 canonical delivery-unit：U0 对应 `G0/L1`，W1 对应 `L2`，C1 对应 `L3`，
+B1 是 W1 之后的固定能力 CLI，U1 对应 `L4`，I1 对应 `L5`；`L1-CLI` 是 L1 阶段的用户
+入口 delivery slice。阶段 gate、owner 和关闭条件仍以
+canonical 文档为准。
 
 ### Owner、路径和首个 gate
 
 | unit | 唯一 owner | 允许写入 | 禁止写入 | 首个 focused gate |
 | --- | --- | --- | --- | --- |
 | U0 | runtime | `runtime/local-config.ts`、`runtime/local-supervisor.ts`、`runtime/local-process.ts`、必要的 `runtime/agent-process.ts` projection、对应 specs、`docs/evidence/159b78b-*/`；architecture-map 变更只作为候选绑定提交给集成 owner | `network/**`、`server/**`、`agent/**` 语义、`config/**`、`docs/architecture/**` 公共真源、UI、package/lock | `pnpm exec vitest run runtime/local-config.spec.ts runtime/local-supervisor.spec.ts runtime/local-two-agent.spec.ts` |
-| U1 | cli-adapter | `cli-adapter/**` 及对应 CLI evidence；需要 runtime API 时另建 runtime unit | `runtime/**`、`agent/**`、`network/**`、`config/**`、UI | `pnpm exec vitest run cli-adapter/cli.spec.ts cli-adapter/fixed-process.spec.ts` |
-| U2a | agent | `agent/**` 及对应 Work/resource specs；跨 `agent-host/**` 或 `runtime/**` 需另建 unit | `network/**`、`config/**`、`opencode-adapter/**`、UI | `pnpm exec vitest run agent/**/*.spec.ts runtime/agent-work-client.spec.ts` |
-| U2b | config + opencode-adapter | `config/**`、`opencode-adapter/**` 及对应 specs/evidence | `agent/**`、`network/**`、UI；不把 RCC/goaichat 结果写进业务 payload | `pnpm exec vitest run runtime/managed-config-owner.spec.ts runtime/managed-config-live.spec.ts runtime/managed-opencode-session.spec.ts` |
-| U4 | ui | `ui/teams-console/**`；必要的 `console-host/**` projection adapter 需单独绑定 owner | `runtime/**` 台账、`network/**` 真相、Agent Work payload、provider ledger | `pnpm exec vitest run runtime/console-hub.spec.ts runtime/console-runtime.spec.ts control-protocol/console-wire.spec.ts ui/teams-console/tests/api.spec.ts ui/teams-console/tests/model.spec.ts` |
-| U3 | 主任务 integration owner | 独立 integration worktree、受影响 integration specs、`docs/architecture/**` 公共 maps、`docs/evidence/<unit>/`；语义修复退回原 owner | 直接覆盖 worker 语义、dirty main、他人 worktree/branch | `pnpm exec vitest run runtime/local-relay-bridge.spec.ts runtime/local-two-agent.spec.ts`，随后编译候选真实回放 |
+| L1-CLI | CLI + runtime local-launcher owner | `cli/agentteams.mjs`、`cli/agentteams.spec.ts`、root `package.json` 的 `bin` 绑定、`runtime/local-config.ts`、`runtime/local-process.ts`、`runtime/local-supervisor.ts`、对应 evidence；runtime API 缺失时另建 unit | `network/**`、`agent/**`、`config/**` 真源、UI、`cli-adapter/**` capability implementation、generated output | `pnpm exec vitest run cli/agentteams.spec.ts runtime/local-config.spec.ts runtime/local-supervisor.spec.ts runtime/local-process.spec.ts`；其中 CLI spec 必须真实执行 `init/start/status/work/stop` |
+| B1 | cli-adapter | `cli-adapter/**` 及对应 CLI evidence；需要 runtime API 时另建 runtime unit | `runtime/**`、`agent/**`、`network/**`、`config/**`、UI | `pnpm exec vitest run cli-adapter/cli.spec.ts cli-adapter/fixed-process.spec.ts` |
+| W1 | agent | `agent/**` 及对应 Work/resource specs；跨 `agent-host/**` 或 `runtime/**` 需另建 unit | `network/**`、`config/**`、`opencode-adapter/**`、UI | `pnpm exec vitest run agent/**/*.spec.ts runtime/agent-work-client.spec.ts` |
+| C1 | config + opencode-adapter | `config/**`、`opencode-adapter/**` 及对应 specs/evidence | `agent/**`、`network/**`、UI；不把 RCC/goaichat 结果写进业务 payload | `pnpm exec vitest run runtime/managed-config-owner.spec.ts runtime/managed-config-live.spec.ts runtime/managed-opencode-session.spec.ts` |
+| U1 | ui + console-host projection owner | `ui/teams-console/**`、限定的 `console-host/src/**` directory-projection adapter、对应 `console-host/tests/**` 与 evidence | `runtime/**` 台账、`network/**` 真相、Agent Work payload、provider ledger、非 projection 的 console-host server/auth 行为 | B1 receipt + projection contract + L3 review PASS；`pnpm exec vitest run runtime/console-hub.spec.ts runtime/console-runtime.spec.ts control-protocol/console-wire.spec.ts console-host/tests/http-api.spec.ts ui/teams-console/tests/api.spec.ts ui/teams-console/tests/model.spec.ts` |
+| I1/L5 | 主任务 integration owner | 独立 integration worktree、受影响 integration specs、`docs/architecture/**` 公共 maps、`docs/evidence/<unit>/`；语义修复退回原 owner | 直接覆盖 worker 语义、dirty main、他人 worktree/branch | `pnpm exec vitest run runtime/local-relay-bridge.spec.ts runtime/local-two-agent.spec.ts`，随后编译候选真实回放 |
 
 表中的命令是首个 focused gate；每个 unit 仍须按受影响 map 补齐 regression、typecheck/build、
-AppSDK compile/verify、真实入口和 exact review。U2 产品检查点的两个 unit 可以并行，不能由一
+AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI 与 C1 在各自路径不重叠时并行；W1
+必须等 L1-CLI receipt，B1 必须等 W1 接口 receipt，U1 与 I1/L5 继续受其余前置 receipt 传递约束，不能由一
 个 worker 跨越两行的禁止路径。
 
 表中 focused gate 的跨模块 spec 只是只读验证输入，不授予该 unit 修改对应 owner 路径的权限。
@@ -134,6 +161,9 @@ AppSDK compile/verify、真实入口和 exact review。U2 产品检查点的两�
 
 - **Trigger**：读取当前计划、issue、候选、receipt、进程和 worktree；找到首个未完成或失效 unit。
 - **Work**：按唯一 owner 派一个边界清晰的 gcm worker；主任务保留架构、冲突、集成和最终验收。
+  当前只可派首个满足依赖的 L1-CLI/C1；没有 L1 receipt 时不得派 W1，没有 W1 receipt 时不得派 B1；
+  没有 B1 receipt 时不得派 U1；U1 Console 与 I1/L5 等前置 receipt 不齐时不得提前共享写入。
+  公网 relay-first N1/N2 不在本轮调度。
 - **Gate**：focused 红绿测试 → mapped regression → typecheck/build → AppSDK compile/verify（仅在
   maps/治理受影响时）→ 真实入口回放 → 独立 exact review。
 - **State**：写 candidate/review/integration/push/memory/cleanup receipts；状态只能是
@@ -179,9 +209,13 @@ docs/goals/teams-user-mvp-delivery.md
 docs/goals/teams-development-plan.md
 
 执行规范：
-- 每次唤醒先检查当前 goal、issue、worker、worktree、branch、进程、端口和远端 main；先复用现有 `159b78b` U0 候选并从第一个失效 gate 重入，只有查重确认没有同语义 unit 后，才从当前 origin/main 为新 delivery unit 建立独立 clean worktree。
+- 每次唤醒先检查当前 goal、issue、worker、worktree、branch、进程、端口和远端 main；U0 已关闭，
+  只复核其 receipt，不重开；按 `L1-CLI → W1 → B1`、`C1`、`U1`、`I1/L5` 的 canonical 依赖查重，
+  只有确认没有同语义 unit 后，才从当前 origin/main 建立对应独立 clean worktree。
 - 默认使用新的 codex exec --profile gcm worker；worker 只改合同范围。普通 exact review 用独立 Codex Review，milestone 用 Astra，不使用 AGY Review。
-- 先完成 U0 internal.toml 真源；U1 CLI、U2a provider/receiver Work、U2b 多 provider/OpenCode 按各自依赖并行；随后完成 U4 Console directory projection，最后由 U3 完成本地真实回放/重启隔离与 L5 收口。
+- U0 internal.toml 真源已完成；下一步先推进 L1-CLI，C1 可按自身 contract 并行；取得 L1 receipt 后推进 W1，
+  再推进 B1；取得 B1 receipt、projection contract 和 L3 review PASS 后完成 U1 Console
+  directory projection，最后由 I1/L5 完成本地真实回放、重启隔离与统一装配。
 - 遵守红测→最小修复→适用 regression/typecheck/build/AppSDK gate→真实入口→exact review→独立 integration→push→memory L2→cleanup 闭环；根据 fingerprint 只重跑首个失效 gate及其下游。
 - 禁止 fallback、silent repair、第二配置真源、Console 数据转发、直接修改 dirty main、复用旧候选证据或删除他人资源。公网 Relay/NAT/手机/关系治理属于 post-MVP。
 
