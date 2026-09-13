@@ -25,14 +25,14 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除�
 
 当前接手指针：
 - 本次接手复核时 root `main` 与远端 `origin/main` 均为
-  `f0197f78582278c99cd0eb513893f942be69189e`，root clean；该 SHA 只作本次快照。
+  `948d5645e20d928332840e2bb9c756995bf2cf44`，root clean；该 SHA 只作本次快照。
   每次唤醒仍必须重新读取 `git status`、`git rev-parse`、`git ls-remote`，不得把快照当作新基线。
 - 本次目标刷新 issue 是 `2cbc522`，当前仍是唯一 open 的目标刷新 issue；上一轮文档刷新
   `8186534` 已关闭。不得创建第二个 goal、第二个 subscription 或第二套任务图。
 - U0 internal.toml 真源 issue 159b78b 已关闭，只复用其 receipts，不重开、不重复实现。
 - 首个实现单元是 runtime issue `3742b9a`：detached launcher、runtime-owned supervisor
   status/stop 和 configured Work API。现有 rebind candidate `546e77f` 的 merge-base 仍是旧的
-  `412fc5f`，而当前 `origin/main` 已推进到 `f0197f7`；它不能直接复用为当前 candidate。
+  `412fc5f`，而当前 `origin/main` 已推进到 `948d564`；它不能直接复用为当前 candidate。
   必须从最新 `origin/main` 重建或重绑定，并重新验证 startup reservation、PID-0 stop guard、
   concurrent-start、internal state merge、configuredWork generation binding 和 supervisor
   start-token ownership 修复。没有当前 candidate 的 focused/full gate、Codex exact review、
