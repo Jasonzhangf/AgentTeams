@@ -17,15 +17,16 @@ receipt 在 `L1-CLI/W1/C1/B1/U1/I1` 中取首个未完成项。
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次文档落盘时的主线是 `94919f71702ce7b91790503714940df6399875b2`；这个 SHA 只是快照，不能
+  本次文档落盘时的主线是 `b4eda44e5d64edba36ae55ec0c9014a21fd17660`；这个 SHA 只是快照，不能
   替代下一轮启动时的现场检查。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 当前根树与远端主线均为 `94919f7`，此前 U0 worktree/branch 已回收。当前唯一运行中的交付单元是
+- 当前根树与远端主线均为 `b4eda44`，此前 U0 worktree/branch 已回收。当前唯一运行中的交付单元是
   AppSDK issue `fdec042`（L1-CLI），其独立 worktree 为
   `playground/fdec042-l1-cli-20260913`，branch 为 `codex/fdec042-l1-cli-20260913`；截至本快照仍处于
-  红测/实现阶段，尚无 candidate commit。下一次恢复必须先复核该 worker 是否仍在写入、是否越界修改
-  `vitest.config.ts` 或 runtime 语义，再从首个失效 gate 继续；不得重复派发或复用未完成候选。
+  红测/实现阶段，尚无 candidate commit，且其基线为上一条 `94919f7`，落后当前 main 一条治理提交。
+  下一次恢复必须先复核该 worker 是否仍在写入；候选交付前从最新 `origin/main` 重建或 rebase，
+  并检查是否越界修改 `vitest.config.ts` 或 runtime 语义；不得重复派发或复用未完成候选。
 
 ## 当前交付指针
 
@@ -65,7 +66,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮当前可用基线为
-  `94919f71702ce7b91790503714940df6399875b2`。
+  `b4eda44e5d64edba36ae55ec0c9014a21fd17660`。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
