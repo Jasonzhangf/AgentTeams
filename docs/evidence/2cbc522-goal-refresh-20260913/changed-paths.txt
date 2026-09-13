@@ -6,3 +6,4 @@ docs/evidence/2cbc522-goal-refresh-20260913/changed-paths.txt
 docs/evidence/2cbc522-goal-refresh-20260913/validation-receipt.md
 docs/evidence/2cbc522-goal-refresh-20260913/pnpm-verify.log
 docs/evidence/2cbc522-goal-refresh-20260913/candidate-fingerprint.md
+docs/evidence/2cbc522-goal-refresh-20260913/candidate-receipt.md
