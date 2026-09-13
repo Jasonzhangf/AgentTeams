@@ -1,17 +1,14 @@
-
 > agentteams@0.1.0 verify /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913
 > pnpm test && pnpm typecheck && appsdk guide compile && appsdk compile && pnpm smoke && appsdk verify
 
-
 > agentteams@0.1.0 test /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913
 > pnpm --dir opencode-adapter build && node scripts/regression.mjs
-
 
 > @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913/opencode-adapter
 > tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
 
 ℹ tsdown v0.22.14 powered by rolldown v1.2.7
-ℹ config file: /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913/opencode-adapter/tsdown.config.ts 
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913/opencode-adapter/tsdown.config.ts
 ℹ entry: src/index.ts
 ℹ target: es2022
 ℹ tsconfig: tsconfig.json
@@ -30,12 +27,11 @@ Tests 447 passed
 > agentteams@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913
 > pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck
 
-
 > @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913/opencode-adapter
 > tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
 
 ℹ tsdown v0.22.14 powered by rolldown v1.2.7
-ℹ config file: /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913/opencode-adapter/tsdown.config.ts 
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913/opencode-adapter/tsdown.config.ts
 ℹ entry: src/index.ts
 ℹ target: es2022
 ℹ tsconfig: tsconfig.json
@@ -49,10 +45,8 @@ Tests 447 passed
 > @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913/opencode-adapter
 > tsc --noEmit
 
-
 > @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913/console-host
 > tsc --noEmit
-
 
 > @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/l1-local-launcher-audit-20260913/ui/teams-console
 > tsc -p tsconfig.json --noEmit
