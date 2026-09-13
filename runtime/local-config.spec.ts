@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { defaultLocalConfigPath, loadLocalConfig, writeLocalConfig, writeLocalInternalState } from './local-config.ts'
+import { defaultLocalConfigPath, loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalState } from './local-config.ts'
 import { parse as parseToml } from 'toml'
 
 it('loads a persisted TOML launcher config and resolves paths relative to the file', async () => {
@@ -59,7 +60,7 @@ it('rejects the reserved relay daemon id before process planning can overwrite o
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
-it('loads v2 endpoint intent from config.toml and materializes only derived endpoint files', async () => {
+it('loads v2 endpoint intent into internal.toml without materializing editable child JSON at load', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-endpoint-config-'))
   const path = join(directory, '.agentteams', 'config.toml')
   try {
@@ -102,16 +103,32 @@ requestId = "configured-search-1"
 demands = [{ resourceId = "search-slot", amount = 1 }]
 payload = { query = "needle" }
 `)
+    await writeFile(join(directory, '.agentteams', 'relay.json'), JSON.stringify({
+      version: 1,
+      listen: { host: '127.0.0.1', port: 48010 },
+      tls: { keyFile: 'relay-key.pem', certFile: 'relay-cert.pem' },
+      limits: { maxPayload: 65536, maxConnections: 8, maxGrants: 8, maxBufferedAmount: 65536, maxPendingMessages: 8, maxPendingBytes: 131072, grantTtlMs: 5000 },
+      credentials: [{ credentialEnv: 'PROVIDER_AUTH', identity: { accountId: 'account', scopeId: 'scope', agentId: 'provider' } }],
+    }))
     const loaded = await loadLocalConfig(path)
     expect(loaded.internalPath).toBe(join(directory, '.agentteams', 'internal.toml'))
+    expect(loaded.relay.configPath).toBe(join(directory, '.agentteams', '.internal', 'projections', 'relay.json'))
     expect(loaded.daemons.map(item => item.id)).toEqual(['provider', 'consumer'])
     expect(loaded.daemons[0]?.role).toBe('provider')
     expect(loaded.daemons[1]?.role).toBe('receiver')
     expect(loaded.daemons[1]?.connection).toMatchObject({ targetAgentId: 'provider', capabilityId: 'file-search', operation: 'search' })
-    const materialized = await readFile(loaded.daemons[0]!.configPath, 'utf8')
-    expect(JSON.parse(materialized)).toMatchObject({ version: 1, endpoint: { role: 'provider' } })
-    expect(materialized).toContain('provider-host')
-    expect(materialized).not.toContain('internal')
+    expect(loaded.daemons[0]!.configPath).toBe(join(directory, '.agentteams', '.internal', 'projections', 'provider.json'))
+    expect(existsSync(loaded.relay.configPath)).toBe(false)
+    expect(existsSync(loaded.daemons[0]!.configPath)).toBe(false)
+    const internal = parseToml(await readFile(loaded.internalPath, 'utf8')) as {
+      relay: { config: string; projectionPath: string }
+      daemon: Record<string, { config: string }>
+    }
+    expect(internal.relay.projectionPath).toBe(loaded.relay.configPath)
+    expect(internal.relay.config).toContain('48010')
+    expect(JSON.parse(internal.daemon.provider!.config)).toMatchObject({ version: 1, endpoint: { role: 'provider' } })
+    expect(internal.daemon.provider!.config).toContain('provider-host')
+    expect(internal.relay.config).not.toContain('internal')
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
@@ -161,6 +178,124 @@ demands = [{ resourceId = "search-slot", amount = 1 }]
 payload = 1970-01-01T00:00:00Z
 `)
     await expect(loadLocalConfig(path)).rejects.toThrow(/payload.*plain JSON object|payload.*JSON/i)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('keeps child JSON as an ephemeral projection from internal.toml instead of a second config source', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-internal-owner-'))
+  const agentteams = join(directory, '.agentteams')
+  const path = join(agentteams, 'config.toml')
+  const relayConfig = join(agentteams, 'relay.json')
+  try {
+    await mkdir(agentteams, { recursive: true })
+    await writeFile(join(agentteams, 'relay-cert.pem'), 'cert\n', { mode: 0o600 })
+    await writeFile(join(agentteams, 'relay-key.pem'), 'key\n', { mode: 0o600 })
+    await writeFile(relayConfig, JSON.stringify({
+      version: 1,
+      listen: { host: '127.0.0.1', port: 49001 },
+      tls: { keyFile: './relay-key.pem', certFile: './relay-cert.pem' },
+      limits: { maxPayload: 65536, maxConnections: 8, maxGrants: 8, maxBufferedAmount: 65536, maxPendingMessages: 8, maxPendingBytes: 131072, grantTtlMs: 5000 },
+      credentials: [{ credentialEnv: 'TEAMS_RELAY_AUTH', identity: { accountId: 'account', scopeId: 'scope', agentId: 'provider' } }],
+    }))
+    await writeFile(path, `version = 2
+[relay]
+config = ${JSON.stringify(relayConfig)}
+
+[endpoints.provider]
+enabled = true
+role = "provider"
+identity = { hostId = "provider-host", machineId = "machine", agentId = "provider", accountId = "account", agentKind = "custom", label = "Provider" }
+scopeId = "scope"
+dataDirectory = "data/provider"
+leasePort = 49011
+presenceIntervalMs = 500
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-provider" }
+relay = { endpoint = "wss://127.0.0.1:49001", credentialEnv = "TEAMS_RELAY_AUTH", caFile = "relay-cert.pem", connectTimeoutMs = 1000, admissionTimeoutMs = 1000, requestTimeoutMs = 1000, maxMessageBytes = 65536, maxBufferedBytes = 65536, maxPendingFrames = 8, maxPendingRequests = 4, maxDataConnections = 4 }
+`)
+    const loaded = await loadLocalConfig(path)
+    expect(loaded.internalPath).toBe(join(agentteams, 'internal.toml'))
+    expect(loaded.relay.configPath).toBe(join(agentteams, '.internal', 'projections', 'relay.json'))
+    expect(loaded.daemons[0]!.configPath).toBe(join(agentteams, '.internal', 'projections', 'provider.json'))
+    expect(existsSync(loaded.relay.configPath)).toBe(false)
+    expect(existsSync(loaded.daemons[0]!.configPath)).toBe(false)
+
+    const internal = parseToml(await readFile(loaded.internalPath, 'utf8')) as {
+      configRevision: string
+      relay: { config: string; projectionPath: string }
+      daemon: Record<string, { config: string; projectionPath: string; enabled: boolean; role: string }>
+    }
+    expect(internal.configRevision).toMatch(/^sha256:/)
+    expect(internal.relay.projectionPath).toBe(loaded.relay.configPath)
+    expect(internal.relay.config).toContain('relay-key.pem')
+    const internalRelay = JSON.parse(internal.relay.config) as { tls: { keyFile: string; certFile: string } }
+    expect(internalRelay.tls.keyFile).toBe(join(agentteams, 'relay-key.pem'))
+    expect(internalRelay.tls.certFile).toBe(join(agentteams, 'relay-cert.pem'))
+    expect(internal.daemon.provider.enabled).toBe(true)
+    expect(internal.daemon.provider.role).toBe('provider')
+    expect(internal.daemon.provider.config).toContain('provider-host')
+
+    const mutatedInternal = (await readFile(loaded.internalPath, 'utf8')).replace('provider-host', 'provider-from-internal')
+    await writeFile(loaded.internalPath, mutatedInternal)
+    await projectLocalChildConfigs(loaded.internalPath)
+    const projected = JSON.parse(await readFile(loaded.daemons[0]!.configPath, 'utf8')) as { identity: { hostId: string } }
+    expect(projected.identity.hostId).toBe('provider-from-internal')
+    const projectedRelay = JSON.parse(await readFile(loaded.relay.configPath, 'utf8')) as { tls: { keyFile: string; certFile: string } }
+    expect(projectedRelay.tls.keyFile).toBe(join(agentteams, 'relay-key.pem'))
+    expect(projectedRelay.tls.certFile).toBe(join(agentteams, 'relay-cert.pem'))
+
+    await rm(loaded.daemons[0]!.configPath)
+    await projectLocalChildConfigs(loaded.internalPath)
+    expect(JSON.parse(await readFile(loaded.daemons[0]!.configPath, 'utf8'))).toMatchObject({ identity: { hostId: 'provider-from-internal' } })
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('reuses internal.toml for the same config revision and preserves lifecycle state when legacy relay JSON disappears', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-internal-reuse-'))
+  const agentteams = join(directory, '.agentteams')
+  const path = join(agentteams, 'config.toml')
+  const relayConfig = join(agentteams, 'relay.json')
+  try {
+    await mkdir(agentteams, { recursive: true })
+    await writeFile(relayConfig, JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 49101 } }))
+    await writeFile(path, `version = 2
+[relay]
+config = "relay.json"
+[endpoints.provider]
+role = "provider"
+identity = { hostId = "provider-host", machineId = "machine", agentId = "provider", accountId = "account", agentKind = "custom", label = "Provider" }
+scopeId = "scope"
+dataDirectory = "data/provider"
+leasePort = 49111
+presenceIntervalMs = 500
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-provider" }
+relay = { endpoint = "wss://127.0.0.1:49101", credentialEnv = "AUTH", connectTimeoutMs = 1000, admissionTimeoutMs = 1000, requestTimeoutMs = 1000, maxMessageBytes = 65536, maxBufferedBytes = 65536, maxPendingFrames = 8, maxPendingRequests = 4, maxDataConnections = 4 }
+`)
+    const first = await loadLocalConfig(path)
+    await writeLocalInternalState(first.internalPath!, { provider: { pid: 49123, generation: 9, state: 'stopped' } })
+    await rm(relayConfig)
+    const second = await loadLocalConfig(path)
+    const internal = await readLocalInternalConfig(second.internalPath!)
+    expect(internal.daemons?.provider).toMatchObject({ pid: 49123, generation: 9, state: 'stopped' })
+    expect(second.relay.configPath).toBe(join(agentteams, '.internal', 'projections', 'relay.json'))
+    await projectLocalChildConfigs(second.internalPath!)
+    expect(JSON.parse(await readFile(second.relay.configPath, 'utf8'))).toMatchObject({ listen: { port: 49101 } })
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('rejects internal projection paths outside the runtime projection directory', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-internal-projection-path-'))
+  const internalPath = join(directory, 'internal.toml')
+  const outsidePath = join(directory, 'outside.json')
+  try {
+    await writeFile(internalPath, `version = 1
+[relay]
+projectionPath = ${JSON.stringify(outsidePath)}
+config = ${JSON.stringify(JSON.stringify({ version: 1 }))}
+`)
+    await expect(projectLocalChildConfigs(internalPath)).rejects.toThrow(/projectionPath must be/)
+    expect(existsSync(outsidePath)).toBe(false)
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 

@@ -1,7 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { writeLocalInternalState, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
+import { projectLocalChildConfigs, writeLocalInternalState, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
 
 export interface LocalProcessSpec {
   readonly id: string
@@ -164,6 +164,7 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
     starting = (async () => {
       lifecycle = 'starting'
       try {
+        if (config.internalPath !== undefined) await projectLocalChildConfigs(config.internalPath)
         for (const spec of specs) {
           if (lifecycle !== 'starting') {
             if (lifecycle === 'failed') throw lastFailure ?? new Error('local daemon failed during startup')
