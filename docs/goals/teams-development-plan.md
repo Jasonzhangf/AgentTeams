@@ -7,10 +7,29 @@
 每个实现任务从最新 origin/main 建立独立 clean worktree。
 
 当前执行 profile 是 [长程交付任务](teams-long-running-delivery.md) 定义的
-relay-first MVP；它覆盖公网 Relay、至少一端真实 NAT 出站、双 daemon Work、
-多 provider 配置和 Console 离线读回。本文件的旧 V1 场景表只保留为依赖参考，
-不得把 direct、NAT-to-NAT、手机蜂窝或完整 UI 当作本轮 MVP 退出条件；这些能力
-属于同一目标的 post-MVP backlog。
+Phase 1 Local Network MVP；它覆盖 `~/.agentteams/config.toml` 多 daemon 启动、真实本地
+socket bridge、目录/广播/连接/协商、Agent Work、provider/OpenCode 配置和 UI daemon
+projection。本文件后面的旧 relay-first V1 场景表只保留为后续依赖参考，不得把公网 Relay、
+NAT/STUN、NAT-to-NAT、手机蜂窝、direct 或完整 UI 当作本阶段退出条件。
+
+## Phase 1 Local Network 顺序与可并发任务
+
+| 波次/任务 | 交付与 owner | 允许修改范围 | 前置依赖 | 可并发 |
+|---|---|---|---|---|
+| G0 治理 profile | 主任务：更新 goal/profile、移除当前 dsh 说明、绑定 gate | `.appsdk/goal.json`、`docs/goals/**`、当前治理说明 | 最新 origin/main | 先串行 |
+| L1 本地 launcher | runtime owner：`~/.agentteams/config.toml`、多 daemon 启停/重启/状态 | `runtime/local-config.ts`、`runtime/local-process.ts`、`runtime/local-supervisor.ts` 及对应测试 | G0 | L3 |
+| L2 本地 bridge/Work | network/runtime/agent owner：真实 socket discovery、broadcast、connect、negotiate、Work | `network/**`、`agent/**`、`agent-host/**`、`runtime/agent-daemon.ts`、`runtime/agent-process.ts`、`runtime/agent-work-client.ts`、`runtime/local-relay-bridge.spec.ts` | G0；L1 配置入口 receipt | L3 |
+| L3 provider/OpenCode | config/adaptor owner：多 provider、catalog/apply/readback、显式 RCC/goaichat | `config/**`、`opencode-adapter/**` | 公共 config contract | L1、L2 |
+| L4 UI discovery | UI owner：directory projection、daemon identity/presence/capability/resource | `ui/teams-console/`、必要的 `console-host/` | L2 projection contract | L3 完成后 |
+| L5 本地收口 | 主任务：统一装配、Console-offline replay、restart/generation/resource/idempotency | integration worktree、maps/evidence | L1-L4 review PASS | 串行 |
+
+每个阶段使用 fingerprint 和 receipt 重入；输入未漂移时复用 PASS，只有首个失效阶段及其
+下游重跑。公网 Relay/NAT/mobile/direct 由后续阶段单独建 delivery unit，不阻断 Phase 1。
+
+Phase 1 的 L2 使用 `teams-peer-work-execution`，L5 使用 `teams-console-offline-work`；
+`teams-peer-work-execution-public-nat` 和 `teams-console-offline-work-public-nat` 只属于
+后续公网/NAT delivery unit。L2 在 L1 配置入口 receipt 后开始；L3 可与 L1、L2 在路径不重叠
+时并行。
 
 ## 审查结论
 
@@ -29,21 +48,19 @@ relay-first MVP；它覆盖公网 Relay、至少一端真实 NAT 出站、双 da
 删除旧生产绕路在新主线通过验收的同一集成任务中完成，不双写、不自动回退旧链。
 不新增通用调度框架、全局配置同步、自动 provider 切换或第二套证据系统。
 
-## 待批准的实施选择
+## 后续阶段约束（不属于 Phase 1 退出条件）
 
-- 一个 Agent 对应一个 daemon 和稳定身份。推理型 Agent 首版由 daemon 独占启动/停止
-  自己的 OpenCode 子进程及派生配置目录；附着任意外部实例延期，避免进程/配置双 owner。
-- 先打通显式 WSS 流量 relay，跨 NAT 先以出站 relay 满足 MVP；可达地址 direct、
-  STUN/打洞和 route plan 候选切换属于 post-MVP。未实现能力声明 unavailable，
-  不把映射成功当直连成功，也不重放未知结果请求。
-- 单一账号/项目作用域内的多设备先行，保留身份、目标授权、撤销与隔离；首版不建组织
-  计费/复杂角色系统。relay 管连接准入，能力方独立管 work 和资源授权。
-- 首版包含 browser CLI、固定目录只读文件检索 CLI 和 OpenCode 推理 Agent；不包含
-  完整 Search/Memory 插件、自动主节点选举、消耗型余额与全局调度。
+- 公网 Relay、STUN/ICE、NAT-to-NAT、direct/relay 候选编排和多设备部署在 Phase 1
+  之后单独建 delivery unit；未实现能力必须声明 unavailable，不把映射成功当直连成功。
+- 单一账号/项目作用域内的多设备、撤销、复杂关系和组织/计费属于后续治理阶段；能力方仍
+  独立拥有 Work 和 resource 授权。
+- browser 多 profile、完整 Search/Memory 插件、自动主节点选举、消耗型余额和全局调度
+  不阻断本地网络闭环。
 
-以上收敛不改变公网/NAT/relay、双方一对多、Console 可离线和多 provider 要求。
+以上后续约束不改变 Phase 1 的双方一对多、Console 可离线和多 provider 要求；它们不提前
+改变当前本地网络交付边界。
 
-## 顺序与可并发任务
+## 后续 relay-first 依赖参考（不作为 Phase 1 退出条件）
 
 | 波次/任务 | 交付与 owner | 允许修改范围 | 前置依赖 | 可并发 |
 |---|---|---|---|---|
@@ -87,7 +104,7 @@ adapter，模块 worker 不另写第二套 daemon。关闭全部 Console 后 wor
 无隐式 failover。RCC 模型目录为空的既有异常须先按当时真源定位，不能以配置 expose_models
 代替实际目录或推理证据。远端 daemon 的 localhost 不等于 Console 所在设备。
 
-**R1/N3/V1 MVP：** 公网 Relay 与至少一端真实 NAT 出站留证；两个 daemon 在无
+**后续 R1/N3/V1：** 公网 Relay 与至少一端真实 NAT 出站留证；两个 daemon 在无
 Console 条件下完成登录、目录、能力/resource、匹配和 file-search Work。Console 全
 关闭、另一设备重开后能读回 config/work/allocation；旧 generation、重复请求、释放
 和容量边界均显式验证。可达地址 direct、两处 NAT 直连、真实手机蜂窝和关系治理
@@ -109,6 +126,6 @@ Console 条件下完成登录、目录、能力/resource、匹配和 file-search
 
 用户已授权三个Luna辅助session、主任务开发审核与合并，以及每阶段L2记忆和资源收尾。
 提交/集成依照长程交付合同与真实候选证据执行，不跳过适用review和主线验证。
-公网 Relay、至少一端 NAT 出站和测试凭据在 MVP 前绑定实际环境；两处 NAT 设备、
-手机蜂窝和 direct 环境属于 post-MVP，不作为本轮前置条件。
+公网 Relay、至少一端 NAT 出站和测试凭据在后续阶段绑定实际环境；两处 NAT 设备、
+手机蜂窝和 direct 环境属于 post-MVP，不作为 Phase 1 前置条件。
 审批不自动授权生产变更、外部发布或任意凭据读取。

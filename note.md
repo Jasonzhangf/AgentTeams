@@ -6,6 +6,15 @@
 - 历史通过子目录迁移保留，`agent-tui` monorepo 路径引用只保留在历史中；当前 active root 使用新仓库根。
 - 旧 `.appsdk` 治理已按 reset 授权作废，当前从独立仓库根重新初始化。
 
+## 当前主线
+
+- 当前收口 profile 是 Phase 1 Local Network MVP：多个独立 daemon 从
+  `~/.agentteams/config.toml` 启动，经真实本地 socket 完成发现、连接、协商和 Agent Work。
+- `network`、`server`、`runtime`、`agent`、`config` 和 `opencode-adapter` 是当前主线 owner；
+  Console 只提供观察、配置和 projection，不进入 Agent-to-Agent 数据路径。
+- 旧宿主适配和历史 UI 设计只作为迁移记录保留，不是当前运行入口、依赖或 release gate；当前
+  provider 适配路径由 Teams 的 OpenCode 配置与 adapter 负责。
+
 ## 2026-08-31
 
 - 基线：新建 `Teams/` 作为独立 AppSDK 项目；现有 `maui-0830` UI 设计只读复用。

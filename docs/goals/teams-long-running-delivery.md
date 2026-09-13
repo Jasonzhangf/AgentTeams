@@ -6,44 +6,42 @@
 阶段依赖参考 [开发计划](teams-development-plan.md)；当前 MVP 收口的唯一验收入口是本文件
 的 MVP profile。不另建重复任务图。
 
-## 当前收口 profile：MVP relay-first
+## 当前收口 profile：Phase 1 Local Network MVP
 
-当前长期目标只执行这一份最小 MVP 收口 profile，不创建第二个 goal 或第二个
-subscription。该 profile 保留 AgentTeams 的控制面和扩展边界，但把首个可用版本收敛
-为一条能在公网和 NAT 环境工作的 relay-first Agent-to-Agent 纵向闭环。Direct、完整
-Endpoint E1/E2、复杂关系治理、完整 Console/UI 和真实移动端扩展保留在同一目标的
-post-MVP backlog，不得混入本轮 live acceptance；受影响源码仍必须通过既有 mapped
-regression gates。
+当前长期目标只执行这一份 Local Network MVP profile，不创建第二个 goal 或第二个
+subscription。第一阶段先收口本机真实网络桥接：多个独立 daemon 从
+`~/.agentteams/config.toml` 启动，通过真实 TCP/WebSocket socket 完成发现、广播、连接、
+协商和 Agent-to-Agent Work。Console Host 只做观察、配置和 daemon projection，不进入
+Agent-to-Agent 数据路径。
 
-MVP 的传输选择是显式 relay：daemon 从配置登录公网 Relay，发布 capability/resource，
-consumer 从目录发现 provider，建立 Agent-to-Agent Work，并在 Console 完全退出时继续
-执行。这样同时覆盖公网入口与 NAT 出站路径；direct listener 和 route contract 可以
-继续保留并通过单元测试维护，但 direct 实际回放不属于本轮 MVP 的必要条件。
+本阶段可以使用本地 Relay/bridge 进程辅助目录和连接建立，但它不是公网服务，也不能替代
+Agent 之间的数据路径。公网 Relay、NAT/STUN、双 NAT、direct transport、移动端、关系治理
+和完整 UI polish 都是后续阶段；受影响源码仍必须通过既有 mapped regression gates。
+本阶段的 mapped live gates 是 `teams-peer-work-execution` 和 `teams-console-offline-work`；
+公网/NAT 证据只由对应的 `*-public-nat` 后续 gates 收集，不得成为本地 profile 的隐含前置。
 
 ### MVP 完成条件
 
 以下条件全部满足才允许关闭本轮 profile；任何单项缺失都保留为 open 或
 cleanup-pending：
 
-1. **真实 Relay/daemon 主链**：同一集成候选在 Claw Relay 和第二环境启动两个 daemon；
-   至少一端处于真实 NAT 出站网络。两端完成登录、身份/代际建立、目录查询、能力与
-   resource 广播、匹配、Work proposal/request/close 和重新登录。不能用 mock、loopback、
-   HTTP health、Tailscale-only 或历史日志替代。
-2. **最小被动能力**：至少一个 passive capability Agent 声明能力和容量，并通过固定
-   CLI operation 完成一次真实请求。MVP 采用固定目录 `file-search` 作为确定性验收能力；
-   browser capability/adapter 必须保持可编译和受测试，真实多 profile 浏览器回放列入
-   post-MVP。
+1. **真实本地 daemon 主链**：同一集成候选从 `~/.agentteams/config.toml` 启动至少两个
+   独立 daemon 进程和其本地 bridge。两个 daemon 完成登录/注册、identity/generation、
+   directory、capability/resource 广播、匹配和 Work proposal/request/result/close。不能用
+   进程内函数调用或 Console 转发代替真实 socket。
+2. **最小被动能力**：至少一个 passive capability Agent 声明能力和容量，并通过固定 CLI
+   operation 完成一次真实本地请求；固定目录 `file-search` 作为确定性验收能力，browser
+   capability/adapter 保持可编译和受测试。
 3. **资源与幂等**：provider 的容量分配不能超卖；重复 request 不重复执行；成功、取消
    或确认销毁后释放 allocation；provider 重启后旧 generation 明确拒绝，新 generation
-   重新发现并完成 Work。至少保留一对多容量的 focused regression，真实回放至少覆盖
-   两次独立 Work。
+   重新发现并完成 Work；至少保留一对多容量的 focused regression。
 4. **Provider 配置最小闭环**：Teams 自己保存多个 provider instance、模型目录、accepted
    revision 和 effective revision。RCC `127.0.0.1:4444` 是主 provider，canonical instance
    `goaichat-openai`（来自 `goaichat_openai` 配置）是显式 backup provider；两者都通过真实 OpenCode 入口完成 catalog/apply/readback 和
    重启读回。不得加入隐式 failover，凭据不得进入业务 payload、metadata 或声明。
-5. **Console 退出不影响 Work**：Console 只观察和配置，不进入 Agent-to-Agent 数据路径。
-   所有 Console 进程关闭后 Work 仍完成；重新打开一个 Console 能读回 accepted/effective
-   config、Work 状态和 allocation 结果。UI 视觉增强、关系图和移动布局不属于本轮门禁。
+5. **UI daemon discovery**：UI 从权威 directory projection 读取 daemon identity、presence、
+   generation、capability 和 resource；不复制 runtime/network 台账。Console 关闭后 Work 仍
+   完成；UI 视觉增强、关系图和移动布局不属于本轮门禁。
 6. **工程交付闭环**：每个 delivery unit 具备 issue、独立 worktree/branch、candidate
    测试、独立 exact review、integration SHA、mainline 验证、远端 push receipt、memory
    Level 2（`ai-reviewed`,`human-unreviewed`）和 cleanup receipt。目标关闭前根树干净，
@@ -51,7 +49,7 @@ cleanup-pending：
 
 ### 明确的 post-MVP backlog
 
-- direct route 的真实公网回放、STUN/ICE、NAT-to-NAT direct 和 direct/relay 自动候选编排；
+- 公网 Relay、STUN/ICE、NAT-to-NAT direct 和 direct/relay 自动候选编排；
 - Endpoint E1/E2 完整注册、发现、AppSDK admission 和 Work 绑定；
 - master/slave 与关系治理、撤销、离线关系投影；
 - browser 多 profile、真实桌面/手机蜂窝回放和更完整 CLI 能力；
@@ -60,14 +58,14 @@ cleanup-pending：
 
 ## 范围与完成定义
 
-推进上述 MVP profile 所需的公共契约、relay、daemon/network、provider/OpenCode、
-Agent Work/资源、最小 passive CLI 和 Console 离线读回。原有 direct、Endpoint、关系、
-移动端和完整 UI 的 live acceptance 保留为 post-MVP backlog；它们不能被 MVP receipt
+推进上述 Local Network MVP profile 所需的公共契约、本地 bridge、daemon/network、
+provider/OpenCode、Agent Work/资源、最小 passive CLI 和 UI daemon projection。公网 Relay、
+direct、Endpoint、关系、移动端和完整 UI 的 live acceptance 保留为 post-MVP backlog；它们不能被本阶段 receipt
 伪装成已完成，但适用的 source regression gate 仍然执行。
 MVP 完成必须同时具备：
 
-- 已确认 MVP 功能逐项通过当前候选的适用测试、构建、部署/重启和真实入口验收；公网
-  Relay 与真实 NAT 出站路径留证，Console 全离线后 Agent Work 继续。
+- 已确认本阶段功能逐项通过当前候选的适用测试、构建、daemon 启停/重启和真实本地 socket
+  入口验收；两个独立 daemon、capability/resource、Work 和 Console 全离线继续执行均留证。
 - 主任务审核、用户选择的独立 Codex exact review（本目标不使用 AGY Review）、集成候选验证通过，已授权提交与合并具有远端
   主线 receipt。
 - 每阶段的有效结论经过 memory Level 2 审核并由官方 memory CLI 更新/verify。

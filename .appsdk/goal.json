@@ -1,20 +1,20 @@
 {
   "goal_id": "agentteams-parallel-service-development",
-  "raw_request": "按既有 AgentTeams 长期目标收敛为最小 MVP relay-first closeout；不创建第二个 goal 或 subscription。",
-  "understood_objective": "Deliver a minimal relay-first AgentTeams MVP: two real daemons bootstrap through the public Relay, publish and discover a passive capability/resource, complete Agent Work across a public/NAT egress path without Console, persist multi-provider OpenCode configuration with explicit RCC and goaichat instances, and close every delivery unit with exact review, integration, remote push, memory and cleanup evidence.",
+  "raw_request": "将 AgentTeams 第一阶段收敛为 Local Network MVP；不创建第二个 goal 或 subscription。",
+  "understood_objective": "Deliver a local AgentTeams MVP: independent daemons launched from ~/.agentteams/config.toml communicate through real local network sockets, discover and broadcast capabilities/resources, negotiate and complete Agent Work without Console forwarding, expose daemon discovery in the UI, and support explicit multi-provider OpenCode configuration with durable readback.",
   "acceptance_criteria": [
-    "The Relay-first daemon path is proven on a real public service with at least one daemon behind NAT egress: login, directory, capability/resource publication, matching, Work proposal/request/close and re-login.",
-    "A fixed-root passive file-search capability completes real Work; allocation capacity, idempotent duplicate requests, release and stale-generation rejection are proven.",
+    "The same ~/.agentteams/config.toml starts at least two independent daemon processes with stable identities, declared capabilities/resources, and owned start/stop/restart lifecycle.",
+    "Two daemons communicate over real local network sockets, complete discovery/broadcast/connect/negotiate and Work proposal/request/result/close without Console forwarding, and expose explicit duplicate-request, capacity, restart and stale-generation behavior.",
     "Teams owns multiple provider instances and model catalogs; RCC at 127.0.0.1:4444 and canonical instance goaichat-openai (from the goaichat_openai configuration) are explicit OpenCode provider bindings with catalog/apply/readback and restart persistence; no implicit failover.",
-    "All Console processes can exit while Agent Work completes; reopening a Console reads accepted/effective config, Work state and allocation state.",
-    "Each delivery unit passes applicable focused/regression gates, exact independent review, integration verification, remote main push, Level 2 memory and owned-resource cleanup; no live direct, full Endpoint, mobile or UI-completeness claim is required for this MVP."
+    "The UI reads the authoritative daemon projection and shows identity, presence, capability and resource state; closing the Console does not interrupt Agent Work.",
+    "Each delivery unit passes applicable focused/regression gates, exact independent review, integration verification, remote main push, Level 2 memory and owned-resource cleanup; public Relay, NAT/STUN, mobile, direct transport and full UI polish remain later phases."
   ],
-  "non_goals": ["Claim runtime readiness from type declarations or unit tests.", "Publish to production without deployment authorization.", "Create a second goal or subscription.", "Require live direct/STUN/ICE or NAT-to-NAT direct in this MVP.", "Complete Endpoint E1/E2, master/slave relations, browser multi-profile/mobile replay or full Console/UI polish in this MVP.", "Add implicit provider failover, modify upstream providers or disclose credentials."],
-  "assumptions": ["One source admission unit contains existing code; semantic ownership stays in docs/architecture/module-registry.json.", "Console is optional and never an Agent-to-Agent transport; passive capability Agents and one-to-many resource semantics remain first-class.", "Relay-first public/NAT egress is the MVP transport; direct listener and route contracts remain post-MVP live work.", "RCC 4444 is the primary provider and canonical goaichat-openai is an explicit backup instance sourced from goaichat_openai; selection and errors remain visible.", "Existing mapped source regression gates remain applicable when their owned paths are affected; post-MVP scope removes only their live acceptance claims."],
+  "non_goals": ["Claim runtime readiness from type declarations or unit tests.", "Publish to production without deployment authorization.", "Create a second goal or subscription.", "Require public Relay, NAT traversal, STUN/ICE, NAT-to-NAT, mobile devices or direct transport in this phase.", "Complete master/slave relation governance, browser multi-profile replay or full Console/UI polish in this phase.", "Add implicit provider failover, modify upstream providers or disclose credentials."],
+  "assumptions": ["One source admission unit contains existing code; semantic ownership stays in docs/architecture/module-registry.json.", "Console is optional and never an Agent-to-Agent transport; passive capability Agents and one-to-many resource semantics remain first-class.", "A local Relay/bridge process may assist local discovery and connection, but Agent Work data must remain on the Agent-to-Agent path and the Console is not a relay.", "RCC 4444 is the primary provider and canonical goaichat-openai is an explicit backup instance sourced from goaichat_openai; selection and errors remain visible.", "Existing mapped source regression gates remain applicable when their owned paths are affected; public/NAT and device live acceptance are later phases."],
   "ambiguities": [],
   "questions": [],
   "status": "confirmed",
   "confirmed_by": "user",
-  "confirmed_at": "2026-09-11T04:20:58Z",
+  "confirmed_at": "2026-09-13T02:35:30Z",
   "created_at": "2026-09-06T00:00:00Z"
 }
