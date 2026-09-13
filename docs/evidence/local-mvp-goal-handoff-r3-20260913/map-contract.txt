@@ -1,0 +1,4 @@
+Affected contract: docs/goals/teams-long-running-delivery.md and docs/goals/teams-development-plan.md
+are referenced but unchanged. Changed documents are the Local MVP execution pointer, user path, and
+copy-paste goal surface. No architecture map, module map, protocol contract, package, lockfile,
+runtime source, or generated output changed.

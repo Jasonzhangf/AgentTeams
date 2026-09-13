@@ -1,0 +1,10 @@
+command: pnpm verify
+exit: 0
+test_files: 77 passed
+tests: 458 passed
+typecheck: passed
+appsdk_guide_compile: passed
+appsdk_compile: passed
+smoke: passed
+appsdk_verify: passed (stage=contract_bound)
+source: exact documentation candidate worktree

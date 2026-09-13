@@ -24,17 +24,17 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除�
 偷偷移入调度文档。不使用 AGY Review；milestone 才使用 Astra。
 
 当前接手指针：
-- 本次候选的实现输入基线为
-  `948d5645e20d928332840e2bb9c756995bf2cf44`；该 SHA 只作输入快照，当前现场仍必须重新读取
-  root `main`、工作树和远端 `origin/main`。
+- 本次文档刷新观察到的实现输入基线为
+  `7e82b8a749409a19316ef5f389881848f9436b4b`；该 SHA 只作现场快照，启动时仍必须重新读取
+  root `main`、工作树和远端 `origin/main`，所有实现单元从届时最新的 `origin/main` 建立。
   每次唤醒仍必须重新读取 `git status`、`git rev-parse`、`git ls-remote`，不得把快照当作新基线。
 - 本次目标刷新 issue 是 `2cbc522`，当前仍是唯一 open 的目标刷新 issue；上一轮文档刷新
   `8186534` 已关闭。不得创建第二个 goal、第二个 subscription 或第二套任务图。
 - U0 internal.toml 真源 issue 159b78b 已关闭，只复用其 receipts，不重开、不重复实现。
 - 首个实现单元是 runtime issue `3742b9a`：detached launcher、runtime-owned supervisor
-  status/stop 和 configured Work API。现有 rebind candidate `546e77f` 的 merge-base 仍是旧的
-  `412fc5f`，而当前实现输入基线是 `948d564`；它不能直接复用为当前 candidate。
-  必须从最新 `origin/main` 重建或重绑定，并重新验证 startup reservation、PID-0 stop guard、
+  status/stop 和 configured Work API。当前 `playground/3742b9a-runtime-rebind-r2-20260913`
+  仍 dirty，尚无 candidate commit；旧 `546e77f` 基于旧主线，不能直接复用。必须先形成最新
+  `origin/main` 上的 clean candidate，并重新验证 startup reservation、PID-0 stop guard、
   concurrent-start、internal state merge、configuredWork generation binding 和 supervisor
   start-token ownership 修复。没有当前 candidate 的 focused/full gate、Codex exact review、
   integration 或 push 前，不得推进 CLI，也不得把 CLI 做成第二套 supervisor/Work ledger。

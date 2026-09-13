@@ -1,0 +1,3 @@
+Documentation/governance-only unit. No runtime artifact, install, restart, public entrypoint, or
+live network replay is produced or claimed. Product artifact hashes are not applicable; the
+normalized source and test gate summary is retained in pnpm-verify-summary.txt.

@@ -17,20 +17,22 @@
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次候选的实现输入基线是 `948d5645e20d928332840e2bb9c756995bf2cf44`；这个 SHA 只是输入
-  快照，不能替代下一轮启动时的现场检查。
+  本次文档刷新观察到的输入基线是 `7e82b8a749409a19316ef5f389881848f9436b4b`；这个 SHA
+  只是现场快照，不能替代下一轮启动时的现场检查。任何实现单元都必须从届时最新的
+  `origin/main` 建立候选。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 本轮文档候选输入基线为 `948d564`，此前 U0 worktree/branch 已回收；每次恢复仍须重读现场。
+- 本轮文档候选从 `7e82b8a` 建立；此前 U0 worktree/branch 已回收，每次恢复仍须重读现场。
   L1-CLI issue `fdec042`
   的 worker 已停止写入并回报了明确的 runtime API 缺口：候选 worktree
   `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测 `cli/agentteams.spec.ts`，没有 candidate
   commit；不得把它标记为完成或删除其红测。
 - 根据该发现已建立独立 runtime delivery unit `3742b9a`，负责 detached launcher、持久 supervisor
-  ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。当前
-  rebind worktree 有候选提交 `546e77f`，worktree clean，但其 merge-base 是旧的 `412fc5f`，
-  该候选落后当前主线；因此必须先从最新主线重建或重绑定，再重跑 focused/full gate、
-  完成 Codex review 后才可集成，不能把旧候选当作当前 candidate，也不能重派同一 runtime unit。
+  ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。当前可见
+  的 `playground/3742b9a-runtime-rebind-r2-20260913` 仍 dirty，HEAD 与 `7e82b8a` 相同，尚无
+  candidate commit；必须先确认唯一 owner 停止写入，再从最新 `origin/main` 形成 clean candidate，
+  重跑 focused/full gate、完成独立 Codex review 后才可集成，不能把旧 `546e77f` 或 dirty tree
+  当作当前 candidate，也不能重派同一 runtime unit。
 - C1 issue `776fcad` 保留在独立 worktree `playground/776fcad-c1-20260913`、branch
   `codex/776fcad-c1-20260913` 上，当前 worktree 基线仍是旧的 `a71615a` 且有 dirty 修改。它只
   修改 `config/runtime-config.ts` 与 `config/runtime-config.spec.ts`，不得由本单元覆盖或删除；它只
@@ -42,7 +44,8 @@
 
 | 资源 | 当前事实 | 调度动作 |
 |---|---|---|
-| `playground/3742b9a-runtime-rebind-20260913` | clean，candidate `546e77f`，merge-base=`412fc5f`，落后当前 main | 先从最新 `origin/main` 重建/重绑定，再验证、review、集成、push |
+| `playground/3742b9a-runtime-rebind-r2-20260913` | dirty，HEAD=`7e82b8a`，无 candidate commit | 先确认 owner 停止写入并从最新 `origin/main` 形成 clean candidate，再跑 focused/full gate 与独立 Codex review |
+| `playground/3742b9a-runtime-rebind-20260913` | clean，旧 candidate `546e77f`，基于旧 main | 只作历史参考；不得直接集成或 reset |
 | `playground/3742b9a-runtime-20260913` | clean，旧 candidate `d040885` | 只作历史参考；不得直接集成或 reset |
 | `playground/fdec042-l1-cli-20260913` | 仅保留未跟踪红测 `cli/`，无 candidate commit | runtime receipt 后从最新 main 重建；红测迁移前不删除 |
 | `playground/776fcad-c1-20260913` | dirty，基线 `a71615a`，仅属 config/OpenCode | 由其 owner 从最新 main 重建后恢复；不得碰 runtime/network |
@@ -102,8 +105,8 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 
 ## 当前基线与已知状态
 
-- 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮接手时可用基线为
-  `948d5645e20d928332840e2bb9c756995bf2cf44`，下一 unit 仍须重新读取远端。
+- 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮接手时观察到
+  `origin/main=7e82b8a749409a19316ef5f389881848f9436b4b`，下一 unit 仍须重新读取远端。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
@@ -232,7 +235,7 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI �
 | unit | issue | 当前状态 | 下一动作 |
 | --- | --- | --- | --- |
 | U0 internal config compiler | `159b78b` | closed；receipt 可复用 | 不重开、不重复派发 |
-| runtime local launcher | `3742b9a` | candidate `546e77f` clean 但 merge-base=`412fc5f`，落后当前 main；当前验证和 exact review 尚未绑定 | 从最新 `origin/main` 重建/重绑定后重跑 focused/full gate → Codex review → candidate receipt → integration/push |
+| runtime local launcher | `3742b9a` | r2 worktree dirty，HEAD=`7e82b8a`，无 candidate commit；旧 `546e77f` 基于旧 main | 先形成最新 `origin/main` 上的 clean candidate，再重跑 focused/full gate → Codex review → candidate receipt → integration/push |
 | L1 CLI | `fdec042` | awaiting-runtime-unit；仅有红测，无 candidate | runtime receipt 后 rebase 到最新 main，再实现 `init/start/status/work/stop` |
 | C1 provider/OpenCode | `776fcad` | retained；旧基线 dirty worktree | 先从最新 `origin/main` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
 | W1/B1/U1/I1-L5 | canonical downstream | pending | 按依赖顺序启动，禁止提前共享写入 |

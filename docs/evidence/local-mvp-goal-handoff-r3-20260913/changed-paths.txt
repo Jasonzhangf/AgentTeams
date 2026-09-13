@@ -1,0 +1,16 @@
+docs/evidence/local-mvp-goal-handoff-r3-20260913/artifact-scope.txt
+docs/evidence/local-mvp-goal-handoff-r3-20260913/base.txt
+docs/evidence/local-mvp-goal-handoff-r3-20260913/candidate-receipt.md
+docs/evidence/local-mvp-goal-handoff-r3-20260913/changed-paths.txt
+docs/evidence/local-mvp-goal-handoff-r3-20260913/cleanup-receipt.md
+docs/evidence/local-mvp-goal-handoff-r3-20260913/head.txt
+docs/evidence/local-mvp-goal-handoff-r3-20260913/map-contract.txt
+docs/evidence/local-mvp-goal-handoff-r3-20260913/pnpm-lock.sha
+docs/evidence/local-mvp-goal-handoff-r3-20260913/pnpm-verify-summary.txt
+docs/evidence/local-mvp-goal-handoff-r3-20260913/pnpm-verify.exit
+docs/evidence/local-mvp-goal-handoff-r3-20260913/tool-versions.txt
+docs/evidence/local-mvp-goal-handoff-r3-20260913/tree.sha
+docs/evidence/local-mvp-goal-handoff-r3-20260913/validation.md
+docs/goals/teams-local-mvp-execution-plan.md
+docs/goals/teams-local-mvp-goal-prompt.md
+docs/goals/teams-user-mvp-delivery.md
