@@ -103,10 +103,12 @@ Agent 重启与信号关闭。只有命令真实通过且源码未变化
 pre-review 记录；完整命令输出保存在 `.appsdk-control/lifecycle-adapter/`。这些本地
 记录不代表公网/NAT、managed OpenCode、跨设备或发布验收。
 
-公网 Relay、至少一端真实 NAT 出站、daemon 自动登录、能力匹配、原子容量与一对多、
-Console 全关闭协作、多 provider apply/readback 是当前 MVP 的必需 live gates；它们
-在真实证据齐备前保持 open，基础测试通过不能升级这些状态。direct、NAT-to-NAT、
-手机蜂窝和完整 UI 属于 post-MVP，不进入本轮 closeout。
+Phase 1 Local Network MVP 的必需 live gates 是：从 `~/.agentteams/config.toml` 启动多个
+独立 daemon，经真实本地 socket 完成注册、发现、能力匹配、原子容量、一对多 Work、
+restart/generation/idempotency，以及 Console 全关闭后的 Agent-to-Agent Work；多 provider
+apply/readback 也必须绑定真实入口证据。它们在真实证据齐备前保持 open，基础测试通过不能
+升级这些状态。公网 Relay、真实 NAT 出站、STUN/ICE、NAT-to-NAT、direct、手机蜂窝和完整
+UI 属于 post-MVP，由对应的 `*-public-nat` 或后续 delivery gate 收集，不进入本轮 closeout。
 
 Guidance 使用声明的项目 AGENTS 和官方治理 Skill，保持 advisory；它帮助计划，
 不重复保存质量 PASS。Collab 自动注册保留；无 tmux 时 pending，不阻断独立工作。
