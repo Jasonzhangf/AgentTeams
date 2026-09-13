@@ -1,4 +1,7 @@
 # Cleanup receipt
 
-Pending until the candidate and integration worktrees are clean, evidence is retained on remote main,
-and this delivery unit's worktrees and branch are safely removed.
+- Candidate worktree `playground/c4387e4-local-mvp-goal-20260913` was clean and removed after its
+  candidate was integrated; branch `codex/c4387e4-local-mvp-goal-20260913` was deleted.
+- Integration worktree `playground/c4387e4-local-mvp-integration-20260913` remains temporarily retained
+  until the final cleanup receipt update is pushed; it has no uncommitted source changes.
+- No worker, daemon, port, lock, claim, or credential was started by this documentation unit.
