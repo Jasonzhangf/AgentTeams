@@ -133,6 +133,37 @@ it('rejects a v2 endpoint named relay before process planning creates duplicate 
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
+it('rejects non-JSON TOML payload values instead of coercing them during materialization', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-endpoint-config-json-'))
+  const path = join(directory, 'config.toml')
+  try {
+    await writeLocalConfig(path, `version = 2
+[relay]
+config = "relay.json"
+[endpoints.consumer]
+role = "receiver"
+identity = { hostId = "host", machineId = "machine", agentId = "consumer", accountId = "account", agentKind = "custom", label = "Consumer" }
+scopeId = "scope"
+dataDirectory = "data"
+leasePort = 48031
+presenceIntervalMs = 100
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-consumer" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", caFile = "relay.pem", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
+[endpoints.consumer.connect]
+targetAgentId = "provider"
+capabilityId = "file-search"
+capabilityVersion = "1"
+operation = "search"
+workId = "configured-search"
+requestId = "configured-search-1"
+demands = [{ resourceId = "search-slot", amount = 1 }]
+payload = 1970-01-01T00:00:00Z
+`)
+    await expect(loadLocalConfig(path)).rejects.toThrow(/payload.*plain JSON object|payload.*JSON/i)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
 it('quotes dotted daemon ids in internal.toml so the persisted key remains exact', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-internal-state-'))
   const path = join(directory, 'internal.toml')

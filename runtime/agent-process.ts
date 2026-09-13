@@ -23,6 +23,7 @@ import { createManagedConfigOwner } from './managed-config-owner.ts'
 import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
 import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
 import { createDirectWssListener, type DirectWssListener } from '../network/direct-listener.ts'
+import { assertJsonValue } from '../control-protocol/json-value.ts'
 import type { JsonValue, ResourceDemand } from '../control-protocol/agent-services.ts'
 
 export interface AgentConnectionIntent {
@@ -119,6 +120,8 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
         return { resourceId: text(demand.resourceId, `endpoint.connect.demands[${index}].resourceId`), amount: number(demand.amount, `endpoint.connect.demands[${index}].amount`) }
       })
       if (!Object.hasOwn(connection, 'payload')) throw new RelayProtocolError('INVALID_INPUT', 'endpoint.connect.payload is required')
+      try { assertJsonValue(connection.payload, 'endpoint.connect.payload') }
+      catch (error) { throw new RelayProtocolError('INVALID_INPUT', error instanceof Error ? error.message : 'endpoint.connect.payload must contain only JSON values') }
       connect = { targetAgentId: field('targetAgentId'), capabilityId: field('capabilityId'), capabilityVersion: field('capabilityVersion'), operation: field('operation'),
         workId: field('workId'), requestId: field('requestId'), demands, payload: connection.payload as JsonValue }
     }

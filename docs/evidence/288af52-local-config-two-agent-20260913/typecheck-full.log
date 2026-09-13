@@ -16,7 +16,7 @@
 ℹ lib/index.mjs    16.95 kB │ gzip: 4.25 kB
 ℹ lib/index.d.mts  12.28 kB │ gzip: 2.84 kB
 ℹ 2 files, total: 29.23 kB
-✔ Build complete in 1495ms
+✔ Build complete in 594ms
 
 > @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/288af52-local-config-two-agent-20260913/opencode-adapter
 > tsc --noEmit

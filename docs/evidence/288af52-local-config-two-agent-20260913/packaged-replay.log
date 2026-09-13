@@ -5,5 +5,5 @@
 
  Test Files  1 passed (1)
       Tests  1 passed (1)
-   Start at  01:32:58
-   Duration  791ms (transform 35ms, setup 0ms, import 53ms, tests 616ms, environment 0ms)
+   Start at  01:45:24
+   Duration  725ms (transform 33ms, setup 0ms, import 49ms, tests 568ms, environment 0ms)

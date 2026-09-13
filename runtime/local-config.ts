@@ -3,6 +3,8 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { parse as parseToml } from 'toml'
+import { assertJsonValue } from '../control-protocol/json-value.ts'
+import type { JsonValue } from '../control-protocol/agent-services.ts'
 
 const LOCAL_CONFIG_VERSION = 1
 
@@ -27,7 +29,7 @@ export interface LocalConnectionIntent {
   readonly workId: string
   readonly requestId: string
   readonly demands: readonly { readonly resourceId: string; readonly amount: number }[]
-  readonly payload: unknown
+  readonly payload: JsonValue
 }
 
 export interface LocalConfig {
@@ -84,6 +86,8 @@ function connection(value: unknown, label: string): LocalConnectionIntent {
     return { resourceId, amount: item.amount as number }
   })
   if (!Object.hasOwn(input, 'payload')) throw new LocalConfigError(`${label}.payload is required`)
+  try { assertJsonValue(input.payload, `${label}.payload`) }
+  catch (cause) { throw new LocalConfigError(cause instanceof Error ? cause.message : `${label}.payload must contain only JSON values`, cause) }
   return { targetAgentId: textField('targetAgentId'), capabilityId: textField('capabilityId'), capabilityVersion: textField('capabilityVersion'),
     operation: textField('operation'), workId: textField('workId'), requestId: textField('requestId'), demands, payload: input.payload }
 }

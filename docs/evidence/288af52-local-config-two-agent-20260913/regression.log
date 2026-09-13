@@ -16,9 +16,6 @@
 ℹ lib/index.mjs    16.95 kB │ gzip: 4.25 kB
 ℹ lib/index.d.mts  12.28 kB │ gzip: 2.84 kB
 ℹ 2 files, total: 29.23 kB
-✔ Build complete in 999ms
-Regression gate: TEAMS_CONSOLE_REAL_DOM=1 (real Chrome required)
-(node:6702) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Build complete in 682ms
 Test Files 77 passed
-Tests 454 passed
+Tests 455 passed
