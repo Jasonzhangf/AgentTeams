@@ -147,6 +147,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `mainline`, `merge`
 - details: [L2/managed-runtime-delivery-20260906.md](L2/managed-runtime-delivery-20260906.md)
 
+### 2dcd928 Phase 1 Local Network MVP closeout
+- tags: `2dcd928`, `ai-reviewed`, `human-unreviewed`, `local-mvp`
+- details: [L2/memory-050a719871964218.md](L2/memory-050a719871964218.md)
+
 ### 2026-09-11 AgentTeams current candidate public relay blocker
 - tags: `9b10ed3`, `AgentTeams`, `ai-reviewed`, `blocker`, `human-unreviewed`, `public-relay`
 - details: [L2/memory-05be8e398937d34c.md](L2/memory-05be8e398937d34c.md)
