@@ -4,7 +4,9 @@
   candidate was integrated; branch `codex/c4387e4-local-mvp-goal-20260913` was deleted.
 - Integration worktree `playground/c4387e4-local-mvp-integration-20260913` was clean and removed after
   the final evidence commit was pushed; branch `codex/c4387e4-local-mvp-integration-20260913` was deleted.
+- The cleanup, integration, and push-receipt worktrees owned by this delivery unit were all clean,
+  stopped, removed, and deleted after the remote push. No owned worktree or branch remains.
 - No worker, daemon, port, lock, claim, or credential was started by this documentation unit.
-- The preceding remote source state was verified at `e078d4d4fc40ba63bb611bdffe925714c853407d`.
-- This receipt update remains `cleanup-pending` until its own evidence commit is pushed and a fresh
-  `git ls-remote origin refs/heads/main` result is recorded.
+- The final pre-cleanup remote state was verified at
+  `1c52ceb597885862a1f7ee3a2b84ded8b7722db5` by `git ls-remote origin refs/heads/main`.
+- Cleanup status: `complete` for the resources owned by this delivery unit.
