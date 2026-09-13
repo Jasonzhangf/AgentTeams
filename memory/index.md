@@ -15,7 +15,7 @@ _Empty._
 
 ## Level 2 — reviewed reusable
 
-### Local MVP goal pointer reentered at 948d564
+### Local MVP goal pointer persisted at 0db94b8
 - tags: `2cbc522`, `agentteams`, `ai-reviewed`, `goal`, `human-unreviewed`, `local-mvp`
 - details: [L2/2cbc522-goal-refresh-20260913.md](L2/2cbc522-goal-refresh-20260913.md)
 
@@ -293,7 +293,7 @@ _Empty._
 
 Base budget: 8 lines. Copy the compact lines into the project Skill `description` after manual architecture deduplication. Fill level 1 first; use level 2, then level 3, only for remaining slots.
 
-- L2: Local MVP goal pointer reentered at 948d564 (plan) [2cbc522,agentteams,ai-reviewed,goal,human-unreviewed,local-mvp] -> L2/2cbc522-goal-refresh-20260913.md
+- L2: Local MVP goal pointer persisted at 0db94b8 (plan) [2cbc522,agentteams,ai-reviewed,goal,human-unreviewed,local-mvp] -> L2/2cbc522-goal-refresh-20260913.md
 - L2: Stage-reentrant lifecycle gates (knowledge) [ai-reviewed,human-unreviewed] -> L2/3fd009a-governance-reentrant.md
 - L2: AgentTeams Local Network MVP governance profile pushed (knowledge) [agentteams,ai-reviewed,governance,human-unreviewed,mvp] -> L2/56baa57-local-network-goal-20260912.md
 - L2: N3 peer route contract delivery (knowledge) [N3,ai-reviewed,human-unreviewed,network] -> L2/8ea5f7c-n3-peer-route-contract-20260910.md
