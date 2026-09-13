@@ -17,13 +17,15 @@ receipt 在 `L1-CLI/W1/C1/B1/U1/I1` 中取首个未完成项。
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次文档落盘时的主线是 `f38b6d90d8d4cc312a92da21e666196f8327b9b5`；这个 SHA 只是快照，不能
+  本次文档落盘时的主线是 `94919f71702ce7b91790503714940df6399875b2`；这个 SHA 只是快照，不能
   替代下一轮启动时的现场检查。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 当前根树与远端主线均为 `f38b6d9`，此前 U0 worktree/branch 已回收；下一次恢复按 canonical
-  阶段 receipt 从 `L1-CLI/W1/C1/B1/U1/I1` 的首个失效 gate 开始。无独立安全任务时记录等待原因，
-  不为填满 worker 槽位制造并行工作。
+- 当前根树与远端主线均为 `94919f7`，此前 U0 worktree/branch 已回收。当前唯一运行中的交付单元是
+  AppSDK issue `fdec042`（L1-CLI），其独立 worktree 为
+  `playground/fdec042-l1-cli-20260913`，branch 为 `codex/fdec042-l1-cli-20260913`；截至本快照仍处于
+  红测/实现阶段，尚无 candidate commit。下一次恢复必须先复核该 worker 是否仍在写入、是否越界修改
+  `vitest.config.ts` 或 runtime 语义，再从首个失效 gate 继续；不得重复派发或复用未完成候选。
 
 ## 当前交付指针
 
@@ -41,6 +43,18 @@ receipt 在 `L1-CLI/W1/C1/B1/U1/I1` 中取首个未完成项。
   后续参考，不是本地 MVP 的前置，也没有被本计划伪装成已完成。Phase 1 使用 canonical
   `L1` 本地 launcher 与 `L2` 本地 bridge/daemon；I1/L5 只消费本地 L1-L4 receipts。
 
+## 本轮 goal 编译（给 `/goal` 的唯一输入）
+
+本轮只交付 Local Network MVP，不扩展公网 Relay、NAT/STUN、手机或关系治理。主任务的职责是
+调度和资源管理：维护唯一 delivery 指针，查重 issue，按依赖为每个 unit 建立 clean worktree，
+派发 gcm worker，审查 exact candidate，执行 integration/push，写 memory L2，并回收自己拥有的
+worker、进程、端口、锁、worktree 和 branch。worker 只改合同范围，不得合并、推送或删除他人资源。
+
+当前顺序为 `L1-CLI → W1 → B1`，`C1` 在公共 config contract 稳定后可并行，`U1` 等待 B1 与
+projection review，`I1/L5` 最后串行收口。每个 unit 均执行红测、最小实现、适用 gate、真实入口、
+独立 Codex exact review、candidate commit、clean integration、远端 push、memory L2、cleanup；
+只从第一个失效 gate 重跑，稳定 fingerprint 的证据写 reuse receipt。
+
 ## 目标
 
 把 AgentTeams 收口为一个用户可执行的本地网络 MVP：用户只维护
@@ -50,8 +64,8 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 
 ## 当前基线与已知状态
 
-- 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；当前可用基线为
-  `f38b6d90d8d4cc312a92da21e666196f8327b9b5`。
+- 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮当前可用基线为
+  `94919f71702ce7b91790503714940df6399875b2`。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
