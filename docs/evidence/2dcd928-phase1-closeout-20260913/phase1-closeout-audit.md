@@ -21,7 +21,8 @@ delivery unit only records evidence and does not change runtime source.
 - Evidence candidate commit: `99a3437314b5a80183eb91d63a0269615fb1cec4`
 - Evidence candidate tree: `ced75c1f1f25bc040614e2791ee817f6c32ed82a`
 - Allowed paths: `docs/evidence/2dcd928-phase1-closeout-20260913/**`
-- Actual changed paths: `diff-check.log`, `focused-tests.log`,
+- Actual changed paths: `diff-check.log`, `focused-command.txt`,
+  `focused-tests-rerun.log`, `focused-tests.log`,
   `phase1-closeout-audit.md`, `pnpm-verify.log`, `remote-main-before.md`,
   `review-receipt.md`, `review-r2-receipt.md`, `review-r3-receipt.md`
 - Clean-worktree proof: `git status --short --branch` returned only the branch
@@ -37,6 +38,7 @@ delivery unit only records evidence and does not change runtime source.
   function map `18dc65bf1b804ec2b55152691f7d7bf1d0b61e50bb93a79422abff67203636be`;
   mainline map `cf75203344106834adb9ebb0a44327f1b4b238b77c695570e60326752d446791`;
   verification map `1d01b5176737dc4d590070992e36ad8b85a1b7288b571cd726fe2bf2c58130b8`;
+  module registry `d30dcc10fa9e3533fcb05668599abc7f4eb27193e2e6d88c176871e3c839a8b1`;
   protocol manifest `a38c9f90c30a9b1f5171fd29c5e992f7278dee4f6758cb45487192a0f9c63177`;
   governance `00053f65adccdfa35253c8c290188561becc9f62bbc9e359e7a5e830cdec70eb`.
 - Environment/entrypoint: clean local worktree under
@@ -47,7 +49,9 @@ Gate artifacts are bound to this fingerprint by their hashes:
 
 | Gate artifact | SHA-256 | Bound source |
 | --- | --- | --- |
-| `focused-tests.log` | `a73abb40149420350b3bb53951ed9a1ac32ef0abfb438540e1e75983333c8ce9` | base commit/tree above |
+| `focused-command.txt` | `e376a7b96012a5fb621a2a9614c568e3f83af556df0331e43dd332ec620f9bd0` | exact command for current focused replay |
+| `focused-tests-rerun.log` | `011f9a3ff980216568daa039dfe2c1db757469b87385c55d1b4891a353aa1ce9` | base commit/tree above |
+| `focused-tests.log` | `a73abb40149420350b3bb53951ed9a1ac32ef0abfb438540e1e75983333c8ce9` | historical focused receipt; superseded by rerun above |
 | `pnpm-verify.log` | `3ce3d935cec53f8560180fc08cfa18901c49ba2e81bd5325c1f64f0284219cfc` | base commit/tree above |
 | `diff-check.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | evidence candidate tree above |
 | `remote-main-before.md` | `440f6c42dca40f0292600ce5b1810b6563f3058a79df72bf741b8ee7946df69b` | base commit resolved before gates |
@@ -57,10 +61,13 @@ Gate artifacts are bound to this fingerprint by their hashes:
 The exact source base was checked in a clean worktree. The command output is
 retained beside this receipt and is bound to the fingerprint above:
 
-- `focused-tests.log`: 24 files and 165 tests passed. It covers the local
+- `focused-command.txt` records the exact 24-file Phase 1 command.
+- `focused-tests-rerun.log`: 24 files and 149 tests passed. It covers the local
   launcher, config persistence, local bridge process replay, daemon lifecycle,
   Work capacity, CLI execution, Console projection, UI directory discovery,
   and provider/OpenCode bindings.
+- `focused-tests.log` remains the earlier 24-file/165-test receipt and is kept
+  as historical evidence; the rerun above is the current focused gate.
 - `pnpm-verify.log`: `pnpm verify` passed; 75 files and 447 tests passed,
   typecheck passed, OpenCode and Console packages built, AppSDK guide compile,
   AppSDK compile, packaged smoke, and `appsdk verify` passed.
