@@ -1,9 +1,12 @@
-# Solution receipt: Local MVP goal refresh
+# Solution receipt
 
-- Issue: `2cbc522`.
-- Result: refreshed the single Local MVP execution pointer, user delivery path, copy-paste `/goal` prompt, current runtime/L1/C1 resource facts, dependency order, re-entry rules, and evidence fingerprints.
-- Source candidate review: Codex Review `2cbc522-goal-refresh-review-r9`, PASS.
-- Final evidence-tip review: Codex Review `2cbc522-goal-refresh-review-r13`, PASS for commit `b03c3626f39d9585e1dc0f2368c533c078a72695`.
-- Integration: `311efb80fc66e068cdf338d86665ad6533a26513` was integrated from `origin/main@412fc5fbc7bba328d9916906122192d4e7e60e2b` and passed the documented verification.
-- Remote evidence tip: `c8377f5695da8f5de96991cff9a5910fab8cbd8d` after the evidence-only receipt push.
-- Scope boundary: this delivery does not implement or close runtime launcher, L1 CLI, Agent Work, provider/OpenCode, Console projection, or live network replay. The Local Network MVP goal remains open.
+- issue: `2cbc522`
+- resolution: refreshed the Local Network MVP execution pointer and sole copy-paste `/goal` prompt
+  to the current `origin/main@f0197f7` handoff state, corrected runtime/L1 ownership overlap, and
+  preserved prior candidate and integration evidence while adding current re-entry receipts.
+- integrated commit: `a52a1077b1dbd81bee44a32f96f37ac19be0f880`
+- remote main SHA: `a52a1077b1dbd81bee44a32f96f37ac19be0f880`
+- validation: `pnpm verify` PASS in the clean integration worktree.
+- review: independent exact review PASS; built-in review attempts were retained as protocol-failure evidence.
+- remaining boundary: the Local Network MVP is still open; this unit only updates dispatch and resource
+  management documentation. Runtime, CLI, Agent Work, provider, Console-offline and live replay units remain downstream.
