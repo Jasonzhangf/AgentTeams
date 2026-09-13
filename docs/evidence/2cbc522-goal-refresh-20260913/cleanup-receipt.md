@@ -7,6 +7,14 @@
 - This receipt is committed before the next cleanup step; the two listed worktrees and branches are removed only after this commit is pushed and the remote SHA is re-read.
 - Runtime `3742b9a`, L1 `fdec042`, and C1 `776fcad` worktrees remain retained under their owners and are not cleanup targets.
 
+## Final re-entry cleanup
+
+- root `main` is clean at `aeba5cdc87e93168a5394445bcabf89027cdfcc6`; local and remote main match.
+- this follow-up started no daemon, listener, claim, lock or temporary credential and therefore had no new
+  process or service to stop.
+- retained resources are unchanged: runtime `3742b9a`, L1 `fdec042`, and C1 `776fcad` remain under their
+  owners; no other worktree or branch was deleted, reset or overwritten.
+
 ## Current re-entry cleanup
 
 - current integrated remote before this receipt: `5445d9d30dcaf4d4a8c0cd4da55cdbe22d8befec`;

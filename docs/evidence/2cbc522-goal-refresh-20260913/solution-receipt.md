@@ -22,3 +22,18 @@
 - current review: independent exact review PASS; built-in review attempts retained as protocol-failure evidence.
 - current remaining boundary: the Local Network MVP is still open; this unit only updates dispatch and resource
   management documentation. Runtime, CLI, Agent Work, provider, Console-offline and live replay units remain downstream.
+
+## Final re-entry update
+
+- candidate: `aeba5cdc87e93168a5394445bcabf89027cdfcc6`.
+- scope: refreshed the live handoff pointers from the historical `f0197f7` snapshot to the verified
+  `948d5645e20d928332840e2bb9c756995bf2cf44` base, and persisted the corresponding Level 2 memory update.
+- validation: `git diff --check` PASS; `pnpm exec project-memory verify` PASS with project source consistent
+  (`68/68` nodes); no product source or retained worker worktree changed.
+- push: `git push origin main` PASS; `git ls-remote origin refs/heads/main` returned
+  `aeba5cdc87e93168a5394445bcabf89027cdfcc6`.
+- review boundary: the prior exact review remains valid for the documented semantic scope; a new independent
+  gcm Codex review was started for this pointer-only candidate but exceeded the bounded wait and was terminated
+  without a final result. It is recorded as protocol/environment failure, not as PASS.
+- final status: this unit has persisted the reentrant Local MVP goal and management contract; runtime, CLI,
+  Agent Work, provider/OpenCode, Console projection and real local replay remain open downstream.
