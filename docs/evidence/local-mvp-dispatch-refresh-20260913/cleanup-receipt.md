@@ -8,4 +8,6 @@
   `codex/local-mvp-dispatch-integration-20260913`.
 - Runtime `3742b9a`, L1 `fdec042`, and C1 `776fcad` worktrees remain retained under their owners and
   are not candidates for deletion here.
-- The listed owned worktrees must be clean and have no active process or claim before removal.
+- Cleanup completed after verifying both owned worktrees were clean and had no active process or claim:
+  both worktrees were removed and both owned branches were deleted. The four runtime/L1/C1 worktrees
+  listed above remain intact.
