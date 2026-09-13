@@ -1,4 +1,7 @@
 # Push receipt: local MVP dispatch refresh
 
-- Pending until the candidate is integrated into the latest remote `main`.
-- Required evidence: `git push origin main` and `git ls-remote origin refs/heads/main`.
+- First integrated push: `git push origin main` succeeded.
+- Remote verification: `git ls-remote origin refs/heads/main` returned
+  `3ccdf3733cc71f5e1c4f934ae9671382bf2d5951`.
+- This SHA includes the reviewed source candidate, evidence follow-up, and integration verification.
+- A final evidence-only push will add the completed cleanup and solution receipts.
