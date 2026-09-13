@@ -1,0 +1,8 @@
+docs/goals/teams-local-mvp-execution-plan.md
+docs/goals/teams-local-mvp-goal-prompt.md
+docs/goals/teams-user-mvp-delivery.md
+docs/evidence/2cbc522-goal-refresh-20260913/base.txt
+docs/evidence/2cbc522-goal-refresh-20260913/changed-paths.txt
+docs/evidence/2cbc522-goal-refresh-20260913/validation-receipt.md
+docs/evidence/2cbc522-goal-refresh-20260913/pnpm-verify.log
+docs/evidence/2cbc522-goal-refresh-20260913/candidate-fingerprint.md

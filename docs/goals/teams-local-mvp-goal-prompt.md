@@ -25,17 +25,21 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除�
 
 当前接手指针：
 - 本次接手复核时 root `main` 与远端 `origin/main` 均为
-  `bc2b209d2806c0a9f95199acd3de0988ac6b6bbe`，root clean；该 SHA 只作本次快照。
+  `412fc5fbc7bba328d9916906122192d4e7e60e2b8`，root clean；该 SHA 只作本次快照。
   每次唤醒仍必须重新读取 `git status`、`git rev-parse`、`git ls-remote`，不得把快照当作新基线。
+- 本次目标刷新 issue 是 `2cbc522`；上一轮文档刷新 `8186534` 已关闭。不得创建第二个 goal、
+  第二个 subscription 或第二套任务图。
 - U0 internal.toml 真源 issue 159b78b 已关闭，只复用其 receipts，不重开、不重复实现。
 - 首个实现单元是 runtime issue 3742b9a：detached launcher、runtime-owned supervisor
-  status/stop 和 configured Work API。rebind worktree 已有 candidate commits `f99089f`、
-  `88b8716`、`ffc1c0c`，当前仍有 startup reservation、PID-0 stop guard 和 concurrent-start
-  修复未提交；继续同一 delivery unit，先完成 focused gate、exact review 和 candidate commit，
-  不得重复派发或把 CLI 做成第二套 supervisor/Work ledger。
+  status/stop 和 configured Work API。rebind worktree 当前 exact candidate 是 `546e77f`，tree
+  clean；它与当前 `origin/main@412fc5f` 的 merge-base 是 `412fc5f`，候选包含 startup reservation、PID-0 stop guard、concurrent-start、internal state merge、
+  configuredWork generation binding 和 supervisor start-token ownership 修复，但还没有绑定当前
+  focused/full gate、Codex exact review、integration 或 push；继续同一 delivery unit，不得重复派发
+  或把 CLI 做成第二套 supervisor/Work ledger。
 - runtime receipt 后从最新 origin/main 重建 L1 issue fdec042 的 worktree，实现
   init/start/status/work/stop；旧 worktree 只保留红测，不得直接集成。C1 issue 776fcad 只能在
-  config/** 与 opencode-adapter/** 范围内并行；其旧 worktree 有 dirty 修改，candidate 前必须
+  config/** 与 opencode-adapter/** 范围内并行；其旧 worktree 当前 dirty，修改为
+  config/runtime-config.ts 与 config/runtime-config.spec.ts；candidate 前必须
   从当前 origin/main 重建并重新验证 fingerprint。
 - 依赖顺序：3742b9a → fdec042 → W1 Agent Work → B1 fixed capability CLI → U1 Console projection
   → I1/L5 本地真实回放；C1 可与 runtime/L1 并行，但不得写 runtime/network/agent/UI。
