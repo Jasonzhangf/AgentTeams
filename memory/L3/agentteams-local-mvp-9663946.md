@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"plan","created_at":"2026-09-13T15:13:47.111631+00:00","id":"agentteams-local-mvp-9663946","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["ai-reviewed","goal","human-unreviewed","local-mvp","scheduler"],"updated_at":"2026-09-13T15:13:47.111631+00:00"} -->
+
+# Local MVP scheduler handoff at 9663946
+
+The canonical AgentTeams Local Network MVP handoff is refreshed and pushed at main 9663946. The user path is agentteams init, edit ~/.agentteams/config.toml, start, status, work, stop, start, status. config.toml remains user intent and internal.toml remains runtime-owned truth. The delivery order is runtime issue 3742b9a, then L1 CLI fdec042, W1 Agent Work, B1 fixed capability CLI, U1 Console projection, and serial I1/L5 local replay; C1 provider/OpenCode is independent only within config/** and opencode-adapter/**. Desktop primary owns scheduling, exact review, integration, push, memory, and owned-resource cleanup. Runtime 3742b9a is active without a candidate commit; L1 is awaiting runtime; C1 is retained on its old baseline and must rebind to latest origin/main before candidate work. This memory is ai-reviewed and human-unreviewed.
+<!-- project-memory:end -->

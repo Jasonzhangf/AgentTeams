@@ -59,6 +59,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `artifact`, `human-unreviewed`, `install`, `restart`
 - details: [L2/agentteams-installed-runtime-20260906.md](L2/agentteams-installed-runtime-20260906.md)
 
+### Local MVP scheduler handoff at 9663946
+- tags: `ai-reviewed`, `goal`, `human-unreviewed`, `local-mvp`, `scheduler`
+- details: [L2/agentteams-local-mvp-9663946.md](L2/agentteams-local-mvp-9663946.md)
+
 ### AgentTeams 长程交付与阶段L2记忆
 - tags: `ai-reviewed`, `delivery`, `governance`, `human-unreviewed`, `memory-l2`
 - details: [L2/agentteams-long-running-delivery-20260906.md](L2/agentteams-long-running-delivery-20260906.md)
