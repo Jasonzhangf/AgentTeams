@@ -255,6 +255,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`
 - details: [L2/teams-2b330d7-relay-request-20260911.md](L2/teams-2b330d7-relay-request-20260911.md)
 
+### Local MVP resumable delivery plan
+- tags: `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`
+- details: [L2/teams-local-mvp-plan-8aeb3fa.md](L2/teams-local-mvp-plan-8aeb3fa.md)
+
 ## Level 3 — new or unreviewed
 
 ### Superseded memory write for 41f0ea2

@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"plan","created_at":"2026-09-13T10:07:17.473990+00:00","id":"teams-local-mvp-plan-8aeb3fa","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["AgentTeams","ai-reviewed","human-unreviewed","local-mvp"],"updated_at":"2026-09-13T10:07:17.473990+00:00"} -->
+
+# Local MVP resumable delivery plan
+
+As of remote main 8ace6cc, AgentTeams has one committed and pushed Local MVP execution plan at docs/goals/teams-local-mvp-execution-plan.md. It defines the user path agentteams init/start/status/work/stop, config.toml as user intent, internal.toml as runtime-owned internal truth, delivery units U0/U1/U2a/U2b/U4/U3 mapped to canonical L1-L5, gcm worker scheduling, Codex exact review, independent integration/push/memory/cleanup receipts, and post-MVP boundaries. Exact Codex review PASS is recorded in docs/evidence/8aeb3fa-goal-plan-20260913/review-receipt.md; integration, push, solution, and cleanup receipts are in the same directory. Tag: ai-reviewed; human-unreviewed.
+<!-- project-memory:end -->
