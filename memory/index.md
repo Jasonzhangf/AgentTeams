@@ -163,6 +163,10 @@ _Empty._
 - tags: `N3`, `ai-reviewed`, `human-unreviewed`, `network`
 - details: [L2/memory-292786e443571d6d.md](L2/memory-292786e443571d6d.md)
 
+### b701a57 Console restart projection requires an offline driver
+- tags: `ai-reviewed`, `b701a57`, `console-offline`, `human-unreviewed`, `local-mvp`
+- details: [L2/memory-30fceee929a3126a.md](L2/memory-30fceee929a3126a.md)
+
 ### n3-d4a-relay-directory-projection-20260910
 - tags: `N3`, `ai-reviewed`, `directory`, `human-unreviewed`, `network`
 - details: [L2/memory-4c4d9e4feeed0c89.md](L2/memory-4c4d9e4feeed0c89.md)
