@@ -1,0 +1,16 @@
+3:> pnpm test && pnpm typecheck && appsdk guide compile && appsdk compile && pnpm smoke && appsdk verify
+27:Test Files 77 passed
+28:Tests 458 passed
+63:  "manifest_hash": "sha256:33064eebb4b8ffb2f669866770deeba4f5a5a03d46adc6ff5e36754fc1137e64",
+64:  "project_contract_digest": "sha256:86407ecbbad07f82e32046ac1d89d56fb3a74356b943ba0368e4b85a2bab5393",
+107:      "description": "Preserve fixed operation/hook/gate boundaries only where the project declares them. Missing required capabilities fail explicitly; never mock success.",
+936:  "artifact_hash": "sha256:cdf2ffbac84933dfcf3025a4d475ac243011541885478dba087dd39ba9c7b523",
+1047:  "source_hash": "sha256:7de0ab94190e0f00d66cf897708e6db88a94c6fa6199070b4f452b48f9b99df2",
+1048:  "stage": "source_implemented"
+1051:  "artifact_hash": "sha256:eb17d64a2afd7ca1123acadd74d60358311bd43211f63c7099b94384bc481fde",
+1168:      "stage": "source_implemented"
+1180:> agentteams@0.1.0 smoke /Volumes/extension/code/AgentTeams/playground/local-mvp-goal-handoff-r2-20260913
+1181:> node scripts/artifact-smoke.mjs && node scripts/runtime-smoke.mjs
+1183:Packaged Console smoke passed: authenticated UI/API, legacy routes absent, owner denial and exact Session JSON. No provider or cross-device claim.
+1184:Packaged runtime smoke passed: real TLS Relay, daemon library admission/directory, stop and fresh generation. No OS process deployment, executor or NAT claim.
+1186:{"ok":true,"project_id":"agentteams","stage":"contract_bound"}

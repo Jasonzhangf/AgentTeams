@@ -25,15 +25,16 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除�
 
 当前接手指针：
 - 本次接手复核时 root `main` 与远端 `origin/main` 均为
-  `6417b84de7a6eb6e65295d390dea44dd875ce24c`，root clean；该 SHA 只作本次快照。
+  `dcb3bdc41284f7efccf4ffd477fd0731fa25c2c0`，root clean；该 SHA 只作本次快照。
   每次唤醒仍必须重新读取 `git status`、`git rev-parse`、`git ls-remote`，不得把快照当作新基线。
 - U0 internal.toml 真源 issue 159b78b 已关闭，只复用其 receipts，不重开、不重复实现。
 - 首个实现单元是 runtime issue 3742b9a：detached launcher、runtime-owned supervisor
-  status/stop 和 configured Work API；当前已有一个 gcm worker 在独立 worktree 中执行，尚无
-  candidate commit。不得重复派发、重启或把 CLI 做成第二套 supervisor/Work ledger。
+  status/stop 和 configured Work API；gcm worker 已提交 candidate `d040885`，但它基于旧
+  `3668b32`，必须从当前远端 main 重新绑定后再 review/integrate。不得重复派发、重启或把 CLI
+  做成第二套 supervisor/Work ledger。
 - runtime receipt 后重建 L1 issue fdec042 的 worktree，从最新 origin/main 实现
   init/start/status/work/stop；C1 issue 776fcad 可在 config/** 与 opencode-adapter/** 范围内并行，
-  但其现有 worktree 基于旧的 a71615a，candidate 前必须从当前 origin/main=6417b84 rebase/重建并
+  但其现有 worktree 基于旧的 a71615a，candidate 前必须从当前 origin/main=dcb3bdc rebase/重建并
   重新验证 fingerprint。
 - 依赖顺序：3742b9a → fdec042 → W1 Agent Work → B1 fixed capability CLI → U1 Console projection
   → I1/L5 本地真实回放；C1 可与 runtime/L1 并行，但不得写 runtime/network/agent/UI。

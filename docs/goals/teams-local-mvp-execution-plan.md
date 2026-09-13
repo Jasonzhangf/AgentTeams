@@ -17,29 +17,30 @@
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次接手复核时的主线是 `6417b84de7a6eb6e65295d390dea44dd875ce24c`；这个 SHA 只是快照，不能
+  本次接手复核时的主线是 `dcb3bdc41284f7efccf4ffd477fd0731fa25c2c0`；这个 SHA 只是快照，不能
   替代下一轮启动时的现场检查。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 当前根树与远端主线均为 `6417b84`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
+- 当前根树与远端主线均为 `dcb3bdc`，此前 U0 worktree/branch 已回收。L1-CLI issue `fdec042`
   的 worker 已停止写入并回报了明确的 runtime API 缺口：候选 worktree
   `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测 `cli/agentteams.spec.ts`，没有 candidate
   commit；不得把它标记为完成或删除其红测。
 - 根据该发现已建立独立 runtime delivery unit `3742b9a`，负责 detached launcher、持久 supervisor
-  ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。L1 在该
-  runtime receipt 前保持 `awaiting-runtime-unit`，取得 receipt 后必须从最新 `origin/main` 重建或
-  rebase，再继续实现和验证；旧的 `94919f7` 基线不能直接集成。
+  ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。runtime
+  candidate `d040885` 已通过 focused tests、typecheck 和 diff check，但基线仍为旧的 `3668b32`；
+  必须从最新 main 重建或 rebase 后重新验证和 review，旧 candidate evidence 不能直接集成。
 - C1 issue `776fcad` 保留在独立 worktree `playground/776fcad-c1-20260913`、branch
   `codex/776fcad-c1-20260913` 上，当前 worktree 基线仍是旧的 `a71615a`。它只拥有 `config/**`
   与 `opencode-adapter/**`，不得修改 runtime lifecycle；下一次恢复必须先从当前
-  `origin/main=6417b84` rebase 或重建 worktree，再重新验证 candidate fingerprint，不能直接复用
+  `origin/main=dcb3bdc` rebase 或重建 worktree，再重新验证 candidate fingerprint，不能直接复用
   旧基线的测试、review 或集成证据。
 
 ## 当前交付指针
 
 - **已关闭**：U0 Internal Config Compiler（`159b78b`）。
-- **下一单元**：继续推进正在运行的 runtime issue `3742b9a`，解除 L1-CLI 的跨进程生命周期/API blocker；
-  C1 Config/OpenCode 可继续并行。runtime receipt 后重新绑定 L1-CLI；取得 L1 receipt 后才推进 W1，
+- **下一单元**：继续推进已有旧基线 candidate、等待从当前 `origin/main` 重建/rebase 的 runtime issue
+  `3742b9a`，解除 L1-CLI 的跨进程生命周期/API blocker；C1 Config/OpenCode 可继续并行。runtime
+  receipt 后重新绑定 L1-CLI；取得 L1 receipt 后才推进 W1，
   再推进 B1；不得用 CLI 自己实现第二套 supervisor 或 Work ledger。
   每项先查重/复用 AppSDK issue，再从最新 `origin/main` 建立
   `playground/<issue-or-task>-<date>` 的独立 clean worktree。
@@ -87,7 +88,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮接手时可用基线为
-  `6417b84de7a6eb6e65295d390dea44dd875ce24c`，下一 unit 仍须重新读取远端。
+  `dcb3bdc41284f7efccf4ffd477fd0731fa25c2c0`，下一 unit 仍须重新读取远端。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
@@ -216,12 +217,12 @@ AppSDK compile/verify、真实入口和 exact review。当前只允许 L1-CLI �
 | unit | issue | 当前状态 | 下一动作 |
 | --- | --- | --- | --- |
 | U0 internal config compiler | `159b78b` | closed；receipt 可复用 | 不重开、不重复派发 |
-| runtime local launcher | `3742b9a` | running；已有一个 gcm worker，暂无 candidate commit | 不重复派发；候选返回后从当前远端 main 重新绑定 fingerprint，再跑首个失效 gate、exact review、integration 和 push |
+| runtime local launcher | `3742b9a` | candidate `d040885` ready；旧基线 `3668b32` | 不重复派发；从当前远端 main 重建/rebase，重跑 focused gate，再 exact review、integration 和 push |
 | L1 CLI | `fdec042` | awaiting-runtime-unit；仅有红测，无 candidate | runtime receipt 后 rebase 到最新 main，再实现 `init/start/status/work/stop` |
-| C1 provider/OpenCode | `776fcad` | retained；旧基线 worktree | runtime 资源稳定后，从当前 `origin/main=6417b84` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
+| C1 provider/OpenCode | `776fcad` | retained；旧基线 worktree | 可与 runtime/L1 并行；从当前 `origin/main=dcb3bdc` rebase/重建，再继续 config/opencode focused gate；不碰 runtime/network |
 | W1/B1/U1/I1-L5 | canonical downstream | pending | 按依赖顺序启动，禁止提前共享写入 |
 
-本次调度 worktree 是 `playground/local-mvp-goal-handoff-20260913`；runtime、L1 红测和 C1
+本次调度 worktree 是 `playground/local-mvp-goal-handoff-r2-20260913`；runtime、L1 红测和 C1
 worktree 属于各自 delivery unit，不删除、不覆盖。任何 worker 结束后先确认停止写入、证据已
 转存和远端候选责任，再回收其自有进程、端口、锁、worktree 与 branch；根 `main` 始终保持 clean。
 
