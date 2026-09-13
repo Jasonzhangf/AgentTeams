@@ -19,6 +19,10 @@ _Empty._
 - tags: `2cbc522`, `agentteams`, `ai-reviewed`, `goal`, `human-unreviewed`, `local-mvp`
 - details: [L2/2cbc522-goal-refresh-20260913.md](L2/2cbc522-goal-refresh-20260913.md)
 
+### Local MVP goal and dispatch contract
+- tags: `ai-reviewed`, `human-unreviewed`
+- details: [L2/3aa1d61-local-mvp-goal-refresh.md](L2/3aa1d61-local-mvp-goal-refresh.md)
+
 ### Stage-reentrant lifecycle gates
 - tags: `ai-reviewed`, `human-unreviewed`
 - details: [L2/3fd009a-governance-reentrant.md](L2/3fd009a-governance-reentrant.md)
@@ -294,11 +298,11 @@ _Empty._
 Base budget: 8 lines. Copy the compact lines into the project Skill `description` after manual architecture deduplication. Fill level 1 first; use level 2, then level 3, only for remaining slots.
 
 - L2: Local MVP goal pointer refreshed at a7e146e (plan) [2cbc522,agentteams,ai-reviewed,goal,human-unreviewed,local-mvp] -> L2/2cbc522-goal-refresh-20260913.md
+- L2: Local MVP goal and dispatch contract (plan) [ai-reviewed,human-unreviewed] -> L2/3aa1d61-local-mvp-goal-refresh.md
 - L2: Stage-reentrant lifecycle gates (knowledge) [ai-reviewed,human-unreviewed] -> L2/3fd009a-governance-reentrant.md
 - L2: AgentTeams Local Network MVP governance profile pushed (knowledge) [agentteams,ai-reviewed,governance,human-unreviewed,mvp] -> L2/56baa57-local-network-goal-20260912.md
 - L2: N3 peer route contract delivery (knowledge) [N3,ai-reviewed,human-unreviewed,network] -> L2/8ea5f7c-n3-peer-route-contract-20260910.md
 - L2: N3 typed runtime peer-route assembly (knowledge) [N3,ai-reviewed,human-unreviewed,network,runtime] -> L2/8ea5f7c-n3-runtime-assembly-20260910.md
 - L2: AgentBrowser icon admission (knowledge) [agentbrowser,ai-reviewed,human-unreviewed,icon,ui-evidence] -> L2/agentbrowser-icon-20260906.md
 - L2: AgentTeams current-candidate relay MVP replay (knowledge) [agentteams,ai-reviewed,human-unreviewed,mvp,relay] -> L2/agentteams-3c437d7-mvp-live-20260912.md
-- L2: 8990d68 Endpoint Work admission source delivery (lesson) [8990d68,AgentTeams,ai-reviewed,human-unreviewed] -> L2/agentteams-8990d68-mvp-source-delivery-529422d.md
 

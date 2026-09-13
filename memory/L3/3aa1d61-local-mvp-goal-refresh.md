@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"plan","created_at":"2026-09-13T23:33:42.846395+00:00","id":"3aa1d61-local-mvp-goal-refresh","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["ai-reviewed","human-unreviewed"],"updated_at":"2026-09-13T23:33:42.846395+00:00"} -->
+
+# Local MVP goal and dispatch contract
+
+Local MVP goal refresh delivered in issue 3aa1d61. Canonical user path is init, edit ~/.agentteams/config.toml, start, status, work, stop, restart, status, work. config.toml is user intent truth; internal.toml is runtime-owned state; two daemons must use a real local socket bridge for register, directory, broadcast, connect, negotiate, capability/resource matching, Work, stop/start generation isolation, and Console-offline operation. RCC 127.0.0.1:4444 is explicit primary provider and goaichat-openai explicit backup; provider failures are explicit and no implicit failover. Docs-only candidate 5172594 passed independent Codex review task 20260913T232305Z-review-98434-jm1y3q, integrated with pnpm verify, and pushed to origin/main final SHA 8ac590d6c9b2823f0902517326a03129cf4285be. Runtime implementation, public relay/NAT/mobile validation remain separate open units.
+<!-- project-memory:end -->
