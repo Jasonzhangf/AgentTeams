@@ -52,12 +52,15 @@ does not create a second U1 meaning. This receipt does not claim B1, W1, C1, U1,
   branch `codex/goal-plan-refresh-20260913`.
 - The candidate diff SHA-256 (excluding the self-referential manifest file) is recorded in the
   `candidate-diff-sha256-excluding-manifest` line of `candidate-fingerprint.txt`.
-- The candidate includes the five architecture maps, the two goal documents, this receipt, and all
-  raw evidence files in this directory. The raw command outputs are retained beside this receipt:
+- At candidate review time, the candidate included the five architecture maps, the two goal
+  documents, this receipt, and the raw verification files present then. The raw command outputs
+  are retained beside this receipt:
   `pnpm-verify.log`, `map-parse.log`, `diff-check.log`, `environment.log`, and
   `candidate-fingerprint.txt`. The `evidence-sha256` section of `candidate-fingerprint.txt` is a
   per-file manifest for every evidence file except the manifest itself; it is regenerated after the
-  final receipt and evidence set is fixed.
+  final candidate evidence set is fixed. The later `integration-receipt.md`, `push-receipt.md`, and
+  `cleanup-receipt.md` are post-candidate lifecycle records and are intentionally outside that
+  candidate fingerprint.
 - Environment: Node `v22.22.2`, pnpm `10.31.0`, AppSDK CLI present, Darwin arm64. The AppSDK
   contract digest reported by the verify run is
   `sha256:86407ecbbad07f82e32046ac1d89d56fb3a74356b943ba0368e4b85a2bab5393`; the governance
