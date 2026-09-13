@@ -12,4 +12,9 @@
 - Integration tree contains only the execution plan and its candidate/review receipts.
 - No runtime, dependency, UI, protocol, or second goal graph changes were integrated.
 
+`pnpm verify` was attempted once and stopped at the repository test preflight because this
+fresh worktree has no installed dependencies: `opencode-adapter` reported `tsdown: command not
+found` and pnpm reported `node_modules` missing. This is retained as an environment limitation;
+the documentation-only candidate has no runtime build gate applicable to it.
+
 This delivery records the single resumable Local MVP execution contract. Runtime implementation remains in issue `159b78b` and is not claimed by this receipt.
