@@ -31,8 +31,8 @@ _Empty._
 - tags: `agentbrowser`, `ai-reviewed`, `human-unreviewed`, `icon`, `ui-evidence`
 - details: [L2/agentbrowser-icon-20260906.md](L2/agentbrowser-icon-20260906.md)
 
-### AgentTeams current-candidate relay MVP replay
-- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `mvp`, `relay`
+### AgentTeams current-candidate relay MVP replay (superseded)
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `mvp`, `relay`, `superseded`
 - details: [L2/agentteams-3c437d7-mvp-live-20260912.md](L2/agentteams-3c437d7-mvp-live-20260912.md)
 
 ### 8990d68 Endpoint Work admission source delivery
@@ -237,6 +237,10 @@ _Empty._
 
 ## Level 3 — new or unreviewed
 
+### AgentTeams relay MVP public NAT replay corrected record
+- tags: `agentteams`, `ai-reviewed`, `corrected`, `human-unreviewed`, `mvp`, `relay`
+- details: [L3/agentteams-3c437d7-mvp-live-corrected-20260912.md](L3/agentteams-3c437d7-mvp-live-corrected-20260912.md)
+
 ### Superseded memory write for 41f0ea2
 - tags: `41f0ea2`, `superseded`
 - details: [L3/memory-45d66e4888339c10.md](L3/memory-45d66e4888339c10.md)
@@ -249,7 +253,7 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: N3 peer route contract delivery (knowledge) [N3,ai-reviewed,human-unreviewed,network] -> L2/8ea5f7c-n3-peer-route-contract-20260910.md
 - L2: N3 typed runtime peer-route assembly (knowledge) [N3,ai-reviewed,human-unreviewed,network,runtime] -> L2/8ea5f7c-n3-runtime-assembly-20260910.md
 - L2: AgentBrowser icon admission (knowledge) [agentbrowser,ai-reviewed,human-unreviewed,icon,ui-evidence] -> L2/agentbrowser-icon-20260906.md
-- L2: AgentTeams current-candidate relay MVP replay (knowledge) [agentteams,ai-reviewed,human-unreviewed,mvp,relay] -> L2/agentteams-3c437d7-mvp-live-20260912.md
+- L2: AgentTeams current-candidate relay MVP replay (superseded) (knowledge) [agentteams,ai-reviewed,human-unreviewed,mvp,relay,superseded] -> L2/agentteams-3c437d7-mvp-live-20260912.md
 - L2: 8990d68 Endpoint Work admission source delivery (lesson) [8990d68,AgentTeams,ai-reviewed,human-unreviewed] -> L2/agentteams-8990d68-mvp-source-delivery-529422d.md
 - L2: Active recovery boundary remains runtime-owned (lesson) [agentteams,ai-reviewed,human-unreviewed,recovery,runtime,work] -> L2/agentteams-active-recovery-boundary-20260906.md
 - L2: AgentTeams af5c167 current-SHA relay replay (knowledge) [af5c167,agentteams,ai-reviewed,human-unreviewed,mvp,relay] -> L2/agentteams-af5c167-relay-replay-20260910.md
