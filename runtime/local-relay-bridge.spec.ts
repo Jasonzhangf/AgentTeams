@@ -7,6 +7,7 @@ import { once } from 'node:events'
 import { afterEach, expect, it } from 'vitest'
 import { createRelayClient, type RelayClient } from '../network/relay-client.ts'
 import { createWorkChannel } from '../network/work-channel.ts'
+import { startConsoleRuntime } from './console-runtime.ts'
 import { createLocalSupervisor } from './local-supervisor.ts'
 import { loadLocalConfig } from './local-config.ts'
 
@@ -20,11 +21,12 @@ async function availablePort(): Promise<number> {
   return address.port
 }
 
-const active: Array<{ readonly supervisor: ReturnType<typeof createLocalSupervisor>; readonly driver?: RelayClient; readonly root: string }> = []
+const active: Array<{ readonly supervisor: ReturnType<typeof createLocalSupervisor>; driver?: RelayClient; console?: Awaited<ReturnType<typeof startConsoleRuntime>>; readonly root: string }> = []
 
 afterEach(async () => {
   const failures: unknown[] = []
   for (const item of active.splice(0)) {
+    try { await item.console?.stop() } catch (error) { failures.push(error) }
     try { await item.driver?.close() } catch (error) { failures.push(error) }
     try { await item.supervisor.stop() } catch (error) { failures.push(error) }
     try { rmSync(item.root, { recursive: true, force: true }) } catch (error) { failures.push(error) }
@@ -56,6 +58,7 @@ it('replays a config-driven local Relay bridge across independent daemon process
       { credentialEnv: 'TEAMS_PROVIDER_AUTH', identity: { accountId: 'local-account', scopeId: 'local-scope', agentId: 'provider' } },
       { credentialEnv: 'TEAMS_CONSUMER_AUTH', identity: { accountId: 'local-account', scopeId: 'local-scope', agentId: 'consumer' } },
       { credentialEnv: 'TEAMS_DRIVER_AUTH', identity: { accountId: 'local-account', scopeId: 'local-scope', agentId: 'driver' } },
+      { credentialEnv: 'TEAMS_CONSOLE_AUTH', identity: { accountId: 'local-account', scopeId: 'local-scope', agentId: 'console' } },
     ] }))
   mkdirSync(searchRoot, { recursive: true })
   writeFileSync(join(searchRoot, 'needle.txt'), 'relay bridge process work\n')
@@ -69,11 +72,11 @@ it('replays a config-driven local Relay bridge across independent daemon process
   }
   writeFileSync(providerConfig, JSON.stringify({ ...base,
     identity: { hostId: 'provider-host', machineId: 'local-machine', agentId: 'provider', accountId: 'local-account', agentKind: 'custom', label: 'Provider' },
-    dataDirectory: providerData, leasePort: providerLeasePort, policy: { revision: 1, allowedConsumers: ['driver'], allowedManagers: [] },
+    dataDirectory: providerData, leasePort: providerLeasePort, policy: { revision: 1, allowedConsumers: ['driver'], allowedManagers: ['console'] },
     relay: { ...base.relay, credentialEnv: 'TEAMS_PROVIDER_AUTH' } }))
   writeFileSync(consumerConfig, JSON.stringify({ ...base,
     identity: { hostId: 'consumer-host', machineId: 'local-machine', agentId: 'consumer', accountId: 'local-account', agentKind: 'custom', label: 'Consumer' },
-    dataDirectory: consumerData, leasePort: consumerLeasePort, policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+    dataDirectory: consumerData, leasePort: consumerLeasePort, policy: { revision: 1, allowedConsumers: [], allowedManagers: ['console'] },
     relay: { ...base.relay, credentialEnv: 'TEAMS_CONSUMER_AUTH' } }))
   writeFileSync(localConfigPath, `version = 1\n\n[relay]\nconfig = ${JSON.stringify(relayConfig)}\n\n[daemons.provider]\nconfig = ${JSON.stringify(providerConfig)}\n\n[daemons.consumer]\nconfig = ${JSON.stringify(consumerConfig)}\n`)
 
@@ -82,11 +85,31 @@ it('replays a config-driven local Relay bridge across independent daemon process
     relayEntry: resolve('server/relay-process.ts'),
     agentEntry: resolve('runtime/agent-process.ts'),
     nodeArguments: ['--experimental-transform-types'],
-    env: { TEAMS_PROVIDER_AUTH: 'Bearer provider', TEAMS_CONSUMER_AUTH: 'Bearer consumer', TEAMS_DRIVER_AUTH: 'Bearer driver' },
+    env: { TEAMS_PROVIDER_AUTH: 'Bearer provider', TEAMS_CONSUMER_AUTH: 'Bearer consumer', TEAMS_DRIVER_AUTH: 'Bearer driver', TEAMS_CONSOLE_AUTH: 'Bearer console' },
   })
-  const lease: { readonly supervisor: ReturnType<typeof createLocalSupervisor>; driver?: RelayClient; readonly root: string } = { supervisor, root }
+  const lease: { readonly supervisor: ReturnType<typeof createLocalSupervisor>; driver?: RelayClient; console?: Awaited<ReturnType<typeof startConsoleRuntime>>; readonly root: string } = { supervisor, root }
   active.push(lease)
   await supervisor.start()
+
+  lease.console = await startConsoleRuntime({
+    host: '127.0.0.1', port: 0, origin: 'http://127.0.0.1', username: 'operator', password: 'test-secret',
+    agentIds: [], staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
+    daemon: { presenceIntervalMs: 500, relay: { declaration: { identity: { hostId: 'console-host', machineId: 'local-machine', agentId: 'console', accountId: 'local-account', agentKind: 'custom', label: 'Console' }, scopeId: 'local-scope', revision: 1, capabilities: [], routes: [] },
+      transport: { endpoint: relayEndpoint, credential: 'Bearer console', ca: readFileSync(certFile), connectTimeoutMs: 1000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 },
+      admissionTimeoutMs: 1000, requestTimeoutMs: 3000, maxPendingRequests: 8, maxDataConnections: 8 } },
+  })
+  const projectionResponse = await fetch(`${lease.console.url}/api/v1/projection`, { headers: { authorization: `Basic ${Buffer.from('operator:test-secret').toString('base64')}` } })
+  expect(projectionResponse.status).toBe(200)
+  await expect(projectionResponse.json()).resolves.toMatchObject({
+    agents: expect.arrayContaining([
+      expect.objectContaining({ agentId: 'provider', presence: 'online', capabilities: expect.arrayContaining(['file-search']) }),
+      expect.objectContaining({ agentId: 'consumer', presence: 'online' }),
+    ]),
+  })
+  await lease.console.stop()
+  await lease.console.closed
+  lease.console = undefined
+
   const createDriver = () => createRelayClient({
     transport: { endpoint: relayEndpoint, credential: 'Bearer driver', ca: readFileSync(certFile), connectTimeoutMs: 1000,
       maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 },
