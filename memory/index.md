@@ -183,6 +183,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `provider-config`
 - details: [L2/memory-5020de602062f883.md](L2/memory-5020de602062f883.md)
 
+### 288af52 local config and two-agent bridge delivery
+- tags: `288af52`, `ai-reviewed`, `config`, `human-unreviewed`, `local-bridge`
+- details: [L2/memory-55a555ce2ab69ac1.md](L2/memory-55a555ce2ab69ac1.md)
+
 ### M1 local Relay bridge replay
 - tags: `2745502`, `M1`, `ai-reviewed`, `human-unreviewed`, `local-network`, `relay`
 - details: [L2/memory-58f7fefea08eead1.md](L2/memory-58f7fefea08eead1.md)
