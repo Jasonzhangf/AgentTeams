@@ -17,7 +17,7 @@
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次接手复核时的主线是 `412fc5fbc7bba328d9916906122192d4e7e60e2b8`；这个 SHA 只是快照，不能
+  本次接手复核时的主线是 `412fc5fbc7bba328d9916906122192d4e7e60e2b`；这个 SHA 只是快照，不能
   替代下一轮启动时的现场检查。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
@@ -104,7 +104,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮接手时可用基线为
-  `412fc5fbc7bba328d9916906122192d4e7e60e2b8`，下一 unit 仍须重新读取远端。
+  `412fc5fbc7bba328d9916906122192d4e7e60e2b`，下一 unit 仍须重新读取远端。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、

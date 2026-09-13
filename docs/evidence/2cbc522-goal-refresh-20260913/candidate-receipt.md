@@ -1,7 +1,7 @@
 # Candidate receipt: Local MVP goal refresh
 
 - Delivery unit: `2cbc522`.
-- Base commit: `412fc5fbc7bba328d9916906122192d4e7e60e2b8`.
+- Base commit: `412fc5fbc7bba328d9916906122192d4e7e60e2b`.
 - Candidate commit: `de56c0b1f5415181f43cd40ac30488a5c85b7f7f`.
 - Candidate tree: `3664e13cc867fa73ff4a64f2637e8be73167459d`.
 - Changed paths: three `docs/goals/**` files plus `docs/evidence/2cbc522-goal-refresh-20260913/**`.

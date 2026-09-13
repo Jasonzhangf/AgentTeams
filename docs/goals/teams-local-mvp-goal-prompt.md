@@ -25,7 +25,7 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除�
 
 当前接手指针：
 - 本次接手复核时 root `main` 与远端 `origin/main` 均为
-  `412fc5fbc7bba328d9916906122192d4e7e60e2b8`，root clean；该 SHA 只作本次快照。
+  `412fc5fbc7bba328d9916906122192d4e7e60e2b`，root clean；该 SHA 只作本次快照。
   每次唤醒仍必须重新读取 `git status`、`git rev-parse`、`git ls-remote`，不得把快照当作新基线。
 - 本次目标刷新 issue 是 `2cbc522`；上一轮文档刷新 `8186534` 已关闭。不得创建第二个 goal、
   第二个 subscription 或第二套任务图。
