@@ -91,13 +91,14 @@ it('replays a config-driven local Relay bridge across independent daemon process
   active.push(lease)
   await supervisor.start()
 
-  lease.console = await startConsoleRuntime({
+  const startConsole = () => startConsoleRuntime({
     host: '127.0.0.1', port: 0, origin: 'http://127.0.0.1', username: 'operator', password: 'test-secret',
     agentIds: [], staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
     daemon: { presenceIntervalMs: 500, relay: { declaration: { identity: { hostId: 'console-host', machineId: 'local-machine', agentId: 'console', accountId: 'local-account', agentKind: 'custom', label: 'Console' }, scopeId: 'local-scope', revision: 1, capabilities: [], routes: [] },
       transport: { endpoint: relayEndpoint, credential: 'Bearer console', ca: readFileSync(certFile), connectTimeoutMs: 1000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 },
       admissionTimeoutMs: 1000, requestTimeoutMs: 3000, maxPendingRequests: 8, maxDataConnections: 8 } },
   })
+  lease.console = await startConsole()
   const projectionResponse = await fetch(`${lease.console.url}/api/v1/projection`, { headers: { authorization: `Basic ${Buffer.from('operator:test-secret').toString('base64')}` } })
   expect(projectionResponse.status).toBe(200)
   await expect(projectionResponse.json()).resolves.toMatchObject({
@@ -127,6 +128,7 @@ it('replays a config-driven local Relay bridge across independent daemon process
   expect(provider?.declaration.capabilities.find(capability => capability.capabilityId === 'file-search')?.operations).toContainEqual(expect.objectContaining({ operation: 'search' }))
   expect(first.revision).toBeGreaterThan(0)
   const firstGeneration = provider!.generation
+  const firstConsumerGeneration = consumer!.generation
   const channel = await createWorkChannel(await driver.openData(await driver.connect('provider', firstGeneration)), { timeoutMs: 3000, maxPending: 4, maxIncoming: 2 })
   try {
     await expect(channel.request({ kind: 'work.propose', proposal: { workId: 'bridge-work', consumerAgentId: 'driver', providerAgentId: 'provider',
@@ -138,6 +140,22 @@ it('replays a config-driven local Relay bridge across independent daemon process
 
   await driver.close()
   lease.driver = undefined
+
+  lease.console = await startConsole()
+  const restartedProjection = await fetch(`${lease.console.url}/api/v1/projection`, { headers: { authorization: `Basic ${Buffer.from('operator:test-secret').toString('base64')}` } })
+  const restartedProjectionBody = await restartedProjection.text()
+  expect(restartedProjection.status, restartedProjectionBody).toBe(200)
+  await expect(Promise.resolve(JSON.parse(restartedProjectionBody))).resolves.toMatchObject({
+    agents: expect.arrayContaining([
+      expect.objectContaining({ agentId: 'provider', presence: 'online', generation: firstGeneration }),
+      expect.objectContaining({ agentId: 'consumer', presence: 'online', generation: firstConsumerGeneration }),
+    ]),
+    works: expect.arrayContaining([expect.objectContaining({ agentId: 'provider', workId: 'bridge-work', state: 'closed' })]),
+  })
+  await lease.console.stop()
+  await lease.console.closed
+  lease.console = undefined
+
   await supervisor.stop()
   await supervisor.start()
   driver = await createDriver()
@@ -147,4 +165,4 @@ it('replays a config-driven local Relay bridge across independent daemon process
   expect(restarted?.generation).toBe(1)
   const secondChannel = await createWorkChannel(await driver.openData(await driver.connect('provider', restarted!.generation)), { timeoutMs: 3000, maxPending: 4, maxIncoming: 2 })
   await secondChannel.close()
-})
+}, 15000)
