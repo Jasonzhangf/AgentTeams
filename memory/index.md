@@ -139,6 +139,10 @@ _Empty._
 - tags: `ai-reviewed`, `backup`, `goaichat`, `human-unreviewed`, `live-replay`, `provider`
 - details: [L2/goaichat-backup-live-20260906.md](L2/goaichat-backup-live-20260906.md)
 
+### Local MVP goal plan is resumable after U0
+- tags: `agentteams`, `ai-reviewed`, `local-mvp`
+- details: [L2/local-mvp-goal-plan-20260913.md](L2/local-mvp-goal-plan-20260913.md)
+
 ### Managed OpenCode daemon wiring
 - tags: `ai-reviewed`, `config`, `daemon`, `human-unreviewed`, `managed-opencode`
 - details: [L2/managed-opencode-daemon-wire-20260906.md](L2/managed-opencode-daemon-wire-20260906.md)
