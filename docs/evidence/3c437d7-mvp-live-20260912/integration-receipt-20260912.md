@@ -23,6 +23,17 @@ pnpm verify                PASS (75 files / 447 tests; typecheck; AppSDK guide c
                              AppSDK compile; packaged Console/runtime smoke; appsdk verify)
 ```
 
+## Final integration receipt review
+
+- Review task: `3c437d7-final-integration-review-20260912`
+- Candidate reviewed: `bb394438e5a7859560f81146bd40bc75413125c3`
+- Base: `6053f45a4edac69512b5b060460f1e9d11b68a8d`
+- Controller result: **PASS**; no P0/P1 findings.
+
+```json
+{"contract_version":"1","scope":{"mode":"commit","commit":"bb394438e5a7859560f81146bd40bc75413125c3","base":"6053f45a4edac69512b5b060460f1e9d11b68a8d"},"module_boundary_evidence":[{"module":"Delivery evidence receipt","owner":"Primary integration owner under docs/development-governance.md","paths":"This commit changes only docs/evidence/3c437d7-mvp-live-20260912/integration-receipt-20260912.md. No runtime, test, dependency, configuration, architecture-map, generated, or deployment source paths change.","edges":"Documentation-only binding of the exact integration review result to candidate 6053f45a4edac69512b5b060460f1e9d11b68a8d; no executable call edge, Session path, or business-payload path is introduced.","resources":"The receipt records the prior integration validation, exact review scope, retained review JSON, and explicitly open provider, direct transport, NAT-to-NAT, mobile replay, and full-MVP obligations. No runtime resource ownership changes.","gates":"Applicable gate is documentation/evidence integrity. The recorded project-memory index/verify, whitespace, frozen-install, and pnpm verify evidence is retained from the reviewed integration candidate. Runtime, install, restart, and live replay gates are not newly applicable because this commit changes no runtime or deployment input."}],"findings":[]}
+```
+
 The runtime and deployment inputs were unchanged; the public Relay/NAT/
 Console-offline replay remains bound to the previously reviewed source and its
 tracked receipts. This integration evidence does not claim provider catalog,
