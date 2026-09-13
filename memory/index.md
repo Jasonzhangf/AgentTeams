@@ -159,6 +159,10 @@ _Empty._
 - tags: `N3`, `ai-reviewed`, `direct`, `human-unreviewed`, `network`, `runtime`
 - details: [L2/memory-09b59a6c81bd5b97.md](L2/memory-09b59a6c81bd5b97.md)
 
+### U0 internal.toml runtime source delivery
+- tags: `ai-reviewed`, `human-unreviewed`, `teams`, `u0`
+- details: [L2/memory-11c82fe69be4d243.md](L2/memory-11c82fe69be4d243.md)
+
 ### AgentTeams MVP C1 N2 mainline closure 2026-09-11
 - tags: `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `mvp`, `network`, `provider`
 - details: [L2/memory-202c3933ad8f54cf.md](L2/memory-202c3933ad8f54cf.md)
