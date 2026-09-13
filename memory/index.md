@@ -167,6 +167,10 @@ _Empty._
 - tags: `ai-reviewed`, `b701a57`, `console-offline`, `human-unreviewed`, `local-mvp`
 - details: [L2/memory-30fceee929a3126a.md](L2/memory-30fceee929a3126a.md)
 
+### G0 Local Network MVP governance integrated
+- tags: `ai-reviewed`, `c4387e4`, `governance`, `human-unreviewed`, `local-network`
+- details: [L2/memory-3752152447f92504.md](L2/memory-3752152447f92504.md)
+
 ### n3-d4a-relay-directory-projection-20260910
 - tags: `N3`, `ai-reviewed`, `directory`, `human-unreviewed`, `network`
 - details: [L2/memory-4c4d9e4feeed0c89.md](L2/memory-4c4d9e4feeed0c89.md)
