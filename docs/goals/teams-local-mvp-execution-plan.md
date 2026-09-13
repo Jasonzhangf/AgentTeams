@@ -7,9 +7,11 @@
 [teams-development-plan.md](teams-development-plan.md)。三者仍是设计、治理和阶段顺序的真源；
 本文件只把下一次 `/goal` 的执行范围收敛成可重入的调度合同。
 
-对应 AppSDK issue：`3aa1d61`（本次目标指针刷新）。上一轮指针刷新 `2cbc522`、文档刷新
-`8186534` 和治理 `c4387e4` 已关闭；U0 `159b78b` 已关闭；当前首个待调度单元是 runtime
-`3742b9a`，随后按 canonical receipt 在 `L1-CLI/W1/C1/B1/U1/I1` 中取首个未完成项。
+对应 AppSDK issue：已存在且仍 open 的长期目标 `af5c167`（re-entry comment `a4f55dc`；本次只
+刷新可重入调度指针）。上一轮
+目标/文档刷新 `3aa1d61`、`2cbc522`、`8186534` 和治理 `c4387e4` 已关闭；U0 `159b78b` 已关闭；
+当前首个待调度单元是 runtime `3742b9a`，随后按 canonical receipt 在
+`L1-CLI/W1/C1/B1/U1/I1` 中取首个未完成项。
 本计划不得创建第二个 goal、第二个 subscription 或第二套任务图。
 
 ## 当前接手状态（启动时必须复核）
@@ -17,42 +19,38 @@
 - Desktop 主任务是本项目当前唯一的调度与资源管理 owner：负责拆分、依赖、worker 派单、独立
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
-- 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、`git ls-remote`。
-  本次文档刷新观察到的输入基线是 `b619ff21ed0bfce5992bc59602faf022f8d67842`；这个 SHA
-  只是现场快照，不能替代下一轮启动时的现场检查。任何实现单元都必须从届时最新的
-  `origin/main` 建立候选。
+- 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、
+  `git ls-remote origin refs/heads/main`。本次现场观察到 root/remote 均为
+  `ce91c14cd7b6c9d97a3d7f25bd35e384599cbb85` 且 clean；这个 SHA 只是现场快照，不能替代下一轮
+  启动时的现场检查。任何实现单元都必须从届时最新的 `origin/main` 建立候选。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 本轮文档候选从 `b619ff2` 建立；此前 U0 与上一轮文档 worktree/branch 已回收，每次恢复仍须重读现场。
-  L1-CLI issue `fdec042`
-  的 worker 已停止写入并回报了明确的 runtime API 缺口：候选 worktree
-  `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测 `cli/agentteams.spec.ts`，没有 candidate
-  commit；不得把它标记为完成或删除其红测。
-- 根据该发现已建立独立 runtime delivery unit `3742b9a`，负责 detached launcher、持久 supervisor
-  ownership/status/stop 和复用现有 configured Work 的显式调用；CLI 不得复制这些真相。当前唯一活动
-  候选 `playground/3742b9a-runtime-r4-20260913` 从 `b619ff2` 重建，仍 dirty，尚无 candidate
-  commit；当前 r4 evidence 已记录 focused runtime、`agent-process`/`local-relay-bridge` socket
-  gate、typecheck 和 build 通过；`local-two-agent` 的 exact receipt、full `pnpm verify` 尚未在
-  r4 evidence 中记录，且 r4 run-notes 仍错误指向 r3 worktree/branch，必须由 runtime owner 修正后
-  才能作为 r4 candidate evidence。必须先完成 local-two-agent exact receipt、full verify、exact
-  Codex review、candidate commit、clean integration、push、memory 和 cleanup；不能把旧候选
-  或 dirty tree 当作当前 candidate，也不能重派同一 runtime unit。
-- C1 issue `776fcad` 当前保留在 `playground/776fcad-c1-r2-20260913`、branch
-  `codex/776fcad-c1-r2-20260913`，基于旧主线且 worktree dirty。它只修改
-  `config/runtime-config.ts` 与 `config/runtime-config.spec.ts`，不得碰 runtime lifecycle；candidate
-  前必须重跑 focused test、typecheck、evidence 和独立 Codex review。
+- 本轮调度文档从 `ce91c14` 建立；此前 U0 与上一轮文档 worktree/branch 已回收，每次恢复仍须重读现场。
+  L1-CLI issue `fdec042` 的旧 worktree `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测
+  `cli/agentteams.spec.ts` 且落后远端主线；不得把它标记为完成、直接集成或删除其红测。runtime receipt
+  后必须从最新远端主线重建 L1。
+- runtime `3742b9a` 负责 detached launcher、持久 supervisor ownership/status/stop 和复用现有
+  configured Work 的显式调用；CLI 不得复制这些真相。当前唯一活动 worktree
+  `playground/3742b9a-runtime-r5-20260913` 从 `ce91c14` 建立，仍 dirty，尚无 candidate commit。
+  最近 focused run 的 configured Work restart 仍有 `START_TIMEOUT`；必须先由 runtime owner 修复并
+  重新验证，再补 `local-two-agent` exact receipt、full verify、exact Codex review、candidate commit、
+  clean integration、push、memory 和 cleanup。
+- C1 issue `776fcad` 已从最新主线重建为 `playground/776fcad-c1-r3-20260913`、branch
+  `codex/776fcad-c1-r3-20260913`，只允许修改 `config/**` 与 `opencode-adapter/**`，不得碰 runtime
+  lifecycle、network、agent 或 UI；candidate 前必须完成 focused test、typecheck、evidence 和独立
+  Codex review。
 
 ### 当前资源与处理动作
 
 | 资源 | 当前事实 | 调度动作 |
 |---|---|---|
-| `playground/3742b9a-runtime-r4-20260913` | dirty，HEAD=`b619ff2`，focused 与 `agent-process`/`local-relay-bridge` socket gates、typecheck/build 已记录通过；`local-two-agent` exact receipt、full `pnpm verify` 未记录；run-notes 仍指向 r3，无 candidate commit | runtime owner 先修正 r4 evidence identity 并补 local-two-agent/full verify；再运行 exact Codex review，PASS 后提交 candidate，再做 integration、push、memory 和 cleanup |
+| `playground/3742b9a-runtime-r5-20260913` | dirty，HEAD=`ce91c14`；configured Work restart focused gate 当前 `START_TIMEOUT`，尚无 candidate/review/push | runtime owner 先修复并重跑首个失败 gate，再补 local-two-agent/full verify → exact review → candidate → integration/push → memory/cleanup |
 | `playground/3742b9a-runtime-r3-20260913` | dirty，旧候选，包含历史 `listen EPERM` 证据和未提交 runtime diff | 只保留审计责任；不得 reset/delete，确认 owner、唯一证据和进程后再决定回收 |
 | `playground/3742b9a-runtime-rebind-r2-20260913` | dirty，旧 runtime rebind，HEAD=`7e82b8a`，含未提交 runtime diff 和独立 evidence | 只保留审计责任；不得 reset/delete，确认 owner、唯一证据和进程后再决定回收 |
 | `playground/3742b9a-runtime-rebind-20260913` | clean，旧 candidate `546e77f`，基于旧 main | 只作历史参考；不得直接集成或 reset |
 | `playground/3742b9a-runtime-20260913` | clean，旧 candidate `d040885` | 只作历史参考；不得直接集成或 reset |
 | `playground/fdec042-l1-cli-20260913` | 仅保留未跟踪红测 `cli/`，无 candidate commit | runtime receipt 后从最新 main 重建；红测迁移前不删除 |
-| `playground/776fcad-c1-r2-20260913` | dirty，基于旧主线，仅属 config/OpenCode | 继续 focused gate/review；不得碰 runtime/network；candidate 前须从最新 main 重建 |
+| `playground/776fcad-c1-r3-20260913` | dirty，HEAD=`ce91c14`，仅属 config/OpenCode | 继续 focused gate/review；不得碰 runtime/network/agent/UI；candidate 前须写 evidence 并完成独立 review |
 
 这些资源均不属于本次目标文档刷新单元；调度主任务只清理自己创建的 worktree。任何超过 24 小时未
 活动的资源，先核对 owner、claim、证据和未提交内容，再决定保留、合并或丢弃。
@@ -60,9 +58,11 @@
 ## 当前交付指针
 
 - **已关闭**：U0 Internal Config Compiler（`159b78b`）。
-- **下一单元**：收口 runtime issue `3742b9a` 的 r4 candidate：full verify → exact review → commit
-  → clean integration → push → memory → cleanup，解除 L1-CLI 的跨进程生命周期/API blocker；C1
-  Config/OpenCode 只有在自身 worktree 从最新 main 重建后才可并行。runtime receipt 后重新绑定 L1-CLI；取得 L1 receipt 后才推进 W1，
+- **下一单元**：收口 runtime issue `3742b9a` 的 r5 worktree：先修复 configured Work restart 的
+  `START_TIMEOUT`，再补 local-two-agent/full verify → exact review → commit → clean integration →
+  push → memory → cleanup，解除 L1-CLI 的跨进程生命周期/API blocker；C1 Config/OpenCode 只有在自身
+  worktree 从最新 main 重建并通过 admission/fingerprint 检查后才可并行。runtime receipt 后重新绑定
+  L1-CLI；取得 L1 receipt 后才推进 W1，
   再推进 B1；不得用 CLI 自己实现第二套 supervisor 或 Work ledger。
   每项先查重/复用 AppSDK issue，再从最新 `origin/main` 建立
   `playground/<issue-or-task>-<date>` 的独立 clean worktree。
@@ -111,7 +111,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮接手时观察到
-  `origin/main=b619ff21ed0bfce5992bc59602faf022f8d67842`，下一 unit 仍须重新读取远端。
+  `origin/main=ce91c14cd7b6c9d97a3d7f25bd35e384599cbb85`，下一 unit 仍须重新读取远端。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
@@ -242,15 +242,15 @@ AppSDK compile/verify、真实入口和 exact review。runtime receipt 前只允
 | unit | issue | 当前状态 | 下一动作 |
 | --- | --- | --- | --- |
 | U0 internal config compiler | `159b78b` | closed；receipt 可复用 | 不重开、不重复派发 |
-| runtime local launcher | `3742b9a` | r4 worktree dirty，HEAD=`b619ff2`；focused 与 `agent-process`/`local-relay-bridge` socket gates、typecheck/build 已记录通过；`local-two-agent` exact receipt、full `pnpm verify` 未记录；run-notes 仍指向 r3，无 candidate commit | 修正 evidence identity → local-two-agent exact receipt → full verify → exact Codex review → candidate commit → integration/push → memory → cleanup |
+| runtime local launcher | `3742b9a` | r5 worktree dirty，HEAD=`ce91c14`；configured Work restart focused gate 报 `START_TIMEOUT`，无 candidate | 修复首个失败 gate → local-two-agent exact receipt → full verify → exact Codex review → candidate commit → integration/push → memory → cleanup |
 | L1 CLI | `fdec042` | awaiting-runtime-unit；仅有红测，无 candidate | runtime receipt 后 rebase 到最新 main，再实现 `init/start/status/work/stop` |
-| C1 provider/OpenCode | `776fcad` | r2 worktree dirty，基于旧主线，未完成 focused gate/review | 从最新 main 重建后继续 config/opencode focused gate → evidence → Codex review；不碰 runtime/network |
+| C1 provider/OpenCode | `776fcad` | r3 worktree dirty，HEAD=`ce91c14`，未完成 focused gate/review | 继续 config/opencode focused gate → evidence → Codex review；不碰 runtime/network/agent/UI |
 | W1/B1/U1/I1-L5 | canonical downstream | pending | 按依赖顺序启动，禁止提前共享写入 |
 
-本次文档刷新 worktree 是 `playground/3aa1d61-goal-refresh-20260913`，只拥有
-`docs/goals/**` 与本单元 evidence；runtime、L1 红测和 C1 worktree 属于各自 delivery unit，
-不删除、不覆盖。任何 worker 结束后先确认停止写入、证据已转存和远端候选责任，再回收其自有进程、
-端口、锁、worktree 与 branch；根 `main` 始终保持 clean。
+本次调度刷新 worktree 是 `playground/af5c167-goal-reentry-20260913`，只拥有 `docs/goals/**`
+与本单元 evidence；runtime、L1 红测和 C1 worktree 属于各自 delivery unit，不删除、不覆盖。
+任何 worker 结束后先确认停止写入、证据已转存和远端候选责任，再回收其自有进程、端口、锁、worktree
+与 branch；根 `main` 始终保持 clean。
 
 ## MVP 退出条件与非目标
 
