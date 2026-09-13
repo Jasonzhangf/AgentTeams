@@ -8,5 +8,7 @@
 - Verification command: `git ls-remote origin refs/heads/main`
 - Remote main after push: `830b7056e0632bcefa203cf7750697336a570085`
 
-The next receipt-only commit will be pushed through the same fast-forward
-route and will record the final remote SHA.
+The receipt-only commit `145714f240ea74d0828a229e95569035313641af` was then
+pushed through the same fast-forward route. The final remote SHA after that
+push was verified with `git ls-remote origin refs/heads/main` and is
+`145714f240ea74d0828a229e95569035313641af`.
