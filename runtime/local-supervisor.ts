@@ -191,11 +191,11 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
             lifecycleGeneration = reservedLauncherGeneration
           }
         }
-        const childControlGeneration = options.launcherGeneration ?? reservedLauncherGeneration
+        const launcherGeneration = options.launcherGeneration ?? reservedLauncherGeneration
         const childEnv = { ...process.env, ...options.env }
-        if (config.internalPath !== undefined && childControlGeneration !== undefined) {
+        if (config.internalPath !== undefined && launcherGeneration !== undefined) {
           childEnv.TEAMS_LOCAL_INTERNAL_PATH = config.internalPath
-          childEnv.TEAMS_LOCAL_LAUNCHER_GENERATION = String(childControlGeneration)
+          childEnv.TEAMS_LOCAL_LAUNCHER_GENERATION = String(launcherGeneration)
         } else {
           delete childEnv.TEAMS_LOCAL_INTERNAL_PATH
           delete childEnv.TEAMS_LOCAL_LAUNCHER_GENERATION
@@ -208,9 +208,12 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           }
           const child = spawnProcess(nodeExecutable, [...(options.nodeArguments ?? []), spec.entry, ...spec.args, '--launcher-start-token', startToken], { env: childEnv, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
           children.set(spec.id, child)
-          states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(childControlGeneration === undefined ? {} : { generation: childControlGeneration }) })
+          // daemon.generation is the launcher ownership generation used by the
+          // stale-writer guard. Child network generation is owned by the child
+          // readiness message and is not persisted into internal.toml.
+          states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(launcherGeneration === undefined ? {} : { generation: launcherGeneration }) })
           if (config.internalPath !== undefined) {
-            await writeLocalInternalState(config.internalPath, { [spec.id]: { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(childControlGeneration === undefined ? {} : { generation: childControlGeneration }) } })
+            await writeLocalInternalState(config.internalPath, { [spec.id]: { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(launcherGeneration === undefined ? {} : { generation: launcherGeneration }) } })
           }
           const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
             if (lifecycle === 'stopping' || lifecycle === 'stopped') return
@@ -227,9 +230,8 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           unwatch.set(spec.id, () => { child.off('exit', onExit); child.off('error', onError) })
           const ready = await waitForReady(child, spec.kind, startupTimeoutMs)
           if (spec.kind === 'agent') {
-            const generation = ready?.generation
-            states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(typeof generation === 'number' ? { generation } : childControlGeneration === undefined ? {} : { generation: childControlGeneration }) })
-          } else states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(childControlGeneration === undefined ? {} : { generation: childControlGeneration }) })
+            states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(launcherGeneration === undefined ? {} : { generation: launcherGeneration }) })
+          } else states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(launcherGeneration === undefined ? {} : { generation: launcherGeneration }) })
           if (lifecycle !== 'starting') throw lastFailure ?? new Error(`local ${spec.kind} failed during startup`)
           if (child.exitCode !== null || child.signalCode !== null) {
             throw new Error(`local ${spec.kind} exited immediately after readiness code=${child.exitCode ?? 'null'} signal=${child.signalCode ?? 'null'}`)

@@ -88,6 +88,51 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
   }
 }, 20000)
 
+it('keeps daemon state on the launcher generation and rejects stale writers', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-local-process-generation-'))
+  const path = join(root, 'config.toml')
+  try {
+    const relay = join(root, 'relay.mjs')
+    const agent = join(root, 'agent.mjs')
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, "process.send?.({kind:'daemon.registered', generation:7}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48017 } }))
+    await writeLocalConfig(path, `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.browser]
+role = "provider"
+identity = { hostId = "browser-host", machineId = "machine", agentId = "browser", accountId = "account", agentKind = "custom", label = "Browser" }
+scopeId = "scope"
+dataDirectory = "data/browser"
+leasePort = 48107
+presenceIntervalMs = 100
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-browser" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
+`)
+    const first = await startLocalProcess(path, { relayEntry: relay, agentEntry: agent, nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 3000 })
+    const firstInternal = await readLocalInternalConfig(first.internalPath)
+    expect(firstInternal.daemons?.browser?.generation).toBe(first.generation)
+    await stopLocalProcess(path, first.generation)
+
+    const second = await startLocalProcess(path, { relayEntry: relay, agentEntry: agent, nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 3000 })
+    const secondInternal = await readLocalInternalConfig(second.internalPath)
+    expect(secondInternal.daemons?.browser?.generation).toBe(second.generation)
+    await writeLocalInternalState(second.internalPath, {
+      browser: { pid: secondInternal.daemons?.browser?.pid ?? 0, generation: first.generation, state: 'online' },
+    })
+    const guarded = await readLocalInternalConfig(second.internalPath)
+    expect(guarded.daemons?.browser).toMatchObject({ generation: second.generation, state: 'online' })
+    await stopLocalProcess(path, second.generation)
+  } finally {
+    try { await stopLocalProcess(path) } catch { /* cleanup is best effort for test-only paths */ }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 20000)
+
 it('cancels a timed-out detached startup instead of allowing a late supervisor to publish running', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-local-process-timeout-'))
   const path = join(root, 'config.toml')

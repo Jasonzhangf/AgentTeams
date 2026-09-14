@@ -600,6 +600,7 @@ export async function loadLocalConfig(path = defaultLocalConfigPath()): Promise<
       }
       const latestDaemons = latest?.daemons ?? {}
       const mergedDaemons: Record<string, LocalInternalDaemonConfig> = Object.fromEntries(Object.entries(latestDaemons).map(([id, daemon]) => [id, { ...daemon, orphaned: true }]))
+      if (latestDaemons.relay !== undefined) mergedDaemons.relay = { ...latestDaemons.relay, orphaned: false }
       for (const [id, projection] of Object.entries(internal.daemons ?? {})) {
         const runtime = latestDaemons[id]
         mergedDaemons[id] = {

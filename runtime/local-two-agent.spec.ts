@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { once } from 'node:events'
 import { createServer } from 'node:net'
 import { expect, it } from 'vitest'
-import { loadLocalConfig } from './local-config.ts'
+import { loadLocalConfig, readLocalInternalConfig } from './local-config.ts'
 import { runLocalConfiguredWork, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
 
 async function availablePort(): Promise<number> {
@@ -96,14 +96,15 @@ payload = { query = "two daemon bridge" }
     expect(internal).toMatch(/\[daemon\."consumer"\][\s\S]*state = "online"/)
     await stopLocalProcess(configPath, first.generation)
     started = false
-    const stopped = readFileSync(config.internalPath!, 'utf8')
-    expect(stopped).toMatch(/\[daemon\."provider"\][\s\S]*state = "stopped"/)
-    expect(stopped).toMatch(/\[daemon\."consumer"\][\s\S]*state = "stopped"/)
+    const stopped = await readLocalInternalConfig(config.internalPath!)
+    expect.soft(Object.values(stopped.daemons ?? {}).map(daemon => daemon.state)).toEqual(['stopped', 'stopped', 'stopped'])
     const second = await startLocalProcess(configPath, { relayEntry: compiled ? resolve('generated/runtime-lib/server/relay-process.js') : resolve('server/relay-process.ts'),
       agentEntry: compiled ? resolve('generated/runtime-lib/runtime/agent-process.js') : resolve('runtime/agent-process.ts'),
       nodeArguments: compiled ? [] : ['--experimental-transform-types'], env: { TEAMS_PROVIDER_AUTH: 'provider-secret', TEAMS_CONSUMER_AUTH: 'consumer-secret' }, startupTimeoutMs: 15000 })
     started = true
     expect(second).toMatchObject({ state: 'running', generation: 2 })
+    const restartedInternal = await readLocalInternalConfig(config.internalPath!)
+    expect.soft(restartedInternal.daemons?.relay?.orphaned).toBe(false)
     await expect(runLocalConfiguredWork(configPath, { TEAMS_PROVIDER_AUTH: 'provider-secret', TEAMS_CONSUMER_AUTH: 'consumer-secret' })).resolves.toMatchObject({
       state: 'succeeded',
       workId: 'configured-search',
@@ -111,6 +112,10 @@ payload = { query = "two daemon bridge" }
     })
     const restarted = readFileSync(config.internalPath!, 'utf8')
     expect(restarted).toMatch(/\[configuredWork\][\s\S]*generation = 2/)
+    await stopLocalProcess(configPath, second.generation)
+    started = false
+    const secondStopped = await readLocalInternalConfig(config.internalPath!)
+    expect.soft(Object.values(secondStopped.daemons ?? {}).map(daemon => daemon.state)).toEqual(['stopped', 'stopped', 'stopped'])
   } finally {
     try { if (started) await stopLocalProcess(join(root, '.agentteams', 'config.toml')) } finally { rmSync(root, { recursive: true, force: true }) }
   }
