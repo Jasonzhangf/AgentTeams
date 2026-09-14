@@ -257,14 +257,14 @@ marks a live supervisor as failed, restarts, and asserts the old PID is gone.
 The post-fix source fingerprint for the mapped source/test paths is:
 
 ```text
-2b2a0f84e208d5dac327bda40ae03f4f65aba147bc0c5c75c27c086486d87495
+b843d7f3a686122c9c0fb765cdc8808429ab40e89b2c9574ad5059873db9a7ae
 ```
 
 Post-fix verification:
 
 ```sh
 pnpm exec vitest run runtime/local-process.spec.ts runtime/local-supervisor.spec.ts runtime/local-config.spec.ts --reporter=dot
-# 3 files, 26 tests passed
+# 3 files, 27 tests passed
 pnpm exec vitest run runtime/local-two-agent.spec.ts runtime/agent-process.spec.ts runtime/local-relay-bridge.spec.ts --reporter=dot
 # 3 files, 8 tests passed
 pnpm typecheck

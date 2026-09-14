@@ -3,7 +3,7 @@ import { spawn as spawnProcess } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
-import { readLocalInternalConfig, writeLocalConfig, writeLocalInternalLauncherState, writeLocalLauncherOwnership, writeLocalInternalState } from './local-config.ts'
+import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig, writeLocalInternalLauncherState, writeLocalLauncherOwnership, writeLocalInternalState } from './local-config.ts'
 import { runLocalConfiguredWork, runLocalProcess, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
 import type { LocalSupervisor } from './local-supervisor.ts'
 
@@ -120,6 +120,53 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     await rm(root, { recursive: true, force: true })
   }
 }, 10000)
+
+it('persists the detached supervisor PID during the startup window', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-local-process-starting-pid-'))
+  const path = join(root, 'config.toml')
+  try {
+    const relay = join(root, 'slow-relay.mjs')
+    const agent = join(root, 'agent.mjs')
+    await writeFile(relay, "setTimeout(() => { console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000) }, 500); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48016 } }))
+    await writeLocalConfig(path, `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.browser]
+role = "provider"
+identity = { hostId = "browser-host", machineId = "machine", agentId = "browser", accountId = "account", agentKind = "custom", label = "Browser" }
+scopeId = "scope"
+dataDirectory = "data/browser"
+leasePort = 48106
+presenceIntervalMs = 100
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-browser" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
+`)
+    const config = await loadLocalConfig(path)
+    expect(config.internalPath).toBeTypeOf('string')
+    const starting = startLocalProcess(path, { relayEntry: relay, agentEntry: agent, nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 3000 })
+    let observedPid: number | undefined
+    for (let attempt = 0; attempt < 50 && observedPid === undefined; attempt += 1) {
+      try {
+        const internal = await readLocalInternalConfig(config.internalPath!)
+        if (internal.launcher?.state === 'starting' && internal.launcher.pid !== undefined && internal.launcher.pid > 0) observedPid = internal.launcher.pid
+      } catch { /* reservation may not have been written yet */ }
+      await new Promise(resolveDelay => setTimeout(resolveDelay, 20))
+    }
+    const resolved = await starting
+    const internal = await readLocalInternalConfig(resolved.internalPath)
+    expect(internal.launcher?.pid).toBeGreaterThan(0)
+    expect(observedPid).toBeGreaterThan(0)
+    await stopLocalProcess(path, resolved.generation)
+  } finally {
+    try { await stopLocalProcess(path) } catch { /* cleanup is best effort for test-only paths */ }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
 
 it('recovers a dead launcher before restarting and stops only exact owned descendants', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-local-process-recovery-'))

@@ -336,6 +336,12 @@ export async function startLocalProcess(configPath = defaultLocalConfigPath(), o
       throw new LocalProcessError('NOT_RUNNING', 'detached local supervisor did not return a pid')
     }
     try {
+      await writeLocalInternalLauncherState(config.internalPath!, { pid: child.pid, generation: nextGeneration, startToken, state: 'starting' })
+    } catch (error) {
+      try { if (processAlive(child.pid)) process.kill(child.pid, 'SIGTERM') } catch { /* preserve the persistence failure */ }
+      throw error
+    }
+    try {
       return await waitForLauncherState(config.internalPath!, config.configPath, 'running', options.startupTimeoutMs)
     } catch (error) {
       const latest = await readLocalInternalConfig(config.internalPath!)
