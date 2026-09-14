@@ -28,25 +28,25 @@ worktree、进程/端口和最新 receipt；只从第一个失效 gate 及其下
 PASS 写 reuse receipt。使用有界等待，不忙轮询；没有安全独立任务时记录等待原因。
 
 当前接手指针（2026-09-13，必须启动时复核）：
-- 本次现场读取到的 root `main` 与 `origin/main` 均为
-  `3793b83a9a3609979d82dfadb8e086922804e828`，root clean；该 SHA 只是当前快照，不是后续
-  delivery unit 的固定基线。每次唤醒必须重新读取 `git status`、`git rev-parse`、
+- 上次文档刷新现场读取到的 root `main` 与 `origin/main` 均为
+  `3793b83a9a3609979d82dfadb8e086922804e828`，root clean；这是历史快照，只用于解释当时的
+  worktree 状态，绝不是当前或后续 delivery unit 的固定基线。每次唤醒必须重新读取 `git status`、`git rev-parse`、
   `git ls-remote origin refs/heads/main`，新 unit 从届时最新远端主线建 clean worktree。
 - 当前唯一长期目标 issue 是已存在且仍 open 的 `af5c167`；本次 re-entry 记录为 AppSDK comment
   `a4f55dc`，与旧的 `docs/evidence/af5c167-mvp-closeout-20260910/` delivery 分开。不得为同一
   MVP 创建第二个 goal、subscription、task graph 或重复 issue。U0 internal.toml 真源 issue
   `159b78b` 已关闭，只复用其 receipts，不重开、不重复实现。
 - runtime issue `3742b9a` 的工作树是
-  `playground/3742b9a-runtime-r5-20260913`，base=`ce91c14`，仍 dirty，且相对当前
-  `origin/main=3793b83` 落后；尚无 candidate commit。它只保留为只读审计/证据源；不得继续在此树
-  写入，必须从当时最新 `origin/main` 建立新的 clean runtime worktree 并通过 admission。上一次
+  `playground/3742b9a-runtime-r5-20260913`，base=`ce91c14`，仍 dirty，且相对上述历史快照已落后；
+  尚无 candidate commit。它只保留为只读审计/证据源；不得继续在此树写入，必须从届时最新
+  `origin/main` 建立新的 clean runtime worktree 并通过 admission。上一次
   focused run 仍有 configured Work restart 的 `START_TIMEOUT`，因此不得进入 review、integration
   或 CLI 派发。`local-two-agent`
   socket replay、full `pnpm verify`、exact review、push、memory、cleanup 均未对 r5 candidate
   成立。
 - C1 issue `776fcad` 的工作树是
-  `playground/776fcad-c1-r3-20260913`，base=`ce91c14`，相对当前 `origin/main=3793b83`
-  落后，只允许写 `config/**` 与
+  `playground/776fcad-c1-r3-20260913`，base=`ce91c14`，相对上述历史快照已落后，只允许写
+  `config/**` 与
   `opencode-adapter/**`。只有在重新核对当前 `origin/main`、clean 状态、owner、changed-path
   fingerprint 和 admission 通过后，才可与 runtime 并行；否则只调度 runtime。C1 必须独立完成
   focused gate、evidence、Codex review、integration、push、memory 和 cleanup。旧 r2 worktree 只作
