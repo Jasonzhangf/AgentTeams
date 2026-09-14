@@ -47,6 +47,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`
 - details: [L2/af5c167-local-mvp-rerun-20260914.md](L2/af5c167-local-mvp-rerun-20260914.md)
 
+### Phase 1 Local MVP current-SHA closure
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`, `phase1`
+- details: [L2/af5c167-phase1-current-20260914.md](L2/af5c167-phase1-current-20260914.md)
+
 ### AgentBrowser icon admission
 - tags: `agentbrowser`, `ai-reviewed`, `human-unreviewed`, `icon`, `ui-evidence`
 - details: [L2/agentbrowser-icon-20260906.md](L2/agentbrowser-icon-20260906.md)
