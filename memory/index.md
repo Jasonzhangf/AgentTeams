@@ -43,6 +43,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `local-mvp`, `scheduler`
 - details: [L2/af5c167-goal-reentry-20260913.md](L2/af5c167-goal-reentry-20260913.md)
 
+### Current SHA local MVP replay
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`
+- details: [L2/af5c167-local-mvp-rerun-20260914.md](L2/af5c167-local-mvp-rerun-20260914.md)
+
 ### AgentBrowser icon admission
 - tags: `agentbrowser`, `ai-reviewed`, `human-unreviewed`, `icon`, `ui-evidence`
 - details: [L2/agentbrowser-icon-20260906.md](L2/agentbrowser-icon-20260906.md)
@@ -336,5 +340,5 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: N3 peer route contract delivery (knowledge) [N3,ai-reviewed,human-unreviewed,network] -> L2/8ea5f7c-n3-peer-route-contract-20260910.md
 - L2: N3 typed runtime peer-route assembly (knowledge) [N3,ai-reviewed,human-unreviewed,network,runtime] -> L2/8ea5f7c-n3-runtime-assembly-20260910.md
 - L2: Local MVP scheduler re-entry 2026-09-13 (plan) [ai-reviewed,human-unreviewed,local-mvp,scheduler] -> L2/af5c167-goal-reentry-20260913.md
-- L2: AgentBrowser icon admission (knowledge) [agentbrowser,ai-reviewed,human-unreviewed,icon,ui-evidence] -> L2/agentbrowser-icon-20260906.md
+- L2: Current SHA local MVP replay (knowledge) [agentteams,ai-reviewed,human-unreviewed,local-mvp] -> L2/af5c167-local-mvp-rerun-20260914.md
 
