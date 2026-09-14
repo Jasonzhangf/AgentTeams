@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "agentteams": "./cli/agentteams.mjs"
+  },
   "scripts": {
     "test": "pnpm --dir opencode-adapter build && node scripts/regression.mjs",
     "typecheck": "pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck",

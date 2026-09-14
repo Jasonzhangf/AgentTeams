@@ -5,6 +5,7 @@ export default {
   test: {
     allowOnly: false,
     include: [
+      'cli/**/*.spec.ts',
       'agent-host/**/*.spec.ts',
       'cli-adapter/**/*.spec.ts',
       'server/**/*.spec.ts',
