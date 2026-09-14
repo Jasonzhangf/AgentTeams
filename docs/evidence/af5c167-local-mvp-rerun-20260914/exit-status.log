@@ -1,0 +1,9 @@
+cli-replay exit=0 expected=0
+stale-generation-stop exit=1 expected=1
+mapped-tests exit=0 expected=0
+pnpm-typecheck exit=0 expected=0
+pnpm-build exit=0 expected=0
+appsdk-compile exit=0 expected=0
+pnpm-smoke exit=0 expected=0
+appsdk-verify exit=0 expected=0
+git-diff-check exit=0 expected=0

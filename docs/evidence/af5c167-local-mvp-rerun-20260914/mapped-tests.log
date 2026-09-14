@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 /Volumes/extension/code/AgentTeams/playground/af5c167-local-mvp-rerun-20260914
+
+
+ Test Files  7 passed (7)
+      Tests  32 passed (32)
+   Start at  09:57:40
+   Duration  1.47s (transform 156ms, setup 0ms, import 309ms, tests 396ms, environment 0ms)

@@ -1,0 +1,1 @@
+git diff --cached --check returned no output; exit=0.

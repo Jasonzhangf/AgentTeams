@@ -1,0 +1,54 @@
+version = 1
+configRevision = "sha256:46a5a65d3606fa7f655255c68359f664a39fa2d1b53e95595d43fab978dc2da1"
+sourcePath = "/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/config.toml"
+generatedAt = "2026-09-14T16:47:35.853Z"
+updatedAt = "2026-09-14T16:47:38.110Z"
+
+[relay]
+projectionPath = "/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/.internal/projections/relay.json"
+config = "{\"version\":1,\"listen\":{\"host\":\"127.0.0.1\",\"port\":48010},\"tls\":{\"keyFile\":\"/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/relay-key.pem\",\"certFile\":\"/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/relay-cert.pem\"},\"limits\":{\"maxPayload\":65536,\"maxConnections\":8,\"maxGrants\":8,\"maxBufferedAmount\":65536,\"maxPendingMessages\":8,\"maxPendingBytes\":131072,\"grantTtlMs\":5000},\"credentials\":[{\"credentialEnv\":\"AGENTTEAMS_PROVIDER_AUTH\",\"identity\":{\"accountId\":\"local\",\"scopeId\":\"local\",\"agentId\":\"provider\"}},{\"credentialEnv\":\"AGENTTEAMS_RECEIVER_AUTH\",\"identity\":{\"accountId\":\"local\",\"scopeId\":\"local\",\"agentId\":\"receiver\"}}]}"
+
+[launcher]
+pid = 44363
+generation = 2
+startToken = "d68e930d-cfc2-4a43-88d2-d44f2cfd02c5"
+state = "stopped"
+
+[configuredWork]
+agentId = "receiver"
+workId = "configured-search"
+requestId = "configured-search-1"
+generation = 2
+state = "succeeded"
+
+[daemon."provider"]
+projectionPath = "/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/.internal/projections/provider.json"
+role = "provider"
+state = "stopped"
+enabled = true
+orphaned = false
+entryPath = "/Volumes/extension/code/AgentTeams/playground/af5c167-local-mvp-rerun-20260914/generated/runtime-lib/runtime/agent-process.js"
+startToken = "d68e930d-cfc2-4a43-88d2-d44f2cfd02c5"
+pid = 44454
+generation = 2
+config = "{\"version\":1,\"identity\":{\"hostId\":\"local\",\"machineId\":\"agentteams\",\"agentId\":\"provider\",\"accountId\":\"local\",\"agentKind\":\"custom\",\"label\":\"Provider\"},\"scopeId\":\"local\",\"dataDirectory\":\"/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/data/provider\",\"leasePort\":48011,\"presenceIntervalMs\":500,\"policy\":{\"revision\":1,\"allowedConsumers\":[\"receiver\"],\"allowedManagers\":[]},\"cli\":{\"camoExecutable\":\"/missing/camo\",\"searchExecutable\":\"/opt/homebrew/bin/rg\",\"searchRoot\":\"/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/files\",\"profilePrefix\":\"teams-provider\"},\"relay\":{\"endpoint\":\"wss://127.0.0.1:48010\",\"credentialEnv\":\"AGENTTEAMS_PROVIDER_AUTH\",\"caFile\":\"/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/relay-cert.pem\",\"connectTimeoutMs\":2000,\"admissionTimeoutMs\":2000,\"requestTimeoutMs\":5000,\"maxMessageBytes\":65536,\"maxBufferedBytes\":65536,\"maxPendingFrames\":8,\"maxPendingRequests\":4,\"maxDataConnections\":4},\"endpoint\":{\"role\":\"provider\"}}"
+
+[daemon."receiver"]
+projectionPath = "/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/.internal/projections/receiver.json"
+role = "receiver"
+state = "stopped"
+enabled = true
+orphaned = false
+entryPath = "/Volumes/extension/code/AgentTeams/playground/af5c167-local-mvp-rerun-20260914/generated/runtime-lib/runtime/agent-process.js"
+startToken = "d68e930d-cfc2-4a43-88d2-d44f2cfd02c5"
+pid = 44503
+generation = 2
+config = "{\"version\":1,\"identity\":{\"hostId\":\"local\",\"machineId\":\"agentteams\",\"agentId\":\"receiver\",\"accountId\":\"local\",\"agentKind\":\"custom\",\"label\":\"Receiver\"},\"scopeId\":\"local\",\"dataDirectory\":\"/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/data/receiver\",\"leasePort\":48012,\"presenceIntervalMs\":500,\"policy\":{\"revision\":1,\"allowedConsumers\":[],\"allowedManagers\":[]},\"cli\":{\"camoExecutable\":\"/missing/camo\",\"searchExecutable\":\"/opt/homebrew/bin/rg\",\"searchRoot\":\"/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/files\",\"profilePrefix\":\"teams-receiver\"},\"relay\":{\"endpoint\":\"wss://127.0.0.1:48010\",\"credentialEnv\":\"AGENTTEAMS_RECEIVER_AUTH\",\"caFile\":\"/tmp/agentteams-mvp-replay-20260914-r2.qXfuxm/.agentteams/relay-cert.pem\",\"connectTimeoutMs\":2000,\"admissionTimeoutMs\":2000,\"requestTimeoutMs\":5000,\"maxMessageBytes\":65536,\"maxBufferedBytes\":65536,\"maxPendingFrames\":8,\"maxPendingRequests\":4,\"maxDataConnections\":4},\"endpoint\":{\"role\":\"receiver\",\"connect\":{\"targetAgentId\":\"provider\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"workId\":\"configured-search\",\"requestId\":\"configured-search-1\",\"demands\":[{\"resourceId\":\"search-slot\",\"amount\":1}],\"payload\":{\"query\":\"needle\"}}}}"
+
+[daemon."relay"]
+state = "stopped"
+orphaned = false
+entryPath = "/Volumes/extension/code/AgentTeams/playground/af5c167-local-mvp-rerun-20260914/generated/runtime-lib/server/relay-process.js"
+startToken = "d68e930d-cfc2-4a43-88d2-d44f2cfd02c5"
+pid = 44374
+generation = 2

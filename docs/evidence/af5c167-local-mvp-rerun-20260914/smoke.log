@@ -1,0 +1,6 @@
+
+> agentteams@0.1.0 smoke /Volumes/extension/code/AgentTeams/playground/af5c167-local-mvp-rerun-20260914
+> node scripts/artifact-smoke.mjs && node scripts/runtime-smoke.mjs
+
+Packaged Console smoke passed: authenticated UI/API, legacy routes absent, owner denial and exact Session JSON. No provider or cross-device claim.
+Packaged runtime smoke passed: real TLS Relay, daemon library admission/directory, stop and fresh generation. No OS process deployment, executor or NAT claim.
