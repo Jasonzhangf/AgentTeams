@@ -103,6 +103,10 @@ _Empty._
 - tags: `ai-reviewed`, `appsdk`, `governance`, `human-unreviewed`
 - details: [L2/appsdk-0-1-6-lock-alignment-20260909.md](L2/appsdk-0-1-6-lock-alignment-20260909.md)
 
+### Current SHA provider OpenCode replay
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `opencode`, `provider`
+- details: [L2/c5708f3-current-syah-provider-20260914.md](L2/c5708f3-current-syah-provider-20260914.md)
+
 ### Provider live milestone accepts explicit models with empty RCC catalog
 - tags: `ai-reviewed`, `human-unreviewed`, `milestone`, `provider`
 - details: [L2/c5708f3-provider-live-milestone-20260912.md](L2/c5708f3-provider-live-milestone-20260912.md)
