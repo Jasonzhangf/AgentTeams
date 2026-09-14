@@ -287,6 +287,10 @@ _Empty._
 - tags: `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`
 - details: [L2/teams-local-mvp-plan-8aeb3fa.md](L2/teams-local-mvp-plan-8aeb3fa.md)
 
+### AgentTeams runtime R6 local launcher delivery
+- tags: `3742b9a`, `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`, `runtime`
+- details: [L2/test-id.md](L2/test-id.md)
+
 ## Level 3 — new or unreviewed
 
 ### Superseded memory write for 41f0ea2
