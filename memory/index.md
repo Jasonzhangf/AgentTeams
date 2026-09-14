@@ -303,6 +303,10 @@ _Empty._
 - tags: `3742b9a`, `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`, `runtime`
 - details: [L2/test-id.md](L2/test-id.md)
 
+### CLI status preserves endpoint capability resources
+- tags: `local-mvp,cli,ai-reviewed,human-unreviewed`
+- details: [L2/u1-cli-status-projection.md](L2/u1-cli-status-projection.md)
+
 ### Runtime projects authoritative daemon status
 - tags: `local-mvp,runtime,ai-reviewed,human-unreviewed`
 - details: [L2/u1-runtime-status-projection.md](L2/u1-runtime-status-projection.md)
