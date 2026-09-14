@@ -231,6 +231,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `network`, `restart`
 - details: [L2/memory-7a956be82fe1bd17.md](L2/memory-7a956be82fe1bd17.md)
 
+### c3c2e0e packaged AgentTeams CLI runtime
+- tags: `AgentTeams`, `ai-reviewed`, `cli`, `human-unreviewed`, `local-mvp`
+- details: [L2/memory-855f0766e3e6df34.md](L2/memory-855f0766e3e6df34.md)
+
 ### a5caff2 provider credential resolver integration
 - tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `provider-config`
 - details: [L2/memory-9043c13eec4ae60c.md](L2/memory-9043c13eec4ae60c.md)
