@@ -1,0 +1,30 @@
+
+> agentteams@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/integration-c5708f3-current-syah-live-20260914
+> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/extension/code/AgentTeams/playground/integration-c5708f3-current-syah-live-20260914/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/extension/code/AgentTeams/playground/integration-c5708f3-current-syah-live-20260914/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ lib/index.mjs    16.95 kB │ gzip: 4.25 kB
+ℹ lib/index.d.mts  12.28 kB │ gzip: 2.84 kB
+ℹ 2 files, total: 29.23 kB
+✔ Build complete in 1494ms
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/integration-c5708f3-current-syah-live-20260914/opencode-adapter
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/integration-c5708f3-current-syah-live-20260914/console-host
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/extension/code/AgentTeams/playground/integration-c5708f3-current-syah-live-20260914/ui/teams-console
+> tsc -p tsconfig.json --noEmit
+

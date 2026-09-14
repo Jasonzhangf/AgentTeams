@@ -1,0 +1,11 @@
+
+ RUN  v4.1.11 /Volumes/extension/code/AgentTeams/playground/integration-c5708f3-current-syah-live-20260914
+
+(node:7288) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  7 passed (7)
+      Tests  43 passed (43)
+   Start at  10:32:10
+   Duration  4.28s (transform 562ms, setup 0ms, import 787ms, tests 8.27s, environment 0ms)
+
