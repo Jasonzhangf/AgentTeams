@@ -94,8 +94,32 @@ payload = { query = "two daemon bridge" }
     const internal = readFileSync(config.internalPath!, 'utf8')
     expect(internal).toMatch(/\[daemon\."provider"\][\s\S]*state = "online"/)
     expect(internal).toMatch(/\[daemon\."consumer"\][\s\S]*state = "online"/)
+    const projected = await statusLocalProcess(configPath)
+    expect(projected.endpoints?.map(endpoint => endpoint.agentId)).toEqual(['provider', 'consumer'])
+    expect(projected.endpoints?.find(endpoint => endpoint.agentId === 'provider')).toMatchObject({
+      role: 'provider',
+      presence: 'online',
+      generation: 1,
+      capabilities: [
+        { capabilityId: 'browser', version: '1', operations: ['context.create', 'navigate', 'snapshot', 'context.destroy'],
+          resources: [
+            { resourceId: 'browser-context', capacity: 2, unit: 'context' },
+            { resourceId: 'browser-slot', capacity: 2, unit: 'slot' },
+          ] },
+        { capabilityId: 'file-search', version: '1', operations: ['search'],
+          resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }] },
+      ],
+    })
+    expect(projected.endpoints?.find(endpoint => endpoint.agentId === 'consumer')).toMatchObject({
+      role: 'receiver', presence: 'online', generation: 1, capabilities: [],
+    })
     await stopLocalProcess(configPath, first.generation)
     started = false
+    const stoppedStatus = await statusLocalProcess(configPath)
+    expect(stoppedStatus.endpoints?.map(endpoint => [endpoint.agentId, endpoint.presence, endpoint.state])).toEqual([
+      ['provider', 'offline', 'stopped'],
+      ['consumer', 'offline', 'stopped'],
+    ])
     const stopped = await readLocalInternalConfig(config.internalPath!)
     expect.soft(Object.values(stopped.daemons ?? {}).map(daemon => daemon.state)).toEqual(['stopped', 'stopped', 'stopped'])
     const second = await startLocalProcess(configPath, { relayEntry: compiled ? resolve('generated/runtime-lib/server/relay-process.js') : resolve('server/relay-process.ts'),

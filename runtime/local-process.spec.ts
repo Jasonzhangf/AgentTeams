@@ -7,6 +7,14 @@ import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig, writeLocalI
 import { runLocalConfiguredWork, runLocalProcess, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
 import type { LocalSupervisor } from './local-supervisor.ts'
 
+const persistedAgentReadySource = `
+const generation = Number(process.env.TEAMS_LOCAL_LAUNCHER_GENERATION ?? 1)
+process.send?.({ kind: 'daemon.registered', agentId: 'browser', generation })
+process.send?.({ kind: 'daemon.status', agentId: 'browser', generation,
+  endpoint: { agentId: 'browser', identity: { hostId: 'browser-host', machineId: 'machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
+    role: 'provider', presence: 'online', state: 'online', generation, capabilities: [] } })
+`
+
 it('turns a post-ready supervisor failure into cleanup and a nonzero launcher result', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-local-process-'))
   const path = join(root, 'config.toml')
@@ -48,7 +56,15 @@ it('starts detached, reports persisted status, rejects stale stop, and survives 
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
     await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
-    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `
+process.send?.({ kind: 'daemon.status', agentId: 'browser', generation: 1,
+  endpoint: { agentId: 'browser', identity: { hostId: 'browser-host', machineId: 'machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
+    role: 'provider', presence: 'online', state: 'online', generation: 1,
+    capabilities: [{ capabilityId: 'file-search', version: '1', operations: ['search'], resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }] }] } })
+process.send?.({kind:'daemon.registered', agentId: 'browser', generation: 1})
+setInterval(() => {}, 1000)
+process.once('SIGTERM', () => process.exit(0))
+`)
     await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48010 } }))
     await writeLocalConfig(path, `version = 2
 
@@ -95,7 +111,7 @@ it('keeps daemon state on the launcher generation and rejects stale writers', as
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
     await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
-    await writeFile(agent, "process.send?.({kind:'daemon.registered', generation:7}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `${persistedAgentReadySource}setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n`)
     await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48017 } }))
     await writeLocalConfig(path, `version = 2
 
@@ -140,7 +156,7 @@ it('cancels a timed-out detached startup instead of allowing a late supervisor t
     const relay = join(root, 'slow-relay.mjs')
     const agent = join(root, 'agent.mjs')
     await writeFile(relay, "setTimeout(() => { console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000) }, 500); process.once('SIGTERM', () => process.exit(0))\n")
-    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `${persistedAgentReadySource}setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n`)
     await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48012 } }))
     await writeLocalConfig(path, `version = 2
 
@@ -173,7 +189,7 @@ it('persists the detached supervisor PID during the startup window', async () =>
     const relay = join(root, 'slow-relay.mjs')
     const agent = join(root, 'agent.mjs')
     await writeFile(relay, "setTimeout(() => { console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000) }, 500); process.once('SIGTERM', () => process.exit(0))\n")
-    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `${persistedAgentReadySource}setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n`)
     await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48016 } }))
     await writeLocalConfig(path, `version = 2
 
@@ -213,6 +229,72 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
   }
 }, 15000)
 
+it('fails status explicitly when a persisted endpoint projection is missing or malformed', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-local-status-projection-'))
+  const path = join(root, 'config.toml')
+  try {
+    const relay = join(root, 'relay.mjs')
+    const agent = join(root, 'agent.mjs')
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `
+    process.send?.({ kind: 'daemon.status', agentId: 'browser', generation: 1,
+  endpoint: { agentId: 'browser', identity: { hostId: 'browser-host', machineId: 'machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
+    role: 'provider', presence: 'online', state: 'online', generation: 1,
+    capabilities: [{ capabilityId: 'file-search', version: '1', operations: ['search'],
+      resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }] }] } })
+process.send?.({ kind: 'daemon.registered', agentId: 'browser', generation: 1 })
+setInterval(() => {}, 1000)
+process.once('SIGTERM', () => process.exit(0))
+`)
+    await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48018 } }))
+    await writeLocalConfig(path, `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.browser]
+role = "provider"
+identity = { hostId = "browser-host", machineId = "machine", agentId = "browser", accountId = "account", agentKind = "custom", label = "Browser" }
+scopeId = "scope"
+dataDirectory = "data/browser"
+leasePort = 48108
+presenceIntervalMs = 100
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-browser" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
+`)
+    const started = await startLocalProcess(path, { relayEntry: relay, agentEntry: agent, nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 3000 })
+    const projected = await statusLocalProcess(path)
+    expect(projected.endpoints).toEqual([{
+      agentId: 'browser',
+      identity: { hostId: 'browser-host', machineId: 'machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
+      role: 'provider',
+      presence: 'online',
+      state: 'online',
+      generation: 1,
+      capabilities: [{ capabilityId: 'file-search', version: '1', operations: ['search'],
+        resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }] }],
+    }])
+    const internal = await readLocalInternalConfig(started.internalPath)
+    expect(internal.daemons?.browser?.state).toBe('online')
+    const projectionPath = join(root, '.internal', 'daemon-status.json')
+    expect(JSON.parse(await readFile(projectionPath, 'utf8'))).toMatchObject({
+      version: 1, generation: 1, daemons: { browser: { agentId: 'browser', role: 'provider', presence: 'online' } },
+    })
+    await rm(projectionPath)
+    await expect(statusLocalProcess(path)).rejects.toMatchObject({ code: 'INVALID_STATUS' })
+    await stopLocalProcess(path, started.generation)
+
+    await writeFile(projectionPath, JSON.stringify({
+      version: 1, generation: 1, daemons: { browser: { agentId: 'browser', capabilities: 'not-an-array' } },
+    }))
+    await expect(statusLocalProcess(path)).rejects.toMatchObject({ code: 'INVALID_STATUS' })
+  } finally {
+    try { await stopLocalProcess(path) } catch { /* cleanup is best effort for test-only paths */ }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 20000)
+
 it('recovers a dead launcher before restarting and stops only exact owned descendants', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-local-process-recovery-'))
   const path = join(root, 'config.toml')
@@ -222,7 +304,7 @@ it('recovers a dead launcher before restarting and stops only exact owned descen
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
     await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
-    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `${persistedAgentReadySource}setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n`)
     await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48013 } }))
     await writeLocalConfig(path, `version = 2
 
@@ -275,7 +357,7 @@ it('rejects a live PID reuse even when the persisted launcher owner record match
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
     await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
-    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `${persistedAgentReadySource}setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n`)
     await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48015 } }))
     await writeLocalConfig(path, `version = 2
 
@@ -314,6 +396,49 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
   }
 }, 20000)
 
+it('rejects a live child persisted under a different launcher generation', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-local-process-generation-'))
+  const path = join(root, 'config.toml')
+  let internalPath: string | undefined
+  try {
+    const relay = join(root, 'relay.mjs')
+    const agent = join(root, 'agent.mjs')
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `${persistedAgentReadySource}setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n`)
+    await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48019 } }))
+    await writeLocalConfig(path, `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.browser]
+role = "provider"
+identity = { hostId = "browser-host", machineId = "machine", agentId = "browser", accountId = "account", agentKind = "custom", label = "Browser" }
+scopeId = "scope"
+dataDirectory = "data/browser"
+leasePort = 48109
+presenceIntervalMs = 100
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-browser" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
+`)
+    const started = await startLocalProcess(path, { relayEntry: relay, agentEntry: agent, nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 3000 })
+    internalPath = started.internalPath
+    const internal = await readLocalInternalConfig(internalPath)
+    const child = internal.daemons?.browser
+    if (child?.pid === undefined || child.entryPath === undefined || child.startToken === undefined) throw new Error('browser child ownership was not persisted')
+    await writeLocalInternalState(internalPath, {
+      browser: { pid: child.pid, entryPath: child.entryPath, startToken: child.startToken, state: 'online', generation: started.generation + 1 },
+    })
+    await expect(statusLocalProcess(path)).resolves.toMatchObject({ state: 'failed', error: expect.stringContaining('generation') })
+  } finally {
+    if (internalPath !== undefined) {
+      try { await stopLocalProcess(path) } catch { /* cleanup is best effort for test-only paths */ }
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 20000)
+
 it('rejects dead-launcher recovery when a persisted child start token does not match', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-local-process-identity-'))
   const path = join(root, 'config.toml')
@@ -325,7 +450,7 @@ it('rejects dead-launcher recovery when a persisted child start token does not m
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
     await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
-    await writeFile(agent, "process.send?.({kind:'daemon.registered'}); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `${persistedAgentReadySource}setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n`)
     await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48014 } }))
     await writeLocalConfig(path, `version = 2
 
@@ -435,7 +560,11 @@ it('persists configured Work receipts across detached restart generations', asyn
     await writeFile(agent, `
 import { readFile } from 'node:fs/promises'
 import { readLocalInternalConfig, writeLocalInternalConfiguredWork } from ${JSON.stringify(resolve('runtime/local-config.ts'))}
-process.send?.({ kind: 'daemon.registered' })
+const generation = Number(process.env.TEAMS_LOCAL_LAUNCHER_GENERATION ?? 1)
+process.send?.({ kind: 'daemon.status', agentId: 'browser', generation,
+  endpoint: { agentId: 'browser', identity: { hostId: 'browser-host', machineId: 'machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
+    role: 'receiver', presence: 'online', state: 'online', generation, capabilities: [] } })
+process.send?.({ kind: 'daemon.registered', agentId: 'browser', generation })
 setInterval(() => {}, 1000)
 setTimeout(async () => {
   const internalPath = process.env.TEAMS_LOCAL_INTERNAL_PATH

@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { createLocalSupervisor } from './local-supervisor.ts'
+import { createLocalSupervisor, localDaemonStatusProjectionPath } from './local-supervisor.ts'
 import { planLocalProcesses } from './local-supervisor.ts'
 import type { LocalConfig } from './local-config.ts'
 
@@ -36,6 +36,10 @@ function config(root: string): LocalConfig {
     ],
   }
 }
+
+it('keeps the daemon status projection beside internal.toml in the canonical .internal directory', () => {
+  expect(localDaemonStatusProjectionPath('/tmp/.agentteams/internal.toml')).toBe('/tmp/.agentteams/.internal/daemon-status.json')
+})
 
 it('starts relay before enabled daemons and stops the owned children reentrantly', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-local-supervisor-'))

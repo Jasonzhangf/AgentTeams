@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
-import { createLocalSupervisor, type LocalSupervisor } from './local-supervisor.ts'
+import { createLocalSupervisor, readLocalDaemonStatusProjection, type LocalDaemonEndpointProjection, type LocalSupervisor } from './local-supervisor.ts'
 import { defaultLocalConfigPath, loadLocalConfig, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalConfig, type LocalInternalLauncherConfig } from './local-config.ts'
 
 const execFile = promisify(execFileCallback)
@@ -16,10 +16,11 @@ export interface LocalLauncherStatus {
   readonly generation: number
   readonly state: 'stopped' | 'starting' | 'running' | 'failed'
   readonly error?: string
+  readonly endpoints?: readonly LocalDaemonEndpointProjection[]
 }
 
 export class LocalProcessError extends Error {
-  constructor(readonly code: 'NOT_RUNNING' | 'STALE_GENERATION' | 'STALE_OWNER' | 'START_TIMEOUT' | 'ALREADY_RUNNING' | 'STARTING', message: string) {
+  constructor(readonly code: 'NOT_RUNNING' | 'STALE_GENERATION' | 'STALE_OWNER' | 'START_TIMEOUT' | 'ALREADY_RUNNING' | 'STARTING' | 'INVALID_STATUS', message: string) {
     super(message)
     this.name = 'LocalProcessError'
   }
@@ -374,7 +375,66 @@ export async function statusLocalProcess(configPath = defaultLocalConfigPath()):
   if (launcher.state === 'running' && launcher.pid !== undefined && !(await processOwnsStartToken(launcher.pid, launcher.startToken, config.configPath))) {
     return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor start token does not match persisted ownership' }
   }
-  return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state, ...(launcher.error === undefined ? {} : { error: launcher.error }) }
+  if (launcher.state === 'running') {
+    const expectedChildren = ['relay', ...config.daemons.filter(daemon => daemon.enabled).map(daemon => daemon.id)]
+    for (const id of expectedChildren) {
+      const child = internal.daemons?.[id]
+      if (child === undefined || child.state !== 'online' || child.pid === undefined || child.pid <= 0 || !processAlive(child.pid)) {
+        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} is not alive` }
+      }
+      if (child.generation !== launcher.generation) {
+        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} generation does not match launcher generation` }
+      }
+      const entryPath = child.entryPath
+      const childConfigPath = id === 'relay' ? internal.relay?.projectionPath : child.projectionPath
+      if (entryPath === undefined || childConfigPath === undefined || child.startToken === undefined) {
+        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} ownership record is incomplete` }
+      }
+      if (child.startToken !== launcher.startToken) {
+        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} start token does not match launcher ownership` }
+      }
+      const command = await processCommand(child.pid)
+      if (command === undefined || !processOwnsConfigCommand(command, childConfigPath, entryPath, child.startToken)) {
+        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} does not match persisted ownership` }
+      }
+    }
+  }
+  // The launcher remains authoritative while a new generation is starting or a
+  // failure is being persisted; an older projection must not mask that state.
+  if (launcher.state === 'starting' || launcher.state === 'failed') {
+    return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
+      ...(launcher.error === undefined ? {} : { error: launcher.error }) }
+  }
+  const projection = await readLocalDaemonStatusProjection(config.internalPath).catch(error => {
+    throw new LocalProcessError('INVALID_STATUS', error instanceof Error ? error.message : String(error))
+  })
+  if (projection !== undefined && projection.generation !== launcher.generation) {
+    throw new LocalProcessError('INVALID_STATUS', `runtime daemon status projection generation=${projection.generation} does not match launcher generation=${launcher.generation}`)
+  }
+  if (projection !== undefined && projection.startToken !== launcher.startToken) {
+    throw new LocalProcessError('INVALID_STATUS', 'runtime daemon status projection start token does not match launcher ownership')
+  }
+  const endpoints = projection === undefined ? undefined : (() => {
+    const enabled = config.daemons.filter(daemon => daemon.enabled)
+    const enabledIds = new Set(enabled.map(daemon => daemon.id))
+    for (const id of Object.keys(projection.daemons)) {
+      if (!enabledIds.has(id)) throw new LocalProcessError('INVALID_STATUS', `runtime daemon status projection contains unknown daemon ${id}`)
+    }
+    return enabled.map(daemon => {
+      const endpoint = projection.daemons[daemon.id]
+      if (endpoint === undefined) throw new LocalProcessError('INVALID_STATUS', `runtime daemon status projection is missing daemon ${daemon.id}`)
+      return endpoint
+    })
+  })()
+  if (launcher.state === 'running' && endpoints === undefined) {
+    throw new LocalProcessError('INVALID_STATUS', 'runtime daemon status projection is missing')
+  }
+  if (launcher.state === 'running' && endpoints?.some(endpoint => endpoint.state !== 'online' || endpoint.presence !== 'online')) {
+    throw new LocalProcessError('INVALID_STATUS', 'runtime daemon status projection is not online')
+  }
+  return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
+    ...(launcher.error === undefined ? {} : { error: launcher.error }),
+    ...(endpoints === undefined ? {} : { endpoints }) }
 }
 
 export async function stopLocalProcess(configPath = defaultLocalConfigPath(), expectedGeneration?: number): Promise<LocalLauncherStatus> {

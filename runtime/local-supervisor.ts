@@ -1,8 +1,48 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { projectLocalChildConfigs, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalLauncherOwnership, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
+
+export interface LocalDaemonIdentityProjection {
+  readonly hostId: string
+  readonly machineId: string
+  readonly agentId: string
+  readonly accountId: string
+  readonly agentKind: 'opencode' | 'acp' | 'custom'
+  readonly label: string
+}
+
+export interface LocalDaemonResourceProjection {
+  readonly resourceId: string
+  readonly capacity: number
+  readonly unit: 'slot' | 'context'
+}
+
+export interface LocalDaemonCapabilityProjection {
+  readonly capabilityId: string
+  readonly version: string
+  readonly operations: readonly string[]
+  readonly resources: readonly LocalDaemonResourceProjection[]
+}
+
+export interface LocalDaemonEndpointProjection {
+  readonly agentId: string
+  readonly identity: LocalDaemonIdentityProjection
+  readonly role: 'provider' | 'receiver' | 'hybrid'
+  readonly presence: 'online' | 'offline' | 'unknown'
+  readonly state: 'online' | 'stopped' | 'failed'
+  readonly generation: number
+  readonly capabilities: readonly LocalDaemonCapabilityProjection[]
+}
+
+export interface LocalDaemonStatusProjection {
+  readonly version: 1
+  readonly generation: number
+  readonly startToken: string
+  readonly daemons: Readonly<Record<string, LocalDaemonEndpointProjection>>
+}
 
 export interface LocalProcessSpec {
   readonly id: string
@@ -26,6 +66,141 @@ export interface LocalSupervisorOptions {
 }
 
 export type LocalSupervisorState = 'stopped' | 'starting' | 'running' | 'stopping' | 'failed'
+
+function projectionRecord(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
+  return value as Record<string, unknown>
+}
+
+function projectionText(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} must be a non-empty string`)
+  return value
+}
+
+function projectionPositiveInteger(value: unknown, label: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 1) throw new Error(`${label} must be a positive safe integer`)
+  return value as number
+}
+
+function projectionFields(value: Record<string, unknown>, allowed: readonly string[], label: string): void {
+  const unknown = Object.keys(value).filter(key => !allowed.includes(key))
+  if (unknown.length > 0) throw new Error(`${label} has unsupported fields: ${unknown.join(', ')}`)
+}
+
+/** Validate the Agent-owned status snapshot before it becomes runtime projection truth. */
+export function parseLocalDaemonEndpointProjection(value: unknown, label = 'local daemon endpoint'): LocalDaemonEndpointProjection {
+  const input = projectionRecord(value, label)
+  projectionFields(input, ['agentId', 'identity', 'role', 'presence', 'state', 'generation', 'capabilities'], label)
+  const identityInput = projectionRecord(input.identity, `${label}.identity`)
+  projectionFields(identityInput, ['hostId', 'machineId', 'agentId', 'accountId', 'agentKind', 'label'], `${label}.identity`)
+  const identity: LocalDaemonIdentityProjection = {
+    hostId: projectionText(identityInput.hostId, `${label}.identity.hostId`),
+    machineId: projectionText(identityInput.machineId, `${label}.identity.machineId`),
+    agentId: projectionText(identityInput.agentId, `${label}.identity.agentId`),
+    accountId: projectionText(identityInput.accountId, `${label}.identity.accountId`),
+    agentKind: (() => {
+      const value = identityInput.agentKind
+      if (value !== 'opencode' && value !== 'acp' && value !== 'custom') throw new Error(`${label}.identity.agentKind is invalid`)
+      return value
+    })(),
+    label: projectionText(identityInput.label, `${label}.identity.label`),
+  }
+  const role = input.role
+  if (role !== 'provider' && role !== 'receiver' && role !== 'hybrid') throw new Error(`${label}.role is invalid`)
+  const presence = input.presence
+  if (presence !== 'online' && presence !== 'offline' && presence !== 'unknown') throw new Error(`${label}.presence is invalid`)
+  const state = input.state
+  if (state !== 'online' && state !== 'stopped' && state !== 'failed') throw new Error(`${label}.state is invalid`)
+  const agentId = projectionText(input.agentId, `${label}.agentId`)
+  if (agentId !== identity.agentId) throw new Error(`${label}.agentId must match identity.agentId`)
+  if (!Array.isArray(input.capabilities)) throw new Error(`${label}.capabilities must be an array`)
+  const capabilities = input.capabilities.map((capability, index) => {
+    const capabilityInput = projectionRecord(capability, `${label}.capabilities[${index}]`)
+    projectionFields(capabilityInput, ['capabilityId', 'version', 'operations', 'resources'], `${label}.capabilities[${index}]`)
+    if (!Array.isArray(capabilityInput.operations) || capabilityInput.operations.length === 0) {
+      throw new Error(`${label}.capabilities[${index}].operations must be a non-empty array`)
+    }
+    const operations = capabilityInput.operations.map((operation, operationIndex) =>
+      projectionText(operation, `${label}.capabilities[${index}].operations[${operationIndex}]`))
+    if (!Array.isArray(capabilityInput.resources)) throw new Error(`${label}.capabilities[${index}].resources must be an array`)
+    const resources = capabilityInput.resources.map((resource, resourceIndex) => {
+      const resourceInput = projectionRecord(resource, `${label}.capabilities[${index}].resources[${resourceIndex}]`)
+      projectionFields(resourceInput, ['resourceId', 'capacity', 'unit'], `${label}.capabilities[${index}].resources[${resourceIndex}]`)
+      const unit = resourceInput.unit
+      if (unit !== 'slot' && unit !== 'context') throw new Error(`${label}.capabilities[${index}].resources[${resourceIndex}].unit is invalid`)
+      const parsed: LocalDaemonResourceProjection = {
+        resourceId: projectionText(resourceInput.resourceId, `${label}.capabilities[${index}].resources[${resourceIndex}].resourceId`),
+        capacity: projectionPositiveInteger(resourceInput.capacity, `${label}.capabilities[${index}].resources[${resourceIndex}].capacity`),
+        unit,
+      }
+      return parsed
+    })
+    return {
+      capabilityId: projectionText(capabilityInput.capabilityId, `${label}.capabilities[${index}].capabilityId`),
+      version: projectionText(capabilityInput.version, `${label}.capabilities[${index}].version`),
+      operations,
+      resources,
+    }
+  })
+  return {
+    agentId,
+    identity,
+    role,
+    presence,
+    state,
+    generation: projectionPositiveInteger(input.generation, `${label}.generation`),
+    capabilities,
+  }
+}
+
+export function parseLocalDaemonStatusProjection(value: unknown, label = 'local daemon status projection'): LocalDaemonStatusProjection {
+  const input = projectionRecord(value, label)
+  projectionFields(input, ['version', 'generation', 'startToken', 'daemons'], label)
+  if (input.version !== 1) throw new Error(`${label}.version must be 1`)
+  const daemonsInput = projectionRecord(input.daemons, `${label}.daemons`)
+  const daemons: Record<string, LocalDaemonEndpointProjection> = {}
+  for (const [id, endpoint] of Object.entries(daemonsInput)) {
+    daemons[id] = parseLocalDaemonEndpointProjection(endpoint, `${label}.daemons.${id}`)
+  }
+  return {
+    version: 1,
+    generation: (() => {
+      if (!Number.isSafeInteger(input.generation) || (input.generation as number) < 0) throw new Error(`${label}.generation must be a non-negative safe integer`)
+      return input.generation as number
+    })(),
+    startToken: projectionText(input.startToken, `${label}.startToken`),
+    daemons,
+  }
+}
+
+export function localDaemonStatusProjectionPath(internalPath: string): string {
+  return resolve(dirname(internalPath), '.internal', 'daemon-status.json')
+}
+
+export async function writeLocalDaemonStatusProjection(internalPath: string, projection: LocalDaemonStatusProjection): Promise<string> {
+  const path = localDaemonStatusProjectionPath(internalPath)
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+  const temporary = `${path}.${randomUUID()}.tmp`
+  await writeFile(temporary, `${JSON.stringify(projection, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+  try { await rename(temporary, path) }
+  catch (error) { try { await rm(temporary, { force: true }) } catch { /* preserve original failure */ } throw error }
+  return path
+}
+
+export async function readLocalDaemonStatusProjection(internalPath: string): Promise<LocalDaemonStatusProjection | undefined> {
+  const path = localDaemonStatusProjectionPath(internalPath)
+  let text: string
+  try { text = await readFile(path, 'utf8') }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw new Error(`local daemon status projection cannot be read: ${path}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  let parsed: unknown
+  try { parsed = JSON.parse(text) } catch (error) {
+    throw new Error(`local daemon status projection is not valid JSON: ${path}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  return parseLocalDaemonStatusProjection(parsed)
+}
 
 function defaultEntry(name: 'relay-process' | 'agent-process'): string {
   const runtimeDirectory = dirname(fileURLToPath(import.meta.url))
@@ -62,12 +237,16 @@ function waitForExit(child: ChildProcess, deadlineMs: number): Promise<void> {
   })
 }
 
-async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'], deadlineMs: number): Promise<Record<string, unknown> | undefined> {
+async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'], deadlineMs: number, requireEndpointProjection = false): Promise<Record<string, unknown> | undefined> {
   const output = { stdout: '', stderr: '' }
   return await new Promise<Record<string, unknown> | undefined>((resolveReady, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
+    let registrationFallback: ReturnType<typeof setTimeout> | undefined
+    let endpoint: unknown
+    let registration: Record<string, unknown> | undefined
     const finish = (error?: Error, value?: Record<string, unknown>) => {
       if (timer !== undefined) clearTimeout(timer)
+      if (registrationFallback !== undefined) clearTimeout(registrationFallback)
       child.off('error', onError)
       child.off('exit', onExit)
       child.off('message', onMessage)
@@ -76,15 +255,33 @@ async function waitForReady(child: ChildProcess, kind: LocalProcessSpec['kind'],
       if (error) reject(error); else resolveReady(value)
     }
     const onError = (error: Error) => finish(error)
-    const onExit = (code: number | null, signal: NodeJS.Signals | null) => finish(new Error(`local ${kind} exited before readiness code=${code ?? 'null'} signal=${signal ?? 'null'} stderr=${output.stderr}`))
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      // A legacy Agent may exit in the same turn as its registration frame.
+      // Preserve that frame as readiness so the supervisor's existing
+      // post-readiness liveness check reports the precise immediate-exit error.
+      if (kind === 'agent' && registration !== undefined && (!requireEndpointProjection || endpoint !== undefined)) finish(undefined, { ...registration, ...(endpoint === undefined ? {} : { endpoint }) })
+      else if (kind === 'agent' && registration !== undefined && requireEndpointProjection) finish(new Error('local agent exited after registration without status projection'))
+      else finish(new Error(`local ${kind} exited before readiness code=${code ?? 'null'} signal=${signal ?? 'null'} stderr=${output.stderr}`))
+    }
     const onStdout = (chunk: Buffer | string) => {
       output.stdout += chunk.toString()
       if (kind === 'relay' && output.stdout.includes('relay listening ')) finish()
     }
     const onStderr = (chunk: Buffer | string) => { output.stderr += chunk.toString() }
     const onMessage = (message: unknown) => {
-      if (kind === 'agent' && typeof message === 'object' && message !== null && (message as { kind?: unknown }).kind === 'daemon.registered') {
-        finish(undefined, message as Record<string, unknown>)
+      if (kind !== 'agent' || typeof message !== 'object' || message === null) return
+      const control = message as { kind?: unknown; endpoint?: unknown }
+      // The registration frame remains the established readiness signal. The
+      // status projection follows on the same IPC queue when supported.
+      if (control.kind === 'daemon.status') {
+        endpoint = control.endpoint
+        if (registration !== undefined) finish(undefined, { ...registration, endpoint })
+        return
+      }
+      if (control.kind === 'daemon.registered') {
+        registration = control as Record<string, unknown>
+        if (endpoint !== undefined) finish(undefined, { ...registration, endpoint })
+        else if (!requireEndpointProjection) registrationFallback = setTimeout(() => finish(undefined, registration), 25)
       }
     }
     child.once('error', onError)
@@ -114,6 +311,7 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   const specs = planLocalProcesses(config, options)
   const children = new Map<string, ChildProcess>()
   const states = new Map<string, LocalInternalDaemonState>()
+  const endpoints = new Map<string, LocalDaemonEndpointProjection>()
   const unwatch = new Map<string, () => void>()
   let lifecycle: LocalSupervisorState = 'stopped'
   let lastFailure: Error | undefined
@@ -157,6 +355,18 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
             ...(failed && lastFailure !== undefined ? { error: lastFailure.message } : {}),
           })
         } catch (error) { failures.push(error) }
+        try {
+          await writeLocalDaemonStatusProjection(config.internalPath, {
+            version: 1,
+            generation: lifecycleGeneration,
+            startToken,
+            daemons: Object.fromEntries([...endpoints.entries()].map(([id, endpoint]) => [id, {
+              ...endpoint,
+              presence: failed ? 'unknown' as const : 'offline' as const,
+              state: failed ? 'failed' as const : 'stopped' as const,
+            }])),
+          })
+        } catch (error) { failures.push(error) }
       }
       if (failures.length > 0) throw new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
       children.clear()
@@ -182,6 +392,7 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
     if (starting) return starting
     starting = (async () => {
       lifecycle = 'starting'
+      endpoints.clear()
       try {
         if (config.internalPath !== undefined) await projectLocalChildConfigs(config.internalPath)
         if (config.internalPath !== undefined) {
@@ -228,8 +439,17 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           child.once('exit', onExit)
           child.once('error', onError)
           unwatch.set(spec.id, () => { child.off('exit', onExit); child.off('error', onError) })
-          const ready = await waitForReady(child, spec.kind, startupTimeoutMs)
+          const ready = await waitForReady(child, spec.kind, startupTimeoutMs, config.internalPath !== undefined)
           if (spec.kind === 'agent') {
+            if (config.internalPath !== undefined && ready?.endpoint === undefined) {
+              throw new Error(`local agent ${spec.id} readiness did not provide status projection`)
+            }
+            if (ready?.endpoint !== undefined) {
+              const endpoint = parseLocalDaemonEndpointProjection(ready.endpoint, `local agent ${spec.id} status`)
+              if (ready.agentId !== endpoint.agentId) throw new Error(`local agent ${spec.id} registration identity does not match its status projection`)
+              if (ready.generation !== endpoint.generation) throw new Error(`local agent ${spec.id} registration generation does not match its status projection`)
+              endpoints.set(spec.id, endpoint)
+            }
             states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(launcherGeneration === undefined ? {} : { generation: launcherGeneration }) })
           } else states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(launcherGeneration === undefined ? {} : { generation: launcherGeneration }) })
           if (lifecycle !== 'starting') throw lastFailure ?? new Error(`local ${spec.kind} failed during startup`)
@@ -261,6 +481,16 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         if (config.internalPath !== undefined) {
           await writeLocalInternalState(config.internalPath, Object.fromEntries(states.entries()))
           await writeLocalLauncherOwnership(config.internalPath, { version: 1, pid: process.pid, startToken })
+          await writeLocalDaemonStatusProjection(config.internalPath, {
+            version: 1,
+            generation: lifecycleGeneration,
+            startToken,
+            daemons: Object.fromEntries([...endpoints.entries()].map(([id, endpoint]) => [id, {
+              ...endpoint,
+              presence: 'online' as const,
+              state: 'online' as const,
+            }])),
+          })
           await writeLocalInternalLauncherState(config.internalPath, { pid: process.pid, generation: lifecycleGeneration, startToken, state: 'running' })
         }
         lifecycle = 'running'

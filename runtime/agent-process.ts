@@ -26,6 +26,7 @@ import { createDirectWssListener, type DirectWssListener } from '../network/dire
 import { assertJsonValue } from '../control-protocol/json-value.ts'
 import type { JsonValue, ResourceDemand } from '../control-protocol/agent-services.ts'
 import { writeLocalInternalConfiguredWorkIfCurrent, type LocalLauncherControl } from './local-config.ts'
+import type { LocalDaemonEndpointProjection } from './local-supervisor.ts'
 
 export interface AgentConnectionIntent {
   readonly targetAgentId: string
@@ -190,6 +191,7 @@ export interface AgentProcess {
   readonly consumerWork: AgentWorkClient
   readonly configuredWork?: Promise<ConfiguredWorkReceipt>
   readonly closed: Promise<void>
+  readonly statusProjection: () => LocalDaemonEndpointProjection
   stop(): Promise<void>
 }
 
@@ -227,6 +229,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   void ready.catch(() => undefined) // Startup failure is also returned to the caller.
   try {
     const executor = createCliWorkExecutor(config.cli)
+    const advertisedCapabilities = config.endpoint?.role === 'receiver' ? [] : executor.capabilities
     let host!: ReturnType<typeof createWorkHost>
     let ledger: WorkLedger | undefined
     const resolveCredentialValue = async (reference: string) => {
@@ -247,7 +250,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     const consoleClient: ConsoleClientV1 = {
       readProjection: async () => ({ version: 1, agents: [{ agentId: config.declaration.identity.agentId,
         machineId: config.declaration.identity.machineId, label: config.declaration.identity.label,
-        presence: daemon?.status().state === 'online' ? 'online' : 'offline', capabilities: executor.capabilities.map(item => item.capabilityId) }],
+        presence: daemon?.status().state === 'online' ? 'online' : 'offline', capabilities: advertisedCapabilities.map(item => item.capabilityId) }],
         sessions: [], notifications: [], configs: configBinding === undefined ? [] : [configBinding.binding.readProjection()],
         ...projectConsoleWorkObservations(config.declaration.identity.agentId, ledger?.snapshot.works ?? []) }),
       command: async command => command.kind.startsWith('config.') && configBinding !== undefined
@@ -326,11 +329,11 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     const publishedDeclaration = {
       ...config.declaration,
       revision: 2,
-      capabilities: executor.capabilities,
+      capabilities: advertisedCapabilities,
       ...(directRoute === undefined ? {} : { routes: [directRoute] }),
     }
     ledger = createWorkLedger({ provider: { accountId: config.declaration.identity.accountId, scopeId: config.declaration.scopeId,
-      agentId: config.declaration.identity.agentId }, generation: daemon.network.generation, capabilities: executor.capabilities,
+      agentId: config.declaration.identity.agentId }, generation: daemon.network.generation, capabilities: advertisedCapabilities,
       endpointCatalog: compileDeclarationEndpoints(publishedDeclaration), store: createFileWorkStore(workFile) })
     const hasUnreconciledState = ledger.snapshot.allocations.some(allocation => allocation.state !== 'released') ||
       ledger.snapshot.requests.some(request => ['running', 'cancel_requested', 'unknown'].includes(request.state))
@@ -372,7 +375,21 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       return stopping
     }
     const closed = live.closed.then(async state => { await stop(); if (state.state === 'failed') throw state.error ?? new Error('Agent network failed') })
-    return { daemon: live, consumerWork: consumerWork!, ...(configuredWork === undefined ? {} : { configuredWork }), stop, closed }
+    const statusProjection = (): LocalDaemonEndpointProjection => ({
+      agentId: publishedDeclaration.identity.agentId,
+      identity: publishedDeclaration.identity,
+      role: config.endpoint?.role ?? 'provider',
+      presence: 'online',
+      state: 'online',
+      generation: live.network.generation,
+      capabilities: publishedDeclaration.capabilities.map(capability => ({
+        capabilityId: capability.capabilityId,
+        version: capability.version,
+        operations: capability.operations.map(operation => operation.operation),
+        resources: capability.resources.map(resource => ({ resourceId: resource.resourceId, capacity: resource.capacity, unit: resource.unit })),
+      })),
+    })
+    return { daemon: live, consumerWork: consumerWork!, ...(configuredWork === undefined ? {} : { configuredWork }), statusProjection, stop, closed }
   } catch (error) {
     readyReject(error)
     try { await directListener?.close(); await daemon?.stop(); await configBinding?.owner.stop() } finally { await closeLease(lease) }
@@ -400,7 +417,11 @@ export async function runAgentProcess(argv = process.argv.slice(2)): Promise<voi
       }
     } catch (error) { await handle.stop(); throw error }
   }
-  process.send?.({ kind: 'daemon.registered', agentId: handle.daemon.status().agentId, generation: handle.daemon.network.generation })
+  const status = handle.daemon.status()
+  // Preserve the established first readiness frame for external child readers;
+  // the typed status projection follows on the same IPC channel.
+  process.send?.({ kind: 'daemon.registered', agentId: status.agentId, generation: status.generation })
+  process.send?.({ kind: 'daemon.status', agentId: status.agentId, generation: status.generation, endpoint: handle.statusProjection() })
   try { await handle.closed } finally { process.off('SIGINT', stop); process.off('SIGTERM', stop) }
 }
 
