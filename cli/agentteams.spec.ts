@@ -1,11 +1,25 @@
 import { createPrivateKey, X509Certificate } from 'node:crypto'
+import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { agentteamsCommand, DEFAULT_RELAY_CONFIG_TEXT } from './agentteams.mjs'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { agentteamsCommand, DEFAULT_CONFIG_TEXT, DEFAULT_RELAY_CONFIG_TEXT } from './agentteams.mjs'
+
+const cliEntry = fileURLToPath(new URL('./agentteams.mjs', import.meta.url))
+const rootDirectory = fileURLToPath(new URL('../', import.meta.url))
+const execFileAsync = promisify(execFile)
 
 describe('agentteams CLI', () => {
+  beforeAll(async () => {
+    await execFileAsync('pnpm', ['build:runtime'], {
+      cwd: rootDirectory,
+      env: process.env,
+    })
+  }, 60_000)
+
   it('init writes the default user config and refuses to overwrite it', async () => {
     const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-init-'))
     try {
@@ -26,6 +40,10 @@ describe('agentteams CLI', () => {
       expect(new X509Certificate(certText).subject).toContain('localhost')
       expect((await stat(join(home, '.agentteams', 'relay-key.pem'))).mode & 0o777).toBe(0o600)
       expect((await stat(join(home, '.agentteams', 'files'))).isDirectory()).toBe(true)
+      const internalText = await readFile(join(home, '.agentteams', 'internal.toml'), 'utf8')
+      expect(internalText).toContain('version = 1')
+      expect(internalText).toContain('[relay]')
+      expect(internalText).toContain('projectionPath')
       await writeFile(configPath, 'sentinel\n', { flag: 'w' })
       await expect(agentteamsCommand(['init'], { home })).rejects.toThrow(/already exists/i)
       expect(await readFile(configPath, 'utf8')).toBe('sentinel\n')
@@ -52,14 +70,15 @@ describe('agentteams CLI', () => {
     try {
       const configPath = join(home, '.agentteams', 'config.toml')
       const results = await Promise.allSettled([
-        agentteamsCommand(['init'], { home, configText: 'winner = "a"\n' }),
-        agentteamsCommand(['init'], { home, configText: 'winner = "b"\n' }),
+        agentteamsCommand(['init'], { home, configText: DEFAULT_CONFIG_TEXT.replace('version = 2', '# winner = "a"\nversion = 2') }),
+        agentteamsCommand(['init'], { home, configText: DEFAULT_CONFIG_TEXT.replace('version = 2', '# winner = "b"\nversion = 2') }),
       ])
       expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
       expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
       const rejected = results.find(result => result.status === 'rejected')
       expect(rejected?.status === 'rejected' ? rejected.reason.message : '').toMatch(/already exists/i)
-      expect(['winner = "a"\n', 'winner = "b"\n']).toContain(await readFile(configPath, 'utf8'))
+      const text = await readFile(configPath, 'utf8')
+      expect([text.includes('winner = "a"'), text.includes('winner = "b"')].filter(Boolean)).toHaveLength(1)
     } finally {
       await rm(home, { recursive: true, force: true })
     }
@@ -70,9 +89,10 @@ describe('agentteams CLI', () => {
     try {
       const directory = join(home, '.agentteams')
       await mkdir(directory, { recursive: true })
-      await writeFile(join(directory, 'relay.json'), 'sentinel\n', { flag: 'w', encoding: 'utf8' })
+      const relaySentinel = `${JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48010 }, sentinel: true })}\n`
+      await writeFile(join(directory, 'relay.json'), relaySentinel, { flag: 'w', encoding: 'utf8' })
       await agentteamsCommand(['init'], { home })
-      expect(await readFile(join(directory, 'relay.json'), 'utf8')).toBe('sentinel\n')
+      expect(await readFile(join(directory, 'relay.json'), 'utf8')).toBe(relaySentinel)
       expect(await readFile(join(directory, 'config.toml'), 'utf8')).toContain('version = 2')
     } finally {
       await rm(home, { recursive: true, force: true })
@@ -114,14 +134,48 @@ describe('agentteams CLI', () => {
       ['work', configPath, undefined],
     ])
     expect(calls[0].options.env).toMatchObject({ AGENTTEAMS_PROVIDER_AUTH: 'local-provider', AGENTTEAMS_RECEIVER_AUTH: 'local-receiver' })
-    expect(calls[0].options.relayEntry).toMatch(/relay-process\.ts$/)
-    expect(calls[0].options.agentEntry).toMatch(/agent-process\.ts$/)
+    expect(calls[0].options.relayEntry).toMatch(/relay-process\.js$/)
+    expect(calls[0].options.agentEntry).toMatch(/agent-process\.js$/)
     expect(calls[3].env).toMatchObject({ AGENTTEAMS_PROVIDER_AUTH: 'local-provider', AGENTTEAMS_RECEIVER_AUTH: 'local-receiver' })
-    expect(calls[3].options.relayEntry).toMatch(/relay-process\.ts$/)
-    expect(calls[3].options.agentEntry).toMatch(/agent-process\.ts$/)
+    expect(calls[3].options.relayEntry).toMatch(/relay-process\.js$/)
+    expect(calls[3].options.agentEntry).toMatch(/agent-process\.js$/)
     expect(calls[0].options.relayEntry).toBe(calls[3].options.relayEntry)
     expect(calls[0].options.agentEntry).toBe(calls[3].options.agentEntry)
   })
+
+  it('direct node entry avoids source TS parameter properties and writes internal.toml from built runtime artifacts', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-entry-'))
+    let generation: number | undefined
+    const runCli = async (...args: string[]) => await execFileAsync(process.execPath, [cliEntry, ...args], {
+      cwd: rootDirectory,
+      env: { ...process.env, HOME: home },
+    })
+    try {
+      const result = await runCli('init')
+      expect(result.stdout).toContain('initialized')
+      const internalText = await readFile(join(home, '.agentteams', 'internal.toml'), 'utf8')
+      expect(internalText).toContain('version = 1')
+      expect(internalText).toContain('[relay]')
+      const started = await runCli('start')
+      expect(started.stdout).toContain('started state=running generation=1')
+      generation = 1
+      expect((await runCli('status')).stdout).toContain('status state=running generation=1')
+      expect((await runCli('work')).stdout).toContain('succeeded agent=receiver work=configured-search request=configured-search-1 state=succeeded')
+      expect((await runCli('stop', '--generation', '1')).stdout).toContain('stopped state=stopped generation=1')
+      generation = undefined
+      const restarted = await runCli('start')
+      expect(restarted.stdout).toContain('started state=running generation=2')
+      generation = 2
+      await expect(runCli('stop', '--generation', '1')).rejects.toThrow(/stale local supervisor generation/i)
+      expect((await runCli('work')).stdout).toContain('succeeded agent=receiver work=configured-search request=configured-search-1 state=succeeded')
+      expect((await runCli('stop', '--generation', '2')).stdout).toContain('stopped state=stopped generation=2')
+      generation = undefined
+      expect((await runCli('status')).stdout).toContain('status state=stopped generation=2')
+    } finally {
+      if (generation !== undefined) await runCli('stop', '--generation', String(generation)).catch(() => undefined)
+      await rm(home, { recursive: true, force: true })
+    }
+  }, 120_000)
 
   it('surfaces explicit parsing and runtime errors', async () => {
     await expect(agentteamsCommand([])).rejects.toThrow(/usage:/i)

@@ -7,13 +7,6 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { writeLocalConfig } from '../runtime/local-config.ts'
-import {
-  runLocalConfiguredWork,
-  startLocalProcess,
-  statusLocalProcess,
-  stopLocalProcess,
-} from '../runtime/local-process.ts'
 
 export const CLI_NAME = 'agentteams'
 
@@ -21,11 +14,18 @@ const sourceDirectory = dirname(fileURLToPath(import.meta.url))
 const runtimeDirectory = resolve(sourceDirectory, '..')
 const execFileAsync = promisify(execFile)
 
-// The facade runs from source in this delivery unit, so it binds the runtime
-// child entrypoints explicitly instead of relying on the packaged .js default.
-const SOURCE_ENTRIES = {
-  relayEntry: resolve(runtimeDirectory, 'server', 'relay-process.ts'),
-  agentEntry: resolve(runtimeDirectory, 'runtime', 'agent-process.ts'),
+// Node 22's strip-only TypeScript support does not accept runtime parameter
+// properties, so the CLI facade only loads compiled build:runtime artifacts.
+const RUNTIME_ARTIFACTS = {
+  localConfig: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-config.js'),
+  localProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-process.js'),
+  relay: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'server', 'relay-process.js'),
+  agent: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'agent-process.js'),
+}
+
+const RUNTIME_CHILD_ENTRIES = {
+  relayEntry: RUNTIME_ARTIFACTS.relay,
+  agentEntry: RUNTIME_ARTIFACTS.agent,
 }
 
 export const DEFAULT_CONFIG_TEXT = `# AgentTeams user config. This is the only file you normally edit.
@@ -89,13 +89,6 @@ export const DEFAULT_RELAY_CONFIG_TEXT = `${JSON.stringify({
     { credentialEnv: 'AGENTTEAMS_RECEIVER_AUTH', identity: { accountId: 'local', scopeId: 'local', agentId: 'receiver' } },
   ],
 }, null, 2)}\n`
-
-const RUNTIME_FUNCTIONS = {
-  startLocalProcess,
-  statusLocalProcess,
-  stopLocalProcess,
-  runLocalConfiguredWork,
-}
 
 export class AgentTeamsCliError extends Error {
   constructor(message) {
@@ -191,6 +184,32 @@ async function pathExists(path) {
   }
 }
 
+let loadedRuntime
+
+async function defaultRuntime() {
+  if (loadedRuntime === undefined) {
+    loadedRuntime = (async () => {
+      const missing = []
+      for (const [name, entry] of Object.entries(RUNTIME_ARTIFACTS)) {
+        if (!(await pathExists(entry))) missing.push(`${name}: ${entry}`)
+      }
+      if (missing.length > 0) {
+        throw new AgentTeamsCliError(`cli runtime artifacts are missing (${missing.join(', ')}); run pnpm build:runtime first`)
+      }
+      try {
+        const [localConfig, localProcess] = await Promise.all([
+          import(RUNTIME_ARTIFACTS.localConfig),
+          import(RUNTIME_ARTIFACTS.localProcess),
+        ])
+        return { localConfig, ...localProcess }
+      } catch (error) {
+        throw new AgentTeamsCliError(`cli runtime artifacts could not be loaded; run pnpm build:runtime first: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    })()
+  }
+  return loadedRuntime
+}
+
 async function defaultConfigText() {
   try {
     const result = await execFileAsync('which', ['rg'])
@@ -229,9 +248,9 @@ async function generateLocalRelayTls(directory) {
   await Promise.all([chmod(keyPath, 0o600), chmod(certPath, 0o600)])
 }
 
-async function initCommand(configPath, configText) {
+async function initCommand(configPath, configText, localConfig) {
   try {
-    await writeLocalConfig(configPath, configText, { exclusive: true })
+    await localConfig.writeLocalConfig(configPath, configText, { exclusive: true })
   } catch (error) {
     if (error?.code === 'EEXIST') throw new AgentTeamsCliError(`config already exists: ${configPath}`)
     throw new AgentTeamsCliError(`cannot create config: ${configPath}: ${error.message}`)
@@ -240,13 +259,14 @@ async function initCommand(configPath, configText) {
   await mkdir(resolve(directory, 'files'), { recursive: true })
   const relayPath = resolve(directory, 'relay.json')
   try {
-    await writeLocalConfig(relayPath, DEFAULT_RELAY_CONFIG_TEXT, { exclusive: true })
+    await localConfig.writeLocalConfig(relayPath, DEFAULT_RELAY_CONFIG_TEXT, { exclusive: true })
   } catch (error) {
     if (error?.code !== 'EEXIST') {
       throw new AgentTeamsCliError(`cannot create relay config: ${relayPath}: ${error.message}`)
     }
   }
   await generateLocalRelayTls(directory)
+  await localConfig.loadLocalConfig(configPath)
   return `initialized ${configPath}
 Edit config.toml, then run ${CLI_NAME} start, ${CLI_NAME} status, ${CLI_NAME} work, or ${CLI_NAME} stop.`
 }
@@ -255,13 +275,14 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
   const parsed = parseArgs(argv, options)
   const configPath = parsed.configPath ?? defaultConfigPath(options.home)
   const env = localEnv(options.env)
-  const runtime = options.runtime ?? RUNTIME_FUNCTIONS
+  const runtime = options.runtime ?? await defaultRuntime()
 
   if (parsed.command === 'init') {
-    return await initCommand(configPath, options.configText ?? await defaultConfigText())
+    const localConfig = runtime.localConfig ?? (await defaultRuntime()).localConfig
+    return await initCommand(configPath, options.configText ?? await defaultConfigText(), localConfig)
   }
   if (parsed.command === 'start') {
-    const status = await runtime.startLocalProcess(configPath, { env, ...SOURCE_ENTRIES })
+    const status = await runtime.startLocalProcess(configPath, { env, ...RUNTIME_CHILD_ENTRIES })
     return formatStatus('started', status)
   }
   if (parsed.command === 'status') {
@@ -269,7 +290,7 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
     return formatStatus('status', status)
   }
   if (parsed.command === 'work') {
-    const result = await runtime.runLocalConfiguredWork(configPath, env, SOURCE_ENTRIES)
+    const result = await runtime.runLocalConfiguredWork(configPath, env, RUNTIME_CHILD_ENTRIES)
     return `succeeded agent=${result.agentId} work=${result.workId} request=${result.requestId} state=${result.state}`
   }
   if (parsed.command === 'stop') {

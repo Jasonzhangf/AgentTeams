@@ -3,11 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "files": [
+    "cli",
+    "generated/runtime-lib"
+  ],
   "bin": {
     "agentteams": "./cli/agentteams.mjs"
   },
   "scripts": {
-    "test": "pnpm --dir opencode-adapter build && node scripts/regression.mjs",
+    "test": "pnpm build:runtime && pnpm --dir opencode-adapter build && node scripts/regression.mjs",
+    "prepack": "pnpm build:runtime",
     "typecheck": "pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck",
     "build": "pnpm --dir opencode-adapter build && pnpm --dir console-host build && pnpm --dir ui/teams-console build && pnpm build:runtime",
     "build:runtime": "node -e \"require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })\" && tsc -p tsconfig.runtime.json",
