@@ -251,6 +251,10 @@ _Empty._
 - tags: `AgentTeams`, `ai-reviewed`, `c5708f3`, `human-unreviewed`, `partial-delivery`
 - details: [L2/memory-e0a93852ce3565fb.md](L2/memory-e0a93852ce3565fb.md)
 
+### Launcher generation must own persisted daemon lifecycle state
+- tags: `AgentTeams`, `ai-reviewed`, `generation`, `human-unreviewed`, `lifecycle`, `runtime`
+- details: [L2/memory-f8a521346d59b5f0.md](L2/memory-f8a521346d59b5f0.md)
+
 ### AgentTeams MVP network-first blocker closure 2026-09-11
 - tags: `ai-reviewed`, `human-unreviewed`
 - details: [L2/mvp-network-blockers-20260911.md](L2/mvp-network-blockers-20260911.md)
