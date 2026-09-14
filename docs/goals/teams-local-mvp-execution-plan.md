@@ -8,10 +8,9 @@
 本文件只把下一次 `/goal` 的执行范围收敛成可重入的调度合同。
 
 对应 AppSDK issue：已存在且仍 open 的长期目标 `af5c167`（re-entry comment `a4f55dc`；本次只
-刷新可重入调度指针）。上一轮
-目标/文档刷新 `3aa1d61`、`2cbc522`、`8186534` 和治理 `c4387e4` 已关闭；U0 `159b78b` 已关闭；
-当前首个待调度单元是 runtime `3742b9a`，随后按 canonical receipt 在
-`L1-CLI/W1/C1/B1/U1/I1` 中取首个未完成项。
+刷新可重入调度指针）。上一轮目标/文档刷新、U0、runtime、L1-CLI、W1 和 Console-offline
+本地证据均已进入主线；当前指针从真实远端 `origin/main@8ea802b` 继续，按 canonical receipt
+只处理仍缺当前候选闭环的单元，不重复已经完成的实现。
 本计划不得创建第二个 goal、第二个 subscription 或第二套任务图。
 
 ## 当前接手状态（启动时必须复核）
@@ -20,58 +19,42 @@
   review、integration、push、memory 和自有资源回收；不把调度权转交外部 master，也不把
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、
-  `git ls-remote origin refs/heads/main`。上次文档刷新现场观察到 root/remote 均为
-  `3793b83a9a3609979d82dfadb8e086922804e828` 且 clean；这是历史快照，不能替代下一轮
-  启动时的现场检查。任何实现单元都必须从届时最新的 `origin/main` 建立候选。
+  `git ls-remote origin refs/heads/main`。本次刷新观察到 root/remote 均为
+  `8ea802b495d01ae48b29cfe152c0791276e3edde` 且 clean；该值仍只是当前快照，后续实现单元
+  继续从届时最新的 `origin/main` 建立候选。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 本轮调度文档从上述历史快照建立；此前 U0 与上一轮文档 worktree/branch 已回收，每次恢复仍须重读现场。
-  L1-CLI issue `fdec042` 的旧 worktree `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测
-  `cli/agentteams.spec.ts` 且落后远端主线；不得把它标记为完成、直接集成或删除其红测。runtime receipt
-  后必须从最新远端主线重建 L1。
-- runtime `3742b9a` 负责 detached launcher、持久 supervisor ownership/status/stop 和复用现有
-  configured Work 的显式调用；CLI 不得复制这些真相。当前唯一活动 worktree
-  `playground/3742b9a-runtime-r5-20260913` 从 `ce91c14` 建立，仍 dirty，且相对当前远端主线落后，尚无 candidate commit。
-  最近 focused run 的 configured Work restart 仍有 `START_TIMEOUT`；必须先由 runtime owner 修复并
-  重新验证，再补 `local-two-agent` exact receipt、full verify、exact Codex review、candidate commit、
-  clean integration、push、memory 和 cleanup。
-- C1 issue `776fcad` 的现存工作树是 `playground/776fcad-c1-r3-20260913`、branch
-  `codex/776fcad-c1-r3-20260913`，base=`ce91c14`，相对上述历史快照已落后；只允许
-  修改 `config/**` 与 `opencode-adapter/**`，不得碰 runtime lifecycle、network、agent 或 UI。
-  它不能作为“最新主线重建”的 admission 证据；必须先审计并从届时最新 `origin/main` 重建 clean
-  worktree，再通过 fingerprint/admission，随后才可继续 focused test、typecheck、evidence 和独立
-  Codex review。
+- runtime `3742b9a` 已在 `5eb568a` 集成并推送，`docs/evidence/3742b9a-runtime-r6-20260914/`
+  具备 focused、`pnpm verify`、安装副本重启、review、push、memory 和 cleanup 证据；不再重开。
+- L1-CLI `fdec042` 已在 `b405361` 集成，`docs/evidence/l1-cli-pure-20260914/` 具备真实
+  disposable-HOME 生命周期和 exact review；只需补 solution/issue bookkeeping，不重做实现。
+- W1 `cabd162` 已在 `3d386c0` 集成，`docs/evidence/w1-agent-work-20260914/` 具备版本/操作匹配
+  回归、review、integration 和 cleanup；不重复派发。
+- C1 `776fcad` 的 stale apply-error 修复已在 `55d6479` 集成，并在 `8ea802b` 补齐 cleanup receipt；
+  只需补 solution/issue bookkeeping，不再接管已删除的旧 worktree。
+- Console directory/offline 与 Phase 1 closeout 已有 `e8dc905`、`bc1cbcb`、`b701a57`、`2dcd928`
+  的 receipt；当前源码若无受影响漂移则复用，只有真实候选变更才重跑对应 replay。
 
 ### 当前资源与处理动作
 
 | 资源 | 当前事实 | 调度动作 |
 |---|---|---|
-| `playground/3742b9a-runtime-r5-20260913` | dirty，HEAD=`ce91c14`，相对当前远端落后；configured Work restart focused gate 当前 `START_TIMEOUT`，尚无 candidate/review/push | 先将旧树保留为只读审计/证据源，再从届时最新 origin/main 建立新的 clean runtime worktree，并通过 owner/path fingerprint admission；只在新树修复首个失败 gate，再补 local-two-agent/full verify → exact review → candidate → integration/push → memory/cleanup |
-| `playground/3742b9a-runtime-r3-20260913` | dirty，旧候选，包含历史 `listen EPERM` 证据和未提交 runtime diff | 只保留审计责任；不得 reset/delete，确认 owner、唯一证据和进程后再决定回收 |
-| `playground/3742b9a-runtime-rebind-r2-20260913` | dirty，旧 runtime rebind，HEAD=`7e82b8a`，含未提交 runtime diff 和独立 evidence | 只保留审计责任；不得 reset/delete，确认 owner、唯一证据和进程后再决定回收 |
-| `playground/3742b9a-runtime-rebind-20260913` | clean，旧 candidate `546e77f`，基于旧 main | 只作历史参考；不得直接集成或 reset |
-| `playground/3742b9a-runtime-20260913` | clean，旧 candidate `d040885` | 只作历史参考；不得直接集成或 reset |
-| `playground/fdec042-l1-cli-20260913` | 仅保留未跟踪红测 `cli/`，无 candidate commit | runtime receipt 后从最新 main 重建；红测迁移前不删除 |
-| `playground/776fcad-c1-r3-20260913` | dirty，HEAD=`ce91c14`，相对当前远端落后，仅属 config/OpenCode | 先审计并从届时最新 origin/main 重建 clean tree，通过 fingerprint/admission 后再跑 focused gate/review；不得碰 runtime/network/agent/UI；candidate 前须写 evidence 并完成独立 review |
+| `playground/776fcad-c1-provider-20260914` | clean 历史树，HEAD=`19775ca`，落后当前远端 | 仅保留历史参考；不直接集成，确认无唯一证据后由所属责任人回收 |
+| `playground/fdec042-l1-cli-20260914` | clean 历史树，HEAD=`3ba0152`，落后当前远端 | 仅保留历史参考；CLI 结果以 `b405361` receipt 为准 |
+| `playground/u4-console-directory-20260914` | clean 历史树，HEAD=`537ce41`，落后当前远端 | 仅保留历史参考；Console 结果以 `e8dc905/bc1cbcb/b701a57` receipts 为准 |
 
 这些资源均不属于本次目标文档刷新单元；调度主任务只清理自己创建的 worktree。任何超过 24 小时未
 活动的资源，先核对 owner、claim、证据和未提交内容，再决定保留、合并或丢弃。
 
 ## 当前交付指针
 
-- **已关闭**：U0 Internal Config Compiler（`159b78b`）。
-- **下一单元**：收口 runtime issue `3742b9a` 的 r5 worktree：先修复 configured Work restart 的
-  `START_TIMEOUT`，再补 local-two-agent/full verify → exact review → commit → clean integration →
-  push → memory → cleanup，解除 L1-CLI 的跨进程生命周期/API blocker；C1 Config/OpenCode 只有在自身
-  worktree 从最新 main 重建并通过 admission/fingerprint 检查后才可并行。runtime receipt 后重新绑定
-  L1-CLI；取得 L1 receipt 后才推进 W1，
-  再推进 B1；不得用 CLI 自己实现第二套 supervisor 或 Work ledger。
-  每项先查重/复用 AppSDK issue，再从最新 `origin/main` 建立
-  `playground/<issue-or-task>-<date>` 的独立 clean worktree。
-- **可并发**：runtime unit 与 C1 仅在 C1 worktree 从当前 `origin/main` 重建并完成 admission/fingerprint
-  检查后并发；否则只派 runtime。runtime receipt 后的 L1-CLI 与已满足该条件的 C1 可并发；`W1` 在 L1
-  receipt 后开始；`B1` 依赖 W1 接口稳定；`U1` Console
-  必须等待 B1 receipt、projection contract 和 L3 review；`I1/L5` 最终串行收口。
+- **已完成实现**：U0、runtime `3742b9a`、L1-CLI、W1、B1 source、Console directory/offline、C1
+  provider/OpenCode 主线均已进入当前 `main`；对应 receipt 可复用。
+- **下一动作**：先补当前候选的 issue/solution bookkeeping 和一次轻量 current-SHA 本地 replay；随后
+  进入长期目标中仍未完成的公网 Relay/NAT/部署或 N3 resilience 单元。新实现必须从当前
+  `origin/main` 建立独立 worktree，文档/状态修复不再阻塞产品主线。
+- **可并发**：公网 Relay 部署/验收与 N3 source resilience 在文件范围不重叠时可并发；涉及同一
+  `network/**` 或 `server/**` 的语义修复串行。Console/UI 只在 projection contract 发生漂移时重开。
 - **资源基线**：本任务只回收自己启动的 worker、进程、端口、锁、临时目录、worktree 和
   branch；根 `main` 必须始终 clean。U0 的证据已转存到
   `docs/evidence/159b78b-internal-config-20260913/`，可供后续复核，不依赖已删除的 worktree。
@@ -228,7 +211,7 @@ AppSDK compile/verify、真实入口和 exact review。runtime receipt 前只允
   runtime receipt 前只可派 runtime 或从最新 main 重建后的 C1；runtime receipt 后才可派 L1-CLI/C1；
   没有 L1 receipt 时不得派 W1，没有 W1 receipt 时不得派 B1；
   没有 B1 receipt 时不得派 U1；U1 Console 与 I1/L5 等前置 receipt 不齐时不得提前共享写入。
-  公网 relay-first N1/N2 不在本轮调度。
+  公网 relay/NAT 是当前长期目标的下一阶段；不把本地 receipt 误写成公网完成。
 - **Gate**：focused 红绿测试 → mapped regression → typecheck/build → AppSDK compile/verify（仅在
   maps/治理受影响时）→ 真实入口回放 → 独立 exact review。
 - **State**：写 candidate/review/integration/push/memory/cleanup receipts；状态只能是
@@ -239,15 +222,17 @@ AppSDK compile/verify、真实入口和 exact review。runtime receipt 前只允
 每轮顺序固定为：`Discover → Hand off → Verify → Persist → Schedule`。等待使用有界等待；worker
 未终态前不重复派发同一 unit，不因 gcm warning 重启或宣称完成。
 
-## 当前调度快照（2026-09-13）
+## 当前调度快照（2026-09-14）
 
 | unit | issue | 当前状态 | 下一动作 |
 | --- | --- | --- | --- |
 | U0 internal config compiler | `159b78b` | closed；receipt 可复用 | 不重开、不重复派发 |
-| runtime local launcher | `3742b9a` | r5 worktree dirty，HEAD=`ce91c14`，相对当前远端落后；configured Work restart focused gate 报 `START_TIMEOUT`，无 candidate | 旧树只读审计 → 从届时最新 origin/main 建 clean tree → fingerprint/admission → 修复首个失败 gate → local-two-agent exact receipt → full verify → exact Codex review → candidate commit → integration/push → memory → cleanup |
-| L1 CLI | `fdec042` | awaiting-runtime-unit；仅有红测，无 candidate | runtime receipt 后 rebase 到最新 main，再实现 `init/start/status/work/stop` |
-| C1 provider/OpenCode | `776fcad` | r3 worktree dirty，HEAD=`ce91c14`，相对当前远端落后，未完成 focused gate/review | 审计并从届时最新 origin/main 重建 clean tree → fingerprint/admission → config/opencode focused gate → evidence → Codex review；不碰 runtime/network/agent/UI |
-| W1/B1/U1/I1-L5 | canonical downstream | pending | 按依赖顺序启动，禁止提前共享写入 |
+| runtime local launcher | `3742b9a` | integrated/pushed (`5eb568a`), receipts complete | reuse; no reimplementation |
+| L1 CLI | `fdec042` | integrated (`b405361`), lifecycle/review evidence present | add solution/issue close bookkeeping only |
+| W1 Agent Work | `cabd162` | integrated (`3d386c0`), focused/review/integration/cleanup present | add solution/issue close bookkeeping only |
+| C1 provider/OpenCode | `776fcad` | integrated (`55d6479`), cleanup receipt pushed in `8ea802b` | add solution receipt and close bookkeeping only |
+| U1/B1/I1-L5 local profile | `e8dc905/bc1cbcb/b701a57/2dcd928` | local evidence already present; current main is later | run one current-SHA replay only if source fingerprint changed |
+| Public Relay/NAT/N3 | `3c437d7/8ea5f7c` | open post-local profile | select first concrete deployment or resilience unit |
 
 本次调度刷新 worktree 是 `playground/af5c167-goal-reentry-20260913`，只拥有 `docs/goals/**`
 与本单元 evidence；runtime、L1 红测和 C1 worktree 属于各自 delivery unit，不删除、不覆盖。

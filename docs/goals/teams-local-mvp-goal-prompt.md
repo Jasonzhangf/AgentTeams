@@ -27,41 +27,24 @@ master。worker 只修改自己的 delivery unit，不合并、推送或删除�
 worktree、进程/端口和最新 receipt；只从第一个失效 gate 及其下游重跑，稳定 fingerprint 的
 PASS 写 reuse receipt。使用有界等待，不忙轮询；没有安全独立任务时记录等待原因。
 
-当前接手指针（2026-09-13，必须启动时复核）：
-- 上次文档刷新现场读取到的 root `main` 与 `origin/main` 均为
-  `3793b83a9a3609979d82dfadb8e086922804e828`，root clean；这是历史快照，只用于解释当时的
-  worktree 状态，绝不是当前或后续 delivery unit 的固定基线。每次唤醒必须重新读取 `git status`、`git rev-parse`、
-  `git ls-remote origin refs/heads/main`，新 unit 从届时最新远端主线建 clean worktree。
-- 当前唯一长期目标 issue 是已存在且仍 open 的 `af5c167`；本次 re-entry 记录为 AppSDK comment
-  `a4f55dc`，与旧的 `docs/evidence/af5c167-mvp-closeout-20260910/` delivery 分开。不得为同一
-  MVP 创建第二个 goal、subscription、task graph 或重复 issue。U0 internal.toml 真源 issue
-  `159b78b` 已关闭，只复用其 receipts，不重开、不重复实现。
-- runtime issue `3742b9a` 的工作树是
-  `playground/3742b9a-runtime-r5-20260913`，base=`ce91c14`，仍 dirty，且相对上述历史快照已落后；
-  尚无 candidate commit。它只保留为只读审计/证据源；不得继续在此树写入，必须从届时最新
-  `origin/main` 建立新的 clean runtime worktree 并通过 admission。上一次
-  focused run 仍有 configured Work restart 的 `START_TIMEOUT`，因此不得进入 review、integration
-  或 CLI 派发。`local-two-agent`
-  socket replay、full `pnpm verify`、exact review、push、memory、cleanup 均未对 r5 candidate
-  成立。
-- C1 issue `776fcad` 的工作树是
-  `playground/776fcad-c1-r3-20260913`，base=`ce91c14`，相对上述历史快照已落后，只允许写
-  `config/**` 与
-  `opencode-adapter/**`。只有在重新核对当前 `origin/main`、clean 状态、owner、changed-path
-  fingerprint 和 admission 通过后，才可与 runtime 并行；否则只调度 runtime。C1 必须独立完成
-  focused gate、evidence、Codex review、integration、push、memory 和 cleanup。旧 r2 worktree 只作
-  审计对象，不得直接集成。
-- L1 issue `fdec042` 的旧 worktree `playground/fdec042-l1-cli-20260913` 仅保留红测且落后主线；
-  runtime receipt 前不得使用。runtime 合并到远端后，必须从最新 `origin/main` 重建新的 L1
-  worktree，再实现 `init/start/status/work/stop`，CLI 不得复制 supervisor 或 Work ledger。
-- 依赖顺序保持：`3742b9a → fdec042 → W1 Agent Work → B1 fixed capability CLI → U1 Console
-  projection → I1/L5 local replay`；C1 仅在自身路径内并行，U1 等 B1 和 projection contract，
-  I1/L5 串行收口。
+当前接手指针（2026-09-14，必须启动时复核）：
+- 每次唤醒仍读取 `git status`、`git rev-parse`、`git ls-remote origin refs/heads/main`；本次
+  root/remote 均为 clean `8ea802b495d01ae48b29cfe152c0791276e3edde`。新 delivery unit 继续从
+  届时最新远端主线建立 clean worktree。
+- 长期目标 issue 仍是 `af5c167`；不得创建第二个 goal、subscription、task graph 或重复 issue。
+- runtime `3742b9a` 已在 `5eb568a` 集成，L1 CLI `fdec042` 已在 `b405361` 集成，W1 `cabd162`
+  已在 `3d386c0` 集成，C1 `776fcad` 已在 `55d6479` 集成并在 `8ea802b` 补齐 cleanup receipt；
+  这些单元只需 solution/issue bookkeeping，不重做实现。
+- Console directory/offline 和 Phase 1 closeout 已有 `e8dc905`、`bc1cbcb`、`b701a57`、`2dcd928`
+  receipt。当前源码没有受影响漂移时复用；只有 fingerprint 变化才重跑 replay。
+- 下一步是补齐完成单元的 solution/close 记录，再选择长期目标中仍未完成的公网 Relay/NAT/
+  deployment 或 N3 resilience 单元；本地 receipt 不得扩写成公网完成。
 
-资源接手规则：旧 runtime r3/r4/rebind、C1 r2、L1 红测和所有超过 24 小时未活动的 playground
-都先审计 owner、dirty 内容、唯一证据、进程、端口和 issue/review 义务；没有明确安全结论不得
-删除或 reset。只回收本主任务/本 delivery unit 自己拥有的资源；残留 daemon/relay 只能按已核对
-的显式 PID 或服务操作停止。每次资源处理写 cleanup receipt，root `main` 永远不作为开发树。
+资源接手规则：当前三个历史 playground 只由其原 owner 审计和回收；新 delivery unit 使用独立
+`playground/<issue>-<date>`。超过 24 小时未活动的树先核对 owner、dirty 内容、唯一证据、进程、
+端口和 issue/review 义务，再决定保留或丢弃。只回收本主任务/本 delivery unit 自己拥有的资源；
+残留 daemon/relay 只能按已核对的显式 PID 或服务操作停止。每次资源处理写 cleanup receipt，root
+`main` 永远不作为开发工作树。
 
 每个 delivery unit 必须独立完成：查重或复用 AppSDK issue → 从最新 origin/main 建立
 playground/<issue>-<date> clean worktree 和唯一 branch → 最小红测 → 最小根因实现 → focused/
