@@ -1,0 +1,11 @@
+{
+  "issue": "af5c167",
+  "candidate": "3ab618aab39e4bc809294ae554c1714aabc35016",
+  "phase": "local-mvp",
+  "focused": { "files": 24, "tests": 172 },
+  "pnpmVerify": "passed",
+  "localReplay": "passed",
+  "providerReplay": "passed",
+  "consoleOffline": "passed",
+  "publicRelayNatMobile": "post-mvp-not-claimed"
+}

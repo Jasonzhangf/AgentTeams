@@ -1,0 +1,11 @@
+
+ RUN  v4.1.11 /Volumes/extension/code/AgentTeams/playground/af5c167-phase1-current-20260914
+
+(node:73957) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  24 passed (24)
+      Tests  172 passed (172)
+   Start at  10:39:20
+   Duration  8.54s (transform 4.58s, setup 0ms, import 5.96s, tests 23.94s, environment 1ms)
+
