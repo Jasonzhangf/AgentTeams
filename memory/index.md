@@ -155,6 +155,10 @@ _Empty._
 - tags: `ai-reviewed`, `backup`, `goaichat`, `human-unreviewed`, `live-replay`, `provider`
 - details: [L2/goaichat-backup-live-20260906.md](L2/goaichat-backup-live-20260906.md)
 
+### L1 CLI local lifecycle
+- tags: `ai-reviewed`, `human-unreviewed`
+- details: [L2/l1-cli-0997992.md](L2/l1-cli-0997992.md)
+
 ### Local MVP dispatch checkpoint refreshed
 - tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`
 - details: [L2/local-mvp-dispatch-3eee987.md](L2/local-mvp-dispatch-3eee987.md)
