@@ -38,7 +38,7 @@ Result:
 
 ```text
 Test Files  3 passed (3)
-     Tests  22 passed (22)
+     Tests  23 passed (23)
 ```
 
 This proves detached `start/status/stop`, generation increment, stale stop rejection, configured-Work receipts across restart generations, internal write serialization, and stale receipt rejection.
@@ -145,7 +145,7 @@ pnpm verify
 Exit code: `0`; regression `77` suites and `463` tests passed, followed by
 typecheck, AppSDK guide/compile/verify, and smoke.
 
-Regression summary:
+Historical failed-attempt regression summary:
 
 ```text
 numTotalTestSuites: 129
@@ -171,7 +171,7 @@ the single-thread pool:
 TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --config vitest.config.ts --pool=threads --maxWorkers=1 --reporter=dot
 ```
 
-Exit code: `0`; `Test Files 77 passed (77)`, `Tests 462 passed (462)`.
+Exit code: `0`; `Test Files 77 passed (77)`, `Tests 463 passed (463)`.
 
 The remaining AppSDK and smoke gates also pass:
 
@@ -186,3 +186,83 @@ appsdk verify          # exit 0
 
 The current candidate has a passing default `pnpm verify` receipt. The earlier
 EPERM attempt remains historical evidence of transient listener pressure only.
+
+## Post-review lifecycle fix revalidation
+
+The commit-bound review identified two lifecycle cases: preserving `failed`
+state after supervisor cleanup, and cleaning owned descendants after launcher
+loss. The current source fingerprint was revalidated with:
+
+```sh
+pnpm exec vitest run runtime/local-process.spec.ts runtime/local-supervisor.spec.ts runtime/local-config.spec.ts --reporter=dot
+pnpm exec vitest run runtime/local-two-agent.spec.ts runtime/agent-process.spec.ts runtime/local-relay-bridge.spec.ts --reporter=dot
+pnpm typecheck
+pnpm verify
+```
+
+All commands exited `0`; the focused runtime suites reported `23 passed`, the
+socket-backed suites reported `8 passed`, and `pnpm verify` reported `77 suites`
+and `463 tests` passed. The earlier `462` count belongs to the pre-timeout-test
+historical run and is retained only in the explicitly labeled failed-attempt
+summary above.
+
+## Current candidate revalidation
+
+The child start-token identity fix changed the source candidate after the
+previous receipt. The exact current source fingerprint is:
+
+```text
+e9d24cedf92c9ce2b56871d1fe5d8304c82a1d82c5847aabafcdd927901d8a08
+```
+
+The current candidate was rerun after that change:
+
+```sh
+pnpm exec vitest run runtime/local-process.spec.ts runtime/local-supervisor.spec.ts runtime/local-config.spec.ts --reporter=dot
+# 3 files, 26 tests passed
+pnpm exec vitest run runtime/local-two-agent.spec.ts runtime/agent-process.spec.ts runtime/local-relay-bridge.spec.ts --reporter=dot
+# 3 files, 8 tests passed
+pnpm typecheck
+# exit 0
+pnpm verify
+# exit 0; 77 suites, 467 tests passed
+```
+
+The first typecheck attempt after the cleanup patch exposed a nullable relay
+state at `runtime/local-process.ts:166`; the owner-local narrowing fix was then
+applied and all commands above were rerun successfully. No commit, integration,
+push, or deployment claim is made by this validation receipt.
+
+An earlier full `pnpm verify` receipt for the pre-child-identity candidate
+reported 77 suites and 465 tests after a transient `agent-host/cli-executor.spec.ts`
+failure. That 465-test result predates the child start-token and startup-state
+changes; it is historical evidence only. The exact current candidate result is
+the 77-suite, 467-test receipt above.
+
+The current candidate also passed the focused runtime and configured-Work
+regressions after the latest lifecycle changes, followed by `pnpm typecheck` and
+the full AppSDK verify chain. No commit, integration, push, deployment, or
+public/NAT claim is made by this receipt.
+
+## Current candidate install/restart/live-entry replay
+
+The authoritative project contract declares `install` and `restart` as required
+operations for this module (`docs/development-governance.md` and
+`.appsdk/project.json`). The exact current candidate fingerprint above was
+executed through the declared installed entrypoint:
+
+```sh
+pnpm smoke:installed
+```
+
+The command exited `0` and reported:
+
+```text
+Installed runtime smoke passed: isolated pnpm install, Relay and Agent startup, restart, local TOML launcher, and signal shutdown.
+```
+
+This replay used an isolated install copy, started the compiled Relay and Agent
+processes, restarted the Agent and observed generation `2`, started the local
+TOML launcher, and stopped the owned processes through their signal paths. The
+receipt proves the module's local installed/restart entrypoint; it does not
+claim public Relay, NAT, mobile, or cross-device acceptance.

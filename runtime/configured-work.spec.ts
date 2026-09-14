@@ -21,3 +21,16 @@ it('closes an accepted Work after a confirmed failed request before surfacing th
   expect(close).toHaveBeenCalledWith('work')
   expect(channel.dispose).toHaveBeenCalledOnce()
 })
+
+it('returns the accepted Work identity without rereading mutable configuration', async () => {
+  const channel = {
+    propose: vi.fn(async () => ({ workId: 'accepted-work' })),
+    request: vi.fn(async () => ({ control: { state: 'succeeded' } })),
+    close: vi.fn(async () => ({ workId: 'accepted-work', state: 'closed' })),
+    dispose: vi.fn(async () => undefined),
+  }
+  const client = { findProvider: vi.fn(async () => ({ providerAgentId: 'provider', generation: 1, capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' })),
+    open: vi.fn(async () => channel) } as unknown as AgentWorkClient
+  await expect(runConfiguredWork(client, intent, 1)).resolves.toEqual({ workId: 'accepted-work', requestId: 'request' })
+  expect(channel.close).toHaveBeenCalledWith('accepted-work')
+})

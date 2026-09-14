@@ -127,6 +127,7 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
     if (stopping) return stopping
     let operation!: Promise<void>
     operation = (async () => {
+      const hadFailure = lifecycle === 'failed' || lastFailure !== undefined
       lifecycle = 'stopping'
       const failures: unknown[] = []
       for (const spec of [...specs].reverse()) {
@@ -144,15 +145,16 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         }
       }
       if (config.internalPath !== undefined) {
-        const persisted: Record<string, LocalInternalDaemonState> = Object.fromEntries([...states.entries()].map(([id, state]) => [id, { ...state, state: lifecycle === 'failed' ? 'failed' : 'stopped' as const }]))
+        const failed = hadFailure || lifecycle === 'failed' || failures.length > 0
+        const persisted: Record<string, LocalInternalDaemonState> = Object.fromEntries([...states.entries()].map(([id, state]) => [id, { ...state, state: failed ? 'failed' : 'stopped' as const }]))
         try { await writeLocalInternalState(config.internalPath, persisted) } catch (error) { failures.push(error) }
         try {
           await writeLocalInternalLauncherState(config.internalPath, {
             pid: process.pid,
             generation: lifecycleGeneration,
             startToken,
-            state: lifecycle === 'failed' ? 'failed' : 'stopped',
-            ...(lifecycle === 'failed' && lastFailure !== undefined ? { error: lastFailure.message } : {}),
+            state: failed ? 'failed' : 'stopped',
+            ...(failed && lastFailure !== undefined ? { error: lastFailure.message } : {}),
           })
         } catch (error) { failures.push(error) }
       }
@@ -204,8 +206,12 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
             if (lifecycle === 'failed') throw lastFailure ?? new Error('local daemon failed during startup')
             throw new Error('local daemon startup was cancelled')
           }
-          const child = spawnProcess(nodeExecutable, [...(options.nodeArguments ?? []), spec.entry, ...spec.args], { env: childEnv, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+          const child = spawnProcess(nodeExecutable, [...(options.nodeArguments ?? []), spec.entry, ...spec.args, '--launcher-start-token', startToken], { env: childEnv, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
           children.set(spec.id, child)
+          states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(childControlGeneration === undefined ? {} : { generation: childControlGeneration }) })
+          if (config.internalPath !== undefined) {
+            await writeLocalInternalState(config.internalPath, { [spec.id]: { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(childControlGeneration === undefined ? {} : { generation: childControlGeneration }) } })
+          }
           const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
             if (lifecycle === 'stopping' || lifecycle === 'stopped') return
             lastFailure = new Error(`local ${spec.kind} exited unexpectedly code=${code ?? 'null'} signal=${signal ?? 'null'}`)
@@ -222,8 +228,8 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
           const ready = await waitForReady(child, spec.kind, startupTimeoutMs)
           if (spec.kind === 'agent') {
             const generation = ready?.generation
-            states.set(spec.id, { pid: child.pid ?? 0, state: 'online', ...(typeof generation === 'number' ? { generation } : {}) })
-          }
+            states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(typeof generation === 'number' ? { generation } : childControlGeneration === undefined ? {} : { generation: childControlGeneration }) })
+          } else states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(childControlGeneration === undefined ? {} : { generation: childControlGeneration }) })
           if (lifecycle !== 'starting') throw lastFailure ?? new Error(`local ${spec.kind} failed during startup`)
           if (child.exitCode !== null || child.signalCode !== null) {
             throw new Error(`local ${spec.kind} exited immediately after readiness code=${child.exitCode ?? 'null'} signal=${child.signalCode ?? 'null'}`)
@@ -257,6 +263,8 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         }
         lifecycle = 'running'
       } catch (error) {
+        lastFailure = error instanceof Error ? error : new Error(String(error))
+        lifecycle = 'failed'
         try { await stop() } catch (cleanupError) { throw new AggregateError([error, cleanupError], 'local daemon startup and cleanup failed') }
         throw error
       } finally { starting = undefined }

@@ -292,6 +292,7 @@ export async function startRelayProcess(configPath: string, env: NodeJS.ProcessE
 
 export function parseRelayProcessArgs(argv: readonly string[]): string {
   if (argv.length === 2 && argv[0] === '--config') return normalizeConfigPath(argv[1])
+  if (argv.length === 4 && argv[0] === '--config' && argv[2] === '--launcher-start-token' && argv[3].trim() !== '') return normalizeConfigPath(argv[1])
   if (argv.length === 1 && argv[0].startsWith('--config=')) {
     return normalizeConfigPath(argv[0].slice('--config='.length))
   }

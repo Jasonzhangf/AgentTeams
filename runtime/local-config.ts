@@ -85,6 +85,9 @@ export interface LocalLauncherOwnerRecord {
 export interface LocalInternalDaemonConfig {
   readonly projectionPath?: string
   readonly enabled?: boolean
+  readonly orphaned?: boolean
+  readonly entryPath?: string
+  readonly startToken?: string
   readonly role?: 'provider' | 'receiver' | 'hybrid'
   readonly config?: string
   readonly pid?: number
@@ -248,6 +251,9 @@ function serializeLocalInternalConfig(internal: LocalInternalConfig): string {
         if (value !== undefined) lines.push(`${key} = ${tomlString(value)}`)
       }
       if (daemon.enabled !== undefined) lines.push(`enabled = ${daemon.enabled ? 'true' : 'false'}`)
+      if (daemon.orphaned !== undefined) lines.push(`orphaned = ${daemon.orphaned ? 'true' : 'false'}`)
+      if (daemon.entryPath !== undefined) lines.push(`entryPath = ${tomlString(daemon.entryPath)}`)
+      if (daemon.startToken !== undefined) lines.push(`startToken = ${tomlString(daemon.startToken)}`)
       if (daemon.pid !== undefined) lines.push(`pid = ${daemon.pid}`)
       if (daemon.generation !== undefined) lines.push(`generation = ${daemon.generation}`)
       if (daemon.config !== undefined) lines.push(`config = ${tomlString(daemon.config)}`)
@@ -363,6 +369,9 @@ export async function readLocalInternalConfig(path: string): Promise<LocalIntern
       daemons[id] = {
         ...(input.projectionPath === undefined ? {} : { projectionPath: requiredString(input.projectionPath, `daemon.${id}.projectionPath`) }),
         ...(input.enabled === undefined ? {} : { enabled: boolean(input.enabled, true, `daemon.${id}.enabled`) }),
+        ...(input.orphaned === undefined ? {} : { orphaned: boolean(input.orphaned, true, `daemon.${id}.orphaned`) }),
+        ...(input.entryPath === undefined ? {} : { entryPath: requiredString(input.entryPath, `daemon.${id}.entryPath`) }),
+        ...(input.startToken === undefined ? {} : { startToken: requiredString(input.startToken, `daemon.${id}.startToken`) }),
         ...(input.role === undefined ? {} : { role: oneOf(input.role, ['provider', 'receiver', 'hybrid'] as const, `daemon.${id}.role`) }),
         ...(input.config === undefined ? {} : { config: requiredString(input.config, `daemon.${id}.config`) }),
         ...(input.pid === undefined ? {} : { pid: optionalNumber(input.pid, `daemon.${id}.pid`) }),
@@ -590,15 +599,19 @@ export async function loadLocalConfig(path = defaultLocalConfigPath()): Promise<
         if (errorCause?.code !== 'ENOENT') throw cause
       }
       const latestDaemons = latest?.daemons ?? {}
-      const mergedDaemons = Object.fromEntries(Object.entries(internal.daemons ?? {}).map(([id, projection]) => {
+      const mergedDaemons: Record<string, LocalInternalDaemonConfig> = Object.fromEntries(Object.entries(latestDaemons).map(([id, daemon]) => [id, { ...daemon, orphaned: true }]))
+      for (const [id, projection] of Object.entries(internal.daemons ?? {})) {
         const runtime = latestDaemons[id]
-        return [id, {
+        mergedDaemons[id] = {
           ...projection,
+          orphaned: false,
           ...(runtime?.pid === undefined ? {} : { pid: runtime.pid }),
           ...(runtime?.generation === undefined ? {} : { generation: runtime.generation }),
           ...(runtime?.state === undefined ? {} : { state: runtime.state }),
-        }]
-      }))
+          ...(runtime?.entryPath === undefined ? {} : { entryPath: runtime.entryPath }),
+          ...(runtime?.startToken === undefined ? {} : { startToken: runtime.startToken }),
+        }
+      }
       await writeLocalInternalConfig(internalPath, {
         ...internal,
         ...(latest?.launcher === undefined ? {} : { launcher: latest.launcher }),
@@ -625,6 +638,8 @@ export async function writeLocalConfig(path: string, text: string): Promise<stri
 export interface LocalInternalDaemonState {
   readonly pid: number
   readonly generation?: number
+  readonly entryPath?: string
+  readonly startToken?: string
   readonly state: 'online' | 'stopped' | 'failed'
 }
 
@@ -647,9 +662,32 @@ export async function writeLocalInternalState(path: string, daemons: Readonly<Re
         pid: state.pid,
         state: state.state,
         ...(state.generation === undefined ? {} : { generation: state.generation }),
+        ...(state.entryPath === undefined ? {} : { entryPath: state.entryPath }),
+        ...(state.startToken === undefined ? {} : { startToken: state.startToken }),
       }
     }
     return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), daemons: mergedDaemons })
+  })
+}
+
+export async function writeLocalInternalRecoveryState(path: string, daemons: Readonly<Record<string, LocalInternalDaemonState>>, launcher: LocalInternalLauncherConfig): Promise<string> {
+  const internalPath = localPath(path, process.cwd())
+  return withLocalInternalConfigLock(internalPath, async () => {
+    let existing: LocalInternalConfig
+    try { existing = await readLocalInternalConfig(internalPath) }
+    catch (error) {
+      const cause = (error as { cause?: NodeJS.ErrnoException })?.cause
+      if (cause?.code === 'ENOENT') existing = { version: 1 }
+      else throw error
+    }
+    const mergedDaemons = { ...(existing.daemons ?? {}) }
+    for (const [id, state] of Object.entries(daemons)) {
+      const previous = mergedDaemons[id]
+      if (previous?.generation !== undefined && state.generation !== undefined && previous.generation > state.generation) continue
+      mergedDaemons[id] = { ...(previous ?? {}), pid: state.pid, state: state.state, ...(state.generation === undefined ? {} : { generation: state.generation }), ...(state.entryPath === undefined ? {} : { entryPath: state.entryPath }), ...(state.startToken === undefined ? {} : { startToken: state.startToken }) }
+    }
+    if (existing.launcher?.generation !== undefined && existing.launcher.generation > launcher.generation) return internalPath
+    return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), daemons: mergedDaemons, launcher })
   })
 }
 

@@ -188,24 +188,29 @@ async function ownDataDirectory(config: AgentProcessConfig): Promise<{ readonly 
 export interface AgentProcess {
   readonly daemon: AgentDaemon
   readonly consumerWork: AgentWorkClient
-  readonly configuredWork?: Promise<void>
+  readonly configuredWork?: Promise<ConfiguredWorkReceipt>
   readonly closed: Promise<void>
   stop(): Promise<void>
 }
 
-export async function runConfiguredWork(client: AgentWorkClient, intent: AgentConnectionIntent, policyRevision: number): Promise<void> {
+export interface ConfiguredWorkReceipt {
+  readonly workId: string
+  readonly requestId: string
+}
+
+export async function runConfiguredWork(client: AgentWorkClient, intent: AgentConnectionIntent, policyRevision: number): Promise<ConfiguredWorkReceipt> {
   const target = await client.findProvider({ providerAgentId: intent.targetAgentId, capabilityId: intent.capabilityId, capabilityVersion: intent.capabilityVersion, operation: intent.operation })
   const channel = await client.open(target)
-  let workId: string | undefined
   try {
     const work = await channel.propose({ workId: intent.workId, capabilityId: intent.capabilityId, capabilityVersion: intent.capabilityVersion, policyRevision })
-    workId = work.workId
+    const workId = work.workId
     const result = await channel.request({ workId, requestId: intent.requestId, operation: intent.operation, demands: intent.demands, payload: intent.payload })
     if (result.control.state !== 'succeeded') {
       if (result.control.state === 'failed' || result.control.state === 'cancelled') await channel.close(workId)
       throw new RelayProtocolError(result.control.error?.code ?? 'RESULT_UNKNOWN', result.control.error?.message ?? 'configured Work did not succeed')
     }
     await channel.close(workId)
+    return { workId, requestId: intent.requestId }
   } finally { await channel.dispose() }
 }
 export async function startAgentProcess(configPath: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcess> {
@@ -376,20 +381,19 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
 }
 
 export async function runAgentProcess(argv = process.argv.slice(2)): Promise<void> {
-  if (argv.length !== 2 || argv[0] !== '--config') throw new RelayProtocolError('INVALID_INPUT', 'usage: agent-process --config <file>')
+  if (!((argv.length === 2 || argv.length === 4) && argv[0] === '--config' && (argv.length === 2 || (argv[2] === '--launcher-start-token' && argv[3].trim() !== '')))) throw new RelayProtocolError('INVALID_INPUT', 'usage: agent-process --config <file>')
   const launcherControl = captureLocalLauncherControl(process.env)
   const handle = await startAgentProcess(argv[1])
   const stop = () => { void handle.stop().catch(error => { process.exitCode = 1; console.error(error.message) }) }
   process.once('SIGINT', stop); process.once('SIGTERM', stop)
   if (handle.configuredWork !== undefined) {
     try {
-      await handle.configuredWork
+      const configuredWork = await handle.configuredWork
       if (launcherControl !== undefined) {
-        const source = JSON.parse(await readFile(argv[1], 'utf8')) as { endpoint?: { connect?: { workId?: unknown; requestId?: unknown } } }
         await writeLocalInternalConfiguredWorkIfCurrent(launcherControl.internalPath, {
           agentId: handle.daemon.status().agentId,
-          workId: typeof source.endpoint?.connect?.workId === 'string' ? source.endpoint.connect.workId : 'configured-work',
-          requestId: typeof source.endpoint?.connect?.requestId === 'string' ? source.endpoint.connect.requestId : 'configured-request',
+          workId: configuredWork.workId,
+          requestId: configuredWork.requestId,
           generation: launcherControl.generation,
           state: 'succeeded',
         }, { generation: launcherControl.generation, startToken: launcherControl.startToken })

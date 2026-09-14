@@ -12,5 +12,7 @@ Allowed write scope:
 - runtime/local-process.spec.ts
 - runtime/local-supervisor.ts
 - runtime/local-two-agent.spec.ts
+- runtime/configured-work.spec.ts
+- server/relay-process.ts
 - docs/evidence/3742b9a-runtime-r6-20260914/**
 Forbidden: package/lock, network/** semantics, agent/** semantics, config/** truth, CLI/UI, other worktrees, commit/push/merge/delete.
