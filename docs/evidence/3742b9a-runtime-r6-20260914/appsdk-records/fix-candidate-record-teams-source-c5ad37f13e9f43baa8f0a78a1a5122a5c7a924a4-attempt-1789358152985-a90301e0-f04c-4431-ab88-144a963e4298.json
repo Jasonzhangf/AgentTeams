@@ -1,0 +1,36 @@
+{
+  "fix_candidate_id": "fix-c5ad37f13e9f-attempt-1789358152985-a90301e0-f04c-4431-ab88-144a963e4298",
+  "issue_id": "teams-lifecycle-admission",
+  "module_id": "teams-source",
+  "worktree_id": "worktree-c5ad37f13e9f",
+  "base_commit": "a0d4b67a0dc45e41101a64e9ab34ccc2dbb9b08f",
+  "head_commit": "c5ad37f13e9f43baa8f0a78a1a5122a5c7a924a4",
+  "tree_hash": "ab64866158c05972c4f93924792efe1ea01706e2",
+  "diff_hash": "sha256:4b1057a2487e8725076ba60c54cf8edcb81e2f494d0c4be2ee69c5c614920815",
+  "design_id": "teams-lifecycle-admission",
+  "owner": "agentteams::lifecycle-adapter:v1",
+  "scope_hash": "sha256:d807404d1309aa312f705c38d46a7b8a597e9cd48a7c425e5f31f96e876d6be6",
+  "changed_paths": [
+    "docs/architecture/function-map.json",
+    "docs/evidence/3742b9a-runtime-r6-20260914/base.txt",
+    "docs/evidence/3742b9a-runtime-r6-20260914/candidate-receipt.md",
+    "docs/evidence/3742b9a-runtime-r6-20260914/validation-evidence.md",
+    "runtime/agent-process.ts",
+    "runtime/configured-work.spec.ts",
+    "runtime/local-config.spec.ts",
+    "runtime/local-config.ts",
+    "runtime/local-process.spec.ts",
+    "runtime/local-process.ts",
+    "runtime/local-supervisor.ts",
+    "runtime/local-two-agent.spec.ts",
+    "server/relay-process.ts"
+  ],
+  "verification_evidence_ids": [
+    "attempt-1789358152985-a90301e0-f04c-4431-ab88-144a963e4298-whitebox",
+    "attempt-1789358152985-a90301e0-f04c-4431-ab88-144a963e4298-artifact",
+    "attempt-1789358152985-a90301e0-f04c-4431-ab88-144a963e4298-install",
+    "attempt-1789358152985-a90301e0-f04c-4431-ab88-144a963e4298-restart",
+    "attempt-1789358152985-a90301e0-f04c-4431-ab88-144a963e4298-blackbox"
+  ],
+  "created_at": "2026-09-14T03:55:52.986Z"
+}

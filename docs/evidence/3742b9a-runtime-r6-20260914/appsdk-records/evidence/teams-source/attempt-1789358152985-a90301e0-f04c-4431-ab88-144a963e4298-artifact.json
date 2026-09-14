@@ -1,0 +1,33 @@
+{
+  "evidence_id": "attempt-1789358152985-a90301e0-f04c-4431-ab88-144a963e4298-artifact",
+  "issue_id": "teams-lifecycle-admission",
+  "experiment_id": "teams-lifecycle-admission",
+  "phase": "artifact",
+  "kind": "build",
+  "source_commit": "c5ad37f13e9f43baa8f0a78a1a5122a5c7a924a4",
+  "scope": {
+    "module_id": "teams-source",
+    "entrypoint": "generated/modules/teams-source/module.compiled.json"
+  },
+  "producer": {
+    "adapter": "agentteams::lifecycle-adapter:v1",
+    "identity": "agentteams::lifecycle-adapter:v1/build"
+  },
+  "result": "pass",
+  "created_at": "2026-09-14T03:56:39.056Z",
+  "expires_at": "2026-09-15T03:56:38.859Z",
+  "input_hashes": [
+    "sha256:e22367490d931ce0d3b3c8dea7be1ee1001772b9c3e5cdacac9c70f3e3b0774e",
+    "sha256:97cb30977c960b8685c7cc045ecbf6590a48d515fd37188f778434bb7b212f64"
+  ],
+  "scope_hash": "sha256:d807404d1309aa312f705c38d46a7b8a597e9cd48a7c425e5f31f96e876d6be6",
+  "artifact_hash": "sha256:edc5a828bbf0b0abced7eda52103742a4e56d59ab44ebe3754a01d6f24ece3b9",
+  "entrypoint": "generated/modules/teams-source/module.compiled.json",
+  "execution_surface": "development_whitebox",
+  "execution": {
+    "mode": "executed",
+    "receipt_id": "stage-pnpm-verify-1789358198859",
+    "receipt_path": "/Volumes/extension/code/AgentTeams/playground/3742b9a-runtime-r6-integration-20260914/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-verify-1789358198859.json"
+  },
+  "command": "appsdk compile (inside pnpm verify)"
+}
