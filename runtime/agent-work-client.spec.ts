@@ -44,6 +44,20 @@ it('selects a visible Endpoint and carries its revision into the Work proposal',
   expect(target.endpoint).toMatchObject({ providerAgentId: 'endpoint-provider', endpointId: 'browser-endpoint', revision: 4 })
 })
 
+it('does not match an operation declared only by a different capability version', async () => {
+  const mixed = { ...peer('mixed-provider', 'online', '2', ['search']), endpoints: [{ endpointId: 'legacy-endpoint', ownerAgentId: 'mixed-provider', scopeId: 'scope', kind: 'browser' as const, revision: 1,
+    lifecycle: 'active' as const, capabilities: [{ capabilityId: 'file-search', version: '1', operations: ['read'] }], resources: [] }] }
+  directory.push(mixed)
+  await expect(client.findProvider({ capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' }))
+    .rejects.toMatchObject({ code: 'UNSUPPORTED_OPERATION' })
+  await expect(client.findProvider({ capabilityId: 'file-search', capabilityVersion: '1', operation: 'read' })).resolves.toMatchObject({
+    providerAgentId: 'mixed-provider', capabilityVersion: '1', operation: 'read', endpoint: { endpointId: 'legacy-endpoint', revision: 1 },
+  })
+  await expect(client.findProvider({ capabilityId: 'file-search', capabilityVersion: '2', operation: 'search' })).resolves.toMatchObject({
+    providerAgentId: 'mixed-provider', capabilityVersion: '2', operation: 'search',
+  })
+})
+
 it.each([
   ['missing capability', [], 'NOT_FOUND'],
   ['unsupported version', [peer('provider', 'online', '2')], 'UNSUPPORTED_VERSION'],

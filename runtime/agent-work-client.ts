@@ -115,8 +115,11 @@ export function createAgentWorkClient(
     const versionPeers = capabilityPeers.filter(peer => capability(peer, capabilityId)?.version === capabilityVersion || (peer.endpoints ?? []).some(endpoint =>
       endpoint.capabilities.some(candidate => candidate.capabilityId === capabilityId && candidate.version === capabilityVersion)))
     if (versionPeers.length === 0) throw new RelayProtocolError('UNSUPPORTED_VERSION', `Capability ${capabilityId} version ${capabilityVersion} is unsupported`)
-    const operationPeers = versionPeers.filter(peer => capability(peer, capabilityId)?.operations.some(item => item.operation === operation) || (peer.endpoints ?? []).some(endpoint =>
-      endpoint.capabilities.some(candidate => candidate.capabilityId === capabilityId && candidate.version === capabilityVersion && candidate.operations.includes(operation))))
+    const operationPeers = versionPeers.filter(peer => {
+      const declaration = capability(peer, capabilityId)
+      return (declaration?.version === capabilityVersion && declaration.operations.some(item => item.operation === operation)) || (peer.endpoints ?? []).some(endpoint =>
+        endpoint.capabilities.some(candidate => candidate.capabilityId === capabilityId && candidate.version === capabilityVersion && candidate.operations.includes(operation)))
+    })
     if (operationPeers.length === 0) throw new RelayProtocolError('UNSUPPORTED_OPERATION', `Capability ${capabilityId} does not support ${operation}`)
     const peer = operationPeers.find(candidate => candidate.presence === 'online' &&
       candidate.declaration.identity.agentId !== consumerIdentity.agentId &&

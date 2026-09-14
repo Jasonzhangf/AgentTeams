@@ -150,6 +150,29 @@ describe('Agent Work resource admission', () => {
     expect(() => proposeWork(state, consumer, { ...workProposal('work-version'), capabilityVersion: '9.0.0' }, policy())).toThrowError(/UNSUPPORTED_VERSION/)
   })
 
+  it('rejects a stale provider generation and admits the current generation', () => {
+    const state = ledger()
+    accept(state, 'work-a')
+    expect(() => requestWork(state, {
+      authenticatedConsumer: consumer,
+      request: request('work-a', 'stale-request', 'open', 3),
+      policy: policy(),
+    })).toThrowError(/STALE_GENERATION/)
+    expect(state.snapshot.requests).toHaveLength(0)
+
+    const restarted = createWorkLedger({ provider, generation: 5, capabilities: [capability], store: state.store })
+    expect(() => requestWork(restarted, {
+      authenticatedConsumer: consumer,
+      request: request('work-a', 'stale-request', 'open', 4),
+      policy: policy(),
+    })).toThrowError(/STALE_GENERATION/)
+    expect(requestWork(restarted, {
+      authenticatedConsumer: consumer,
+      request: request('work-a', 'current-request', 'open', 5),
+      policy: policy(),
+    }).executionAllowed).toBe(true)
+  })
+
   it('requires provider-wide resource ids across capabilities', () => {
     const directory = mkdtempSync(join(tmpdir(), 'teams-work-resource-id-'))
     tempDirs.push(directory)
@@ -250,6 +273,29 @@ describe('Agent Work resource admission', () => {
     expect(new Set(state.snapshot.allocations.map(allocation => allocation.workId))).toEqual(new Set(['work-a', 'work-b']))
   })
 
+  it('serves one consumer across multiple capabilities with independent capacity accounting', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'teams-work-multi-capability-'))
+    tempDirs.push(directory)
+    const search: CapabilityDeclaration = {
+      capabilityId: 'file-search/v1',
+      version: '1',
+      operations: [{ operation: 'search', inputSchema: {}, outputSchema: {}, cancellation: 'cooperative' }],
+      resources: [{ resourceId: 'search-slot', capacity: 1, unit: 'slot', sharing: 'shared', allocationScope: 'request' }],
+    }
+    const state = createWorkLedger({ provider, generation: 4, capabilities: [capability, search],
+      store: createFileWorkStore(join(directory, 'work.json')) })
+    accept(state, 'browser-work')
+    proposeWork(state, consumer, { ...workProposal('search-work'), capabilityId: search.capabilityId, capabilityVersion: search.version }, policy())
+    const browserRequest = requestWork(state, { authenticatedConsumer: consumer, request: request('browser-work', 'browser-request'), policy: policy() })
+    const searchRequest = requestWork(state, { authenticatedConsumer: consumer, request: {
+      control: { workId: 'search-work', requestId: 'search-request', operation: 'search', targetGeneration: 4, demands: [{ resourceId: 'search-slot', amount: 1 }] },
+      payload: { query: 'x' },
+    }, policy: policy() })
+    expect(browserRequest.executionAllowed).toBe(true)
+    expect(searchRequest.executionAllowed).toBe(true)
+    expect(state.snapshot.allocations.map(allocation => allocation.resourceId).sort()).toEqual(['browser-context', 'request-slot', 'search-slot'])
+  })
+
   it('deduplicates requests and rejects changed parameters for the same request id', () => {
     const state = ledger()
     accept(state, 'work-a')
@@ -296,6 +342,22 @@ describe('Agent Work resource admission', () => {
     expect(() => completeRequest(state, {} as never, 'work-a', 'request-a', { outcome: 'cancelled' })).toThrowError(/FORBIDDEN/)
     completeRequest(state, authority, 'work-a', 'request-a', { outcome: 'cancelled' })
     expect(state.snapshot.allocations.find(allocation => allocation.resourceId === 'request-slot')?.state).toBe('released')
+  })
+
+  it('reports unsupported cancellation explicitly and keeps the request and allocations running', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'teams-work-unsupported-cancel-'))
+    tempDirs.push(directory)
+    const unsupported: CapabilityDeclaration = {
+      ...capability,
+      operations: capability.operations.map(operation => ({ ...operation, cancellation: 'unsupported' as const })),
+    }
+    const state = createWorkLedger({ provider, generation: 4, capabilities: [unsupported],
+      store: createFileWorkStore(join(directory, 'work.json')) })
+    accept(state, 'work-a')
+    requestWork(state, { authenticatedConsumer: consumer, request: request('work-a', 'request-a'), policy: policy() })
+    expect(() => requestCancellation(state, consumer, 'work-a', 'request-a')).toThrowError(/UNSUPPORTED_OPERATION/)
+    expect(getRequest(state, 'work-a', 'request-a').state).toBe('running')
+    expect(state.snapshot.allocations.every(allocation => allocation.state === 'held')).toBe(true)
   })
 
   it('does not reuse an unknown work allocation before trusted reconciliation', () => {
