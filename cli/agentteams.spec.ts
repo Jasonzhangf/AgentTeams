@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createPrivateKey, X509Certificate } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -19,9 +20,27 @@ describe('agentteams CLI', () => {
       expect(relayText).toBe(DEFAULT_RELAY_CONFIG_TEXT)
       expect(relayText).not.toContain('pid')
       expect(relayText).not.toContain('internal.toml')
+      const keyText = await readFile(join(home, '.agentteams', 'relay-key.pem'), 'utf8')
+      const certText = await readFile(join(home, '.agentteams', 'relay-cert.pem'), 'utf8')
+      expect(() => createPrivateKey(keyText)).not.toThrow()
+      expect(new X509Certificate(certText).subject).toContain('localhost')
+      expect((await stat(join(home, '.agentteams', 'relay-key.pem'))).mode & 0o777).toBe(0o600)
       await writeFile(configPath, 'sentinel\n', { flag: 'w' })
       await expect(agentteamsCommand(['init'], { home })).rejects.toThrow(/already exists/i)
       expect(await readFile(configPath, 'utf8')).toBe('sentinel\n')
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it('fails init explicitly when local relay TLS material is incomplete', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-init-tls-'))
+    try {
+      const directory = join(home, '.agentteams')
+      await mkdir(directory, { recursive: true })
+      await writeFile(join(directory, 'relay-key.pem'), 'sentinel\n', { flag: 'w', encoding: 'utf8' })
+      await expect(agentteamsCommand(['init'], { home })).rejects.toThrow(/relay TLS material is incomplete/i)
+      expect(await readFile(join(directory, 'relay-key.pem'), 'utf8')).toBe('sentinel\n')
     } finally {
       await rm(home, { recursive: true, force: true })
     }

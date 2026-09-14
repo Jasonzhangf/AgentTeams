@@ -1,10 +1,13 @@
 #!/usr/bin/env -S node --experimental-transform-types
 
-import { mkdir, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { access, chmod } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import { writeLocalConfig } from '../runtime/local-config.ts'
 import {
   runLocalConfiguredWork,
   startLocalProcess,
@@ -16,6 +19,7 @@ export const CLI_NAME = 'agentteams'
 
 const sourceDirectory = dirname(fileURLToPath(import.meta.url))
 const runtimeDirectory = resolve(sourceDirectory, '..')
+const execFileAsync = promisify(execFile)
 
 // The facade runs from source in this delivery unit, so it binds the runtime
 // child entrypoints explicitly instead of relying on the packaged .js default.
@@ -178,26 +182,59 @@ function formatStatus(prefix, status) {
   return pieces.join(' ')
 }
 
-async function createExclusive(path, text) {
-  await writeFile(path, text, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+async function pathExists(path) {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// The relay is a `wss://` endpoint, so a usable default init must produce the
+// self-signed local TLS material that relay.json references. The runtime owner
+// exposes no TLS bootstrap API, so this facade generates it with the same
+// openssl invocation the repository's local smoke scripts already use. Missing
+// openssl or a partial existing pair fails explicitly; it never silently
+// substitutes or overwrites material.
+async function generateLocalRelayTls(directory) {
+  const keyPath = resolve(directory, 'relay-key.pem')
+  const certPath = resolve(directory, 'relay-cert.pem')
+  const [keyExists, certExists] = await Promise.all([pathExists(keyPath), pathExists(certPath)])
+  if (keyExists && certExists) return
+  if (keyExists || certExists) {
+    throw new AgentTeamsCliError(`relay TLS material is incomplete in ${directory}: relay-key.pem and relay-cert.pem must both exist`)
+  }
+  try {
+    await execFileAsync('openssl', [
+      'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '3650',
+      '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1',
+      '-keyout', keyPath, '-out', certPath,
+    ])
+  } catch (error) {
+    const detail = typeof error?.stderr === 'string' && error.stderr.trim() !== '' ? error.stderr.trim() : error.message
+    throw new AgentTeamsCliError(`cannot generate relay TLS material in ${directory}: ${detail}`)
+  }
+  await Promise.all([chmod(keyPath, 0o600), chmod(certPath, 0o600)])
 }
 
 async function initCommand(configPath, configText) {
-  await mkdir(dirname(configPath), { recursive: true, mode: 0o700 })
   try {
-    await createExclusive(configPath, configText)
+    await writeLocalConfig(configPath, configText, { exclusive: true })
   } catch (error) {
     if (error?.code === 'EEXIST') throw new AgentTeamsCliError(`config already exists: ${configPath}`)
     throw new AgentTeamsCliError(`cannot create config: ${configPath}: ${error.message}`)
   }
-  const relayPath = resolve(dirname(configPath), 'relay.json')
+  const directory = dirname(configPath)
+  const relayPath = resolve(directory, 'relay.json')
   try {
-    await createExclusive(relayPath, DEFAULT_RELAY_CONFIG_TEXT)
+    await writeLocalConfig(relayPath, DEFAULT_RELAY_CONFIG_TEXT, { exclusive: true })
   } catch (error) {
     if (error?.code !== 'EEXIST') {
       throw new AgentTeamsCliError(`cannot create relay config: ${relayPath}: ${error.message}`)
     }
   }
+  await generateLocalRelayTls(directory)
   return `initialized ${configPath}
 Edit config.toml, then run ${CLI_NAME} start, ${CLI_NAME} status, ${CLI_NAME} work, or ${CLI_NAME} stop.`
 }
