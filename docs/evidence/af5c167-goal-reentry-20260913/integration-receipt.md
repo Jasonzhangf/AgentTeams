@@ -6,4 +6,6 @@
 - Integration validation: `pnpm install --frozen-lockfile --offline` and `pnpm verify` passed;
   regression reported 77 test files / 458 tests, typecheck, AppSDK compile/verify and smoke.
 - `git diff --check`: passed.
+- Exact tree, lockfile/tool, AppSDK contract identities and raw output are bound in `fingerprint.md`;
+  raw output is retained at `integration-pnpm-verify.log`.
 - No runtime, network, provider, Console or public/NAT acceptance is claimed by this unit.
