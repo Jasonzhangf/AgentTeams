@@ -1,0 +1,10 @@
+candidate source=18279c48c26af725e98de7194c59d600b115f77a; generated runtime used only for harness execution
+$ node --check live-harness.mjs
+$ node --check opencode-harness.mjs
+$ git diff --check
+$ node --version
+v22.22.2
+$ pnpm --version
+10.31.0
+$ opencode --version
+1.18.23

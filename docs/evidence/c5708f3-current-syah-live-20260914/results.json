@@ -1,0 +1,11 @@
+{
+  "issue": "c5708f3",
+  "candidate": "18279c48c26af725e98de7194c59d600b115f77a",
+  "rcc": { "modelsHttpStatus": 200, "catalogCount": 0, "explicitManualModel": "gpt-5.5" },
+  "goaichat": { "catalogCount": 18, "explicitModel": "qwen3.8-max" },
+  "agentRelay": { "refreshPrimary": "ok", "refreshBackup": "ok", "apply": "ok", "acceptedRevision": 5, "effectiveRevision": 5, "restartAcceptedRevision": 5, "restartEffectiveRevision": 5 },
+  "openCode": { "primaryHttpStatus": 200, "backupHttpStatus": 200 },
+  "automaticFailover": false,
+  "responseModelUsedAsConfigTruth": false,
+  "scope": "current-SHA local provider replay; public Relay/NAT/mobile/OS daemon deployment not claimed"
+}
