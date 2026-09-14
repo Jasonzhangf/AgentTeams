@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { spawn as spawnProcess } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -327,6 +327,55 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     if (internalPath !== undefined) {
       try { await stopLocalProcess(path, generation) } catch { /* cleanup is best effort for test-only paths */ }
     }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 20000)
+
+it('forwards explicit start options through the implicit configured Work start', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-local-process-work-options-'))
+  const path = join(root, 'config.toml')
+  try {
+    const capturedPath = join(root, 'launcher-env.txt')
+    const launcher = join(root, 'fake-launcher.sh')
+    await writeFile(launcher, `#!/bin/sh\nenv | grep '^TEAMS_LOCAL_' > ${JSON.stringify(capturedPath)}\n`, { mode: 0o755 })
+    await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48051 } }))
+    await writeLocalConfig(path, `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.browser]
+role = "receiver"
+identity = { hostId = "browser-host", machineId = "machine", agentId = "browser", accountId = "account", agentKind = "custom", label = "Browser" }
+scopeId = "scope"
+dataDirectory = "data/browser"
+leasePort = 48151
+presenceIntervalMs = 100
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-browser" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
+
+[endpoints.browser.connect]
+targetAgentId = "provider"
+capabilityId = "file-search"
+capabilityVersion = "1"
+operation = "search"
+workId = "configured-work"
+requestId = "configured-request"
+demands = [{ resourceId = "search-slot", amount = 1 }]
+payload = { query = "needle" }
+`)
+    const options = { nodeExecutable: launcher, relayEntry: '/explicit/relay.mjs', agentEntry: '/explicit/agent.mjs', nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 1000 }
+    await expect(runLocalConfiguredWork(path, {}, options)).rejects.toMatchObject({ code: 'START_TIMEOUT' })
+    let captured = ''
+    for (let attempt = 0; attempt < 40 && captured === ''; attempt += 1) {
+      try { captured = await readFile(capturedPath, 'utf8') } catch { await new Promise(resolveDelay => setTimeout(resolveDelay, 50)) }
+    }
+    expect(captured).toContain('TEAMS_LOCAL_RELAY_ENTRY=/explicit/relay.mjs')
+    expect(captured).toContain('TEAMS_LOCAL_AGENT_ENTRY=/explicit/agent.mjs')
+    expect(captured).toContain('TEAMS_LOCAL_NODE_ARGUMENTS=--experimental-transform-types')
+  } finally {
+    try { await stopLocalProcess(path) } catch { /* cleanup is best effort for test-only paths */ }
     await rm(root, { recursive: true, force: true })
   }
 }, 20000)

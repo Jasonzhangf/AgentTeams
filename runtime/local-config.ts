@@ -624,10 +624,30 @@ export async function loadLocalConfig(path = defaultLocalConfigPath()): Promise<
   return parsed
 }
 
+export interface WriteLocalConfigOptions {
+  /** Create the config only when it does not already exist; never replace an existing file. */
+  readonly exclusive?: boolean
+}
+
 /** Persist operator-authored TOML atomically; validation remains the startup gate. */
-export async function writeLocalConfig(path: string, text: string): Promise<string> {
+export async function writeLocalConfig(path: string, text: string, options: WriteLocalConfigOptions = {}): Promise<string> {
   const configPath = localPath(path, process.cwd())
   await mkdir(dirname(configPath), { recursive: true, mode: 0o700 })
+  if (options.exclusive === true) {
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+    try {
+      handle = await open(configPath, 'wx', 0o600)
+      await handle.writeFile(text, { encoding: 'utf8' })
+    } catch (error) {
+      if (handle !== undefined) {
+        try { await handle.close() } catch { /* preserve original failure */ }
+        try { await unlink(configPath) } catch { /* preserve original failure */ }
+      }
+      throw error
+    }
+    await handle.close()
+    return configPath
+  }
   const temporary = `${configPath}.${randomUUID()}.tmp`
   await writeFile(temporary, text, { encoding: 'utf8', mode: 0o600 })
   try { await rename(temporary, configPath) }

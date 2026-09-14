@@ -38,6 +38,19 @@ enabled = false
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
+it('atomically rejects an exclusive config write without replacing an existing file', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-local-config-exclusive-'))
+  const path = join(directory, 'config.toml')
+  const first = 'version = 1\n[relay]\nconfig = "relay.json"\n[daemons.one]\nconfig = "one.json"\n'
+  try {
+    await writeLocalConfig(path, first, { exclusive: true })
+    await expect(writeLocalConfig(path, 'version = 1\nreplaced = true\n', { exclusive: true })).rejects.toMatchObject({ code: 'EEXIST' })
+    expect(await readFile(path, 'utf8')).toBe(first)
+    await writeLocalConfig(path, 'version = 1\nreplaced = true\n')
+    expect(await readFile(path, 'utf8')).toBe('version = 1\nreplaced = true\n')
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
 it('uses ~/.agentteams/config.toml as the stable default without creating it during read', () => {
   expect(defaultLocalConfigPath('/tmp/teams-home')).toBe('/tmp/teams-home/.agentteams/config.toml')
 })

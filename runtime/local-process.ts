@@ -410,13 +410,13 @@ export interface LocalConfiguredWorkResult {
   readonly state: 'succeeded'
 }
 
-export async function runLocalConfiguredWork(configPath = defaultLocalConfigPath(), env: NodeJS.ProcessEnv = process.env): Promise<LocalConfiguredWorkResult> {
+export async function runLocalConfiguredWork(configPath = defaultLocalConfigPath(), env: NodeJS.ProcessEnv = process.env, options: LocalProcessStartOptions = {}): Promise<LocalConfiguredWorkResult> {
   const config: LocalConfig = await loadLocalConfig(configPath)
   const receiver = config.daemons.find(daemon => daemon.enabled && daemon.connection !== undefined)
   if (receiver?.connection === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no enabled receiver connection intent')
   if (config.internalPath === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no runtime internal state')
   const before = await statusLocalProcess(configPath)
-  const running = before.state === 'running' ? before : await startLocalProcess(configPath, { env })
+  const running = before.state === 'running' ? before : await startLocalProcess(configPath, { ...options, env: { ...env, ...options.env } })
   const expectedGeneration = running.generation
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline) {
