@@ -21,36 +21,38 @@
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、
   `git ls-remote origin refs/heads/main`。本次现场观察到 root/remote 均为
-  `ce91c14cd7b6c9d97a3d7f25bd35e384599cbb85` 且 clean；这个 SHA 只是现场快照，不能替代下一轮
+  `a0ef263a339abd9edd22646973d500de501026be` 且 clean；这个 SHA 只是现场快照，不能替代下一轮
   启动时的现场检查。任何实现单元都必须从届时最新的 `origin/main` 建立候选。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 本轮调度文档从 `ce91c14` 建立；此前 U0 与上一轮文档 worktree/branch 已回收，每次恢复仍须重读现场。
+- 本轮调度文档从 `a0ef263` 建立；此前 U0 与上一轮文档 worktree/branch 已回收，每次恢复仍须重读现场。
   L1-CLI issue `fdec042` 的旧 worktree `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测
   `cli/agentteams.spec.ts` 且落后远端主线；不得把它标记为完成、直接集成或删除其红测。runtime receipt
   后必须从最新远端主线重建 L1。
 - runtime `3742b9a` 负责 detached launcher、持久 supervisor ownership/status/stop 和复用现有
   configured Work 的显式调用；CLI 不得复制这些真相。当前唯一活动 worktree
-  `playground/3742b9a-runtime-r5-20260913` 从 `ce91c14` 建立，仍 dirty，尚无 candidate commit。
+  `playground/3742b9a-runtime-r5-20260913` 从 `ce91c14` 建立，仍 dirty，且相对当前远端主线落后，尚无 candidate commit。
   最近 focused run 的 configured Work restart 仍有 `START_TIMEOUT`；必须先由 runtime owner 修复并
   重新验证，再补 `local-two-agent` exact receipt、full verify、exact Codex review、candidate commit、
   clean integration、push、memory 和 cleanup。
-- C1 issue `776fcad` 已从最新主线重建为 `playground/776fcad-c1-r3-20260913`、branch
-  `codex/776fcad-c1-r3-20260913`，只允许修改 `config/**` 与 `opencode-adapter/**`，不得碰 runtime
-  lifecycle、network、agent 或 UI；candidate 前必须完成 focused test、typecheck、evidence 和独立
+- C1 issue `776fcad` 的现存工作树是 `playground/776fcad-c1-r3-20260913`、branch
+  `codex/776fcad-c1-r3-20260913`，base=`ce91c14`，相对当前 `origin/main=a0ef263` 已落后；只允许
+  修改 `config/**` 与 `opencode-adapter/**`，不得碰 runtime lifecycle、network、agent 或 UI。
+  它不能作为“最新主线重建”的 admission 证据；必须先审计并从当时最新 `origin/main` 重建 clean
+  worktree，再通过 fingerprint/admission，随后才可继续 focused test、typecheck、evidence 和独立
   Codex review。
 
 ### 当前资源与处理动作
 
 | 资源 | 当前事实 | 调度动作 |
 |---|---|---|
-| `playground/3742b9a-runtime-r5-20260913` | dirty，HEAD=`ce91c14`；configured Work restart focused gate 当前 `START_TIMEOUT`，尚无 candidate/review/push | runtime owner 先修复并重跑首个失败 gate，再补 local-two-agent/full verify → exact review → candidate → integration/push → memory/cleanup |
+| `playground/3742b9a-runtime-r5-20260913` | dirty，HEAD=`ce91c14`，相对当前远端落后；configured Work restart focused gate 当前 `START_TIMEOUT`，尚无 candidate/review/push | 先将旧树保留为只读审计/证据源，再从当时最新 origin/main 建立新的 clean runtime worktree，并通过 owner/path fingerprint admission；只在新树修复首个失败 gate，再补 local-two-agent/full verify → exact review → candidate → integration/push → memory/cleanup |
 | `playground/3742b9a-runtime-r3-20260913` | dirty，旧候选，包含历史 `listen EPERM` 证据和未提交 runtime diff | 只保留审计责任；不得 reset/delete，确认 owner、唯一证据和进程后再决定回收 |
 | `playground/3742b9a-runtime-rebind-r2-20260913` | dirty，旧 runtime rebind，HEAD=`7e82b8a`，含未提交 runtime diff 和独立 evidence | 只保留审计责任；不得 reset/delete，确认 owner、唯一证据和进程后再决定回收 |
 | `playground/3742b9a-runtime-rebind-20260913` | clean，旧 candidate `546e77f`，基于旧 main | 只作历史参考；不得直接集成或 reset |
 | `playground/3742b9a-runtime-20260913` | clean，旧 candidate `d040885` | 只作历史参考；不得直接集成或 reset |
 | `playground/fdec042-l1-cli-20260913` | 仅保留未跟踪红测 `cli/`，无 candidate commit | runtime receipt 后从最新 main 重建；红测迁移前不删除 |
-| `playground/776fcad-c1-r3-20260913` | dirty，HEAD=`ce91c14`，仅属 config/OpenCode | 继续 focused gate/review；不得碰 runtime/network/agent/UI；candidate 前须写 evidence 并完成独立 review |
+| `playground/776fcad-c1-r3-20260913` | dirty，HEAD=`ce91c14`，相对当前远端落后，仅属 config/OpenCode | 先审计并从当时最新 origin/main 重建 clean tree，通过 fingerprint/admission 后再跑 focused gate/review；不得碰 runtime/network/agent/UI；candidate 前须写 evidence 并完成独立 review |
 
 这些资源均不属于本次目标文档刷新单元；调度主任务只清理自己创建的 worktree。任何超过 24 小时未
 活动的资源，先核对 owner、claim、证据和未提交内容，再决定保留、合并或丢弃。
@@ -111,7 +113,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮接手时观察到
-  `origin/main=ce91c14cd7b6c9d97a3d7f25bd35e384599cbb85`，下一 unit 仍须重新读取远端。
+  `origin/main=a0ef263a339abd9edd22646973d500de501026be`，下一 unit 仍须重新读取远端。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
@@ -147,8 +149,8 @@ commit、唯一写入范围和精确验收命令。实现 worker 与 reviewer �
    - provider 是可被动提供 capability/resource 的 Agent；receiver 声明连接意图并请求 Work。
    - provider 负责 admission、容量分配和释放；重复 request、超卖、取消和旧 generation 必须显式处理。
    - **C1 Config/OpenCode owner**：`config/**`、`opencode-adapter/**`；不得写 `agent/**`、
-     `network/**` 或 UI 台账。
-     C1 在公共 config contract 稳定后即可开始，可与 W1 并行。
+     `network/**` 或 UI 台账。C1 只有在公共 config contract 稳定、从当时最新 `origin/main`
+     重建 clean worktree、且 owner/path fingerprint admission 通过后，才可开始并与 W1 并行。
    - 支持多个 provider instance；RCC `127.0.0.1:4444` 为主 provider，`goaichat-openai` 为显式
      backup provider。backup 不等于隐式 failover；catalog/apply/readback 必须走真实 OpenCode 入口。
 
@@ -242,9 +244,9 @@ AppSDK compile/verify、真实入口和 exact review。runtime receipt 前只允
 | unit | issue | 当前状态 | 下一动作 |
 | --- | --- | --- | --- |
 | U0 internal config compiler | `159b78b` | closed；receipt 可复用 | 不重开、不重复派发 |
-| runtime local launcher | `3742b9a` | r5 worktree dirty，HEAD=`ce91c14`；configured Work restart focused gate 报 `START_TIMEOUT`，无 candidate | 修复首个失败 gate → local-two-agent exact receipt → full verify → exact Codex review → candidate commit → integration/push → memory → cleanup |
+| runtime local launcher | `3742b9a` | r5 worktree dirty，HEAD=`ce91c14`，相对当前远端落后；configured Work restart focused gate 报 `START_TIMEOUT`，无 candidate | 旧树只读审计 → 从当时最新 origin/main 建 clean tree → fingerprint/admission → 修复首个失败 gate → local-two-agent exact receipt → full verify → exact Codex review → candidate commit → integration/push → memory → cleanup |
 | L1 CLI | `fdec042` | awaiting-runtime-unit；仅有红测，无 candidate | runtime receipt 后 rebase 到最新 main，再实现 `init/start/status/work/stop` |
-| C1 provider/OpenCode | `776fcad` | r3 worktree dirty，HEAD=`ce91c14`，未完成 focused gate/review | 继续 config/opencode focused gate → evidence → Codex review；不碰 runtime/network/agent/UI |
+| C1 provider/OpenCode | `776fcad` | r3 worktree dirty，HEAD=`ce91c14`，相对当前远端落后，未完成 focused gate/review | 审计并从当时最新 origin/main 重建 clean tree → fingerprint/admission → config/opencode focused gate → evidence → Codex review；不碰 runtime/network/agent/UI |
 | W1/B1/U1/I1-L5 | canonical downstream | pending | 按依赖顺序启动，禁止提前共享写入 |
 
 本次调度刷新 worktree 是 `playground/af5c167-goal-reentry-20260913`，只拥有 `docs/goals/**`

@@ -72,12 +72,15 @@ failover 和生产部署继续属于 canonical 计划中的 post-MVP 阶段。
 | 本地真实回放 | L5 | 两个独立 daemon 经 socket bridge 完成 discovery、协商、Work、stop/restart |
 | Console 观察面 | L4，随后由 L5 收口 | UI 展示 directory projection，Console 关闭不影响 Work |
 
-当前主线（本次接手复核为 `ce91c14`）已包含 internal.toml 真源迁移（U0/`159b78b`）及本机双 daemon
+当前主线（本次接手复核为 `a0ef263`）已包含 internal.toml 真源迁移（U0/`159b78b`）及本机双 daemon
 基础；用户 CLI、完整 passive provider/receiver Work、OpenCode 多 provider、Console directory
 projection 和最终 Console-offline/restart 真实收口仍未完成。runtime issue `3742b9a` 的当前
-r5 worktree 仍 dirty，尚无 candidate commit；最近 configured Work restart focused gate 报
-`START_TIMEOUT`，因此不能复用旧 r4/r3 receipts 或进入 review/integration。C1 已在 r3 worktree
-从当前主线重建并只负责 config/OpenCode；L1 旧 worktree 只保留红测，runtime receipt 后必须重建。
+r5 worktree 仍 dirty，尚无 candidate commit；它只保留为只读审计/证据源，必须从当时最新远端主线
+重建新的 clean runtime worktree。最近 configured Work restart focused gate 报 `START_TIMEOUT`，
+因此不能复用旧 r4/r3 receipts 或进入 review/integration。C1 已在 r3 worktree
+从旧主线 `ce91c14` 建立，当前相对 `origin/main=a0ef263` 已落后，不能作为最新主线 admission；
+它只负责 config/OpenCode，必须从最新远端重建后才可继续。L1 旧 worktree 只保留红测，runtime
+receipt 后必须重建。
 
 ## 用户 MVP 验收路径
 
