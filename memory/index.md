@@ -295,6 +295,10 @@ _Empty._
 - tags: `3742b9a`, `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`, `runtime`
 - details: [L2/test-id.md](L2/test-id.md)
 
+### W1 Agent Work matching and admission
+- tags: `ai-reviewed,human-unreviewed`
+- details: [L2/w1-agent-work-91a5bb8.md](L2/w1-agent-work-91a5bb8.md)
+
 ## Level 3 — new or unreviewed
 
 ### Superseded memory write for 41f0ea2
