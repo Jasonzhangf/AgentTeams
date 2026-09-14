@@ -1,10 +1,10 @@
 #!/usr/bin/env -S node --experimental-transform-types
 
 import { execFile } from 'node:child_process'
-import { access, chmod } from 'node:fs/promises'
+import { access, chmod, mkdir } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, resolve } from 'node:path'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { writeLocalConfig } from '../runtime/local-config.ts'
@@ -191,6 +191,17 @@ async function pathExists(path) {
   }
 }
 
+async function defaultConfigText() {
+  try {
+    const result = await execFileAsync('which', ['rg'])
+    const executable = result.stdout.trim()
+    if (!isAbsolute(executable)) throw new Error('which rg returned a non-absolute path')
+    return DEFAULT_CONFIG_TEXT.replaceAll('/usr/bin/rg', executable)
+  } catch (error) {
+    throw new AgentTeamsCliError(`cannot locate rg executable: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 // The relay is a `wss://` endpoint, so a usable default init must produce the
 // self-signed local TLS material that relay.json references. The runtime owner
 // exposes no TLS bootstrap API, so this facade generates it with the same
@@ -226,6 +237,7 @@ async function initCommand(configPath, configText) {
     throw new AgentTeamsCliError(`cannot create config: ${configPath}: ${error.message}`)
   }
   const directory = dirname(configPath)
+  await mkdir(resolve(directory, 'files'), { recursive: true })
   const relayPath = resolve(directory, 'relay.json')
   try {
     await writeLocalConfig(relayPath, DEFAULT_RELAY_CONFIG_TEXT, { exclusive: true })
@@ -246,7 +258,7 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
   const runtime = options.runtime ?? RUNTIME_FUNCTIONS
 
   if (parsed.command === 'init') {
-    return await initCommand(configPath, options.configText ?? DEFAULT_CONFIG_TEXT)
+    return await initCommand(configPath, options.configText ?? await defaultConfigText())
   }
   if (parsed.command === 'start') {
     const status = await runtime.startLocalProcess(configPath, { env, ...SOURCE_ENTRIES })

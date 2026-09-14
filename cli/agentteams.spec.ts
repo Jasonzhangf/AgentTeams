@@ -25,6 +25,7 @@ describe('agentteams CLI', () => {
       expect(() => createPrivateKey(keyText)).not.toThrow()
       expect(new X509Certificate(certText).subject).toContain('localhost')
       expect((await stat(join(home, '.agentteams', 'relay-key.pem'))).mode & 0o777).toBe(0o600)
+      expect((await stat(join(home, '.agentteams', 'files'))).isDirectory()).toBe(true)
       await writeFile(configPath, 'sentinel\n', { flag: 'w' })
       await expect(agentteamsCommand(['init'], { home })).rejects.toThrow(/already exists/i)
       expect(await readFile(configPath, 'utf8')).toBe('sentinel\n')
