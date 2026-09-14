@@ -303,6 +303,10 @@ _Empty._
 - tags: `3742b9a`, `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`, `runtime`
 - details: [L2/test-id.md](L2/test-id.md)
 
+### Runtime projects authoritative daemon status
+- tags: `local-mvp,runtime,ai-reviewed,human-unreviewed`
+- details: [L2/u1-runtime-status-projection.md](L2/u1-runtime-status-projection.md)
+
 ### W1 Agent Work matching and admission
 - tags: `ai-reviewed,human-unreviewed`
 - details: [L2/w1-agent-work-91a5bb8.md](L2/w1-agent-work-91a5bb8.md)
