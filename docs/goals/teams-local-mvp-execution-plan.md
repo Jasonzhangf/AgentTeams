@@ -21,11 +21,11 @@
   worker 的实现范围扩大到主任务。
 - 根 `main` 的事实必须在每次唤醒时重新读取 `git status`、`git rev-parse`、
   `git ls-remote origin refs/heads/main`。本次现场观察到 root/remote 均为
-  `a0ef263a339abd9edd22646973d500de501026be` 且 clean；这个 SHA 只是现场快照，不能替代下一轮
+  `3793b83a9a3609979d82dfadb8e086922804e828` 且 clean；这个 SHA 只是现场快照，不能替代下一轮
   启动时的现场检查。任何实现单元都必须从届时最新的 `origin/main` 建立候选。
 - U0 `159b78b` 的 exact review、集成、远端 push、L2 memory 和 cleanup 均已有 receipt；不得
   重复派单或复用旧候选。其唯一保留 advisory 已另建 issue `b17014`，不阻断 U1。
-- 本轮调度文档从 `a0ef263` 建立；此前 U0 与上一轮文档 worktree/branch 已回收，每次恢复仍须重读现场。
+- 本轮调度文档从 `3793b83` 建立；此前 U0 与上一轮文档 worktree/branch 已回收，每次恢复仍须重读现场。
   L1-CLI issue `fdec042` 的旧 worktree `playground/fdec042-l1-cli-20260913` 只保留未跟踪红测
   `cli/agentteams.spec.ts` 且落后远端主线；不得把它标记为完成、直接集成或删除其红测。runtime receipt
   后必须从最新远端主线重建 L1。
@@ -36,7 +36,7 @@
   重新验证，再补 `local-two-agent` exact receipt、full verify、exact Codex review、candidate commit、
   clean integration、push、memory 和 cleanup。
 - C1 issue `776fcad` 的现存工作树是 `playground/776fcad-c1-r3-20260913`、branch
-  `codex/776fcad-c1-r3-20260913`，base=`ce91c14`，相对当前 `origin/main=a0ef263` 已落后；只允许
+  `codex/776fcad-c1-r3-20260913`，base=`ce91c14`，相对当前 `origin/main=3793b83` 已落后；只允许
   修改 `config/**` 与 `opencode-adapter/**`，不得碰 runtime lifecycle、network、agent 或 UI。
   它不能作为“最新主线重建”的 admission 证据；必须先审计并从当时最新 `origin/main` 重建 clean
   worktree，再通过 fingerprint/admission，随后才可继续 focused test、typecheck、evidence 和独立
@@ -113,7 +113,7 @@ Agent Work；Console 只做观察与配置，关闭 Console 后 Agent-to-Agent W
 ## 当前基线与已知状态
 
 - 基线主线：每个 delivery unit 都从当时最新的 `origin/main` 建立；本轮接手时观察到
-  `origin/main=a0ef263a339abd9edd22646973d500de501026be`，下一 unit 仍须重新读取远端。
+  `origin/main=3793b83a9a3609979d82dfadb8e086922804e828`，下一 unit 仍须重新读取远端。
 - 已有 `288af52`：本地双 daemon、bridge、directory、capability/resource、一次 Work、
   `internal.toml` 生命周期状态和重启基础证据已合并；它不等于完整用户入口或完整 MVP。
 - 已交付 U0 `159b78b`：将 `internal.toml` 变成 runtime-owned 的非用户配置真源；候选、review、
