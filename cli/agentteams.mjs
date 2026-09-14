@@ -162,7 +162,76 @@ function localEnv(env) {
   return result
 }
 
-function formatStatus(prefix, status) {
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0
+}
+
+function isEndpointIdentity(value) {
+  return value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && isNonEmptyString(value.hostId)
+    && isNonEmptyString(value.machineId)
+    && isNonEmptyString(value.agentId)
+    && isNonEmptyString(value.accountId)
+    && isNonEmptyString(value.agentKind)
+    && isNonEmptyString(value.label)
+}
+
+function isEndpointCapability(value) {
+  return value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && isNonEmptyString(value.capabilityId)
+    && isNonEmptyString(value.version)
+    && Array.isArray(value.operations)
+    && value.operations.every(isNonEmptyString)
+    && Array.isArray(value.resources)
+    && value.resources.every(isEndpointResource)
+}
+
+function isEndpointResource(value) {
+  return value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && isNonEmptyString(value.resourceId)
+    && Number.isSafeInteger(value.capacity)
+    && value.capacity > 0
+    && isNonEmptyString(value.unit)
+}
+
+function formatEndpoint(endpoint) {
+  const id = endpoint !== null && typeof endpoint === 'object' && !Array.isArray(endpoint) && isNonEmptyString(endpoint.agentId)
+    ? endpoint.agentId
+    : '?'
+  if (
+    id === '?'
+    || !isEndpointIdentity(endpoint.identity)
+    || !isNonEmptyString(endpoint.role)
+    || !isNonEmptyString(endpoint.presence)
+    || !Number.isSafeInteger(endpoint.generation)
+    || endpoint.generation < 0
+    || !Array.isArray(endpoint.capabilities)
+    || !endpoint.capabilities.every(isEndpointCapability)
+  ) {
+    return `endpoint=${id} projection=malformed`
+  }
+  const identity = endpoint.identity
+  const capabilities = endpoint.capabilities.length === 0
+    ? '-'
+    : endpoint.capabilities
+      .map(capability => {
+        const operations = capability.operations.length === 0 ? '-' : capability.operations.join(',')
+        const resources = capability.resources.length === 0
+          ? '-'
+          : capability.resources.map(resource => `${resource.resourceId}:${resource.capacity}:${resource.unit}`).join(',')
+        return `${capability.capabilityId}@${capability.version}:${operations}[${resources}]`
+      })
+      .join(',')
+  return `endpoint=${id} identity=${identity.hostId}/${identity.machineId}/${identity.agentId}/${identity.accountId}/${identity.agentKind}/${identity.label} role=${endpoint.role} presence=${endpoint.presence} generation=${endpoint.generation} capabilities=${capabilities}`
+}
+
+function formatStatus(prefix, status, includeEndpoints = false) {
   const pieces = [
     prefix,
     `state=${status.state}`,
@@ -172,6 +241,11 @@ function formatStatus(prefix, status) {
   ]
   if (status.pid !== undefined) pieces.push(`pid=${status.pid}`)
   if (status.error !== undefined) pieces.push(`error=${status.error}`)
+  if (includeEndpoints) {
+    if (status.endpoints === undefined || status.endpoints === null) pieces.push('endpoints=missing')
+    else if (!Array.isArray(status.endpoints)) pieces.push('endpoints=malformed')
+    else pieces.push(...status.endpoints.map(formatEndpoint))
+  }
   return pieces.join(' ')
 }
 
@@ -287,7 +361,7 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
   }
   if (parsed.command === 'status') {
     const status = await runtime.statusLocalProcess(configPath)
-    return formatStatus('status', status)
+    return formatStatus('status', status, true)
   }
   if (parsed.command === 'work') {
     const result = await runtime.runLocalConfiguredWork(configPath, env, RUNTIME_CHILD_ENTRIES)

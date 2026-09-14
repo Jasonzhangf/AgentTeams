@@ -143,6 +143,72 @@ describe('agentteams CLI', () => {
     expect(calls[0].options.agentEntry).toBe(calls[3].options.agentEntry)
   })
 
+  it('formats the authoritative endpoint status projection without reconstructing it from config', async () => {
+    const status = {
+      configPath: '/tmp/agentteams-cli-config.toml',
+      internalPath: '/tmp/internal.toml',
+      pid: 12,
+      generation: 6,
+      state: 'running',
+      endpoints: [
+        {
+          agentId: 'provider',
+          identity: { hostId: 'local', machineId: 'agentteams', agentId: 'provider', accountId: 'local', agentKind: 'custom', label: 'Provider' },
+          role: 'provider',
+          presence: 'online',
+          state: 'online',
+          generation: 1,
+          capabilities: [
+            { capabilityId: 'file-search', version: '1', operations: ['search'], resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }] },
+            { capabilityId: 'browser', version: '1', operations: ['navigate'], resources: [{ resourceId: 'browser-context', capacity: 1, unit: 'context' }] },
+          ],
+        },
+        {
+          agentId: 'receiver',
+          identity: { hostId: 'local', machineId: 'agentteams', agentId: 'receiver', accountId: 'local', agentKind: 'custom', label: 'Receiver' },
+          role: 'receiver',
+          presence: 'offline',
+          state: 'stopped',
+          generation: 1,
+          capabilities: [],
+        },
+      ],
+    }
+    const runtime = {
+      statusLocalProcess: async () => status,
+    }
+
+    const output = await agentteamsCommand(['status', '--config', status.configPath], { runtime })
+    expect(output).toContain('status state=running generation=6')
+    expect(output).toContain('endpoint=provider identity=local/agentteams/provider/local/custom/Provider role=provider presence=online generation=1')
+    expect(output).toContain('capabilities=file-search@1:search[search-slot:2:slot],browser@1:navigate[browser-context:1:context]')
+    expect(output).toContain('endpoint=receiver identity=local/agentteams/receiver/local/custom/Receiver role=receiver presence=offline generation=1')
+    expect(output).toContain('capabilities=-')
+  })
+
+  it('shows missing and malformed endpoint projections explicitly', async () => {
+    const configPath = '/tmp/agentteams-cli-config.toml'
+    const missing = await agentteamsCommand(['status', '--config', configPath], {
+      runtime: {
+        statusLocalProcess: async () => ({ configPath, internalPath: '/tmp/internal.toml', generation: 0, state: 'stopped' }),
+      },
+    })
+    expect(missing).toContain('endpoints=missing')
+
+    const malformed = await agentteamsCommand(['status', '--config', configPath], {
+      runtime: {
+        statusLocalProcess: async () => ({
+          configPath,
+          internalPath: '/tmp/internal.toml',
+          generation: 1,
+          state: 'running',
+          endpoints: [{ agentId: 'provider', role: 'provider', presence: 'online' }],
+        }),
+      },
+    })
+    expect(malformed).toContain('endpoint=provider projection=malformed')
+  })
+
   it('direct node entry avoids source TS parameter properties and writes internal.toml from built runtime artifacts', async () => {
     const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-entry-'))
     let generation: number | undefined
