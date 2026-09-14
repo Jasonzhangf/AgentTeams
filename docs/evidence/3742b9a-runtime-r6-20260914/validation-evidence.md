@@ -257,7 +257,7 @@ marks a live supervisor as failed, restarts, and asserts the old PID is gone.
 The post-fix source fingerprint for the mapped source/test paths is:
 
 ```text
-b843d7f3a686122c9c0fb765cdc8808429ab40e89b2c9574ad5059873db9a7ae
+98182e4b98ec37dccf97111323ba82d61e5e8f4b804549fb9213a963ce3b9d27
 ```
 
 Post-fix verification:
@@ -274,6 +274,11 @@ pnpm verify
 pnpm smoke:installed
 # exit 0; isolated install, Relay/Agent startup, restart, local TOML launcher and signal shutdown
 ```
+
+The post-fix cleanup path waits for the detached supervisor PID to exit before
+accepting cleanup completion, then preserves the original same-generation
+`failed` state if supervisor cleanup wrote `stopped`. The existing timeout
+regression now asserts that status remains failed after the supervisor exits.
 
 ## Current candidate install/restart/live-entry replay
 

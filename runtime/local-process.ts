@@ -350,7 +350,11 @@ export async function startLocalProcess(configPath = defaultLocalConfigPath(), o
         const childPid = child.pid
         if (childPid !== undefined && processAlive(childPid)) {
           try { process.kill(childPid, 'SIGTERM') } catch { /* preserve the original startup failure */ }
-          try { await waitForLauncherState(config.internalPath!, config.configPath, 'stopped', Math.max(500, Math.min(options.startupTimeoutMs ?? 10_000, 2_000))) } catch { /* preserve the original startup failure */ }
+          try { await waitForProcessExit(childPid, Math.max(500, Math.min(options.startupTimeoutMs ?? 10_000, 2_000))) } catch { /* preserve the original startup failure */ }
+        }
+        const afterCleanup = await readLocalInternalConfig(config.internalPath!)
+        if (afterCleanup.launcher?.generation === nextGeneration && afterCleanup.launcher.startToken === startToken && afterCleanup.launcher.state !== 'failed') {
+          await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: nextGeneration, startToken, state: 'failed', error: error instanceof Error ? error.message : String(error) })
         }
       }
       throw error

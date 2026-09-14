@@ -46,7 +46,7 @@ docs/evidence/3742b9a-runtime-r6-20260914/validation-evidence.md
 ## Candidate fingerprint
 
 ```text
-source diff sha256: b843d7f3a686122c9c0fb765cdc8808429ab40e89b2c9574ad5059873db9a7ae
+source diff sha256: 98182e4b98ec37dccf97111323ba82d61e5e8f4b804549fb9213a963ce3b9d27
 The focused, socket-backed, typecheck/build, smoke, AppSDK, and `pnpm verify`
 receipts in `validation-evidence.md` were rerun after the source diff reached
 this fingerprint. Evidence documents are reviewed with this exact worktree;
@@ -76,6 +76,7 @@ Exact review history:
 - `20260914T034500Z-review-r6-runtime-install-replay`: PASS, Codex controller found no P0/P1 findings for the exact uncommitted candidate after the installed-entrypoint replay. Review evidence is retained under `.agent-collab/review/20260914T034500Z-review-r6-runtime-install-replay/`.
 - `20260914T035200Z-review-r6-commit-bound`: FAIL, a failed launcher could retain a live owned supervisor PID and start a duplicate supervisor. Fixed by validating and stopping the persisted supervisor before descendant recovery, with a regression in `runtime/local-process.spec.ts`; this candidate requires a new exact review.
 - `20260914T040000Z-review-r6-final-commit`: FAIL, the spawn-to-readiness window persisted `pid=0`, leaving a live detached supervisor unrecoverable after caller loss. Fixed by persisting the spawned PID immediately and adding a startup-window regression; this candidate requires a new exact review.
+- `20260914T041500Z-review-r6-final-commit`: FAIL, timeout cleanup could let supervisor cleanup overwrite the caller's same-generation `failed` state with `stopped`. Fixed by waiting for supervisor exit and restoring `failed` after cleanup; this candidate requires a new exact review.
 
 MCPX workspace discovery did not list this repository (`workspace not found: AgentTeams`);
 the project CLI and Git hooks were used once with the same commands and exact receipts,
