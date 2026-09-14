@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { defaultLocalConfigPath, loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalState } from './local-config.ts'
+import { defaultLocalConfigPath, loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalConfiguredWork, writeLocalInternalConfiguredWorkIfCurrent, writeLocalInternalLauncherState, writeLocalInternalState } from './local-config.ts'
 import { parse as parseToml } from 'toml'
 
 it('loads a persisted TOML launcher config and resolves paths relative to the file', async () => {
@@ -306,5 +306,42 @@ it('quotes dotted daemon ids in internal.toml so the persisted key remains exact
     await writeLocalInternalState(path, { 'a.b': { pid: 42, generation: 3, state: 'online' } })
     const parsed = parseToml(await readFile(path, 'utf8')) as { daemon?: Record<string, { pid?: number }> }
     expect(parsed.daemon?.['a.b']?.pid).toBe(42)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('serializes concurrent internal state and configured-work updates without dropping either field', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-internal-write-lock-'))
+  const path = join(directory, 'internal.toml')
+  try {
+    for (let iteration = 0; iteration < 20; iteration += 1) {
+      await Promise.all([
+        writeLocalInternalState(path, { provider: { pid: 4200 + iteration, generation: iteration + 1, state: 'online' } }),
+        writeLocalInternalConfiguredWork(path, { agentId: 'consumer', workId: `work-${iteration}`, requestId: `request-${iteration}`, generation: iteration + 1, state: 'succeeded' }),
+      ])
+      const internal = await readLocalInternalConfig(path)
+      expect(internal.daemons?.provider?.generation).toBe(iteration + 1)
+      expect(internal.configuredWork?.workId).toBe(`work-${iteration}`)
+    }
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('rejects configured Work receipts when the launcher start control changed', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-internal-stale-work-'))
+  const path = join(directory, 'internal.toml')
+  try {
+    await writeLocalInternalLauncherState(path, { pid: 101, generation: 1, startToken: 'start-token-1', state: 'running' })
+    await expect(writeLocalInternalConfiguredWorkIfCurrent(path,
+      { agentId: 'consumer', workId: 'work-1', requestId: 'request-1', generation: 1, state: 'succeeded' },
+      { generation: 1, startToken: 'start-token-1' })).resolves.toBe(path)
+    const first = await readLocalInternalConfig(path)
+    expect(first.configuredWork).toMatchObject({ workId: 'work-1', generation: 1 })
+
+    await writeLocalInternalLauncherState(path, { pid: 102, generation: 2, startToken: 'start-token-2', state: 'running' })
+    await expect(writeLocalInternalConfiguredWorkIfCurrent(path,
+      { agentId: 'consumer', workId: 'work-2', requestId: 'request-2', generation: 1, state: 'succeeded' },
+      { generation: 1, startToken: 'start-token-1' })).rejects.toThrow(/stale/)
+    const second = await readLocalInternalConfig(path)
+    expect(second.configuredWork).toMatchObject({ workId: 'work-1', generation: 1 })
+    expect(second.configuredWork?.workId).not.toBe('work-2')
   } finally { await rm(directory, { recursive: true, force: true }) }
 })

@@ -6,7 +6,7 @@ import { once } from 'node:events'
 import { createServer } from 'node:net'
 import { expect, it } from 'vitest'
 import { loadLocalConfig } from './local-config.ts'
-import { createLocalSupervisor } from './local-supervisor.ts'
+import { runLocalConfiguredWork, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
 
 async function availablePort(): Promise<number> {
   const server = createServer()
@@ -20,7 +20,7 @@ async function availablePort(): Promise<number> {
 
 it('starts two independent daemons from config.toml and completes receiver Work over the local bridge', async () => {
   const root = mkdtempSync(join(tmpdir(), 'teams-two-agent-'))
-  let supervisor: ReturnType<typeof createLocalSupervisor> | undefined
+  let started = false
   try {
     const agentteams = join(root, '.agentteams')
     const relayPort = await availablePort()
@@ -77,20 +77,41 @@ requestId = "configured-search-1"
 demands = [{ resourceId = "search-slot", amount = 1 }]
 payload = { query = "two daemon bridge" }
 `)
-    const config = await loadLocalConfig(join(agentteams, 'config.toml'))
+    const configPath = join(agentteams, 'config.toml')
     const compiled = process.env.TEAMS_LOCAL_REPLAY === 'compiled'
-    supervisor = createLocalSupervisor(config, { relayEntry: compiled ? resolve('generated/runtime-lib/server/relay-process.js') : resolve('server/relay-process.ts'),
+    const first = await startLocalProcess(configPath, { relayEntry: compiled ? resolve('generated/runtime-lib/server/relay-process.js') : resolve('server/relay-process.ts'),
       agentEntry: compiled ? resolve('generated/runtime-lib/runtime/agent-process.js') : resolve('runtime/agent-process.ts'),
       nodeArguments: compiled ? [] : ['--experimental-transform-types'], env: { TEAMS_PROVIDER_AUTH: 'provider-secret', TEAMS_CONSUMER_AUTH: 'consumer-secret' }, startupTimeoutMs: 15000 })
-    await supervisor.start()
+    started = true
+    expect(first).toMatchObject({ state: 'running', generation: 1 })
+    expect(await statusLocalProcess(configPath)).toMatchObject({ state: 'running', generation: 1 })
+    await expect(runLocalConfiguredWork(configPath, { TEAMS_PROVIDER_AUTH: 'provider-secret', TEAMS_CONSUMER_AUTH: 'consumer-secret' })).resolves.toMatchObject({
+      state: 'succeeded',
+      workId: 'configured-search',
+      requestId: 'configured-search-1',
+    })
+    const config = await loadLocalConfig(configPath)
     const internal = readFileSync(config.internalPath!, 'utf8')
     expect(internal).toMatch(/\[daemon\."provider"\][\s\S]*state = "online"/)
     expect(internal).toMatch(/\[daemon\."consumer"\][\s\S]*state = "online"/)
-    await supervisor.stop()
+    await stopLocalProcess(configPath, first.generation)
+    started = false
     const stopped = readFileSync(config.internalPath!, 'utf8')
     expect(stopped).toMatch(/\[daemon\."provider"\][\s\S]*state = "stopped"/)
-    supervisor = undefined
+    expect(stopped).toMatch(/\[daemon\."consumer"\][\s\S]*state = "stopped"/)
+    const second = await startLocalProcess(configPath, { relayEntry: compiled ? resolve('generated/runtime-lib/server/relay-process.js') : resolve('server/relay-process.ts'),
+      agentEntry: compiled ? resolve('generated/runtime-lib/runtime/agent-process.js') : resolve('runtime/agent-process.ts'),
+      nodeArguments: compiled ? [] : ['--experimental-transform-types'], env: { TEAMS_PROVIDER_AUTH: 'provider-secret', TEAMS_CONSUMER_AUTH: 'consumer-secret' }, startupTimeoutMs: 15000 })
+    started = true
+    expect(second).toMatchObject({ state: 'running', generation: 2 })
+    await expect(runLocalConfiguredWork(configPath, { TEAMS_PROVIDER_AUTH: 'provider-secret', TEAMS_CONSUMER_AUTH: 'consumer-secret' })).resolves.toMatchObject({
+      state: 'succeeded',
+      workId: 'configured-search',
+      requestId: 'configured-search-1',
+    })
+    const restarted = readFileSync(config.internalPath!, 'utf8')
+    expect(restarted).toMatch(/\[configuredWork\][\s\S]*generation = 2/)
   } finally {
-    try { await supervisor?.stop() } finally { rmSync(root, { recursive: true, force: true }) }
+    try { if (started) await stopLocalProcess(join(root, '.agentteams', 'config.toml')) } finally { rmSync(root, { recursive: true, force: true }) }
   }
 }, 30000)

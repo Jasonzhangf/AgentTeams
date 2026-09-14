@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, open, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
@@ -46,11 +46,40 @@ export interface LocalInternalConfig {
   readonly sourcePath?: string
   readonly generatedAt?: string
   readonly updatedAt?: string
+  readonly launcher?: LocalInternalLauncherConfig
+  readonly configuredWork?: LocalInternalConfiguredWork
   readonly relay?: {
     readonly projectionPath?: string
     readonly config?: string
   }
   readonly daemons?: Readonly<Record<string, LocalInternalDaemonConfig>>
+}
+
+export interface LocalInternalLauncherConfig {
+  readonly pid: number
+  readonly generation: number
+  readonly startToken?: string
+  readonly state: 'starting' | 'running' | 'stopped' | 'failed'
+  readonly error?: string
+}
+
+export interface LocalInternalConfiguredWork {
+  readonly agentId: string
+  readonly workId: string
+  readonly requestId: string
+  readonly generation: number
+  readonly state: 'succeeded'
+}
+
+export interface LocalLauncherControl {
+  readonly generation: number
+  readonly startToken: string
+}
+
+export interface LocalLauncherOwnerRecord {
+  readonly version: 1
+  readonly pid: number
+  readonly startToken: string
 }
 
 export interface LocalInternalDaemonConfig {
@@ -192,6 +221,24 @@ function serializeLocalInternalConfig(internal: LocalInternalConfig): string {
     if (relay.projectionPath !== undefined) lines.push(`projectionPath = ${tomlString(relay.projectionPath)}`)
     if (relay.config !== undefined) lines.push(`config = ${tomlString(relay.config)}`)
   }
+  const launcher = internal.launcher
+  if (launcher !== undefined) {
+    lines.push('', '[launcher]')
+    lines.push(`pid = ${launcher.pid}`)
+    lines.push(`generation = ${launcher.generation}`)
+    if (launcher.startToken !== undefined) lines.push(`startToken = ${tomlString(launcher.startToken)}`)
+    lines.push(`state = ${tomlString(launcher.state)}`)
+    if (launcher.error !== undefined) lines.push(`error = ${tomlString(launcher.error)}`)
+  }
+  const configuredWork = internal.configuredWork
+  if (configuredWork !== undefined) {
+    lines.push('', '[configuredWork]')
+    lines.push(`agentId = ${tomlString(configuredWork.agentId)}`)
+    lines.push(`workId = ${tomlString(configuredWork.workId)}`)
+    lines.push(`requestId = ${tomlString(configuredWork.requestId)}`)
+    lines.push(`generation = ${configuredWork.generation}`)
+    lines.push(`state = ${tomlString(configuredWork.state)}`)
+  }
   const daemons = internal.daemons
   if (daemons !== undefined) {
     for (const [id, daemon] of Object.entries(daemons).sort(([left], [right]) => left.localeCompare(right))) {
@@ -217,6 +264,82 @@ async function writeLocalInternalConfig(path: string, internal: LocalInternalCon
   try { await rename(temporary, internalPath) }
   catch (error) { try { await unlink(temporary) } catch { /* preserve original failure */ } throw error }
   return internalPath
+}
+
+function processAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true }
+  catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' }
+}
+
+function launcherOwnershipPath(path: string): string {
+  const internalPath = localPath(path, process.cwd())
+  return resolve(dirname(internalPath), '.internal', 'launcher-owner.json')
+}
+
+export async function readLocalLauncherOwnership(path: string): Promise<LocalLauncherOwnerRecord | undefined> {
+  const ownerPath = launcherOwnershipPath(path)
+  let text: string
+  try { text = await readFile(ownerPath, 'utf8') }
+  catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw new LocalConfigError(`launcher ownership cannot be read: ${ownerPath}`, cause)
+  }
+  let parsed: unknown
+  try { parsed = JSON.parse(text) } catch (cause) {
+    throw new LocalConfigError(`launcher ownership is not valid JSON: ${ownerPath}`, cause)
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new LocalConfigError(`launcher ownership must be an object: ${ownerPath}`)
+  }
+  const record = parsed as Record<string, unknown>
+  if (record.version !== 1 || typeof record.pid !== 'number' || !Number.isSafeInteger(record.pid) || record.pid <= 0 ||
+    typeof record.startToken !== 'string' || record.startToken.length === 0) {
+    throw new LocalConfigError(`launcher ownership record is invalid: ${ownerPath}`)
+  }
+  return { version: 1, pid: record.pid, startToken: record.startToken }
+}
+
+export async function writeLocalLauncherOwnership(path: string, owner: LocalLauncherOwnerRecord): Promise<string> {
+  const ownerPath = launcherOwnershipPath(path)
+  await mkdir(dirname(ownerPath), { recursive: true, mode: 0o700 })
+  const temporary = `${ownerPath}.${randomUUID()}.tmp`
+  await writeFile(temporary, `${JSON.stringify(owner, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+  try { await rename(temporary, ownerPath) }
+  catch (error) { try { await unlink(temporary) } catch { /* preserve original failure */ } throw error }
+  return ownerPath
+}
+
+/** Serialize internal.toml read-modify-write transactions across launcher and daemon writers. */
+export async function withLocalInternalConfigLock<T>(path: string, task: () => Promise<T>): Promise<T> {
+  const internalPath = localPath(path, process.cwd())
+  const lockPath = `${internalPath}.internal.lock`
+  const deadline = Date.now() + 5_000
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  while (handle === undefined) {
+    try {
+      handle = await open(lockPath, 'wx')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      let ownerPid: number | undefined
+      try {
+        const value = Number.parseInt((await readFile(lockPath, 'utf8')).trim(), 10)
+        if (Number.isSafeInteger(value) && value > 0) ownerPid = value
+      } catch { /* preserve the lock when its owner cannot be read */ }
+      if (ownerPid !== undefined && !processAlive(ownerPid)) {
+        await rm(lockPath, { force: true })
+        continue
+      }
+      if (Date.now() >= deadline) throw new LocalConfigError(`internal config update is already in progress: ${internalPath}`)
+      await new Promise(resolveDelay => setTimeout(resolveDelay, 10))
+    }
+  }
+  try {
+    await handle.writeFile(`${process.pid}\n`)
+    return await task()
+  } finally {
+    await handle.close()
+    await rm(lockPath, { force: true })
+  }
 }
 
 export async function readLocalInternalConfig(path: string): Promise<LocalInternalConfig> {
@@ -248,12 +371,41 @@ export async function readLocalInternalConfig(path: string): Promise<LocalIntern
       }
     }
   }
+  const launcher = root.launcher === undefined ? undefined : (() => {
+    const input = object(root.launcher, 'launcher')
+    const pid = optionalNumber(input.pid, 'launcher.pid')
+    const generation = optionalNumber(input.generation, 'launcher.generation')
+    if (pid === undefined || generation === undefined) throw new LocalConfigError('launcher pid and generation are required')
+    return {
+      pid,
+      generation,
+      ...(input.startToken === undefined ? {} : { startToken: requiredString(input.startToken, 'launcher.startToken') }),
+      state: oneOf(input.state, ['starting', 'running', 'stopped', 'failed'] as const, 'launcher.state'),
+      ...(input.error === undefined ? {} : { error: requiredString(input.error, 'launcher.error') }),
+    }
+  })()
+  const configuredWork = root.configuredWork === undefined ? undefined : (() => {
+    const input = object(root.configuredWork, 'configuredWork')
+    return {
+      agentId: requiredString(input.agentId, 'configuredWork.agentId'),
+      workId: requiredString(input.workId, 'configuredWork.workId'),
+      requestId: requiredString(input.requestId, 'configuredWork.requestId'),
+      generation: (() => {
+        const value = optionalNumber(input.generation, 'configuredWork.generation')
+        if (value === undefined) throw new LocalConfigError('configuredWork.generation is required')
+        return value
+      })(),
+      state: oneOf(input.state, ['succeeded'] as const, 'configuredWork.state'),
+    }
+  })()
   return {
     version: 1,
     ...(root.configRevision === undefined ? {} : { configRevision: textOrUndefined(root.configRevision, 'configRevision') }),
     ...(root.sourcePath === undefined ? {} : { sourcePath: textOrUndefined(root.sourcePath, 'sourcePath') }),
     ...(root.generatedAt === undefined ? {} : { generatedAt: textOrUndefined(root.generatedAt, 'generatedAt') }),
     ...(root.updatedAt === undefined ? {} : { updatedAt: textOrUndefined(root.updatedAt, 'updatedAt') }),
+    ...(launcher === undefined ? {} : { launcher }),
+    ...(configuredWork === undefined ? {} : { configuredWork }),
     ...(root.relay === undefined ? {} : (() => {
       const relay = object(root.relay, 'relay')
       return { relay: {
@@ -425,10 +577,35 @@ export async function loadLocalConfig(path = defaultLocalConfigPath()): Promise<
       sourcePath: configPath,
       generatedAt: existing?.generatedAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      ...(existing?.launcher === undefined ? {} : { launcher: existing.launcher }),
+      ...(existing?.configuredWork === undefined ? {} : { configuredWork: existing.configuredWork }),
       relay: { ...(reusable ? existing!.relay : {}), projectionPath: relayProjectionPath, config: reusable ? existing!.relay!.config : JSON.stringify(relayConfig) },
       daemons: daemonProjections,
     }
-    await writeLocalInternalConfig(internalPath, internal)
+    await withLocalInternalConfigLock(internalPath, async () => {
+      let latest: LocalInternalConfig | undefined
+      try { latest = await readLocalInternalConfig(internalPath) }
+      catch (cause) {
+        const errorCause = (cause as { cause?: NodeJS.ErrnoException })?.cause
+        if (errorCause?.code !== 'ENOENT') throw cause
+      }
+      const latestDaemons = latest?.daemons ?? {}
+      const mergedDaemons = Object.fromEntries(Object.entries(internal.daemons ?? {}).map(([id, projection]) => {
+        const runtime = latestDaemons[id]
+        return [id, {
+          ...projection,
+          ...(runtime?.pid === undefined ? {} : { pid: runtime.pid }),
+          ...(runtime?.generation === undefined ? {} : { generation: runtime.generation }),
+          ...(runtime?.state === undefined ? {} : { state: runtime.state }),
+        }]
+      }))
+      await writeLocalInternalConfig(internalPath, {
+        ...internal,
+        ...(latest?.launcher === undefined ? {} : { launcher: latest.launcher }),
+        ...(latest?.configuredWork === undefined ? {} : { configuredWork: latest.configuredWork }),
+        daemons: mergedDaemons,
+      })
+    })
     return { ...parsed, relay: { enabled: parsed.relay.enabled, configPath: relayProjectionPath }, daemons, internalPath }
   }
   return parsed
@@ -453,21 +630,71 @@ export interface LocalInternalDaemonState {
 
 export async function writeLocalInternalState(path: string, daemons: Readonly<Record<string, LocalInternalDaemonState>>): Promise<string> {
   const internalPath = localPath(path, process.cwd())
-  let existing: LocalInternalConfig
-  try { existing = await readLocalInternalConfig(internalPath) }
-  catch (error) {
-    const cause = (error as { cause?: NodeJS.ErrnoException })?.cause
-    if (cause?.code === 'ENOENT') existing = { version: 1 }
-    else throw error
-  }
-  const mergedDaemons = { ...(existing.daemons ?? {}) }
-  for (const [id, state] of Object.entries(daemons)) {
-    mergedDaemons[id] = {
-      ...(mergedDaemons[id] ?? {}),
-      pid: state.pid,
-      state: state.state,
-      ...(state.generation === undefined ? {} : { generation: state.generation }),
+  return withLocalInternalConfigLock(internalPath, async () => {
+    let existing: LocalInternalConfig
+    try { existing = await readLocalInternalConfig(internalPath) }
+    catch (error) {
+      const cause = (error as { cause?: NodeJS.ErrnoException })?.cause
+      if (cause?.code === 'ENOENT') existing = { version: 1 }
+      else throw error
     }
-  }
-  return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), daemons: mergedDaemons })
+    const mergedDaemons = { ...(existing.daemons ?? {}) }
+    for (const [id, state] of Object.entries(daemons)) {
+      const previous = mergedDaemons[id]
+      if (previous?.generation !== undefined && state.generation !== undefined && previous.generation > state.generation) continue
+      mergedDaemons[id] = {
+        ...(previous ?? {}),
+        pid: state.pid,
+        state: state.state,
+        ...(state.generation === undefined ? {} : { generation: state.generation }),
+      }
+    }
+    return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), daemons: mergedDaemons })
+  })
+}
+
+export async function writeLocalInternalLauncherState(path: string, launcher: LocalInternalLauncherConfig): Promise<string> {
+  const internalPath = localPath(path, process.cwd())
+  return withLocalInternalConfigLock(internalPath, async () => {
+    let existing: LocalInternalConfig
+    try { existing = await readLocalInternalConfig(internalPath) }
+    catch (error) {
+      const cause = (error as { cause?: NodeJS.ErrnoException })?.cause
+      if (cause?.code === 'ENOENT') existing = { version: 1 }
+      else throw error
+    }
+    if (existing.launcher?.generation !== undefined && existing.launcher.generation > launcher.generation) return internalPath
+    return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), launcher })
+  })
+}
+
+export async function writeLocalInternalConfiguredWork(path: string, configuredWork: LocalInternalConfiguredWork): Promise<string> {
+  const internalPath = localPath(path, process.cwd())
+  return withLocalInternalConfigLock(internalPath, async () => {
+    let existing: LocalInternalConfig
+    try { existing = await readLocalInternalConfig(internalPath) }
+    catch (error) {
+      const cause = (error as { cause?: NodeJS.ErrnoException })?.cause
+      if (cause?.code === 'ENOENT') existing = { version: 1 }
+      else throw error
+    }
+    if (existing.configuredWork?.generation !== undefined && existing.configuredWork.generation > configuredWork.generation) return internalPath
+    return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), configuredWork })
+  })
+}
+
+export async function writeLocalInternalConfiguredWorkIfCurrent(
+  path: string,
+  configuredWork: LocalInternalConfiguredWork,
+  expectedLauncher: LocalLauncherControl,
+): Promise<string> {
+  const internalPath = localPath(path, process.cwd())
+  return withLocalInternalConfigLock(internalPath, async () => {
+    const existing = await readLocalInternalConfig(internalPath)
+    const current = existing.launcher
+    if (current === undefined || current.generation !== expectedLauncher.generation || current.startToken !== expectedLauncher.startToken) {
+      throw new LocalConfigError('configured Work receipt is stale: launcher does not match child start control')
+    }
+    return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), configuredWork })
+  })
 }

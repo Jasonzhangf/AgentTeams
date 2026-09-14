@@ -1,0 +1,16 @@
+Worktree: /Volumes/extension/code/AgentTeams/playground/3742b9a-runtime-r6-20260914
+Branch: codex/3742b9a-runtime-r6-20260914
+HEAD: a0d4b67a0dc45e41101a64e9ab34ccc2dbb9b08f
+Base: a0d4b67a0dc45e41101a64e9ab34ccc2dbb9b08f
+origin/main: a0d4b67a0dc45e41101a64e9ab34ccc2dbb9b08f
+Initial status: clean
+Allowed write scope:
+- runtime/agent-process.ts
+- runtime/local-config.ts
+- runtime/local-config.spec.ts
+- runtime/local-process.ts
+- runtime/local-process.spec.ts
+- runtime/local-supervisor.ts
+- runtime/local-two-agent.spec.ts
+- docs/evidence/3742b9a-runtime-r6-20260914/**
+Forbidden: package/lock, network/** semantics, agent/** semantics, config/** truth, CLI/UI, other worktrees, commit/push/merge/delete.

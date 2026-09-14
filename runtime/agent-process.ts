@@ -25,6 +25,7 @@ import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
 import { createDirectWssListener, type DirectWssListener } from '../network/direct-listener.ts'
 import { assertJsonValue } from '../control-protocol/json-value.ts'
 import type { JsonValue, ResourceDemand } from '../control-protocol/agent-services.ts'
+import { writeLocalInternalConfiguredWorkIfCurrent, type LocalLauncherControl } from './local-config.ts'
 
 export interface AgentConnectionIntent {
   readonly targetAgentId: string
@@ -376,14 +377,38 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
 
 export async function runAgentProcess(argv = process.argv.slice(2)): Promise<void> {
   if (argv.length !== 2 || argv[0] !== '--config') throw new RelayProtocolError('INVALID_INPUT', 'usage: agent-process --config <file>')
+  const launcherControl = captureLocalLauncherControl(process.env)
   const handle = await startAgentProcess(argv[1])
   const stop = () => { void handle.stop().catch(error => { process.exitCode = 1; console.error(error.message) }) }
   process.once('SIGINT', stop); process.once('SIGTERM', stop)
   if (handle.configuredWork !== undefined) {
-    try { await handle.configuredWork } catch (error) { await handle.stop(); throw error }
+    try {
+      await handle.configuredWork
+      if (launcherControl !== undefined) {
+        const source = JSON.parse(await readFile(argv[1], 'utf8')) as { endpoint?: { connect?: { workId?: unknown; requestId?: unknown } } }
+        await writeLocalInternalConfiguredWorkIfCurrent(launcherControl.internalPath, {
+          agentId: handle.daemon.status().agentId,
+          workId: typeof source.endpoint?.connect?.workId === 'string' ? source.endpoint.connect.workId : 'configured-work',
+          requestId: typeof source.endpoint?.connect?.requestId === 'string' ? source.endpoint.connect.requestId : 'configured-request',
+          generation: launcherControl.generation,
+          state: 'succeeded',
+        }, { generation: launcherControl.generation, startToken: launcherControl.startToken })
+      }
+    } catch (error) { await handle.stop(); throw error }
   }
   process.send?.({ kind: 'daemon.registered', agentId: handle.daemon.status().agentId, generation: handle.daemon.network.generation })
   try { await handle.closed } finally { process.off('SIGINT', stop); process.off('SIGTERM', stop) }
+}
+
+function captureLocalLauncherControl(env: NodeJS.ProcessEnv): (LocalLauncherControl & { readonly internalPath: string }) | undefined {
+  const internalPath = env.TEAMS_LOCAL_INTERNAL_PATH
+  if (internalPath === undefined) return undefined
+  const generation = Number(env.TEAMS_LOCAL_LAUNCHER_GENERATION)
+  const startToken = env.TEAMS_LOCAL_START_TOKEN
+  if (!Number.isSafeInteger(generation) || generation < 0 || startToken === undefined || startToken.length === 0) {
+    throw new RelayProtocolError('INVALID_INPUT', 'local launcher control values are required for configured Work')
+  }
+  return { internalPath, generation, startToken }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   void runAgentProcess().catch(error => { console.error(error instanceof Error ? error.message : 'Agent startup failed'); process.exitCode = 1 })

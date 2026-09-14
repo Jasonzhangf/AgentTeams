@@ -1,7 +1,8 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { projectLocalChildConfigs, writeLocalInternalState, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
+import { randomUUID } from 'node:crypto'
+import { projectLocalChildConfigs, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalLauncherOwnership, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
 
 export interface LocalProcessSpec {
   readonly id: string
@@ -17,6 +18,8 @@ export interface LocalSupervisorOptions {
   readonly relayEntry?: string
   readonly agentEntry?: string
   readonly env?: NodeJS.ProcessEnv
+  readonly startToken?: string
+  readonly launcherGeneration?: number
   readonly startupTimeoutMs?: number
   readonly stopTimeoutMs?: number
   readonly spawn?: typeof nodeSpawn
@@ -97,6 +100,8 @@ export interface LocalSupervisor {
   readonly state: () => LocalSupervisorState
   readonly failure: () => Error | undefined
   readonly processes: () => readonly LocalProcessSpec[]
+  /** Runtime-owned lifecycle generation; increments per successful start and persists through the launcher. */
+  readonly generation: () => number
   start(): Promise<void>
   stop(): Promise<void>
 }
@@ -112,8 +117,11 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   const unwatch = new Map<string, () => void>()
   let lifecycle: LocalSupervisorState = 'stopped'
   let lastFailure: Error | undefined
+  let lifecycleGeneration = 0
   let starting: Promise<void> | undefined
   let stopping: Promise<void> | undefined
+  const startToken = options.startToken ?? randomUUID()
+  let reservedLauncherGeneration: number | undefined
 
   const stop = (): Promise<void> => {
     if (stopping) return stopping
@@ -138,6 +146,15 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       if (config.internalPath !== undefined) {
         const persisted: Record<string, LocalInternalDaemonState> = Object.fromEntries([...states.entries()].map(([id, state]) => [id, { ...state, state: lifecycle === 'failed' ? 'failed' : 'stopped' as const }]))
         try { await writeLocalInternalState(config.internalPath, persisted) } catch (error) { failures.push(error) }
+        try {
+          await writeLocalInternalLauncherState(config.internalPath, {
+            pid: process.pid,
+            generation: lifecycleGeneration,
+            startToken,
+            state: lifecycle === 'failed' ? 'failed' : 'stopped',
+            ...(lifecycle === 'failed' && lastFailure !== undefined ? { error: lastFailure.message } : {}),
+          })
+        } catch (error) { failures.push(error) }
       }
       if (failures.length > 0) throw new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
       children.clear()
@@ -165,12 +182,29 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       lifecycle = 'starting'
       try {
         if (config.internalPath !== undefined) await projectLocalChildConfigs(config.internalPath)
+        if (config.internalPath !== undefined) {
+          const internal = await readLocalInternalConfig(config.internalPath)
+          if (internal.launcher?.state === 'starting' && internal.launcher.startToken === startToken && internal.launcher.generation !== undefined) {
+            reservedLauncherGeneration = internal.launcher.generation
+            lifecycleGeneration = reservedLauncherGeneration
+          }
+        }
+        const childControlGeneration = options.launcherGeneration ?? reservedLauncherGeneration
+        const childEnv = { ...process.env, ...options.env }
+        if (config.internalPath !== undefined && childControlGeneration !== undefined) {
+          childEnv.TEAMS_LOCAL_INTERNAL_PATH = config.internalPath
+          childEnv.TEAMS_LOCAL_LAUNCHER_GENERATION = String(childControlGeneration)
+        } else {
+          delete childEnv.TEAMS_LOCAL_INTERNAL_PATH
+          delete childEnv.TEAMS_LOCAL_LAUNCHER_GENERATION
+        }
+        childEnv.TEAMS_LOCAL_START_TOKEN = startToken
         for (const spec of specs) {
           if (lifecycle !== 'starting') {
             if (lifecycle === 'failed') throw lastFailure ?? new Error('local daemon failed during startup')
             throw new Error('local daemon startup was cancelled')
           }
-          const child = spawnProcess(nodeExecutable, [...(options.nodeArguments ?? []), spec.entry, ...spec.args], { env: { ...process.env, ...options.env }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+          const child = spawnProcess(nodeExecutable, [...(options.nodeArguments ?? []), spec.entry, ...spec.args], { env: childEnv, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
           children.set(spec.id, child)
           const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
             if (lifecycle === 'stopping' || lifecycle === 'stopped') return
@@ -203,7 +237,24 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         for (const child of children.values()) {
           if (child.exitCode !== null || child.signalCode !== null) throw new Error('local daemon exited during startup')
         }
-        if (config.internalPath !== undefined) await writeLocalInternalState(config.internalPath, Object.fromEntries(states.entries()))
+        if (config.internalPath !== undefined) {
+          const internal = await readLocalInternalConfig(config.internalPath)
+          const expectedReservation = options.launcherGeneration ?? reservedLauncherGeneration
+          if (expectedReservation !== undefined) {
+            if (internal.launcher?.state !== 'starting' || internal.launcher.startToken !== startToken || internal.launcher.generation !== expectedReservation) {
+              throw new Error(`local supervisor start reservation was cancelled generation=${expectedReservation}`)
+            }
+            lifecycleGeneration = expectedReservation
+          } else if (internal.launcher?.state === 'starting' && (internal.launcher.pid === 0 || internal.launcher.pid === process.pid)) {
+            if (internal.launcher.startToken !== startToken) throw new Error('local supervisor start token does not match launcher reservation')
+            lifecycleGeneration = internal.launcher.generation
+          } else lifecycleGeneration += 1
+        } else lifecycleGeneration += 1
+        if (config.internalPath !== undefined) {
+          await writeLocalInternalState(config.internalPath, Object.fromEntries(states.entries()))
+          await writeLocalLauncherOwnership(config.internalPath, { version: 1, pid: process.pid, startToken })
+          await writeLocalInternalLauncherState(config.internalPath, { pid: process.pid, generation: lifecycleGeneration, startToken, state: 'running' })
+        }
         lifecycle = 'running'
       } catch (error) {
         try { await stop() } catch (cleanupError) { throw new AggregateError([error, cleanupError], 'local daemon startup and cleanup failed') }
@@ -213,5 +264,5 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
     return starting
   }
 
-  return { state: () => lifecycle, failure: () => lastFailure, processes: () => specs, start, stop }
+  return { state: () => lifecycle, failure: () => lastFailure, processes: () => specs, generation: () => lifecycleGeneration, start, stop }
 }
