@@ -46,7 +46,7 @@ docs/evidence/3742b9a-runtime-r6-20260914/validation-evidence.md
 ## Candidate fingerprint
 
 ```text
-source diff sha256: e9d24cedf92c9ce2b56871d1fe5d8304c82a1d82c5847aabafcdd927901d8a08
+source diff sha256: 2b2a0f84e208d5dac327bda40ae03f4f65aba147bc0c5c75c27c086486d87495
 The focused, socket-backed, typecheck/build, smoke, AppSDK, and `pnpm verify`
 receipts in `validation-evidence.md` were rerun after the source diff reached
 this fingerprint. Evidence documents are reviewed with this exact worktree;
@@ -74,6 +74,7 @@ Exact review history:
 - `20260914T030706Z-review-84505-vmm8ip`: FAIL, config reload dropped daemon startToken, and candidate scope/evidence records were inconsistent; fixed by retaining startToken through reload and binding the actual paths/467-test receipt, and requires a new exact review.
 - `20260914T031329Z-review-84505-l9u59u`: FAIL, the declared install/restart operations lacked exact installed-entrypoint evidence; the current candidate has now passed `pnpm smoke:installed` with the receipt recorded in `validation-evidence.md`, and requires a new exact review.
 - `20260914T034500Z-review-r6-runtime-install-replay`: PASS, Codex controller found no P0/P1 findings for the exact uncommitted candidate after the installed-entrypoint replay. Review evidence is retained under `.agent-collab/review/20260914T034500Z-review-r6-runtime-install-replay/`.
+- `20260914T035200Z-review-r6-commit-bound`: FAIL, a failed launcher could retain a live owned supervisor PID and start a duplicate supervisor. Fixed by validating and stopping the persisted supervisor before descendant recovery, with a regression in `runtime/local-process.spec.ts`; this candidate requires a new exact review.
 
 MCPX workspace discovery did not list this repository (`workspace not found: AgentTeams`);
 the project CLI and Git hooks were used once with the same commands and exact receipts,

@@ -70,11 +70,17 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     expect(first).toMatchObject({ state: 'running', generation: 1 })
     expect(await statusLocalProcess(path)).toMatchObject({ state: 'running', generation: 1 })
     await expect(stopLocalProcess(path, 99)).rejects.toMatchObject({ code: 'STALE_GENERATION' })
-    const stopped = await stopLocalProcess(path, first.generation)
-    expect(stopped).toMatchObject({ state: 'stopped', generation: 1 })
+    const firstInternal = await readLocalInternalConfig(first.internalPath)
+    const firstLauncher = firstInternal.launcher
+    expect(firstLauncher?.pid).toBeGreaterThan(0)
+    expect(firstLauncher?.startToken).toBeTypeOf('string')
+    await writeLocalInternalLauncherState(first.internalPath, {
+      pid: firstLauncher!.pid!, generation: first.generation, startToken: firstLauncher!.startToken!, state: 'failed', error: 'cleanup remains unconfirmed',
+    })
     const second = await startLocalProcess(path, { relayEntry: relay, agentEntry: agent, nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 3000 })
     expect(second).toMatchObject({ state: 'running', generation: 2 })
     expect(second.generation).toBeGreaterThan(first.generation)
+    expect(() => process.kill(firstLauncher!.pid!, 0)).toThrow()
     await stopLocalProcess(path, second.generation)
   } finally {
     try { await stopLocalProcess(path) } catch { /* cleanup is best effort for test-only paths */ }

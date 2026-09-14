@@ -160,6 +160,16 @@ async function waitForProcessExit(pid: number, deadlineMs: number): Promise<void
   throw new LocalProcessError('STALE_OWNER', `owned child pid=${pid} did not exit after SIGTERM`)
 }
 
+async function stopOwnedLauncher(configPath: string, launcher: LocalInternalLauncherConfig): Promise<void> {
+  const pid = launcher.pid
+  if (pid === undefined || pid <= 0 || !processAlive(pid)) return
+  if (!(await processOwnsStartToken(pid, launcher.startToken, configPath))) {
+    throw new LocalProcessError('STALE_OWNER', `local supervisor pid=${pid} does not match its persisted start token`)
+  }
+  process.kill(pid, 'SIGTERM')
+  await waitForProcessExit(pid, 2_000)
+}
+
 async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLocalInternalConfig>>): Promise<void> {
   const candidates: Array<{ readonly id: string; readonly pid: number; readonly configPath: string; readonly entryPath?: string; readonly startToken?: string }> = []
   const relay = internal.daemons?.relay
@@ -182,8 +192,9 @@ async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLoca
   }
 }
 
-async function recoverDeadLauncher(internalPath: string, internal: Awaited<ReturnType<typeof readLocalInternalConfig>>, launcher: LocalInternalLauncherConfig, state: 'stopped' | 'failed' = launcher.state === 'failed' ? 'failed' : 'stopped'): Promise<void> {
+async function recoverDeadLauncher(internalPath: string, configPath: string, internal: Awaited<ReturnType<typeof readLocalInternalConfig>>, launcher: LocalInternalLauncherConfig, state: 'stopped' | 'failed' = launcher.state === 'failed' ? 'failed' : 'stopped'): Promise<void> {
   try {
+    await stopOwnedLauncher(configPath, launcher)
     await stopOwnedDescendants(internal)
     const recoveredDaemons = Object.fromEntries(Object.entries(internal.daemons ?? {}).map(([id, daemon]) => [id, {
       pid: daemon.pid ?? 0,
@@ -294,7 +305,7 @@ export async function startLocalProcess(configPath = defaultLocalConfigPath(), o
       throw new LocalProcessError('ALREADY_RUNNING', `local supervisor is already running pid=${current.launcher.pid} generation=${current.launcher.generation}`)
     }
     if (current.launcher !== undefined && current.launcher.state !== 'stopped') {
-      await recoverDeadLauncher(config.internalPath!, current, current.launcher, 'stopped')
+      await recoverDeadLauncher(config.internalPath!, config.configPath, current, current.launcher, 'stopped')
     }
     const latest = await readLocalInternalConfig(config.internalPath!)
     const nextGeneration = (latest.launcher?.generation ?? 0) + 1
@@ -370,7 +381,7 @@ export async function stopLocalProcess(configPath = defaultLocalConfigPath(), ex
       throw new LocalProcessError('STALE_GENERATION', `stale local supervisor generation expected=${expectedGeneration} current=${launcher.generation}`)
     }
     if (launcher.pid === undefined || launcher.pid <= 0 || !processAlive(launcher.pid)) {
-      await recoverDeadLauncher(config.internalPath!, internal, launcher)
+      await recoverDeadLauncher(config.internalPath!, config.configPath, internal, launcher)
       return { configPath: config.configPath, internalPath: config.internalPath!, generation: launcher.generation, state: launcher.state === 'failed' ? 'failed' : 'stopped' as const, ...(launcher.error === undefined ? {} : { error: launcher.error }) }
     }
     if (!(await processOwnsStartToken(launcher.pid, launcher.startToken, config.configPath))) {

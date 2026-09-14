@@ -239,10 +239,41 @@ failure. That 465-test result predates the child start-token and startup-state
 changes; it is historical evidence only. The exact current candidate result is
 the 77-suite, 467-test receipt above.
 
-The current candidate also passed the focused runtime and configured-Work
+The pre-fix candidate passed the focused runtime and configured-Work
 regressions after the latest lifecycle changes, followed by `pnpm typecheck` and
 the full AppSDK verify chain. No commit, integration, push, deployment, or
 public/NAT claim is made by this receipt.
+
+## Commit-bound review remediation
+
+The commit-bound review `20260914T035200Z-review-r6-commit-bound` found that a
+persisted `failed` launcher could still have a live owned supervisor PID. The
+next `startLocalProcess` call recovered descendants and spawned a second
+supervisor without first proving that the old supervisor had exited. The fix
+adds exact supervisor command/start-token validation, signals the owned
+supervisor, waits for exit, and only then recovers descendants. The regression
+marks a live supervisor as failed, restarts, and asserts the old PID is gone.
+
+The post-fix source fingerprint for the mapped source/test paths is:
+
+```text
+2b2a0f84e208d5dac327bda40ae03f4f65aba147bc0c5c75c27c086486d87495
+```
+
+Post-fix verification:
+
+```sh
+pnpm exec vitest run runtime/local-process.spec.ts runtime/local-supervisor.spec.ts runtime/local-config.spec.ts --reporter=dot
+# 3 files, 26 tests passed
+pnpm exec vitest run runtime/local-two-agent.spec.ts runtime/agent-process.spec.ts runtime/local-relay-bridge.spec.ts --reporter=dot
+# 3 files, 8 tests passed
+pnpm typecheck
+# exit 0
+pnpm verify
+# exit 0; 77 suites, 467 tests passed
+pnpm smoke:installed
+# exit 0; isolated install, Relay/Agent startup, restart, local TOML launcher and signal shutdown
+```
 
 ## Current candidate install/restart/live-entry replay
 
