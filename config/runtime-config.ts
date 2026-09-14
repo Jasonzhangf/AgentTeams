@@ -567,7 +567,8 @@ export function createRuntimeConfigStore(
             state = observed
             return { status: 'failed', error: invalid.toJSON() }
           }
-          const observed = withObservation(state, { effectiveRevision: result.effectiveRevision })
+          const { lastApplyError: _clearedApplyError, ...observedWithoutError } = state
+          const observed = normalizeRuntimeConfig({ ...observedWithoutError, effectiveRevision: result.effectiveRevision })
           persistence.save(clone(observed))
           state = observed
           return result

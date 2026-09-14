@@ -222,6 +222,25 @@ describe('Teams config owner', () => {
     expect(restarted.readEffective()).toEqual({ acceptedRevision: state.acceptedRevision, effectiveRevision: state.acceptedRevision })
   })
 
+  it('clears a previous apply error after a later successful apply', async () => {
+    const persistence = new MemoryPersistence()
+    const store = createRuntimeConfigStore(persistence)
+    store.putProviderInstance(0, rcc)
+    store.putModelEntry(1, manualModel)
+    store.bindAgentModel(2, 'planner', { primary: manualModel.ref })
+
+    await expect(store.applyAcceptedConfig({
+      apply: async () => ({ status: 'failed', error: { code: 'UPSTREAM_ERROR' as const, message: 'temporary apply failure' } }),
+    })).resolves.toEqual({ status: 'failed', error: { code: 'UPSTREAM_ERROR', message: 'temporary apply failure' } })
+    expect(store.readEffective()).toMatchObject({ lastApplyError: { code: 'UPSTREAM_ERROR' } })
+
+    await expect(store.applyAcceptedConfig({
+      apply: async config => ({ status: 'applied', effectiveRevision: config.acceptedRevision }),
+    })).resolves.toEqual({ status: 'applied', effectiveRevision: store.read().acceptedRevision })
+    expect(store.readEffective()).toEqual({ acceptedRevision: store.read().acceptedRevision, effectiveRevision: store.read().acceptedRevision })
+    expect(createRuntimeConfigStore(persistence).readEffective()).toEqual(store.readEffective())
+  })
+
   it('protects provider removal while an Agent binding still references it', () => {
     const store = createRuntimeConfigStore(new MemoryPersistence())
     let state = store.putProviderInstance(0, rcc)
