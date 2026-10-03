@@ -1,0 +1,168 @@
+{
+  "id": "agentteams.version-delivery",
+  "version": "1",
+  "inputs": [
+    {
+      "id": "delivery.intent",
+      "schema": "Object"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "verify-source",
+      "operator": "teams.verify-affected-source",
+      "operator_version": "1",
+      "inputs": [
+        "delivery.intent"
+      ],
+      "output": {
+        "id": "source.verified",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "build-package",
+      "operator": "teams.build-user-package",
+      "operator_version": "1",
+      "inputs": [
+        "source.verified"
+      ],
+      "output": {
+        "id": "package.built",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "install-replay",
+      "operator": "teams.replay-installed-entry",
+      "operator_version": "1",
+      "inputs": [
+        "package.built"
+      ],
+      "output": {
+        "id": "entry.verified",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "review-candidate",
+      "operator": "teams.review-exact-candidate",
+      "operator_version": "1",
+      "inputs": [
+        "entry.verified"
+      ],
+      "output": {
+        "id": "candidate.reviewed",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "integrate-push",
+      "operator": "teams.integrate-and-confirm-remote",
+      "operator_version": "1",
+      "inputs": [
+        "candidate.reviewed"
+      ],
+      "output": {
+        "id": "remote.confirmed",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "cleanup-owned",
+      "operator": "teams.cleanup-owned-delivery",
+      "operator_version": "1",
+      "inputs": [
+        "remote.confirmed"
+      ],
+      "output": {
+        "id": "delivery.receipt",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    {
+      "from": "verify-source",
+      "to": "build-package",
+      "arc_id": "source.verified"
+    },
+    {
+      "from": "build-package",
+      "to": "install-replay",
+      "arc_id": "package.built"
+    },
+    {
+      "from": "install-replay",
+      "to": "review-candidate",
+      "arc_id": "entry.verified"
+    },
+    {
+      "from": "review-candidate",
+      "to": "integrate-push",
+      "arc_id": "candidate.reviewed"
+    },
+    {
+      "from": "integrate-push",
+      "to": "cleanup-owned",
+      "arc_id": "remote.confirmed"
+    }
+  ],
+  "outputs": [
+    "delivery.receipt"
+  ]
+}

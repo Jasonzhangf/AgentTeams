@@ -1,6 +1,8 @@
 # AgentTeams 用户可用本地 MVP 产品路径
 
-状态：ready-for-goal-input
+状态：历史 brief。2026-10-02 项目审计与新的本地用户交付顺序见
+[teams-user-delivery-plan.md](teams-user-delivery-plan.md)。下文历史 worktree/候选状态
+不代表当前执行状态；历史验收不证明新请求、统一用户配置、Console 和 Session 已交付。
 
 本文件是用户路径 brief，不是新的 goal、subscription 或 task graph。唯一的长程目标、派单
 顺序、owner、review、integration、push、memory 和 cleanup 真源仍是

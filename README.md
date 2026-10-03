@@ -25,9 +25,16 @@ Phase 1 先覆盖本地网络 bridge，Console 不充当必经业务中继。公
 
 ## 当前进度
 
-已有协议/目录/路由/channel 状态组件、OpenCode adapter 和直接访问 OpenCode HTTP
-API 的 Console 原型。独立 daemon、Agent-to-Agent transport 与公网 relay 尚未
-串成主线；provider 注册、模型目录刷新与配置应用仍待实现。
+2026-10-02 基于远端 `5496e1e` 的审计：本地 bridge、独立 daemon、目录/能力发布、
+Agent Work 资源账本、多 provider 配置和受管 OpenCode 已有实现与历史真实回放。
+当前用户入口仍需收口：`work` 读取启动任务回执，服务声明固定，Console 另需 JSON，
+provider/model 用户意图未统一到 TOML，daemon Session 入口尚未接通，用户包缺 Console 静态资源。
+因此当前状态是本地协作工程底座，尚未完成可交给普通用户的完整 MVP。
+
+下一步以 [项目行为审计](docs/design/teams-behavior-audit-20261002.md)、
+[行为 DAG 与状态机](docs/design/teams-behavior-model.md) 和
+[用户交付计划](docs/goals/teams-user-delivery-plan.md) 为当前入口。
+静态图位于 `docs/design/dagpipe/graphs/`；DAGpipe topology PASS 不代表运行时已经接入 SDK。
 
 迁移审计基线 `57c3dc4`：根配置的 57 个测试及 Console/OpenCode adapter 类型检查
 通过；根回归命令缺 package 入口，扩展测试存在旧路径和外部构建配置依赖。

@@ -1,0 +1,142 @@
+{
+  "id": "agentteams.console-observe",
+  "version": "1",
+  "inputs": [
+    {
+      "id": "console.intent",
+      "schema": "Object"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "authorize-console",
+      "operator": "teams.authorize-console-access",
+      "operator_version": "1",
+      "inputs": [
+        "console.intent"
+      ],
+      "output": {
+        "id": "console.authorized",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "discover-visible",
+      "operator": "teams.discover-visible-endpoints",
+      "operator_version": "1",
+      "inputs": [
+        "console.authorized"
+      ],
+      "output": {
+        "id": "directory.observed",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "read-agent-state",
+      "operator": "teams.read-authorized-agent-state",
+      "operator_version": "1",
+      "inputs": [
+        "directory.observed"
+      ],
+      "output": {
+        "id": "agents.observed",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "project-view",
+      "operator": "teams.project-console-view",
+      "operator_version": "1",
+      "inputs": [
+        "agents.observed"
+      ],
+      "output": {
+        "id": "view.projected",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "return-view",
+      "operator": "teams.return-console-view",
+      "operator_version": "1",
+      "inputs": [
+        "view.projected"
+      ],
+      "output": {
+        "id": "console.receipt",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    {
+      "from": "authorize-console",
+      "to": "discover-visible",
+      "arc_id": "console.authorized"
+    },
+    {
+      "from": "discover-visible",
+      "to": "read-agent-state",
+      "arc_id": "directory.observed"
+    },
+    {
+      "from": "read-agent-state",
+      "to": "project-view",
+      "arc_id": "agents.observed"
+    },
+    {
+      "from": "project-view",
+      "to": "return-view",
+      "arc_id": "view.projected"
+    }
+  ],
+  "outputs": [
+    "console.receipt"
+  ]
+}

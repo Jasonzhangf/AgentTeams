@@ -1,0 +1,142 @@
+{
+  "id": "agentteams.provider-config",
+  "version": "1",
+  "inputs": [
+    {
+      "id": "config.intent",
+      "schema": "Object"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "authorize-edit",
+      "operator": "teams.authorize-config-edit",
+      "operator_version": "1",
+      "inputs": [
+        "config.intent"
+      ],
+      "output": {
+        "id": "edit.authorized",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "accept-revision",
+      "operator": "teams.accept-config-revision",
+      "operator_version": "1",
+      "inputs": [
+        "edit.authorized"
+      ],
+      "output": {
+        "id": "revision.accepted",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "derive-substrate",
+      "operator": "teams.derive-opencode-config",
+      "operator_version": "1",
+      "inputs": [
+        "revision.accepted"
+      ],
+      "output": {
+        "id": "substrate.configured",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "apply-substrate",
+      "operator": "teams.apply-opencode-revision",
+      "operator_version": "1",
+      "inputs": [
+        "substrate.configured"
+      ],
+      "output": {
+        "id": "substrate.applied",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "confirm-effective",
+      "operator": "teams.confirm-effective-revision",
+      "operator_version": "1",
+      "inputs": [
+        "substrate.applied"
+      ],
+      "output": {
+        "id": "config.receipt",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    {
+      "from": "authorize-edit",
+      "to": "accept-revision",
+      "arc_id": "edit.authorized"
+    },
+    {
+      "from": "accept-revision",
+      "to": "derive-substrate",
+      "arc_id": "revision.accepted"
+    },
+    {
+      "from": "derive-substrate",
+      "to": "apply-substrate",
+      "arc_id": "substrate.configured"
+    },
+    {
+      "from": "apply-substrate",
+      "to": "confirm-effective",
+      "arc_id": "substrate.applied"
+    }
+  ],
+  "outputs": [
+    "config.receipt"
+  ]
+}

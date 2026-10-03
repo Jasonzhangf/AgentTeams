@@ -1,0 +1,168 @@
+{
+  "id": "agentteams.daemon-start",
+  "version": "1",
+  "inputs": [
+    {
+      "id": "start.intent",
+      "schema": "Object"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "compile-intent",
+      "operator": "teams.compile-local-intent",
+      "operator_version": "1",
+      "inputs": [
+        "start.intent"
+      ],
+      "output": {
+        "id": "config.resolved",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "claim-owner",
+      "operator": "teams.claim-daemon-owner",
+      "operator_version": "1",
+      "inputs": [
+        "config.resolved"
+      ],
+      "output": {
+        "id": "owner.claimed",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "start-bridge",
+      "operator": "teams.start-local-bridge",
+      "operator_version": "1",
+      "inputs": [
+        "owner.claimed"
+      ],
+      "output": {
+        "id": "bridge.ready",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "admit-daemons",
+      "operator": "teams.admit-local-daemons",
+      "operator_version": "1",
+      "inputs": [
+        "bridge.ready"
+      ],
+      "output": {
+        "id": "daemons.admitted",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "publish-services",
+      "operator": "teams.publish-enabled-services",
+      "operator_version": "1",
+      "inputs": [
+        "daemons.admitted"
+      ],
+      "output": {
+        "id": "services.published",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "observe-ready",
+      "operator": "teams.observe-local-ready",
+      "operator_version": "1",
+      "inputs": [
+        "services.published"
+      ],
+      "output": {
+        "id": "start.receipt",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    {
+      "from": "compile-intent",
+      "to": "claim-owner",
+      "arc_id": "config.resolved"
+    },
+    {
+      "from": "claim-owner",
+      "to": "start-bridge",
+      "arc_id": "owner.claimed"
+    },
+    {
+      "from": "start-bridge",
+      "to": "admit-daemons",
+      "arc_id": "bridge.ready"
+    },
+    {
+      "from": "admit-daemons",
+      "to": "publish-services",
+      "arc_id": "daemons.admitted"
+    },
+    {
+      "from": "publish-services",
+      "to": "observe-ready",
+      "arc_id": "services.published"
+    }
+  ],
+  "outputs": [
+    "start.receipt"
+  ]
+}

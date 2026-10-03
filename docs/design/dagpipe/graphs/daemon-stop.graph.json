@@ -1,0 +1,142 @@
+{
+  "id": "agentteams.daemon-stop",
+  "version": "1",
+  "inputs": [
+    {
+      "id": "stop.intent",
+      "schema": "Object"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "verify-owner",
+      "operator": "teams.verify-stop-owner",
+      "operator_version": "1",
+      "inputs": [
+        "stop.intent"
+      ],
+      "output": {
+        "id": "stop.authorized",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "drain-work",
+      "operator": "teams.drain-or-retain-work",
+      "operator_version": "1",
+      "inputs": [
+        "stop.authorized"
+      ],
+      "output": {
+        "id": "work.settled",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "stop-children",
+      "operator": "teams.stop-owned-children",
+      "operator_version": "1",
+      "inputs": [
+        "work.settled"
+      ],
+      "output": {
+        "id": "children.stopped",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "release-runtime",
+      "operator": "teams.release-owned-runtime",
+      "operator_version": "1",
+      "inputs": [
+        "children.stopped"
+      ],
+      "output": {
+        "id": "runtime.released",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "persist-stop",
+      "operator": "teams.persist-stop-receipt",
+      "operator_version": "1",
+      "inputs": [
+        "runtime.released"
+      ],
+      "output": {
+        "id": "stop.receipt",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    {
+      "from": "verify-owner",
+      "to": "drain-work",
+      "arc_id": "stop.authorized"
+    },
+    {
+      "from": "drain-work",
+      "to": "stop-children",
+      "arc_id": "work.settled"
+    },
+    {
+      "from": "stop-children",
+      "to": "release-runtime",
+      "arc_id": "children.stopped"
+    },
+    {
+      "from": "release-runtime",
+      "to": "persist-stop",
+      "arc_id": "runtime.released"
+    }
+  ],
+  "outputs": [
+    "stop.receipt"
+  ]
+}

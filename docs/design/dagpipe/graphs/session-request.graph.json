@@ -1,0 +1,142 @@
+{
+  "id": "agentteams.session-request",
+  "version": "1",
+  "inputs": [
+    {
+      "id": "session.intent",
+      "schema": "Object"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "authorize-session",
+      "operator": "teams.authorize-session-request",
+      "operator_version": "1",
+      "inputs": [
+        "session.intent"
+      ],
+      "output": {
+        "id": "session.authorized",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "resolve-runtime",
+      "operator": "teams.resolve-effective-runtime",
+      "operator_version": "1",
+      "inputs": [
+        "session.authorized"
+      ],
+      "output": {
+        "id": "runtime.resolved",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "dispatch-session",
+      "operator": "teams.dispatch-opencode-session",
+      "operator_version": "1",
+      "inputs": [
+        "runtime.resolved"
+      ],
+      "output": {
+        "id": "session.dispatched",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "observe-session",
+      "operator": "teams.observe-session-outcome",
+      "operator_version": "1",
+      "inputs": [
+        "session.dispatched"
+      ],
+      "output": {
+        "id": "session.outcome",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "return-session",
+      "operator": "teams.return-session-result",
+      "operator_version": "1",
+      "inputs": [
+        "session.outcome"
+      ],
+      "output": {
+        "id": "session.receipt",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    {
+      "from": "authorize-session",
+      "to": "resolve-runtime",
+      "arc_id": "session.authorized"
+    },
+    {
+      "from": "resolve-runtime",
+      "to": "dispatch-session",
+      "arc_id": "runtime.resolved"
+    },
+    {
+      "from": "dispatch-session",
+      "to": "observe-session",
+      "arc_id": "session.dispatched"
+    },
+    {
+      "from": "observe-session",
+      "to": "return-session",
+      "arc_id": "session.outcome"
+    }
+  ],
+  "outputs": [
+    "session.receipt"
+  ]
+}
