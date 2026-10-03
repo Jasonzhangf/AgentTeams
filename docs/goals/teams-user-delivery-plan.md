@@ -1,7 +1,7 @@
 # AgentTeams 本地用户 MVP 交付计划
 
-日期：2026-10-02。原审计源码基线：`5496e1e925e4bbe612d509488368003bd78880d6`；本次计划基线：`946c0734618e2ed8aa6da597b97848699fa3585c`。
-状态：审计、中文行为模型及七条静态 graph 已落盘；最终设计准入、SDK 接入和下列产品 delivery units 尚未完成。历史源码/网络证据不代表本次安装后的交付通过。
+日期：2026-10-03（UTC）。原审计源码基线：`5496e1e925e4bbe612d509488368003bd78880d6`；当前接手源码基线：`20051913b8145d176d50afdae563adb6737d2779`。
+状态：原审计、中文行为模型及七条静态 graph 已在主线。D1 的事件/ARC 契约、五节点 Work 修订和独立查询恢复图是待审候选；D2 已产生真实 SDK consumer 的八例通过报告，尚待 primary 复核与独立准入。最终设计准入、产品 SDK 接线和下列产品 delivery units 尚未完成。历史源码/网络证据不代表本次安装后的交付通过。
 本文件接替旧 G0/L1-L5 的本地产品任务排序；交付质量仍引用 `teams-long-running-delivery.md`、`development-governance.md` 和当前 AGENTS。不是新 goal/subscription。
 
 ## 唯一交付目标
@@ -30,14 +30,15 @@
 ## 行为改造与 delivery units
 
 D0 本次已建七个项目 graph：启动、Work、配置、观察、Session、停止、版本交付；只完成静态治理，未接 DAGpipe SDK runtime。
+当前 D1 候选增加 B8 独立 Work 查询图；B2 只负责提交与结果收尾，B8 只查询原请求。原审计七图是历史基线，不是限制后续必要补链的固定数量。
 后续每个 unit 从当时最新 origin/main 建外置独立 clean worktree `/Volumes/Intel/playground/agentteams/<unit>`；记录唯一 owner、base、allowed paths、验收、candidate tree。只有已确认可复现缺陷/需跨轮跟踪的内容进入 AppSDK bug，先查询去重，不预造 bug ID。
 
 ### 首先关闭的 gap
 
 | Gap | 已有事实与欠缺 | 关闭责任 |
 |---|---|---|
-| 模型还不能作为执行契约 | 七图静态校验通过；ARC 仍为宽泛 Object，缺完整触发事件、守卫、公开接口与异常收尾绑定；没有最终设计 review PASS | D1 + D2 |
-| DAGpipe 没有执行产品请求 | teams.*@1 尚未注册 Operator，没有 SDK compile、CompiledGraph、真实运行及结果消费证据 | D2 + D3/U4 |
+| 模型还不能作为执行契约 | 原七图静态校验通过；D1 补具体字段/事件/守卫/owner 和 B8 查询恢复。r1 review FAIL 的查询缺链与 gate 覆盖声明已进入修订；最终精确设计 PASS 尚缺 | D1 + D2 |
+| DAGpipe 没有执行产品请求 | D2 八例探针证明候选 Node 宿主可回调实际 Rust SDK；产品 teams.*@1 尚未注册，没有安装后的 SDK compile/run 与真实 Work 结果证据 | D2 + D3/U4 |
 | 安装对象不统一 | 用户 pack 缺 Console assets，治理 installed smoke 与用户安装包不是同一个对象 | U1 |
 | 用户配置有多处输入 | TOML 已有基础，bridge、Console 和 provider/model 仍依赖独立 JSON；accepted/effective 的持久化事务需定界 | U2 |
 | 服务声明与实际能力不一致 | CLI executor 固定声明 browser/file-search，缺失 browser CLI 仍可能广播；资源容量未统一由用户意图驱动 | U3 |
@@ -47,14 +48,25 @@ D0 本次已建七个项目 graph：启动、Work、配置、观察、Session、
 
 上述实现偏离以 [审计记录](../design/teams-behavior-audit-20261002.md) 为来源，属于源码审计结论；开始修复时先用当前公开入口确认，不把审计假设写成已经复现的 bug。
 
+### 当前接手状态与最近完成条件
+
+| 单元 | 当前事实 | 下一步与不能越过的边界 |
+|---|---|---|
+| D1 行为设计 | 独占候选树；r1 独立 review 两条 P1，AppSDK issue `ed0bada` open；提交五节点和查询四节点图待复验 | 定向 topology/maps/契约检查 → 新独立设计 review；FAIL 回作者修订，不以已启动 review 当 PASS |
+| D2 SDK 能力 | GCM worker 报告八例通过：A/B、Object 字段边界、缺 Operator/effects、host error/EOF；源码、结果和清理笔记在 D2 候选树 | Primary 核对报告/源码/SDK 身份与打包边界，再独立准入；该探针不关闭产品 BB11 |
+| U2 窄配置设计 | 独立 GCM worker 负责 TOML、持久化/CAS 与迁移设计；当前未取得完成回执 | 落设计 → 独立窄准入；尚不授权 parser/store 双写实现 |
+| U1–U7 产品交付 | 本轮没有已集成的产品改动，没有最终安装包黑盒通过 | D1/D2 准入后 U1 与 U2 实现并发；后续按依赖推进，逐单元 push/cleanup |
+
+当前三个任务树都基于上述源码基线；未交付候选应保留，不能为 main clean 删除其成果。实际 tree、review、integration、push 和 cleanup 身份在每个单元的独占 run notes/receipts 中维护，不由本表代替。主线代码未因本轮设计改动发生行为变化。
+
 ### 建模与 DAGpipe 改造责任
 
 | Unit | 产物、边界与 owner | 完成 iff / 验证 |
 |---|---|---|
-| D1 行为契约补链 | Primary 维护现有 behavior-model、七个 graph 和受影响 architecture maps；逐对象写事件表：生产者、消费者、关联身份、前置状态/守卫、状态变化、公开结果、失败/取消/unknown 与收尾责任。不得按私有函数切节点 | 每条图单源单汇；具体 typed ARC 的数据形状、业务结果与控制资源隔离、Operator effects/replay 约束、输入输出与真实公开接口一一对应；改变的图通过 dagpipe graph validate/inspect |
+| D1 行为契约补链 | Primary 维护现有 behavior-model、graph 与受影响 architecture maps；逐对象写事件表：生产者、消费者、关联身份、前置状态/守卫、状态变化、公开结果、失败/取消/unknown 与收尾责任。B2 提交和 B8 原请求查询分开，不重放业务。不得按私有函数切节点 | 每条图单源单汇；具体 typed ARC 的数据形状、业务结果与控制资源隔离、Operator effects/replay 约束、输入输出与真实公开接口一一对应；改变的图通过 dagpipe graph validate/inspect；gate 声明与实际覆盖一致 |
 | D2 SDK 接入能力与设计准入 | Primary 核实 dagpipe sdk path、SDK 版本/API、Node/TS 宿主到 SDK 的最小支持边界及打包方式；在独立实验树用实际 consumer 验证，不修改产品。当前已知安装的是 Rust SDK，不假设存在 TS SDK | 留下可编译/运行的真实 SDK 接入探针和失败路径证据；选定项目自有接入目录及 allowed paths 后，由独立 reviewer 对 D1/D2 精确设计给 PASS，再编码。缺工具链/宿主支持则列具体 blocker、owner、解除动作；静态校验不替代此门禁 |
 | D3/U4 可执行 Work 主线 | 同一个有边界的实现单元同时完成按需 Work 和 DAGpipe 执行接线；project-owned Operators 调用现有 network/Agent 公开接口；依 D2 确认后新增唯一 runtime adapter，禁止新建第二个 daemon、资源账本或调度器 | 用户安装入口真正走 registered Operators → SDK compile → immutable CompiledGraph → Runtime → 用户消费结果；绑定 graph/registry/contracts/effects/SDK/产物身份。BB04–BB07、BB11 通过；独立 demo 或 journal 单独不能关闭 |
-| D4/U7 覆盖与可重入交付 | 同一个生命周期单元复用现有 stage store；将其他六图逐条标为 executable 或 static-governed，并附当前契约依据、owner、入口和验收边界；不要声称全部已经 SDK 化 | Work 的 executable 路径必须成立；其他对象图与实际接线一致、分类明确。无必要的整体重写；图/registry/contracts/effects/SDK/产物改变使受影响节点及后继失效；BB12–BB14 和最终安装回放通过 |
+| D4/U7 覆盖与可重入交付 | 同一个生命周期单元复用现有 stage store；B2 提交与 B8 查询均须 executable；其余启动/配置/观察/Session/停止/交付六图逐条标为 executable 或 static-governed，并附当前契约依据、owner、入口和验收边界；不要声称全部已经 SDK 化 | 两条 Work 的 executable 路径必须成立；其他对象图与实际接线一致、分类明确。无必要的整体重写；图/registry/contracts/effects/SDK/产物改变使受影响节点及后继失效；BB12–BB14 和最终安装回放通过 |
 
 D1/D2 是编码前的设计与能力准入。只读检查及隔离 SDK 探针可用于关闭未知能力，不允许先写产品实现再倒补设计。D3 与 U4、D4 与 U7 各为同一交付责任，不能派给两个 worker 重复实现。
 
@@ -139,14 +151,14 @@ pnpm exec vitest run --no-file-parallelism --configLoader runner <该 unit 对�
 | BB01 / U1 / B1,B4,B6 | 源码树外安装 pack；init，启动、查询、打开 Console 后停止 | 路径来自安装包；CLI/runtime/UI assets 齐备，无开发目录依赖；退出后本轮进程/listener 不残留；缺必需依赖显式失败 |
 | BB02 / U2 / B1,B3 | 只编辑 config.toml，声明 bridge、provider、receiver；start/status | 不需用户编辑其他配置；两个独立 daemon PID，经真实 local socket 注册、广播、发现、协商连接；internal.toml 为派生运行配置 |
 | BB03 / U3 / B1,B2 | 禁用 browser 或指向不存在 CLI，再启用可执行 browser；查询目录并提出 browser Work | 禁用/缺失能力不宣告可用、不可匹配且拒绝无执行副作用；启用后实际创建/销毁自己的 browser context，file-search 返回真实文件匹配 |
-| BB04 / D3/U4 / B2 | 创建含不同标记的自有文件；公开 work 提交 query A，再 query B；显式查询原请求 | A/B 使用新 Work/request ID，并分别返回对应真实搜索结果；查询原 ID 返回原回执且不重复执行，不读 startup receipt 冒充新结果 |
+| BB04 / D3/U4 / B2,B8 | 创建含不同标记的自有文件；公开 work 提交 query A，再 query B；显式查询原请求 | A/B 使用新 Work/request ID，并分别返回对应真实搜索结果；B8 查询使用新 execution/attempt，原 Work/request ID 返回原回执且不重复执行，不读 startup receipt 冒充新结果 |
 | BB05 / U3,U4 / B2 | 未授权 consumer/manager、未声明 operation、旧 generation、错误 target 发请求 | 每项明确拒绝，真实服务无新增执行/资源副作用；拒绝不表现为空结果或成功；合法请求仍成功 |
 | BB06 / U3 / B2 | 两 receiver 向同 provider 使用真实 browser Work；保持可见活动 context，达到配置容量再发额外请求，关闭后再请求 | 一对多真实成立；超容量明确拒绝且不多建 context；确认释放后可再接纳；通过公开状态及实际 context 观察，不用 mock 账本 |
-| BB07 / D3/U4 / B2,B6 | 实际请求执行中断开本轮 socket 或停止自有 provider；查询结果，再恢复/停止 | failed 或 unknown 与事实一致；unknown 不自动重发/假释放；外部资源保留明确 owner、状态和恢复动作；确认销毁后有最终回执 |
+| BB07 / D3/U4 / B2,B8,B6 | 实际请求执行中断开本轮 socket 或停止自有 provider；经新授权查询连接观察原请求，再恢复/停止 | failed 或 unknown 与事实一致；B8 get 不调用 propose/request，不增加业务执行；unknown 不自动重发/假释放；外部资源保留明确 owner、状态和恢复动作；确认销毁后有最终回执 |
 | BB08 / U2,U4 / B1,B3,B6 | 应用服务/provider/model 配置；stop/start；用旧与新 generation 发 Work | 用户意图及 accepted/effective 区分持久；新代次有效、旧代次拒绝；旧资源责任不能因重启消失；无第二份 editable JSON |
 | BB09 / U5 / B4,B2 | 用真实 Camo 浏览器打开安装后的 Console，发现/config/观察；验证入口 auth/origin 拒绝；关闭 Console，再发新 Work | 展示两个真实 daemon 及权威服务/资源；配置进入同一 owner；未经授权不能管理；Console 离线后新的 Agent Work 仍成功 |
 | BB10 / U2,U6 / B3,B5 | 当前 RCC provider 显式模型请求；catalog 空时仍选明确模型；显式切换 backup 后再请求；制造配置冲突/无效凭据 | 两个 provider 分别有真实成功调用；accepted/effective readback 明确；空 catalog 不阻止显式模型；CAS/鉴权失败明确，无自动 failover。地址和凭据只从当时真源读取 |
-| BB11 / D3/U4 / B2 | 用安装 CLI 发真实 Work，再以未注册 Operator、ARC 契约错误或缺 effects 的隔离候选执行 compile | 正常用户结果关联精确 graph、SDK、registry、CompiledGraph 和 journal；compile 缺契约/effects 时显式失败且没有业务副作用；不能只跑独立 SDK demo |
+| BB11 / D3/U4 / B2,B8 | 用安装 CLI 发真实 Work 并查询原请求，再以未注册 Operator、ARC 契约错误或缺 effects 的隔离候选执行 compile | 提交与查询分别关联精确 graph、SDK、registry、CompiledGraph 和 journal；query 无新增业务执行；compile 缺契约/effects 时显式失败且没有业务副作用；Object 字段约束由 typed boundary 验证，不冒充 SDK Record schema；不能只跑独立 SDK demo |
 | BB12 / U6 / B5 | Console→Agent→OpenCode 发消息和真实工具请求；分别批准/拒绝真实 permission；取消活动请求；对 passive Agent 发 Session | 消息及 tool ID/arguments/result 意义完整；批准产生期望副作用，拒绝无该副作用；cancel 有基座最终确认；被动 Agent 明确不支持。模型随机文本不作为固定断言 |
 | BB13 / D4/U7 / B7 | 使一个 stage 确定失败，恢复后重入；再分别改源、图/registry、配置、产物或删除必需证据 | 相同有效输入的已完成阶段不重复执行；只重跑首失效节点及依赖后继；变化不能错误复用 PASS；每次 reuse/invalidate 有已有 store receipt |
 | BB14 / U1,U7 / B1,B6,B7 | 制造本轮启动失败；完成 stop 及交付 cleanup；检查自有 children、端口、临时安装和 worktree | 不停止其他 owner 的进程；本轮资源移除且证据保留；dirty 或保留责任资源明确列 owner/路径/解除动作，未核销不得 complete |

@@ -1,0 +1,33 @@
+{
+  "id": "agentteams.work-query",
+  "version": "1",
+  "inputs": [{ "id": "work.query.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "resolve-service", "operator": "teams.resolve-peer-service", "operator_version": "1",
+      "inputs": ["work.query.intent"], "output": { "id": "service.resolved", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "open-link", "operator": "teams.open-work-link", "operator_version": "1",
+      "inputs": ["service.resolved"], "output": { "id": "link.verified", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "query-request", "operator": "teams.query-provider-request", "operator_version": "1",
+      "inputs": ["link.verified"], "output": { "id": "request.observed", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "return-observation", "operator": "teams.return-work-observation", "operator_version": "1",
+      "inputs": ["request.observed"], "output": { "id": "work.observation.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "resolve-service", "to": "open-link", "arc_id": "service.resolved" },
+    { "from": "open-link", "to": "query-request", "arc_id": "link.verified" },
+    { "from": "query-request", "to": "return-observation", "arc_id": "request.observed" }
+  ],
+  "outputs": ["work.observation.receipt"]
+}

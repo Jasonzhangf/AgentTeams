@@ -115,6 +115,8 @@
       "module_id": "runtime",
       "owner": "runtime",
       "status": "partial",
+      "design_doc": "docs/design/teams-behavior-contracts.md",
+      "note": "Work DAGpipe SDK host adapter and launcher local Work ingress are design-only runtime scope. Provider ledger and admission remain Agent-owned; no second daemon or scheduler. Product symbols, install and blackbox evidence are pending.",
       "owned_paths": [
         "runtime/**"
       ],

@@ -1,194 +1,39 @@
 {
   "id": "agentteams.agent-work",
-  "version": "1",
-  "inputs": [
-    {
-      "id": "work.intent",
-      "schema": "Object"
-    }
-  ],
+  "version": "2",
+  "inputs": [{ "id": "work.intent", "schema": "Object" }],
   "nodes": [
     {
-      "id": "resolve-service",
-      "operator": "teams.resolve-peer-service",
-      "operator_version": "1",
-      "inputs": [
-        "work.intent"
-      ],
-      "output": {
-        "id": "service.resolved",
-        "schema": "Object"
-      },
-      "input_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "output_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "iterator": "Whole"
+      "id": "resolve-service", "operator": "teams.resolve-peer-service", "operator_version": "1",
+      "inputs": ["work.intent"], "output": { "id": "service.resolved", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
     },
     {
-      "id": "open-link",
-      "operator": "teams.open-work-link",
-      "operator_version": "1",
-      "inputs": [
-        "service.resolved"
-      ],
-      "output": {
-        "id": "link.verified",
-        "schema": "Object"
-      },
-      "input_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "output_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "iterator": "Whole"
+      "id": "open-link", "operator": "teams.open-work-link", "operator_version": "1",
+      "inputs": ["service.resolved"], "output": { "id": "link.verified", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
     },
     {
-      "id": "admit-work",
-      "operator": "teams.admit-provider-work",
-      "operator_version": "1",
-      "inputs": [
-        "link.verified"
-      ],
-      "output": {
-        "id": "work.admitted",
-        "schema": "Object"
-      },
-      "input_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "output_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "iterator": "Whole"
+      "id": "admit-work", "operator": "teams.admit-provider-work", "operator_version": "1",
+      "inputs": ["link.verified"], "output": { "id": "work.admitted", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
     },
     {
-      "id": "allocate-request",
-      "operator": "teams.allocate-provider-resources",
-      "operator_version": "1",
-      "inputs": [
-        "work.admitted"
-      ],
-      "output": {
-        "id": "request.allocated",
-        "schema": "Object"
-      },
-      "input_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "output_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "iterator": "Whole"
+      "id": "request-work", "operator": "teams.request-provider-work", "operator_version": "1",
+      "inputs": ["work.admitted"], "output": { "id": "execution.outcome", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
     },
     {
-      "id": "execute-service",
-      "operator": "teams.execute-service",
-      "operator_version": "1",
-      "inputs": [
-        "request.allocated"
-      ],
-      "output": {
-        "id": "execution.outcome",
-        "schema": "Object"
-      },
-      "input_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "output_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "iterator": "Whole"
-    },
-    {
-      "id": "record-result",
-      "operator": "teams.record-provider-result",
-      "operator_version": "1",
-      "inputs": [
-        "execution.outcome"
-      ],
-      "output": {
-        "id": "result.recorded",
-        "schema": "Object"
-      },
-      "input_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "output_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "iterator": "Whole"
-    },
-    {
-      "id": "close-work",
-      "operator": "teams.close-confirmed-work",
-      "operator_version": "1",
-      "inputs": [
-        "result.recorded"
-      ],
-      "output": {
-        "id": "work.receipt",
-        "schema": "Object"
-      },
-      "input_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "output_selector": {
-        "include": [],
-        "exclude": []
-      },
-      "iterator": "Whole"
+      "id": "settle-work", "operator": "teams.settle-provider-work", "operator_version": "1",
+      "inputs": ["execution.outcome"], "output": { "id": "work.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
     }
   ],
   "edges": [
-    {
-      "from": "resolve-service",
-      "to": "open-link",
-      "arc_id": "service.resolved"
-    },
-    {
-      "from": "open-link",
-      "to": "admit-work",
-      "arc_id": "link.verified"
-    },
-    {
-      "from": "admit-work",
-      "to": "allocate-request",
-      "arc_id": "work.admitted"
-    },
-    {
-      "from": "allocate-request",
-      "to": "execute-service",
-      "arc_id": "request.allocated"
-    },
-    {
-      "from": "execute-service",
-      "to": "record-result",
-      "arc_id": "execution.outcome"
-    },
-    {
-      "from": "record-result",
-      "to": "close-work",
-      "arc_id": "result.recorded"
-    }
+    { "from": "resolve-service", "to": "open-link", "arc_id": "service.resolved" },
+    { "from": "open-link", "to": "admit-work", "arc_id": "link.verified" },
+    { "from": "admit-work", "to": "request-work", "arc_id": "work.admitted" },
+    { "from": "request-work", "to": "settle-work", "arc_id": "execution.outcome" }
   ],
-  "outputs": [
-    "work.receipt"
-  ]
+  "outputs": ["work.receipt"]
 }

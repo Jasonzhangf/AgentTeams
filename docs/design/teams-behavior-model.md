@@ -3,6 +3,7 @@
 本模型定义本地用户 MVP 的目标行为。审计基线与实现偏离见 [现状审计](teams-behavior-audit-20261002.md)。
 graph JSON 是拓扑真源；以下中文图解释业务语义，映射表用于连接现有 owner，不是第二个执行图。
 所有 `teams.*@1` 是项目设计 binding，**尚未注册为 DAGpipe SDK Operator**。目前实现由 TS 模块承担；缺失边明确标为待实现。
+事件、具体 ARC、公开边界、宿主接入及执行分类见 [行为契约](teams-behavior-contracts.md)。SDK 的 Object 不证明字段契约已校验。
 
 ## 角色、对象与边界
 
@@ -16,7 +17,7 @@ graph JSON 是拓扑真源；以下中文图解释业务语义，映射表用于
 每次 graph 执行绑定 project/graph/version/execution/attempt；进程启动另绑定 owner token 和 generation。图无跨节点回边；生命周期可以产生下一次执行。
 调用方选择重试必须遵守该对象语义：观察可重新查询，配置需重新读取 revision，未确认业务执行不得自动重放。
 
-## 七条行为图
+## 行为图
 
 ### B1 一次启动
 
@@ -43,16 +44,15 @@ flowchart LR
 flowchart LR
   A[查询目标的服务声明] --> B[验证目标并建立通信]
   B --> C[由能力方接纳本次协作]
-  C --> D[由能力方分配请求资源]
-  D --> E[执行所请求服务]
-  E --> F[记录并交付真实执行结果]
-  F --> G[关闭已确认协作并回报资源状态]
+  C --> D[由能力方接纳请求并执行及确认结果]
+  D --> E[关闭已确认协作或保留未知责任并返回结果]
 ```
 
 每次用户发起使用新 Work/request identity；相同幂等标识可查询原回执，但必须明确“已执行结果”。禁止把旧成功当新执行。
 能力方决定容量与政策，provider/receiver 均允许一对多。超过容量、无权限、旧 generation、未声明 operation 均返回明确拒绝。
 业务结果来自执行 payload；控制状态、route、generation、权限和执行诊断放 typed control/error chain，绝不镜像进业务 metadata。
 资源结束条件：request allocation 经确认执行结束才释放；Work context 经 destroy 确认才释放。unknown 进入保留状态，不能沿成功 close 边假释放。
+B2 v2 的 request 节点使用真实公开 request 契约，allocation/executor/record 留在 provider 内部；不假设存在三个可独立调度的远端 API。异常收尾由持有 typed ownership/dispatch facts 的宿主执行，不能从 journal 重建控制真相。
 
 ### B3 一次配置应用
 
@@ -135,6 +135,19 @@ flowchart LR
 用户安装包、runtime hash、安装入口及真实效果必须绑定精确候选。包内用户入口与治理安装 smoke 要验同一个对象。
 代码未变不重跑全量。复用 `scripts/lifecycle-adapter.mjs` 的 stage state/fingerprint/receipt；目前其粗粒度 pnpm-verify/installed stage 不等于所有功能已有 fine-grained reuse。
 失败进入项目既有阶段 blocked/invalidated；从首个失效节点重入，远端/PID/runtime 等可变边界刷新。候选改变使依赖图中受影响下游失效，不按会话重启失效。
+
+### B8 一次 Work 查询或恢复观察
+
+文件：`dagpipe/graphs/work-query.graph.json`。输入 work.query.intent，输出 work.observation.receipt。
+
+```mermaid
+flowchart LR
+  A[查询原能力方声明] --> B[建立受权查询通信]
+  B --> C[向能力方查询原请求结果]
+  C --> D[返回原结果或未确认责任]
+```
+
+查询创建新的图执行身份，保留原 Work/request 身份；不重新 propose/request。连接收尾由宿主负责；query 成功不代表外部资源已销毁。后续显式清理走新的生命周期动作，unknown 返回保留责任和解除条件。BB04、BB07 验证查询不产生新业务执行。
 
 ## 状态机与异常终点
 
@@ -242,9 +255,10 @@ stateDiagram-v2
 | B1 发布服务 | publish-enabled-services | agent-host：cli-executor.ts，runtime/capability-publication.ts 投影 | 固定声明须改为 enabled 服务 |
 | B1 回报就绪 | observe-local-ready | runtime：local-supervisor.ts/local-process.ts | 已有 |
 | B2 查询声明；建立通信 | resolve-peer-service；open-work-link | network：relay-client.ts/work-channel.ts，runtime/agent-work-client.ts 消费 | 已有；CLI 新任务入口缺 |
-| B2 接纳协作；分配资源 | admit-provider-work；allocate-provider-resources | agent：work-resource.ts，agent-host/work-host.ts 入口 | 已有账本语义，禁止 CLI 复制 |
-| B2 执行服务 | execute-service | agent-host：cli-executor.ts，cli-adapter/ | 已有；真实 enabled service 配置缺 |
-| B2 记录结果；确认关闭 | record-provider-result；close-confirmed-work | agent：work-resource.ts，agent-host/work-host.ts 执行桥接 | 已有；用户 payload 回执待暴露 |
+| B2 接纳协作 | admit-provider-work | agent：work-resource.ts，agent-host/work-host.ts 的 propose 公开入口 | 已有账本语义，禁止 CLI 复制 |
+| B2 接纳请求并执行及确认结果 | request-provider-work | agent-host：work-host.ts 的 request 公开入口，内部使用唯一 ledger/executor | 已有公开契约；真实 enabled service 和 SDK 宿主接线缺 |
+| B2 确认关闭或保留并返回结果 | settle-provider-work | runtime：agent-work-client.ts 的 close/dispose；资源销毁仍由 provider 决定 | 用户 payload 回执待暴露；unknown 不 close 假释放 |
+| B8 查询原请求；返回观察 | query-provider-request；return-work-observation | agent-work-client.ts 的 get → provider WorkHost.get，runtime projection | SDK 查询图未接；观察不重放、不更改资源状态；finally 释放查询连接 |
 | B3 允许修改 | authorize-config-edit | agent-host：console-ingress.ts | 已有 |
 | B3 接受意图 | accept-config-revision | config：runtime-config.ts，runtime/console-config.ts | JSON durable store 已有；TOML 用户源待接 |
 | B3 推导配置 | derive-opencode-config | opencode-adapter：src/index.ts、src/managed-config.ts | 已有，派生输出非 editable |
@@ -270,8 +284,8 @@ CLI schema 仅使用 `Object`，不会校验下列字段。运行接入前必须
 | start.intent→config.resolved→owner.claimed | config revision、endpoint/service intent、resolved references；pid/token/generation 控制资源 | 新 HOME 配置编译；invalid intent 不启动子进程 |
 | bridge.ready→daemons.admitted→services.published→start.receipt | admission identity、directory generation、enabled declarations、真实 PID readiness | 两 daemon socket discovery；未启用 browser 不可匹配 |
 | work.intent→service.resolved→link.verified | 显式 target/capability/version/operation，独立 business payload，link/generation control | target mismatch、旧代次明确拒绝 |
-| work.admitted→request.allocated | provider policy revision、work/request id、allocation reference | 一对多与超过容量拒绝，不能超卖 |
-| execution.outcome→result.recorded→work.receipt | succeeded/failed/unknown、原业务结果、typed error、资源 confirmed/released/retained | 两次新操作结果不同；unknown 不重放、不假释放 |
+| work.admitted→execution.outcome | provider policy revision、work/request id、原 WorkReply；allocation/execute/record 是 provider 内部职责 | 一对多与超过容量拒绝，不能超卖 |
+| execution.outcome→work.receipt | succeeded/failed/unknown、原业务结果、typed error、资源 confirmed/released/retained | 两次新操作结果不同；unknown 不重放、不假释放 |
 | config.intent→edit.authorized→revision.accepted | expected revision、用户 provider/model、授权主体、durable revision | CAS 冲突、凭据缺失、重启持久化 |
 | substrate.configured→substrate.applied→config.receipt | 派生配置 hash、实际 runtime readback、accepted/effective/error | RCC/显式备用独立请求，无自动 fallback |
 | console.intent→console.authorized→directory.observed→agents.observed→view.projected→console.receipt | auth/origin 事实、可见目录 generation、Agent state 与错误、只读 projection | 真浏览器目录发现，越权失败；Console-offline Work |
