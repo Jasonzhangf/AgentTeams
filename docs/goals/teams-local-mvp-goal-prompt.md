@@ -18,6 +18,7 @@ Console 是可选观察/配置/Session 面，关闭后新的 Agent Work 仍成�
 - docs/goals/teams-user-delivery-plan.md（当前任务顺序、范围与黑盒验收真源）
 - docs/design/teams-behavior-model.md
 - docs/design/teams-behavior-contracts.md（已准入 D1 精确事件/ARC/公开接口契约）
+- docs/design/teams-package-delivery.md（已交付 U1 窄安装设计）
 - docs/design/dagpipe/graphs/（项目 graph 拓扑真源）
 - docs/design/teams-behavior-audit-20261002.md（审计偏离，启动时确认当前实现）
 - docs/goals/teams-long-running-delivery.md（适用交付与阶段记忆约束）
@@ -30,15 +31,20 @@ coding-principals 和项目适用技能。需要实现 worker 时新建 codex ex
 实现者和 reviewer 必须不同；不使用 AGY；milestone 使用 Codex Review oauth + gpt-6.1-sol。
 
 启动：读取现有任务笔记/issue/receipts，核对实际 main、origin/main、worktrees、worker 和自有进程。
-计划更新输入为 main/origin/main 8d143ae。D1 94b4633 和 D2 35ca32b 已独立 PASS、推送、清理，
+计划更新输入为 main/origin/main 6526667c。D1 94b4633 和 D2 35ca32b 已独立 PASS、推送、清理，
 阶段记忆分别在 1b492fb/78fa8bc。读取 receipts 后复用，不重开已关闭的 ed0bada/8981687。
-从首个尚未完成或失效节点接手：U1 设计 r5-main 已 completed/pass，精确 tree 77b37da1；
-交付设计并清理，继续已有 746dd7b 基础 package worker，基础包不等于完整 U1。
-U2 设计 r1 working，精确 staged tree 87c4e4eb，冻结到正式裁决；PASS 后交付并派产品实现。
-4b6c377 D3/U4 独立 r2 worker 接手 runtime/dagpipe，旧 writer 已停，旧 exit0/5例绿不作完成。
-U6 r1 FAIL 六条 P1，83a8bd1 open，需先派窄设计修订，再独立审新候选。
-U7 诊断 exit0，未达故障注入；852c3ac prerequisite open，canonical pin-lock 返回
-INVALID_SDK_MIGRATION_RECORD，upstream a7cc2a4 open。前置阻塞不等于重入缺陷已复现。
+从首个尚未完成或失效节点接手：U1 设计 r6-main PASS 已在 6526667c 推送，精确 tree 1eb7afa2，
+审查归档、设计树/branch 已回收；阶段 memory 待 primary 收口。746dd7b 基础 package
+只证 assets/auth 和 CLI init/status/stop，须完成实际 daemon start/restart 或显式 fail-closed，
+不能让基础 smoke 生成 restart evidence；继续同一 owner，不重复 writer。
+U2 776fcad 的 r1 FAIL 三项 P1，r4 已派独占修订；U6 83a8bd1 的 r1 FAIL 六项 P1，
+r2 已派独占修订。两者新设计 PASS 后才产品实现，不按旧状态重新派作者。
+4b6c377 D3/U4 r3 turn.completed，作者报告 10/10、build/typecheck/图验证通过及三旧失败文件
+串行通过；核实包装终态、exact evidence 和 scope。全量并发因果未证，安装 BB11 未完成，
+AppSDK 准入仍阻塞。U7 两个实验树已归档回收，不再接管这些旧路径。
+852c3ac prerequisite open，canonical pin-lock 返回 INVALID_SDK_MIGRATION_RECORD；
+upstream a7cc2a4 在独立 AppSDK 树只读诊断/设计中，先独立设计审再修。
+前置阻塞不等于重入缺陷已复现；禁止用旧 binary 或伪造锁/历史 receipt 解门禁。
 精确候选与状态见交付计划及各单元 notes/receipts，启动时刷新。
 核对实际 worker/终态再收口，不重复 writer，不删除未交付候选。
 八图静态与 SDK 探针能力已证实；尚无安装后的产品 SDK Work 执行证明。
@@ -53,10 +59,15 @@ INVALID_SDK_MIGRATION_RECORD，upstream a7cc2a4 open。前置阻塞不等于重�
    U2 必须区分 machine source revision 与每 daemon durable accepted/effective；catalog 刷新不
    推进用户意图 revision。固定 async persistence/CAS/锁与显式迁移，不批准全机 accepted 替代
    daemon accepted，不宣称已有双文件原子保证。新接缝先窄设计 PASS 再实现。
-3. 交付 U1 已审设计，消费 U2 独立裁决；U6 修订固定模型意图归 U2，禁止 Session 第二配置源；
+3. 复用已交付 U1 设计，修基础安装行为/证据；消费 U2/U6 已派修订并独立审新设计。
+   U2 先持久化 pending migration 再替换 config，固定恢复顺序；锁只覆盖 capture/reconcile，
+   外部 provider/OpenCode 操作不持锁；uncertain 有 typed projection 与 startup/reconcile owner。
+   U6 修订固定模型意图归 U2，禁止 Session 第二配置源；
    Console JsonValue 保真，adapter 显式验证映射；事件必填身份/结果，cancel 保留基座接纳和最终
    unknown，明确失败不能永久污染 ManagedConfigOwner，readiness 由 owner 观察。新设计独立 PASS
-   后再实施产品。既有 U1 package、D3/U4 实现与独立设计/SDK前置调查可并行，不重复 writer。
+   后再实施产品。每份新接缝交付角色/事件、中文 SESE 与状态图、typed ARC/错误、公开接口及
+   Operator/owner/effects、成功/失败/unknown/取消/恢复/清理证据和精确黑盒命令。
+   既有 U1 package、D3/U4 实现与独立设计/SDK前置调查可并行，不重复 writer。
    现有 D3/U4 同一 owner 先做
    已准入 SDK/公开 Work 范围，修 typed stdio 控制/业务分离与当前失败路径，重验精确候选。
    U1/U2 准入后派独占产品实现，配置接缝冻结后推进 U3 与 D3/U4 CLI/receiver 接线。
@@ -71,7 +82,7 @@ INVALID_SDK_MIGRATION_RECORD，upstream a7cc2a4 open。前置阻塞不等于重�
    实现黑盒 driver 与 BB01–BB14；同包最终验收含端口隔离、runner identity 拒绝和无副作用证明。
    U7 先以官方非破坏 pin/migration 修复 prerequisite，保留历史 evidence；不复制旧 binary、手写
    digest/receipt 或削弱 gate。upstream 根因仍待真实正反证据；前置恢复后同入口验证后阶段失败
-   和恢复，不用静态推断冒充已复现。归档并回收已终态诊断与零改动 pin 实验，保留未交付候选。
+   和恢复，不用静态推断冒充已复现。已回收诊断不重建，保留未交付候选；按当前归属清理资源。
 
 每个实现单元：从当时最新 origin/main 建独占 clean worktree，位于
 /Volumes/Intel/playground/agentteams/<unit>，唯一 codex/ branch、owner、allowed/forbidden paths、
@@ -79,6 +90,8 @@ INVALID_SDK_MIGRATION_RECORD，upstream a7cc2a4 open。前置阻塞不等于重�
 可复现缺陷先 AppSDK bug 查重建档；按范围做最小红测、根因修复和重复实现消融。
 作者完成 focused/regression、适用 typecheck/build/AppSDK gate、候选包安装及真实黑盒，
 再独立架构 review；缺证据不得进入 review 或宣称完成。
+每个 unit 随实现交付公开 consumer/黑盒，不等最后才补；U7 driver 汇总已有用例，不重建业务
+owner。资产/health/stopped status、SDK 探针和 journal 不能代替启动/重启/业务结果的事实。
 随后组合最新 main 并复验受影响项，逐单元合入 clean main、push origin main、核对远端 SHA。
 候选变更使受影响测试和 review 失效；禁止绕过 hook、force-push 或用旧证据充数。
 
