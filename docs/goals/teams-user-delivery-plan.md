@@ -1,6 +1,6 @@
 # AgentTeams 本地用户 MVP 交付计划
 
-日期：2026-10-03（UTC）。原审计源码基线：`5496e1e925e4bbe612d509488368003bd78880d6`；本次计划更新输入：`78fa8bc4b1576cda94151dcfe8c7e6f449efd4e9`，已核对 main clean 与远端 main 相同。
+日期：2026-10-03（UTC）。原审计源码基线：`5496e1e925e4bbe612d509488368003bd78880d6`；本次计划更新输入：`55c8282cbad3886022790d9ffb4b04a84b776820`，已核对 main clean 与远端 main 相同。接手时刷新 main/远端及各任务终态；以下状态是本次核对快照，不代替当前 receipt。
 状态：D1 行为契约、八条静态 graph 和 D2 真实 SDK consumer 已独立审查 PASS、合入并推送；阶段记忆已晋升 L2，标记 ai-reviewed/human-unreviewed。产品 SDK 接线、U1–U7 和最终安装包 BB01–BB14 尚未交付。历史源码/网络证据及 SDK 探针不代表本次安装后的交付通过。
 本文件接替旧 G0/L1-L5 的本地产品任务排序；交付质量仍引用 `teams-long-running-delivery.md`、`development-governance.md` 和当前 AGENTS。不是新 goal/subscription。
 
@@ -37,8 +37,8 @@ D0 已建启动、Work、配置、观察、Session、停止、版本交付七图
 | Gap | 已有事实与欠缺 | 关闭责任 |
 |---|---|---|
 | 通用行为建模已准入，配置/Session 窄契约仍缺 | D1 事件/ARC/owner、五节点提交与四节点查询已 PASS；U2 草稿混淆全机 source revision 与每 daemon accepted ownership，U6 新建/取消会话入口仍须窄建模 | U2 + U6；不重做 D1 |
-| DAGpipe 没有执行安装后的产品请求 | D2 八例及 identity guards 证明已有 Node 宿主能回调真实 Rust SDK；D3/U4 树已有 runtime/dagpipe 草稿，尚无作者完整验证、产品 review 或安装后 compile/run/业务结果回执 | D3/U4 |
-| 安装对象不统一且隔离验收有缺口 | 用户 pack 缺 Console assets；U1 设计 r2 FAIL：独立 HOME 不隔离固定端口，缺 runner hash 错误的无副作用黑盒；SDK 完整 build-input 指纹另有 advisory | U1 |
+| DAGpipe 没有执行安装后的产品请求 | D2 八例及 identity guards 证明已有 Node 宿主能回调真实 Rust SDK；D3/U4 树已有 runtime/dagpipe 草稿，尚无作者完整验证、产品 review 或安装后 compile/run/业务结果回执。当前草稿的 host.call/result/error 仍把 target、policyRevision、channelRef、资源需求与错误材料放在 business；同一 owner 必须修 typed control/error 边界并验证，不能以 ARC 内分离代替跨进程端口分离 | D3/U4 |
+| 安装对象不统一且隔离验收有缺口 | 用户 pack 缺 Console assets；U1 已修 r2/r3 设计问题，r4 正独立审查。动态端口、runner 缺失/hash/平台拒绝及完整 SDK build-input 的同包黑盒仍待产品实现 | U1 |
 | 用户配置有多处输入 | TOML 已有基础，bridge、Console 和 provider/model 仍依赖独立 JSON；U2 草稿尚未解决 per-daemon accepted、异步锁/CAS、迁移与 observations 写入边界 | U2 |
 | 服务声明与实际能力不一致 | CLI executor 固定声明 browser/file-search，缺失 browser CLI 仍可能广播；资源容量未统一由用户意图驱动 | U3 |
 | work 没有按用户请求执行 | 当前 CLI 读取 startup configuredWork 回执；缺每次调用创建新任务及显示真实结果的路径 | D3/U4 |
@@ -53,12 +53,14 @@ D0 已建启动、Work、配置、观察、Session、停止、版本交付七图
 |---|---|---|
 | D1 行为设计 | `94b4633`，精确 tree `da94159b`，r2 PASS；issue `ed0bada` 已关闭；`1b492fb` 为 L2 阶段记忆；设计/集成/记忆树已回收 | 复用准入；只在受影响契约/图改变时复验，不再修已关闭的 r1 问题 |
 | D2 SDK 能力 | `35ca32b`，精确 tree `5acf841b`，r2 PASS；主线重建重放 8/8 与 identity guards；issue `8981687` 已关闭；`78fa8bc` 为 L2 记忆；自有树/cache 已回收 | 复用接入能力；该探针不关闭产品 BB11、portable package 或真实 Work |
-| U1 窄安装设计 | 独占候选树；正式 r2 退出 0，但 controller FAIL，两条 P1、一条 P2 | 同一设计 owner 补端口隔离和 runner identity 失败用例；定向验证后独立新审；不将退出 0 当 PASS |
-| U2 窄配置设计 | 独占候选已有 TOML/事务草稿；尚未独立准入，明确提出改变 per-daemon accepted 契约 | 确认作者停写后 primary 收紧 owner、异步接口、迁移和中文 SESE 图；窄设计 PASS 后实现 |
-| D3/U4 SDK/Work | issue `4b6c377`，独占树 base `78fa8bc`；GCM 已写 runtime/dagpipe 草稿，未有完成验收 | 当前仅 SDK/公开 Work harness；U1/U2 接缝冻结后给同一 owner 扩展 CLI/receiver IPC；不得把前半阶段合并成 U4 完成 |
+| U1 窄安装设计 | 独占候选已组合 main `55c8282`；r2/r3 FAIL 已修；精确 staged tree `a4fdd66cddc85086733b22c3a8e3ec182ce90e03`，r4 controller working，尚无 PASS | 冻结候选，消费正式 r4 裁决；PASS 后单独交付设计并派产品实现，FAIL 则同一 scope 修订；不改变正在审查的候选 |
+| U2 窄配置设计 | r3 GCM 正修订，base `55c8282`；machine source 与每 daemon accepted/effective 已拆分为草稿，尚未独立准入 | 消费作者终态、检查 async/CAS/锁/显式迁移及中文 SESE，再独立窄审；不同时写作者文件，不批准全机 accepted 替代 daemon accepted |
+| D3/U4 SDK/Work | issue `4b6c377`，独占树 base `78fa8bc`；真实公开 harness 曾 5/5 通过，但之后候选继续改变，当前仍调试协议失败路径 | 作者先修 stdio 控制/业务边界和范围外证据目录，重验当前精确候选；U1/U2 接缝冻结后给同一 owner 扩展 CLI/receiver IPC；中途 green 不作最终证据，前半阶段不关闭 U4 |
+| U6 窄 Session 设计 | 作者 exit 0、已停止写入；base `55c8282`，精确 staged tree `41b6ae9b224faeed3e6992639cbc70b93be55c4d`；公开 SDK 能力和 Session 图定向检查通过，r1 独立设计审查 working | 消费独立裁决；PASS 后交付设计，产品实现等 U2/U4 共享 runtime 接缝释放；设计不等于真实消息/工具/审批/取消完成 |
+| U7 重入诊断 | base `55c8282`，独立 GCM 正用实际 lifecycle:admission 做后阶段失败注入；前序 verify receipt 可能因晚绑定 evidence 无法复用，仍是假设 | 根据真实 store/receipt 确认或证伪，confirmed 才查重建 bug；不删 evidence 校验、不建第二 PASS 缓存，不把诊断当修复 |
 | U1–U7 产品交付 | 本次尚无已集成的产品行为改动，也没有最终安装包黑盒通过 | 按下方依赖推进，逐单元 push/cleanup，不用 D1/D2 完成推算产品完成百分比 |
 
-当前 U1 设计、U2 设计、D3/U4 是三个不同基线的未交付任务树；恢复时读取各自实际 HEAD、notes 和进程终态，不能凭旧 PID 重启或删除。完整 D1/D2 receipts 已保存在 primary 的 task-evidence/agentteams/receipts 中，源内证据分别见 docs/evidence/d1-behavior-contracts-20261003/ 和 docs/evidence/d2-sdk-probe-20261003/。未交付候选保留；此表不代替 exact receipt。主线产品行为未因 D1/D2 设计与探针发生变化。
+当前 U1/U2/U6 设计、D3/U4 实现、U7 诊断为五个未交付任务树；恢复时读取各自实际 HEAD、notes 和进程终态，不能凭旧 PID 重启或删除。完整 D1/D2 receipts 已保存在 primary 的 task-evidence/agentteams/receipts 中，源内证据分别见 docs/evidence/d1-behavior-contracts-20261003/ 和 docs/evidence/d2-sdk-probe-20261003/。未交付候选保留；此表不代替 exact receipt。主线产品行为未因 D1/D2 设计与探针发生变化。
 
 ### 先闭合的窄模型
 
