@@ -1,80 +1,73 @@
-# AgentTeams Local Network MVP `/goal` 提示词
+# AgentTeams 建模、DAGpipe 与用户 MVP `/goal` 提示词
 
-这是唯一可复制到 `/goal` 的执行提示词。详细阶段、owner、路径和 gate 以
-[teams-local-mvp-execution-plan.md](teams-local-mvp-execution-plan.md) 为准；本文件不创建新的
-goal、subscription 或 task graph。
+本文件是可复制执行入口；具体任务、依赖、写入边界和 BB01–BB14 由
+[teams-user-delivery-plan.md](teams-user-delivery-plan.md) 唯一维护。
+它替换旧版本的接手进度和公网优先排序，不创建 goal 或 subscription。
 
 ```text
 /goal
-目标：把 AgentTeams 收口为可供用户实际运行的 Local Network MVP。用户只维护
-~/.agentteams/config.toml，执行 agentteams init/start/status/work/stop；runtime 负责生成和维护
-~/.agentteams/internal.toml。至少两个独立 daemon 必须经真实本地 socket bridge 完成注册、发现、
-capability/resource 广播、匹配、连接、协商和一次 Agent Work；Console 只做观察与配置，关闭
-Console 后 Agent-to-Agent Work 仍然成功。
+目标：完成 AgentTeams 本地用户 MVP 的行为建模、实际 DAGpipe 改造和安装后黑盒交付。
+普通用户安装一个包，只编辑 ~/.agentteams/config.toml，启动本地 bridge 和两个独立 daemon；
+provider 声明真实服务/资源，receiver 按配置发现、匹配、连接、协商并反复提交新 Work，
+取得真实结果。internal.toml 保存需要系统配置、无需用户编辑的内部材料。
+Console 是可选观察/配置/Session 面，关闭后新的 Agent Work 仍成功。
+有 Session 能力的 Agent 使用受管 OpenCode；被动能力 Agent 不要求模型。
 
 依据：
-- docs/goals/teams-local-mvp-execution-plan.md
-- docs/goals/teams-user-mvp-delivery.md
-- docs/goals/teams-long-running-delivery.md
-- docs/goals/teams-development-plan.md
+- AGENTS.md 与 docs/development-governance.md
+- docs/goals/teams-user-delivery-plan.md（当前任务顺序、范围与黑盒验收真源）
+- docs/design/teams-behavior-model.md
+- docs/design/dagpipe/graphs/（项目 graph 拓扑真源）
+- docs/design/teams-behavior-audit-20261002.md（审计偏离，启动时确认当前实现）
+- docs/goals/teams-long-running-delivery.md（适用交付与阶段记忆约束）
 
-调度角色：当前 Desktop 主任务负责目标编译、依赖排序、issue 查重、gcm worker 派单、范围冲突、
-独立 Codex review、integration、push、memory L2 和资源回收。不要依赖或冒充其他 scope 的
-master。worker 只修改自己的 delivery unit，不合并、推送或删除他人资源；主任务不把产品实现
-偷偷移入调度文档。不使用 AGY Review；milestone 才使用 Astra。
-默认实现 worker 入口是 `codex exec --profile gcm`；每个 worker 必须有独立 clean worktree、
-唯一 branch、唯一写入范围和精确验收命令。每次唤醒先检查目标/issue、root 与远端、worker、
-worktree、进程/端口和最新 receipt；只从第一个失效 gate 及其下游重跑，稳定 fingerprint 的
-PASS 写 reuse receipt。使用有界等待，不忙轮询；没有安全独立任务时记录等待原因。
+身份与调度：当前 Desktop 主任务是本目标唯一编排者，负责架构/建模、依赖、派单、证据审核、
+独立 review、集成、推送、进度与自有资源管理。读取当前 codex-orchestrator、dagpipe-runtime、
+coding-principals 和项目适用技能。需要实现 worker 时新建 codex exec --profile gcm，
+只传当前任务合同，不 resume/fork 或使用父 transcript；不核究 gcm 的底层路由模型。
+不依赖外部 TUI Master，也不为独立开发建立 Collab 身份。不存在可用 worker 时独立推进主线。
+实现者和 reviewer 必须不同；不使用 AGY；milestone 使用 Codex Review oauth + gpt-6.1-sol。
 
-当前接手指针（2026-09-14，必须启动时复核）：
-- 每次唤醒仍读取 `git status`、`git rev-parse`、`git ls-remote origin refs/heads/main`；本次
-  root/remote 均为 clean `8ea802b495d01ae48b29cfe152c0791276e3edde`。新 delivery unit 继续从
-  届时最新远端主线建立 clean worktree。
-- 长期目标 issue 仍是 `af5c167`；不得创建第二个 goal、subscription、task graph 或重复 issue。
-- runtime `3742b9a` 已在 `5eb568a` 集成，L1 CLI `fdec042` 已在 `b405361` 集成，W1 `cabd162`
-  已在 `3d386c0` 集成，C1 `776fcad` 已在 `55d6479` 集成并在 `8ea802b` 补齐 cleanup receipt；
-  这些单元只需 solution/issue bookkeeping，不重做实现。
-- Console directory/offline 和 Phase 1 closeout 已有 `e8dc905`、`bc1cbcb`、`b701a57`、`2dcd928`
-  receipt。当前源码没有受影响漂移时复用；只有 fingerprint 变化才重跑 replay。
-- 下一步是补齐完成单元的 solution/close 记录，再选择长期目标中仍未完成的公网 Relay/NAT/
-  deployment 或 N3 resilience 单元；本地 receipt 不得扩写成公网完成。
+启动：读取现有任务笔记/issue/receipts，核对实际 main、origin/main、worktrees、worker 和自有进程。
+从第一个尚未完成或证据失效的节点接手；已有图只证明静态校验，尚无产品 SDK 执行证明。
+本轮先完成本地用户路径，不根据旧提示词转去公网/NAT 阶段。不得重复建目标、订阅或 bug。
 
-资源接手规则：当前三个历史 playground 只由其原 owner 审计和回收；新 delivery unit 使用独立
-`playground/<issue>-<date>`。超过 24 小时未活动的树先核对 owner、dirty 内容、唯一证据、进程、
-端口和 issue/review 义务，再决定保留或丢弃。只回收本主任务/本 delivery unit 自己拥有的资源；
-残留 daemon/relay 只能按已核对的显式 PID 或服务操作停止。每次资源处理写 cleanup receipt，root
-`main` 永远不作为开发工作树。
+执行顺序：
+1. 按计划 D1 补事件、守卫、具体 typed ARC、真实公开接口、唯一 owner 和成功/失败/取消/
+   unknown/清理终点；修订现有图，运行 dagpipe graph validate/inspect，不新增第二套图骨架。
+2. 按 D2 核实当前 SDK 与 Node/TS 宿主接入能力；已知 Rust SDK 不等于存在 TS SDK。
+   用隔离真实 consumer 验证最小支持边界及打包；取得独立精确设计 PASS 后编写产品代码。
+3. 按依赖派发 U1 安装包、U2 配置真源，再做 U3 服务声明与 D3/U4 按需 Work。
+   D3/U4 是同一 worker 的单元：用户安装入口真正走 registered Operators → SDK compile →
+   immutable CompiledGraph → Runtime → 消费真实结果。远端 Agent 仍拥有 admission/资源，
+   不虚构远端 API，不新增账本/daemon/调度器，不以 demo 或 journal 代替用户结果。
+4. 接通 U5 可选 Console 和 U6 OpenCode Session；重叠 runtime 路径串行，UI 可在固定契约下独占并行。
+5. D4/U7 复用现有 lifecycle stage store，明确其他图 executable/static-governed 分类，
+   实现计划中的黑盒 driver 和 BB01–BB14；统一验证最终同一用户安装包。
 
-每个 delivery unit 必须独立完成：查重或复用 AppSDK issue → 从最新 origin/main 建立
-playground/<issue>-<date> clean worktree 和唯一 branch → 最小红测 → 最小根因实现 → focused/
-regression/typecheck/build/适用 AppSDK gate → 真实入口验证 → 独立 Codex exact review → candidate
-commit → clean integration worktree → mainline verification → git push origin main 与
-git ls-remote receipt → project-memory Level 2（ai-reviewed,human-unreviewed）→ 停止自有进程并
-写 cleanup receipt → 才能关闭 issue。milestone review 使用 Astra；不使用 AGY Review。
+每个实现单元：从当时最新 origin/main 建独占 clean worktree，位于
+/Volumes/Intel/playground/agentteams/<unit>，唯一 codex/ branch、owner、allowed/forbidden paths、
+精确命令和证据目录。根 main 不开发，其他 dirty state 不覆盖。
+可复现缺陷先 AppSDK bug 查重建档；按范围做最小红测、根因修复和重复实现消融。
+作者完成 focused/regression、适用 typecheck/build/AppSDK gate、候选包安装及真实黑盒，
+再独立架构 review；缺证据不得进入 review 或宣称完成。
+随后组合最新 main 并复验受影响项，逐单元合入 clean main、push origin main、核对远端 SHA。
+候选变更使受影响测试和 review 失效；禁止绕过 hook、force-push 或用旧证据充数。
 
-重入规则：每次唤醒先读取本文件、execution plan、issue、worktree、branch、进程、端口和远端
-main。用 candidate tree/commit、changed paths、依赖、环境和产物组成 fingerprint；只从首个失效
-gate 及其下游重跑，稳定且仍有效的 PASS 写 reuse receipt。没有 receipt 或 identity 漂移时不得复用
-旧证据。使用有界等待，不忙轮询，不因 worker 空闲创建无依赖任务。
+重入与等待：节点结论及证据立即写入当前任务独占 run notes；恢复先读笔记。
+按 source/config/graph/registry/contracts/effects/SDK/environment/artifact 指纹复用有效阶段，
+只从首失效节点及依赖后继重跑；main/远端/PID/runtime 可变边界刷新。
+有安全独立任务时继续派单；worker 等待使用有界等待，超时检查状态与阻塞，不忙轮询、只 ACK
+或干等。阻塞记录首偏离、owner、解除条件和具体恢复动作，不切换到无关治理工作。
 
-资源规则：只回收本主任务或本 delivery unit 自己拥有的 worker、进程、端口、锁、临时目录、
-worktree 和 branch。超过 24 小时未活动的 playground 先检查 owner、claim、未提交内容、唯一证据、
-进程和 bug/review 义务，再决定合并、保留或丢弃；不得批量删除其他 unit、dirty tree 或唯一证据。
-当前保留的 runtime、L1、C1 worktree 不属于本次文档刷新单元，不能删除或 reset。根 main 永远不得
-作为开发工作树。
+收尾：逐单元保留证据，确认停止写入后回收自有 child/daemon/listener、临时 HOME/包/日志、
+worktree 和 branch，核对 worktree list 与路径不存在。stale 资源先查归属和内容，再按已有
+核销授权处理；dirty、其他 owner 或唯一证据不得强删。保留责任列清 owner/路径/解除动作。
+Primary 统一按项目官方 memory 命令写阶段记忆；复核事实标 ai-reviewed、human-unreviewed，
+不得把测试、merge、push 写成安装或真实使用完成。
 
-MVP 完成 iff：用户路径可在 disposable HOME 中真实执行；两个 daemon 的 socket replay 包含
-discovery/broadcast/connect/negotiate/proposal/request/result/close；status 展示 endpoint、role、
-generation、capability、resource；stop/start 后 generation 增长、旧 generation 被拒绝、新
-generation 可重新 Work；provider 不能超卖且重复 request 不重复执行；RCC 127.0.0.1:4444 是显式
-primary，goaichat-openai 是显式 backup，catalog/apply/readback 失败必须显式呈现且不得隐式
-failover；UI 只读权威 directory projection；Console 离线时 Work 仍成功；所有 unit 均有 review、
-integration、远端 push、L2 memory 和 cleanup receipt，根 main clean。
-
-本阶段不做：公网 Relay、NAT/STUN、双 NAT、direct internet、手机/蜂窝、master/slave 关系治理、
-完整 UI polish、browser 多 profile、生产部署或 provider 自动 failover。缺证据时保留为
-open/blocked/cleanup-pending，不能把测试、merge、本地 replay 或 push 写成公网部署或完整 V1。
-
-直接执行本目标，不再生成新的提示词。
+完成 iff：D1/D2 设计准入、真实 Work 的 SDK compile/run/用户结果、其余图覆盖分类、U1–U7、
+最终安装包 BB01–BB14、独立 milestone PASS、远端 main receipt、适用阶段记忆和自有清理
+全部齐备，main clean。公网 Relay、NAT/STUN、手机、coder2new、多 profile、关系治理及
+provider 自动 failover 留到后续。直接执行本目标，不再生成新的提示词。
 ```
