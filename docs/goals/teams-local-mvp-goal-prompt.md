@@ -30,12 +30,16 @@ coding-principals 和项目适用技能。需要实现 worker 时新建 codex ex
 实现者和 reviewer 必须不同；不使用 AGY；milestone 使用 Codex Review oauth + gpt-6.1-sol。
 
 启动：读取现有任务笔记/issue/receipts，核对实际 main、origin/main、worktrees、worker 和自有进程。
-计划更新输入为 main/origin/main 55c8282。D1 94b4633 和 D2 35ca32b 已独立 PASS、推送、清理，
+计划更新输入为 main/origin/main 8d143ae。D1 94b4633 和 D2 35ca32b 已独立 PASS、推送、清理，
 阶段记忆分别在 1b492fb/78fa8bc。读取 receipts 后复用，不重开已关闭的 ed0bada/8981687。
-从首个尚未完成或失效节点接手：U1 安装设计 r4 正在审查，候选已修 r2/r3，冻结到正式裁决；
-U2 r3 正修订 per-daemon accepted、async/CAS/迁移和 SESE 图；已有 4b6c377 D3/U4 worker
-在调试 runtime/dagpipe。U6 作者已停止写入、r1 窄设计审查进行中；U7 正用真实 lifecycle
-入口复现重入假设。精确候选与状态见交付计划及各单元 notes/receipts，启动时刷新。
+从首个尚未完成或失效节点接手：U1 设计 r5-main 已 completed/pass，精确 tree 77b37da1；
+交付设计并清理，继续已有 746dd7b 基础 package worker，基础包不等于完整 U1。
+U2 设计 r1 working，精确 staged tree 87c4e4eb，冻结到正式裁决；PASS 后交付并派产品实现。
+4b6c377 D3/U4 独立 r2 worker 接手 runtime/dagpipe，旧 writer 已停，旧 exit0/5例绿不作完成。
+U6 r1 FAIL 六条 P1，83a8bd1 open，需先派窄设计修订，再独立审新候选。
+U7 诊断 exit0，未达故障注入；852c3ac prerequisite open，canonical pin-lock 返回
+INVALID_SDK_MIGRATION_RECORD，upstream a7cc2a4 open。前置阻塞不等于重入缺陷已复现。
+精确候选与状态见交付计划及各单元 notes/receipts，启动时刷新。
 核对实际 worker/终态再收口，不重复 writer，不删除未交付候选。
 八图静态与 SDK 探针能力已证实；尚无安装后的产品 SDK Work 执行证明。
 本轮先完成本地用户路径，不根据旧提示词转去公网/NAT 阶段。不得重复建目标、订阅或 bug。
@@ -49,7 +53,11 @@ U2 r3 正修订 per-daemon accepted、async/CAS/迁移和 SESE 图；已有 4b6c
    U2 必须区分 machine source revision 与每 daemon durable accepted/effective；catalog 刷新不
    推进用户意图 revision。固定 async persistence/CAS/锁与显式迁移，不批准全机 accepted 替代
    daemon accepted，不宣称已有双文件原子保证。新接缝先窄设计 PASS 再实现。
-3. U1/U6 独立设计审查与 U2 窄建模、U7 真实重入诊断可并行；现有 D3/U4 同一 owner 先做
+3. 交付 U1 已审设计，消费 U2 独立裁决；U6 修订固定模型意图归 U2，禁止 Session 第二配置源；
+   Console JsonValue 保真，adapter 显式验证映射；事件必填身份/结果，cancel 保留基座接纳和最终
+   unknown，明确失败不能永久污染 ManagedConfigOwner，readiness 由 owner 观察。新设计独立 PASS
+   后再实施产品。既有 U1 package、D3/U4 实现与独立设计/SDK前置调查可并行，不重复 writer。
+   现有 D3/U4 同一 owner 先做
    已准入 SDK/公开 Work 范围，修 typed stdio 控制/业务分离与当前失败路径，重验精确候选。
    U1/U2 准入后派独占产品实现，配置接缝冻结后推进 U3 与 D3/U4 CLI/receiver 接线。
    D3/U4 是同一 worker 的单元：用户安装入口真正走 registered Operators → SDK compile →
@@ -61,6 +69,9 @@ U2 r3 正修订 per-daemon accepted、async/CAS/迁移和 SESE 图；已有 4b6c
 5. 按计划 P1 本地协作、P2 观察/能力、P3 模型 Session、P4 完整交付逐阶段收口。
    D4/U7 复用现有 lifecycle stage store，明确其他图 executable/static-governed 分类，
    实现黑盒 driver 与 BB01–BB14；同包最终验收含端口隔离、runner identity 拒绝和无副作用证明。
+   U7 先以官方非破坏 pin/migration 修复 prerequisite，保留历史 evidence；不复制旧 binary、手写
+   digest/receipt 或削弱 gate。upstream 根因仍待真实正反证据；前置恢复后同入口验证后阶段失败
+   和恢复，不用静态推断冒充已复现。归档并回收已终态诊断与零改动 pin 实验，保留未交付候选。
 
 每个实现单元：从当时最新 origin/main 建独占 clean worktree，位于
 /Volumes/Intel/playground/agentteams/<unit>，唯一 codex/ branch、owner、allowed/forbidden paths、
