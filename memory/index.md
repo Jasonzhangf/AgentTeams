@@ -135,6 +135,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `dagpipe`, `design`, `human-unreviewed`
 - details: [L2/d1-behavior-design-20261003.md](L2/d1-behavior-design-20261003.md)
 
+### D2 SDK host callback capability verified and delivered
+- tags: `agentteams`, `ai-reviewed`, `dagpipe`, `human-unreviewed`, `sdk`
+- details: [L2/d2-sdk-capability-20261003.md](L2/d2-sdk-capability-20261003.md)
+
 ### Local Agent process and Work execution candidate verified
 - tags: `ai-reviewed`, `human-unreviewed`
 - details: [L2/daemon-execution-candidate-20260906.md](L2/daemon-execution-candidate-20260906.md)
