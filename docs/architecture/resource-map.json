@@ -502,6 +502,17 @@
         "session_transcript_truth",
         "business_payload_metadata"
       ]
+    },
+    {
+      "resource_id": "console-runtime-facts",
+      "owner": "runtime",
+      "status": "design",
+      "kind": "control_resource",
+      "truth_store": "internal.toml [consoleRuntime] only; [console] remains U2 projection/config and shares no writable field with U5",
+      "allowed_operations": ["read_runtime_facts", "patch_owned_runtime_facts", "clear_owned_optional_fact", "persist_atomic"],
+      "forbidden_relations": ["user_intent", "credential_value", "daemon_lifecycle", "work_drain", "business_payload", "session_payload"],
+      "required_gates": ["teams-console-lifecycle-topology", "teams-u5-console-lifecycle-design"],
+      "note": "Design-only U5 fact table and typed short-lock patch port. U2 owns schema/serializer and the same internal lock; no second store, lock or copy exists yet."
     }
   ]
 }

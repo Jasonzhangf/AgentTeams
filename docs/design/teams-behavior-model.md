@@ -149,6 +149,72 @@ flowchart LR
 
 查询创建新的图执行身份，保留原 Work/request 身份；不重新 propose/request。连接收尾由宿主负责；query 成功不代表外部资源已销毁。后续显式清理走新的生命周期动作，unknown 返回保留责任和解除条件。BB04、BB07 验证查询不产生新业务执行。
 
+### U5-Ua Console 启动
+
+文件：`dagpipe/graphs/console-start.graph.json`。输入 console.start.intent，输出 console.start.receipt。
+该图是静态治理产物，不是已注册的 DAGpipe SDK executable。
+
+```mermaid
+flowchart LR
+  A[核验可选观察面启动请求] --> B[读取用户意图与内部观察面运行表]
+  B --> C[以新代次启动唯一 Console 子进程]
+  C --> D[确认监听、鉴权、注册和地址均就绪]
+  D --> E[短锁写回运行事实并返回启动回执]
+```
+
+完成条件：Console 子进程已由 launcher/supervisor 拥有，listener exclusive bind、auth、registration 与实际 URL/origin 均确认，非零运行事实和 generation/startToken 已写入 `[consoleRuntime]`。Bridge、daemon 和 Work 不因本次启动改变。
+成功图不表达失败拓扑。disabled、凭据缺失、asset 缺失、端口占用或资源收尾不明必须由 caller 以显式 `console.start.failed`/`console.retained` 回执结束；下一次启动是新 execution/attempt 和新的 Console generation，不能在图内回边重试。
+
+### U5-Ub Console 停止
+
+文件：`dagpipe/graphs/console-stop.graph.json`。输入 console.stop.intent，输出 console.stop.receipt。
+
+```mermaid
+flowchart LR
+  A[核验停止代次与 Console 归属] --> B[仅停止 Console 子进程]
+  B --> C[关闭自身监听、注册和连接]
+  C --> D[确认进程退出与本轮资源责任]
+  D --> E[短锁写回停止事实并返回停止回执]
+```
+
+完成条件：匹配 PID/startToken 的 Console 子进程、listener、registration 和自身连接均确认关闭，`[consoleRuntime]` 进入 stopped/failed/retained 的诚实状态。Bridge、daemon、Agent Work 和既有配置 slice 必须保持存活。
+Console-only stop 不进入 B6 的 Work drain 节点。失败或 retained 不包装为 stopped-clean；caller 对 retained 责任发起独立恢复/清理动作，不把 B6 daemon stop 当作补偿路径。
+
+### U5-Uc Console 状态观察
+
+文件：`dagpipe/graphs/console-status.graph.json`。输入 console.status.intent，输出 console.status.receipt。
+
+```mermaid
+flowchart LR
+  A[核验状态请求与代次] --> B[读取内部观察面运行事实]
+  B --> C[只读观察子进程与 launcher 状态]
+  C --> D[分类公开状态和错误]
+  D --> E[返回不含秘密的状态回执]
+```
+
+完成条件：回执以 `[consoleRuntime]`、launcher generation 和实际子进程观察为事实来源；Launcher 未运行明确为 launcher=stopped，不把旧 PID/URL 显示为 online。查询不写持久事实，不授予管理权，不包含 password 值。
+
+### U5 失败、取消与清理终点
+
+以下端点与三张成功图分离，由 launcher/supervisor 的 lifecycle owner 调用；静态图本身不包含
+回边或补偿节点。
+
+| 当前外部动作 | 触发条件 | 外部可观察结果 | 清理/保留责任 |
+|---|---|---|---|
+| Console start | disabled | `outcome=failed, code=CONSOLE_DISABLED` | 无子进程/端口/状态写入 |
+| Console start | 端口已被占用 | `outcome=failed, code=CONSOLE_PORT_OCCUPIED` | 只清理本轮已创建 Console 资源；既有 listener 不动 |
+| Console start | credential env 缺失 | `outcome=failed, code=CONSOLE_CREDENTIAL_MISSING` | 不启动子进程 |
+| Console start | asset 缺失 | `outcome=failed, code=CONSOLE_ASSET_MISSING` | 只清理本轮已创建 Console 资源 |
+| Console start | generation 不匹配 | `outcome=failed, code=STALE_GENERATION` | 零状态改写 |
+| Console start | 取消或启动进程结果未知 | `outcome=retained` | 保留 PID/listener/registration owner、资源与恢复动作 |
+| Console stop | 无匹配进程 | `outcome=failed, code=NOT_RUNNING` | 保留当前 `[consoleRuntime]` |
+| Console stop | generation/PID/startToken 不匹配 | `outcome=failed, code=STALE_GENERATION` | 零状态改写，不触碰其他进程 |
+| Console stop | listener/registration/exit 无法确认 | `outcome=retained` | 保留 Console owner、资源、恢复动作；不得写 stopped-clean |
+| Console status | 文件/socket/子进程观察不可读 | `outcome=failed, code=CONSOLE_STATUS_UNAVAILABLE` | 无状态写入；不虚构 online |
+
+成功图只有一条成功出口；调用者必须在收到失败/retained 后走上述独立终点的证据流程。下一次
+start/stop/status 是新的 execution/attempt 身份，最新 generation 由 launcher 决定。
+
 ## 状态机与异常终点
 
 静态 graph 画正常的数据依赖，不表达全部条件控制流。预期业务拒绝可返回 typed outcome；未知异常由 graph execution failure 终止，owner 执行适用 teardown 并保存失败 journal/receipt。
@@ -272,6 +338,12 @@ stateDiagram-v2
 | B6 归属校验 | verify-stop-owner | runtime：local-process.ts | 已有 generation/token 校验 |
 | B6 排空或保留 | drain-or-retain-work | agent-host：work-host.ts，runtime 驱动 | unknown 必须保留责任；外部清理验收待补 |
 | B6 停止；释放；回执 | stop-owned-children；release-owned-runtime；persist-stop-receipt | runtime：local-supervisor.ts/local-process.ts/local-config.ts | 已有；验证全部 own 资源终点 |
+| U5-Ua 核验；投影 | verify-console-start-request；resolve-console-child-projection | runtime：local-process.ts/local-config.ts | design pending；只读 U2 `[console]` 与 `[consoleRuntime]`，不写用户 intent |
+| U5-Ua 启动；就绪；回执 | start-console-child；confirm-console-readiness；persist-console-start | runtime：local-supervisor.ts/local-process.ts | design pending；U5 拥有 PID/generation/startToken/state/url/origin/identity/error，使用 U2 同锁短写 |
+| U5-Ub 核验；停止；释放 | verify-console-stop-request；stop-console-child；release-console-runtime | runtime：local-process.ts/local-supervisor.ts | design pending；只触碰 Console own child，不进入 daemon Work drain |
+| U5-Ub 确认；回执 | confirm-console-termination；persist-console-stop | runtime：local-process.ts/local-config.ts | design pending；retained 必须保留 owner/资源/恢复动作 |
+| U5-Uc 核验；读取；观察 | verify-console-status-request；read-console-runtime-facts；observe-console-child | runtime：local-process.ts/local-config.ts | design pending；读 launcher 事实和 B4 observe，不刷新配置 revision |
+| U5-Uc 分类；返回 | classify-console-state；return-console-status | runtime：local-process.ts | design pending；公开状态不含秘密，旧事实不得伪装 online |
 | B7 源码；构建；回放 | verify-affected-source；build-user-package；replay-installed-entry | development-governance：scripts/lifecycle-adapter.mjs、package.json | 分阶段 reuse 已有；用户 package 同源尚缺 |
 | B7 审查；远端；清理 | review-exact-candidate；integrate-and-confirm-remote；cleanup-owned-delivery | primary integration owner：独立 review、Git、资源 receipt | 按现有授权闭环，不虚构 runtime Operator |
 

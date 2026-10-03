@@ -430,6 +430,34 @@
         "Agent Card current-session primary action stays the primary affordance on both viewports",
         "mobile 390x844 and desktop 1440x960 share the same component tree and projection input"
       ]
+    },
+    {
+      "gate_id": "teams-console-lifecycle-topology",
+      "status": "design",
+      "required": true,
+      "command": "dagpipe graph validate docs/design/dagpipe/graphs/console-start.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/console-stop.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/console-status.graph.json",
+      "checks": [
+        "start stop and status are three independent single-source single-sink object flows",
+        "Console stop contains no daemon Work drain node and cannot modify bridge or daemon lifecycle",
+        "graph bindings are design-only and do not claim registered SDK Operators",
+        "retry/attempt and failure/retained/cleanup terminals are documented outside the acyclic success topology"
+      ],
+      "note": "Static topology gate only; it does not prove product caller wiring, SDK compile or runtime behavior."
+    },
+    {
+      "gate_id": "teams-u5-console-lifecycle-design",
+      "status": "design",
+      "required": true,
+      "checks": [
+        "U5 owns [consoleRuntime] PID/generation/startToken/state/url/origin/identity/error while [console] remains U2 projection/config",
+        "typed patch preserves omitted fields clears explicit null and validates state combinations before one atomic write",
+        "reload-latest merge-owned-fields and atomic rename occur under the U2 internal short lock; no external operation is held under that lock",
+        "concurrent U5 runtime facts and U2 console/config/launcher/daemon fields do not overwrite each other",
+        "startup failure port occupancy credential/asset loss process cancellation and retained cleanup have explicit external-observable outcomes",
+        "Console offline does not affect bridge daemon Agent Work or Work drain",
+        "status never invents online availability and never exposes credential values"
+      ],
+      "note": "Design acceptance only. Planned black-box commands and evidence remain pending until U2 and U5 implementation."
     }
   ]
 }

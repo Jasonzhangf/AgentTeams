@@ -1,0 +1,142 @@
+{
+  "id": "agentteams.console-stop",
+  "version": "1",
+  "inputs": [
+    {
+      "id": "console.stop.intent",
+      "schema": "Object"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "verify-console-stop-request",
+      "operator": "teams.verify-console-stop-request",
+      "operator_version": "1",
+      "inputs": [
+        "console.stop.intent"
+      ],
+      "output": {
+        "id": "console.stop.authorized",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "stop-console-child",
+      "operator": "teams.stop-console-child",
+      "operator_version": "1",
+      "inputs": [
+        "console.stop.authorized"
+      ],
+      "output": {
+        "id": "console.child.stopping",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "release-console-runtime",
+      "operator": "teams.release-console-runtime",
+      "operator_version": "1",
+      "inputs": [
+        "console.child.stopping"
+      ],
+      "output": {
+        "id": "console.runtime.released",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "confirm-console-termination",
+      "operator": "teams.confirm-console-termination",
+      "operator_version": "1",
+      "inputs": [
+        "console.runtime.released"
+      ],
+      "output": {
+        "id": "console.child.exited",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
+      "id": "persist-console-stop",
+      "operator": "teams.persist-console-stop",
+      "operator_version": "1",
+      "inputs": [
+        "console.child.exited"
+      ],
+      "output": {
+        "id": "console.stop.receipt",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    {
+      "from": "verify-console-stop-request",
+      "to": "stop-console-child",
+      "arc_id": "console.stop.authorized"
+    },
+    {
+      "from": "stop-console-child",
+      "to": "release-console-runtime",
+      "arc_id": "console.child.stopping"
+    },
+    {
+      "from": "release-console-runtime",
+      "to": "confirm-console-termination",
+      "arc_id": "console.runtime.released"
+    },
+    {
+      "from": "confirm-console-termination",
+      "to": "persist-console-stop",
+      "arc_id": "console.child.exited"
+    }
+  ],
+  "outputs": [
+    "console.stop.receipt"
+  ]
+}

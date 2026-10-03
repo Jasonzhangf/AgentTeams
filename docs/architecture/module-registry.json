@@ -188,6 +188,33 @@
         "server/**",
         "agent/**"
       ]
+    },
+    {
+      "module_id": "console-lifecycle",
+      "owner": "runtime",
+      "status": "design",
+      "design_doc": "docs/design/teams-local-console-v1.md",
+      "note": "Design-only U5 Console start/stop/status object ownership. Runtime owns launcher/supervisor lifecycle facts in [consoleRuntime]; U2 owns schema/serializer/[console] projection. Graph files are static governance, not registered SDK Operators. Console stop is independent from daemon Work drain.",
+      "owned_paths": [
+        "docs/design/teams-local-console-v1.md",
+        "docs/design/dagpipe/graphs/console-start.graph.json",
+        "docs/design/dagpipe/graphs/console-stop.graph.json",
+        "docs/design/dagpipe/graphs/console-status.graph.json"
+      ],
+      "planned_paths": [
+        "runtime/local-config.ts",
+        "runtime/local-process.ts",
+        "runtime/local-supervisor.ts",
+        "runtime/console-process.ts",
+        "runtime/console-runtime.ts",
+        "cli/agentteams.mjs"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "config/**",
+        "server/**",
+        "ui/**"
+      ]
     }
   ]
 }
