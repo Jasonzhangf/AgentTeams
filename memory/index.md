@@ -131,6 +131,10 @@ _Empty._
 - tags: `ai-reviewed`, `console`, `human-unreviewed`, `mobile`, `projection`, `ui`
 - details: [L2/console-ui-polish-20260906.md](L2/console-ui-polish-20260906.md)
 
+### D1 Work submit/query design baseline delivered
+- tags: `agentteams`, `ai-reviewed`, `dagpipe`, `design`, `human-unreviewed`
+- details: [L2/d1-behavior-design-20261003.md](L2/d1-behavior-design-20261003.md)
+
 ### Local Agent process and Work execution candidate verified
 - tags: `ai-reviewed`, `human-unreviewed`
 - details: [L2/daemon-execution-candidate-20260906.md](L2/daemon-execution-candidate-20260906.md)
