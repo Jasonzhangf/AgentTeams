@@ -1,6 +1,6 @@
 # AgentTeams 本地用户 MVP 交付计划
 
-日期：2026-10-03（UTC）。原审计源码基线：`5496e1e925e4bbe612d509488368003bd78880d6`；本次计划更新输入：`55c8282cbad3886022790d9ffb4b04a84b776820`，已核对 main clean 与远端 main 相同。接手时刷新 main/远端及各任务终态；以下状态是本次核对快照，不代替当前 receipt。
+日期：2026-10-03（UTC）。原审计源码基线：`5496e1e925e4bbe612d509488368003bd78880d6`；本次计划更新输入：`8d143ae8bab7594d25402282a4a2ed33d06919b0`，已 fetch 并核对 main clean 与远端 main 相同。接手时刷新 main/远端及各任务终态；以下状态是本次核对快照，不代替当前 receipt。
 状态：D1 行为契约、八条静态 graph 和 D2 真实 SDK consumer 已独立审查 PASS、合入并推送；阶段记忆已晋升 L2，标记 ai-reviewed/human-unreviewed。产品 SDK 接线、U1–U7 和最终安装包 BB01–BB14 尚未交付。历史源码/网络证据及 SDK 探针不代表本次安装后的交付通过。
 本文件接替旧 G0/L1-L5 的本地产品任务排序；交付质量仍引用 `teams-long-running-delivery.md`、`development-governance.md` 和当前 AGENTS。不是新 goal/subscription。
 
@@ -36,14 +36,14 @@ D0 已建启动、Work、配置、观察、Session、停止、版本交付七图
 
 | Gap | 已有事实与欠缺 | 关闭责任 |
 |---|---|---|
-| 通用行为建模已准入，配置/Session 窄契约仍缺 | D1 事件/ARC/owner、五节点提交与四节点查询已 PASS；U2 草稿混淆全机 source revision 与每 daemon accepted ownership，U6 新建/取消会话入口仍须窄建模 | U2 + U6；不重做 D1 |
+| 通用行为建模已准入，配置/Session 窄契约仍缺 | D1 事件/ARC/owner、五节点提交与四节点查询已 PASS；U2 已修订 per-daemon accepted、async/CAS 和内部端口边界，独立审查未结束；U6 独立设计 FAIL，六项 P1 尚待修订 | U2 + U6；不重做 D1 |
 | DAGpipe 没有执行安装后的产品请求 | D2 八例及 identity guards 证明已有 Node 宿主能回调真实 Rust SDK；D3/U4 树已有 runtime/dagpipe 草稿，尚无作者完整验证、产品 review 或安装后 compile/run/业务结果回执。当前草稿的 host.call/result/error 仍把 target、policyRevision、channelRef、资源需求与错误材料放在 business；同一 owner 必须修 typed control/error 边界并验证，不能以 ARC 内分离代替跨进程端口分离 | D3/U4 |
-| 安装对象不统一且隔离验收有缺口 | 用户 pack 缺 Console assets；U1 已修 r2/r3 设计问题，r4 正独立审查。动态端口、runner 缺失/hash/平台拒绝及完整 SDK build-input 的同包黑盒仍待产品实现 | U1 |
-| 用户配置有多处输入 | TOML 已有基础，bridge、Console 和 provider/model 仍依赖独立 JSON；U2 草稿尚未解决 per-daemon accepted、异步锁/CAS、迁移与 observations 写入边界 | U2 |
+| 安装对象不统一且隔离验收有缺口 | 用户 pack 缺 Console assets；U1 设计 r4 和最新 main 组合 r5 均 PASS，基础 package 实现 worker 已启动。动态端口、runner 缺失/hash/平台拒绝及完整 SDK build-input 的同包黑盒仍待产品实现 | U1 |
+| 用户配置有多处输入 | TOML 已有基础，bridge、Console 和 provider/model 仍依赖独立 JSON；U2 设计候选包含 per-daemon accepted、异步锁/CAS、迁移与 observations，尚未准入或实现 | U2 |
 | 服务声明与实际能力不一致 | CLI executor 固定声明 browser/file-search，缺失 browser CLI 仍可能广播；资源容量未统一由用户意图驱动 | U3 |
 | work 没有按用户请求执行 | 当前 CLI 读取 startup configuredWork 回执；缺每次调用创建新任务及显示真实结果的路径 | D3/U4 |
 | UI 与 Session 用户路径未闭合 | Console 缺同包用户启动入口；daemon Session 投影为空且 sendSession 明确不支持 | U5 + U6 |
-| 交付证据粒度不足 | 已有 lifecycle stage store 可复用，但缺用户黑盒用例及图/注册表/产物的失效依赖 | D4/U7 |
+| 交付证据粒度不足且 SDK 前置阻塞 | 已有 lifecycle stage store；真实重入诊断未到后阶段故障注入即失败。项目 pin `0.1.6` 与 canonical `0.1.0010` 不一致；官方 pin-lock 又返回 INVALID_SDK_MIGRATION_RECORD。缺用户黑盒 driver 及图/注册表/产物的失效依赖；重入缺陷仍未确认 | 前置 issue `852c3ac` / upstream `a7cc2a4`，随后 D4/U7 |
 
 上述实现偏离以 [审计记录](../design/teams-behavior-audit-20261002.md) 为来源，属于源码审计结论；开始修复时先用当前公开入口确认，不把审计假设写成已经复现的 bug。
 
@@ -53,14 +53,25 @@ D0 已建启动、Work、配置、观察、Session、停止、版本交付七图
 |---|---|---|
 | D1 行为设计 | `94b4633`，精确 tree `da94159b`，r2 PASS；issue `ed0bada` 已关闭；`1b492fb` 为 L2 阶段记忆；设计/集成/记忆树已回收 | 复用准入；只在受影响契约/图改变时复验，不再修已关闭的 r1 问题 |
 | D2 SDK 能力 | `35ca32b`，精确 tree `5acf841b`，r2 PASS；主线重建重放 8/8 与 identity guards；issue `8981687` 已关闭；`78fa8bc` 为 L2 记忆；自有树/cache 已回收 | 复用接入能力；该探针不关闭产品 BB11、portable package 或真实 Work |
-| U1 窄安装设计 | 独占候选已组合 main `55c8282`；r2/r3 FAIL 已修；精确 staged tree `a4fdd66cddc85086733b22c3a8e3ec182ce90e03`，r4 controller working，尚无 PASS | 冻结候选，消费正式 r4 裁决；PASS 后单独交付设计并派产品实现，FAIL 则同一 scope 修订；不改变正在审查的候选 |
-| U2 窄配置设计 | r3 GCM 正修订，base `55c8282`；machine source 与每 daemon accepted/effective 已拆分为草稿，尚未独立准入 | 消费作者终态、检查 async/CAS/锁/显式迁移及中文 SESE，再独立窄审；不同时写作者文件，不批准全机 accepted 替代 daemon accepted |
-| D3/U4 SDK/Work | issue `4b6c377`，独占树 base `78fa8bc`；真实公开 harness 曾 5/5 通过，但之后候选继续改变，当前仍调试协议失败路径 | 作者先修 stdio 控制/业务边界和范围外证据目录，重验当前精确候选；U1/U2 接缝冻结后给同一 owner 扩展 CLI/receiver IPC；中途 green 不作最终证据，前半阶段不关闭 U4 |
-| U6 窄 Session 设计 | 作者 exit 0、已停止写入；base `55c8282`，精确 staged tree `41b6ae9b224faeed3e6992639cbc70b93be55c4d`；公开 SDK 能力和 Session 图定向检查通过，r1 独立设计审查 working | 消费独立裁决；PASS 后交付设计，产品实现等 U2/U4 共享 runtime 接缝释放；设计不等于真实消息/工具/审批/取消完成 |
-| U7 重入诊断 | base `55c8282`，独立 GCM 正用实际 lifecycle:admission 做后阶段失败注入；前序 verify receipt 可能因晚绑定 evidence 无法复用，仍是假设 | 根据真实 store/receipt 确认或证伪，confirmed 才查重建 bug；不删 evidence 校验、不建第二 PASS 缓存，不把诊断当修复 |
+| U1 窄安装设计 | r4 PASS；候选 commit `d6cfee64` 已组合 `8d143ae`，tree `77b37da1fc55f859d5185b03f98bb76355f30bd1`；r5-main controller completed/pass、exit 0，仅 P2 | 交付该设计、归档审查并回收设计树；不把设计 PASS 写成安装完成。安装 runner 名固定为 agentteams-dagpipe-runner，完整 SDK 输入身份由 D3 唯一 build receipt 提供 |
+| U1 基础 package 实现 | issue `746dd7b`，base `8d143ae`；独占新 GCM worker 经 signal 0 确认 live，无终态 | 唯一 producer/pack root 和源码树外真实安装 consumer；不改业务 owner。基础模式 release_eligible=false，最终 SDK/Console 生命周期仍依赖 U2/U4/U5，不能关闭完整 U1 |
+| U2 窄配置设计 | 作者已 exit 0 停写；base `8d143ae`，staged tree `87c4e4ebfcc80bf4a88c40d4baa9cac71e624541`，独立 r1 working；内部端口/heartbeat 已从用户 TOML 示例移出 | 冻结候选，消费正式审查；PASS 后交付设计并派独占配置实现。系统选择新机端口并持久化，既有端口占用显式失败，不静默换端口；迁移/双文件持久保证不得夸大 |
+| D3/U4 SDK/Work | issue `4b6c377`，base `8d143ae`；旧 writer 因已证实无界 stdin 实验停止，包装 exit 0 不作完成；独立 r2 GCM 接手同一范围，经 signal 0 确认 live | 先修 fixture 路径、typed stdio 控制/业务/error 分离、有界关闭和唯一 SDK aggregate build receipt；当前候选重新验证。U1/U2 接缝冻结后同一 owner 扩展 CLI/receiver IPC；历史 5/5 不作最终证据 |
+| U6 窄 Session 设计 | r1 官方 FAIL：旧审查 tree `41b6ae9b` 六项 P1；当前候选已组合 `8d143ae`，未重新审查。issue `83a8bd1` open，尚未派修订 writer | 按下方六项最小补链修设计，再由独立 reviewer 审新候选；product 等 U2/U4 共享 runtime 接缝释放。不采用第二个 Session model/config store |
+| U7 重入诊断 | 作者 exit 0；两次真实 admission 分别返回 PROJECT_SDK_VERSION_PIN_MISMATCH / SDK_BINARY_DIGEST_MISMATCH，未到 smoke 故障注入；自有 PATH shim/监听已回收，证据与工作树待收口 | H1 晚绑定 evidence 导致前序重跑未确认也未证伪；先修官方前置再同入口复现，不选旧 binary、不删除真实性 gate、不建第二 PASS 缓存 |
+| U7 SDK prerequisite | `852c3ac` open；clean `8d143ae` pin 实验中 canonical pin-lock 返回 INVALID_SDK_MIGRATION_RECORD，零 tracked 修改；upstream `a7cc2a4` 已 open | 保留失败证据、回收无修改实验树；upstream 唯一 migration reader 用真实旧 bundle 的同入口正反证据定位修复。仅阻断依赖 SDK admission/reentry 的节点，其他产品工作继续 |
 | U1–U7 产品交付 | 本次尚无已集成的产品行为改动，也没有最终安装包黑盒通过 | 按下方依赖推进，逐单元 push/cleanup，不用 D1/D2 完成推算产品完成百分比 |
 
-当前 U1/U2/U6 设计、D3/U4 实现、U7 诊断为五个未交付任务树；恢复时读取各自实际 HEAD、notes 和进程终态，不能凭旧 PID 重启或删除。完整 D1/D2 receipts 已保存在 primary 的 task-evidence/agentteams/receipts 中，源内证据分别见 docs/evidence/d1-behavior-contracts-20261003/ 和 docs/evidence/d2-sdk-probe-20261003/。未交付候选保留；此表不代替 exact receipt。主线产品行为未因 D1/D2 设计与探针发生变化。
+当前有七个既有外置任务树：U1 设计/实现、U2 设计、D3/U4 实现、U6 设计、U7 诊断/pin 实验。恢复时读取各自 HEAD、notes 和终态，不凭旧 PID 重启或删除。U1 设计待独立交付；U7 诊断需归档证据，零修改 pin 实验需核销；其他未交付候选保留。完整 D1/D2 receipts 已保存在 primary 的 task-evidence/agentteams/receipts 中，源内证据见 docs/evidence/d1-behavior-contracts-20261003/ 和 docs/evidence/d2-sdk-probe-20261003/。此表不代替 exact receipt；main 尚无 U1–U7 产品交付。
+
+### 下一轮的确定动作
+
+1. 复用 U1 r5-main PASS，独立交付设计并回收设计树；继续既有基础 package writer，不重复派单。
+2. 消费 U2 r1 终态：PASS 则交付设计并开启 U2 产品单元；FAIL 则仅修 findings 及受影响证据。
+3. 派新 GCM 修 U6 设计的六条 P1，产品源码只读：移除无基座映射的 create.model，模型意图仅属 U2；任意 JsonValue 的 Console 业务传输保真，支持的 OpenCode 消息形状由 owning adapter 在副作用前显式验证；事件按 kind 要求完整身份及结果；取消保留 baseAccepted 与最终状态/unknown；use 内将明确 404/400 等转成 typed result，不永久污染 owner；配置能力声明与 runtime 可用观察分开。修正错误 owner 表和设计阶段禁止推理与 BB10 真实推理的范围差异。
+4. 继续 D3/U4 r2，当前公开 harness 全部通过后才产品 review；U2 冻结/集成后释放 Work CLI 接缝。
+5. 保存 U7 两次 preflight 和官方 pin 失败事实，归档诊断资源；跟踪 upstream，不改历史锁/收据假装迁移成功。前置修复后重做同入口后阶段故障注入，未复现前不关闭 U7。
+6. 按 P1→P4 收口。当前未完成任何最终安装 BB 用例；实现 driver 前，其命令只作为协议设计，不声称可运行。
 
 ### 先闭合的窄模型
 
@@ -75,6 +86,17 @@ D0 已建启动、Work、配置、观察、Session、停止、版本交付七图
 | U6 Console → Session Agent | 新建、发送、观察、审批、取消是明确管理动作；passive Agent 明确不支持，Session Agent 有基座确认；Console 断开不取消 Agent 业务 | 复用 B5，必要最小图/控制契约补链及窄设计 review；保留消息/tool/permission 语义与完整终点 |
 
 D1/D2 准入可复用；上表只约束尚未定义的受影响接缝，不把全部设计重开一遍。
+
+### 图覆盖与实际执行边界
+
+| 业务对象 | 目标执行分类 | 进入实现或交付的缺边 |
+|---|---|---|
+| B1 启动 / B3 配置 / B4 观察 / B5 Session / B6 停止 / B7 交付 | 当前保持 static-governed；由既有 TS/工具 owner 执行 | 各自 owner、真实入口、生命周期/异常终点及对应 BB 证据；不把静态 validate 写成 SDK runtime 已执行 |
+| B2 新 Work 提交 | 必须 executable | 安装入口→Node 宿主→单次 Rust runner→注册 Operators→SDK compile→CompiledGraph→Runtime→现有公开 provider/transport owner→业务结果被用户消费 |
+| B8 原 Work 查询 | 必须 executable，独立于 B2 | 新 execution/attempt + 原 Work/request→resolve/open/get→返回原观察；无 propose/request 重放、无隐式资源释放 |
+
+每个改变的节点固定触发事件、关联身份、typed control/业务 ARC/error、唯一 owner、effects、成功/失败/取消/unknown 和清理证据。sdk Object 只验证形状，项目 decoder 负责字段；SDK 不提供自动鉴权、状态触发、补偿或清理。provider 继续独占 admission、容量、执行和结果账本；Node 不再排序图，Rust 不成为第二个常驻 daemon。
+八个 graph JSON 是拓扑真源；中文语义图与状态图说明业务，现有 maps 说明实现位置。未改契约不重写图；设计窄审与产品 E2E 后的架构审查是不同准入。
 
 ### 建模与 DAGpipe 改造责任
 
@@ -124,7 +146,7 @@ flowchart LR
   V --> R[独立审查与远端交付及回收]
 ```
 
-- 当前 D1/D2 已准入。立即收口 U1 r2 FAIL 与 U2 窄设计；同时现有 D3/U4 owner 可在 runtime/dagpipe 独占范围实现，不触碰尚未冻结的 CLI/config/agent-process 接缝。
+- 当前 D1/D2 已准入。立即交付 U1 r5 PASS、消费 U2 窄设计、修 U6 FAIL；既有 U1 packaging 与 D3/U4 owner 在独占范围继续，不触碰尚未冻结的配置接缝。SDK prerequisite 单独跟踪，不让其阻断无依赖工作。
 - 第一批：U1 packaging worker 与 U2 config worker 的已准入实现可并发；各写独立 worktree，无共享文件。U1 先收口 assets，SDK 产物由 D3 提供后同包补验；不得以基础包通过关闭 U1 最终安装依赖。
 - 第二批：U2 集成后 U3 capability worker 与 U4 worker 准备定向测试可并发，但 U4 的最终 E2E 等 U3。U3 不改 parser，U4 不改 executor。
 - U5 runtime 与 U6 session 都可能修改 agent-process/local-process 或其 projection；按集成依赖串行，同文件不并发写。U5 的 UI worker 可在固定 contract 下并行，只拥有 UI 路径；fixture 不替代真实浏览器验收。
