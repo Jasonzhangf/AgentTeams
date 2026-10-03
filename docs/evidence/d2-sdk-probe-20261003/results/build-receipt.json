@@ -1,0 +1,88 @@
+{
+  "protocol": "d2-sdk-probe-build-receipt",
+  "version": 1,
+  "generated_at": "2026-10-03T04:38:07.774Z",
+  "inputs": {
+    "build_entry": {
+      "path": "build.mjs",
+      "sha256": "fbdd4c1d4c6c63cd7205f2b2198b9377324514eec0f1e08b50f356a1529522bb"
+    },
+    "driver": {
+      "path": "host/host.mjs",
+      "sha256": "a994a617e419e276f391696954cae7618d16c822144a597f443135a70960f2ab"
+    },
+    "probe_source": {
+      "path": "runner/src/bin/probe.rs",
+      "sha256": "10abd71c838984eba10ef4d25b1fd3d3da9b18c858327116aed6b6b552518d4c"
+    },
+    "build_template": {
+      "path": "runner/Cargo.toml.template",
+      "sha256": "b243ae553d7f442cdc6513eeebd849521857ce2cedf0d1eef3e9a18fc3e19af4"
+    },
+    "lock": {
+      "path": "runner/Cargo.lock",
+      "sha256": "81b5d0dd1da1dae7d129e572e0acc7d6636e504ee03b6b386582de1a9842b891"
+    }
+  },
+  "fixtures": {
+    "cases": {
+      "path": "cases.json",
+      "sha256": "b18e7bcd597a7fa07e67c44894bcf48d7c250982ac608806c7a1a720a4848148"
+    },
+    "input_a": {
+      "path": "input-A.txt",
+      "sha256": "88c684655ea0b798a4cd5db77ac1af0439dbe23de391781205951a34968fda66"
+    },
+    "input_b": {
+      "path": "input-B.txt",
+      "sha256": "b232e76aa7355eb01752c8908c8ce9ebe5016701733c0f0a5b5b8b39cc75f05e"
+    }
+  },
+  "sdk": {
+    "crate": "pipeline_runtime",
+    "version": "0.1.1",
+    "path": "/Users/fanzhang/.local/share/dagpipe/sdk",
+    "manifest": {
+      "path": "Cargo.toml",
+      "sha256": "2a3ef4936288b80f369cc740f3d7254c4a19fe0c252444fcc4f5481ca35bfc58"
+    },
+    "sources": [
+      {
+        "path": "src/bin/dagpipe.rs",
+        "sha256": "a212d0ad96f1d19a90ee94fc4fad7fc51445715a55d2014d9da72bf34dfc4483"
+      },
+      {
+        "path": "src/lib.rs",
+        "sha256": "81f7a5051f6d5420f325cf982d1c13b9b1c5e080ff788fccc7c8983ed348c89a"
+      }
+    ]
+  },
+  "generated": {
+    "manifest": {
+      "path": ".build/current/Cargo.toml",
+      "sha256": "c7f37f53e5bcb7ffcea8b6de5c622b3a1a741edad0f00293bfb4c2c9915aa581"
+    },
+    "lock": {
+      "path": ".build/current/Cargo.lock",
+      "sha256": "81b5d0dd1da1dae7d129e572e0acc7d6636e504ee03b6b386582de1a9842b891"
+    }
+  },
+  "artifact": {
+    "kind": "rust-bin",
+    "name": "probe",
+    "path": ".build/current/target/debug/probe",
+    "sha256": "0587d96c6eab03727285eb231dfa373d4345076c9ca2595ad72f4f162ec9aee7",
+    "size": 3275816
+  },
+  "resolution": {
+    "package": "pipeline_runtime",
+    "version": "0.1.1",
+    "manifest_path": "/Users/fanzhang/.local/share/dagpipe/sdk/Cargo.toml",
+    "source": null
+  },
+  "toolchain": {
+    "node": "v22.22.2",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)\nrelease: 1.97.1\ncommit-hash: c980f4866141969fab6254a680546a277789d6f0\ncommit-date: 2026-06-30\nhost: aarch64-apple-darwin\nlibgit2: 1.9.2 (sys:0.20.4 vendored)\nlibcurl: 8.7.1 (sys:0.4.88+curl-8.20.0 system ssl:(SecureTransport) LibreSSL/3.3.6)\nssl: OpenSSL 3.6.2 7 Apr 2026\nos: Mac OS 26.6.2 [64-bit]",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6"
+  }
+}

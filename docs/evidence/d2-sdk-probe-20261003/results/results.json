@@ -1,0 +1,1910 @@
+{
+  "protocol": "d2-sdk-probe-results",
+  "receipt": {
+    "path": "results/build-receipt.json",
+    "sha256": "721dbd79dda742bfff7b2f4e87151a4b33a669a233e333e4c7cdac77353db0d0",
+    "artifact": {
+      "kind": "rust-bin",
+      "name": "probe",
+      "path": ".build/current/target/debug/probe",
+      "sha256": "0587d96c6eab03727285eb231dfa373d4345076c9ca2595ad72f4f162ec9aee7",
+      "size": 3275816
+    },
+    "sdk": {
+      "crate": "pipeline_runtime",
+      "version": "0.1.1",
+      "path": "/Users/fanzhang/.local/share/dagpipe/sdk",
+      "manifest": {
+        "path": "Cargo.toml",
+        "sha256": "2a3ef4936288b80f369cc740f3d7254c4a19fe0c252444fcc4f5481ca35bfc58"
+      },
+      "sources": [
+        {
+          "path": "src/bin/dagpipe.rs",
+          "sha256": "a212d0ad96f1d19a90ee94fc4fad7fc51445715a55d2014d9da72bf34dfc4483"
+        },
+        {
+          "path": "src/lib.rs",
+          "sha256": "81f7a5051f6d5420f325cf982d1c13b9b1c5e080ff788fccc7c8983ed348c89a"
+        }
+      ]
+    }
+  },
+  "identityMismatch": {
+    "pass": true,
+    "hostCalls": 0,
+    "runnerSpawns": 0,
+    "checks": [
+      {
+        "label": "artifact sha256 mismatch rejected",
+        "pass": true,
+        "actual": true,
+        "expected": true
+      },
+      {
+        "label": "artifact sha256 mismatch zero runner spawn",
+        "pass": true,
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "label": "artifact sha256 mismatch error",
+        "pass": true,
+        "actual": "artifact sha256 mismatch: expected 0000000000000000000000000000000000000000000000000000000000000000, got 0587d96c6eab03727285eb231dfa373d4345076c9ca2595ad72f4f162ec9aee7",
+        "expected": "contains \"mismatch\""
+      },
+      {
+        "label": "SDK source sha256 mismatch rejected",
+        "pass": true,
+        "actual": true,
+        "expected": true
+      },
+      {
+        "label": "SDK source sha256 mismatch zero runner spawn",
+        "pass": true,
+        "actual": 0,
+        "expected": 0
+      },
+      {
+        "label": "SDK source sha256 mismatch error",
+        "pass": true,
+        "actual": "sdk.sources[0] sha256 mismatch: expected 0000000000000000000000000000000000000000000000000000000000000000, got a212d0ad96f1d19a90ee94fc4fad7fc51445715a55d2014d9da72bf34dfc4483",
+        "expected": "contains \"mismatch\""
+      }
+    ]
+  },
+  "sdk": {
+    "crate": "pipeline_runtime",
+    "version": "0.1.1",
+    "path": "/Users/fanzhang/.local/share/dagpipe/sdk",
+    "manifest": {
+      "path": "Cargo.toml",
+      "sha256": "2a3ef4936288b80f369cc740f3d7254c4a19fe0c252444fcc4f5481ca35bfc58"
+    },
+    "sources": [
+      {
+        "path": "src/bin/dagpipe.rs",
+        "sha256": "a212d0ad96f1d19a90ee94fc4fad7fc51445715a55d2014d9da72bf34dfc4483"
+      },
+      {
+        "path": "src/lib.rs",
+        "sha256": "81f7a5051f6d5420f325cf982d1c13b9b1c5e080ff788fccc7c8983ed348c89a"
+      }
+    ]
+  },
+  "runtime": {
+    "node": "v22.22.2",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)\nrelease: 1.97.1\ncommit-hash: c980f4866141969fab6254a680546a277789d6f0\ncommit-date: 2026-06-30\nhost: aarch64-apple-darwin\nlibgit2: 1.9.2 (sys:0.20.4 vendored)\nlibcurl: 8.7.1 (sys:0.4.88+curl-8.20.0 system ssl:(SecureTransport) LibreSSL/3.3.6)\nssl: OpenSSL 3.6.2 7 Apr 2026\nos: Mac OS 26.6.2 [64-bit]",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)\nbinary: rustc\ncommit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452\ncommit-date: 2026-07-14\nhost: aarch64-apple-darwin\nrelease: 1.97.1\nLLVM version: 22.1.6",
+    "receiptMatch": true
+  },
+  "passed": 8,
+  "total": 8,
+  "results": [
+    {
+      "case": "normal-a",
+      "command": [
+        "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/.build/current/target/debug/probe",
+        "run",
+        "{\"path\":\"/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt\"}"
+      ],
+      "pass": true,
+      "checks": [
+        {
+          "label": "runner exit code",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "one final frame",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "no protocol errors",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "stderr empty",
+          "pass": true,
+          "actual": "",
+          "expected": ""
+        },
+        {
+          "label": "host call count",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "status",
+          "pass": true,
+          "actual": "success",
+          "expected": "success"
+        },
+        {
+          "label": "compiled graph",
+          "pass": true,
+          "actual": {
+            "id": "d2_sdk_host_probe",
+            "node_ids": [
+              "first-host-read",
+              "second-pure-output"
+            ],
+            "version": "1"
+          },
+          "expected": {
+            "id": "d2_sdk_host_probe",
+            "version": "1",
+            "node_ids": [
+              "first-host-read",
+              "second-pure-output"
+            ]
+          }
+        },
+        {
+          "label": "identity",
+          "pass": true,
+          "actual": {
+            "attempt_id": "1",
+            "execution_id": "d2-probe-execution",
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "project_id": "agentteams-d2-probe"
+          },
+          "expected": {
+            "project_id": "agentteams-d2-probe",
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "execution_id": "d2-probe-execution",
+            "attempt_id": "1"
+          }
+        },
+        {
+          "label": "graph input accepted by Object",
+          "pass": true,
+          "actual": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "expected": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          }
+        },
+        {
+          "label": "output keys",
+          "pass": true,
+          "actual": [
+            "work.receipt"
+          ],
+          "expected": [
+            "work.receipt"
+          ]
+        },
+        {
+          "label": "output payload",
+          "pass": true,
+          "actual": {
+            "id": "work.receipt",
+            "payload": {
+              "bytes": 9,
+              "content": "marker=A\n",
+              "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+            },
+            "schema": "Object",
+            "version": 1
+          },
+          "expected": {
+            "id": "work.receipt",
+            "version": 1,
+            "schema": "Object",
+            "payload": {
+              "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt",
+              "content": "marker=A\n",
+              "bytes": 9
+            }
+          }
+        },
+        {
+          "label": "SDK node schedule order",
+          "pass": true,
+          "actual": [
+            "first-host-read",
+            "second-pure-output"
+          ],
+          "expected": [
+            "first-host-read",
+            "second-pure-output"
+          ]
+        },
+        {
+          "label": "SDK node completion order",
+          "pass": true,
+          "actual": [
+            "first-host-read",
+            "second-pure-output"
+          ],
+          "expected": [
+            "first-host-read",
+            "second-pure-output"
+          ]
+        },
+        {
+          "label": "journal completed last",
+          "pass": true,
+          "actual": {
+            "kind": "execution_completed"
+          },
+          "expected": {
+            "kind": "execution_completed"
+          }
+        },
+        {
+          "label": "journal has no failure",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "host.call control",
+          "pass": true,
+          "actual": {
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "node_id": "first-host-read",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "request_id": "d2-probe-execution/first-host-read/1"
+          },
+          "expected": {
+            "request_id": "d2-probe-execution/first-host-read/1",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "node_id": "first-host-read",
+            "identity": {
+              "project_id": "agentteams-d2-probe",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "execution_id": "d2-probe-execution",
+              "attempt_id": "1"
+            }
+          }
+        },
+        {
+          "label": "host.call business",
+          "pass": true,
+          "actual": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "expected": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          }
+        }
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "hostCalls": [
+        {
+          "business": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "control": {
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "node_id": "first-host-read",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "request_id": "d2-probe-execution/first-host-read/1"
+          },
+          "type": "host.call"
+        }
+      ],
+      "final": {
+        "compiled": {
+          "id": "d2_sdk_host_probe",
+          "node_ids": [
+            "first-host-read",
+            "second-pure-output"
+          ],
+          "version": "1"
+        },
+        "graph_input": {
+          "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+        },
+        "identity": {
+          "attempt_id": "1",
+          "execution_id": "d2-probe-execution",
+          "graph_id": "d2_sdk_host_probe",
+          "graph_version": "1",
+          "project_id": "agentteams-d2-probe"
+        },
+        "journal": [
+          {
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "kind": "execution_started"
+          },
+          {
+            "kind": "node_scheduled",
+            "node_id": "first-host-read"
+          },
+          {
+            "input_arc_refs": [
+              "arc://d2-probe-execution/work.intent@1"
+            ],
+            "kind": "node_started",
+            "node_id": "first-host-read"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/work.intent@1",
+            "kind": "arc_read",
+            "node_id": "first-host-read"
+          },
+          {
+            "effects": [
+              "d2.host.read"
+            ],
+            "invocation_index": null,
+            "kind": "operator_started",
+            "node_id": "first-host-read",
+            "operator": "d2.host_read",
+            "operator_version": "1",
+            "replay": "idempotent"
+          },
+          {
+            "invocation_index": null,
+            "kind": "operator_completed",
+            "node_id": "first-host-read"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/host.read@1",
+            "kind": "arc_written",
+            "node_id": "first-host-read"
+          },
+          {
+            "kind": "node_completed",
+            "node_id": "first-host-read",
+            "output_arc_ref": "arc://d2-probe-execution/host.read@1"
+          },
+          {
+            "kind": "node_scheduled",
+            "node_id": "second-pure-output"
+          },
+          {
+            "input_arc_refs": [
+              "arc://d2-probe-execution/host.read@1"
+            ],
+            "kind": "node_started",
+            "node_id": "second-pure-output"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/host.read@1",
+            "kind": "arc_read",
+            "node_id": "second-pure-output"
+          },
+          {
+            "effects": [],
+            "invocation_index": null,
+            "kind": "operator_started",
+            "node_id": "second-pure-output",
+            "operator": "d2.pure_output",
+            "operator_version": "1",
+            "replay": "replayable"
+          },
+          {
+            "invocation_index": null,
+            "kind": "operator_completed",
+            "node_id": "second-pure-output"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/work.receipt@1",
+            "kind": "arc_written",
+            "node_id": "second-pure-output"
+          },
+          {
+            "kind": "node_completed",
+            "node_id": "second-pure-output",
+            "output_arc_ref": "arc://d2-probe-execution/work.receipt@1"
+          },
+          {
+            "kind": "execution_completed"
+          }
+        ],
+        "outputs": {
+          "work.receipt": {
+            "id": "work.receipt",
+            "payload": {
+              "bytes": 9,
+              "content": "marker=A\n",
+              "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+            },
+            "schema": "Object",
+            "version": 1
+          }
+        },
+        "probe": "d2-sdk-probe",
+        "status": "success"
+      },
+      "stderr": ""
+    },
+    {
+      "case": "normal-b",
+      "command": [
+        "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/.build/current/target/debug/probe",
+        "run",
+        "{\"path\":\"/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt\"}"
+      ],
+      "pass": true,
+      "checks": [
+        {
+          "label": "runner exit code",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "one final frame",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "no protocol errors",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "stderr empty",
+          "pass": true,
+          "actual": "",
+          "expected": ""
+        },
+        {
+          "label": "host call count",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "status",
+          "pass": true,
+          "actual": "success",
+          "expected": "success"
+        },
+        {
+          "label": "compiled graph",
+          "pass": true,
+          "actual": {
+            "id": "d2_sdk_host_probe",
+            "node_ids": [
+              "first-host-read",
+              "second-pure-output"
+            ],
+            "version": "1"
+          },
+          "expected": {
+            "id": "d2_sdk_host_probe",
+            "version": "1",
+            "node_ids": [
+              "first-host-read",
+              "second-pure-output"
+            ]
+          }
+        },
+        {
+          "label": "identity",
+          "pass": true,
+          "actual": {
+            "attempt_id": "1",
+            "execution_id": "d2-probe-execution",
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "project_id": "agentteams-d2-probe"
+          },
+          "expected": {
+            "project_id": "agentteams-d2-probe",
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "execution_id": "d2-probe-execution",
+            "attempt_id": "1"
+          }
+        },
+        {
+          "label": "graph input accepted by Object",
+          "pass": true,
+          "actual": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt"
+          },
+          "expected": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt"
+          }
+        },
+        {
+          "label": "output keys",
+          "pass": true,
+          "actual": [
+            "work.receipt"
+          ],
+          "expected": [
+            "work.receipt"
+          ]
+        },
+        {
+          "label": "output payload",
+          "pass": true,
+          "actual": {
+            "id": "work.receipt",
+            "payload": {
+              "bytes": 9,
+              "content": "marker=B\n",
+              "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt"
+            },
+            "schema": "Object",
+            "version": 1
+          },
+          "expected": {
+            "id": "work.receipt",
+            "version": 1,
+            "schema": "Object",
+            "payload": {
+              "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt",
+              "content": "marker=B\n",
+              "bytes": 9
+            }
+          }
+        },
+        {
+          "label": "SDK node schedule order",
+          "pass": true,
+          "actual": [
+            "first-host-read",
+            "second-pure-output"
+          ],
+          "expected": [
+            "first-host-read",
+            "second-pure-output"
+          ]
+        },
+        {
+          "label": "SDK node completion order",
+          "pass": true,
+          "actual": [
+            "first-host-read",
+            "second-pure-output"
+          ],
+          "expected": [
+            "first-host-read",
+            "second-pure-output"
+          ]
+        },
+        {
+          "label": "journal completed last",
+          "pass": true,
+          "actual": {
+            "kind": "execution_completed"
+          },
+          "expected": {
+            "kind": "execution_completed"
+          }
+        },
+        {
+          "label": "journal has no failure",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "host.call control",
+          "pass": true,
+          "actual": {
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "node_id": "first-host-read",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "request_id": "d2-probe-execution/first-host-read/1"
+          },
+          "expected": {
+            "request_id": "d2-probe-execution/first-host-read/1",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "node_id": "first-host-read",
+            "identity": {
+              "project_id": "agentteams-d2-probe",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "execution_id": "d2-probe-execution",
+              "attempt_id": "1"
+            }
+          }
+        },
+        {
+          "label": "host.call business",
+          "pass": true,
+          "actual": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt"
+          },
+          "expected": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt"
+          }
+        }
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "hostCalls": [
+        {
+          "business": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt"
+          },
+          "control": {
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "node_id": "first-host-read",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "request_id": "d2-probe-execution/first-host-read/1"
+          },
+          "type": "host.call"
+        }
+      ],
+      "final": {
+        "compiled": {
+          "id": "d2_sdk_host_probe",
+          "node_ids": [
+            "first-host-read",
+            "second-pure-output"
+          ],
+          "version": "1"
+        },
+        "graph_input": {
+          "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt"
+        },
+        "identity": {
+          "attempt_id": "1",
+          "execution_id": "d2-probe-execution",
+          "graph_id": "d2_sdk_host_probe",
+          "graph_version": "1",
+          "project_id": "agentteams-d2-probe"
+        },
+        "journal": [
+          {
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "kind": "execution_started"
+          },
+          {
+            "kind": "node_scheduled",
+            "node_id": "first-host-read"
+          },
+          {
+            "input_arc_refs": [
+              "arc://d2-probe-execution/work.intent@1"
+            ],
+            "kind": "node_started",
+            "node_id": "first-host-read"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/work.intent@1",
+            "kind": "arc_read",
+            "node_id": "first-host-read"
+          },
+          {
+            "effects": [
+              "d2.host.read"
+            ],
+            "invocation_index": null,
+            "kind": "operator_started",
+            "node_id": "first-host-read",
+            "operator": "d2.host_read",
+            "operator_version": "1",
+            "replay": "idempotent"
+          },
+          {
+            "invocation_index": null,
+            "kind": "operator_completed",
+            "node_id": "first-host-read"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/host.read@1",
+            "kind": "arc_written",
+            "node_id": "first-host-read"
+          },
+          {
+            "kind": "node_completed",
+            "node_id": "first-host-read",
+            "output_arc_ref": "arc://d2-probe-execution/host.read@1"
+          },
+          {
+            "kind": "node_scheduled",
+            "node_id": "second-pure-output"
+          },
+          {
+            "input_arc_refs": [
+              "arc://d2-probe-execution/host.read@1"
+            ],
+            "kind": "node_started",
+            "node_id": "second-pure-output"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/host.read@1",
+            "kind": "arc_read",
+            "node_id": "second-pure-output"
+          },
+          {
+            "effects": [],
+            "invocation_index": null,
+            "kind": "operator_started",
+            "node_id": "second-pure-output",
+            "operator": "d2.pure_output",
+            "operator_version": "1",
+            "replay": "replayable"
+          },
+          {
+            "invocation_index": null,
+            "kind": "operator_completed",
+            "node_id": "second-pure-output"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/work.receipt@1",
+            "kind": "arc_written",
+            "node_id": "second-pure-output"
+          },
+          {
+            "kind": "node_completed",
+            "node_id": "second-pure-output",
+            "output_arc_ref": "arc://d2-probe-execution/work.receipt@1"
+          },
+          {
+            "kind": "execution_completed"
+          }
+        ],
+        "outputs": {
+          "work.receipt": {
+            "id": "work.receipt",
+            "payload": {
+              "bytes": 9,
+              "content": "marker=B\n",
+              "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-B.txt"
+            },
+            "schema": "Object",
+            "version": 1
+          }
+        },
+        "probe": "d2-sdk-probe",
+        "status": "success"
+      },
+      "stderr": ""
+    },
+    {
+      "case": "object-extra-field",
+      "command": [
+        "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/.build/current/target/debug/probe",
+        "run",
+        "{\"path\":\"/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt\",\"extra\":{\"not_a_record_field\":true}}"
+      ],
+      "pass": true,
+      "checks": [
+        {
+          "label": "runner exit code",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "one final frame",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "no protocol errors",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "stderr empty",
+          "pass": true,
+          "actual": "",
+          "expected": ""
+        },
+        {
+          "label": "host call count",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "status",
+          "pass": true,
+          "actual": "success",
+          "expected": "success"
+        },
+        {
+          "label": "compiled graph",
+          "pass": true,
+          "actual": {
+            "id": "d2_sdk_host_probe",
+            "node_ids": [
+              "first-host-read",
+              "second-pure-output"
+            ],
+            "version": "1"
+          },
+          "expected": {
+            "id": "d2_sdk_host_probe",
+            "version": "1",
+            "node_ids": [
+              "first-host-read",
+              "second-pure-output"
+            ]
+          }
+        },
+        {
+          "label": "identity",
+          "pass": true,
+          "actual": {
+            "attempt_id": "1",
+            "execution_id": "d2-probe-execution",
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "project_id": "agentteams-d2-probe"
+          },
+          "expected": {
+            "project_id": "agentteams-d2-probe",
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "execution_id": "d2-probe-execution",
+            "attempt_id": "1"
+          }
+        },
+        {
+          "label": "graph input accepted by Object",
+          "pass": true,
+          "actual": {
+            "extra": {
+              "not_a_record_field": true
+            },
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "expected": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt",
+            "extra": {
+              "not_a_record_field": true
+            }
+          }
+        },
+        {
+          "label": "output keys",
+          "pass": true,
+          "actual": [
+            "work.receipt"
+          ],
+          "expected": [
+            "work.receipt"
+          ]
+        },
+        {
+          "label": "output payload",
+          "pass": true,
+          "actual": {
+            "id": "work.receipt",
+            "payload": {
+              "bytes": 9,
+              "content": "marker=A\n",
+              "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+            },
+            "schema": "Object",
+            "version": 1
+          },
+          "expected": {
+            "id": "work.receipt",
+            "version": 1,
+            "schema": "Object",
+            "payload": {
+              "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt",
+              "content": "marker=A\n",
+              "bytes": 9
+            }
+          }
+        },
+        {
+          "label": "SDK node schedule order",
+          "pass": true,
+          "actual": [
+            "first-host-read",
+            "second-pure-output"
+          ],
+          "expected": [
+            "first-host-read",
+            "second-pure-output"
+          ]
+        },
+        {
+          "label": "SDK node completion order",
+          "pass": true,
+          "actual": [
+            "first-host-read",
+            "second-pure-output"
+          ],
+          "expected": [
+            "first-host-read",
+            "second-pure-output"
+          ]
+        },
+        {
+          "label": "journal completed last",
+          "pass": true,
+          "actual": {
+            "kind": "execution_completed"
+          },
+          "expected": {
+            "kind": "execution_completed"
+          }
+        },
+        {
+          "label": "journal has no failure",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "host.call control",
+          "pass": true,
+          "actual": {
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "node_id": "first-host-read",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "request_id": "d2-probe-execution/first-host-read/1"
+          },
+          "expected": {
+            "request_id": "d2-probe-execution/first-host-read/1",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "node_id": "first-host-read",
+            "identity": {
+              "project_id": "agentteams-d2-probe",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "execution_id": "d2-probe-execution",
+              "attempt_id": "1"
+            }
+          }
+        },
+        {
+          "label": "host.call business",
+          "pass": true,
+          "actual": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "expected": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          }
+        }
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "hostCalls": [
+        {
+          "business": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "control": {
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "node_id": "first-host-read",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "request_id": "d2-probe-execution/first-host-read/1"
+          },
+          "type": "host.call"
+        }
+      ],
+      "final": {
+        "compiled": {
+          "id": "d2_sdk_host_probe",
+          "node_ids": [
+            "first-host-read",
+            "second-pure-output"
+          ],
+          "version": "1"
+        },
+        "graph_input": {
+          "extra": {
+            "not_a_record_field": true
+          },
+          "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+        },
+        "identity": {
+          "attempt_id": "1",
+          "execution_id": "d2-probe-execution",
+          "graph_id": "d2_sdk_host_probe",
+          "graph_version": "1",
+          "project_id": "agentteams-d2-probe"
+        },
+        "journal": [
+          {
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "kind": "execution_started"
+          },
+          {
+            "kind": "node_scheduled",
+            "node_id": "first-host-read"
+          },
+          {
+            "input_arc_refs": [
+              "arc://d2-probe-execution/work.intent@1"
+            ],
+            "kind": "node_started",
+            "node_id": "first-host-read"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/work.intent@1",
+            "kind": "arc_read",
+            "node_id": "first-host-read"
+          },
+          {
+            "effects": [
+              "d2.host.read"
+            ],
+            "invocation_index": null,
+            "kind": "operator_started",
+            "node_id": "first-host-read",
+            "operator": "d2.host_read",
+            "operator_version": "1",
+            "replay": "idempotent"
+          },
+          {
+            "invocation_index": null,
+            "kind": "operator_completed",
+            "node_id": "first-host-read"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/host.read@1",
+            "kind": "arc_written",
+            "node_id": "first-host-read"
+          },
+          {
+            "kind": "node_completed",
+            "node_id": "first-host-read",
+            "output_arc_ref": "arc://d2-probe-execution/host.read@1"
+          },
+          {
+            "kind": "node_scheduled",
+            "node_id": "second-pure-output"
+          },
+          {
+            "input_arc_refs": [
+              "arc://d2-probe-execution/host.read@1"
+            ],
+            "kind": "node_started",
+            "node_id": "second-pure-output"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/host.read@1",
+            "kind": "arc_read",
+            "node_id": "second-pure-output"
+          },
+          {
+            "effects": [],
+            "invocation_index": null,
+            "kind": "operator_started",
+            "node_id": "second-pure-output",
+            "operator": "d2.pure_output",
+            "operator_version": "1",
+            "replay": "replayable"
+          },
+          {
+            "invocation_index": null,
+            "kind": "operator_completed",
+            "node_id": "second-pure-output"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/work.receipt@1",
+            "kind": "arc_written",
+            "node_id": "second-pure-output"
+          },
+          {
+            "kind": "node_completed",
+            "node_id": "second-pure-output",
+            "output_arc_ref": "arc://d2-probe-execution/work.receipt@1"
+          },
+          {
+            "kind": "execution_completed"
+          }
+        ],
+        "outputs": {
+          "work.receipt": {
+            "id": "work.receipt",
+            "payload": {
+              "bytes": 9,
+              "content": "marker=A\n",
+              "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+            },
+            "schema": "Object",
+            "version": 1
+          }
+        },
+        "probe": "d2-sdk-probe",
+        "status": "success"
+      },
+      "stderr": ""
+    },
+    {
+      "case": "field-missing",
+      "command": [
+        "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/.build/current/target/debug/probe",
+        "run",
+        "{\"not_path\":1}"
+      ],
+      "pass": true,
+      "checks": [
+        {
+          "label": "runner exit code",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "one final frame",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "no protocol errors",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "stderr empty",
+          "pass": true,
+          "actual": "",
+          "expected": ""
+        },
+        {
+          "label": "host call count",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "status",
+          "pass": true,
+          "actual": "runtime_error",
+          "expected": "runtime_error"
+        },
+        {
+          "label": "error kind",
+          "pass": true,
+          "actual": "operator",
+          "expected": "operator"
+        },
+        {
+          "label": "error message",
+          "pass": true,
+          "actual": "business.path must be a non-empty string",
+          "expected": "business.path must be a non-empty string"
+        },
+        {
+          "label": "no false outputs",
+          "pass": true,
+          "actual": false,
+          "expected": false
+        },
+        {
+          "label": "node completion order",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "journal failed last",
+          "pass": true,
+          "actual": {
+            "error_kind": "operator",
+            "kind": "execution_failed"
+          },
+          "expected": {
+            "kind": "execution_failed"
+          }
+        },
+        {
+          "label": "journal error kind",
+          "pass": true,
+          "actual": "operator",
+          "expected": "operator"
+        },
+        {
+          "label": "no false execution completion",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        }
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "hostCalls": [],
+      "final": {
+        "journal": [
+          {
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "kind": "execution_started"
+          },
+          {
+            "kind": "node_scheduled",
+            "node_id": "first-host-read"
+          },
+          {
+            "input_arc_refs": [
+              "arc://d2-probe-execution/work.intent@1"
+            ],
+            "kind": "node_started",
+            "node_id": "first-host-read"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/work.intent@1",
+            "kind": "arc_read",
+            "node_id": "first-host-read"
+          },
+          {
+            "effects": [
+              "d2.host.read"
+            ],
+            "invocation_index": null,
+            "kind": "operator_started",
+            "node_id": "first-host-read",
+            "operator": "d2.host_read",
+            "operator_version": "1",
+            "replay": "idempotent"
+          },
+          {
+            "error_kind": "operator",
+            "kind": "node_failed",
+            "node_id": "first-host-read"
+          },
+          {
+            "error_kind": "operator",
+            "kind": "execution_failed"
+          }
+        ],
+        "kind": "operator",
+        "message": "business.path must be a non-empty string",
+        "probe": "d2-sdk-probe",
+        "status": "runtime_error"
+      },
+      "stderr": ""
+    },
+    {
+      "case": "compile-missing-operator",
+      "command": [
+        "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/.build/current/target/debug/probe",
+        "compile-missing-operator",
+        "{}"
+      ],
+      "pass": true,
+      "checks": [
+        {
+          "label": "runner exit code",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "one final frame",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "no protocol errors",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "stderr empty",
+          "pass": true,
+          "actual": "",
+          "expected": ""
+        },
+        {
+          "label": "host call count",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "status",
+          "pass": true,
+          "actual": "compile_error",
+          "expected": "compile_error"
+        },
+        {
+          "label": "stage",
+          "pass": true,
+          "actual": "compile",
+          "expected": "compile"
+        },
+        {
+          "label": "graph id",
+          "pass": true,
+          "actual": "d2_sdk_host_probe",
+          "expected": "d2_sdk_host_probe"
+        },
+        {
+          "label": "error message",
+          "pass": true,
+          "actual": "node `first-host-read` references missing operator `d2.missing_operator@1`",
+          "expected": "node `first-host-read` references missing operator `d2.missing_operator@1`"
+        },
+        {
+          "label": "no host calls",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "no journal",
+          "pass": true,
+          "actual": false,
+          "expected": false
+        }
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "hostCalls": [],
+      "final": {
+        "graph_id": "d2_sdk_host_probe",
+        "message": "node `first-host-read` references missing operator `d2.missing_operator@1`",
+        "probe": "d2-sdk-probe",
+        "stage": "compile",
+        "status": "compile_error"
+      },
+      "stderr": ""
+    },
+    {
+      "case": "compile-missing-effects",
+      "command": [
+        "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/.build/current/target/debug/probe",
+        "compile-missing-effects",
+        "{}"
+      ],
+      "pass": true,
+      "checks": [
+        {
+          "label": "runner exit code",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "one final frame",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "no protocol errors",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "stderr empty",
+          "pass": true,
+          "actual": "",
+          "expected": ""
+        },
+        {
+          "label": "host call count",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "status",
+          "pass": true,
+          "actual": "compile_error",
+          "expected": "compile_error"
+        },
+        {
+          "label": "stage",
+          "pass": true,
+          "actual": "compile",
+          "expected": "compile"
+        },
+        {
+          "label": "graph id",
+          "pass": true,
+          "actual": "d2_sdk_host_probe",
+          "expected": "d2_sdk_host_probe"
+        },
+        {
+          "label": "error message",
+          "pass": true,
+          "actual": "node `first-host-read` requires undeclared capability `d2.host.read`",
+          "expected": "node `first-host-read` requires undeclared capability `d2.host.read`"
+        },
+        {
+          "label": "no host calls",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "no journal",
+          "pass": true,
+          "actual": false,
+          "expected": false
+        }
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "hostCalls": [],
+      "final": {
+        "graph_id": "d2_sdk_host_probe",
+        "message": "node `first-host-read` requires undeclared capability `d2.host.read`",
+        "probe": "d2-sdk-probe",
+        "stage": "compile",
+        "status": "compile_error"
+      },
+      "stderr": ""
+    },
+    {
+      "case": "host-error",
+      "command": [
+        "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/.build/current/target/debug/probe",
+        "run",
+        "{\"path\":\"/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt\"}"
+      ],
+      "pass": true,
+      "checks": [
+        {
+          "label": "runner exit code",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "one final frame",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "no protocol errors",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "stderr empty",
+          "pass": true,
+          "actual": "",
+          "expected": ""
+        },
+        {
+          "label": "host call count",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "status",
+          "pass": true,
+          "actual": "runtime_error",
+          "expected": "runtime_error"
+        },
+        {
+          "label": "error kind",
+          "pass": true,
+          "actual": "operator",
+          "expected": "operator"
+        },
+        {
+          "label": "error message",
+          "pass": true,
+          "actual": "host read failed: permission denied",
+          "expected": "host read failed: permission denied"
+        },
+        {
+          "label": "no false outputs",
+          "pass": true,
+          "actual": false,
+          "expected": false
+        },
+        {
+          "label": "node completion order",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "journal failed last",
+          "pass": true,
+          "actual": {
+            "error_kind": "operator",
+            "kind": "execution_failed"
+          },
+          "expected": {
+            "kind": "execution_failed"
+          }
+        },
+        {
+          "label": "journal error kind",
+          "pass": true,
+          "actual": "operator",
+          "expected": "operator"
+        },
+        {
+          "label": "no false execution completion",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "failed host.call business",
+          "pass": true,
+          "actual": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "expected": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          }
+        }
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "hostCalls": [
+        {
+          "business": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "control": {
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "node_id": "first-host-read",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "request_id": "d2-probe-execution/first-host-read/1"
+          },
+          "type": "host.call"
+        }
+      ],
+      "final": {
+        "journal": [
+          {
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "kind": "execution_started"
+          },
+          {
+            "kind": "node_scheduled",
+            "node_id": "first-host-read"
+          },
+          {
+            "input_arc_refs": [
+              "arc://d2-probe-execution/work.intent@1"
+            ],
+            "kind": "node_started",
+            "node_id": "first-host-read"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/work.intent@1",
+            "kind": "arc_read",
+            "node_id": "first-host-read"
+          },
+          {
+            "effects": [
+              "d2.host.read"
+            ],
+            "invocation_index": null,
+            "kind": "operator_started",
+            "node_id": "first-host-read",
+            "operator": "d2.host_read",
+            "operator_version": "1",
+            "replay": "idempotent"
+          },
+          {
+            "error_kind": "operator",
+            "kind": "node_failed",
+            "node_id": "first-host-read"
+          },
+          {
+            "error_kind": "operator",
+            "kind": "execution_failed"
+          }
+        ],
+        "kind": "operator",
+        "message": "host read failed: permission denied",
+        "probe": "d2-sdk-probe",
+        "status": "runtime_error"
+      },
+      "stderr": ""
+    },
+    {
+      "case": "host-eof",
+      "command": [
+        "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/.build/current/target/debug/probe",
+        "run",
+        "{\"path\":\"/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt\"}"
+      ],
+      "pass": true,
+      "checks": [
+        {
+          "label": "runner exit code",
+          "pass": true,
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "label": "one final frame",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "no protocol errors",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "stderr empty",
+          "pass": true,
+          "actual": "",
+          "expected": ""
+        },
+        {
+          "label": "host call count",
+          "pass": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "label": "status",
+          "pass": true,
+          "actual": "runtime_error",
+          "expected": "runtime_error"
+        },
+        {
+          "label": "error kind",
+          "pass": true,
+          "actual": "operator",
+          "expected": "operator"
+        },
+        {
+          "label": "error message",
+          "pass": true,
+          "actual": "host EOF before host.result/host.error",
+          "expected": "host EOF before host.result/host.error"
+        },
+        {
+          "label": "no false outputs",
+          "pass": true,
+          "actual": false,
+          "expected": false
+        },
+        {
+          "label": "node completion order",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "journal failed last",
+          "pass": true,
+          "actual": {
+            "error_kind": "operator",
+            "kind": "execution_failed"
+          },
+          "expected": {
+            "kind": "execution_failed"
+          }
+        },
+        {
+          "label": "journal error kind",
+          "pass": true,
+          "actual": "operator",
+          "expected": "operator"
+        },
+        {
+          "label": "no false execution completion",
+          "pass": true,
+          "actual": [],
+          "expected": []
+        },
+        {
+          "label": "failed host.call business",
+          "pass": true,
+          "actual": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "expected": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          }
+        }
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "hostCalls": [
+        {
+          "business": {
+            "path": "/Volumes/Intel/playground/agentteams/d2-sdk-probe-20261003/docs/evidence/d2-sdk-probe-20261003/input-A.txt"
+          },
+          "control": {
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "node_id": "first-host-read",
+            "operation": "host.read_file",
+            "operator": "d2.host_read",
+            "request_id": "d2-probe-execution/first-host-read/1"
+          },
+          "type": "host.call"
+        }
+      ],
+      "final": {
+        "journal": [
+          {
+            "graph_id": "d2_sdk_host_probe",
+            "graph_version": "1",
+            "identity": {
+              "attempt_id": "1",
+              "execution_id": "d2-probe-execution",
+              "graph_id": "d2_sdk_host_probe",
+              "graph_version": "1",
+              "project_id": "agentteams-d2-probe"
+            },
+            "kind": "execution_started"
+          },
+          {
+            "kind": "node_scheduled",
+            "node_id": "first-host-read"
+          },
+          {
+            "input_arc_refs": [
+              "arc://d2-probe-execution/work.intent@1"
+            ],
+            "kind": "node_started",
+            "node_id": "first-host-read"
+          },
+          {
+            "arc_ref": "arc://d2-probe-execution/work.intent@1",
+            "kind": "arc_read",
+            "node_id": "first-host-read"
+          },
+          {
+            "effects": [
+              "d2.host.read"
+            ],
+            "invocation_index": null,
+            "kind": "operator_started",
+            "node_id": "first-host-read",
+            "operator": "d2.host_read",
+            "operator_version": "1",
+            "replay": "idempotent"
+          },
+          {
+            "error_kind": "operator",
+            "kind": "node_failed",
+            "node_id": "first-host-read"
+          },
+          {
+            "error_kind": "operator",
+            "kind": "execution_failed"
+          }
+        ],
+        "kind": "operator",
+        "message": "host EOF before host.result/host.error",
+        "probe": "d2-sdk-probe",
+        "status": "runtime_error"
+      },
+      "stderr": ""
+    }
+  ]
+}

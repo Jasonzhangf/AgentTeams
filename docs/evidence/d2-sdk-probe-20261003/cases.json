@@ -1,0 +1,89 @@
+{
+  "normal-a": {
+    "mode": "run",
+    "inputFile": "input-A.txt",
+    "hostBehavior": "read",
+    "expectedContent": "marker=A\n",
+    "expect": {
+      "status": "success",
+      "hostCalls": 1
+    }
+  },
+  "normal-b": {
+    "mode": "run",
+    "inputFile": "input-B.txt",
+    "hostBehavior": "read",
+    "expectedContent": "marker=B\n",
+    "expect": {
+      "status": "success",
+      "hostCalls": 1
+    }
+  },
+  "object-extra-field": {
+    "mode": "run",
+    "inputFile": "input-A.txt",
+    "inputExtra": true,
+    "hostBehavior": "read",
+    "expectedContent": "marker=A\n",
+    "expect": {
+      "status": "success",
+      "hostCalls": 1
+    }
+  },
+  "field-missing": {
+    "mode": "run",
+    "input": {
+      "not_path": 1
+    },
+    "hostBehavior": "read",
+    "expect": {
+      "status": "runtime_error",
+      "kind": "operator",
+      "message": "business.path must be a non-empty string",
+      "hostCalls": 0,
+      "nodeOrder": []
+    }
+  },
+  "compile-missing-operator": {
+    "mode": "compile-missing-operator",
+    "hostBehavior": "read",
+    "expect": {
+      "status": "compile_error",
+      "message": "node `first-host-read` references missing operator `d2.missing_operator@1`",
+      "hostCalls": 0
+    }
+  },
+  "compile-missing-effects": {
+    "mode": "compile-missing-effects",
+    "hostBehavior": "read",
+    "expect": {
+      "status": "compile_error",
+      "message": "node `first-host-read` requires undeclared capability `d2.host.read`",
+      "hostCalls": 0
+    }
+  },
+  "host-error": {
+    "mode": "run",
+    "inputFile": "input-A.txt",
+    "hostBehavior": "error",
+    "expect": {
+      "status": "runtime_error",
+      "kind": "operator",
+      "message": "host read failed: permission denied",
+      "hostCalls": 1,
+      "nodeOrder": []
+    }
+  },
+  "host-eof": {
+    "mode": "run",
+    "inputFile": "input-A.txt",
+    "hostBehavior": "eof",
+    "expect": {
+      "status": "runtime_error",
+      "kind": "operator",
+      "message": "host EOF before host.result/host.error",
+      "hostCalls": 1,
+      "nodeOrder": []
+    }
+  }
+}
