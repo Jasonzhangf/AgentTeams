@@ -327,9 +327,21 @@ _Empty._
 - tags: `local-mvp,cli,ai-reviewed,human-unreviewed`
 - details: [L2/u1-cli-status-projection.md](L2/u1-cli-status-projection.md)
 
+### U1 installation design admitted and delivered
+- tags: `agentteams`, `ai-reviewed`, `design`, `human-unreviewed`, `installation`
+- details: [L2/u1-package-design-20261003.md](L2/u1-package-design-20261003.md)
+
 ### Runtime projects authoritative daemon status
 - tags: `local-mvp,runtime,ai-reviewed,human-unreviewed`
 - details: [L2/u1-runtime-status-projection.md](L2/u1-runtime-status-projection.md)
+
+### U2 local TOML and config recovery design admitted
+- tags: `agentteams`, `ai-reviewed`, `config`, `design`, `human-unreviewed`
+- details: [L2/u2-config-design-20261003.md](L2/u2-config-design-20261003.md)
+
+### U5 optional Console lifecycle design admitted
+- tags: `agentteams`, `ai-reviewed`, `console`, `design`, `human-unreviewed`
+- details: [L2/u5-console-design-20261003.md](L2/u5-console-design-20261003.md)
 
 ### W1 Agent Work matching and admission
 - tags: `ai-reviewed,human-unreviewed`

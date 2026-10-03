@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-10-03T10:03:23.619696+00:00","id":"u5-console-design-20261003","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["agentteams","ai-reviewed","console","design","human-unreviewed"],"updated_at":"2026-10-03T10:03:23.619696+00:00"} -->
+
+# U5 optional Console lifecycle design admitted
+
+U5 design delivered at commit 71094acb886c48c71c9e4812acc822cbe65497a3, tree b7e85b6a7c9096c5af17bf4d32be705f4a307e55. Independent r2-review PASS; main and remote verified, clean design worktree/branch and stopped author home reclaimed. Console start/stop/status have independent static SESE graphs and pending map bindings. Console stop never stops bridge/daemons or drains Agent Work. U2 owns console projection/config; U5 lifecycle facts occupy consoleRuntime and only use the same U2 typed short-lock serializer. Evidence: primary task-evidence/agentteams/receipts/u5-console-design-20261003/delivery-receipt.json and r2-review/status.json. No product Console, browser/live or BB09 completion is claimed. ai-reviewed, human-unreviewed.
+<!-- project-memory:end -->
