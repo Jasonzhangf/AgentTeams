@@ -30,11 +30,13 @@ coding-principals 和项目适用技能。需要实现 worker 时新建 codex ex
 实现者和 reviewer 必须不同；不使用 AGY；milestone 使用 Codex Review oauth + gpt-6.1-sol。
 
 启动：读取现有任务笔记/issue/receipts，核对实际 main、origin/main、worktrees、worker 和自有进程。
-计划更新输入为 main/origin/main 78fa8bc。D1 94b4633 和 D2 35ca32b 已独立 PASS、推送、清理，
+计划更新输入为 main/origin/main 55c8282。D1 94b4633 和 D2 35ca32b 已独立 PASS、推送、清理，
 阶段记忆分别在 1b492fb/78fa8bc。读取 receipts 后复用，不重开已关闭的 ed0bada/8981687。
-从首个尚未完成或失效节点接手：U1 安装设计 r2 的端口隔离/runner identity 两条 P1；
-U2 草稿的 per-daemon accepted、async/CAS/迁移和 SESE 图；已有 4b6c377 D3/U4 worker 的
-runtime/dagpipe 实现与验证。核对实际 worker/终态再收口，不重复 writer，不删除未交付候选。
+从首个尚未完成或失效节点接手：U1 安装设计 r4 正在审查，候选已修 r2/r3，冻结到正式裁决；
+U2 r3 正修订 per-daemon accepted、async/CAS/迁移和 SESE 图；已有 4b6c377 D3/U4 worker
+在调试 runtime/dagpipe。U6 作者已停止写入、r1 窄设计审查进行中；U7 正用真实 lifecycle
+入口复现重入假设。精确候选与状态见交付计划及各单元 notes/receipts，启动时刷新。
+核对实际 worker/终态再收口，不重复 writer，不删除未交付候选。
 八图静态与 SDK 探针能力已证实；尚无安装后的产品 SDK Work 执行证明。
 本轮先完成本地用户路径，不根据旧提示词转去公网/NAT 阶段。不得重复建目标、订阅或 bug。
 
@@ -47,7 +49,8 @@ runtime/dagpipe 实现与验证。核对实际 worker/终态再收口，不重�
    U2 必须区分 machine source revision 与每 daemon durable accepted/effective；catalog 刷新不
    推进用户意图 revision。固定 async persistence/CAS/锁与显式迁移，不批准全机 accepted 替代
    daemon accepted，不宣称已有双文件原子保证。新接缝先窄设计 PASS 再实现。
-3. U1 修设计 FAIL 与 U2 窄建模可并发；现有 D3/U4 同一 owner 先做已准入 SDK/公开 Work 范围。
+3. U1/U6 独立设计审查与 U2 窄建模、U7 真实重入诊断可并行；现有 D3/U4 同一 owner 先做
+   已准入 SDK/公开 Work 范围，修 typed stdio 控制/业务分离与当前失败路径，重验精确候选。
    U1/U2 准入后派独占产品实现，配置接缝冻结后推进 U3 与 D3/U4 CLI/receiver 接线。
    D3/U4 是同一 worker 的单元：用户安装入口真正走 registered Operators → SDK compile →
    immutable CompiledGraph → Runtime → 消费真实结果。远端 Agent 仍拥有 admission/资源，
