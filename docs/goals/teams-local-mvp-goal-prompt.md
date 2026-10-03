@@ -30,25 +30,19 @@ coding-principals 和项目适用技能。需要实现 worker 时新建 codex ex
 不依赖外部 TUI Master，也不为独立开发建立 Collab 身份。不存在可用 worker 时独立推进主线。
 实现者和 reviewer 必须不同；不使用 AGY；milestone 使用 Codex Review oauth + gpt-6.1-sol。
 
-启动：读取现有任务笔记/issue/receipts，核对实际 main、origin/main、worktrees、worker 和自有进程。
-计划更新输入为 main/origin/main 6526667c。D1 94b4633 和 D2 35ca32b 已独立 PASS、推送、清理，
-阶段记忆分别在 1b492fb/78fa8bc。读取 receipts 后复用，不重开已关闭的 ed0bada/8981687。
-从首个尚未完成或失效节点接手：U1 设计 r6-main PASS 已在 6526667c 推送，精确 tree 1eb7afa2，
-审查归档、设计树/branch 已回收；阶段 memory 待 primary 收口。746dd7b 基础 package
-只证 assets/auth 和 CLI init/status/stop，须完成实际 daemon start/restart 或显式 fail-closed，
-不能让基础 smoke 生成 restart evidence；继续同一 owner，不重复 writer。
-U2 776fcad 的 r1 FAIL 三项 P1，r4 已派独占修订；U6 83a8bd1 的 r1 FAIL 六项 P1，
-r2 已派独占修订。两者新设计 PASS 后才产品实现，不按旧状态重新派作者。
-4b6c377 D3/U4 r3 turn.completed，作者报告 10/10、build/typecheck/图验证通过及三旧失败文件
-串行通过；核实包装终态、exact evidence 和 scope。全量并发因果未证，安装 BB11 未完成，
-AppSDK 准入仍阻塞。U7 两个实验树已归档回收，不再接管这些旧路径。
-852c3ac prerequisite open，canonical pin-lock 返回 INVALID_SDK_MIGRATION_RECORD；
-upstream a7cc2a4 在独立 AppSDK 树只读诊断/设计中，先独立设计审再修。
-前置阻塞不等于重入缺陷已复现；禁止用旧 binary 或伪造锁/历史 receipt 解门禁。
-精确候选与状态见交付计划及各单元 notes/receipts，启动时刷新。
-核对实际 worker/终态再收口，不重复 writer，不删除未交付候选。
-八图静态与 SDK 探针能力已证实；尚无安装后的产品 SDK Work 执行证明。
-本轮先完成本地用户路径，不根据旧提示词转去公网/NAT 阶段。不得重复建目标、订阅或 bug。
+启动：从当时 HOME 读取 .codex/task-evidence/agentteams/local-mvp-active-20261003.md 和所引
+notes/receipts，核对实际 main、origin/main、worktrees、worker、自有进程及正式审查终态。
+本次核对输入为 4fc38a491089693f61b5901aa15c1c966a664338；它是快照，不固定执行基线。
+D1/D2 和 U1 窄安装设计已有独立 PASS、main/push/cleanup；D1/D2 阶段记忆 L2 已交付，
+U1 设计记忆仍待 primary 收口。读取当前 receipt 后复用，不能按旧文档标题重做准入。
+五个 Teams 未交付候选和一个 AppSDK upstream 诊断树仍有具体责任，不能强删或重复 writer。
+当前最先处理：776fcad 的 U2 r2 正式 FAIL 两项 P1，修设计后独立 r3；83a8bd1 的 U6 r2
+与 upstream a7cc2a4 r1 仍 working，消费正式结果后推进。b0f7f3b 的 U5 作者已 exit0，
+先纠正误引 U6 文件并核对实际 teams-session-delivery.md，再独立窄设计审查。
+746dd7b 的 U1 r2 已复现产物路径/安装重启证据缺口，作者正在修，不能重复派作者或写 PASS。
+4b6c377 的 D3/U4 10/10 是作者公开 harness 证据；尚未安装 BB11 或产品审查/交付。
+852c3ac SDK prerequisite 未修，U7 重入假设尚未确认。具体 candidate、paths、依赖、下一动作
+以交付计划与当前 notes 为准。先完成本地用户路径，不转公网，不重复建 goal/subscription/bug。
 
 执行顺序：
 1. 复用 D1 事件、守卫、typed ARC、真实公开接口、owner 与各终点；仅对改变的契约修订现有图，
@@ -59,12 +53,16 @@ upstream a7cc2a4 在独立 AppSDK 树只读诊断/设计中，先独立设计审
    U2 必须区分 machine source revision 与每 daemon durable accepted/effective；catalog 刷新不
    推进用户意图 revision。固定 async persistence/CAS/锁与显式迁移，不批准全机 accepted 替代
    daemon accepted，不宣称已有双文件原子保证。新接缝先窄设计 PASS 再实现。
-3. 复用已交付 U1 设计，修基础安装行为/证据；消费 U2/U6 已派修订并独立审新设计。
+3. 先关闭当前窄建模缺口，再补产品接线，不重开已准入 D1/D2。U2 r2 修 accepted snapshot
+   在同一短锁内持久化后才释放的图顺序；lastApplyError 明确 absent 保留/null 清除/error 设置，
+   成功 apply 清旧 error，refresh/uncertain 不静默清 error/fence；不夸大双文件原子性。
+   复用已交付 U1 设计，修基础安装行为/证据；消费 U6 当前审查和 U5 草稿并审新设计。
    U2 先持久化 pending migration 再替换 config，固定恢复顺序；锁只覆盖 capture/reconcile，
    外部 provider/OpenCode 操作不持锁；uncertain 有 typed projection 与 startup/reconcile owner。
    U6 修订固定模型意图归 U2，禁止 Session 第二配置源；
    Console JsonValue 保真，adapter 显式验证映射；事件必填身份/结果，cancel 保留基座接纳和最终
-   unknown，明确失败不能永久污染 ManagedConfigOwner，readiness 由 owner 观察。新设计独立 PASS
+   unknown，明确失败不能永久污染 ManagedConfigOwner。Session ingress 等待 U2 唯一 recover，
+   重启不能清 durable uncertain；config reconcile 不能证明 Session unknown 的最终结果。新设计独立 PASS
    后再实施产品。每份新接缝交付角色/事件、中文 SESE 与状态图、typed ARC/错误、公开接口及
    Operator/owner/effects、成功/失败/unknown/取消/恢复/清理证据和精确黑盒命令。
    既有 U1 package、D3/U4 实现与独立设计/SDK前置调查可并行，不重复 writer。
@@ -76,12 +74,15 @@ upstream a7cc2a4 在独立 AppSDK 树只读诊断/设计中，先独立设计审
    不虚构远端 API，不新增账本/daemon/调度器，不以 demo 或 journal 代替用户结果。
    Node 已运行宿主启动单次 Rust runner，以 typed host.call 回调现有公开 owner；不增加常驻
    Rust 服务或 Node 第二套图排序。SDK Object 只证形状，字段契约由 typed port/decoder 验证。
-4. 接通 U5 可选 Console 和 U6 OpenCode Session；重叠 runtime 路径串行，UI 可在固定契约下独占并行。
+4. U5 先修当前草稿的错误 U6 缺席声明，关联实际 Session 设计并标 pending admission；固定
+   同包入口、唯一 launcher 控制通道、auth/origin/Agent policy、Console-only stop 和真实 BB09。
+   设计 PASS 后接通可选 Console 和 U6 OpenCode Session；重叠 runtime 路径串行，UI 可在固定契约下独占并行。
 5. 按计划 P1 本地协作、P2 观察/能力、P3 模型 Session、P4 完整交付逐阶段收口。
    D4/U7 复用现有 lifecycle stage store，明确其他图 executable/static-governed 分类，
    实现黑盒 driver 与 BB01–BB14；同包最终验收含端口隔离、runner identity 拒绝和无副作用证明。
    U7 先以官方非破坏 pin/migration 修复 prerequisite，保留历史 evidence；不复制旧 binary、手写
-   digest/receipt 或削弱 gate。upstream 根因仍待真实正反证据；前置恢复后同入口验证后阶段失败
+   digest/receipt 或削弱 gate。upstream genuine 历史输入已复现，正反 controls 已读，修复设计尚
+   在独立审查、尚未实施；先设计 PASS、根因红绿和架构审查交付，再恢复官方前置。同入口验证后阶段失败
    和恢复，不用静态推断冒充已复现。已回收诊断不重建，保留未交付候选；按当前归属清理资源。
 
 每个实现单元：从当时最新 origin/main 建独占 clean worktree，位于
@@ -99,7 +100,9 @@ owner。资产/health/stopped status、SDK 探针和 journal 不能代替启动/
 按 source/config/graph/registry/contracts/effects/SDK/environment/artifact 指纹复用有效阶段，
 只从首失效节点及依赖后继重跑；main/远端/PID/runtime 可变边界刷新。
 有安全独立任务时继续派单；worker 等待使用有界等待，超时检查状态与阻塞，不忙轮询、只 ACK
-或干等。阻塞记录首偏离、owner、解除条件和具体恢复动作，不切换到无关治理工作。
+或干等。网络/实验工具故障由 primary 查真实子进程与回执并恢复，不因 quiet 取消、不绕过
+review poll window，不把实验排障推给用户。阻塞记录首偏离、owner、解除条件和具体恢复动作，
+不切换到无关治理工作。
 
 收尾：逐单元保留证据，确认停止写入后回收自有 child/daemon/listener、临时 HOME/包/日志、
 worktree 和 branch，核对 worktree list 与路径不存在。stale 资源先查归属和内容，再按已有
