@@ -363,6 +363,10 @@ _Empty._
 - tags: `local-mvp,runtime,ai-reviewed,human-unreviewed`
 - details: [L2/u1-runtime-status-projection.md](L2/u1-runtime-status-projection.md)
 
+### U1 base package provenance source delivered; full package pending
+- tags: `746dd7b`, `U1`, `ai-reviewed`, `candidate-provenance`, `human-unreviewed`
+- details: [L2/u1-source-delivery-20261004.md](L2/u1-source-delivery-20261004.md)
+
 ### U2 local TOML and config recovery design admitted
 - tags: `agentteams`, `ai-reviewed`, `config`, `design`, `human-unreviewed`
 - details: [L2/u2-config-design-20261003.md](L2/u2-config-design-20261003.md)
