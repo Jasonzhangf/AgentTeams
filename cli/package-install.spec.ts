@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -83,6 +83,20 @@ async function tamperedPackageReceipt(name: string, mutate: (receipt: any) => vo
   return path
 }
 
+async function createIdentityFixtureRepo(): Promise<string> {
+  const repo = await mkdtemp(join(tmpdir(), 'u1-receipt-identity-'))
+  await execFileAsync('git', ['init', '--quiet'], { cwd: repo, env: process.env, maxBuffer })
+  await writeFile(join(repo, 'source.txt'), 'tracked source\n')
+  await execFileAsync('git', ['add', 'source.txt'], { cwd: repo, env: process.env, maxBuffer })
+  await execFileAsync('git', ['-c', 'user.name=receipt-test', '-c', 'user.email=receipt-test@example.invalid', 'commit', '--quiet', '-m', 'fixture'], {
+    cwd: repo,
+    env: process.env,
+    maxBuffer,
+  })
+  await execFileAsync('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd: repo, env: process.env, maxBuffer })
+  return repo
+}
+
 describe('agentteams install package', () => {
   beforeAll(async () => {
     evidenceDir = await mkdtemp(join(tmpdir(), 'u1-package-install-spec-'))
@@ -99,6 +113,69 @@ describe('agentteams install package', () => {
     const packageReceipt = JSON.parse(await readFile(receiptPath, 'utf8'))
 
     expect(packageReceipt.candidate).toEqual(currentCandidateIdentity(root))
+  })
+
+  it('allows declared SDK evidence and lifecycle record paths', async () => {
+    const repo = await createIdentityFixtureRepo()
+    try {
+      const identityBefore = currentCandidateIdentity(repo)
+      const allowedPaths = [
+        '.appsdk/records/evidence/teams-source/attempt-1-artifact.json',
+        '.appsdk/records/evidence-record.json',
+        '.appsdk/records/worktree-record.json',
+        '.appsdk/records/fix-candidate-record-teams-source-attempt-1.json',
+        '.appsdk/records/pre-review-validation-record-teams-source-attempt-1.json',
+        '.appsdk/records/evidence-record-teams-source-attempt-1.json',
+        '.appsdk/records/worktree-record-teams-source-attempt-1.json',
+      ]
+      for (const path of allowedPaths) {
+        await mkdir(join(repo, path, '..'), { recursive: true })
+        await writeFile(join(repo, path), '{}\n')
+      }
+      expect(currentCandidateIdentity(repo)).toEqual(identityBefore)
+    } finally {
+      await rm(repo, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects unclassified or nested SDK record paths', async () => {
+    const repo = await createIdentityFixtureRepo()
+    try {
+      const rejectedPaths = [
+        '.appsdk/records/source.md',
+        '.appsdk/records/fix-candidate-record-teams-source-attempt-1.txt',
+        '.appsdk/records/evidence/teams-source/nested/attempt-1-artifact.json',
+        '.appsdk/records/evidence/teams-source/source.md',
+      ]
+      for (const path of rejectedPaths) {
+        await mkdir(join(repo, path, '..'), { recursive: true })
+        await writeFile(join(repo, path), 'fixture\n')
+        expect(() => currentCandidateIdentity(repo)).toThrow(path)
+        await rm(join(repo, path), { force: true })
+      }
+    } finally {
+      await rm(repo, { recursive: true, force: true })
+    }
+  })
+
+  it('still rejects untracked product source', async () => {
+    const repo = await createIdentityFixtureRepo()
+    try {
+      await writeFile(join(repo, 'untracked-product.ts'), 'export const fixture = true\n')
+      expect(() => currentCandidateIdentity(repo)).toThrow()
+    } finally {
+      await rm(repo, { recursive: true, force: true })
+    }
+  })
+
+  it('still rejects unstaged tracked source', async () => {
+    const repo = await createIdentityFixtureRepo()
+    try {
+      await writeFile(join(repo, 'source.txt'), 'unstaged source\n')
+      expect(() => currentCandidateIdentity(repo)).toThrow()
+    } finally {
+      await rm(repo, { recursive: true, force: true })
+    }
   })
 
   it('builds one base pack root with the root version and installable layout', async () => {

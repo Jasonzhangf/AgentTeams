@@ -1,6 +1,8 @@
 import { spawnSync } from 'node:child_process'
 
 const objectIdPattern = /^[0-9a-f]{40}$/u
+const sdkEvidencePathPattern = /^\.appsdk\/records\/evidence\/teams-source\/[^/]+\.json$/u
+const sdkLifecycleRecordPathPattern = /^\.appsdk\/records\/(?:(?:fix-candidate-record-|pre-review-validation-record-)[^/]+|(?:evidence-record|worktree-record)(?:-[^/]+)?)\.json$/u
 
 function fail(message) {
   throw new Error(`receipt identity: ${message}`)
@@ -29,8 +31,10 @@ export function currentCandidateIdentity(root) {
     fail('staged product does not match the recorded index')
   }
   const untracked = git(['ls-files', '--others', '--exclude-standard'])
-  if (untracked !== '') {
-    fail(`candidate has untracked product paths:\n${untracked}`)
+    .split('\n')
+    .filter(path => path !== '' && !sdkEvidencePathPattern.test(path) && !sdkLifecycleRecordPathPattern.test(path))
+  if (untracked.length !== 0) {
+    fail(`candidate has untracked product paths:\n${untracked.join('\n')}`)
   }
   return identity
 }
