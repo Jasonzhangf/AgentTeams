@@ -175,6 +175,10 @@ _Empty._
 - tags: `ai-reviewed`, `dependency-source-delivery`, `human-unreviewed`
 - details: [L2/f7bf558-sdk-source-delivery-20261004.md](L2/f7bf558-sdk-source-delivery-20261004.md)
 
+### Camo snapshot requires explicit raw DOM format for HTML adapter
+- tags: `ai-reviewed`, `browser-snapshot`, `f9c181f`, `human-unreviewed`
+- details: [L2/f9c181f-camo-raw-dom-snapshot.md](L2/f9c181f-camo-raw-dom-snapshot.md)
+
 ### 第一波PR7合并和主集成树关闭回执
 - tags: `ai-reviewed`, `cleanup`, `delivery`, `human-unreviewed`
 - details: [L2/first-wave-delivery-20260906.md](L2/first-wave-delivery-20260906.md)
