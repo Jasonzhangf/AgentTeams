@@ -315,6 +315,10 @@ _Empty._
 - tags: `ai-reviewed`, `blocked`, `direct`, `human-unreviewed`, `nat`, `relay`
 - details: [L2/relay-public-nat-blocked-20260906.md](L2/relay-public-nat-blocked-20260906.md)
 
+### SDK pin/transition installed prerequisites delivered; Teams product still pending
+- tags: `ai-reviewed`, `human-unreviewed`, `local-mvp`, `sdk`
+- details: [L2/sdk-installed-prerequisites-20261004.md](L2/sdk-installed-prerequisites-20261004.md)
+
 ### SDK bundle更新与PR3/PR4交付回执
 - tags: `ai-reviewed`, `delivery`, `governance`, `human-unreviewed`
 - details: [L2/sdk-refresh-receipts-20260906.md](L2/sdk-refresh-receipts-20260906.md)
