@@ -6,13 +6,19 @@ import { createAgentWorkClient } from './agent-work-client.ts'
 
 const identity = { accountId: 'account', scopeId: 'scope', agentId: 'consumer' }
 
-function peer(agentId: string, presence: RelayPeer['presence'], version = '1', operations = ['search']): RelayPeer {
+function peer(
+  agentId: string,
+  presence: RelayPeer['presence'],
+  version = '1',
+  operations = ['search'],
+  generation = 3,
+): RelayPeer {
   const declaration: AgentDeclaration = {
     identity: { hostId: `${agentId}-host`, machineId: 'machine', agentId, accountId: 'account', agentKind: 'custom', label: agentId },
     scopeId: 'scope', revision: 1, routes: [], capabilities: [{ capabilityId: 'file-search', version,
       operations: operations.map(operation => ({ operation, inputSchema: {}, outputSchema: {}, cancellation: 'unsupported' as const })), resources: [] }],
   }
-  return { declaration, connectionId: `${agentId}-connection`, generation: 3, lastSeenAt: new Date().toISOString(), presence }
+  return { declaration, connectionId: `${agentId}-connection`, generation, lastSeenAt: new Date().toISOString(), presence }
 }
 
 let directory: RelayPeer[]
@@ -34,6 +40,82 @@ it('honors an explicitly configured provider when multiple peers advertise the s
   directory.push(peer('first-provider', 'online'), peer('configured-provider', 'online'))
   await expect(client.findProvider({ providerAgentId: 'configured-provider', capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' }))
     .resolves.toMatchObject({ providerAgentId: 'configured-provider' })
+})
+
+it('resolves capability selection only from the exact provider declaration and returns no Endpoint', async () => {
+  directory.push(peer('first-provider', 'online'), peer('selected-provider', 'online'))
+  const target = await client.findProvider({
+    capabilityId: 'file-search',
+    capabilityVersion: '1',
+    operation: 'search',
+    serviceSelection: {
+      mode: 'capability',
+      providerAgentId: 'selected-provider',
+      targetGeneration: 3,
+      generationPolicy: 'exact',
+    },
+  })
+  expect(target).toMatchObject({
+    providerAgentId: 'selected-provider',
+    generation: 3,
+    serviceSelection: 'capability',
+  })
+  expect(target).not.toHaveProperty('endpoint')
+})
+
+it('keeps capability selection separate from Endpoint admission and rejects stale exact generations', async () => {
+  const endpointOnly = {
+    ...peer('endpoint-only', 'online', '2'),
+    endpoints: [{
+      endpointId: 'legacy-endpoint',
+      ownerAgentId: 'endpoint-only',
+      scopeId: 'scope',
+      kind: 'browser' as const,
+      revision: 1,
+      lifecycle: 'active' as const,
+      capabilities: [{ capabilityId: 'file-search', version: '1', operations: ['search'] }],
+      resources: [],
+    }],
+  }
+  directory.push(endpointOnly)
+  await expect(client.findProvider({
+    capabilityId: 'file-search',
+    capabilityVersion: '1',
+    operation: 'search',
+    serviceSelection: {
+      mode: 'capability',
+      providerAgentId: 'endpoint-only',
+      targetGeneration: 3,
+      generationPolicy: 'exact',
+    },
+  })).rejects.toMatchObject({ code: 'UNSUPPORTED_VERSION' })
+  await expect(client.findProvider({ capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' }))
+    .resolves.toMatchObject({ providerAgentId: 'endpoint-only', endpoint: { endpointId: 'legacy-endpoint' } })
+
+  directory = [peer('provider', 'online', '1', ['search'], 7)]
+  await expect(client.findProvider({
+    capabilityId: 'file-search',
+    capabilityVersion: '1',
+    operation: 'search',
+    serviceSelection: {
+      mode: 'capability',
+      providerAgentId: 'provider',
+      targetGeneration: 6,
+      generationPolicy: 'exact',
+    },
+  })).rejects.toMatchObject({ code: 'STALE_GENERATION' })
+  await expect(client.findProvider({
+    capabilityId: 'file-search',
+    capabilityVersion: '1',
+    operation: 'search',
+    serviceSelection: {
+      mode: 'capability',
+      providerAgentId: 'provider',
+      targetGeneration: 6,
+      generationPolicy: 'current',
+      linkGeneration: 7,
+    },
+  })).resolves.toMatchObject({ providerAgentId: 'provider', generation: 7, serviceSelection: 'capability' })
 })
 
 it('selects a visible Endpoint and carries its revision into the Work proposal', async () => {

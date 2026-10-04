@@ -1,0 +1,12 @@
+[package]
+name = "teams-dagpipe-runner"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "teams-dagpipe-runner"
+path = "src/bin/runner.rs"
+
+[dependencies]
+pipeline_runtime = { path = __DAGPIPE_SDK_PATH__, version = "=__DAGPIPE_SDK_VERSION__" }
+serde_json = "1"

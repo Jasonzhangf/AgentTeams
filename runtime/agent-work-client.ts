@@ -26,7 +26,35 @@ export interface AgentWorkTarget {
   readonly capabilityId: string
   readonly capabilityVersion: string
   readonly operation: string
+  readonly serviceSelection: 'endpoint' | 'capability'
   readonly endpoint?: Omit<WorkEndpointReference, 'workId'>
+}
+
+export type AgentWorkServiceSelection =
+  | { readonly mode: 'endpoint' }
+  | {
+      readonly mode: 'capability'
+      readonly providerAgentId: string
+      /** Original Work generation; it is never replaced by the current link generation. */
+      readonly targetGeneration: number
+      /** Exact pins the original generation; current resolves the current authorized generation. */
+      readonly generationPolicy: 'exact' | 'current'
+      /** Query-only current authorized generation. Omit to resolve the current generation. */
+      readonly linkGeneration?: number
+    }
+
+export interface FindProviderInput {
+  readonly capabilityId: string
+  readonly capabilityVersion: string
+  readonly operation: string
+  /** Legacy endpoint callers may omit this; persistent callers must pass capability explicitly. */
+  readonly serviceSelection?: AgentWorkServiceSelection
+  readonly providerAgentId?: string
+}
+
+/** A local transport failure after dispatch; the provider may or may not have observed the command. */
+export class AgentWorkTransportError extends RelayProtocolError {
+  readonly deliveryState = 'unconfirmed' as const
 }
 
 export interface AgentWorkChannel {
@@ -45,7 +73,7 @@ export interface AgentWorkChannel {
 }
 
 export interface AgentWorkClient {
-  findProvider(input: { readonly capabilityId: string; readonly capabilityVersion: string; readonly operation: string; readonly providerAgentId?: string }): Promise<AgentWorkTarget>
+  findProvider(input: FindProviderInput): Promise<AgentWorkTarget>
   open(target: AgentWorkTarget): Promise<AgentWorkChannel>
   dispose(): Promise<void>
 }
@@ -67,6 +95,19 @@ function endpointTarget(peer: RelayPeer, capabilityId: string, capabilityVersion
 
 function asError(reply: Extract<WorkWireReply, { kind: 'work.error' }>): RelayProtocolError {
   return new RelayProtocolError(reply.error.code, reply.error.message)
+}
+
+async function transportRequest<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation()
+  } catch (error) {
+    if (error instanceof AgentWorkTransportError) throw error
+    if (error instanceof RelayProtocolError) {
+      if (error.code === 'INVALID_INPUT' || error.code === 'RESOURCE_EXHAUSTED') throw error
+      throw new AgentWorkTransportError(error.code, error.message)
+    }
+    throw new AgentWorkTransportError('UNAVAILABLE', error instanceof Error ? error.message : 'Work transport failed')
+  }
 }
 
 function state(reply: WorkWireReply): AgentWork {
@@ -101,13 +142,50 @@ export function createAgentWorkClient(
     throw new RelayProtocolError('INVALID_INPUT', 'Invalid Agent Work limits')
   }
   const channels = new Set<AgentWorkChannel>()
-  const findProvider = async ({ capabilityId, capabilityVersion, operation, providerAgentId }: {
-    readonly capabilityId: string
-    readonly capabilityVersion: string
-    readonly operation: string
-    readonly providerAgentId?: string
-  }): Promise<AgentWorkTarget> => {
+  const findProvider = async (input: FindProviderInput): Promise<AgentWorkTarget> => {
+    const { capabilityId, capabilityVersion, operation } = input
     const peers = await relay.directory(false)
+    const selection = input.serviceSelection ?? { mode: 'endpoint' as const }
+
+    if (selection.mode === 'capability') {
+      const providerAgentId = selection.providerAgentId
+      const providerPeers = peers.filter(peer => peer.declaration.identity.agentId === providerAgentId)
+      if (providerPeers.length === 0) {
+        throw new RelayProtocolError('NOT_FOUND', `Provider ${providerAgentId} was not found`)
+      }
+      const online = providerPeers.filter(peer => peer.presence === 'online')
+      if (online.length === 0) {
+        throw new RelayProtocolError('UNAVAILABLE', `Provider ${providerAgentId} is offline`)
+      }
+      const expectedGeneration = selection.generationPolicy === 'exact'
+        ? selection.targetGeneration
+        : selection.linkGeneration ?? online[0].generation
+      const peer = online.find(candidate => candidate.generation === expectedGeneration)
+      if (peer === undefined) {
+        throw new RelayProtocolError('STALE_GENERATION', `Provider ${providerAgentId} generation ${expectedGeneration} is not current`)
+      }
+      const declarations = peer.declaration.capabilities.filter(candidate => candidate.capabilityId === capabilityId)
+      if (declarations.length === 0) {
+        throw new RelayProtocolError('NOT_FOUND', `Provider ${providerAgentId} does not declare ${capabilityId}`)
+      }
+      const versioned = declarations.filter(candidate => candidate.version === capabilityVersion)
+      if (versioned.length === 0) {
+        throw new RelayProtocolError('UNSUPPORTED_VERSION', `Capability ${capabilityId} version ${capabilityVersion} is unsupported`)
+      }
+      if (!versioned.some(candidate => candidate.operations.some(item => item.operation === operation))) {
+        throw new RelayProtocolError('UNSUPPORTED_OPERATION', `Capability ${capabilityId} does not support ${operation}`)
+      }
+      return {
+        providerAgentId,
+        generation: expectedGeneration,
+        capabilityId,
+        capabilityVersion,
+        operation,
+        serviceSelection: 'capability',
+      }
+    }
+
+    const providerAgentId = input.providerAgentId
     const scopedPeers = peers.filter(peer => providerAgentId === undefined || peer.declaration.identity.agentId === providerAgentId)
     const capabilityPeers = scopedPeers.filter(peer => capability(peer, capabilityId) !== undefined || (peer.endpoints ?? []).some(endpoint =>
       endpoint.capabilities.some(candidate => candidate.capabilityId === capabilityId)))
@@ -126,7 +204,7 @@ export function createAgentWorkClient(
       (providerAgentId === undefined || candidate.declaration.identity.agentId === providerAgentId))
     if (peer === undefined) throw new RelayProtocolError('UNAVAILABLE', `Capability ${capabilityId} is offline`)
     const endpoint = endpointTarget(peer, capabilityId, capabilityVersion, operation)
-    return { providerAgentId: peer.declaration.identity.agentId, generation: peer.generation, capabilityId, capabilityVersion, operation,
+    return { providerAgentId: peer.declaration.identity.agentId, generation: peer.generation, capabilityId, capabilityVersion, operation, serviceSelection: 'endpoint',
       ...(endpoint === undefined ? {} : { endpoint }) }
   }
 
@@ -148,22 +226,26 @@ export function createAgentWorkClient(
         if (proposal.endpoint !== undefined && (endpoint === undefined || !sameEndpointReference(proposal.endpoint, endpoint))) {
           throw new RelayProtocolError('CONFLICT', 'Work proposal Endpoint does not match the selected target')
         }
-        return state(await wire.request({ kind: 'work.propose', proposal: {
+        const reply = await transportRequest(() => wire.request({ kind: 'work.propose', proposal: {
           ...proposal,
           ...(endpoint === undefined ? {} : { endpoint }),
           consumerAgentId: consumerIdentity.agentId,
           providerAgentId: target.providerAgentId,
         } }))
+        return state(reply)
       },
-      request: async request => result(await wire.request({ kind: 'work.request', control: {
+      request: async request => {
+        const reply = await transportRequest(() => wire.request({ kind: 'work.request', control: {
         workId: request.workId,
         requestId: request.requestId,
         operation: request.operation,
         targetGeneration: target.generation,
         demands: request.demands,
-      }, payload: request.payload })),
-      get: async (workId, requestId) => result(await wire.request({ kind: 'work.get', workId, requestId })),
-      close: async workId => state(await wire.request({ kind: 'work.close', workId })),
+        }, payload: request.payload }))
+        return result(reply)
+      },
+      get: async (workId, requestId) => result(await transportRequest(() => wire.request({ kind: 'work.get', workId, requestId }))),
+      close: async workId => state(await transportRequest(() => wire.request({ kind: 'work.close', workId }))),
       dispose: async () => {
         if (disposed) return
         disposed = true
