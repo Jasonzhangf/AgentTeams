@@ -1,0 +1,39 @@
+{
+  "id": "agentteams.work-open",
+  "version": "1",
+  "inputs": [{ "id": "work.open.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "resolve-service", "operator": "teams.resolve-peer-service", "operator_version": "1",
+      "inputs": ["work.open.intent"], "output": { "id": "service.resolved", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "open-link", "operator": "teams.open-work-link", "operator_version": "1",
+      "inputs": ["service.resolved"], "output": { "id": "link.verified", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "admit-work", "operator": "teams.admit-provider-work", "operator_version": "1",
+      "inputs": ["link.verified"], "output": { "id": "work.admitted", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "request-work", "operator": "teams.request-provider-work", "operator_version": "1",
+      "inputs": ["work.admitted"], "output": { "id": "execution.outcome", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "return-held-work", "operator": "teams.return-held-work", "operator_version": "1",
+      "inputs": ["execution.outcome"], "output": { "id": "work.held.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "resolve-service", "to": "open-link", "arc_id": "service.resolved" },
+    { "from": "open-link", "to": "admit-work", "arc_id": "link.verified" },
+    { "from": "admit-work", "to": "request-work", "arc_id": "work.admitted" },
+    { "from": "request-work", "to": "return-held-work", "arc_id": "execution.outcome" }
+  ],
+  "outputs": ["work.held.receipt"]
+}

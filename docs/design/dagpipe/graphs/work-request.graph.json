@@ -1,0 +1,33 @@
+{
+  "id": "agentteams.work-request",
+  "version": "1",
+  "inputs": [{ "id": "work.request.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "resolve-service", "operator": "teams.resolve-peer-service", "operator_version": "1",
+      "inputs": ["work.request.intent"], "output": { "id": "service.resolved", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "open-link", "operator": "teams.open-work-link", "operator_version": "1",
+      "inputs": ["service.resolved"], "output": { "id": "link.verified", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "continue-work", "operator": "teams.continue-provider-work", "operator_version": "1",
+      "inputs": ["link.verified"], "output": { "id": "execution.outcome", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "return-held-work", "operator": "teams.return-held-work", "operator_version": "1",
+      "inputs": ["execution.outcome"], "output": { "id": "work.held.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "resolve-service", "to": "open-link", "arc_id": "service.resolved" },
+    { "from": "open-link", "to": "continue-work", "arc_id": "link.verified" },
+    { "from": "continue-work", "to": "return-held-work", "arc_id": "execution.outcome" }
+  ],
+  "outputs": ["work.held.receipt"]
+}

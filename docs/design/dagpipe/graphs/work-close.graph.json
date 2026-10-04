@@ -1,0 +1,27 @@
+{
+  "id": "agentteams.work-close",
+  "version": "1",
+  "inputs": [{ "id": "work.close.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "resolve-service", "operator": "teams.resolve-peer-service", "operator_version": "1",
+      "inputs": ["work.close.intent"], "output": { "id": "service.resolved", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "open-link", "operator": "teams.open-work-link", "operator_version": "1",
+      "inputs": ["service.resolved"], "output": { "id": "link.verified", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "close-work", "operator": "teams.close-provider-work", "operator_version": "1",
+      "inputs": ["link.verified"], "output": { "id": "work.close.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "resolve-service", "to": "open-link", "arc_id": "service.resolved" },
+    { "from": "open-link", "to": "close-work", "arc_id": "link.verified" }
+  ],
+  "outputs": ["work.close.receipt"]
+}
