@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "task": "U1 746dd7b exact installed receipt corrections",
+  "issue": "746dd7b",
+  "timestamp": "2026-10-04T08:30:00Z",
+  "result": "passed-author-verification",
+  "mode": "base",
+  "release_eligible": false,
+  "candidate": {
+    "worktree": "/Volumes/Intel/playground/agentteams/u1-receipt-fix-20261004",
+    "branch": "codex/u1-receipt-fix-20261004",
+    "base_commit": "2f6caaa90db9f2592dcfc54c51984080650da0a4",
+    "head_commit": "2f6caaa90db9f2592dcfc54c51984080650da0a4",
+    "origin_main": "2f6caaa90db9f2592dcfc54c51984080650da0a4",
+    "uncommitted": true,
+    "staged_tree_before_final_evidence": "8219c2057f7d12079f1ebb1674e3bdf243a58411",
+    "staged_diff_sha256_before_final_evidence": "70e07b7ffdb03e689bd4bddbd913de6c73005d38dc9e5de0132569f473be2217",
+    "worktree_diff_sha256_before_final_evidence": "18a77a27d3686e34967c9de5b3d3ed4a2ea75cf096377005e75715f3ecfe698c",
+    "changed_paths": [
+      ".appsdk/project.json",
+      "cli/package-install.spec.ts",
+      "docs/architecture/function-map.json",
+      "docs/architecture/mainline-call-map.json",
+      "docs/architecture/module-registry.json",
+      "docs/architecture/resource-map.json",
+      "docs/architecture/verification-map.json",
+      "package.json",
+      "scripts/artifact-smoke.mjs",
+      "scripts/installed-runtime-smoke.mjs",
+      "scripts/lifecycle-adapter.mjs",
+      "scripts/package-artifact.mjs",
+      "scripts/package-user-smoke.mjs",
+      "scripts/runtime-smoke.mjs"
+    ]
+  },
+  "sdk": {
+    "binary": "$HOME/.cargo/bin/appsdk",
+    "reported_version": "appsdk 0.1.0010 (rust)",
+    "binary_sha256": "84a8f6f24f08031d55cb9ae87564cb7930c8af5ea3da183b576de581564e028a",
+    "compile": {
+      "exit": 0,
+      "artifact_hash": "sha256:5e2372d79b8fd397f0227817ef2f852ee0f2c576855a4d77cd3643a47d2039bf",
+      "source_hash": "sha256:5e0e29d3bffb90fe6337644fb7992fb5fab2ed953da25a5dc5897cc637cd984d",
+      "public_api_hash": "sha256:c7bd9d8c834d4df34022d7af3a90be1da6bfce50e667082cfd67375b834a1ff5",
+      "contract_hash": "sha256:bbf976321a4e34151ef538e4bc56b472380b08607ed59022d284745113ff0f88"
+    },
+    "verify": {
+      "exit": 0,
+      "result": {
+        "baseline_status": "current",
+        "command_ok": true,
+        "delivery_assessed": false,
+        "delivery_verified": false,
+        "development_ready": true,
+        "ok": false,
+        "reason": "delivery_not_evaluated",
+        "stage": "contract_bound"
+      }
+    }
+  },
+  "package": {
+    "mode": "base",
+    "release_eligible": false,
+    "version": "0.1.0",
+    "content_sha256": "f6d3f822e88f58c72013f03b3e7d703af26844d6326fcb9209ccd8390ee1b1de",
+    "files": 169,
+    "tarball_sha256": "f97763a5e1183426f89ee41c3ff1463a573217fe19ad0d9d333b0aa4e25a5502",
+    "package_receipt": "generated/modules/teams-source/package-receipt.json"
+  },
+  "installed_receipt": {
+    "path": "docs/evidence/746dd7b-u1-receipt-fix-20261004/installed-runtime-smoke.receipt.json",
+    "sha256": "9dfd457a5f61821266d6be626fafd978d520fcbed82e00e54ef06ccbc4d9dc46",
+    "pack_content_sha256": "f6d3f822e88f58c72013f03b3e7d703af26844d6326fcb9209ccd8390ee1b1de",
+    "tarball_sha256": "f97763a5e1183426f89ee41c3ff1463a573217fe19ad0d9d333b0aa4e25a5502",
+    "installed_content_sha256": "f6d3f822e88f58c72013f03b3e7d703af26844d6326fcb9209ccd8390ee1b1de",
+    "generations": [1, 2]
+  },
+  "base_receipt": {
+    "path": "docs/evidence/746dd7b-u1-receipt-fix-20261004/package-user-smoke.receipt.json",
+    "sha256": "2201f944350e6736aaea3887b492d5d8731ee5cdd858ba43959faa54077dc138"
+  },
+  "commands": [
+    { "command": "pnpm build", "exit": 0, "log": "pnpm-build.log.gz" },
+    { "command": "pnpm typecheck", "exit": 0, "log": "pnpm-typecheck.log.gz" },
+    { "command": "$HOME/.cargo/bin/appsdk compile .", "exit": 0, "log": "appsdk-compile.log" },
+    { "command": "$HOME/.cargo/bin/appsdk verify .", "exit": 0, "log": "appsdk-verify.log" },
+    { "command": "node scripts/artifact-smoke.mjs", "exit": 0, "log": "artifact-smoke.log" },
+    { "command": "node scripts/runtime-smoke.mjs", "exit": 0, "log": "runtime-smoke.log" },
+    { "command": "node scripts/installed-runtime-smoke.mjs", "exit": 0, "log": "installed-runtime-smoke.log" },
+    { "command": "node scripts/package-user-smoke.mjs --evidence-dir docs/evidence/746dd7b-u1-receipt-fix-20261004", "exit": 0, "log": "package-user-smoke.log" },
+    { "command": "pnpm exec vitest run --no-file-parallelism --configLoader runner cli/package-install.spec.ts", "exit": 0, "log": "package-install-spec.log.gz" }
+  ],
+  "red_evidence": {
+    "frozen_mutation": "red-frozen-mutation.log",
+    "prefix_consumer_non_rejection": "red-prefix-replay.log"
+  },
+  "frozen_evidence": {
+    "dir": "docs/evidence/746dd7b-u1-package-20261003",
+    "package_user_receipt_sha256": "d40bc84370b039e05ba7dc6b2510817a3e4d324a40533e9f178acec718c86041",
+    "installed_receipt_sha256": "f7fa5fc3f7805ce84c88b22b4c006af879bda22bbb03b0ea345cb4d115cd15e3",
+    "byte_unchanged_across_public_smoke": true
+  },
+  "reused_unchanged_inputs": {
+    "note": "Historical 4155 and the external primary composition receipt remain historical; the current candidate reuses the unchanged runtime/scripts/lock/build inputs and re-ran every applicable gate on this exact tree.",
+    "external_primary_receipt": "$HOME/.codex/task-evidence/agentteams/receipts/u1-package-review-final-20261004/composition-receipt.json"
+  },
+  "not_claimed": [
+    "finalSDKrunner packaged",
+    "U2 finalTOML",
+    "U3 service",
+    "U4 installed Work",
+    "BB01-BB14",
+    "lifecycle:admission post-commit node (parent runs after review PASS and commit)"
+  ]
+}

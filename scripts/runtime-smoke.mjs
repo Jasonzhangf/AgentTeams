@@ -3,8 +3,8 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createRelayServer } from '../generated/modules/teams-source/lib/runtime/server/relay.js'
-import { startAgentDaemon } from '../generated/modules/teams-source/lib/runtime/runtime/agent-daemon.js'
+import { createRelayServer } from '../generated/modules/teams-source/lib/generated/runtime-lib/server/relay.js'
+import { startAgentDaemon } from '../generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-daemon.js'
 
 // Exercise the packaged JS directly in Node, without TypeScript/test transforms.
 const directory = mkdtempSync(join(tmpdir(), 'teams-runtime-smoke-'))

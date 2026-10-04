@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "task": "U1 base manifest follow-up",
+  "owned_pids": [
+    60725,
+    60765,
+    60802,
+    60831,
+    61488,
+    61561,
+    61646,
+    61750
+  ],
+  "process_check": {
+    "command": "ps -p 60725,60765,60802,60831,61488,61561,61646,61750 -o pid=,ppid=,command=",
+    "result": "no processes reported"
+  },
+  "temporary_root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-EVeAa8",
+  "temporary_root_removed": true,
+  "worktree_retained": "/Volumes/Intel/playground/agentteams/u1-manifest-fix-20261004",
+  "worktree_retention_reason": "primary owns candidate integration and L2 retirement"
+}

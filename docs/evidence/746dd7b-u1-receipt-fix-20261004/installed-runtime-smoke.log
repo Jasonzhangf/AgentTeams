@@ -1,0 +1,2 @@
+u1-installed-receipt /Volumes/Intel/playground/agentteams/u1-receipt-fix-20261004/generated/u1-receipts/1791102425072-20476/installed-runtime-smoke.receipt.json sha256:9dfd457a5f61821266d6be626fafd978d520fcbed82e00e54ef06ccbc4d9dc46
+Installed runtime smoke passed: the staged base package was installed outside the source tree and consumed through installed CLI/Relay/Agent lifecycle plus Console entrypoints.

@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-04T09:10:11.699Z",
+  "issue": "746dd7b",
+  "base": "dd4ffa9075b1fbc215e99070147865b4fa1495bb",
+  "oldAuthorBase": "2f6caaa90db9f2592dcfc54c51984080650da0a4",
+  "authorPathsByteEqual": 61,
+  "pack": {
+    "root": "generated/modules/teams-source/lib",
+    "files": 169,
+    "contentSha256": "f6d3f822e88f58c72013f03b3e7d703af26844d6326fcb9209ccd8390ee1b1de",
+    "mode": "base",
+    "releaseEligible": false
+  },
+  "currentCanonicalSDK": {
+    "artifactHash": "sha256:342044f998331b30a7f293cc0a02dc7f60e5627db6f6d7042e6925e2ba62fb8f",
+    "declaredDirectInputs": 23,
+    "allDeclaredFileHashesMatch": true,
+    "aggregatePackReceiptCovered": true
+  },
+  "actualInstalledEvidenceReused": {
+    "receipt": "docs/evidence/746dd7b-u1-receipt-fix-20261004/installed-runtime-smoke.receipt.json",
+    "tarballSha256": "f97763a5e1183426f89ee41c3ff1463a573217fe19ad0d9d333b0aa4e25a5502",
+    "fullContentSha256": "f6d3f822e88f58c72013f03b3e7d703af26844d6326fcb9209ccd8390ee1b1de",
+    "generations": [
+      1,
+      2
+    ]
+  },
+  "equivalence": "SDK artifact inputs include a hashed aggregate receipt for every staged pack file; SDK artifact hash and raw npm tarball hash have different domains and are not asserted numerically equal",
+  "compileExit": "0",
+  "verifyExit": "0",
+  "priorReview": {
+    "task": "u1-receipt-fix-20261004-r2",
+    "result": "protocol_failure/resources_note extra field; no valid PASS",
+    "next": "independent stateless review of current exact tree"
+  }
+}

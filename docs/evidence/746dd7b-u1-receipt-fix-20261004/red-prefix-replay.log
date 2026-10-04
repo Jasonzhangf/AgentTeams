@@ -1,0 +1,13 @@
+RED: pre-fix lifecycle consumer accepts an installed receipt with no candidate binding
+
+Harness: extracted the staged (pre-fix) scripts/lifecycle-adapter.mjs from the git index, replaced the
+trailing main() with an export, and invoked installedLifecycleReceipt() through that boundary against
+the frozen receipt at docs/evidence/746dd7b-u1-package-20261003/installed-runtime-smoke.receipt.json.
+
+pre-fix consumer ACCEPTED a receipt with no candidate binding:
+  path: /Volumes/Intel/playground/agentteams/u1-receipt-fix-20261004/docs/evidence/746dd7b-u1-package-20261003/installed-runtime-smoke.receipt.json
+  hash: sha256:f7fa5fc3f7805ce84c88b22b4c006af879bda22bbb03b0ea345cb4d115cd15e3
+  receipt has pack field? false
+
+Fixed consumer against the same foreign receipt:
+fixed consumer REJECTED foreign receipt: installed lifecycle receipt has no staged pack content hash

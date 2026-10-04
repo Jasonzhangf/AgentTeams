@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "task": "U1 base manifest follow-up",
+  "issue": "746dd7b",
+  "timestamp": "2026-10-04T09:28:47.183634Z",
+  "timestamp_source": "primary live evidence readback; original author manual timestamp archived externally",
+  "result": "author-verification-passed",
+  "mode": "base",
+  "release_eligible": false,
+  "candidate": {
+    "worktree": "/Volumes/Intel/playground/agentteams/u1-manifest-fix-20261004",
+    "branch": "codex/u1-manifest-fix-20261004",
+    "base_commit": "dd4ffa9075b1fbc215e99070147865b4fa1495bb",
+    "head_commit": "dd4ffa9075b1fbc215e99070147865b4fa1495bb",
+    "origin_main": "dd4ffa9075b1fbc215e99070147865b4fa1495bb",
+    "inherited_staged_tree": "b6694c6e56efec1f7b0d71dec5661e0dc891ae5d",
+    "staged_tree_before_final_evidence": "c45452df0792efba2a2308fbb37215b5617eaeb6",
+    "worker_changed_paths": [
+      "package.json",
+      "cli/package-install.spec.ts"
+    ],
+    "worker_evidence_paths": [
+      "docs/evidence/746dd7b-u1-manifest-fix-20261004/**"
+    ]
+  },
+  "inputs": {
+    "home": "/Users/fanzhang",
+    "node": "v22.22.2",
+    "pnpm": "10.31.0",
+    "appsdk": {
+      "path": "/Users/fanzhang/.cargo/bin/appsdk",
+      "sha256": "84a8f6f24f08031d55cb9ae87564cb7930c8af5ea3da183b576de581564e028a"
+    },
+    "root_package_json_sha256": "c2cdbe2813c1d4a3f0556ebb0b582b1abd3ad66eeae261a359b874eef179481a",
+    "package_install_spec_sha256": "b097fe10b4cfc64a113c8ede14a38aaa92ff1ae5ff78e08fd7353704db8bebb4",
+    "pnpm_lock_sha256": "d6ffb637673ac0ef6c8f4e7f03a2a76eb58ed3e1b13e53a19122d8eca7053d37"
+  },
+  "red": {
+    "log": "red-declared-files.log.gz",
+    "assertion": "declared base entry is missing from staged pack: runtime/dagpipe",
+    "exit": 1
+  },
+  "fix": {
+    "removed_declaration": "runtime/dagpipe",
+    "final_mode_log": "final-mode-red.log",
+    "final_mode_exit": 1,
+    "final_mode_error": "final mode requires the frozen D3/U4 SDK build receipt interface; no runner build interface is available"
+  },
+  "commands": [
+    {
+      "command": "pnpm exec vitest run cli/package-install.spec.ts",
+      "exit": 0,
+      "result": "1 file, 12/12 tests passed",
+      "log": "package-install-spec.log.gz"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exit": 0,
+      "log": "pnpm-typecheck.log.gz"
+    },
+    {
+      "command": "pnpm build",
+      "exit": 0,
+      "log": "pnpm-build.log.gz"
+    },
+    {
+      "command": "node scripts/package-artifact.mjs --mode base",
+      "exit": 0,
+      "log": "package-artifact-base.log"
+    },
+    {
+      "command": "node scripts/artifact-smoke.mjs",
+      "exit": 0,
+      "log": "artifact-smoke.log"
+    },
+    {
+      "command": "node scripts/runtime-smoke.mjs",
+      "exit": 0,
+      "log": "runtime-smoke.log"
+    },
+    {
+      "command": "node scripts/package-user-smoke.mjs --evidence-dir docs/evidence/746dd7b-u1-manifest-fix-20261004",
+      "exit": 0,
+      "log": "package-user-smoke.log",
+      "receipt": "package-user-smoke.receipt.json"
+    },
+    {
+      "command": "node scripts/installed-runtime-smoke.mjs --receipt-path docs/evidence/746dd7b-u1-manifest-fix-20261004/installed-runtime-smoke.receipt.json",
+      "exit": 0,
+      "log": "installed-runtime-smoke.log",
+      "receipt": "installed-runtime-smoke.receipt.json"
+    },
+    {
+      "command": "/Users/fanzhang/.cargo/bin/appsdk compile .",
+      "exit": 0,
+      "log": "appsdk-compile.log",
+      "artifact_hash": "sha256:21df5f3008799fcd06311fe3b60ecc644c6b0e16ba82baf993e5e411950c0425",
+      "project_artifact_hash": "sha256:ee065449413f220aa801e909ec1fabce329a030fd14bc87fea9204c3d10c4ec4",
+      "source_hash": "sha256:048602238f8ab957b4bd644f840c56f5fcdbadfe0a2f8426f691ac4431e42bf7",
+      "public_api_hash": "sha256:c5af2856c3f18c9c60d0694469e7bf8b26dbfec65477c441d1acfc5aa4f95f71",
+      "contract_hash": "sha256:bbf976321a4e34151ef538e4bc56b472380b08607ed59022d284745113ff0f88"
+    },
+    {
+      "command": "/Users/fanzhang/.cargo/bin/appsdk verify .",
+      "exit": 0,
+      "log": "appsdk-verify.log",
+      "result": {
+        "baseline_status": "current",
+        "command_ok": true,
+        "delivery_assessed": false,
+        "delivery_verified": false,
+        "development_ready": true,
+        "ok": false,
+        "reason": "delivery_not_evaluated",
+        "stage": "contract_bound"
+      }
+    }
+  ],
+  "package": {
+    "version": "0.1.0",
+    "declared_base_files": [
+      "cli",
+      "generated/runtime-lib",
+      "console-host/lib",
+      "console-host/static",
+      "ui/teams-console"
+    ],
+    "package_receipt": "generated/modules/teams-source/package-receipt.json",
+    "package_receipt_sha256": "89c08f4f712be9fb0c497e4c6efc37046d67aa34fee1f770c72a4f3e0b23f5a8",
+    "staged_package_json_sha256": "99df20ddc8bc068341c248304ce8b14f7c0131417eeb59627bd073fa3e118c6b",
+    "content_sha256": "7aa1a77f38d7daf641d102abd97e822e3bee187a03c142dc9730d308dbf1ee81",
+    "files": 169,
+    "tarball": {
+      "filename": "agentteams-0.1.0.tgz",
+      "sha256": "a44c7876d813a61d003c5ee45ce0292d5d24e2ea0963669adc19dac565d0ef10",
+      "content_sha256": "7aa1a77f38d7daf641d102abd97e822e3bee187a03c142dc9730d308dbf1ee81",
+      "files": 169
+    }
+  },
+  "installed": {
+    "receipt": "installed-runtime-smoke.receipt.json",
+    "receipt_sha256": "a8091d2e21fdf8dc2cc9dcd09f32175bbb2a21a34f890a599a83151c840d3a45",
+    "installed_content_sha256": "7aa1a77f38d7daf641d102abd97e822e3bee187a03c142dc9730d308dbf1ee81",
+    "installed_files": 169,
+    "lifecycle": {
+      "status": "passed",
+      "start_generation": 1,
+      "restart_generation": 2,
+      "start_launcher_pid": 60725,
+      "restart_launcher_pid": 61488,
+      "start_processes": [
+        {"id": "relay", "pid": 60765},
+        {"id": "installed-provider", "pid": 60802},
+        {"id": "installed-receiver", "pid": 60831}
+      ],
+      "restart_processes": [
+        {"id": "relay", "pid": 61561},
+        {"id": "installed-provider", "pid": 61646},
+        {"id": "installed-receiver", "pid": 61750}
+      ],
+      "installed_entry_root": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-EVeAa8/prefix/node_modules/agentteams/generated/runtime-lib"
+    }
+  },
+  "frozen_receipts": {
+    "package_user_smoke_sha256": "d40bc84370b039e05ba7dc6b2510817a3e4d324a40533e9f178acec718c86041",
+    "installed_runtime_smoke_sha256": "f7fa5fc3f7805ce84c88b22b4c006af879bda22bb003b0ea345cb4d115cd15e3",
+    "byte_unchanged": true
+  },
+  "cleanup": {
+    "owned_processes_absent": true,
+    "temporary_root_removed": true,
+    "owned_worktree_retained_for_primary": true
+  },
+  "not_claimed": [
+    "D3/U4 runner or graph packaging",
+    "final mode success",
+    "release eligibility",
+    "commit, merge, push, independent review, or bug closure"
+  ]
+}

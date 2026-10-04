@@ -1,0 +1,41 @@
+{
+  "reason": "preserve exact tool output including trailing whitespace while passing staged diff whitespace check",
+  "rows": [
+    {
+      "rawName": "green-package-install.log",
+      "rawSha256": "a39568ec269d6c4b98e91a8cf0013deeeeb70d4c4e6364900e5b18231eafe05a",
+      "rawBytes": 249,
+      "compressedPath": "green-package-install.log.gz",
+      "compressedSha256": "e407ef23b754452394f795f24a68bfc2475ea34e5a0a7222edeb70ff873d15d9",
+      "archivedRaw": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-package-impl-20261003/raw-r2-logs/green-package-install.log",
+      "byteEquivalent": true
+    },
+    {
+      "rawName": "pnpm-build.log",
+      "rawSha256": "d5ea20da4e119d54d6eda9613aa0d037449376d14aee06c2d992f311accbbdf2",
+      "rawBytes": 2606,
+      "compressedPath": "pnpm-build.log.gz",
+      "compressedSha256": "a30ed0702a9f77de74c268e8d24c30601d9f7b56b760d864296c97296a03d17b",
+      "archivedRaw": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-package-impl-20261003/raw-r2-logs/pnpm-build.log",
+      "byteEquivalent": true
+    },
+    {
+      "rawName": "pnpm-typecheck.log",
+      "rawSha256": "3063312f413b6d32b65573e8380972db6dfdbf46e79be090360727a4278cf9ef",
+      "rawBytes": 2058,
+      "compressedPath": "pnpm-typecheck.log.gz",
+      "compressedSha256": "ec74249bed24eea821590615d801315d9ad1c78decd9a0416bd7a0b978fa4a83",
+      "archivedRaw": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-package-impl-20261003/raw-r2-logs/pnpm-typecheck.log",
+      "byteEquivalent": true
+    },
+    {
+      "rawName": "red-package-consumer.log",
+      "rawSha256": "55a74d784b228642f5e5c1e99a2cd1dcf460d47b8085922a0d0acce55f3e8ff1",
+      "rawBytes": 2788,
+      "compressedPath": "red-package-consumer.log.gz",
+      "compressedSha256": "292772779addf3e35704c26aa00b71e0986e3769f3e415840821e7874a23179f",
+      "archivedRaw": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-package-impl-20261003/raw-r2-logs/red-package-consumer.log",
+      "byteEquivalent": true
+    }
+  ]
+}

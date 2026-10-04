@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "task": "U1 746dd7b current SDK author verification",
+  "timestamp": "2026-10-04T07:28:20Z",
+  "result": "passed-author-verification",
+  "candidate": {
+    "worktree": "/Volumes/Intel/playground/agentteams/u1-package-final-20261004",
+    "branch": "codex/u1-package-final-20261004",
+    "base_commit": "4155c01b8c2107891a6a97579d96601d9cae0bf9",
+    "head_commit": "4155c01b8c2107891a6a97579d96601d9cae0bf9",
+    "head_tree": "b90ba567ed4991e38941f08a3ac361dd00fda74e",
+    "u1_staged_index_tree_before_final_evidence": "17d15e083a56d7f56ac3a8a88c375aedd2e989f8",
+    "staged_diff_sha256_before_final_evidence": "88d15602cba44d49fbc177b575e5f8624abaceeab8441e8894cc41d0de7ce0bc",
+    "working_tree_diff_sha256_before_final_evidence": "2947ea0d131d60a76aa1fa44d113f44c2468dfc5dd6f6a41e9acae056c92f474"
+  },
+  "sdk": {
+    "binary": "/Users/fanzhang/.cargo/bin/appsdk",
+    "reported_version": "appsdk 0.1.0010 (rust)",
+    "binary_sha256": "84a8f6f24f08031d55cb9ae87564cb7930c8af5ea3da183b576de581564e028a",
+    "pin_lock": {
+      "command": "/Users/fanzhang/.cargo/bin/appsdk pin-lock . --binary /Users/fanzhang/.cargo/bin/appsdk",
+      "exit": 0,
+      "output": "pinned /Users/fanzhang/.cargo/bin/appsdk",
+      "previous_version": "0.1.6",
+      "previous_bundle_digest": "sha256:e9a816589ce03740b30bf847be4fbb6c4203c70d39b11ada2b723dc966d0a091",
+      "current_version": "0.1.0010",
+      "current_bundle_digest": "sha256:a51c01a3a2bbe4158d358db672b7e9683bfb8c714c97fed0600a413fe03b2aa1",
+      "current_compiler_digest": "sha256:84a8f6f24f08031d55cb9ae87564cb7930c8af5ea3da183b576de581564e028a"
+    },
+    "verify": {
+      "command": "/Users/fanzhang/.cargo/bin/appsdk verify .",
+      "exit": 0,
+      "result": {
+        "baseline_status": "current",
+        "command_ok": true,
+        "delivery_assessed": false,
+        "delivery_verified": false,
+        "development_ready": true,
+        "ok": false,
+        "reason": "delivery_not_evaluated",
+        "stage": "contract_bound"
+      }
+    },
+    "compile": {
+      "command": "/Users/fanzhang/.cargo/bin/appsdk compile .",
+      "exit": 0,
+      "artifact_hash": "sha256:2f12a64e36cdadf54839674040e0c7a34f30d1a774f46f85442704395273b07d",
+      "source_hash": "sha256:cdadde82606bfff4f27a2a4e39fa866447b1ec7a0aab32ecc3cd9ebd71d976a3",
+      "public_api_hash": "sha256:c7bd9d8c834d4df34022d7af3a90be1da6bfce50e667082cfd67375b834a1ff5",
+      "contract_hash": "sha256:8198c076b46ff05606c7c47fcadcce972550fd9dcfd2ecfe554d2bff2378b9b1"
+    }
+  },
+  "package": {
+    "mode": "base",
+    "release_eligible": false,
+    "version": "0.1.0",
+    "content_sha256": "f6d3f822e88f58c72013f03b3e7d703af26844d6326fcb9209ccd8390ee1b1de",
+    "files": 169,
+    "tarball_sha256": "f97763a5e1183426f89ee41c3ff1463a573217fe19ad0d9d333b0aa4e25a5502",
+    "base_receipt": "docs/evidence/746dd7b-u1-package-final-20261004/package-user-smoke.receipt.json",
+    "base_lifecycle": "not_run",
+    "installed_receipt": "docs/evidence/746dd7b-u1-package-final-20261004/installed-runtime-smoke.receipt.json",
+    "installed_lifecycle": "passed",
+    "installed_start_generation": 1,
+    "installed_restart_generation": 2,
+    "installed_start_launcher_pid": 23475,
+    "installed_restart_launcher_pid": 24396,
+    "installed_start_process_pids": [23514, 23554, 23622],
+    "installed_restart_process_pids": [24429, 24480, 24555],
+    "cleanup_removed": true
+  },
+  "generated_dependency": {
+    "classification": "official-appsdk-pin-lock-generated-dependency-separate-from-U1",
+    "paths_file": "docs/evidence/746dd7b-u1-package-final-20261004/sdk-generated-paths.txt",
+    "changed_paths_count": 77,
+    "changed_roots": [".appsdk/**", "contracts/**"],
+    "mixed_path": ".appsdk/project.json contains staged U1 module artifact paths and an unstaged SDK version change to 0.1.0010",
+    "note": "This generated dependency was used for author validation only. It was not staged or committed by this worker."
+  },
+  "post_run_external_state": {
+    "origin_main_after_run": "26f12ec3ea92175cc8d9900459450490b4a71745",
+    "origin_main_commit_subject": "fix(governance): refresh canonical SDK consumer inputs (852c3ac)",
+    "sdk_bundle_digest_matches_merged_main": true,
+    "only_observed_local_generated_difference": ".appsdk/migrations/0.1.0009-to-0.1.0010/record.json differs only in its generated created_at timestamp",
+    "note": "The advanced origin/main was not fetched or incorporated by this worker; parent owns latest-main composition."
+  },
+  "evidence": {
+    "logs": [
+      "pnpm-install.log.gz",
+      "pnpm-build.log.gz",
+      "pnpm-typecheck.log.gz",
+      "appsdk-verify.log.gz",
+      "appsdk-compile.log.gz",
+      "artifact-smoke.log.gz",
+      "runtime-smoke.log.gz",
+      "package-user-smoke.log.gz",
+      "installed-runtime-smoke.log.gz",
+      "package-install-spec.log.gz",
+      "appsdk-verify-post-compile.log.gz"
+    ],
+    "raw_log_archive": "raw-log-archive.json",
+    "focused_spec": "6 passed",
+    "frozen_receipts_restored": {
+      "package-user-smoke.receipt.json": "d40bc84370b039e05ba7dc6b2510817a3e4d324a40533e9f178acec718c86041",
+      "installed-runtime-smoke.receipt.json": "f7fa5fc3f7805ce84c88b22b4c006af879bda22bbb03b0ea345cb4d115cd15e3"
+    }
+  },
+  "obligations": [
+    "Parent owns latest-main composition, final U1 review, integration, and delivery.",
+    "The official pin-lock-generated SDK dependency remains separate from U1 and must be combined by the primary from its merged main.",
+    "Base mode remains release_eligible=false; final SDK runner/graph packaging, final user-TOML/U2, and BB01-BB14 are not claimed."
+  ]
+}

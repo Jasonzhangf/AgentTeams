@@ -1,0 +1,269 @@
+{
+  "artifact_hash": "sha256:21df5f3008799fcd06311fe3b60ecc644c6b0e16ba82baf993e5e411950c0425",
+  "artifact_paths": [
+    "generated/modules/teams-source/package-receipt.json",
+    "generated/modules/teams-source/lib/package.json",
+    "generated/modules/teams-source/lib/cli/agentteams.mjs",
+    "generated/modules/teams-source/lib/generated/runtime-lib/network/wss-connection.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/network/relay-login.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-runtime.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-process.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-config.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-process.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-supervisor.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-process.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/server/relay.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/server/relay-process.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/agent/work-resource.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/config/runtime-config.js",
+    "generated/modules/teams-source/lib/console-host/lib/index.mjs",
+    "generated/modules/teams-source/lib/console-host/lib/index.d.mts",
+    "generated/modules/teams-source/lib/console-host/static/console.html",
+    "generated/modules/teams-source/lib/console-host/static/console-entry.js",
+    "generated/modules/teams-source/lib/ui/teams-console/index.js",
+    "generated/modules/teams-source/lib/ui/teams-console/browser.js",
+    "generated/modules/teams-source/lib/ui/teams-console/client/render.js",
+    "generated/modules/teams-source/lib/ui/teams-console/assets/agentbrowser-icon.jpg"
+  ],
+  "artifact_schema": 1,
+  "artifacts": [
+    {
+      "hash": "sha256:89c08f4f712be9fb0c497e4c6efc37046d67aa34fee1f770c72a4f3e0b23f5a8",
+      "path": "generated/modules/teams-source/package-receipt.json"
+    },
+    {
+      "hash": "sha256:99df20ddc8bc068341c248304ce8b14f7c0131417eeb59627bd073fa3e118c6b",
+      "path": "generated/modules/teams-source/lib/package.json"
+    },
+    {
+      "hash": "sha256:65ac16b3f47b29b7687a874052cafe99f0e90781f0543321335936baedaa78fa",
+      "path": "generated/modules/teams-source/lib/cli/agentteams.mjs"
+    },
+    {
+      "hash": "sha256:33fdd0abdebbc00597c547014a5b501300ea487c5d76db6ef219af23e47e00c3",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/network/wss-connection.js"
+    },
+    {
+      "hash": "sha256:2542c4bcd0333a79b5f218c8a1e1f1526052f1f927582116447e9cbd09991f8b",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/network/relay-login.js"
+    },
+    {
+      "hash": "sha256:49d83acbe1889cfe7d393fc504e57c28404851880994d54287e6634c75039c97",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-runtime.js"
+    },
+    {
+      "hash": "sha256:4b795bacfb5204cc6b94e8efa9e573fe3d4de51fbba5dbe3da9fb6d672800947",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-process.js"
+    },
+    {
+      "hash": "sha256:0ad63fc4a925484cd492002ac1ee37ef0413d0ae06c389cd8f80c0c4a06dd0ae",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-config.js"
+    },
+    {
+      "hash": "sha256:348bece16b7ac0f26eb0828f2597c78db3b0623f11c65b95c51d76e176277b40",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-process.js"
+    },
+    {
+      "hash": "sha256:a1e405c913243f0f8d85ae3abc6a64592448548cdfa6a110de7b77d0d3cc9129",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-supervisor.js"
+    },
+    {
+      "hash": "sha256:1fee3951039767887a5e7e5ba9151e0b538dec30604b0c80e7bfb39e24828659",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-process.js"
+    },
+    {
+      "hash": "sha256:797a0cbc31bcb30a3a9767f475277d805b723c6480b86bdccd1ad53e341c8ed7",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/server/relay.js"
+    },
+    {
+      "hash": "sha256:3387737036e7c54a6b8c54c370ce6a06fff25c0e43d70aafd67e3f310d4106bf",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/server/relay-process.js"
+    },
+    {
+      "hash": "sha256:c86065ecf8128ac0c5c427803bbb135e35ea804069912d8e8f26d3acb9396902",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/agent/work-resource.js"
+    },
+    {
+      "hash": "sha256:1844f6e3ec1327684b2dcf043f36f783a1571ca11312ba85726793d2165a835f",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/config/runtime-config.js"
+    },
+    {
+      "hash": "sha256:5649b9da614b75aaa5556239c695088854ac45c736f1571e5d2fa39876b5f034",
+      "path": "generated/modules/teams-source/lib/console-host/lib/index.mjs"
+    },
+    {
+      "hash": "sha256:7c799c1555333e50fed378d6b546db3e2cf315415b6454f263203529622e0a5f",
+      "path": "generated/modules/teams-source/lib/console-host/lib/index.d.mts"
+    },
+    {
+      "hash": "sha256:2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21",
+      "path": "generated/modules/teams-source/lib/console-host/static/console.html"
+    },
+    {
+      "hash": "sha256:da3abef3af6da4d6119bff1e195a1b4bfca83982981e0f093943b544836f0b15",
+      "path": "generated/modules/teams-source/lib/console-host/static/console-entry.js"
+    },
+    {
+      "hash": "sha256:a5ee64c2b8aabc7ae6b92b4eee4840ddca81190976d5b3b0490034f2c555ce95",
+      "path": "generated/modules/teams-source/lib/ui/teams-console/index.js"
+    },
+    {
+      "hash": "sha256:e0c26f25c15308a638ec4fca5d2cc58b50df3d266a647495248377ca92d52aa9",
+      "path": "generated/modules/teams-source/lib/ui/teams-console/browser.js"
+    },
+    {
+      "hash": "sha256:671127e93ce66cd79ad308aeb134e906725faa1cbea66126aae9e5d154f6af12",
+      "path": "generated/modules/teams-source/lib/ui/teams-console/client/render.js"
+    },
+    {
+      "hash": "sha256:e310c0ee9f7ebb9da88f68498a90e6cd83f4540541574251c90da5e83e736587",
+      "path": "generated/modules/teams-source/lib/ui/teams-console/assets/agentbrowser-icon.jpg"
+    }
+  ],
+  "build": {
+    "args": [
+      "build:governance"
+    ],
+    "program": "pnpm",
+    "working_directory": "."
+  },
+  "contract_hash": "sha256:bbf976321a4e34151ef538e4bc56b472380b08607ed59022d284745113ff0f88",
+  "dependency_hashes": [],
+  "deployment_operations": [
+    "install",
+    "restart"
+  ],
+  "module_id": "teams-source",
+  "public_api_hash": "sha256:c5af2856c3f18c9c60d0694469e7bf8b26dbfec65477c441d1acfc5aa4f95f71",
+  "source_hash": "sha256:048602238f8ab957b4bd644f840c56f5fcdbadfe0a2f8426f691ac4431e42bf7",
+  "stage": "source_implemented"
+}
+{
+  "artifact_hash": "sha256:ee065449413f220aa801e909ec1fabce329a030fd14bc87fea9204c3d10c4ec4",
+  "artifact_schema": 1,
+  "modules": [
+    {
+      "active_artifact": "active/lib/teams-source/**",
+      "generated_outputs": [
+        "generated/modules/teams-source/**"
+      ],
+      "module_id": "teams-source",
+      "owned_paths": [
+        "agent/**",
+        "agent-host/**",
+        "cli-adapter/**",
+        "endpoint/**",
+        "config/**",
+        "control-protocol/**",
+        "network/**",
+        "runtime/**",
+        "server/**",
+        "opencode-adapter/src/**",
+        "opencode-adapter/tests/**",
+        "opencode-adapter/separator.spec.ts",
+        "opencode-adapter/package.json",
+        "opencode-adapter/tsconfig.json",
+        "opencode-adapter/tsdown.config.ts",
+        "console-host/src/**",
+        "console-host/tests/**",
+        "console-host/static/**",
+        "console-host/package.json",
+        "console-host/tsconfig.json",
+        "console-host/vitest.config.ts",
+        "ui/teams-console/src/**",
+        "ui/teams-console/tests/**",
+        "ui/teams-console/package.json",
+        "ui/teams-console/tsconfig.json",
+        "ui/teams-console/vitest.config.ts",
+        "ui/teams-console/tsconfig.build.json",
+        "ui/teams-console/fixture/**",
+        "ui/teams-console/assets/**",
+        "dsh-adapter/**",
+        "memory-plugin/**",
+        "search-plugin/**",
+        "docs/**",
+        "scripts/**",
+        "AGENTS.md",
+        "README.md",
+        "package.json",
+        "pnpm-workspace.yaml",
+        "pnpm-lock.yaml",
+        "tsconfig.json",
+        "tsconfig.runtime.json",
+        "vitest.config.ts",
+        ".gitignore"
+      ],
+      "regression": {
+        "allow_skipped": false,
+        "command": {
+          "args": [
+            "test"
+          ],
+          "program": "pnpm",
+          "working_directory": "."
+        },
+        "input_paths": [
+          "agent/**",
+          "agent-host/**",
+          "endpoint/**",
+          "config/**",
+          "control-protocol/**",
+          "network/**",
+          "runtime/**",
+          "server/**",
+          "opencode-adapter/src/**",
+          "opencode-adapter/tests/**",
+          "opencode-adapter/separator.spec.ts",
+          "opencode-adapter/package.json",
+          "opencode-adapter/tsconfig.json",
+          "opencode-adapter/tsdown.config.ts",
+          "console-host/src/**",
+          "console-host/tests/**",
+          "console-host/static/**",
+          "console-host/package.json",
+          "console-host/tsconfig.json",
+          "console-host/vitest.config.ts",
+          "ui/teams-console/src/**",
+          "ui/teams-console/tests/**",
+          "ui/teams-console/package.json",
+          "ui/teams-console/tsconfig.json",
+          "ui/teams-console/vitest.config.ts",
+          "ui/teams-console/tsconfig.build.json",
+          "ui/teams-console/fixture/**",
+          "ui/teams-console/assets/**",
+          "dsh-adapter/**",
+          "memory-plugin/**",
+          "search-plugin/**",
+          "scripts/**",
+          "package.json",
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          "tsconfig.json",
+          "tsconfig.runtime.json",
+          "vitest.config.ts",
+          "docs/architecture/**"
+        ],
+        "minimum_test_count": 304,
+        "ordinary_mode_after_freeze": "disabled",
+        "reenable_on": [
+          "source_change",
+          "contract_change",
+          "public_api_change",
+          "artifact_change",
+          "dependency_change"
+        ],
+        "required_before_freeze": true,
+        "suite_id": "teams-source-regression"
+      },
+      "source_owner": "teams-source",
+      "stage": "source_implemented"
+    }
+  ],
+  "project_id": "agentteams",
+  "sdk": {
+    "bundle_manifest": ".appsdk/contracts/sdk-bundle.manifest.json",
+    "name": "appsdk",
+    "resource_record": ".appsdk/sdk-resources.json",
+    "version": "0.1.0010"
+  }
+}

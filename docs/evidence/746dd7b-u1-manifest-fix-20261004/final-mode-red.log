@@ -1,0 +1,13 @@
+file:///Volumes/Intel/playground/agentteams/u1-manifest-fix-20261004/scripts/package-artifact.mjs:12
+  throw new Error(`package artifact: ${message}`)
+        ^
+
+Error: package artifact: final mode requires the frozen D3/U4 SDK build receipt interface; no runner build interface is available
+    at fail (file:///Volumes/Intel/playground/agentteams/u1-manifest-fix-20261004/scripts/package-artifact.mjs:12:9)
+    at file:///Volumes/Intel/playground/agentteams/u1-manifest-fix-20261004/scripts/package-artifact.mjs:97:3
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v22.22.2
+exit=1

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "issue": "746dd7b",
+  "timestamp": "2026-10-04T08:34:00Z",
+  "owned_resources": [
+    {
+      "kind": "installed_smoke_temp_home",
+      "path": "os tmp agentteams-package-user-*",
+      "state": "removed",
+      "evidence": "installed-runtime-smoke.receipt.json cleanup.removed=true"
+    },
+    {
+      "kind": "ignored_run_scoped_receipts",
+      "path": "generated/u1-receipts/**",
+      "state": "removed",
+      "evidence": "rm -r generated/u1-receipts exit=0"
+    },
+    {
+      "kind": "spec_evidence_temp_dir",
+      "path": "os tmp u1-package-install-spec-*",
+      "state": "removed",
+      "evidence": "rm -r of the three created spec temp dirs exit=0"
+    },
+    {
+      "kind": "red_harness_scratch",
+      "path": "/tmp/u1-red, /tmp/u1-check-*, scripts/__u1_prefix_replay.mjs",
+      "state": "removed",
+      "evidence": "rm -r exit=0; replay harness removed in its finally block"
+    }
+  ],
+  "listeners": {
+    "checked": true,
+    "smoke_ports": [64087, 64088, 64089],
+    "remaining": "none on smoke ports; no owned daemon or listener left",
+    "evidence": "lsof -nP -iTCP:<port> -sTCP:LISTEN empty for each smoke port"
+  },
+  "frozen_evidence": {
+    "dir": "docs/evidence/746dd7b-u1-package-20261003",
+    "state": "retained (historical, byte-unchanged)",
+    "package_user_receipt_sha256": "d40bc84370b039e05ba7dc6b2510817a3e4d324a40533e9f178acec718c86041",
+    "installed_receipt_sha256": "f7fa5fc3f7805ce84c88b22b4c006af879bda22bbb03b0ea345cb4d115cd15e3"
+  },
+  "retained_obligations": [
+    "pnpm lifecycle:admission must run on the committed clean candidate; the parent owns that step after review PASS and commit."
+  ]
+}

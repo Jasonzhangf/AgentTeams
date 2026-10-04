@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { assertCandidateIdentity, currentCandidateIdentity, validateCandidateIdentity } from './receipt-identity.mjs'
 
 const root = resolve(import.meta.dirname, '..')
 const moduleId = 'teams-source'
@@ -21,13 +23,14 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
 }
 
-function run(program, args, logPath, cwd = root) {
+function run(program, args, logPath, cwd = root, extraEnv = {}) {
   const result = spawnSync(program, args, {
     cwd,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     env: {
       ...process.env,
+      ...extraEnv,
       CI: 'true',
       npm_config_fetch_timeout: '30000',
       npm_config_prefer_offline: 'true',
@@ -88,23 +91,102 @@ function moduleScope() {
   return { allowedPaths: module.owned_paths, forbiddenPaths: module.forbidden_paths }
 }
 
-function stageInputs(candidateInfo, artifactHash) {
+const sha256Pattern = /^[0-9a-f]{64}$/u
+
+export function installedLifecycleReceipt({ receiptPath, expectedReceiptSha256, expectedPackContentSha256, expectedCandidateIdentity }) {
+  if (!existsSync(receiptPath)) throw new Error(`installed lifecycle receipt is missing: ${receiptPath}`)
+  const receiptHash = digest(readFileSync(receiptPath)).slice('sha256:'.length)
+  if (expectedReceiptSha256 !== undefined && receiptHash !== expectedReceiptSha256) {
+    throw new Error(`installed lifecycle receipt ${receiptPath} hash ${receiptHash} does not match the producer reference ${expectedReceiptSha256}`)
+  }
+  const receipt = readJson(receiptPath)
+  const receiptCandidate = validateCandidateIdentity(receipt.candidate)
+  if (expectedCandidateIdentity !== undefined) {
+    assertCandidateIdentity(receiptCandidate, expectedCandidateIdentity, 'installed lifecycle receipt')
+  }
+  const lifecycle = receipt.lifecycle
+  if (receipt.release_eligible !== false) throw new Error('installed lifecycle receipt must remain a non-release base package receipt')
+  if (lifecycle?.status !== 'passed') throw new Error('installed lifecycle receipt does not contain a passed installed start/restart')
+  const start = lifecycle.start
+  const restart = lifecycle.restart
+  if (start?.state !== 'running' || restart?.state !== 'running') throw new Error('installed lifecycle receipt start/restart state is not running')
+  if (!Number.isSafeInteger(start.generation) || !Number.isSafeInteger(restart.generation) || restart.generation <= start.generation) {
+    throw new Error('installed lifecycle receipt restart generation did not advance')
+  }
+  if (!Array.isArray(start.processes) || start.processes.length !== 3 ||
+      !Array.isArray(restart.processes) || restart.processes.length !== 3) {
+    throw new Error('installed lifecycle receipt must bind Relay and two independent Agent processes for each generation')
+  }
+  const startPids = new Set([start.launcher?.pid, ...start.processes.map(process => process.pid)])
+  if (startPids.size !== 4 || startPids.has(undefined)) throw new Error('installed lifecycle receipt start process identities are incomplete')
+  if (!Number.isSafeInteger(restart.launcher?.pid) || startPids.has(restart.launcher.pid)) {
+    throw new Error('installed lifecycle receipt restart did not prove a new launcher PID')
+  }
+  for (const process of restart.processes) {
+    if (!Number.isSafeInteger(process.pid) || startPids.has(process.pid)) {
+      throw new Error('installed lifecycle receipt restart did not prove new Agent/Relay PIDs')
+    }
+    if (typeof process.entryPath !== 'string' || !process.entryPath.includes('node_modules/agentteams/generated/runtime-lib/')) {
+      throw new Error(`installed lifecycle receipt process did not load installed bytes: ${process.entryPath}`)
+    }
+  }
+  if (typeof receipt.install?.cli_realpath !== 'string' || !receipt.install.cli_realpath.includes('node_modules/agentteams/cli/agentteams.mjs')) {
+    throw new Error('installed lifecycle receipt CLI identity is not bound to the installed package')
+  }
+  const pack = receipt.pack
+  const tarball = receipt.tarball
+  const installedContentSha256 = receipt.install?.installed_content_sha256
+  if (typeof pack?.content_sha256 !== 'string' || !sha256Pattern.test(pack.content_sha256)) {
+    throw new Error('installed lifecycle receipt has no staged pack content hash')
+  }
+  if (pack.root !== 'generated/modules/teams-source/lib') {
+    throw new Error(`installed lifecycle receipt pack root ${pack.root} is not the teams-source staged pack root`)
+  }
+  if (pack.content_sha256 !== expectedPackContentSha256) {
+    throw new Error(`installed lifecycle receipt pack content ${pack.content_sha256} does not match this candidate package ${expectedPackContentSha256}`)
+  }
+  if (typeof tarball?.sha256 !== 'string' || !sha256Pattern.test(tarball.sha256)) {
+    throw new Error('installed lifecycle receipt tarball sha256 is missing or malformed')
+  }
+  if (tarball.filename !== `agentteams-${receipt.package?.version}.tgz`) {
+    throw new Error(`installed lifecycle receipt tarball ${tarball.filename} is not the candidate package version`)
+  }
+  const tarballFiles = Array.isArray(tarball.files) ? [...tarball.files].sort() : undefined
+  const packFiles = Array.isArray(pack.files) ? [...pack.files].sort() : undefined
+  if (tarball.content_sha256 !== pack.content_sha256 || tarballFiles === undefined || packFiles === undefined ||
+      JSON.stringify(tarballFiles) !== JSON.stringify(packFiles)) {
+    throw new Error('installed lifecycle receipt tarball content does not match the staged pack')
+  }
+  if (installedContentSha256 !== pack.content_sha256) {
+    throw new Error(`installed lifecycle receipt installed content ${installedContentSha256} does not match the staged pack ${pack.content_sha256}`)
+  }
+  return { path: receiptPath, hash: `sha256:${receiptHash}`, candidate: receiptCandidate, tarballSha256: tarball.sha256,
+    installedContentSha256, packContentSha256: pack.content_sha256, lifecycle }
+}
+
+function stageInputs(candidateInfo, artifactHash, installedReceiptPath) {
   const environmentId = artifactHash ? digest(JSON.stringify({
     platform: process.platform,
     arch: process.arch,
     node: process.version,
     artifactHash,
   })) : undefined
-  const deployedEntrypoint = 'pnpm smoke:installed -> installed runtime/server/relay-process.js + runtime/runtime/agent-process.js'
+  const deployedEntrypoint = 'pnpm smoke:installed -> installed agentteams CLI start/status/stop -> installed Relay and two Agent entrypoints with actual restart generation/PID evidence'
   return {
     verify: { inputCandidate: candidateInfo, ...moduleScope(), changedPaths: candidateInfo.changedPaths },
     smoke: { inputCandidate: candidateInfo, artifactHash, environmentId, entrypoint: deployedEntrypoint,
+      installedReceiptPath,
       runtimeInputs: pathHashes([
+        join(root, 'scripts', 'package-user-smoke.mjs'),
         join(root, 'scripts', 'installed-runtime-smoke.mjs'),
+        join(root, 'scripts', 'runtime-smoke.mjs'),
         join(root, 'package.json'),
         join(root, 'pnpm-workspace.yaml'),
       ]),
-      credentialRefs: { TEAMS_RELAY_AGENT: process.env.TEAMS_RELAY_AGENT ? digest(process.env.TEAMS_RELAY_AGENT) : 'missing' } },
+      credentialRefs: {
+        AGENTTEAMS_PROVIDER_AUTH: process.env.AGENTTEAMS_PROVIDER_AUTH ? digest(process.env.AGENTTEAMS_PROVIDER_AUTH) : 'generated-default-by-cli',
+        AGENTTEAMS_RECEIVER_AUTH: process.env.AGENTTEAMS_RECEIVER_AUTH ? digest(process.env.AGENTTEAMS_RECEIVER_AUTH) : 'generated-default-by-cli',
+      } },
     environmentId,
     deployedEntrypoint,
   }
@@ -142,7 +224,7 @@ function bindStageEvidence(stage, evidenceIds) {
   writeJson(stage.receiptPath, { ...receipt, evidence_ids: evidenceIds }, false)
 }
 
-function runStage({ state, statePath, receiptRoot, stageId, command, logPath, candidateInfo, requiredPaths = [], extra = {}, remainingStages = [] }) {
+function runStage({ state, statePath, receiptRoot, stageId, command, logPath, candidateInfo, requiredPaths = [], extra = {}, remainingStages = [], env = {} }) {
   const fingerprint = stageFingerprint(candidateInfo, stageId, command, extra)
   const previous = state.stages[stageId]
   const currentPathHashes = pathHashes(requiredPaths)
@@ -195,7 +277,7 @@ function runStage({ state, statePath, receiptRoot, stageId, command, logPath, ca
   state.stages[stageId] = { stageId, status: 'running', fingerprint, command, startedAt: now(), logPath }
   saveStageState(statePath, state)
   try {
-    const output = run(command[0], command.slice(1), logPath)
+    const output = run(command[0], command.slice(1), logPath, root, env)
     const receiptId = `stage-${stageId}-${Date.now()}`
     const receiptPath = join(receiptRoot, `${receiptId}.json`)
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
@@ -285,6 +367,11 @@ function assertExistingValidationReusable(validationPath, candidateInfo, stageSt
   if (existing.candidate_commit !== candidateInfo.head || existing.candidate_tree_hash !== candidateInfo.tree) {
     throw new Error('existing pre-review validation belongs to another candidate')
   }
+  installedLifecycleReceipt({
+    receiptPath: u1InstalledReceiptPath(candidateInfo.head),
+    expectedPackContentSha256: candidatePackReceipt().contentSha256,
+    expectedCandidateIdentity: currentCandidateIdentity(root),
+  })
   const artifactPath = join(root, 'generated', 'modules', moduleId, 'module.compiled.json')
   const artifact = existsSync(artifactPath) ? readJson(artifactPath) : undefined
   const currentEvidenceIds = [
@@ -325,6 +412,31 @@ function assertExistingValidationReusable(validationPath, candidateInfo, stageSt
   return existing
 }
 
+function u1InstalledReceiptPath(head) {
+  return join(root, '.appsdk-control', 'lifecycle-adapter', 'u1-installed-receipts', head, 'installed-runtime-smoke.receipt.json')
+}
+
+export function candidatePackReceipt(
+  receiptPath = join(root, 'generated', 'modules', moduleId, 'package-receipt.json'),
+  expectedCandidateIdentity = currentCandidateIdentity(root),
+) {
+  const packageReceiptPath = resolve(receiptPath)
+  if (!existsSync(packageReceiptPath)) throw new Error(`staged package receipt is missing: ${packageReceiptPath}`)
+  const packageReceipt = readJson(packageReceiptPath)
+  const candidateIdentity = validateCandidateIdentity(packageReceipt.candidate)
+  assertCandidateIdentity(candidateIdentity, expectedCandidateIdentity, 'staged package receipt')
+  if (typeof packageReceipt.content_sha256 !== 'string' || !sha256Pattern.test(packageReceipt.content_sha256)) {
+    throw new Error(`staged package receipt has no content hash: ${packageReceiptPath}`)
+  }
+  return { path: packageReceiptPath, contentSha256: packageReceipt.content_sha256, candidate: candidateIdentity }
+}
+
+function parseInstalledReceiptReference(output) {
+  const match = /^u1-installed-receipt (\S+) sha256:([0-9a-f]{64})$/mu.exec(output)
+  if (!match) throw new Error('installed runtime smoke did not emit an exact installed receipt reference')
+  return { path: resolve(match[1]), sha256: match[2] }
+}
+
 function main() {
   assertCleanSource()
   const candidateInfo = candidate()
@@ -333,7 +445,8 @@ function main() {
   const stageState = loadStageState(stageStatePath, candidateInfo)
   const currentArtifactPath = join(root, 'generated', 'modules', moduleId, 'module.compiled.json')
   const currentArtifact = existsSync(currentArtifactPath) ? readJson(currentArtifactPath) : undefined
-  const currentInputs = stageInputs(candidateInfo, currentArtifact?.artifact_hash)
+  const u1ReceiptPath = u1InstalledReceiptPath(candidateInfo.head)
+  const currentInputs = stageInputs(candidateInfo, currentArtifact?.artifact_hash, u1ReceiptPath)
   const expectedFingerprints = {
     'pnpm-verify': stageFingerprint(candidateInfo, 'pnpm-verify', ['pnpm', 'verify'], currentInputs.verify),
     'pnpm-smoke-installed': stageFingerprint(candidateInfo, 'pnpm-smoke-installed', ['pnpm', 'smoke:installed'], currentInputs.smoke),
@@ -396,7 +509,7 @@ function main() {
       throw new Error(`compiled artifact source commit ${artifact.source_commit} does not match ${candidateInfo.head}`)
     }
     const artifactHash = artifact.artifact_hash
-    const smokeInputs = stageInputs(candidateInfo, artifactHash)
+    const smokeInputs = stageInputs(candidateInfo, artifactHash, u1ReceiptPath)
     const environmentId = smokeInputs.environmentId
     const deployedEntrypoint = smokeInputs.deployedEntrypoint
 
@@ -404,10 +517,28 @@ function main() {
     const smokeStage = runStage({ state: stageState, statePath: stageStatePath, receiptRoot, stageId: 'pnpm-smoke-installed',
       command: ['pnpm', 'smoke:installed'], logPath: join(commandRoot, 'pnpm-smoke-installed.log'), candidateInfo,
       requiredPaths: [join(root, 'generated', 'modules', moduleId, 'module.compiled.json'),
-        join(root, 'scripts', 'installed-runtime-smoke.mjs'), join(root, 'package.json'), join(root, 'pnpm-workspace.yaml')],
+        join(root, 'generated', 'modules', moduleId, 'package-receipt.json'), u1ReceiptPath,
+        join(root, 'scripts', 'package-user-smoke.mjs'), join(root, 'scripts', 'installed-runtime-smoke.mjs'),
+        join(root, 'scripts', 'runtime-smoke.mjs'), join(root, 'package.json'), join(root, 'pnpm-workspace.yaml')],
       extra: smokeInputs.smoke,
+      env: { AGENTTEAMS_U1_INSTALLED_RECEIPT_PATH: u1ReceiptPath },
       remainingStages: [] })
-    const installedOutput = smokeStage.output
+    const receiptReference = parseInstalledReceiptReference(smokeStage.output)
+    if (receiptReference.path !== u1ReceiptPath) {
+      throw new Error(`installed receipt path ${receiptReference.path} does not match the adapter-owned ${u1ReceiptPath}`)
+    }
+    const installedLifecycle = installedLifecycleReceipt({
+      receiptPath: receiptReference.path,
+      expectedReceiptSha256: receiptReference.sha256,
+      expectedPackContentSha256: candidatePackReceipt().contentSha256,
+      expectedCandidateIdentity: currentCandidateIdentity(root),
+    })
+    const installedOutput = `${smokeStage.output}
+installed lifecycle receipt ${installedLifecycle.path} ${installedLifecycle.hash}
+installed lifecycle tarball ${installedLifecycle.tarballSha256}
+installed lifecycle pack content ${installedLifecycle.packContentSha256}
+installed lifecycle generations ${installedLifecycle.lifecycle.start.generation} -> ${installedLifecycle.lifecycle.restart.generation}
+`
     const verifyExecution = verifyStage.reused ? { mode: 'reused', source_receipt_id: verifyStage.receiptId,
       source_receipt_path: verifyStage.receiptPath, source_evidence_ids: verifyStage.sourceEvidenceIds } :
       { mode: 'executed', receipt_id: verifyStage.receiptId, receipt_path: verifyStage.receiptPath }
@@ -596,4 +727,6 @@ function main() {
   }
 }
 
-main()
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main()
+}

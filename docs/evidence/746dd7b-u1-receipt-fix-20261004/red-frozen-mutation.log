@@ -1,0 +1,20 @@
+RED: normal public smoke wrappers mutate tracked frozen receipts (pre-fix)
+
+pre-run frozen hashes
+d40bc84370b039e05ba7dc6b2510817a3e4d324a40533e9f178acec718c86041  docs/evidence/746dd7b-u1-package-20261003/package-user-smoke.receipt.json
+f7fa5fc3f7805ce84c88b22b4c006af879bda22bbb03b0ea345cb4d115cd15e3  docs/evidence/746dd7b-u1-package-20261003/installed-runtime-smoke.receipt.json
+
+$ node scripts/package-user-smoke.mjs
+Package user smoke passed: installed CLI and Console consumers verified.
+exit=0
+post-run hash b3f734a562806ad96de6e619ae4929f0b096544d0f8dc285e688ef067a99e6cf
+git status docs/evidence/746dd7b-u1-package-20261003/package-user-smoke.receipt.json -> AM (tracked file modified)
+
+$ node scripts/installed-runtime-smoke.mjs
+Installed runtime smoke passed: the staged base package was installed outside the source tree and consumed through installed CLI/Relay/Agent lifecycle plus Console entrypoints.
+exit=0
+post-run hash 1cc294bf5b1bc660cb30bb0ee61534ca44e9854738ac09699ba44cfe399ab5ea
+git status docs/evidence/746dd7b-u1-package-20261003/installed-runtime-smoke.receipt.json -> AM (tracked file modified)
+
+The receipts were then restored from the index. After the fix, both public wrappers default to a
+run-scoped ignored path and the frozen hashes above are unchanged (see frozen-receipt-hashes.txt).

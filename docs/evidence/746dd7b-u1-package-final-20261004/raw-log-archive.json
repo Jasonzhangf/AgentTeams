@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "compression": "gzip -n -9",
+  "logs": [
+    {
+      "path": "pnpm-install.log.gz",
+      "raw_sha256": "61f807f9d9231779e79a57258d7dbb8b31bdfc14f583e3473610b6bf1952d161",
+      "gzip_sha256": "e9d1e1c1ecb1b2513aaea64cd87ba239733945a0b73aaa077ed0eea3f9ec7b5c"
+    },
+    {
+      "path": "pnpm-build.log.gz",
+      "raw_sha256": "f2ae3333f7832a2a84eb0d50bb0f929ec4e36f53a5a874216e9a6813cf5c511b",
+      "gzip_sha256": "83baa95c726e795fca3377c394b5f55321751e221e2f6e87f2bb2a082deb7bcc"
+    },
+    {
+      "path": "pnpm-typecheck.log.gz",
+      "raw_sha256": "f767036ae2823fc9415a2597fe1e991b59c2e92e5dbfb6cc71e3f20f730df61c",
+      "gzip_sha256": "15fde4532dfd0b390c801e1dcc238e24fb0e5dcf19764fec034f518cffeffe9f"
+    },
+    {
+      "path": "appsdk-verify.log.gz",
+      "raw_sha256": "b4468c2a94f7b0c7e97aab354da7d088fffe80828456c688cdb1820ce8dc9865",
+      "gzip_sha256": "f06f73b3733af2cc6a010b19a1f9fd98d3e39fcc570151cab8410f5a516e7afc"
+    },
+    {
+      "path": "appsdk-compile.log.gz",
+      "raw_sha256": "9e4bee2e290ab01834f355b3a0f3923abdb05e4de425583459d889dc1664e009",
+      "gzip_sha256": "948291f6d6e31187350c25e12aa3df5388f712d1558b0613bdbc3d10e1598a38"
+    },
+    {
+      "path": "artifact-smoke.log.gz",
+      "raw_sha256": "1dcd79d7e25b6b7dbc05f74251fb0611e7f006137699a48037fc5bb8161996b5",
+      "gzip_sha256": "ce6c4bb27ad2568da5704decf6deaf861a1963f88bcce23d888cb6309959c00b"
+    },
+    {
+      "path": "runtime-smoke.log.gz",
+      "raw_sha256": "c05fa06f9f9cfce06dfc72bee182a531f01e7a2af218e208e69eae15d8fc1754",
+      "gzip_sha256": "52cf2eb79afa3bd54814ff3da24e1b1f5759598f1c396188e1418d1cfb766ba3"
+    },
+    {
+      "path": "package-user-smoke.log.gz",
+      "raw_sha256": "34efa9aa653d932472d60e6a7bed214a0052d401433fd5e295d32077bcdc7448",
+      "gzip_sha256": "b68f3954cd13801f480edf225849c8d4ec91acd4d74113a9c991d7693c2dfbac"
+    },
+    {
+      "path": "installed-runtime-smoke.log.gz",
+      "raw_sha256": "81b87b0f92af71c68cb994dd1c91ddf2d9f95d9b4dcf3033f9dfcf9d96267d50",
+      "gzip_sha256": "6e8d73f7fc9a06f0fabce332e7821640e46edf4d58d41d52fbff14d0500a505d"
+    },
+    {
+      "path": "package-install-spec.log.gz",
+      "raw_sha256": "f90205297ad72ec8e43a64d2563e27a5b1b08a156348872167ce40e8cd70927d",
+      "gzip_sha256": "efdbd8e5d5a9abd118644055140b8068555a43c0a794f6eeaec77bfaa6ed81d5"
+    },
+    {
+      "path": "appsdk-verify-post-compile.log.gz",
+      "raw_sha256": "b4468c2a94f7b0c7e97aab354da7d088fffe80828456c688cdb1820ce8dc9865",
+      "gzip_sha256": "f06f73b3733af2cc6a010b19a1f9fd98d3e39fcc570151cab8410f5a516e7afc"
+    }
+  ]
+}

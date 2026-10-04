@@ -1,8 +1,8 @@
 {
   "enforcement": "advisory",
   "harness": "appsdk-development-process-control",
-  "manifest_hash": "sha256:54e06681f1603cbcf136e8395ce47abb32ef67215bfd433c6c5b5b9fb37578b7",
-  "project_contract_digest": "sha256:853dd611504a25d97585d78b52bca02703e4c6e90416cf7dc4191832fdacff03",
+  "manifest_hash": "sha256:04ac95de0ba0b33c0c20f7d6a15e2fe6bcfd2405c28a144ed23e95d77a816398",
+  "project_contract_digest": "sha256:18093635bb62be2bf861486cbd490a0a51d04548fd63fb571b697d4f9f00c7de",
   "rules": [
     {
       "description": "Read only rule sources declared by the project contract.",
