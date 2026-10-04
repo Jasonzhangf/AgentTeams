@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-04T08:07:12.369725+00:00",
+  "owner": "desktop-primary",
+  "path": "/Volumes/Intel/playground/agentteams/u4-persistent-contract-final-20261004",
+  "branch": "codex/u4-persistent-contract-final-20261004",
+  "worktreeListAbsent": true,
+  "pathAbsent": true,
+  "normalGitRemoval": true,
+  "branchDeleted": true,
+  "remoteReceipt": "93c3e090bad6141fcb981a74b66eb8e6b022dde1",
+  "scope": "current delivered design/memory tree only; historical retained successors tracked separately"
+}

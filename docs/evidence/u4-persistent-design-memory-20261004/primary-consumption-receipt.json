@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-04T07:52:13.439364+00:00",
+  "owner": "desktop-primary",
+  "state": "exact-design-review-PASS/awaiting-integration",
+  "base": "26f12ec3ea92175cc8d9900459450490b4a71745",
+  "candidateTree": "7f187ac538b2ffab2e70bd6bc3bdc9910d2ee027",
+  "reviewTask": "u4-persistent-contract-final-20261004-r8",
+  "profile": "oauth",
+  "model": "gpt-6.1-sol",
+  "exit": 0,
+  "blockingFindings": 0,
+  "changedPaths": [
+    "docs/architecture/function-map.json",
+    "docs/architecture/mainline-call-map.json",
+    "docs/architecture/resource-map.json",
+    "docs/architecture/verification-map.json",
+    "docs/design/dagpipe/graphs/work-close.graph.json",
+    "docs/design/dagpipe/graphs/work-open.graph.json",
+    "docs/design/dagpipe/graphs/work-request.graph.json",
+    "docs/design/teams-behavior-contracts.md",
+    "docs/design/teams-local-work-entry-v1.md",
+    "docs/evidence/4b6c377-u4-open-binding-design-20261004/run-notes.md",
+    "docs/evidence/4b6c377-u4-persistent-contract-final-20261004/run-notes.md",
+    "docs/evidence/4b6c377-u4-persistent-design-20261004/run-notes.md",
+    "docs/evidence/4b6c377-u4-persistent-design-r3-20261004/run-notes.md",
+    "docs/evidence/4b6c377-u4-persistent-design-r4-20261004/run-notes.md",
+    "docs/evidence/4b6c377-u4-persistent-design-r5-20261004/run-notes.md"
+  ],
+  "scope": "design only; no product/installed Work claim",
+  "next": "candidate commit; preserve current product reviews, serialize latest-main integration"
+}

@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-04T08:05:10.591550+00:00",
+  "state": "exact-design-PASS/committed/mainline-validated/remote-pushed",
+  "candidate": "a00e53bbcd1c8a8b46991e0db4779e0fcc8ccebe",
+  "candidateTree": "7f187ac538b2ffab2e70bd6bc3bdc9910d2ee027",
+  "review": "u4-persistent-contract-final-20261004-r8",
+  "reviewProfile": "oauth",
+  "reviewModel": "gpt-6.1-sol",
+  "remoteDesignReceipt": "a00e53bbcd1c8a8b46991e0db4779e0fcc8ccebe",
+  "currentRemoteMain": "93c3e090bad6141fcb981a74b66eb8e6b022dde1",
+  "mainlineValidation": "three new Work static DAGs valid; diff check; exact tree equal",
+  "scope": "design only; actual Operators/SDK/installed Work remain incomplete",
+  "issue": "4b6c377 remains open",
+  "memory": "pending design-stage memory",
+  "cleanup": "pending"
+}

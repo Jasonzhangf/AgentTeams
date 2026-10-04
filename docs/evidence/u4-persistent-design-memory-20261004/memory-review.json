@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-04T08:09:38.510667+00:00",
+  "reviewer": "desktop-primary",
+  "status": "PASS",
+  "scope": "persistent Work design only",
+  "sourceCommit": "a00e53bbcd1c8a8b46991e0db4779e0fcc8ccebe",
+  "tree": "7f187ac538b2ffab2e70bd6bc3bdc9910d2ee027",
+  "exactReview": "u4-persistent-contract-final-20261004-r8",
+  "profile": "oauth",
+  "model": "gpt-6.1-sol",
+  "evidence": [
+    "delivery-receipt.json",
+    "primary-consumption-receipt.json",
+    "stage-owned-cleanup-receipt.json",
+    "retired-predecessors-cleanup.json"
+  ],
+  "tags": [
+    "ai-reviewed",
+    "human-unreviewed"
+  ],
+  "limits": "No implemented Operators, SDK compile, installed Work or BB06 claim. 4b6c377 stays open for product delivery."
+}

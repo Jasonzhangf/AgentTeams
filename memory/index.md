@@ -307,6 +307,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `session`
 - details: [L2/p0-explicit-session-20260906.md](L2/p0-explicit-session-20260906.md)
 
+### Persistent Work design admitted: immutable binding, per-request operations, explicit recovery
+- tags: `ai-reviewed`, `design`, `human-unreviewed`, `local-mvp`, `persistent-work`
+- details: [L2/persistent-work-design-20261004.md](L2/persistent-work-design-20261004.md)
+
 ### RCC 4444 managed OpenCode live replay
 - tags: `ai-reviewed`, `human-unreviewed`, `live-replay`, `managed-opencode`, `rcc`
 - details: [L2/rcc-managed-live-20260906.md](L2/rcc-managed-live-20260906.md)
