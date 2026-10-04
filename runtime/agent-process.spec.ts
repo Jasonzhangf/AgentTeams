@@ -1,4 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -53,6 +54,7 @@ function child(configPath: string, credential = 'Bearer provider', extraEnv: Nod
   children.push(process)
   let output = ''
   process.stderr!.on('data', chunk => { output += chunk.toString() })
+  process.stdout!.on('data', chunk => { output += chunk.toString() })
   const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(resolve => process.once('exit', (code, signal) => resolve({ code, signal })))
   const ready = new Promise<{ agentId: string; generation: number }>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Agent startup deadline: ${output}`)), 5000)
@@ -61,7 +63,7 @@ function child(configPath: string, credential = 'Bearer provider', extraEnv: Nod
       if ((message as { kind?: string }).kind !== 'daemon.registered') reject(new Error('unexpected process control message'))
       else resolve(message as { agentId: string; generation: number })
     })
-    process.once('exit', () => { clearTimeout(timeout); reject(new Error(`Agent exited before registration: ${output}`)) })
+    process.once('close', code => { clearTimeout(timeout); reject(new Error(`Agent exited before registration (${configPath}, code=${code}): ${output}`)) })
     process.once('error', error => { clearTimeout(timeout); reject(error) })
   })
   return { process, ready, exited, output: () => output }
@@ -204,30 +206,71 @@ process.once('SIGINT', () => server.close(() => process.exit(0)))
   await new Promise<void>(resolve => catalogServer.listen(0, '127.0.0.1', resolve))
   const catalogPort = (catalogServer.address() as { port: number }).port
   const managedData = join(directory, 'managed-data')
-  const managedConfigPath = join(directory, 'managed-runtime.json')
-  writeFileSync(managedConfigPath, JSON.stringify({ revision: 3, acceptedRevision: 3,
+  const managedConfigPath = join(directory, 'managed-config.toml')
+  const managedInternalPath = join(directory, 'managed-internal.toml')
+  const managedConfigText = [
+    'version = 3',
+    '',
+    '[providers.probe]',
+    'protocol = "openai-chat"',
+    'apiBaseUrl = "http://127.0.0.1:1/v1"',
+    'label = "Probe"',
+    'enabled = true',
+    '',
+    '[providers.catalog]',
+    'protocol = "openai-chat"',
+    `apiBaseUrl = "http://127.0.0.1:${catalogPort}/v1"`,
+    'label = "Catalog"',
+    'enabled = true',
+    'credentialEnv = "TEAMS_PROVIDER_TEST_CREDENTIAL"',
+    '',
+    '[[models]]',
+    'provider = "probe"',
+    'id = "probe-model"',
+    '',
+    '[agents.managed.model]',
+    'primary = { provider = "probe", model = "probe-model" }',
+    '',
+  ].join('\n')
+  writeFileSync(managedConfigPath, managedConfigText)
+  const managedSourceHash = `sha256:${createHash('sha256').update(managedConfigText).digest('hex')}`
+  const managedSnapshot = JSON.stringify({
+    revision: 3, acceptedRevision: 3,
     providers: {
       probe: { id: 'probe', label: 'Probe', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:1/v1', enabled: true, auth: { kind: 'none' } },
       catalog: { id: 'catalog', label: 'Catalog', protocol: 'openai-chat', apiBaseUrl: `http://127.0.0.1:${catalogPort}/v1`, enabled: true, auth: { kind: 'bearer', credentialRef: 'TEAMS_PROVIDER_TEST_CREDENTIAL' } },
     },
-    catalogs: {
-      probe: { state: 'ready', entries: [{ ref: { providerInstanceId: 'probe', modelId: 'probe-model' }, origin: 'manual', base: {}, overrides: {} }] },
-      catalog: { state: 'stale', entries: [] },
-    },
-    agents: { managed: { primary: { providerInstanceId: 'probe', modelId: 'probe-model' } } } }))
+    catalogs: { probe: { state: 'ready', entries: [{ ref: { providerInstanceId: 'probe', modelId: 'probe-model' }, origin: 'manual', base: {}, overrides: {} }] }, catalog: { state: 'stale', entries: [] } },
+    agents: { managed: { primary: { providerInstanceId: 'probe', modelId: 'probe-model' } } },
+  })
+  writeFileSync(managedInternalPath, [
+    'version = 2',
+    `sourcePath = "${managedConfigPath}"`,
+    'sourceRevision = 3',
+    `sourceHash = "${managedSourceHash}"`,
+    '',
+    '[configRuntime.accepted.managed]',
+    'acceptedRevision = 3',
+    'acceptedSourceRevision = 3',
+    `acceptedSourceHash = "${managedSourceHash}"`,
+    `snapshot = '''${managedSnapshot}'''`,
+    '',
+  ].join('\n'))
   const managedAgentConfig = join(directory, 'managed-agent.json')
   writeFileSync(managedAgentConfig, JSON.stringify({ ...config, identity: { ...config.identity, hostId: 'managed-host', agentId: 'managed', label: 'Managed Agent' },
     dataDirectory: managedData, leasePort: await availablePort(), policy: { revision: 1, allowedConsumers: ['consumer'], allowedManagers: ['consumer'] },
     openCode: { executable: managedExecutable, directory: join(directory, 'managed-opencode-data'), configFile: managedConfigPath, port: await availablePort(), startupTimeoutMs: 5000, stopTimeoutMs: 2000 } }))
-  const managedChild = child(managedAgentConfig, 'Bearer managed', { TEAMS_PROVIDER_TEST_CREDENTIAL: 'provider-catalog' })
+  const managedChild = child(managedAgentConfig, 'Bearer managed', { TEAMS_PROVIDER_TEST_CREDENTIAL: 'provider-catalog',
+    TEAMS_LOCAL_CONFIG_PATH: managedConfigPath, TEAMS_LOCAL_INTERNAL_PATH: managedInternalPath,
+    TEAMS_LOCAL_LAUNCHER_GENERATION: '1', TEAMS_LOCAL_START_TOKEN: 'managed-test' })
   expect(await managedChild.ready).toMatchObject({ agentId: 'managed' })
-  const managedConsole = createRelayConsoleClient(consumer, 'managed', 3000)
+  const managedConsole = createRelayConsoleClient(consumer, 'managed', 8000)
   expect(await managedConsole.command({ kind: 'config.refreshModels', agentId: 'managed', expectedRevision: 3, providerId: 'catalog' })).toEqual({ ok: true })
-  expect((await managedConsole.readProjection()).configs[0]).toMatchObject({ acceptedRevision: 4,
+  expect((await managedConsole.readProjection()).configs[0]).toMatchObject({ acceptedRevision: 3,
     providers: expect.arrayContaining([expect.objectContaining({ id: 'catalog', catalogState: 'ready', models: [{ id: 'catalog-model' }] })]) })
   expect(catalogAuthSeen).toBe(true)
   expect(await managedConsole.command({ kind: 'config.apply', agentId: 'managed' })).toEqual({ ok: true })
-  expect((await managedConsole.readProjection()).configs[0]).toMatchObject({ acceptedRevision: 4, effectiveRevision: 4 })
+  expect((await managedConsole.readProjection()).configs[0]).toMatchObject({ acceptedRevision: 3, effectiveRevision: 3 })
   managedChild.process.kill('SIGTERM')
   expect((await managedChild.exited).code).toBe(0)
   await new Promise<void>(resolve => catalogServer.close(() => resolve()))

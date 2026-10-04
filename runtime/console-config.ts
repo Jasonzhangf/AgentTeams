@@ -18,21 +18,21 @@ export function createConsoleConfigBinding(options: {
       if (command.agentId !== agentId) throw new RuntimeConfigError({ code: 'FORBIDDEN', message: 'Configuration target does not match this daemon' })
       switch (command.kind) {
         case 'config.putProvider':
-          store.putProviderInstance(command.expectedRevision, command.provider)
+          await store.putProviderInstance(command.expectedRevision, command.provider)
           return
         case 'config.bindModel': {
-          const current = store.read().agents[agentId]
-          store.bindAgentModel(command.expectedRevision, agentId, {
+          const current = (await store.read()).agents[agentId]
+          await store.bindAgentModel(command.expectedRevision, agentId, {
             primary: { providerInstanceId: command.providerId, modelId: command.modelId },
             ...(current?.backup === undefined ? {} : { backup: current.backup }),
           })
           return
         }
         case 'config.model.put':
-          store.putModelEntry(command.expectedRevision, command.entry as ModelEntry)
+          await store.putModelEntry(command.expectedRevision, command.entry as ModelEntry)
           return
         case 'config.agent.select-backup':
-          store.selectAgentBackup(command.expectedRevision, agentId, command.backup)
+          await store.selectAgentBackup(command.expectedRevision, agentId, command.backup)
           return
         case 'config.refreshModels': {
           const result = await store.refreshProviderModels(command.expectedRevision, command.providerId, models, credentials)
@@ -48,10 +48,10 @@ export function createConsoleConfigBinding(options: {
       }
   }
   return {
-    readProjection: (): ConsoleProjectionV1['configs'][number] => {
-      const config = store.read()
+    readProjection: async (): Promise<ConsoleProjectionV1['configs'][number]> => {
+      const config = await store.read()
       return {
-        agentId, acceptedRevision: config.acceptedRevision,
+        agentId, acceptedRevision: config.acceptedRevision, applyState: config.applyState,
         ...(config.effectiveRevision === undefined ? {} : { effectiveRevision: config.effectiveRevision }),
         ...(config.lastApplyError === undefined ? {} : { error: config.lastApplyError }),
         providers: Object.values(config.providers).map(provider => {

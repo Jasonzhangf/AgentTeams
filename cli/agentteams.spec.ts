@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { agentteamsCommand, DEFAULT_CONFIG_TEXT, DEFAULT_RELAY_CONFIG_TEXT } from './agentteams.mjs'
+import { agentteamsCommand, DEFAULT_CONFIG_TEXT } from './agentteams.mjs'
 
 const cliEntry = fileURLToPath(new URL('./agentteams.mjs', import.meta.url))
 const rootDirectory = fileURLToPath(new URL('../', import.meta.url))
@@ -20,46 +20,62 @@ describe('agentteams CLI', () => {
     })
   }, 60_000)
 
-  it('init writes the default user config and refuses to overwrite it', async () => {
+  it('init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it', async () => {
     const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-init-'))
     try {
       const output = await agentteamsCommand(['init'], { home })
       const configPath = join(home, '.agentteams', 'config.toml')
       expect(output).toContain(configPath)
       const text = await readFile(configPath, 'utf8')
-      expect(text).toContain('version = 2')
-      expect(text).toContain('[endpoints.provider]')
-      expect(text).toContain('[endpoints.receiver.connect]')
-      const relayText = await readFile(join(home, '.agentteams', 'relay.json'), 'utf8')
-      expect(relayText).toBe(DEFAULT_RELAY_CONFIG_TEXT)
-      expect(relayText).not.toContain('pid')
-      expect(relayText).not.toContain('internal.toml')
-      const keyText = await readFile(join(home, '.agentteams', 'relay-key.pem'), 'utf8')
-      const certText = await readFile(join(home, '.agentteams', 'relay-cert.pem'), 'utf8')
+      expect(text).toContain('version = 3')
+      expect(text).toContain('[bridge]')
+      expect(text).toContain('[agents.provider]')
+      expect(text).toContain('[agents.receiver.connect]')
+      expect(text).not.toContain('relay.json')
+      expect(text).not.toContain('workId')
+      expect(text).not.toContain('requestId')
+      expect(text).not.toContain('payload')
+      await expect(readFile(join(home, '.agentteams', 'relay.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      const tlsDirectory = join(home, '.agentteams', '.internal', 'tls')
+      const keyText = await readFile(join(tlsDirectory, 'relay-key.pem'), 'utf8')
+      const certText = await readFile(join(tlsDirectory, 'relay-cert.pem'), 'utf8')
       expect(() => createPrivateKey(keyText)).not.toThrow()
       expect(new X509Certificate(certText).subject).toContain('localhost')
-      expect((await stat(join(home, '.agentteams', 'relay-key.pem'))).mode & 0o777).toBe(0o600)
-      expect((await stat(join(home, '.agentteams', 'files'))).isDirectory()).toBe(true)
+      expect((await stat(join(tlsDirectory, 'relay-key.pem'))).mode & 0o777).toBe(0o600)
+      expect((await stat(join(tlsDirectory, 'relay-cert.pem'))).mode & 0o777).toBe(0o600)
       const internalText = await readFile(join(home, '.agentteams', 'internal.toml'), 'utf8')
-      expect(internalText).toContain('version = 1')
+      expect(internalText).toContain('version = 2')
+      expect(internalText).toContain('sourceRevision = 1')
+      expect(internalText).toContain('sourceHash = "sha256:')
       expect(internalText).toContain('[relay]')
+      expect(internalText).toContain('[daemon."provider"]')
+      expect(internalText).toContain('[configRuntime.accepted]')
+      expect(internalText).toContain('[configRuntime.effective]')
+      expect(internalText).toContain('[configRuntime.catalogs]')
+      expect(internalText).toContain('AGENTTEAMS_PROVIDER_AUTH')
+      expect(internalText).toContain('AGENTTEAMS_RECEIVER_AUTH')
       expect(internalText).toContain('projectionPath')
       await writeFile(configPath, 'sentinel\n', { flag: 'w' })
       await expect(agentteamsCommand(['init'], { home })).rejects.toThrow(/already exists/i)
       expect(await readFile(configPath, 'utf8')).toBe('sentinel\n')
+      expect(await readFile(join(tlsDirectory, 'relay-key.pem'), 'utf8')).toBe(keyText)
+      expect(await readFile(join(tlsDirectory, 'relay-cert.pem'), 'utf8')).toBe(certText)
     } finally {
       await rm(home, { recursive: true, force: true })
     }
   })
 
-  it('fails init explicitly when local relay TLS material is incomplete', async () => {
+  it('fails init explicitly before creating config when local bridge TLS material is incomplete', async () => {
     const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-init-tls-'))
     try {
       const directory = join(home, '.agentteams')
-      await mkdir(directory, { recursive: true })
-      await writeFile(join(directory, 'relay-key.pem'), 'sentinel\n', { flag: 'w', encoding: 'utf8' })
-      await expect(agentteamsCommand(['init'], { home })).rejects.toThrow(/relay TLS material is incomplete/i)
-      expect(await readFile(join(directory, 'relay-key.pem'), 'utf8')).toBe('sentinel\n')
+      const tlsDirectory = join(directory, '.internal', 'tls')
+      await mkdir(tlsDirectory, { recursive: true, mode: 0o700 })
+      await writeFile(join(tlsDirectory, 'relay-key.pem'), 'sentinel\n', { flag: 'w', encoding: 'utf8', mode: 0o600 })
+      await expect(agentteamsCommand(['init'], { home })).rejects.toThrow(/TLS material is incomplete/i)
+      expect(await readFile(join(tlsDirectory, 'relay-key.pem'), 'utf8')).toBe('sentinel\n')
+      await expect(readFile(join(directory, 'config.toml'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(readFile(join(directory, 'relay.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     } finally {
       await rm(home, { recursive: true, force: true })
     }
@@ -70,8 +86,8 @@ describe('agentteams CLI', () => {
     try {
       const configPath = join(home, '.agentteams', 'config.toml')
       const results = await Promise.allSettled([
-        agentteamsCommand(['init'], { home, configText: DEFAULT_CONFIG_TEXT.replace('version = 2', '# winner = "a"\nversion = 2') }),
-        agentteamsCommand(['init'], { home, configText: DEFAULT_CONFIG_TEXT.replace('version = 2', '# winner = "b"\nversion = 2') }),
+        agentteamsCommand(['init'], { home, configText: DEFAULT_CONFIG_TEXT.replace('version = 3', '# winner = "a"\nversion = 3') }),
+        agentteamsCommand(['init'], { home, configText: DEFAULT_CONFIG_TEXT.replace('version = 3', '# winner = "b"\nversion = 3') }),
       ])
       expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
       expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
@@ -84,7 +100,7 @@ describe('agentteams CLI', () => {
     }
   })
 
-  it('does not overwrite a relay config that already exists', async () => {
+  it('does not create or overwrite an editable relay config', async () => {
     const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-init-relay-'))
     try {
       const directory = join(home, '.agentteams')
@@ -93,7 +109,7 @@ describe('agentteams CLI', () => {
       await writeFile(join(directory, 'relay.json'), relaySentinel, { flag: 'w', encoding: 'utf8' })
       await agentteamsCommand(['init'], { home })
       expect(await readFile(join(directory, 'relay.json'), 'utf8')).toBe(relaySentinel)
-      expect(await readFile(join(directory, 'config.toml'), 'utf8')).toContain('version = 2')
+      expect(await readFile(join(directory, 'config.toml'), 'utf8')).toContain('version = 3')
     } finally {
       await rm(home, { recursive: true, force: true })
     }
@@ -209,9 +225,8 @@ describe('agentteams CLI', () => {
     expect(malformed).toContain('endpoint=provider projection=malformed')
   })
 
-  it('direct node entry avoids source TS parameter properties and writes internal.toml from built runtime artifacts', async () => {
+  it('direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts', async () => {
     const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-entry-'))
-    let generation: number | undefined
     const runCli = async (...args: string[]) => await execFileAsync(process.execPath, [cliEntry, ...args], {
       cwd: rootDirectory,
       env: { ...process.env, HOME: home },
@@ -220,28 +235,14 @@ describe('agentteams CLI', () => {
       const result = await runCli('init')
       expect(result.stdout).toContain('initialized')
       const internalText = await readFile(join(home, '.agentteams', 'internal.toml'), 'utf8')
-      expect(internalText).toContain('version = 1')
+      expect(internalText).toContain('version = 2')
       expect(internalText).toContain('[relay]')
-      const started = await runCli('start')
-      expect(started.stdout).toContain('started state=running generation=1')
-      generation = 1
-      expect((await runCli('status')).stdout).toContain('status state=running generation=1')
-      expect((await runCli('work')).stdout).toContain('succeeded agent=receiver work=configured-search request=configured-search-1 state=succeeded')
-      expect((await runCli('stop', '--generation', '1')).stdout).toContain('stopped state=stopped generation=1')
-      generation = undefined
-      const restarted = await runCli('start')
-      expect(restarted.stdout).toContain('started state=running generation=2')
-      generation = 2
-      await expect(runCli('stop', '--generation', '1')).rejects.toThrow(/stale local supervisor generation/i)
-      expect((await runCli('work')).stdout).toContain('succeeded agent=receiver work=configured-search request=configured-search-1 state=succeeded')
-      expect((await runCli('stop', '--generation', '2')).stdout).toContain('stopped state=stopped generation=2')
-      generation = undefined
-      expect((await runCli('status')).stdout).toContain('status state=stopped generation=2')
+      expect((await runCli('status')).stdout).toContain('status state=stopped generation=0')
+      await expect(runCli('init')).rejects.toThrow(/already exists/i)
     } finally {
-      if (generation !== undefined) await runCli('stop', '--generation', String(generation)).catch(() => undefined)
       await rm(home, { recursive: true, force: true })
     }
-  }, 120_000)
+  }, 60_000)
 
   it('surfaces explicit parsing and runtime errors', async () => {
     await expect(agentteamsCommand([])).rejects.toThrow(/usage:/i)

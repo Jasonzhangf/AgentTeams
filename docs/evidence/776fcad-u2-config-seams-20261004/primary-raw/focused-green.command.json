@@ -1,0 +1,6 @@
+{
+  "streamEventIndex": 155,
+  "command": "/bin/zsh -c 'pnpm exec vitest run runtime/local-config.spec.ts > docs/evidence/776fcad-u2-config-seams-20261004/focused-green.log 2>&1; code=$?; cat docs/evidence/776fcad-u2-config-seams-20261004/focused-green.log; exit $code'",
+  "exitCode": 0,
+  "stdoutSha256": "3d4bd5b111e7a26bafba756d0b5541bdfc559e1f7e00bf16fa344f91edd958b3"
+}

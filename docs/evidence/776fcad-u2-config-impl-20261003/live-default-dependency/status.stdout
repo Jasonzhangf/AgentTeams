@@ -1,0 +1,2 @@
+status state=failed generation=1 config=/tmp/u2-final-live.HBqbIO/default/home/.agentteams/config.toml internal=/tmp/u2-final-live.HBqbIO/default/home/.agentteams/internal.toml pid=13098 error=local agent exited before readiness code=1 signal=null stderr=endpoint.connect.payload is required
+ endpoints=missing

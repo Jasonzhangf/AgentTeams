@@ -1,0 +1,6 @@
+{
+  "streamEventIndex": 122,
+  "command": "/bin/zsh -c 'pnpm build:runtime'",
+  "exitCode": 0,
+  "stdoutSha256": "f70103c11043177fa9921b8f0a664c83b14e0cd4748ae023f65ad19fe5db6da5"
+}

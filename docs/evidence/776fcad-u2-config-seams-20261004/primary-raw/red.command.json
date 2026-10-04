@@ -1,0 +1,6 @@
+{
+  "streamEventIndex": 95,
+  "command": "/bin/zsh -c 'pnpm exec vitest run runtime/local-config.spec.ts'",
+  "exitCode": 1,
+  "stdoutSha256": "356bd4b89f433661d8f4ee15219bad5853104836b19cae0888e69d068e717c98"
+}

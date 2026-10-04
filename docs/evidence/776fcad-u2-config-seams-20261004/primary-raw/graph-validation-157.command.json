@@ -1,0 +1,6 @@
+{
+  "streamEventIndex": 157,
+  "command": "/bin/zsh -c 'dagpipe graph validate docs/design/dagpipe/graphs/daemon-start.graph.json > docs/evidence/776fcad-u2-config-seams-20261004/dagpipe-daemon-start.log 2>&1 && dagpipe graph validate docs/design/dagpipe/graphs/provider-config.graph.json > docs/evidence/776fcad-u2-config-seams-20261004/dagpipe-provider-config.log 2>&1; code=$?; cat docs/evidence/776fcad-u2-config-seams-20261004/dagpipe-daemon-start.log docs/evidence/776fcad-u2-config-seams-20261004/dagpipe-provider-config.log; exit $code'",
+  "exitCode": 0,
+  "stdoutSha256": "be4aed1c4e3e9aa9a70c416497a4c5c762cdffb4e84aaaf2cb02f3a38a726be6"
+}

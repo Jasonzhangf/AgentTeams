@@ -319,6 +319,7 @@ export async function startLocalProcess(configPath = defaultLocalConfigPath(), o
     if (childNodeArguments.length > 0) childEnv.TEAMS_LOCAL_NODE_ARGUMENTS = childNodeArguments.join('\0')
     childEnv.TEAMS_LOCAL_START_TOKEN = startToken
     childEnv.TEAMS_LOCAL_LAUNCHER_GENERATION = String(nextGeneration)
+    childEnv.TEAMS_LOCAL_CONFIG_PATH = config.configPath
     childEnv.TEAMS_LOCAL_INTERNAL_PATH = config.internalPath!
     let child: ChildProcess | undefined
     try {

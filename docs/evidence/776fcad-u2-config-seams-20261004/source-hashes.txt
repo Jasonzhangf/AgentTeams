@@ -1,0 +1,10 @@
+runtime/local-config.ts git object e6394710e6d71f8b6c700a7644c37a5f2653a57e
+SHA256 7471042543dae4062d9f17b86cafe94590626dfaba29c3aa5d8d0224cf5e50d5
+runtime/local-config.spec.ts git object 6d0012080c777f3ed982ad0d563a60c4866c24d6
+SHA256 f212fcec82052d70fa6aea6003afcd205ef26e1c339639ea690f37bb0313f67b
+docs/architecture/function-map.json git object c515dce0483cc4945136bcb2d9d9f34259402f4b
+SHA256 eb055911cd323fb20489d990303896ced582d241a1287b7aacf585514fa64c96
+docs/architecture/resource-map.json git object ba259f524bad23b5f06cc8a945ca6be24c979b6a
+SHA256 4dc7dc797d6cf48d3d32584281d205e680129cb8c806fc581e9ad046e593ea10
+
+Dependency install: pnpm install --frozen-lockfile exit 0; lockfile unchanged; node_modules was absent before the first red-test attempt, so the initial "vitest not found" was an environment readiness failure, not source red evidence.

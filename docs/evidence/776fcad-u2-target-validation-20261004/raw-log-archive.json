@@ -1,0 +1,94 @@
+{
+  "at": "2026-10-04T10:04:15.626663+00:00",
+  "kind": "lossless raw-command logs; no text stripping",
+  "files": [
+    {
+      "raw": "public-env-consumer.log",
+      "archive": "public-env-consumer.log.gz",
+      "rawBytes": 4335,
+      "rawSha256": "d03f488d87bfc639ac09e565d00921efb40b21182ceb4282e660c058aca16bff",
+      "archiveSha256": "3c49f8fcd988d7b86128abc6a9e79853e96f56476764e7808039f9b9d4626f90",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "regression.log",
+      "archive": "regression.log.gz",
+      "rawBytes": 432,
+      "rawSha256": "042521128592e8241e0f1908a112a9fa2cfce24ac4a46bd04429b2a5401dd6f7",
+      "archiveSha256": "f5748eb80015751f81d5f60e7e119eec1dd79ea20001508eeb06305e6ac08a9e",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "build-runtime.log",
+      "archive": "build-runtime.log.gz",
+      "rawBytes": 231,
+      "rawSha256": "a083070d1841f35a21f028b93023b55882fda4cedc8272cac7cfff96e6064853",
+      "archiveSha256": "2dc1874cc79f9d9287afdf1c22a7425d31d88e99da9b7055a4be68b5014e5258",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "appsdk-version.log",
+      "archive": "appsdk-version.log.gz",
+      "rawBytes": 250,
+      "rawSha256": "3f20d51be8cdab9f8c96db774d5b24b8fc0778b85331c2199963ae3bc343541f",
+      "archiveSha256": "94d6e25bfe6438c51adc2d4c08e9d3b49a7101b96bfe518879b0ec5f514779e4",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "public-env-first-error.log",
+      "archive": "public-env-first-error.log.gz",
+      "rawBytes": 1416,
+      "rawSha256": "52fbcb595c0b86aa984400d953fc3622e4be8993a4d8061411ba018e24489281",
+      "archiveSha256": "d525aec722b85372988d1d092d4c806fca2fa775259eda6f183eaaa016de5796",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "typecheck.log",
+      "archive": "typecheck.log.gz",
+      "rawBytes": 1371,
+      "rawSha256": "762c505e8332cb21b97286861dccc50b95af865163198037f579a15d9793231a",
+      "archiveSha256": "83a2476dda51bdb5f237019510448c599f0705bc01f57ab91f3d37bf791eae40",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "appsdk-verify.log",
+      "archive": "appsdk-verify.log.gz",
+      "rawBytes": 291,
+      "rawSha256": "b4468c2a94f7b0c7e97aab354da7d088fffe80828456c688cdb1820ce8dc9865",
+      "archiveSha256": "288d11a17575924c2f6a00f41555ecbd55aa96c9888167d226e37b5bf5f57305",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "recovery-consumer.log",
+      "archive": "recovery-consumer.log.gz",
+      "rawBytes": 4179,
+      "rawSha256": "7f42c20bfaaa6bae1187000270a072e3e365b672b148d0a80205fcae15004f4a",
+      "archiveSha256": "83b393bdea50c465f051f538089f3a5d5830c1a6db657792481dcbea4133c175",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "graph-validation.log",
+      "archive": "graph-validation.log.gz",
+      "rawBytes": 574,
+      "rawSha256": "3ab9b6a8906fe4609d64a10bd79aa799c3214f9a2bf2c1b46491f1b7c2c8a086",
+      "archiveSha256": "7855e3f97347af42bb6026b6f26592de4b6191eb7f438e924d64d8b4626aa2a3",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "appsdk-compile.log",
+      "archive": "appsdk-compile.log.gz",
+      "rawBytes": 7990,
+      "rawSha256": "aca1f3d855e9e406925698b89f82f78cb781481d72c1899068cf9263ead3fbc6",
+      "archiveSha256": "276344a5371429f919f850b7d8c067aa8c372c433b4a3e5fd95cbe448c310d16",
+      "roundTripIdentical": true
+    },
+    {
+      "raw": "focused.log",
+      "archive": "focused.log.gz",
+      "rawBytes": 253,
+      "rawSha256": "fd298decd121067320d4bf471605412a05fc571e677e9504114b3d372779dad0",
+      "archiveSha256": "1fad4c4cfe614bf809c162d83b213538e3cb010498b5590988e437560d18d03b",
+      "roundTripIdentical": true
+    }
+  ]
+}

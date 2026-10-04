@@ -1,0 +1,7 @@
+default_relay_json=absent
+passive_relay_json=absent
+default_tls_key=present
+passive_tls_cert=present
+default_config_forbidden_tokens=absent
+default_internal_version=2
+passive_internal_online=3

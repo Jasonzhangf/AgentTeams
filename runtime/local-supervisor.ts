@@ -405,9 +405,11 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         const launcherGeneration = options.launcherGeneration ?? reservedLauncherGeneration
         const childEnv = { ...process.env, ...options.env }
         if (config.internalPath !== undefined && launcherGeneration !== undefined) {
+          childEnv.TEAMS_LOCAL_CONFIG_PATH = config.configPath
           childEnv.TEAMS_LOCAL_INTERNAL_PATH = config.internalPath
           childEnv.TEAMS_LOCAL_LAUNCHER_GENERATION = String(launcherGeneration)
         } else {
+          delete childEnv.TEAMS_LOCAL_CONFIG_PATH
           delete childEnv.TEAMS_LOCAL_INTERNAL_PATH
           delete childEnv.TEAMS_LOCAL_LAUNCHER_GENERATION
         }

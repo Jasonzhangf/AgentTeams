@@ -1,0 +1,1 @@
+{"endpoint":{"role":"provider","services":[{"capabilityId":"file-search","version":"1","operations":["search"],"resources":[{"resourceId":"slot","capacity":1,"unit":"slot"}]}]},"workControl":{"socketPath":"/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/u2-public-consumer-1dPixU/.agentteams/.internal/work-control.sock","launcherGeneration":7,"launcherStartToken":"consumer-7"}}

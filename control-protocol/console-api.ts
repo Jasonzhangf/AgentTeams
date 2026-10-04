@@ -4,7 +4,7 @@ export type { JsonValue } from './agent-services.ts'
 
 /** Console config errors retain their owning service's code and provider/status context. */
 export interface ConsoleServiceError extends Omit<ServiceError, 'code'> {
-  readonly code: ServiceErrorCode | 'CREDENTIAL_UNAVAILABLE'
+  readonly code: ServiceErrorCode | 'CREDENTIAL_UNAVAILABLE' | 'SOURCE_CHANGED' | 'MIGRATION_CONFLICT' | 'APPLY_TARGET_MISMATCH'
   readonly message: string
   readonly status?: number
   readonly providerInstanceId?: string
@@ -73,6 +73,8 @@ export interface ConsoleProjectionV1 {
   }[]
   readonly configs: readonly {
     readonly agentId: string; readonly acceptedRevision: number; readonly effectiveRevision?: number
+    /** Durable config-owner fence projection; always emitted by the U2 config binding. */
+    readonly applyState?: 'clean' | 'uncertain'
     readonly providers: readonly ConsoleProviderView[]; readonly error?: ConsoleServiceError
   }[]
   readonly sessionEvents?: readonly ConsoleSessionEventView[]

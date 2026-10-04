@@ -1,0 +1,31 @@
+IDENTITY opencode=/Users/fanzhang/.opencode/bin/opencode exists=true root=/Volumes/Intel/playground/agentteams/u2-recovery-live-20261004
+PASS [case1-dead-fence-restart] old OpenCode substrate is a real owned process :: pid=49801 port=59230
+PASS [case1-dead-fence-restart] durable fence persisted via typed TOML persistence :: {"acceptedRevision":2,"acceptedSourceRevision":2,"acceptedSourceHash":"sha256:ce947ec3d4c73796f2cedcee8539bde0c3f3e1b8c14c97dcbb11b0b2f14f29f5","applyState":"uncertain","lastApplyError":{"code":"UPSTREAM_ERROR","message":"stale apply error"}}
+PASS [case1-dead-fence-restart] fence and stale error present in internal.toml
+PASS [case1-dead-fence-restart] explicitly-owned old substrate confirmed exited :: pid=49801
+PASS [case1-dead-fence-restart] compiled daemon entry registered the agent
+PASS [case1-dead-fence-restart] config readback clean (accepted==effective) :: {"acceptedRevision":2,"acceptedSourceRevision":2,"acceptedSourceHash":"sha256:ce947ec3d4c73796f2cedcee8539bde0c3f3e1b8c14c97dcbb11b0b2f14f29f5","effectiveRevision":2,"applyState":"clean"}
+PASS [case1-dead-fence-restart] no stale lastApplyError remains :: {"acceptedRevision":2,"acceptedSourceRevision":2,"acceptedSourceHash":"sha256:ce947ec3d4c73796f2cedcee8539bde0c3f3e1b8c14c97dcbb11b0b2f14f29f5","effectiveRevision":2,"applyState":"clean"}
+PASS [case1-dead-fence-restart] no remaining uncertainty fence in internal.toml
+PASS [case1-dead-fence-restart] real new OpenCode substrate launched on configured port :: port=59275
+PASS [case1-dead-fence-restart] public Console projection reports clean applyState with no fence :: {"agentId":"recover-a","acceptedRevision":2,"applyState":"clean","effectiveRevision":2,"providers":[{"id":"probe","label":"Probe","protocol":"openai-chat","apiBaseUrl":"http://127.0.0.1:1/v1","enabled":true,"authKind":"none","catalogState":"ready","models":[{"id":"probe-model","label":"probe-model"}]}]}
+PASS [case1-dead-fence-restart] new substrate stopped with daemon :: port=59275
+PASS [case2-live-fence-blocked] daemon still registers while recovery obligation is explicit
+PASS [case2-live-fence-blocked] uncertain is retained, not cleared :: {"acceptedRevision":2,"acceptedSourceRevision":2,"acceptedSourceHash":"sha256:4a7d8593b61b6f44cb99567048325e2fea4c3ea7d03e24439c32d5c317e3c730","applyState":"uncertain"}
+PASS [case2-live-fence-blocked] exact fence retained in internal.toml
+PASS [case2-live-fence-blocked] live old substrate still alive :: pid=52225
+PASS [case2-live-fence-blocked] no second substrate launched :: port=59449
+PASS [case2-live-fence-blocked] config ingress reports explicit CONFLICT recovery obligation :: {"ok":false,"error":{"code":"CONFLICT","message":"Managed runtime has active or unconfirmed operations"}}
+PASS [case2-live-fence-blocked] fence still exact after ingress conflict
+PASS [case2-live-fence-blocked] daemon stop surfaces retained uncertainty (expected typed conflict) :: Managed runtime has active or unconfirmed operations
+PASS [case2-live-fence-blocked] owned old substrate confirmed exited in finally :: pid=52225
+PASS [case3-multi-fence-identity] removing one fence keeps the other and its error :: {"acceptedRevision":2,"acceptedSourceRevision":2,"acceptedSourceHash":"sha256:9a2d0a3f0b392ca3719d019b13f4d8cb7bb872a8ecfc3410d874682bb9735b49","effectiveRevision":2,"applyState":"uncertain","lastApplyError":{"code":"UPSTREAM_ERROR","message":"retain me"}}
+PASS [case3-multi-fence-identity] only the exact cleared operation removed
+PASS [case3-multi-fence-identity] same operationId / full-identity mismatch rejected :: code=CONFLICT
+PASS [case3-multi-fence-identity] TOML bytes and state not mutated on mismatch
+PASS [case3-multi-fence-identity] fence/error retained after mismatch
+PASS [case3-multi-fence-identity] last clear yields clean with no stale error :: {"acceptedRevision":2,"acceptedSourceRevision":2,"acceptedSourceHash":"sha256:9a2d0a3f0b392ca3719d019b13f4d8cb7bb872a8ecfc3410d874682bb9735b49","effectiveRevision":2,"applyState":"clean"}
+PASS [case3-multi-fence-identity] no fence records remain
+SUMMARY total=27 pass=27 fail=0
+RESULT {"ok":true,"assertions":27}
+CLEANUP done children=1 dirs=1

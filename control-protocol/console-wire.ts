@@ -72,7 +72,8 @@ function array(value: unknown, validate: (item: unknown) => void): void {
 function error(value: unknown): void {
   const input = record(value, ['code', 'message', 'execution', 'status', 'providerInstanceId'])
   // Validate shared fields through their owner; the Console-only credential code is retained verbatim.
-  parseServiceError({ code: input.code === 'CREDENTIAL_UNAVAILABLE' ? 'UNAVAILABLE' : input.code, message: input.message,
+  const configOnly = input.code === 'CREDENTIAL_UNAVAILABLE' || input.code === 'SOURCE_CHANGED' || input.code === 'MIGRATION_CONFLICT' || input.code === 'APPLY_TARGET_MISMATCH'
+  parseServiceError({ code: configOnly ? 'UNAVAILABLE' : input.code, message: input.message,
     ...(input.execution === undefined ? {} : { execution: input.execution }) }, 'Console error')
   optionalString(input.providerInstanceId)
   if (input.status !== undefined && (!Number.isSafeInteger(input.status) || (input.status as number) < 100 || (input.status as number) > 599)) throw new Error('Console response HTTP status invalid')
@@ -98,9 +99,10 @@ function projection(value: unknown): void {
     optionalString(notice.sessionId); optionalString(notice.permissionId)
   })
   array(input.configs, item => {
-    const config = record(item, ['agentId', 'acceptedRevision', 'effectiveRevision', 'providers', 'error'])
+    const config = record(item, ['agentId', 'acceptedRevision', 'effectiveRevision', 'applyState', 'providers', 'error'])
     string(config.agentId); revision(config.acceptedRevision)
     if (config.effectiveRevision !== undefined) revision(config.effectiveRevision)
+    if (config.applyState !== undefined) choice(config.applyState, ['clean', 'uncertain'])
     if (config.error !== undefined) error(config.error)
     array(config.providers, item => {
       const provider = record(item, ['id', 'label', 'protocol', 'apiBaseUrl', 'enabled', 'authKind', 'catalogState', 'models', 'error'])

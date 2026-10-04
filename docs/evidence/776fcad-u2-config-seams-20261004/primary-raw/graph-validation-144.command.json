@@ -1,0 +1,6 @@
+{
+  "streamEventIndex": 144,
+  "command": "/bin/zsh -c 'dagpipe graph validate docs/design/dagpipe/graphs/daemon-start.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/provider-config.graph.json'",
+  "exitCode": 0,
+  "stdoutSha256": "be4aed1c4e3e9aa9a70c416497a4c5c762cdffb4e84aaaf2cb02f3a38a726be6"
+}

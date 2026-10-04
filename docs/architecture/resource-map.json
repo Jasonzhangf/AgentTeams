@@ -294,13 +294,17 @@
       "resource_id": "local-agent-runtime-config",
       "owner": "config",
       "kind": "control_resource",
-      "truth_store": "versioned per-agent provider and model configuration",
+      "status": "partial",
+      "truth_store": "config.toml [providers.*]/[[models]]/[agents.*.model] user intent plus internal.toml [configRuntime.accepted.<agentId>] accepted snapshot, [configRuntime.effective.<agentId>] effective/applyState/error/uncertainty, and [configRuntime.catalogs.<agentId>.*] discovered observation; machine sourceRevision/sourceHash never substitutes for daemon accepted",
       "allowed_operations": [
         "read",
         "validate",
         "save",
         "sync",
-        "apply"
+        "apply",
+        "accept",
+        "observe",
+        "reconcile"
       ],
       "forbidden_relations": [
         "network_truth",
@@ -467,8 +471,9 @@
       "resource_id": "local-launcher-config",
       "owner": "runtime",
       "kind": "control_resource",
-      "truth_store": "~/.agentteams/config.toml user intent only; internal.toml owns resolved endpoint/Relay config, ports, credential references, child launch parameters, PID, generation, revision and lifecycle state",
-      "allowed_operations": ["read", "validate", "persist", "compile", "resolve"],
+      "status": "partial",
+      "truth_store": "~/.agentteams/config.toml v3 user intent only (bridge/agents identity+runtime+services+connect/console/providers/manual models/bindings); internal.toml v2 owns machine sourceRevision/sourceHash, resolved endpoint/Relay/Console/child projections, [workControl] socketPath/launcherGeneration/launcherStartToken refs, per-daemon [configRuntime.accepted.<agentId>] snapshot, [configRuntime.effective.<agentId>] effective/applyState/error/uncertainty fence, [configRuntime.catalogs.<agentId>.*] observations, [migration] pending, PID/generation/revision/lifecycle state, and system-generated .internal/tls references; relay.json is never an editable source",
+      "allowed_operations": ["read", "validate", "persist", "compile", "resolve", "bootstrap", "accept", "observe", "read_work_control", "write_work_control"],
       "forbidden_relations": ["business_payload", "session_payload", "credential_value"]
     },
     {
@@ -512,7 +517,7 @@
       "allowed_operations": ["read_runtime_facts", "patch_owned_runtime_facts", "clear_owned_optional_fact", "persist_atomic"],
       "forbidden_relations": ["user_intent", "credential_value", "daemon_lifecycle", "work_drain", "business_payload", "session_payload"],
       "required_gates": ["teams-console-lifecycle-topology", "teams-u5-console-lifecycle-design"],
-      "note": "Design-only U5 fact table and typed short-lock patch port. U2 owns schema/serializer and the same internal lock; no second store, lock or copy exists yet."
+      "note": "U2 owns the closed [consoleRuntime] schema/serializer and the typed same-lock patch port (writeLocalInternalConsoleRuntime); U5 owns lifecycle field semantics and is the only intended caller. No second store, lock or copy exists; the U5 start/stop/status caller is still design-only."
     }
   ]
 }

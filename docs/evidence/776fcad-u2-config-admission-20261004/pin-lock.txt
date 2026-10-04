@@ -1,0 +1,4 @@
+# cmd: appsdk pin-lock --binary /Users/fanzhang/.cargo/bin/appsdk
+# at: 2026-10-04T07:25:14Z
+pinned /Users/fanzhang/.cargo/bin/appsdk
+exit=0

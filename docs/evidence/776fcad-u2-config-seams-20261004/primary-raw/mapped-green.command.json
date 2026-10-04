@@ -1,0 +1,6 @@
+{
+  "streamEventIndex": 161,
+  "command": "/bin/zsh -c 'pnpm exec vitest run config/runtime-config.spec.ts config/config-boundary.spec.ts runtime/managed-config-owner.spec.ts runtime/console-config.spec.ts > docs/evidence/776fcad-u2-config-seams-20261004/mapped-green.log 2>&1; code=$?; cat docs/evidence/776fcad-u2-config-seams-20261004/mapped-green.log; exit $code'",
+  "exitCode": 0,
+  "stdoutSha256": "452a5c85a3bf3adc65deab5e1fd1cdaaa8918ef7429830820bd0697bad34bd63"
+}

@@ -1,0 +1,22 @@
+Before implementation, `runtime/local-config.spec.ts` had no `readLocalInternalWorkControl`/`writeLocalInternalWorkControl` exports and `compileV3Config` dropped service intent from the endpoint projection. `pnpm exec vitest run runtime/local-config.spec.ts`:
+
+```
+RUN v4.1.11 /Volumes/Intel/playground/agentteams/u2-config-seams-20261004
+
+ runtime/local-config.spec.ts (29 tests | 3 failed) 3307ms
+   x projects enabled v3 service intent into daemon child config without treating it as a wire declaration 191ms
+   x round-trips work control through the public internal adapter and removes only that table 17ms
+   x preserves work control across an accepted lifecycle writer and rejects malformed or stale refs 14ms
+
+ FAIL runtime/local-config.spec.ts > projects enabled v3 service intent into daemon child config without treating it as a wire declaration
+ AssertionError: expected { role: 'provider' } to deeply equal { role: 'provider', services: [ ... ] }
+
+ FAIL runtime/local-config.spec.ts > round-trips work control through the public internal adapter and removes only that table
+ TypeError: writeLocalInternalWorkControl is not a function
+
+ FAIL runtime/local-config.spec.ts > preserves work control across an accepted lifecycle writer and rejects malformed or stale refs
+ TypeError: writeLocalInternalWorkControl is not a function
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 26 passed (29)
+```

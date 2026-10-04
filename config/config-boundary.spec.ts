@@ -12,7 +12,8 @@ describe('Per-Agent provider/model boundary', () => {
     expect(config.includes('export interface RuntimeConfigApplier')).toBe(true)
     expect(config.includes('expectedRevision')).toBe(true)
     expect(config.includes('acceptedRevision')).toBe(true)
-    expect(config.includes('commitAccepted')).toBe(true)
+    expect(config.includes('saveMachineSourceUnlocked')).toBe(true)
+    expect(config.includes('acceptMachineSourceUnlocked')).toBe(true)
     expect(config.includes('credentialRef')).toBe(true)
   })
 

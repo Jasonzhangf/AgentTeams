@@ -1,0 +1,3 @@
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/u2-config-seams-20261004
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json

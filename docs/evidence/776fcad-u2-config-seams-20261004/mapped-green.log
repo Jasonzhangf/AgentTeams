@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/u2-config-seams-20261004
+
+
+ Test Files  4 passed (4)
+      Tests  23 passed (23)
+   Start at  20:15:20
+   Duration  508ms (transform 262ms, setup 0ms, import 345ms, tests 373ms, environment 0ms)

@@ -1,0 +1,6 @@
+{
+  "streamEventIndex": 123,
+  "command": "/bin/zsh -c 'pnpm typecheck'",
+  "exitCode": 0,
+  "stdoutSha256": "60de2baeae9cfdaadda71e91c3da777a57a39a300c57c5ab87bbef60cebd653b"
+}

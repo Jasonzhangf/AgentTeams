@@ -16,10 +16,11 @@ import type { ConsoleClientV1 } from '../control-protocol/console-api.ts'
 import { projectConsoleWorkObservations } from './console-work-projection.ts'
 import type { RelayClientOptions } from '../network/relay-client.ts'
 import { startAgentDaemon, type AgentDaemon } from './agent-daemon.ts'
-import { createJsonFileConfigPersistence, createRuntimeConfigStore, RuntimeConfigError } from '../config/runtime-config.ts'
+import { createRuntimeConfigStore, RuntimeConfigError, targetIdentityFor } from '../config/runtime-config.ts'
 import { createOpenAIModelCatalogClient } from '../config/provider-model-client.ts'
 import { createConsoleConfigBinding } from './console-config.ts'
-import { createManagedConfigOwner } from './managed-config-owner.ts'
+import { createManagedConfigOwner, createManagedConfigOwnerPersistence } from './managed-config-owner.ts'
+import { createTomlRuntimeConfigPersistence, defaultLocalConfigPath } from './local-config.ts'
 import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
 import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
 import { createDirectWssListener, type DirectWssListener } from '../network/direct-listener.ts'
@@ -237,22 +238,42 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       if (typeof value !== 'string' || value.length === 0) throw new RuntimeConfigError({ code: 'CREDENTIAL_UNAVAILABLE', message: `credential ${reference} is unavailable` })
       return value
     }
-    configBinding = config.openCode === undefined ? undefined : (() => {
-      const store = createRuntimeConfigStore(createJsonFileConfigPersistence(config.openCode.configFile))
-      const owner = createManagedConfigOwner({ agentId: config.declaration.identity.agentId, executable: config.openCode.executable,
-        directory: config.openCode.directory, port: config.openCode.port, startupTimeoutMs: config.openCode.startupTimeoutMs,
-        stopTimeoutMs: config.openCode.stopTimeoutMs, resolveCredential: resolveCredentialValue })
-      return { binding: createConsoleConfigBinding({ agentId: config.declaration.identity.agentId, store,
-        models: createOpenAIModelCatalogClient(), credentials: { resolve: async reference => ({ kind: 'bearer', value: await resolveCredentialValue(reference) }) }, applier: owner }), owner }
+    const openCode = config.openCode
+    configBinding = openCode === undefined ? undefined : await (async () => {
+      const agentId = config.declaration.identity.agentId
+      const configPath = env.TEAMS_LOCAL_CONFIG_PATH ?? defaultLocalConfigPath(env.HOME)
+      const internalPath = env.TEAMS_LOCAL_INTERNAL_PATH ?? resolve(configPath, '..', 'internal.toml')
+      const persistence = createTomlRuntimeConfigPersistence({ configPath, internalPath, agentId })
+      const store = createRuntimeConfigStore(persistence, { agentId })
+      const owner = createManagedConfigOwner({ agentId, executable: openCode.executable,
+        directory: openCode.directory, port: openCode.port, startupTimeoutMs: openCode.startupTimeoutMs,
+        stopTimeoutMs: openCode.stopTimeoutMs, resolveCredential: resolveCredentialValue,
+        persistence: createManagedConfigOwnerPersistence({ agentId, internalPath, persistence }) })
+      const binding = createConsoleConfigBinding({ agentId, store,
+        models: createOpenAIModelCatalogClient(), credentials: { resolve: async reference => ({ kind: 'bearer', value: await resolveCredentialValue(reference) }) }, applier: owner })
+      const created = { binding, owner }
+      configBinding = created
+      // Reconcile the exact current target before Session/command ingress opens.
+      await owner.recover(async () => {
+        const current = await store.read()
+        const modelBinding = current.agents[agentId]
+        const provider = modelBinding === undefined ? undefined : current.providers[modelBinding.primary.providerInstanceId]
+        return provider === undefined ? undefined : { target: targetIdentityFor(current, provider), config: current }
+      })
+      return created
     })()
     const allowed = (consumer: { agentId: string }) => config.allowedConsumers.includes(consumer.agentId)
     const policy = { revision: config.policyRevision, authorizeWork: allowed, authorizeRequest: allowed }
     const consoleClient: ConsoleClientV1 = {
-      readProjection: async () => ({ version: 1, agents: [{ agentId: config.declaration.identity.agentId,
-        machineId: config.declaration.identity.machineId, label: config.declaration.identity.label,
-        presence: daemon?.status().state === 'online' ? 'online' : 'offline', capabilities: advertisedCapabilities.map(item => item.capabilityId) }],
-        sessions: [], notifications: [], configs: configBinding === undefined ? [] : [configBinding.binding.readProjection()],
-        ...projectConsoleWorkObservations(config.declaration.identity.agentId, ledger?.snapshot.works ?? []) }),
+      readProjection: async () => ({
+        version: 1,
+        agents: [{ agentId: config.declaration.identity.agentId,
+          machineId: config.declaration.identity.machineId, label: config.declaration.identity.label,
+          presence: daemon?.status().state === 'online' ? 'online' : 'offline', capabilities: advertisedCapabilities.map(item => item.capabilityId) }],
+        sessions: [], notifications: [],
+        configs: configBinding === undefined ? [] : [await configBinding.binding.readProjection()],
+        ...projectConsoleWorkObservations(config.declaration.identity.agentId, ledger?.snapshot.works ?? []),
+      }),
       command: async command => command.kind.startsWith('config.') && configBinding !== undefined
         ? configBinding.binding.command(command as Extract<typeof command, { kind: `config.${string}` }>)
         : ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: configBinding === undefined ? 'Agent has no Session or model configuration owner' : 'Agent has no Session execution capability' } }),

@@ -1,0 +1,89 @@
+# generated official SDK dependency (pin-lock refresh), NOT part of U2 product scope
+# cmd: appsdk pin-lock --binary /Users/fanzhang/.cargo/bin/appsdk
+# at: 2026-10-04T07:27:21Z
+# installed binary sha256: 84a8f6f24f08031d55cb9ae87564cb7930c8af5ea3da183b576de581564e028a
+# appsdk source HEAD 80f8524f03ca67a729bf6cc0f985619a0ad8d315
+
+## post-pin control digests
+fcf53045b8b6c9097c35a3e1fb038421af66b8213c2f1b5ccf9661d6875ccbac  .appsdk/sdk.lock
+ae0401d6bd0f578f0eca8df7942e4f15983722dabe43dd31c57330adf2098a29  .appsdk/project.json
+85e18dba63969bd02ce6fca6733dc1c5ae563dbb54352461d9fa7402da386d09  .appsdk/sdk-resources.json
+
+## changed/added SDK paths (git status porcelain, .appsdk + root contracts)
+ M .appsdk/contracts/communication/communication-capabilities.schema.json
+ M .appsdk/contracts/communication/communication-event.schema.json
+ M .appsdk/contracts/communication/communication-request.schema.json
+ M .appsdk/contracts/lifecycle-state-machines.manifest.json
+ M .appsdk/contracts/maps/function-map.json
+ M .appsdk/contracts/maps/mainline-call-map.json
+ M .appsdk/contracts/maps/resource-map.json
+ M .appsdk/contracts/maps/verification-map.json
+ M .appsdk/contracts/migrations/sdk-0.1.5-to-0.1.6.json
+ M .appsdk/contracts/project.schema.json
+ M .appsdk/contracts/records/evidence-record.schema.json
+ M .appsdk/contracts/records/promotion-record.schema.json
+ M .appsdk/contracts/records/record-graph.contract.json
+ M .appsdk/contracts/records/review-record.schema.json
+ M .appsdk/contracts/records/worktree-record.schema.json
+ M .appsdk/contracts/sdk-bundle.manifest.json
+ M .appsdk/contracts/transitions/zone-transition.manifest.json
+ M .appsdk/docs/design/apps-sdk-communication.md
+ M .appsdk/docs/design/appsdk-global-registry.md
+ M .appsdk/docs/design/appsdk-project-integration.md
+ M .appsdk/docs/design/fix-lifecycle-v2.md
+ M .appsdk/project.json
+ M .appsdk/rules/appsdk-project-governance.md
+ M .appsdk/sdk-resources.json
+ M .appsdk/sdk.lock
+ M .appsdk/skills/appsdk-migration/SKILL.md
+ M .appsdk/skills/appsdk-project-governance/SKILL.md
+ M .appsdk/skills/appsdk-project-governance/appsdk-guidance.json
+ M .appsdk/skills/appsdk-project-governance/references/bootstrap-migration.md
+ M .appsdk/skills/appsdk-project-governance/references/goal-prompt.md
+ M .appsdk/skills/project-memory/SKILL.md
+ M contracts/records/evidence-record.schema.json
+ M contracts/records/promotion-record.schema.json
+ M contracts/records/record-graph.contract.json
+ M contracts/records/worktree-record.schema.json
+ M contracts/transitions/zone-transition-manifest.json
+ M contracts/transitions/zone-transition.manifest.json
+?? .appsdk/contracts/dagpipe/fix-lifecycle.graph.json
+?? .appsdk/contracts/dagpipe/notification.graph.json
+?? .appsdk/contracts/migrations/0.1.0007/governance-maps/function-map.json
+?? .appsdk/contracts/migrations/0.1.0007/governance-maps/mainline-call-map.json
+?? .appsdk/contracts/migrations/0.1.0007/governance-maps/resource-map.json
+?? .appsdk/contracts/migrations/0.1.0007/governance-maps/verification-map.json
+?? .appsdk/contracts/migrations/0.1.0008/governance-maps/function-map.json
+?? .appsdk/contracts/migrations/0.1.0008/governance-maps/mainline-call-map.json
+?? .appsdk/contracts/migrations/0.1.0008/governance-maps/resource-map.json
+?? .appsdk/contracts/migrations/0.1.0008/governance-maps/verification-map.json
+?? .appsdk/contracts/migrations/0.1.0009/governance-maps/function-map.json
+?? .appsdk/contracts/migrations/0.1.0009/governance-maps/mainline-call-map.json
+?? .appsdk/contracts/migrations/0.1.0009/governance-maps/resource-map.json
+?? .appsdk/contracts/migrations/0.1.0009/governance-maps/verification-map.json
+?? .appsdk/contracts/migrations/0.1.6/governance-maps/function-map.json
+?? .appsdk/contracts/migrations/0.1.6/governance-maps/mainline-call-map.json
+?? .appsdk/contracts/migrations/0.1.6/governance-maps/resource-map.json
+?? .appsdk/contracts/migrations/0.1.6/governance-maps/verification-map.json
+?? .appsdk/contracts/migrations/sdk-0.1.0007-to-0.1.0008.json
+?? .appsdk/contracts/migrations/sdk-0.1.0008-to-0.1.0009.json
+?? .appsdk/contracts/migrations/sdk-0.1.0009-to-0.1.0010.json
+?? .appsdk/contracts/migrations/sdk-0.1.6-to-0.1.0007.json
+?? .appsdk/contracts/records/collab-live-closure-record.schema.json
+?? .appsdk/contracts/records/test-scenario-result-record.schema.json
+?? .appsdk/contracts/test-governance.schema.json
+?? .appsdk/docs/design/optional-test-governance.md
+?? .appsdk/migrations/0.1.0009-to-0.1.0010/maps/function-map.json
+?? .appsdk/migrations/0.1.0009-to-0.1.0010/maps/mainline-call-map.json
+?? .appsdk/migrations/0.1.0009-to-0.1.0010/maps/resource-map.json
+?? .appsdk/migrations/0.1.0009-to-0.1.0010/maps/verification-map.json
+?? .appsdk/migrations/0.1.0009-to-0.1.0010/record.json
+?? .appsdk/skills/appsdk-project-governance/references/command-surface.md
+?? .appsdk/skills/appsdk-project-governance/references/init-prompts.md
+?? .appsdk/skills/appsdk-project-governance/references/state-paths.md
+?? .appsdk/skills/appsdk-project-governance/references/subagents-config.md
+?? contracts/records/collab-live-closure-record.schema.json
+?? contracts/records/plan-record.schema.json
+?? contracts/records/plan-revision-record.schema.json
+?? contracts/records/step-execution-record.schema.json
+?? contracts/records/test-scenario-result-record.schema.json

@@ -1,0 +1,5 @@
+# cmd: appsdk verify (pre-pin, base 4155c01b)
+# at: 2026-10-04T07:25:09Z
+warning: legacy SDK migration history retained for ordinary development (./.appsdk/migrations/0.1.5-to-0.1.6)
+NON_CANONICAL_RECORD_CONTRACT_SET
+exit=1

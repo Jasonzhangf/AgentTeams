@@ -1,0 +1,4 @@
+# cmd: appsdk verify (post-compile)
+# at: 2026-10-04T07:26:28Z
+{"baseline_status":"current","command_ok":true,"delivery_assessed":false,"delivery_verified":false,"development_ready":true,"ok":false,"project_id":"agentteams","reason":"delivery_not_evaluated","stage":"contract_bound","test_governance":{"mode":"off","objects":[],"status":"not_selected"}}
+exit=0
