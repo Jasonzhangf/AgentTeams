@@ -12,6 +12,7 @@
     "deliveryStates",
     "notification",
     "facts",
+    "runtimeIdentity",
     "adapters",
     "adapterBinding",
     "completionEvidence"
@@ -26,11 +27,12 @@
     "deliveryStates": {"type": "array", "items": {"type": "string"}},
     "notification": {
       "type": "object",
-      "required": ["batchWindowSeconds", "masterReminderLimit", "p0Breakthrough"],
+      "required": ["batchWindowSeconds", "masterReminderLimit", "p0Breakthrough", "masterWake"],
       "properties": {
         "batchWindowSeconds": {"const": 120},
         "masterReminderLimit": {"const": 3},
-        "p0Breakthrough": {"const": true}
+        "p0Breakthrough": {"const": true},
+        "masterWake": {"const": "accumulate-while-working-and-brief-when-idle"}
       },
       "additionalProperties": false
     },
@@ -45,7 +47,20 @@
       },
       "additionalProperties": false
     },
-    "adapters": {"const": ["mailbox", "tmux", "appserver"]},
+    "runtimeIdentity": {
+      "type": "object",
+      "required": ["registry", "stableAcross", "scopeBinding", "proof"],
+      "properties": {
+        "registry": {"const": "~/.appsdk/runtimes.jsonl"},
+        "stableAcross": {
+          "const": ["conversation-compaction", "conversation-fork"]
+        },
+        "scopeBinding": {"const": "runtimeId"},
+        "proof": {"const": "host-registration-receipt"}
+      },
+      "additionalProperties": false
+    },
+    "adapters": {"const": ["mailbox", "appserver"]},
     "adapterBinding": {"const": "recipient-address"},
     "completionEvidence": {
       "type": "object",

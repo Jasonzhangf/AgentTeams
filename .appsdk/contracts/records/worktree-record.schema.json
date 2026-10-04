@@ -1,47 +1,163 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://appsdk.local/contracts/records/worktree-record.schema.json",
-  "type": "object",
-  "required": ["worktree_id", "issue_id", "module_id", "base_ref", "base_commit", "branch", "head_commit", "initial_clean", "final_clean", "isolation_mode", "scope_hash", "created_at"],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "allOf": [
     {
       "if": {
-        "required": ["issue_id"],
         "properties": {
           "issue_id": {
-            "type": "string",
             "minLength": 1,
-            "not": {"pattern": "^(?:none$|legacy-)"}
+            "not": {
+              "pattern": "^(?:none$|legacy-)"
+            },
+            "type": "string"
           }
-        }
+        },
+        "required": [
+          "issue_id"
+        ]
       },
-      "then": {"required": ["bug_triage", "bug_triage_query_binding"]}
+      "then": {
+        "required": [
+          "bug_triage",
+          "bug_triage_query_binding"
+        ]
+      }
     }
   ],
   "properties": {
-    "worktree_id": {"type": "string"},
-    "milestone_id": {"type": "string"},
-    "issue_id": {"type": "string"},
-    "module_id": {"type": "string"},
-    "base_ref": {"type": "string"},
-    "base_commit": {"type": "string"},
-    "branch": {"type": "string"},
-    "head_commit": {"type": "string"},
-    "initial_clean": {"const": true},
-    "final_clean": {"const": true},
-    "isolation_mode": {"const": "isolated_worktree"},
-    "scope_hash": {"type": "string"},
-    "bug_triage": {
-      "type": "object",
-      "required": ["query_executed", "query", "mode", "reopened_from_issue_id"],
-      "properties": {
-        "query_executed": {"const": true},
-        "query": {"type": "string", "minLength": 1},
-        "mode": {"enum": ["new_confirmed", "reopened", "historical_legacy"]},
-        "reopened_from_issue_id": {"type": ["string", "null"]}
-      }
+    "base_commit": {
+      "type": "string"
     },
-    "bug_triage_query_binding": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "created_at": {"type": "string"}
-  }
+    "base_ref": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "bug_triage": {
+      "properties": {
+        "matched_classification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matched_issue_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matched_title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "new_confirmed",
+            "reused",
+            "reopened",
+            "reopened_same_record",
+            "historical_legacy"
+          ]
+        },
+        "query": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "query_executed": {
+          "const": true
+        },
+        "query_result": {
+          "properties": {
+            "query_result_hash": {
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "records": {
+              "type": "array"
+            }
+          },
+          "required": [
+            "records",
+            "query_result_hash"
+          ],
+          "type": "object"
+        },
+        "reopened_from_issue_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query_executed",
+        "query",
+        "query_result",
+        "mode",
+        "reopened_from_issue_id"
+      ],
+      "type": "object"
+    },
+    "bug_triage_query_binding": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "final_clean": {
+      "const": true
+    },
+    "goal_issue_binding": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "goal_issue_id": {
+      "type": "string"
+    },
+    "head_commit": {
+      "type": "string"
+    },
+    "initial_clean": {
+      "const": true
+    },
+    "isolation_mode": {
+      "const": "isolated_worktree"
+    },
+    "issue_id": {
+      "type": "string"
+    },
+    "milestone_id": {
+      "type": "string"
+    },
+    "module_id": {
+      "type": "string"
+    },
+    "scope_hash": {
+      "type": "string"
+    },
+    "worktree_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "worktree_id",
+    "issue_id",
+    "module_id",
+    "base_ref",
+    "base_commit",
+    "branch",
+    "head_commit",
+    "initial_clean",
+    "final_clean",
+    "isolation_mode",
+    "scope_hash",
+    "created_at"
+  ],
+  "type": "object"
 }

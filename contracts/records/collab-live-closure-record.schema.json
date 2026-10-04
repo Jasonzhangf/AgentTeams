@@ -1,0 +1,424 @@
+{
+  "$defs": {
+    "path_receipt": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_hash": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "challenge": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "endpoint_generation": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "entrypoint": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "environment_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evidence_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "message_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "observed_at": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "receiver": {
+          "enum": [
+            "peer",
+            "master"
+          ]
+        },
+        "sender": {
+          "enum": [
+            "peer",
+            "master",
+            "daemon"
+          ]
+        },
+        "source_commit": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "message_id",
+        "challenge",
+        "sender",
+        "receiver",
+        "source_commit",
+        "artifact_hash",
+        "environment_id",
+        "entrypoint",
+        "endpoint_generation",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "tmux_endpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "codex_session_id": {
+          "type": "string"
+        },
+        "codex_thread_id": {
+          "type": "string"
+        },
+        "pane_id": {
+          "pattern": "^%[0-9]+$",
+          "type": "string"
+        },
+        "pane_pid": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "server_pid": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "socket_path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tmux_session_id": {
+          "pattern": "^\\$[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "socket_path",
+        "server_pid",
+        "tmux_session_id",
+        "pane_id",
+        "pane_pid"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://appsdk.local/contracts/records/collab-live-closure-record.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "artifact_hash": {
+      "type": "string"
+    },
+    "closure_id": {
+      "type": "string"
+    },
+    "collab_identity": {
+      "properties": {
+        "app_scope_id": {
+          "type": "string"
+        },
+        "binding_id": {
+          "type": "string"
+        },
+        "project_scope_id": {
+          "type": "string"
+        },
+        "thread_id": {
+          "type": "string"
+        },
+        "worker_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "worker_id",
+        "binding_id",
+        "app_scope_id",
+        "project_scope_id"
+      ],
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "entrypoint": {
+      "type": "string"
+    },
+    "environment_id": {
+      "type": "string"
+    },
+    "evidence_ids": {
+      "additionalProperties": false,
+      "properties": {
+        "daemon_to_master": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "daemon_to_peer": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "master_to_master": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "master_to_peer": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "peer_to_master": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "peer_to_peer": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "restart_replay": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "propertyNames": {
+        "enum": [
+          "peer_to_peer",
+          "peer_to_master",
+          "master_to_peer",
+          "master_to_master",
+          "daemon_to_peer",
+          "daemon_to_master",
+          "restart_replay"
+        ]
+      },
+      "required": [
+        "peer_to_peer",
+        "peer_to_master",
+        "master_to_peer",
+        "master_to_master",
+        "daemon_to_peer",
+        "daemon_to_master",
+        "restart_replay"
+      ],
+      "type": "object"
+    },
+    "fix_candidate_id": {
+      "type": "string"
+    },
+    "issue_id": {
+      "type": "string"
+    },
+    "module_id": {
+      "type": "string"
+    },
+    "path_receipts": {
+      "additionalProperties": false,
+      "properties": {
+        "daemon_to_master": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/path_receipt"
+            },
+            {
+              "properties": {
+                "receiver": {
+                  "const": "master"
+                },
+                "sender": {
+                  "const": "daemon"
+                }
+              }
+            }
+          ]
+        },
+        "daemon_to_peer": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/path_receipt"
+            },
+            {
+              "properties": {
+                "receiver": {
+                  "const": "peer"
+                },
+                "sender": {
+                  "const": "daemon"
+                }
+              }
+            }
+          ]
+        },
+        "master_to_master": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/path_receipt"
+            },
+            {
+              "properties": {
+                "receiver": {
+                  "const": "master"
+                },
+                "sender": {
+                  "const": "master"
+                }
+              }
+            }
+          ]
+        },
+        "master_to_peer": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/path_receipt"
+            },
+            {
+              "properties": {
+                "receiver": {
+                  "const": "peer"
+                },
+                "sender": {
+                  "const": "master"
+                }
+              }
+            }
+          ]
+        },
+        "peer_to_master": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/path_receipt"
+            },
+            {
+              "properties": {
+                "receiver": {
+                  "const": "master"
+                },
+                "sender": {
+                  "const": "peer"
+                }
+              }
+            }
+          ]
+        },
+        "peer_to_peer": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/path_receipt"
+            },
+            {
+              "properties": {
+                "receiver": {
+                  "const": "peer"
+                },
+                "sender": {
+                  "const": "peer"
+                }
+              }
+            }
+          ]
+        },
+        "restart_replay": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/path_receipt"
+            },
+            {
+              "properties": {
+                "receiver": {
+                  "const": "peer"
+                },
+                "sender": {
+                  "const": "daemon"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "peer_to_peer",
+        "peer_to_master",
+        "master_to_peer",
+        "master_to_master",
+        "daemon_to_peer",
+        "daemon_to_master",
+        "restart_replay"
+      ],
+      "type": "object"
+    },
+    "route_receipt": {
+      "properties": {
+        "daemon_live": {
+          "const": true
+        },
+        "endpoint_generation": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "resolved_at": {
+          "type": "string"
+        },
+        "route_scope": {
+          "properties": {
+            "app_scope_id": {
+              "type": "string"
+            },
+            "project_scope": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "project_scope",
+            "app_scope_id"
+          ],
+          "type": "object"
+        },
+        "source": {
+          "const": "collab_cli"
+        },
+        "storage_root": {
+          "type": "string"
+        },
+        "tmux_endpoint": {
+          "$ref": "#/$defs/tmux_endpoint"
+        }
+      },
+      "required": [
+        "daemon_live",
+        "endpoint_generation",
+        "route_scope",
+        "storage_root",
+        "tmux_endpoint",
+        "resolved_at",
+        "source"
+      ],
+      "type": "object"
+    },
+    "scope_hash": {
+      "type": "string"
+    },
+    "source_commit": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "closure_id",
+    "issue_id",
+    "module_id",
+    "fix_candidate_id",
+    "artifact_hash",
+    "scope_hash",
+    "source_commit",
+    "environment_id",
+    "entrypoint",
+    "collab_identity",
+    "route_receipt",
+    "evidence_ids",
+    "path_receipts",
+    "created_at"
+  ],
+  "type": "object"
+}

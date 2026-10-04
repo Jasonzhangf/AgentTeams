@@ -13,6 +13,10 @@ The first host-wide record is the append-only project registry:
 ~/.appsdk/
   projects.jsonl
   projects.jsonl.lock
+  runtimes.jsonl
+  runtimes.jsonl.lock
+  communication.jsonl
+  communication.jsonl.lock
 ```
 
 `projects.jsonl` is the source of truth. The lock file only serializes writers;
@@ -33,6 +37,7 @@ delivery with mutable host state.
 | --- | --- | --- | --- |
 | Host-wide AppSDK project registry | AppSDK | `~/.appsdk/projects.jsonl` | `appsdk new` and `appsdk init` append or reuse one entry |
 | Host-wide AppSDK configuration | Collab integration/its declared owner | `~/.appsdk/config.toml` when enabled | AppSDK forwards configuration; it does not create a shadow copy |
+| Host-wide communication discovery | AppSDK communication owner | `~/.appsdk/communication.jsonl` | Scope/agent registration appends or reuses one address owner |
 | Project governance contract | Managed project | `<project>/.appsdk/` | Committed project state; never copied into the host registry |
 | Project run/control cache | Managed project | `<project>/.appsdk-control/` | Ignored local state; not host-wide registration truth |
 | Collab daemon, journal, mailbox, claims, bindings | Collab | Collab's canonical state root | AppSDK never hand-edits or relocates it |
@@ -42,6 +47,54 @@ The registry identifies a project root that opted into this AppSDK release. It
 does not register an agent, grant `master`, establish a Collab route, or replace
 the live runtime identity proof. A project can therefore have a valid registry
 entry while its TUI route remains unbound or unavailable.
+
+The host runtime registry is the second append-only stream under the same root.
+`runtimes.jsonl` binds a stable `runtimeId` to one App Server endpoint,
+namespace, project root, declared capabilities, process id and a derived
+fingerprint. `appsdk communication ... register_runtime`
+appends or reuses one binding. A later registration with the same ID but a
+changed endpoint, cwd or namespace fails with `GLOBAL_RUNTIME_IDENTITY_CONFLICT`;
+it never overwrites the old record. Capability changes and volatile process or
+App Server fields use an append-only `runtime.refreshed` record while preserving the
+stable transport identity. Capability-bearing records use a versioned
+length-prefixed encoding for every identity field and capability item, so
+capability bytes cannot change field boundaries. Legacy records are not
+migrated or replayed by the current AppServer-only registry; an explicitly
+authorized runtime-registry reset archives them and rebuilds the empty baseline.
+A scope or agent may be
+created only when its `runtimeId` resolves to this exact binding. The registry
+is an identity binding and replay source; it does not claim that an appserver
+delivered a message. The host must report that fact through the communication
+`record_delivery` operation.
+
+The communication discovery registry is the third host-wide stream. It maps a
+`scopeId/sessionId` address to the canonical project root whose
+`.appsdk-control/communication/mailbox.jsonl` owns the complete scope and agent
+record. It contains no role, lease, parent, route, message, or delivery state;
+the target project mailbox remains the only source for those facts. A sender
+uses the mapping only to locate the target mailbox, replays its identity events,
+and then applies the existing route policy. Cross-project discovery therefore
+works with separate project mailboxes without turning the host index into a
+second authority.
+
+`communication.jsonl` accepts `communication.scope.registered`,
+`communication.agent.registered`, and `communication.agent.rebound` events.
+Addresses and project roots are canonical and length-bounded. Rebinding leaves
+an old-address tombstone; lookup reports the new address, while a send to the
+old address fails with `agent_address_rebound` rather than silently rewriting
+the caller's request. Scope or address conflicts, malformed lines, unknown
+events, missing final newlines, symlinked paths, and a busy lock fail closed.
+Registration is idempotent only when the address and canonical project owner
+are unchanged.
+
+Communication registration is recoverable across the project mailbox and this
+host projection. The project first records a `discovery.pending` intent with the
+complete scope, agent, or rebind record, then commits the local mailbox fact,
+publishes the host event, and finally records `discovery.reconciled`. A process
+stop or write error between those stores leaves the intent and the original
+error; the next normal mailbox open retries from that intent. The host stream
+never becomes an uncommitted source of truth, and repair never edits or copies
+historical JSONL by hand.
 
 ## Event contract
 
@@ -66,30 +119,57 @@ root and SDK version returns an `idempotent: true` receipt and appends nothing.
 A later SDK version appends a new version event; history remains recoverable and
 the latest matching event is the current registration view.
 
-The writer takes an exclusive non-blocking lock, validates every existing line,
-appends the event, and calls `sync_all`. Blank lines, malformed JSON, an
-unsupported event shape, a symlinked registry path, or a busy lock fail closed.
-The caller must preserve the exact error and may retry only through a deliberate
-operator action; there is no tight retry loop or silent fallback.
+The writer takes an exclusive lock, validates every existing line, appends the
+event, and calls `sync_all`. Project initialization waits up to 30 seconds with
+bounded backoff when another AppSDK initialization holds the writer lock; this
+only handles expected contention and never changes the event or project root.
+Blank lines, malformed JSON, an unsupported event shape, a symlinked registry
+path, lock I/O failures, or contention that exceeds the deadline fail closed
+with the original `GLOBAL_REGISTRY_*` error. There is no unbounded retry or
+silent fallback.
 
 ## Initialization ordering
 
-`appsdk init` and `appsdk new` use the same order:
+`appsdk new` uses the fail-closed two-phase order:
 
 ```text
 resolve project root
   -> create only the empty target directory when `new` needs it
-  -> register in ~/.appsdk/projects.jsonl
-  -> emit the registration receipt
+  -> validate and reserve ~/.appsdk/projects.jsonl (hold its writer lock)
   -> write project governance scaffold
+  -> append the registration event and emit the receipt
   -> attempt one optional Collab bootstrap
 ```
 
-Registration failure stops before project governance files are written. A
-successful registration does not make optional Collab bootstrap failure look
-successful. The command prints a machine-readable `appsdk-registration` line
-containing the registry path, canonical project root, project ID, SDK version,
-and idempotency flag.
+Registry validation or reservation failure stops `appsdk new` before project
+governance files are written. The reservation keeps competing writers out
+until the local initialization transaction has completed; dropping it on any
+local failure publishes no project event. A final append or sync failure
+remains an explicit `GLOBAL_REGISTRY_*` error and never becomes a successful
+initialization. A successful registration does not make optional Collab
+bootstrap failure look successful. The command prints a machine-readable
+`appsdk-registration` line containing the registry path, canonical project
+root, project ID, SDK version, and idempotency flag.
+
+`appsdk init` (including fresh reset and idempotent SDK refresh) treats global
+registration as an auxiliary capability. It completes local governance first,
+then attempts registration:
+
+- On success it prints the same `appsdk-registration` receipt.
+- On any `GLOBAL_REGISTRY_*` failure it prints
+  `GLOBAL_PROJECT_REGISTRATION_PENDING:<exact error>` to stderr and still
+  succeeds locally. The error is surfaced verbatim; nothing is written to
+  `projects.jsonl`, so a failed or unknown registry is never reported as a
+  successful registration and no partial event is fabricated.
+
+Local governance (project contract, maps, records, Active/Protected state,
+`sdk.lock`) does not depend on the host registry, so a damaged or busy
+registry must not freeze independent development or recovery. The boundary
+stays explicit: operations that consume global identity, shared ownership, or
+cross-project coordination must check the registration capability
+separately and remain blocked until a real registration receipt exists.
+`GLOBAL_PROJECT_REGISTRATION_PENDING` means exactly "local work may continue,
+host registration is not established".
 
 ## Recovery and migration
 
@@ -99,7 +179,9 @@ credentials or runtime tokens. Existing project `.appsdk/` contracts,
 `.appsdk-control/` caches, Collab journal/mailbox, and project-memory sources
 follow their own owners and migration contracts. A missing registry is
 recreated by the next successful `init`/`new`; a malformed registry is retained
-and reported until repaired by an explicit migration owner.
+and reported until repaired by an explicit migration owner. The same fail-closed
+rule applies to `runtimes.jsonl`: a missing runtime record blocks communication
+registration while leaving ordinary project governance usable.
 
 Removing a stale registry entry is not part of ordinary initialization. It
 requires a named migration/reset plan, an immutable snapshot, an authorized

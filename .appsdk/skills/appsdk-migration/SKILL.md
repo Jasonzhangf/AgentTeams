@@ -1,11 +1,6 @@
 ---
 name: appsdk-migration
-description: >
-  Migrate an existing AppSDK and Collab installation to one reviewed version,
-  preserving business and protected state while safely resetting an explicitly
-  authorized legacy control plane. Use for version upgrades, daemon
-  migrations, identity rebinding, and authorized legacy resets; do not use for
-  ordinary feature development or unapproved deletion.
+description: "AppSDK+Collab 迁移/升级/身份重绑/授权重置。owner 全程记录证据; worker 只可查候选, 不可删状态/重启/重绑他人/未授权删除。"
 ---
 
 # AppSDK migration
@@ -31,25 +26,33 @@ Skills before acting; do not copy their state machines into this one. For the
 project-level preserve/reset choices, also read
 [`bootstrap-migration.md`](../appsdk-project-governance/references/bootstrap-migration.md).
 
+The two clean-epoch owners are independent. Use `collab migrate` when the
+Collab journal is replayable; use `collab reset --discard-legacy --approval
+"<user text>"` only when the operator authorizes abandoning the old Collab
+epoch. Use `appsdk init <project> --fresh --discard-legacy` or the lower-level
+`appsdk reset-governance <project> --discard-legacy` only for the AppSDK-owned
+project control plane. A reset record proves reset only; it never proves
+delivery, review, install, restart, or live communication.
+
 ## Invariants
 
 - There is one global Collab daemon for the host. Resolve its PID and socket
   before changing anything. Never start a second daemon, use a project-local
   replacement, or repair a timeout by switching binaries or sockets.
 - A project scope is the exact project root/cwd resolved by the authoritative
-  runtime. A tmux pane, process, screenshot, mailbox, or shared directory by
-  itself does not prove a registered identity or route.
+  runtime. A process, screenshot, mailbox, or shared directory by itself does
+  not prove a registered identity or route.
 - A durable peer registration and its live runtime route are the identity
   authority. A transcript/session ID is observation metadata and may change
-  after compression, fork, pane replacement, or restart. Rebind the new live
+  after compression, fork, thread replacement, or restart. Rebind the new live
   runtime through the official registration path; never copy tokens or make a
   session ID the durable identity.
-- User authorization is required before promoting a peer to `master`. A
-  Codex TUI can register and communicate only through a real live route. A
-  Desktop runtime must not register a goal subscription; only the authorized
-  master/TUI scheduler may do so.
-- The communication path and durable facts are different surfaces. A tmux or
-  appserver notification is a bounded wake hint; the journal/mailbox is the
+- User authorization is required before promoting a peer to `master`. A peer
+  can register and communicate only through a server-selected App Server route
+  that passed its capability self-check. A Desktop runtime must not register a
+  goal subscription; only the authorized master/TUI scheduler may do so.
+- The communication path and durable facts are different surfaces. An App
+  Server notification is a bounded wake hint; the journal/mailbox is the
   durable record. Do not delete, rewrite, replay, or use a notification as
   proof of consumption.
 - Business source, runtime data, human documents, `active/`, and `protected/`
@@ -80,9 +83,14 @@ Before inspecting mutable state, write a migration record with a unique
 
 For the AppSDK source repository itself, first determine whether the root is a
 managed AppSDK project. The presence of SDK source or `.appsdk-control/` alone
-does not make it a normal governed application. If there is no project
-contract, do not run `appsdk init` or reset commands just to manufacture one;
-perform only the declared SDK/runtime migration and record that scope.
+does not implicitly register it as a governed application. When the user
+explicitly chooses to govern the SDK workspace itself, `appsdk prepare` may be
+confirmed and followed by `appsdk init` in a clean non-`main` owner worktree;
+the owner must then review the generated contract and bind it to the SDK
+source modules. If the user has not made that choice, do not run `appsdk init`
+or reset commands merely to manufacture a contract; perform only the declared
+SDK/runtime migration and record that scope. A fresh reset still requires an
+existing contract plus explicit `--fresh --discard-legacy` authorization.
 
 All code, Skill, or contract changes are made in a clean non-`main` worktree
 created from the latest `origin/main`. Merge and verify the candidate on the
@@ -97,7 +105,6 @@ versions, with the usual Collab sequence:
 
 ```sh
 collab migrate inspect
-collab status --all
 collab context
 ```
 
@@ -107,8 +114,8 @@ its read-only commands. Resolve, at minimum:
 - one daemon PID, socket, binary path, version, and SHA-256;
 - project root/cwd, current branch/HEAD, all worktrees, and any unmerged
   worker branch;
-- registered peers, roles, parent/owner relations, live panes, appserver
-  routes, tasks, leases, claims, and active goal subscriptions;
+- registered peers, roles, parent/owner relations, live App Server routes,
+  tasks, leases, claims, and active goal subscriptions;
 - journal, mailbox, notification, task, worker, and identity counts plus their
   last durable IDs;
 - `.appsdk/`, `.appsdk-control/`, generated roots, `active/`, `protected/`,
@@ -159,12 +166,31 @@ appsdk init <project> --fresh --discard-legacy
 
 This is the only init path that discards a legacy control plane. It requires an
 existing `.appsdk/project.json`, a clean non-`main`/`master` worktree, and the
-explicit `--discard-legacy` confirmation. It removes the same AppSDK-owned
-`.appsdk/`, `.appsdk-control/`, and declared generated roots, then rebuilds the
-current `.appsdk` state and refreshes SDK-managed record/transition contracts.
-It records `mode: "fresh_init"`. Ordinary `appsdk init` remains non-destructive;
-the lower-level reset command remains idempotent. A rejected fresh-init must
-leave the old state untouched.
+explicit `--discard-legacy` confirmation. The current SDK scaffold is the only
+reset baseline: legacy SDK pins, migration witnesses, SDK-owned record and
+transition contracts, indexes, and rebuildable projections are ignored and
+regenerated; missing SDK-owned fields are refilled. Only project-owned identity,
+module ownership, build declarations, and protection boundaries are carried
+forward. It removes the remaining AppSDK-owned control state,
+`.appsdk-control/`, and declared generated roots, then validates only the new
+staging baseline. It records `mode: "fresh_init"`. Ordinary `appsdk init`
+remains non-destructive; the lower-level reset command uses the same
+transactional owner. A rejected fresh-init must leave the old state untouched.
+
+The Collab-owned project control plane uses a separate reset owner:
+
+```sh
+collab down
+collab reset --discard-legacy --approval "<explicit user authorization>"
+collab up
+collab init
+```
+
+It archives the exact `.agent-collab/` and `.agent-collab-v2/` bytes, removes
+only Collab-owned control state and stale routes, and rebuilds the current
+empty baseline with `delivery_verified: false`. It never removes `.appsdk/` or
+`.appsdk-control/`; never manually delete either owner's state or start a
+second daemon.
 
 The canonical transition contract is `contracts/transitions/zone-transition.manifest.json`.
 The historical `contracts/transitions/zone-transition-manifest.json` path remains
@@ -176,6 +202,20 @@ business source, `dist/`, `.deploy/`, `build/`, `tmp/`, or custom reports.
 Obsolete Active/Protected or external artifacts need their own exact-path
 authorization and cleanup record. Do not copy old PASS, hashes, receipts, or
 review results into the new baseline. The reset record proves the reset only.
+
+For the AppSDK host runtime registry (`~/.appsdk/runtimes.jsonl`), the explicit
+AppServer-only baseline replacement is:
+
+```sh
+appsdk communication reset-runtime-registry --discard-legacy --approval "<user text>"
+```
+
+It requires explicit `--discard-legacy` and a non-empty approval, archives the
+legacy registry bytes without parsing them, writes an empty current baseline,
+and records `delivery_verified: false`. It touches only the runtime registry;
+`projects.jsonl` and `communication.jsonl` are preserved. Run it before the
+current AppServer-only `register_runtime` path when a host still has a
+pre-AppServer registry.
 
 If old state belongs to a still-valid task, use that task's canonical abort or
 retry operation before reset. If its owner cannot be established, classify it
@@ -259,23 +299,21 @@ not rebind peers or send recovery messages until the owner resolves it.
 ## Identity rebind
 
 Rebind only the named live peers after the daemon and socket pass the restart
-gate. The current Codex TUI must be a real registered tmux runtime with a
-working bidirectional route. Use the official current-peer initialization or
-rebind operation once in that pane, then inspect:
+gate. The current peer must have a live App Server runtime whose capability
+self-check and server selection passed. Use the official current-peer
+initialization or rebind operation once in that runtime, then inspect:
 
 ```sh
 collab context
-collab whoami
-collab status --all
 ```
 
-The evidence must bind the durable peer ID to the live runtime/pane, exact
-project cwd, appserver route (if present), role, parent, and capabilities. A
-screen preview, process name, pane number, or session ID alone is insufficient.
+The evidence must bind the durable peer ID to the live runtime, selected
+App Server target, exact project cwd, role, parent, and capabilities. A screen
+preview, process name, or session ID alone is insufficient.
 
-When a pane is replaced or a transcript is forked/compressed, preserve the
-durable peer identity only through the supported authenticated rebind. Do not
-reuse a stale pane, guess among panes, register a new master, copy identity
+When an App Server binding is replaced, or a transcript is forked/compressed,
+preserve the durable peer identity only through the supported authenticated
+rebind. Do not reuse a stale endpoint, register a new master, copy identity
 tokens, or replay the old mailbox batch. A user-approved master assignment is
 the only basis for the `master` role; otherwise the peer remains a peer.
 
@@ -293,12 +331,12 @@ does not imply the next.
 2. **Durability:** journal, mailbox, tasks, workers, leases, and last durable
    IDs are continuous with the snapshot, apart from explicitly recorded
    migration events. Any unexplained count or ID loss fails the gate.
-3. **Identity:** the AppSDK directory's Codex TUI has a confirmed durable
-   identity, exact cwd/project scope, role, and live bidirectional route.
+3. **Identity:** each rebound peer has a confirmed durable identity, exact
+   cwd/project scope, role, and live bidirectional App Server route.
 4. **Communication:** send one unique migration marker to an authorized
    registered peer and require separate evidence for durable journal
    acceptance, notification delivery, peer consumption, and a reply. `sent`,
-   `pane evidence`, or `recv` alone is not an end-to-end success receipt.
+   transport acceptance, or `recv` alone is not an end-to-end success receipt.
 5. **Governance:** after a reset, initialize and compile only the fresh current
    contract, then run `appsdk verify` through the project governance Skill.
    Verify that no discarded legacy goal/control record is active and that no
@@ -307,8 +345,8 @@ does not imply the next.
    `active/`, `protected/`, and retained evidence remain present and owned.
 
 If the real marker cannot be consumed or the reply is missing, record the
-first failed layer and stop. Do not call a mailbox append, tmux wake, or
-status response a communication proof.
+first failed layer and stop. Do not call a mailbox append, App Server queue
+acceptance, or status response a communication proof.
 
 ## Resume
 
@@ -338,7 +376,7 @@ Use this contract at every phase:
 | lease/owner conflict | preserve both owners and task IDs; ask the migration owner to resolve | steal, force-close, or invent an owner |
 | candidate/version/hash mismatch | stop before install; report expected and observed values | install “close enough” or use the old binary silently |
 | restart timeout or ambiguous PID/socket | leave lifecycle state explicit; inspect once through the official command | send/rebind, start a second daemon, or kill by process name |
-| identity/scope mismatch | stop all messaging and goal operations; perform authenticated rebind or escalate | copy tokens, guess pane/session, or promote a peer |
+| identity/scope mismatch | stop all messaging and goal operations; perform authenticated rebind or escalate | copy tokens, guess a session binding, or promote a peer |
 | partial reset/migration result | preserve transaction ID and files; use the canonical recovery path | manually finish deletion or run a second reset |
 | communication marker missing reply | classify the failing layer and keep the route unverified | treat durable send or notification as peer consumption |
 
@@ -353,7 +391,7 @@ Write one append-only JSONL event for each phase transition and each failed
 gate. Use this shape; omit secrets and large payloads:
 
 ```json
-{"schema":"appsdk-migration/v1","run_id":"20260910T000000Z-example","at":"2026-09-10T00:00:00Z","phase":"inspect","operation":"collab migrate inspect","result":"pass","actor":{"peer_id":"peer-id","role":"master","runtime_id":"runtime-id","tmux_pane":"%2","cwd":"/absolute/project"},"source":{"head":"commit","tree":"tree","binary":"/absolute/bin","version":"0.1.6","sha256":"hex"},"evidence":{"paths":["/absolute/run-note.jsonl"],"counts":{"tasks":0,"workers":0,"mailbox":0},"receipts":["receipt-id"],"errors":[]},"retained":["active/","protected/"],"discarded":[],"next":"classify"}
+{"schema":"appsdk-migration/v1","run_id":"20260910T000000Z-example","at":"2026-09-10T00:00:00Z","phase":"inspect","operation":"collab migrate inspect","result":"pass","actor":{"peer_id":"peer-id","role":"master","runtime_id":"runtime-id","transport":{"kind":"appserver","target":"thread-id"},"cwd":"/absolute/project"},"source":{"head":"commit","tree":"tree","binary":"/absolute/bin","version":"0.1.6","sha256":"hex"},"evidence":{"paths":["/absolute/run-note.jsonl"],"counts":{"tasks":0,"workers":0,"mailbox":0},"receipts":["receipt-id"],"errors":[]},"retained":["active/","protected/"],"discarded":[],"next":"classify"}
 ```
 
 Required semantics:

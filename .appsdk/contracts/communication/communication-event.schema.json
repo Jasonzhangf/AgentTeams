@@ -14,16 +14,24 @@
         "adapter.registered",
         "agent.registered",
         "agent.refreshed",
+        "agent.rebound",
+        "discovery.pending",
+        "discovery.reconciled",
         "agent.state",
         "message.created",
+        "message.delivery_attempt",
         "message.state",
         "notification.queued",
+        "notification.superseded",
         "notification.delivery_attempt",
         "notification.emitted",
         "notification.batch_emitted",
         "notification.delivery_failed",
         "wakeup.updated",
         "wakeup.reminder",
+        "master_wake.updated",
+        "master_wake.briefing",
+        "master_wake.decided",
         "bug.reported",
         "bug.updated",
         "loop.created",
@@ -33,6 +41,7 @@
     },
     "data": {"type": "object"}
   },
+  "additionalProperties": false,
   "allOf": [
     {
       "if": {
@@ -58,11 +67,131 @@
     },
     {
       "if": {
+        "properties": {"kind": {"const": "message.delivery_attempt"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/messageDeliveryAttemptEvent"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "agent.rebound"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/agentReboundEvent"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "scope.registered"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/scopeRecord"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "scope.unregistered"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/scopeUnregisteredEvent"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "adapter.registered"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/adapterRecord"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "agent.registered"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/agentRecord"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "agent.refreshed"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/agentRecord"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "agent.state"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/agentStateEvent"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "message.created"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/messageRecord"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "discovery.pending"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/discoveryPendingRecord"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "discovery.reconciled"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/discoveryReconciledEvent"}
+        }
+      }
+    },
+    {
+      "if": {
         "properties": {"kind": {"const": "notification.queued"}}
       },
       "then": {
         "properties": {
           "data": {"$ref": "#/$defs/notificationQueueEvent"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "notification.superseded"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/notificationSupersededEvent"}
         }
       }
     },
@@ -108,6 +237,76 @@
     },
     {
       "if": {
+        "properties": {"kind": {"const": "master_wake.updated"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/masterWakeAccumulator"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "master_wake.briefing"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/masterWakeBriefingEvent"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "master_wake.decided"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/masterWakeDecidedEvent"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "wakeup.updated"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/wakeupRecord"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "wakeup.reminder"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/wakeupReminderEvent"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "bug.reported"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/bugRecord"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"kind": {"const": "bug.updated"}}
+      },
+      "then": {
+        "properties": {
+          "data": {"$ref": "#/$defs/bugUpdatedEvent"}
+        }
+      }
+    },
+    {
+      "if": {
         "properties": {"kind": {"const": "error.recorded"}}
       },
       "then": {
@@ -124,6 +323,163 @@
       "properties": {
         "scopeId": {"type": "string", "minLength": 1},
         "sessionId": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "scopeRecord": {
+      "type": "object",
+      "required": [
+        "scopeId",
+        "appserverId",
+        "namespace",
+        "endpoint",
+        "projectRoot",
+        "sessionIds",
+        "registeredAt",
+        "lastObservedAt",
+        "masterSessionId",
+        "runtimeId"
+      ],
+      "properties": {
+        "scopeId": {"type": "string", "minLength": 1},
+        "appserverId": {"type": "string", "minLength": 1},
+        "namespace": {"enum": ["codex_app", "codex_tui"]},
+        "endpoint": {"type": "string", "minLength": 1},
+        "projectRoot": {"type": "string", "minLength": 1},
+        "sessionIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "registeredAt": {"type": "string", "format": "date-time"},
+        "lastObservedAt": {"type": "string", "format": "date-time"},
+        "masterSessionId": {"type": ["string", "null"], "minLength": 1},
+        "runtimeId": {"type": ["string", "null"], "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "scopeUnregisteredEvent": {
+      "type": "object",
+      "required": ["scopeId"],
+      "properties": {
+        "scopeId": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "agentRecord": {
+      "type": "object",
+      "required": [
+        "scopeId",
+        "sessionId",
+        "agentId",
+        "role",
+        "masterGrant",
+        "parent",
+        "leaseMs",
+        "registeredAt",
+        "lastObservedAt",
+        "expiresAt",
+        "state",
+        "lastStateAt",
+        "runtimeId"
+      ],
+      "properties": {
+        "scopeId": {"type": "string", "minLength": 1},
+        "sessionId": {"type": "string", "minLength": 1},
+        "agentId": {"type": "string", "minLength": 1},
+        "role": {"enum": ["master", "peer", "subagent"]},
+        "masterGrant": {"type": ["string", "null"]},
+        "parent": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/address"}]
+        },
+        "leaseMs": {"type": "integer", "minimum": 1000},
+        "registeredAt": {"type": "string", "format": "date-time"},
+        "lastObservedAt": {"type": "string", "format": "date-time"},
+        "expiresAt": {"type": "string", "format": "date-time"},
+        "state": {"enum": ["working", "idle"]},
+        "lastStateAt": {"type": "string", "format": "date-time"},
+        "runtimeId": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "agentStateEvent": {
+      "type": "object",
+      "required": ["address", "state", "at"],
+      "properties": {
+        "address": {"$ref": "#/$defs/address"},
+        "state": {"enum": ["working", "idle"]},
+        "at": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "agentTombstone": {
+      "type": "object",
+      "required": ["address", "agentId", "runtimeId", "reboundTo", "reboundAt"],
+      "properties": {
+        "address": {"$ref": "#/$defs/address"},
+        "agentId": {"type": "string", "minLength": 1},
+        "runtimeId": {"type": "string", "minLength": 1},
+        "reboundTo": {"$ref": "#/$defs/address"},
+        "reboundAt": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "agentReboundEvent": {
+      "type": "object",
+      "required": ["from", "to", "tombstone"],
+      "properties": {
+        "from": {"$ref": "#/$defs/agentRecord"},
+        "to": {"$ref": "#/$defs/agentRecord"},
+        "tombstone": {"$ref": "#/$defs/agentTombstone"}
+      },
+      "additionalProperties": false
+    },
+    "discoveryOperation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["operation", "record"],
+          "properties": {
+            "operation": {"const": "scope"},
+            "record": {"$ref": "#/$defs/scopeRecord"}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["operation", "record"],
+          "properties": {
+            "operation": {"const": "agent"},
+            "record": {"$ref": "#/$defs/agentRecord"}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["operation", "event"],
+          "properties": {
+            "operation": {"const": "rebind"},
+            "event": {"$ref": "#/$defs/agentReboundEvent"}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "discoveryPendingRecord": {
+      "type": "object",
+      "required": ["pendingId", "operation", "createdAt"],
+      "properties": {
+        "pendingId": {"type": "string", "minLength": 1},
+        "operation": {"$ref": "#/$defs/discoveryOperation"},
+        "createdAt": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "discoveryReconciledEvent": {
+      "type": "object",
+      "required": ["pendingId"],
+      "properties": {
+        "pendingId": {"type": "string", "minLength": 1}
       },
       "additionalProperties": false
     },
@@ -233,7 +589,7 @@
           ]
         },
         "at": {"type": "string", "format": "date-time"},
-        "details": {}
+        "details": {"type": "object", "minProperties": 1}
       },
       "additionalProperties": false
     },
@@ -242,7 +598,7 @@
       "required": ["adapterId", "kind", "state", "target", "evidence"],
       "properties": {
         "adapterId": {"type": "string", "minLength": 1},
-        "kind": {"enum": ["mailbox", "tmux", "appserver"]},
+        "kind": {"enum": ["mailbox", "appserver"]},
         "state": {"enum": ["accepted", "intent", "delivered", "unknown"]},
         "target": {"type": ["string", "null"]},
         "evidence": {"type": "object"}
@@ -283,6 +639,30 @@
         "message": {"type": "string", "minLength": 1},
         "context": {},
         "at": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "adapterRecord": {
+      "type": "object",
+      "required": [
+        "adapterId",
+        "kind",
+        "target",
+        "enabled",
+        "execute",
+        "recipient",
+        "registeredAt"
+      ],
+      "properties": {
+        "adapterId": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["mailbox", "appserver"]},
+        "target": {"type": ["string", "null"]},
+        "enabled": {"type": "boolean"},
+        "execute": {"type": "boolean"},
+        "recipient": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/address"}]
+        },
+        "registeredAt": {"type": "string", "minLength": 1}
       },
       "additionalProperties": false
     },
@@ -361,7 +741,43 @@
       "properties": {
         "messageId": {"type": "string", "minLength": 1},
         "state": {"type": "string", "minLength": 1},
+        "attemptId": {"type": "string", "minLength": 1},
+        "nonce": {"type": "string", "minLength": 1},
         "evidence": {"$ref": "#/$defs/deliveryEvidence"}
+      },
+      "additionalProperties": false
+    },
+    "messageDeliveryAttemptEvent": {
+      "type": "object",
+      "required": ["messageId", "attempt"],
+      "properties": {
+        "messageId": {"type": "string", "minLength": 1},
+        "attempt": {
+          "type": "object",
+          "required": [
+            "attemptId",
+            "messageId",
+            "operation",
+            "adapterId",
+            "runtimeId",
+            "runtimeFingerprint",
+            "target",
+            "nonce",
+            "startedAt"
+          ],
+          "properties": {
+            "attemptId": {"type": "string", "minLength": 1},
+            "messageId": {"type": "string", "minLength": 1},
+            "operation": {"const": "message.delivery"},
+            "adapterId": {"type": "string", "minLength": 1},
+            "runtimeId": {"type": "string", "minLength": 1},
+            "runtimeFingerprint": {"type": "string", "minLength": 1},
+            "target": {"type": ["string", "null"]},
+            "nonce": {"type": "string", "minLength": 1},
+            "startedAt": {"type": "string", "format": "date-time"}
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },
@@ -399,6 +815,7 @@
       "properties": {
         "notificationId": {"type": "string", "minLength": 1},
         "messageId": {"type": "string", "minLength": 1},
+        "generation": {"type": "integer", "minimum": 0},
         "title": {"type": "string", "minLength": 1},
         "priority": {"enum": ["p0", "p1", "p2", "p3"]},
         "issueId": {"type": ["string", "null"]},
@@ -429,6 +846,7 @@
       "properties": {
         "notificationId": {"type": "string", "minLength": 1},
         "messageId": {"type": "string", "minLength": 1},
+        "generation": {"type": "integer", "minimum": 0},
         "recipient": {"$ref": "#/$defs/address"},
         "title": {"type": "string", "minLength": 1},
         "priority": {"enum": ["p0", "p1", "p2", "p3"]},
@@ -437,7 +855,7 @@
         "body": {"type": "string", "minLength": 1},
         "createdAt": {"type": "string", "format": "date-time"},
         "availableAt": {"type": "string", "format": "date-time"},
-        "status": {"enum": ["pending", "emitted", "unknown"]},
+        "status": {"enum": ["pending", "emitted", "superseded", "unknown"]},
         "emittedAt": {"type": ["string", "null"], "format": "date-time"},
         "adapterId": {"type": "string", "minLength": 1},
         "transportReceipt": {
@@ -467,6 +885,284 @@
       "properties": {
         "key": {"type": "string", "minLength": 1},
         "notification": {"$ref": "#/$defs/notificationRecord"}
+      },
+      "additionalProperties": false
+    },
+    "notificationSupersededEvent": {
+      "type": "object",
+      "required": ["keys", "generation", "reason"],
+      "properties": {
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "generation": {"type": "integer", "minimum": 0},
+        "reason": {"enum": ["master_wake_briefing", "master_wake_decision"]}
+      },
+      "additionalProperties": false
+    },
+    "masterWakeSignal": {
+      "type": "object",
+      "required": [
+        "signalId",
+        "key",
+        "kind",
+        "title",
+        "priority",
+        "summary",
+        "issueId",
+        "source",
+        "observedAt",
+        "directDispatched"
+      ],
+      "properties": {
+        "signalId": {"type": "string", "minLength": 1},
+        "key": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "priority": {"enum": ["p0", "p1", "p2", "p3"]},
+        "summary": {"type": "string", "minLength": 1},
+        "issueId": {"type": ["string", "null"]},
+        "source": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/address"}]
+        },
+        "observedAt": {"type": "string", "format": "date-time"},
+        "directDispatched": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "masterWakeAccumulator": {
+      "type": "object",
+      "required": [
+        "address",
+        "generation",
+        "pending",
+        "firstObservedAt",
+        "lastObservedAt",
+        "nextDueAt",
+        "remindersSent",
+        "stopped",
+        "lastBriefingGeneration",
+        "lastBriefingAt",
+        "held",
+        "signals",
+        "consumedSignals"
+      ],
+      "properties": {
+        "address": {"$ref": "#/$defs/address"},
+        "generation": {"type": "integer", "minimum": 0},
+        "pending": {"type": "boolean"},
+        "firstObservedAt": {"type": ["string", "null"], "format": "date-time"},
+        "lastObservedAt": {"type": ["string", "null"], "format": "date-time"},
+        "nextDueAt": {"type": ["string", "null"], "format": "date-time"},
+        "remindersSent": {"type": "integer", "minimum": 0, "maximum": 3},
+        "stopped": {"type": "boolean"},
+        "lastBriefingGeneration": {"type": ["integer", "null"], "minimum": 0},
+        "lastBriefingAt": {"type": ["string", "null"], "format": "date-time"},
+        "held": {"type": "boolean"},
+        "signals": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/masterWakeSignal"}
+        },
+        "consumedSignals": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/masterWakeSignal"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "routeRecord": {
+      "type": "object",
+      "required": ["mode", "sameAppserver", "sameProject", "sourceRole", "targetRole"],
+      "properties": {
+        "mode": {"type": "string", "minLength": 1},
+        "sameAppserver": {"type": "boolean"},
+        "sameProject": {"type": "boolean"},
+        "sourceRole": {"type": "string", "minLength": 1},
+        "targetRole": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "messageRecord": {
+      "type": "object",
+      "required": [
+        "protocol",
+        "messageId",
+        "conversationId",
+        "from",
+        "to",
+        "title",
+        "priority",
+        "body",
+        "deliveryMode",
+        "coalesceKey",
+        "issueId",
+        "adapterId",
+        "createdAt",
+        "state",
+        "evidence",
+        "route",
+        "lastError"
+      ],
+      "properties": {
+        "protocol": {"const": "appsdk-comm/v1"},
+        "messageId": {"type": "string", "minLength": 1},
+        "conversationId": {"type": "string", "minLength": 1},
+        "from": {"$ref": "#/$defs/address"},
+        "to": {"$ref": "#/$defs/address"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "priority": {"enum": ["p0", "p1", "p2", "p3"]},
+        "body": {"type": "string", "minLength": 1},
+        "deliveryMode": {"enum": ["direct", "idle"]},
+        "coalesceKey": {"type": ["string", "null"], "minLength": 1},
+        "issueId": {"type": ["string", "null"]},
+        "adapterId": {"type": "string", "minLength": 1},
+        "deliveryAttemptRequired": {"type": "boolean"},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "state": {"type": "string", "minLength": 1},
+        "evidence": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/deliveryEvidence"}
+        },
+        "route": {"$ref": "#/$defs/routeRecord"},
+        "lastError": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/errorRecord"}]
+        }
+      },
+      "additionalProperties": false
+    },
+    "wakeupRecord": {
+      "type": "object",
+      "required": [
+        "address",
+        "idleSince",
+        "remindersSent",
+        "nextDueAt",
+        "stopped",
+        "lastReminderAt"
+      ],
+      "properties": {
+        "address": {"$ref": "#/$defs/address"},
+        "idleSince": {"type": ["string", "null"], "format": "date-time"},
+        "remindersSent": {"type": "integer", "minimum": 0, "maximum": 3},
+        "nextDueAt": {"type": ["string", "null"], "format": "date-time"},
+        "stopped": {"type": "boolean"},
+        "lastReminderAt": {"type": ["string", "null"], "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "wakeupReminderEvent": {
+      "type": "object",
+      "required": [
+        "wakeup",
+        "message",
+        "notificationKey",
+        "notification",
+        "attemptId",
+        "receipt"
+      ],
+      "properties": {
+        "wakeup": {"$ref": "#/$defs/wakeupRecord"},
+        "message": {"$ref": "#/$defs/messageRecord"},
+        "notificationKey": {"type": "string", "minLength": 1},
+        "notification": {"$ref": "#/$defs/notificationRecord"},
+        "attemptId": {"type": ["string", "null"], "minLength": 1},
+        "receipt": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/transportReceipt"}
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "bugRecord": {
+      "type": "object",
+      "required": [
+        "bugId",
+        "scopeId",
+        "title",
+        "priority",
+        "description",
+        "reporter",
+        "status",
+        "worktreeId",
+        "loopId",
+        "createdAt",
+        "updatedAt",
+        "resolutionEvidence"
+      ],
+      "properties": {
+        "bugId": {"type": "string", "minLength": 1},
+        "scopeId": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "priority": {"enum": ["p0", "p1", "p2", "p3"]},
+        "description": {"type": "string", "minLength": 1},
+        "reporter": {"$ref": "#/$defs/address"},
+        "status": {"enum": ["active", "resolved", "closed"]},
+        "worktreeId": {"type": ["string", "null"]},
+        "loopId": {"type": "string", "minLength": 1},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "updatedAt": {"type": "string", "format": "date-time"},
+        "resolutionEvidence": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/bugResolutionEvidence"}
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "bugResolutionEvidence": {
+      "type": "object",
+      "required": ["fix", "verification", "merge"],
+      "properties": {
+        "fix": {"$ref": "#/$defs/evidenceValue"},
+        "verification": {"$ref": "#/$defs/evidenceValue"},
+        "merge": {"$ref": "#/$defs/evidenceValue"}
+      },
+      "additionalProperties": true
+    },
+    "bugUpdatedEvent": {
+      "type": "object",
+      "required": ["bug", "loop", "evidence"],
+      "properties": {
+        "bug": {"$ref": "#/$defs/bugRecord"},
+        "loop": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/loopRecord"}
+          ]
+        },
+        "evidence": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/bugResolutionEvidence"}
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "masterWakeBriefingEvent": {
+      "type": "object",
+      "required": ["accumulator", "message", "notification", "generation", "reminder"],
+      "properties": {
+        "accumulator": {"$ref": "#/$defs/masterWakeAccumulator"},
+        "message": {"$ref": "#/$defs/messageRecord"},
+        "notification": {"$ref": "#/$defs/notificationRecord"},
+        "generation": {"type": "integer", "minimum": 0},
+        "reminder": {"type": "integer", "minimum": 1, "maximum": 3}
+      },
+      "additionalProperties": false
+    },
+    "masterWakeDecidedEvent": {
+      "type": "object",
+      "required": ["accumulator", "action", "at"],
+      "properties": {
+        "accumulator": {"$ref": "#/$defs/masterWakeAccumulator"},
+        "action": {"type": "string", "minLength": 1},
+        "at": {"type": "string", "format": "date-time"}
       },
       "additionalProperties": false
     },
