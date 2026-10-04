@@ -607,6 +607,55 @@ it('preserves system-owned internal relay/daemon material and lifecycle fields a
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
+it('keeps the configured bridge Relay non-orphaned while removed agent projections stay orphaned across v3 reloads', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-v3-relay-orphan-'))
+  const agentteams = join(directory, '.agentteams')
+  const configPath = join(agentteams, 'config.toml')
+  const internalPath = join(agentteams, 'internal.toml')
+  const providerOnlyConfig = V3_PRIMARY_CONFIG.replace(/\n\[agents\.receiver\][\s\S]*?(?=\n\[providers\.rcc\])/, '')
+  try {
+    await initializeLocalConfig(configPath, V3_PRIMARY_CONFIG)
+    await writeLocalInternalState(internalPath, {
+      relay: { pid: 61001, generation: 4, entryPath: '/installed/runtime/relay-process.js', startToken: 'relay-token-4', state: 'online' },
+      provider: { pid: 61002, generation: 4, entryPath: '/installed/runtime/agent-process.js', startToken: 'provider-token-4', state: 'online' },
+      receiver: { pid: 61003, generation: 4, entryPath: '/installed/runtime/agent-process.js', startToken: 'receiver-token-4', state: 'online' },
+    })
+    await writeLocalConfig(configPath, providerOnlyConfig)
+
+    const first = await loadLocalConfig(configPath)
+    const second = await loadLocalConfig(configPath)
+    const internal = await readLocalInternalConfig(second.internalPath!)
+    expect(await readFile(configPath, 'utf8')).toBe(providerOnlyConfig)
+    expect(first.daemons.map(daemon => daemon.id)).toEqual(['provider'])
+    expect(internal.sourceRevision).toBe(2)
+    expect(internal.sourceHash).toBe(configSourceHash(providerOnlyConfig))
+    expect(internal.daemons?.relay).toMatchObject({
+      orphaned: false,
+      pid: 61001,
+      generation: 4,
+      entryPath: '/installed/runtime/relay-process.js',
+      startToken: 'relay-token-4',
+      state: 'online',
+    })
+    expect(internal.daemons?.provider).toMatchObject({
+      orphaned: false,
+      pid: 61002,
+      generation: 4,
+      entryPath: '/installed/runtime/agent-process.js',
+      startToken: 'provider-token-4',
+      state: 'online',
+    })
+    expect(internal.daemons?.receiver).toMatchObject({
+      orphaned: true,
+      pid: 61003,
+      generation: 4,
+      entryPath: '/installed/runtime/agent-process.js',
+      startToken: 'receiver-token-4',
+      state: 'online',
+    })
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
 it('does not advance machine source when a v3 compile fails after parse', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-v3-invalid-compile-'))
   const agentteams = join(directory, '.agentteams')

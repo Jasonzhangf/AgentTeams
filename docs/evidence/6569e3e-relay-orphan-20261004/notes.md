@@ -1,0 +1,30 @@
+# 6569e3e relay orphan ownership notes
+
+Base: ad5a46b462fd28d2a2de713879283f047cf46d1c
+Branch: codex/6569e3e-relay-orphan-20261004
+Changed product paths: runtime/local-config.ts, runtime/local-config.spec.ts
+
+## Nodes
+
+- 2026-10-04 / observe | Original compiled generation1->2 failure and existing v2/v3 persistence paths are consistent with issue 6569e3e. Evidence: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/u3-compiled-entry-diagnosis-20261004/orphan-red.log, relay-orphan-intake.json.
+- 2026-10-04 / first-divergence | persistLocalV3ConfigLocked marks every prior daemon orphaned and restores only result.daemonProjections; active bridge Relay is not an agent projection and stays orphaned. Existing v2 path restores latestDaemons.relay as non-orphaned. Source: runtime/local-config.ts lines around 1659-1692.
+- 2026-10-04 / red | New public-boundary spec added; focused run exited 1, 33 tests, 1 failed on daemons.relay.orphaned expected false received true. Log: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/focused-red.log.
+- 2026-10-04 / fix | In persistLocalV3ConfigLocked, restore the configured bridge marker when an existing daemon relay record is present: if daemons.relay !== undefined keep orphaned false. This mirrors the existing v2 bridge ownership behavior and does not alter relay PID/generation/state/entry/startToken.
+- 2026-10-04 / green | Focused vtests exited 0, 33 passed. Log: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/focused-green.log.
+- 2026-10-04 / mapped | First mapped run exited 1 on runtime/local-process.spec.ts v2 options test; that test does not call changed v3 code and passed when isolated (1 passed, 11 skipped). Full mapped rerun exited 0, 3 files / 27 tests passed. Logs: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/mapped-green.log, local-process-isolated.log, mapped-green-rerun.log.
+- 2026-10-04 / typecheck | pnpm typecheck exited 0. Log: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/typecheck.log.
+- 2026-10-04 / build | pnpm build:runtime exited 0. Log: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/build-runtime.log. Compiled module path: generated/runtime-lib/runtime/local-config.js.
+- 2026-10-04 / public consumer | Ran compiled public config module from outside source cwd (/tmp). Consumer exited 0 and asserted sourceRevision 2, sourceHash matches provider-only config text, relayOrphaned false, removedReceiverOrphaned true, providerRetained online. Log: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/public-disk-consumer.log; script: public-disk-consumer.mjs.
+- 2026-10-04 / graph | dagpipe graph validate docs/design/dagpipe/graphs/daemon-start.graph.json exited 0 and printed valid DAG. Log: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/dagpipe-validate.log.
+- 2026-10-04 / appsdk guide compile | exited 0. Log: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/appsdk-guide-compile.log. No tracked guidance output changed.
+- 2026-10-04 / appsdk compile | exited 1 at package artifact receipt identity because product changes are intentionally unstaged in this worker tree; primary owns candidate staging/commit. Log: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/appsdk-compile.log.
+- 2026-10-04 / appsdk verify | command exited 0, command_ok true, development_ready true, delivery_not_evaluated. Log: /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/appsdk-verify.log.
+
+The original worker performed no review, commit, merge, push, memory, or restart. These are historical worker results, not the final primary validation state.
+
+## Primary exact-candidate continuation
+
+- r1 architecture review failed because the original v3 two-daemon generation2 replay was not bound to the config candidate. The one-line product change remains unchanged. Full r1 evidence is archived under /Users/fanzhang/.codex/task-evidence/agentteams/receipts/6569e3e-relay-orphan-20261004/review-r1/.
+- The primary consumer now imports initializeLocalConfig/loadLocalConfig/readLocalInternalConfig and the compiled local-process public launcher directly from this config candidate's generated/runtime-lib. Its real detached supervisor also comes from this candidate. It starts two real v3 daemon processes through the local bridge and asserts the truthful Relay orphan=false value after generation2. Command: TEAMS_LOCAL_REPLAY=compiled pnpm exec vitest run runtime/local-two-agent.spec.ts in the retained U3 diagnostic consumer tree; 1 test passed, exit0. Raw proof and consumer/module/child provenance: exact-config-v3-lifecycle.log and exact-config-v3-lifecycle-receipt.json in the same external issue receipt directory.
+- U3 service decoder/compiled daemon and Relay entries are explicit external consumer prerequisites from /Volumes/Intel/playground/agentteams/u3-compiled-entry-diagnosis-20261004/generated/runtime-lib. They are bound by file hash, are not a hidden change to this candidate, and are not claimed as U3 mainline delivery, installed final package, new Work, or rg/Camo capacity acceptance. This configuration library slice has no independent user UI; the real consumer crosses its public config and launcher boundaries. The real removed-agent orphan classification remains covered by the public disk regression.
+- Current compile/smoke/installed package checks before r1 passed after normal source staging. After this fixed-reference note update, product-source focused/mapped/typecheck evidence remains valid; package identity is rebuilt and installed again before r2. Current results are recorded externally as current-r2-compile/current-r2-smoke/current-r2-installed logs and primary-candidate-receipt-r2.json. No existing user/shared service was restarted. All lifecycle effects use isolated task fixtures.

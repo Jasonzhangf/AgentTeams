@@ -1658,6 +1658,7 @@ async function persistLocalV3ConfigLocked(
   const latest = await readInternalOrUndefined(internalPath)
   const daemons: Record<string, LocalInternalDaemonConfig> = { ...(latest?.daemons ?? {}) }
   for (const [id, daemon] of Object.entries(daemons)) daemons[id] = { ...daemon, orphaned: true }
+  if (daemons.relay !== undefined) daemons.relay = { ...daemons.relay, orphaned: false }
   for (const [id, projection] of Object.entries(result.daemonProjections)) {
     const runtime = latest?.daemons?.[id]
     daemons[id] = {
