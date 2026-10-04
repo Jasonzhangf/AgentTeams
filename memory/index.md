@@ -391,6 +391,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `console`, `design`, `human-unreviewed`
 - details: [L2/u5-console-design-20261003.md](L2/u5-console-design-20261003.md)
 
+### Successful stages persist before later admission failures
+- tags: `3fd009a`, `ai-reviewed`, `human-unreviewed`, `stage-reentry`
+- details: [L2/u7-successful-stage-persistence-20261004.md](L2/u7-successful-stage-persistence-20261004.md)
+
 ### W1 Agent Work matching and admission
 - tags: `ai-reviewed,human-unreviewed`
 - details: [L2/w1-agent-work-91a5bb8.md](L2/w1-agent-work-91a5bb8.md)
