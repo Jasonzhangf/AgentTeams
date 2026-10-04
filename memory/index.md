@@ -339,6 +339,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `config`, `design`, `human-unreviewed`
 - details: [L2/u2-config-design-20261003.md](L2/u2-config-design-20261003.md)
 
+### Local Work public entry design admitted; implementation pending
+- tags: `ai-reviewed`, `design-only`, `human-unreviewed`, `local-mvp`
+- details: [L2/u4-public-work-entry-design-5debd37.md](L2/u4-public-work-entry-design-5debd37.md)
+
 ### U5 optional Console lifecycle design admitted
 - tags: `agentteams`, `ai-reviewed`, `console`, `design`, `human-unreviewed`
 - details: [L2/u5-console-design-20261003.md](L2/u5-console-design-20261003.md)
