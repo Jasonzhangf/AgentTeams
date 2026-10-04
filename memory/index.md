@@ -351,6 +351,10 @@ _Empty._
 - tags: `AgentTeams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`
 - details: [L2/teams-local-mvp-plan-8aeb3fa.md](L2/teams-local-mvp-plan-8aeb3fa.md)
 
+### Relay opened lifetime source delivery; browser acceptance pending
+- tags: `4e04166`, `ai-reviewed`, `human-unreviewed`, `network`
+- details: [L2/teams-relay-opened-lifetime-source-4e04166-20261004.md](L2/teams-relay-opened-lifetime-source-4e04166-20261004.md)
+
 ### AppSDK control records do not dirty product identity (9262a49)
 - tags: `9262a49`, `ai-reviewed`, `human-unreviewed`, `lifecycle`
 - details: [L2/teams-sdk-lifecycle-identity-9262a49-20261004.md](L2/teams-sdk-lifecycle-identity-9262a49-20261004.md)
