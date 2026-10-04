@@ -224,20 +224,65 @@ function bindStageEvidence(stage, evidenceIds) {
   writeJson(stage.receiptPath, { ...receipt, evidence_ids: evidenceIds }, false)
 }
 
-function runStage({ state, statePath, receiptRoot, stageId, command, logPath, candidateInfo, requiredPaths = [], extra = {}, remainingStages = [], env = {} }) {
+function evidencePath(evidenceId) {
+  return join(root, '.appsdk', 'records', 'evidence', moduleId, `${evidenceId}.json`)
+}
+
+function validateStageEvidence(receipt, expectedRecords, candidateInfo, artifactHash) {
+  if (!Array.isArray(receipt.evidence_ids) || receipt.evidence_ids.length !== expectedRecords.length) return false
+  for (const [index, expected] of expectedRecords.entries()) {
+    const evidenceId = receipt.evidence_ids[index]
+    const path = evidencePath(evidenceId)
+    if (!existsSync(path)) return false
+    const record = readJson(path)
+    if (record.evidence_id !== evidenceId ||
+        record.result !== 'pass' ||
+        Date.parse(record.expires_at) <= Date.now() ||
+        record.expires_at !== receipt.expires_at ||
+        record.source_commit !== candidateInfo.head ||
+        record.scope_hash !== candidateInfo.scopeHash ||
+        record.scope?.module_id !== moduleId ||
+        record.scope?.entrypoint !== expected.entrypoint ||
+        record.producer?.adapter !== adapter ||
+        record.producer?.identity !== expected.identity ||
+        record.phase !== expected.phase ||
+        record.kind !== expected.kind ||
+        record.artifact_hash !== artifactHash ||
+        record.environment_id !== expected.environmentId ||
+        record.execution_surface !== expected.executionSurface ||
+        record.command !== expected.command ||
+        record.input_hashes?.[0] !== digest(JSON.stringify({
+          command: expected.command,
+          sourceCommit: candidateInfo.head,
+          artifactHash,
+        }))) {
+      return false
+    }
+  }
+  return true
+}
+
+function runStage({ state, statePath, receiptRoot, stageId, command, logPath, candidateInfo, requiredPaths = [], extra = {},
+  remainingStages = [], env = {}, stageEvidence, validateEvidence }) {
   const fingerprint = stageFingerprint(candidateInfo, stageId, command, extra)
   const previous = state.stages[stageId]
   const currentPathHashes = pathHashes(requiredPaths)
   const previousReceiptPath = previous?.receiptPath
   const previousReceipt = previousReceiptPath && existsSync(previousReceiptPath) ? readJson(previousReceiptPath) : undefined
-  const reusable = (previous?.status === 'passed' || previous?.status === 'reused') && previous.fingerprint === fingerprint &&
+  let reusable = (previous?.status === 'passed' || previous?.status === 'reused') && previous.fingerprint === fingerprint &&
     previous.expiresAt !== undefined && Date.parse(previous.expiresAt) > Date.now() &&
     previous.logPath !== undefined && existsSync(previous.logPath) && previous.logHash === digest(readFileSync(previous.logPath)) &&
     JSON.stringify(previous.requiredPathHashes ?? {}) === JSON.stringify(currentPathHashes) &&
     requiredPaths.every(path => Object.hasOwn(currentPathHashes, path)) &&
+    previousReceipt?.stage_id === stageId &&
+    JSON.stringify(previousReceipt?.command) === JSON.stringify(command) &&
+    JSON.stringify(previousReceipt?.candidate) === JSON.stringify(candidateInfo) &&
     previousReceipt?.result === 'pass' && previousReceipt.receipt_id === previous.receiptId &&
     previousReceipt.fingerprint === fingerprint && Date.parse(previousReceipt.expires_at) > Date.now() &&
+    JSON.stringify(previousReceipt.tool_versions) === JSON.stringify(toolVersions()) &&
+    JSON.stringify(previousReceipt.governance_input_hashes) === JSON.stringify(governanceInputHashes()) &&
     Array.isArray(previousReceipt.evidence_ids) && previousReceipt.evidence_ids.length > 0
+  if (reusable && validateEvidence) reusable = validateEvidence(previousReceipt)
   if (reusable) {
     const reusedAt = now()
     const reuseReceiptId = `reuse-${stageId}-${Date.now()}`
@@ -258,7 +303,9 @@ function runStage({ state, statePath, receiptRoot, stageId, command, logPath, ca
     state.stages[stageId] = { ...previous, status: 'reused', reuseReceiptId, reusedAt, reuseReceipt }
     saveStageState(statePath, state)
     return { output: readFileSync(previous.logPath, 'utf8'), fingerprint, reused: true, receiptId: previous.receiptId,
-      receiptPath: previousReceiptPath, sourceEvidenceIds: previousReceipt.evidence_ids, expiresAt: previous.expiresAt }
+      receiptPath: previousReceiptPath, sourceEvidenceIds: previousReceipt.evidence_ids,
+      evidenceRecords: previousReceipt.evidence_ids.map(evidenceId => readJson(evidencePath(evidenceId))),
+      expiresAt: previous.expiresAt }
   }
 
   if (previous?.status === 'passed' || previous?.status === 'reused') {
@@ -285,10 +332,15 @@ function runStage({ state, statePath, receiptRoot, stageId, command, logPath, ca
       candidate: candidateInfo, command, log_path: logPath, log_hash: digest(readFileSync(logPath)),
       required_path_hashes: pathHashes(requiredPaths), tool_versions: toolVersions(),
       governance_input_hashes: governanceInputHashes(), evidence_ids: [], created_at: now(), expires_at: expiresAt })
+    const evidenceRecords = stageEvidence ? stageEvidence({ output, receiptId, receiptPath, expiresAt }) : []
+    for (const record of evidenceRecords) writeJson(evidencePath(record.evidence_id), record)
+    const sourceEvidenceIds = evidenceRecords.map(record => record.evidence_id)
+    if (sourceEvidenceIds.length > 0) bindStageEvidence({ stageId, receiptPath }, sourceEvidenceIds)
     state.stages[stageId] = { ...state.stages[stageId], status: 'passed', receiptId, completedAt: now(),
-      expiresAt, receiptPath, logHash: digest(readFileSync(logPath)), requiredPathHashes: pathHashes(requiredPaths) }
+      expiresAt, receiptPath, logHash: digest(readFileSync(logPath)), requiredPathHashes: pathHashes(requiredPaths),
+      evidenceIds: sourceEvidenceIds }
     saveStageState(statePath, state)
-    return { output, fingerprint, reused: false, receiptId, receiptPath, sourceEvidenceIds: [], expiresAt }
+    return { output, fingerprint, reused: false, receiptId, receiptPath, sourceEvidenceIds, evidenceRecords, expiresAt }
   } catch (error) {
     state.stages[stageId] = { ...state.stages[stageId], status: 'blocked', error: String(error), failedAt: now() }
     saveStageState(statePath, state)
@@ -380,9 +432,9 @@ function assertExistingValidationReusable(validationPath, candidateInfo, stageSt
     existing.deployment?.install_receipt_id,
     existing.deployment?.restart_receipt_id,
   ].filter(Boolean)
-  const sourceEvidenceIds = Object.values(existing.stage_execution ?? {})
-    .flatMap(execution => execution.source_evidence_ids ?? [])
-  const evidenceIds = [...new Set([...currentEvidenceIds, ...sourceEvidenceIds])]
+  const stageEvidenceIds = Object.values(existing.stage_execution ?? {})
+    .flatMap(execution => [...(execution.evidence_ids ?? []), ...(execution.source_evidence_ids ?? [])])
+  const evidenceIds = [...new Set([...currentEvidenceIds, ...stageEvidenceIds])]
   if (existing.result !== 'pass' || !artifact || artifact.artifact_hash !== existing.artifact_hash ||
       !existing.stage_execution || evidenceIds.length === 0) {
     throw new Error('existing pre-review validation is stale or incomplete; stage evidence must be invalidated and rerun')
@@ -392,7 +444,9 @@ function assertExistingValidationReusable(validationPath, candidateInfo, stageSt
     const evidencePath = join(evidenceRoot, `${evidenceId}.json`)
     if (!existsSync(evidencePath)) throw new Error(`existing evidence ${evidenceId} is missing; stage evidence must be invalidated and rerun`)
     const evidence = readJson(evidencePath)
-    if (evidence.result !== 'pass' || (currentEvidenceIds.includes(evidenceId) && evidence.source_commit !== candidateInfo.head) ||
+    if (evidence.result !== 'pass' || evidence.source_commit !== candidateInfo.head ||
+        evidence.scope?.module_id !== moduleId || evidence.scope_hash !== candidateInfo.scopeHash ||
+        evidence.artifact_hash !== existing.artifact_hash || evidence.producer?.adapter !== adapter ||
         Date.parse(evidence.expires_at) <= Date.now()) {
       throw new Error(`existing evidence ${evidenceId} is stale; stage evidence must be invalidated and rerun`)
     }
@@ -401,8 +455,14 @@ function assertExistingValidationReusable(validationPath, candidateInfo, stageSt
     const stage = stageState.stages[stageId]
     if (!stage?.receiptPath || !existsSync(stage.receiptPath)) throw new Error(`existing stage receipt ${stageId} is missing; stage evidence must be invalidated and rerun`)
     const receipt = readJson(stage.receiptPath)
-    if (receipt.result !== 'pass' || Date.parse(receipt.expires_at) <= Date.now() ||
+    const expectedCommand = stageId === 'pnpm-verify' ? ['pnpm', 'verify'] : ['pnpm', 'smoke:installed']
+    if (receipt.stage_id !== stageId || JSON.stringify(receipt.command) !== JSON.stringify(expectedCommand) ||
+        JSON.stringify(receipt.candidate) !== JSON.stringify(candidateInfo) ||
+        receipt.result !== 'pass' || Date.parse(receipt.expires_at) <= Date.now() ||
         receipt.fingerprint !== expectedFingerprints[stageId] ||
+        JSON.stringify(receipt.tool_versions) !== JSON.stringify(toolVersions()) ||
+        JSON.stringify(receipt.governance_input_hashes) !== JSON.stringify(governanceInputHashes()) ||
+        !Array.isArray(receipt.evidence_ids) || receipt.evidence_ids.length === 0 ||
         !receipt.evidence_ids.every(evidenceId => evidenceIds.includes(evidenceId)) ||
         !existsSync(receipt.log_path) || fileHash(receipt.log_path) !== receipt.log_hash ||
         Object.entries(receipt.required_path_hashes ?? {}).some(([path, hash]) => fileHash(path) !== hash)) {
@@ -498,13 +558,77 @@ function main() {
 
   try {
     const candidateCreatedAt = now()
+    const verifyEvidenceSpec = [
+      {
+        identity: `${adapter}/whitebox`,
+        phase: 'development_whitebox',
+        kind: 'gate',
+        entrypoint: 'pnpm verify',
+        executionSurface: 'development_whitebox',
+        command: 'pnpm verify',
+      },
+      {
+        identity: `${adapter}/build`,
+        phase: 'artifact',
+        kind: 'build',
+        entrypoint: 'generated/modules/teams-source/module.compiled.json',
+        executionSurface: 'development_whitebox',
+        command: 'appsdk compile (inside pnpm verify)',
+      },
+    ]
     const verifyStage = runStage({ state: stageState, statePath: stageStatePath, receiptRoot, stageId: 'pnpm-verify',
       command: ['pnpm', 'verify'], logPath: join(commandRoot, 'pnpm-verify.log'), candidateInfo,
       requiredPaths: [join(root, 'generated', 'modules', moduleId, 'module.compiled.json')],
       extra: currentInputs.verify,
-      remainingStages: ['pnpm-smoke-installed'] })
-    const verifyOutput = verifyStage.output
-    const artifact = readJson(join(root, 'generated', 'modules', moduleId, 'module.compiled.json'))
+      remainingStages: ['pnpm-smoke-installed'],
+      stageEvidence: ({ output, receiptId, receiptPath, expiresAt }) => {
+        const stageArtifact = readJson(currentArtifactPath)
+        if (stageArtifact.source_commit && stageArtifact.source_commit !== candidateInfo.head) {
+          throw new Error(`compiled artifact source commit ${stageArtifact.source_commit} does not match ${candidateInfo.head}`)
+        }
+        const artifactHash = stageArtifact.artifact_hash
+        const execution = { mode: 'executed', receipt_id: receiptId, receipt_path: receiptPath }
+        const createdAt = now()
+        return [
+          evidence({
+            id: `${attempt}-whitebox`,
+            phase: 'development_whitebox',
+            kind: 'gate',
+            candidateInfo,
+            createdAt,
+            command: 'pnpm verify',
+            commandOutput: output,
+            artifactHash,
+            entrypoint: 'pnpm verify',
+            executionSurface: 'development_whitebox',
+            identity: `${adapter}/whitebox`,
+            execution,
+            expiresAt,
+          }),
+          evidence({
+            id: `${attempt}-artifact`,
+            phase: 'artifact',
+            kind: 'build',
+            candidateInfo,
+            createdAt,
+            command: 'appsdk compile (inside pnpm verify)',
+            commandOutput: output,
+            artifactHash,
+            entrypoint: 'generated/modules/teams-source/module.compiled.json',
+            executionSurface: 'development_whitebox',
+            identity: `${adapter}/build`,
+            execution,
+            expiresAt,
+          }),
+        ]
+      },
+      validateEvidence: receipt => {
+        if (!existsSync(currentArtifactPath)) return false
+        const stageArtifact = readJson(currentArtifactPath)
+        if (stageArtifact.source_commit && stageArtifact.source_commit !== candidateInfo.head) return false
+        return validateStageEvidence(receipt, verifyEvidenceSpec, candidateInfo, stageArtifact.artifact_hash)
+      } })
+    const artifact = readJson(currentArtifactPath)
     if (artifact.source_commit && artifact.source_commit !== candidateInfo.head) {
       throw new Error(`compiled artifact source commit ${artifact.source_commit} does not match ${candidateInfo.head}`)
     }
@@ -512,8 +636,36 @@ function main() {
     const smokeInputs = stageInputs(candidateInfo, artifactHash, u1ReceiptPath)
     const environmentId = smokeInputs.environmentId
     const deployedEntrypoint = smokeInputs.deployedEntrypoint
+    const smokeEvidenceSpec = [
+      {
+        identity: `${adapter}/deployment`,
+        phase: 'deployment_install',
+        kind: 'install',
+        entrypoint: deployedEntrypoint,
+        executionSurface: 'deployed_blackbox',
+        command: 'pnpm smoke:installed',
+        environmentId,
+      },
+      {
+        identity: `${adapter}/deployment`,
+        phase: 'deployment_restart',
+        kind: 'restart',
+        entrypoint: deployedEntrypoint,
+        executionSurface: 'deployed_blackbox',
+        command: 'pnpm smoke:installed',
+        environmentId,
+      },
+      {
+        identity: `${adapter}/deployment`,
+        phase: 'deployed_blackbox',
+        kind: 'runtime',
+        entrypoint: deployedEntrypoint,
+        executionSurface: 'deployed_blackbox',
+        command: 'pnpm smoke:installed',
+        environmentId,
+      },
+    ]
 
-    const whiteboxCreatedAt = now()
     const smokeStage = runStage({ state: stageState, statePath: stageStatePath, receiptRoot, stageId: 'pnpm-smoke-installed',
       command: ['pnpm', 'smoke:installed'], logPath: join(commandRoot, 'pnpm-smoke-installed.log'), candidateInfo,
       requiredPaths: [join(root, 'generated', 'modules', moduleId, 'module.compiled.json'),
@@ -522,29 +674,112 @@ function main() {
         join(root, 'scripts', 'runtime-smoke.mjs'), join(root, 'package.json'), join(root, 'pnpm-workspace.yaml')],
       extra: smokeInputs.smoke,
       env: { AGENTTEAMS_U1_INSTALLED_RECEIPT_PATH: u1ReceiptPath },
-      remainingStages: [] })
-    const receiptReference = parseInstalledReceiptReference(smokeStage.output)
-    if (receiptReference.path !== u1ReceiptPath) {
-      throw new Error(`installed receipt path ${receiptReference.path} does not match the adapter-owned ${u1ReceiptPath}`)
-    }
-    const installedLifecycle = installedLifecycleReceipt({
-      receiptPath: receiptReference.path,
-      expectedReceiptSha256: receiptReference.sha256,
-      expectedPackContentSha256: candidatePackReceipt().contentSha256,
-      expectedCandidateIdentity: currentCandidateIdentity(root),
-    })
-    const installedOutput = `${smokeStage.output}
+      remainingStages: [],
+      stageEvidence: ({ output, receiptId, receiptPath, expiresAt }) => {
+        const receiptReference = parseInstalledReceiptReference(output)
+        if (receiptReference.path !== u1ReceiptPath) {
+          throw new Error(`installed receipt path ${receiptReference.path} does not match the adapter-owned ${u1ReceiptPath}`)
+        }
+        const installedLifecycle = installedLifecycleReceipt({
+          receiptPath: receiptReference.path,
+          expectedReceiptSha256: receiptReference.sha256,
+          expectedPackContentSha256: candidatePackReceipt().contentSha256,
+          expectedCandidateIdentity: currentCandidateIdentity(root),
+        })
+        const installedOutput = `${output}
 installed lifecycle receipt ${installedLifecycle.path} ${installedLifecycle.hash}
 installed lifecycle tarball ${installedLifecycle.tarballSha256}
 installed lifecycle pack content ${installedLifecycle.packContentSha256}
 installed lifecycle generations ${installedLifecycle.lifecycle.start.generation} -> ${installedLifecycle.lifecycle.restart.generation}
 `
+        const execution = { mode: 'executed', receipt_id: receiptId, receipt_path: receiptPath }
+        const createdAt = now()
+        return [
+          evidence({
+            id: `${attempt}-install`,
+            phase: 'deployment_install',
+            kind: 'install',
+            candidateInfo,
+            createdAt,
+            command: 'pnpm smoke:installed',
+            commandOutput: installedOutput,
+            artifactHash,
+            environmentId,
+            entrypoint: deployedEntrypoint,
+            executionSurface: 'deployed_blackbox',
+            identity: `${adapter}/deployment`,
+            execution,
+            expiresAt,
+          }),
+          evidence({
+            id: `${attempt}-restart`,
+            phase: 'deployment_restart',
+            kind: 'restart',
+            candidateInfo,
+            createdAt,
+            command: 'pnpm smoke:installed',
+            commandOutput: installedOutput,
+            artifactHash,
+            environmentId,
+            entrypoint: deployedEntrypoint,
+            executionSurface: 'deployed_blackbox',
+            identity: `${adapter}/deployment`,
+            execution,
+            expiresAt,
+          }),
+          evidence({
+            id: `${attempt}-blackbox`,
+            phase: 'deployed_blackbox',
+            kind: 'runtime',
+            candidateInfo,
+            createdAt,
+            command: 'pnpm smoke:installed',
+            commandOutput: installedOutput,
+            artifactHash,
+            environmentId,
+            entrypoint: deployedEntrypoint,
+            executionSurface: 'deployed_blackbox',
+            identity: `${adapter}/deployment`,
+            execution,
+            expiresAt,
+          }),
+        ]
+      },
+      validateEvidence: receipt => {
+        try {
+          const receiptReference = parseInstalledReceiptReference(readFileSync(receipt.log_path, 'utf8'))
+          if (receiptReference.path !== u1ReceiptPath) return false
+          installedLifecycleReceipt({
+            receiptPath: receiptReference.path,
+            expectedReceiptSha256: receiptReference.sha256,
+            expectedPackContentSha256: candidatePackReceipt().contentSha256,
+            expectedCandidateIdentity: currentCandidateIdentity(root),
+          })
+        } catch {
+          return false
+        }
+        return validateStageEvidence(receipt, smokeEvidenceSpec, candidateInfo, artifactHash)
+      } })
     const verifyExecution = verifyStage.reused ? { mode: 'reused', source_receipt_id: verifyStage.receiptId,
-      source_receipt_path: verifyStage.receiptPath, source_evidence_ids: verifyStage.sourceEvidenceIds } :
-      { mode: 'executed', receipt_id: verifyStage.receiptId, receipt_path: verifyStage.receiptPath }
+      source_receipt_path: verifyStage.receiptPath, source_evidence_ids: verifyStage.sourceEvidenceIds,
+      evidence_ids: verifyStage.sourceEvidenceIds } :
+      { mode: 'executed', receipt_id: verifyStage.receiptId, receipt_path: verifyStage.receiptPath,
+        evidence_ids: verifyStage.sourceEvidenceIds }
     const smokeExecution = smokeStage.reused ? { mode: 'reused', source_receipt_id: smokeStage.receiptId,
-      source_receipt_path: smokeStage.receiptPath, source_evidence_ids: smokeStage.sourceEvidenceIds } :
-      { mode: 'executed', receipt_id: smokeStage.receiptId, receipt_path: smokeStage.receiptPath }
+      source_receipt_path: smokeStage.receiptPath, source_evidence_ids: smokeStage.sourceEvidenceIds,
+      evidence_ids: smokeStage.sourceEvidenceIds } :
+      { mode: 'executed', receipt_id: smokeStage.receiptId, receipt_path: smokeStage.receiptPath,
+        evidence_ids: smokeStage.sourceEvidenceIds }
+    const verifyEvidenceRecords = verifyStage.evidenceRecords
+    const smokeEvidenceRecords = smokeStage.evidenceRecords
+    const whitebox = verifyEvidenceRecords.find(record => record.phase === 'development_whitebox')
+    const build = verifyEvidenceRecords.find(record => record.phase === 'artifact')
+    const install = smokeEvidenceRecords.find(record => record.phase === 'deployment_install')
+    const restart = smokeEvidenceRecords.find(record => record.phase === 'deployment_restart')
+    const blackbox = smokeEvidenceRecords.find(record => record.phase === 'deployed_blackbox')
+    if (!whitebox || !build || !install || !restart || !blackbox) {
+      throw new Error('lifecycle stage evidence records are incomplete')
+    }
     assertCleanSource()
     if (git(['rev-parse', 'HEAD']) !== candidateInfo.head || git(['rev-parse', 'HEAD^{tree}']) !== candidateInfo.tree) {
       throw new Error('candidate source changed during lifecycle execution')
@@ -552,93 +787,7 @@ installed lifecycle generations ${installedLifecycle.lifecycle.start.generation}
 
     const worktreeId = `worktree-${candidateInfo.head.slice(0, 12)}`
     const fixCandidateId = `fix-${candidateInfo.head.slice(0, 12)}-${attempt}`
-    const whitebox = evidence({
-      id: `${attempt}-whitebox`,
-      phase: 'development_whitebox',
-      kind: 'gate',
-      candidateInfo,
-      createdAt: whiteboxCreatedAt,
-      command: 'pnpm verify',
-      commandOutput: verifyOutput,
-      artifactHash,
-      entrypoint: 'pnpm verify',
-      executionSurface: 'development_whitebox',
-      identity: `${adapter}/whitebox`,
-      execution: verifyExecution,
-      expiresAt: verifyStage.expiresAt,
-    })
-    const build = evidence({
-      id: `${attempt}-artifact`,
-      phase: 'artifact',
-      kind: 'build',
-      candidateInfo,
-      createdAt: whiteboxCreatedAt,
-      command: 'appsdk compile (inside pnpm verify)',
-      commandOutput: verifyOutput,
-      artifactHash,
-      entrypoint: 'generated/modules/teams-source/module.compiled.json',
-      executionSurface: 'development_whitebox',
-      identity: `${adapter}/build`,
-      execution: verifyExecution,
-      expiresAt: verifyStage.expiresAt,
-    })
-    const installCreatedAt = now()
-    const install = evidence({
-      id: `${attempt}-install`,
-      phase: 'deployment_install',
-      kind: 'install',
-      candidateInfo,
-      createdAt: installCreatedAt,
-      command: 'pnpm smoke:installed',
-      commandOutput: installedOutput,
-      artifactHash,
-      environmentId,
-      entrypoint: deployedEntrypoint,
-      executionSurface: 'deployed_blackbox',
-      identity: `${adapter}/deployment`,
-      execution: smokeExecution,
-      expiresAt: smokeStage.expiresAt,
-    })
-    const restartCreatedAt = now()
-    const restart = evidence({
-      id: `${attempt}-restart`,
-      phase: 'deployment_restart',
-      kind: 'restart',
-      candidateInfo,
-      createdAt: restartCreatedAt,
-      command: 'pnpm smoke:installed',
-      commandOutput: installedOutput,
-      artifactHash,
-      environmentId,
-      entrypoint: deployedEntrypoint,
-      executionSurface: 'deployed_blackbox',
-      identity: `${adapter}/deployment`,
-      execution: smokeExecution,
-      expiresAt: smokeStage.expiresAt,
-    })
-    const blackboxCreatedAt = now()
-    const blackbox = evidence({
-      id: `${attempt}-blackbox`,
-      phase: 'deployed_blackbox',
-      kind: 'runtime',
-      candidateInfo,
-      createdAt: blackboxCreatedAt,
-      command: 'pnpm smoke:installed',
-      commandOutput: installedOutput,
-      artifactHash,
-      environmentId,
-      entrypoint: deployedEntrypoint,
-      executionSurface: 'deployed_blackbox',
-      identity: `${adapter}/deployment`,
-      execution: smokeExecution,
-      expiresAt: smokeStage.expiresAt,
-    })
-
-    const evidenceRoot = join(recordsRoot, 'evidence', moduleId)
     const evidenceSet = [whitebox, build, install, restart, blackbox]
-    if (!verifyStage.reused) bindStageEvidence(verifyStage, [whitebox.evidence_id, build.evidence_id])
-    if (!smokeStage.reused) bindStageEvidence(smokeStage, [install.evidence_id, restart.evidence_id, blackbox.evidence_id])
-    for (const item of evidenceSet) writeJson(join(evidenceRoot, `${item.evidence_id}.json`), item)
     const worktree = {
       worktree_id: worktreeId,
       issue_id: issueId,
@@ -686,7 +835,7 @@ installed lifecycle generations ${installedLifecycle.lifecycle.start.generation}
         restart_receipt_id: restart.evidence_id,
         entrypoint: deployedEntrypoint,
         producer: { adapter, identity: `${adapter}/deployment` },
-        observed_at: blackboxCreatedAt,
+        observed_at: blackbox.created_at,
       },
       stage_execution: {
         'pnpm-verify': verifyExecution,
@@ -711,7 +860,7 @@ installed lifecycle generations ${installedLifecycle.lifecycle.start.generation}
       records: [
         candidateRecordPath,
         validationPath,
-        ...evidenceSet.map(item => join(evidenceRoot, `${item.evidence_id}.json`)),
+        ...evidenceSet.map(item => evidencePath(item.evidence_id)),
       ],
       completed_at: now(),
     })
