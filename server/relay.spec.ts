@@ -510,6 +510,24 @@ describe('N1 relay server', () => {
     expect(grantMessage.kind).toBe('relay.grant')
     if (grantMessage.kind !== 'relay.grant') return
 
+    const crossScopeData = await openSocket(peer('agent-c').token)
+    send(crossScopeData, { kind: 'relay.open', requestId: 'open-cross-scope', grantId: grantMessage.grant.grantId, generation: 1 })
+    await expect(nextJson(crossScopeData)).resolves.toMatchObject({
+      kind: 'relay.error',
+      requestId: 'open-cross-scope',
+      error: { code: 'FORBIDDEN' },
+    })
+    await waitForClose(crossScopeData)
+
+    const staleData = await openSocket(peer('agent-a').token)
+    send(staleData, { kind: 'relay.open', requestId: 'open-stale-generation', grantId: grantMessage.grant.grantId, generation: 2 })
+    await expect(nextJson(staleData)).resolves.toMatchObject({
+      kind: 'relay.error',
+      requestId: 'open-stale-generation',
+      error: { code: 'STALE_GENERATION' },
+    })
+    await waitForClose(staleData)
+
     clockMs += 60_001
     const data = await openSocket(peer('agent-a').token)
     send(data, { kind: 'relay.open', requestId: 'open-expired', grantId: grantMessage.grant.grantId, generation: 1 })
@@ -541,6 +559,48 @@ describe('N1 relay server', () => {
     await expect(nextOffer).resolves.toMatchObject({ kind: 'relay.offer' })
   })
 
+  it('rejects and reclaims a half-open grant at the admission deadline', async () => {
+    const a = await openSocket(peer('agent-a').token)
+    const b = await openSocket(peer('agent-b').token)
+    await login(a, peer('agent-a'))
+    await login(b, peer('agent-b'))
+
+    send(a, { kind: 'relay.connect', requestId: 'half-open-grant', generation: 1, targetAgentId: 'agent-b', targetGeneration: 1 })
+    const grantMessage = await nextJson(a)
+    await nextJson(b)
+    if (grantMessage.kind !== 'relay.grant') throw new Error('grant was not issued')
+
+    const dataA = await openSocket(peer('agent-a').token)
+    send(dataA, { kind: 'relay.open', requestId: 'half-open-source', grantId: grantMessage.grant.grantId, generation: 1 })
+    await expectNoMessage(dataA)
+
+    const duplicate = await openSocket(peer('agent-a').token)
+    send(duplicate, { kind: 'relay.open', requestId: 'half-open-duplicate', grantId: grantMessage.grant.grantId, generation: 1 })
+    await expect(nextJson(duplicate)).resolves.toMatchObject({
+      kind: 'relay.error',
+      requestId: 'half-open-duplicate',
+      error: { code: 'CONFLICT' },
+    })
+    await waitForClose(duplicate)
+
+    const sourceDataClosed = waitForClose(dataA)
+    clockMs += 60_001
+    const dataB = await openSocket(peer('agent-b').token)
+    send(dataB, { kind: 'relay.open', requestId: 'half-open-target', grantId: grantMessage.grant.grantId, generation: 1 })
+    await expect(nextJson(dataB)).resolves.toMatchObject({
+      kind: 'relay.error',
+      requestId: 'half-open-target',
+      error: { code: 'UNAVAILABLE' },
+    })
+    await sourceDataClosed
+
+    const nextGrant = nextMatching(a, (message) => message.kind === 'relay.grant')
+    const nextOffer = nextMatching(b, (message) => message.kind === 'relay.offer')
+    send(a, { kind: 'relay.connect', requestId: 'half-open-reclaimed', generation: 1, targetAgentId: 'agent-b', targetGeneration: 1 })
+    await expect(nextGrant).resolves.toMatchObject({ kind: 'relay.grant', requestId: 'half-open-reclaimed' })
+    await expect(nextOffer).resolves.toMatchObject({ kind: 'relay.offer' })
+  })
+
   it('revokes a grant when either control identity reconnects', async () => {
     const a = await openSocket(peer('agent-a').token)
     const b = await openSocket(peer('agent-b').token)
@@ -551,15 +611,26 @@ describe('N1 relay server', () => {
     await nextJson(b)
     if (grantMessage.kind !== 'relay.grant') throw new Error('grant was not issued')
 
+    const dataA = await openSocket(peer('agent-a').token)
+    const dataB = await openSocket(peer('agent-b').token)
+    send(dataA, { kind: 'relay.open', requestId: 'open-reconnect-a', grantId: grantMessage.grant.grantId, generation: 1 })
+    send(dataB, { kind: 'relay.open', requestId: 'open-reconnect-b', grantId: grantMessage.grant.grantId, generation: 1 })
+    await Promise.all([nextJson(dataA), nextJson(dataB)])
+
     const sourceClosed = nextJson(a)
+    const sourceDataClosed = waitForClose(dataA)
+    const targetDataClosed = waitForClose(dataB)
     const replacement = await openSocket(peer('agent-b').token)
     await expect(login(replacement, peer('agent-b'))).resolves.toMatchObject({ kind: 'relay.admitted', generation: 2 })
     await waitForClose(b)
     await expect(sourceClosed).resolves.toMatchObject({ kind: 'relay.closed', grantId: grantMessage.grant.grantId, error: { code: 'UNAVAILABLE' } })
+    await Promise.all([sourceDataClosed, targetDataClosed])
 
-    const data = await openSocket(peer('agent-a').token)
-    send(data, { kind: 'relay.open', requestId: 'open-revoked', grantId: grantMessage.grant.grantId, generation: 1 })
-    await expect(nextJson(data)).resolves.toMatchObject({ kind: 'relay.error', requestId: 'open-revoked', error: { code: 'NOT_FOUND' } })
+    const nextGrant = nextMatching(a, (message) => message.kind === 'relay.grant')
+    const nextOffer = nextMatching(replacement, (message) => message.kind === 'relay.offer')
+    send(a, { kind: 'relay.connect', requestId: 'grant-reconnect-reclaimed', generation: 1, targetAgentId: 'agent-b', targetGeneration: 2 })
+    await expect(nextGrant).resolves.toMatchObject({ kind: 'relay.grant', requestId: 'grant-reconnect-reclaimed' })
+    await expect(nextOffer).resolves.toMatchObject({ kind: 'relay.offer' })
   })
 
   it('does not attach a data socket when authentication resolves after close', async () => {
@@ -665,7 +736,7 @@ describe('N1 relay server', () => {
     await Promise.all([dataAClosed, dataBClosed, dataANoMessage, dataBNoMessage])
   })
 
-  it('stops forwarding after an opened grant expires', async () => {
+  it('keeps an opened pair after the admission deadline despite duplicate and invalid participant opens', async () => {
     const a = await openSocket(peer('agent-a').token)
     const b = await openSocket(peer('agent-b').token)
     await login(a, peer('agent-a'))
@@ -681,16 +752,59 @@ describe('N1 relay server', () => {
     send(dataB, { kind: 'relay.open', requestId: 'open-expiring-b', grantId: grantMessage.grant.grantId, generation: 1 })
     await Promise.all([nextJson(dataA), nextJson(dataB)])
 
-    const sourceClosed = nextJson(a)
-    const targetClosed = nextJson(b)
-    const targetDataClosed = waitForClose(dataB)
-    const sourceDataNoMessage = expectNoMessage(dataA)
     clockMs += 60_001
-    dataA.send(Buffer.from('expired'))
-    await expect(sourceClosed).resolves.toMatchObject({ kind: 'relay.closed', grantId: grantMessage.grant.grantId, error: { code: 'UNAVAILABLE' } })
-    await expect(targetClosed).resolves.toMatchObject({ kind: 'relay.closed', grantId: grantMessage.grant.grantId, error: { code: 'UNAVAILABLE' } })
+
+    const duplicate = await openSocket(peer('agent-a').token)
+    send(duplicate, { kind: 'relay.open', requestId: 'duplicate-after-deadline', grantId: grantMessage.grant.grantId, generation: 1 })
+    const duplicateResponse = await nextJson(duplicate)
+    expect(dataA.readyState).toBe(WebSocket.OPEN)
+    expect(dataB.readyState).toBe(WebSocket.OPEN)
+    expect(duplicateResponse).toMatchObject({
+      kind: 'relay.error',
+      requestId: 'duplicate-after-deadline',
+      error: { code: 'CONFLICT' },
+    })
+    await waitForClose(duplicate)
+
+    const invalidParticipant = await openSocket(peer('agent-c').token)
+    send(invalidParticipant, { kind: 'relay.open', requestId: 'invalid-participant-after-deadline', grantId: grantMessage.grant.grantId, generation: 1 })
+    const invalidParticipantResponse = await nextJson(invalidParticipant)
+    expect(dataA.readyState).toBe(WebSocket.OPEN)
+    expect(dataB.readyState).toBe(WebSocket.OPEN)
+    expect(invalidParticipantResponse).toMatchObject({
+      kind: 'relay.error',
+      requestId: 'invalid-participant-after-deadline',
+      error: { code: 'FORBIDDEN' },
+    })
+    await waitForClose(invalidParticipant)
+
+    const sourceToTarget = Buffer.from('{"kind":"session.message","body":"after-deadline"}')
+    dataA.send(sourceToTarget)
+    await expect(nextBinary(dataB)).resolves.toEqual(sourceToTarget)
+    const targetToSource = Buffer.from([0, 255, 1, 254])
+    dataB.send(targetToSource)
+    await expect(nextBinary(dataA)).resolves.toEqual(targetToSource)
+
+    expect(dataA.readyState).toBe(WebSocket.OPEN)
+    expect(dataB.readyState).toBe(WebSocket.OPEN)
+    expect(a.readyState).toBe(WebSocket.OPEN)
+    expect(b.readyState).toBe(WebSocket.OPEN)
+
+    send(a, { kind: 'relay.connect', requestId: 'opened-capacity', generation: 1, targetAgentId: 'agent-b', targetGeneration: 1 })
+    await expect(nextJson(a)).resolves.toMatchObject({
+      kind: 'relay.error',
+      requestId: 'opened-capacity',
+      error: { code: 'RESOURCE_EXHAUSTED' },
+    })
+
+    const targetDataClosed = waitForClose(dataB)
+    dataA.close()
     await targetDataClosed
-    await sourceDataNoMessage
+    const nextGrant = nextMatching(a, (message) => message.kind === 'relay.grant')
+    const nextOffer = nextMatching(b, (message) => message.kind === 'relay.offer')
+    send(a, { kind: 'relay.connect', requestId: 'opened-capacity-reclaimed', generation: 1, targetAgentId: 'agent-b', targetGeneration: 1 })
+    await expect(nextGrant).resolves.toMatchObject({ kind: 'relay.grant', requestId: 'opened-capacity-reclaimed' })
+    await expect(nextOffer).resolves.toMatchObject({ kind: 'relay.offer' })
   })
 
   it('fails on a full relay send buffer without injecting control JSON into data', async () => {

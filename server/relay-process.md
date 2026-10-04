@@ -54,6 +54,13 @@ test port; the process prints only the resulting `wss://` listener address.
 All limit fields are positive safe integers, and `grantTtlMs` must fit the
 Node timer range.
 
+`grantTtlMs` is the admission deadline for both data sides to complete
+`relay.open`. An opened pair remains active after that deadline while its two
+original authenticated control connections and generations stay current. It
+closes on either data/control disconnection, generation replacement, service
+shutdown, or a transport limit/error. No renewal scheduler or separate
+opened-link lifetime configuration exists.
+
 Each credential is an environment-variable reference, never a credential
 value. The environment value is the exact HTTP `Authorization` header sent by
 the client, for example `Bearer ...`. The loader rejects missing or empty

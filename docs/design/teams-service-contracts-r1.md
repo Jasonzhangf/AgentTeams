@@ -20,10 +20,14 @@ owner 定义，注入 authenticate(credential) 与允许的目标策略，不导
 directory 的 subscribe=true 后推送 relay.changed；revision 由服务端单调递增。
 publish declaration revision 必须递增；routes 仅是候选，不是可达证明。
 
-relay.connect 核对双方身份、scope、generation 后签发有限有效期 RelayGrant。
+relay.connect 核对双方身份、scope、generation 后签发带 admission deadline 的 RelayGrant。
 发起端收到 relay.grant，对端收到 relay.offer；二者只有显式接受后才建立数据连接。
 两端分别在专用 WSS 数据连接握手鉴权，再发送 relay.open；均匹配 grant 后打开双工转发。
-grant 只绑定这一对连接，每端至多一条；过期、撤销、重连、未知 grant 明确拒绝。
+deadline 只约束两端完成 relay.open 的时间；任一未打开或只打开一侧的 grant 到期后明确
+拒绝并释放容量。两侧均打开后，grant 不再因 admission deadline 过期，并继续绑定原
+控制连接和 generation，直到任一侧数据/控制断开、generation 被替换、服务关闭或传输
+限额/错误撤销。grant 只绑定这一对连接，每端至多一条；重复、跨 scope、stale generation、
+撤销和未知 grant 明确拒绝。
 控制连接仍可发关闭/错误通知；数据连接打开后的帧是 opaque bytes，服务端只转发，
 不解析 Session/Work，也不从字节内容推断路由。任一侧退出关闭对应数据通道。
 N1 可选择成熟 ws 包；根依赖变更由主任务处理。限制帧大小/连接数须显式配置和报错。

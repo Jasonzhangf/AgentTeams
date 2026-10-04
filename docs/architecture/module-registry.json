@@ -103,6 +103,7 @@
       "module_id": "server",
       "owner": "server",
       "status": "partial",
+      "note": "Owns Relay link admission/lifetime and closeGrant revocation. 4e04166 is bound to docs/design/teams-relay-link-lifetime.md and docs/design/dagpipe/graphs/relay-link.graph.json under required teams-relay-link-topology. Static governance bindings are not Work SDK Operators. The opened pair continues after the admission deadline while original controls/generations stay current; server/relay.spec.ts covers the public TLS/WSS behavior. Public deployment remains deferred.",
       "owned_paths": [
         "server/**"
       ],

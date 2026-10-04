@@ -1,0 +1,33 @@
+{
+  "id": "agentteams.relay-link",
+  "version": "1",
+  "inputs": [{ "id": "relay.link.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-link", "operator": "teams.authorize-relay-link", "operator_version": "1",
+      "inputs": ["relay.link.intent"], "output": { "id": "relay.link.admitted", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "pair-data-sides", "operator": "teams.pair-relay-data", "operator_version": "1",
+      "inputs": ["relay.link.admitted"], "output": { "id": "relay.link.channel", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "forward-link", "operator": "teams.forward-relay-link", "operator_version": "1",
+      "inputs": ["relay.link.channel"], "output": { "id": "relay.link.outcome", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    },
+    {
+      "id": "release-link", "operator": "teams.release-relay-link", "operator_version": "1",
+      "inputs": ["relay.link.outcome"], "output": { "id": "relay.link.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] }, "output_selector": { "include": [], "exclude": [] }, "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-link", "to": "pair-data-sides", "arc_id": "relay.link.admitted" },
+    { "from": "pair-data-sides", "to": "forward-link", "arc_id": "relay.link.channel" },
+    { "from": "forward-link", "to": "release-link", "arc_id": "relay.link.outcome" }
+  ],
+  "outputs": ["relay.link.receipt"]
+}

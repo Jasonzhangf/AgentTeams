@@ -79,6 +79,10 @@ interface RelayGrantState {
   targetRequestId?: string
 }
 
+function grantOpened(stored: RelayGrantState): boolean {
+  return stored.sourceData?.opened === true && stored.targetData?.opened === true
+}
+
 class RelayFailure extends Error {
   constructor(
     readonly code: ServiceErrorCode,
@@ -539,7 +543,7 @@ class RelayServerImpl implements RelayServer {
     if (state.closed || !open(state.socket)) throw new RelayFailure('UNAVAILABLE', 'connection closed during authentication', requestId, true)
     const stored = this.grants.get(grantId)
     if (!stored) throw new RelayFailure('NOT_FOUND', 'relay grant is unknown', requestId, true)
-    if (Date.parse(stored.grant.expiresAt) <= this.now().getTime()) {
+    if (!grantOpened(stored) && Date.parse(stored.grant.expiresAt) <= this.now().getTime()) {
       this.closeGrant(grantId, { code: 'UNAVAILABLE', message: 'relay grant expired' })
       throw new RelayFailure('UNAVAILABLE', 'relay grant expired', requestId, true)
     }
@@ -571,6 +575,7 @@ class RelayServerImpl implements RelayServer {
     if (!stored.sourceData || !stored.targetData) return
     stored.sourceData.opened = true
     stored.targetData.opened = true
+    clearTimeout(stored.expiryTimer)
     this.send(stored.sourceData.socket, { kind: 'relay.opened', requestId: stored.sourceRequestId ?? requestId, grantId })
     this.send(stored.targetData.socket, { kind: 'relay.opened', requestId: stored.targetRequestId ?? requestId, grantId })
   }
@@ -593,10 +598,6 @@ class RelayServerImpl implements RelayServer {
     const grant = state.grantId ? this.grants.get(state.grantId) : undefined
     if (!grant || !state.side) {
       throw new RelayFailure('UNAVAILABLE', 'relay data connection is no longer active', undefined, true)
-    }
-    if (Date.parse(grant.grant.expiresAt) <= this.now().getTime()) {
-      this.closeGrant(grant.grant.grantId, { code: 'UNAVAILABLE', message: 'relay grant expired' })
-      throw new RelayFailure('UNAVAILABLE', 'relay grant expired', undefined, true)
     }
     const target = state.side === 'source' ? grant.targetData : grant.sourceData
     if (!target || !target.opened || !open(target.socket)) {
@@ -674,13 +675,16 @@ class RelayServerImpl implements RelayServer {
   private purgeExpiredGrants(): void {
     const now = this.now().getTime()
     for (const [grantId, stored] of this.grants) {
-      if (Date.parse(stored.grant.expiresAt) <= now) this.closeGrant(grantId, { code: 'UNAVAILABLE', message: 'relay grant expired' })
+      if (!grantOpened(stored) && Date.parse(stored.grant.expiresAt) <= now) {
+        this.closeGrant(grantId, { code: 'UNAVAILABLE', message: 'relay grant expired' })
+      }
     }
   }
 
   private expireGrant(grantId: string): void {
     const stored = this.grants.get(grantId)
     if (!stored) return
+    if (grantOpened(stored)) return
     const remainingMs = Date.parse(stored.grant.expiresAt) - this.now().getTime()
     if (remainingMs > 0) {
       stored.expiryTimer = setTimeout(() => this.expireGrant(grantId), remainingMs)
