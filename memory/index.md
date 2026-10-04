@@ -315,6 +315,10 @@ _Empty._
 - tags: `ai-reviewed`, `blocked`, `direct`, `human-unreviewed`, `nat`, `relay`
 - details: [L2/relay-public-nat-blocked-20260906.md](L2/relay-public-nat-blocked-20260906.md)
 
+### SDK consumer canonical baseline restored, product MVP remains open
+- tags: `ai-reviewed`, `governance`, `human-unreviewed`, `sdk-consumer`
+- details: [L2/sdk-consumer-restored-20261004.md](L2/sdk-consumer-restored-20261004.md)
+
 ### SDK pin/transition installed prerequisites delivered; Teams product still pending
 - tags: `ai-reviewed`, `human-unreviewed`, `local-mvp`, `sdk`
 - details: [L2/sdk-installed-prerequisites-20261004.md](L2/sdk-installed-prerequisites-20261004.md)

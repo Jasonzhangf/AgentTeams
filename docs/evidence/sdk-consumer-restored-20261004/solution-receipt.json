@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-04T07:34:47.448070+00:00",
+  "issue": "852c3ac",
+  "rootCause": "project retained SDK0.1.6 pin/resources and historical witness after canonical SDK moved to0.1.0010; official pin initially blocked by upstream migration/transition defects, now upstream fixes installed",
+  "fixCommit": "26f12ec3ea92175cc8d9900459450490b4a71745",
+  "review": "852c3ac-sdk-consumer-final-20261004-r1/PASS/exit0",
+  "integrationReceipt": "integration-receipt.json",
+  "remoteMain": "26f12ec3ea92175cc8d9900459450490b4a71745",
+  "validation": "official canonical pin-lock/verify/reentry/realcompile; source/maps/history protected; SHA-bound integration and mainverify command_ok/development_ready true",
+  "cleanupReceipt": "cleanup-receipt.json",
+  "remainingBoundary": "delivery_verified false by source-only scope; U7 reentry and user MVP still pending",
+  "P2": "six pin-authorized rootcontracts explained in integrationreceipt; own124M+2.4M ignoredcache removed with normal threeworktree cleanup"
+}

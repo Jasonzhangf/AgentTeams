@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-04T07:32:49.280148+00:00",
+  "unit": "852c3ac",
+  "owner": "Desktop primary/scoped child",
+  "state": "owned-resource-cleanup-verified",
+  "worktrees": [
+    "/Volumes/Intel/playground/agentteams/852c3ac-sdk-consumer-refresh-20261004",
+    "/Volumes/Intel/playground/agentteams/852c3ac-sdk-consumer-final-20261004",
+    "/Volumes/Intel/playground/agentteams/852c3ac-sdk-integration-20261004"
+  ],
+  "pathAbsent": true,
+  "gitListAbsent": true,
+  "branchesDeleted": true,
+  "originalAuthor": "terminal0/turn.completed; HOME removed recorded separately",
+  "reviewProcesses": [
+    {
+      "pid": 40885,
+      "state": "ESRCH"
+    },
+    {
+      "pid": 40839,
+      "state": "ESRCH"
+    }
+  ],
+  "evidence": "all authored changed files inclraw receipts committedremote26f12ec; frozenpatch7fa6b069 retained; review-r1 directory exported externally",
+  "discardMethod": "original author patch byteexact7fa6b069; exact reverse to clean baseline, then normal gitworktreeremove withoutforce",
+  "ignoredArtifacts": "original own124M node_modules/2.4M generated plus installed SDK witnesses removed with ownworktree lifecycle; no alternate recursive cache deletion",
+  "retainedObligations": "none for852c3ac; otherworkers/candidates/securityretention untouched"
+}

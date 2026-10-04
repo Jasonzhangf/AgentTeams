@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-04T07:31:48.933040+00:00",
+  "unit": "852c3ac",
+  "state": "reviewed/integrated/remote-pushed/mainline-verified/owned-cleanup-complete",
+  "candidate": "26f12ec3ea92175cc8d9900459450490b4a71745",
+  "integration": "26f12ec3ea92175cc8d9900459450490b4a71745",
+  "main": "26f12ec3ea92175cc8d9900459450490b4a71745",
+  "remoteMain": "26f12ec3ea92175cc8d9900459450490b4a71745",
+  "tree": "3b90a5747066a47574d407ca2940d110ca7d4c62",
+  "review": "852c3ac-sdk-consumer-final-20261004-r1/PASS/exit0",
+  "integrationReceipt": "integration-receipt.json",
+  "mainlineVerify": "main-verify.json",
+  "mainClean": true,
+  "rootPinAttempt": "exit1 MAIN_WORKTREE_MUTATION_FORBIDDEN; no mutation/no bypass; supported pin performed in isolated integration tree, notrequired on main",
+  "boundary": "command_ok/development_ready only; not product delivery_verified; no runtime code change",
+  "cleanup": "cleanup-receipt.json"
+}

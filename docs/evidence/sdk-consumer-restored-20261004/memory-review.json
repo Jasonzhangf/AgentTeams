@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-04T07:46:39.330197+00:00",
+  "reviewer": "desktop-primary",
+  "status": "PASS",
+  "scope": "SDK consumer restoration facts only",
+  "evidence": [
+    "delivery-receipt.json",
+    "exact-review-consumption-receipt.json",
+    "remote-main.txt",
+    "cleanup-receipt.json",
+    "bug-after-close.txt.gz"
+  ],
+  "sourceMain": "26f12ec3ea92175cc8d9900459450490b4a71745",
+  "tags": [
+    "ai-reviewed",
+    "human-unreviewed"
+  ],
+  "limitations": "development admission restored; delivery_verified=false. Not Teams runtime, installed Work, final package or final MVP acceptance."
+}
