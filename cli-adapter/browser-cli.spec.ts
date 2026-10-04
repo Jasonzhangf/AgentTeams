@@ -127,7 +127,7 @@ describe('Camo browser CLI adapter', () => {
       ['daemon', 'start', '--profile', 'teams-test'],
       ['start', '--profile', 'teams-test', '--headless'],
       ['goto', 'https://example.com', '--profile', 'teams-test', '--waitUntil', 'domcontentloaded'],
-      ['snapshot', '--format', 'json', '--profile', 'teams-test'],
+      ['snapshot', '--format', 'json', '--raw-dom', '--profile', 'teams-test'],
       ['stop', '--profile', 'teams-test'],
     ])
     expect(scripted.calls.every(call => call.shell === false)).toBe(true)

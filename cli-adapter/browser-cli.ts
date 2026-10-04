@@ -229,7 +229,7 @@ export function createBrowserCliAdapter(options: BrowserCliAdapterOptions): Brow
           throw new CliAdapterError({ code: 'INVALID_INPUT', message: 'snapshot received the wrong operation' })
         }
         const current = activeContextMatches(contextState, validateContextId(request.contextId))
-        const snapshot = await run(['snapshot', '--format', 'json', '--profile', current.profile])
+        const snapshot = await run(['snapshot', '--format', 'json', '--raw-dom', '--profile', current.profile])
         if (snapshot.object.profile !== current.profile || !isRecord(snapshot.object.data)) {
           throw new CliAdapterError({ code: 'PROTOCOL_ERROR', message: 'snapshot did not return the requested profile' })
         }
