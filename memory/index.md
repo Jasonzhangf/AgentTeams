@@ -167,6 +167,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `relay`, `stale-peer`
 - details: [L2/f66499f-stale-peer-20260912.md](L2/f66499f-stale-peer-20260912.md)
 
+### SDK source gate dependency delivered; consumer installation pending
+- tags: `ai-reviewed`, `dependency-source-delivery`, `human-unreviewed`
+- details: [L2/f7bf558-sdk-source-delivery-20261004.md](L2/f7bf558-sdk-source-delivery-20261004.md)
+
 ### 第一波PR7合并和主集成树关闭回执
 - tags: `ai-reviewed`, `cleanup`, `delivery`, `human-unreviewed`
 - details: [L2/first-wave-delivery-20260906.md](L2/first-wave-delivery-20260906.md)
