@@ -323,6 +323,10 @@ _Empty._
 - tags: `ai-reviewed`, `human-unreviewed`, `live-replay`, `managed-opencode`, `rcc`
 - details: [L2/rcc-managed-live-20260906.md](L2/rcc-managed-live-20260906.md)
 
+### v3 bridge Relay ownership fix delivered; MVP remains open
+- tags: `6569e3e`, `ai-reviewed`, `config`, `human-unreviewed`, `relay-ownership`
+- details: [L2/relay-ownership-delivery-20261004.md](L2/relay-ownership-delivery-20261004.md)
+
 ### 公网 relay 与 NAT direct 证据阻断
 - tags: `ai-reviewed`, `blocked`, `direct`, `human-unreviewed`, `nat`, `relay`
 - details: [L2/relay-public-nat-blocked-20260906.md](L2/relay-public-nat-blocked-20260906.md)
