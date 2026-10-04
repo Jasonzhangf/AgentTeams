@@ -1,0 +1,10 @@
+# Current frozen document hashes; generated after final notes.
+e2da74aba2e295635cccd6b10bf8405af1a84ce8f2957bc278a7010615f5548e  docs/design/teams-local-work-entry-v1.md
+3d710dfdaab9726675a0932dded8fbd07c68c601bd27095d1517ede581856502  docs/design/teams-local-config-v3.md
+1f196e88302ce676fcdaa8b568aa0ce19c98b54396ccbf0d63eaf67e4c3400b9  docs/evidence/4b6c377-u4-public-work-design-20261003/run-notes.md
+0b0ea2f0feebba509a34c8b3e5ebbbcfd2d60fd4e67c5b24a399915e8dbfe00f  docs/evidence/4b6c377-u4-public-work-design-20261003/dependency-bindings.txt
+# Historical provenance only - author revision before review P1 corrections.
+# These do not bind current candidate bytes and must not be used for review/acceptance.
+# 2f733b4205ba41bb64e8ff4f3907aca8c50c429e1c2381f8ee73ecde971dce9d  docs/design/teams-local-work-entry-v1.md
+# 7c598af749908a56b0389aa4cc89934b1d1871f3e72a062544fc792ec69e61c8  docs/evidence/4b6c377-u4-public-work-design-20261003/run-notes.md
+# f4ba692d719b5073427438ea009852e7767221f2411146a510b476ffb5a912e3  docs/evidence/4b6c377-u4-public-work-design-20261003/dependency-bindings.txt

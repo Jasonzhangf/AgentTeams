@@ -34,7 +34,7 @@
 | 文件 | 角色 | 内容 |
 |---|---|---|
 | `~/.agentteams/config.toml` | 用户意图唯一编辑源 | bridge 开关；独立 Agent 身份、运行意图、服务/连接；Console 可选身份；LLM provider 实例；manual model 条目；Agent/Model binding。不存 PID、generation、系统选择的动态端口、child JSON、accepted/effective revision |
-| `~/.agentteams/internal.toml` | 系统配置和运行状态，用户不编辑 | 机器 sourceRevision/sourceHash、runtime generated bridge/Console/daemon child projection、launcher/daemon PID/generation/startToken/state/error、每 daemon `acceptedRevision/acceptedSourceRevision/acceptedSourceHash` 与 accepted snapshot、每 daemon discovered catalog observation、每 daemon effectiveRevision/lastApplyError/applyState、`[migration]` pending/崩溃恢复记录 |
+| `~/.agentteams/internal.toml` | 系统配置和运行状态，用户不编辑 | 机器 sourceRevision/sourceHash、runtime generated bridge/Console/daemon child projection、launcher/daemon PID/generation/startToken/state/error、U4 `[workControl]` socket/ref、每 daemon `acceptedRevision/acceptedSourceRevision/acceptedSourceHash` 与 accepted snapshot、每 daemon discovered catalog observation、每 daemon effectiveRevision/lastApplyError/applyState、`[migration]` pending/崩溃恢复记录 |
 | `.internal/projections/*.json` | 派生 child 配置 | 只从 `internal.toml` 生成，不反向读回，用户不维护 |
 
 不采用“config.toml 改写 internal、internal 再反写 config.toml”的双向同步。`config.toml` 只承载用户意图；`internal.toml` 只承载运行真相；child JSON 只是投影。对于 provider/model，用户/Console 提交的 provider、manual model、binding 先由唯一 TOML 事务 owner 写入 `config.toml` 并形成新的 machine sourceRevision/sourceHash；目标 daemon 的 accepted snapshot 只有在它接受该 source 时才写入自己的 `[configRuntime.accepted.<agentId>]`。`accepted snapshot` 是该 daemon 已接受事实的可恢复绑定，不是第二个用户编辑源。机器 source 变化只改变 source 身份，不自动改变任何 daemon 的 accepted；catalog observation 只写目标 daemon 的 accepted observation，不写 `config.toml`、不推进 machine source、不推进 accepted revision。
@@ -263,6 +263,11 @@ startToken = "uuid"
 pid = 12347
 generation = 4
 state = "online"
+
+[workControl]
+socketPath = "<absolute .agentteams/.internal/work-control.sock path>"
+launcherGeneration = 4
+launcherStartToken = "uuid"
 ```
 
 设计决策：
@@ -273,6 +278,35 @@ state = "online"
 - `applyState='uncertain'` 是同一 config-owned internal fence，覆盖 apply replacement 与 active Session/use exchange 的未确认责任；volatile `uncertain` 与 durable `applyState` 不得分叉。`clean` 只表示没有未确认的 in-flight/unknown apply/use，不等于最后一次操作一定成功；显式失败可以同时保留旧 `effectiveRevision` 与结构化 `lastApplyError`。只有 `effectiveRevision == acceptedRevision` 且不存在 `lastApplyError` 才表示该 accepted revision 已对齐。
 - `[migration]` 是 `internal.toml` 内唯一 pending migration 真源，先于 `config.toml` 替换写入；它保存候选源、输入 hash 与逐 daemon 恢复数据，恢复时不重新枚举 legacy 输入。
 - `[launcher]`/`[daemon.*]` 继续保存 lifecycle 字段。任何 config store 写入 internal 必须读改写，保留原 launcher/daemon 字段，不得整体覆盖。
+- `[workControl]` 是 U4 要求的 internal v2 socket-lifecycle 扩展，字段和生命周期由本节附录冻结。它只在 launcher socket 存在时出现；不保存 Work 业务、receipt、provider grant、agent identity 或第二个 socket token。
+
+### 4.1 U4 必需控制资源附录（U2 owner，当前未实现）
+
+当前 U2 tree `7cf779b6f2f6b729ce9eac60377927b974848a1a` 没有 `[workControl]` schema、parser、serializer 或 public primitive；本节是设计契约，不能写成已存在接口。U4 只获本附录的编码前 owner 定义，实际 parser/serializer 文件修改仍是 U2 `runtime/local-config.ts` 的唯一 owner，并在实现 U4 seam 时顺序分配。
+
+```ts
+interface LocalInternalWorkControl {
+  readonly socketPath: string  // TOML string; absolute, exactly one entry
+  readonly launcherGeneration: number  // TOML integer; exact ref to [launcher].generation
+  readonly launcherStartToken: string  // TOML string; exact ref to [launcher].startToken
+}
+```
+
+固定路径：`socketPath = resolve(dirname(internalPath), '.internal', 'work-control.sock')`。`internal.toml` 与 socket 为 `0600`，`.internal/` 为 `0700`。`[launcher].generation/startToken` 是唯一 launcher lifecycle/start-ownership truth；`[workControl]` 只保存指向它们的 exact refs。U2 扩展 `LocalInternalConfig.workControl?: LocalInternalWorkControl`、closed parser 与 serializer，并新增同内部锁 primitive：
+
+```ts
+readLocalInternalWorkControl(path: string): Promise<LocalInternalWorkControl | undefined>
+writeLocalInternalWorkControl(
+  path: string,
+  value: LocalInternalWorkControl | undefined,
+): Promise<string>
+```
+
+`writeLocalInternalWorkControl()` 必须在既有 `withLocalInternalConfigLock()` 内完成全文件 read-modify-write 与 temp+rename，保留全部 `sourcePath/sourceRevision/sourceHash/configRuntime/launcher/bridge/console/consoleRuntime/daemon.*/migration`。`undefined` 是删除整表的唯一语义。U2 不启动 socket、不执行 Work、不分配 provider resource，也不新增 `[configuredWork]`。任何 internal v2 writer 不得整文件替换丢字段。
+
+launcher-only runtime owner 负责调用 primitive，并强制启动前 admission 顺序：取 `.launcher.lock`，在同 lock 写 exact `[workControl]`，bind/listen，回读校验 exact refs；全部成功后才可发布 `running`/admission。listener 创建失败必须关闭 socket 并通过 primitive 删除表项，不得接受请求。`stop` 与任何 terminal/error path 先停止 admission、关闭 socket，再在内部锁内删除 `[workControl]`，保留 `[launcher]` ownership 与其他 sections。未执行 socket lifecycle 的 U2 独立交付可以无此表；`status` 必须把它读作 absent，而不是推断 running。
+
+未来 public tests 覆盖：写入后 read-modify-write 保留 `configRuntime/launcher/daemon/consoleRuntime`；restart 后 exact refs 可恢复；`undefined` 删除整表；socket 文件/目录权限；listener failure 删除表项且无 request；stop 删除表项且保留 provider ledger；mismatched generation/startToken 显式拒绝。
 
 ## 5. `RuntimeConfigPersistence` 与同一 TOML 真源映射
 
@@ -571,7 +605,7 @@ U2 只定义/实现 config-owner startup/reconcile 端口和上述 persistence c
 已有 `withLocalInternalConfigLock` 已提供跨进程锁（PID stale 清理）。实现规则：
 
 - 低层持久化锁的唯一 owner 是 `RuntimeConfigStore` 的公开入口；`RuntimeConfigPersistence` 只提供 `*Unlocked` primitive，不获取锁，也不允许 async store 方法在 primitive 内重入。pure mutation 在一个短锁内完成 read-modify-write；capture/reconcile 操作只锁内做读取或 identity 复核与 observation 写入，锁在外部 I/O 前释放。
-- 所有写 `internal.toml` 的函数必须复用 `withLocalInternalConfigLock`：launcher state、daemon state、config store。existing configured-work 写路径在 U2 移交给 D3/U4 前不得新增独立锁；不得新增第二个 internal 锁文件。
+- 所有写 `internal.toml` 的函数必须复用 `withLocalInternalConfigLock`：launcher state、daemon state、config store。`[workControl]` primitive 也走同一锁；U4 launcher caller 不新建 TOML writer、lock 文件或直接 serializer。不得新增第二个 internal 锁文件。
 - `withLauncherStartLock` 保持 `.launcher.lock` 作为启动互斥；它和 internal lock 有明确顺序：launcher 先拿 launcher lock 再拿 internal lock。ConfigStore 只拿 internal lock，不反向拿 launcher lock，避免死锁。
 - 写 internal 时每次从磁盘重新读 `[launcher]`、`[daemon.*]` 的 PID/generation/startToken/state/config/projection，只更新自己拥有的 sections。现有 `loadLocalConfig` 的合并逻辑（[594-622](../../runtime/local-config.ts:594)）就是这个模式的模板；config store 沿用，不要把整个 internal 替换成只有 `[configRuntime]` 的版本。
 - 禁止嵌套获取同一 internal lock；`refresh/apply/startup/stop/closed` 等可能长期等待的外部工作不得在持锁期间执行。lock 超时按现有 5s 显式失败，不无限等待。
@@ -667,7 +701,8 @@ U2 核心待补（必须由 U2 config owner 实现；不得当作今天已存在
 - async `createRuntimeConfigStore(...)`：唯一 public lock owner；read 短锁 reload；pure mutation 单短锁；`refreshProviderModels`/`applyAcceptedConfig` 采用 capture -> unlocked external work -> reconcile，并同时校验 machine source identity 与目标 daemon accepted identity。
 - `admitMachineSource(internalPath, configText)`：`loadLocalConfig` 与 TOML persistence 共用的唯一机器 sourceRevision/sourceHash 分配实现；`saveMachineSourceUnlocked()` 是唯一 store mutation primitive 并调用它。
 - `acceptMachineSourceUnlocked(agentId, ...)`：目标 daemon 唯一 accepted snapshot 写入实现；不自动为其他 daemon 接受。
-- `loadLocalConfig` 对 `version = 3` 的 parser/compiler，以及 internal `version = 2` + root source identity、`[configRuntime.accepted.*]`、`[configRuntime.effective.*]`、`[configRuntime.catalogs.*]`、`[migration]` pending phases。
+- `loadLocalConfig` 对 `version = 3` 的 parser/compiler，以及 internal `version = 2` + root source identity、`[configRuntime.accepted.*]`、`[configRuntime.effective.*]`、`[configRuntime.catalogs.*]`、`[workControl]` exact-ref socket table、`[migration]` pending phases。
+- `readLocalInternalWorkControl/writeLocalInternalWorkControl`：U4 唯一 socket-lifecycle internal adapter，见 §4.1。
 - `resumePendingMigration()`：`loadLocalConfig` 在普通解析前调用的唯一恢复实现；按 `[migration]` 的 `candidateConfigText`/`intendedSourceHash`/`recovery` 补齐 `prepared -> config-committed -> verified`，不重新枚举 legacy 输入。
 - v3 `[agents.*.identity/runtime/services/connect]` 到现有 `AgentDeclaration` + `AgentProcessConfig` 的 compiler；U2 只编译/校验并投影，不在本单元实现 U3 adapter schema 或 U4 Work。
 - `projectLocalChildConfigs` 新增 console/opencode projection；它仍只从 internal 投影。
@@ -697,12 +732,12 @@ U2 核心待补（必须由 U2 config owner 实现；不得当作今天已存在
 |---|---|---|---|
 | U1 packaging/install | U1 | `config.toml` v3 字段需求和系统生成路径契约 | tarball、assets 安装、CLI 默认模板 |
 | U3 capability executor | U3 | 保存 `services/operations/resources` 简化意图并校验引用 | 把 operation 编译成真实 adapter schema、执行能力、资源账本 |
-| U4 按需 Work | U4 | 删除 v2 `connect.workId/requestId/payload` 配置化入口的契约；不得写 U2 配置接缝 | CLI `work`、新请求 identity、Work result、configured startup replay |
+| U4 按需 Work | U4 | 删除 v2 `connect.workId/requestId/payload` 配置化入口；按 §4.1 只调用 U2 `[workControl]` primitive 并拥有 launcher socket lifecycle | CLI `work`、新请求 identity、Work result、configured startup replay |
 | U5 Console 用户入口 | U5 | 生成 internal console projection 的字段契约；消费 typed `applyState` readback | Console HTTP/UI、浏览器入口、`runtime/console-process.ts` 消费接线 |
 | U6 Session/OpenCode | U6 | 与 U2 共享 `createManagedConfigOwner.recover()` 这一 single-owner proposal；消费 durable `applyState` fence | Session send/cancel、OpenCode runtime 接线、managed child 生命周期；不新增第二 manager 或 Session readiness 替代 config fence |
 | U7 blackbox driver | U7 | BB02/BB08/BB10 的输入、断言和证据字段 | driver 实现、最终安装包回放 |
 
-U2 的实现范围是 `runtime/local-config.ts`、`runtime/process-config.ts`、`config/runtime-config.ts`、`runtime/console-config.ts`、`runtime/agent-process.ts` 的配置接缝、`control-protocol/console-api.ts`/`console-wire.ts` 的 config projection typed 字段/parser、`runtime/managed-config-owner.ts` 的 config-owner semantics，以及上列真实调用者测试。`runtime/managed-config-owner.ts` 是 U2 的 single owner：`recover()` 及 uncertainty persistence caller 由 U2 定义/实现，U6 只在同一实例上消费 `recover()`/readiness，不另建 manager、不复制 fence 或持久化 caller。U4/U6 在 U2 接缝冻结前禁止写这些文件；`cli/**`、`agent/**`、`console-host/**`、`ui/**` 的其他行为不归 U2。
+U2 的实现范围是 `runtime/local-config.ts`、`runtime/process-config.ts`、`config/runtime-config.ts`、`runtime/console-config.ts`、`runtime/agent-process.ts` 的配置接缝、`control-protocol/console-api.ts`/`console-wire.ts` 的 config projection typed 字段/parser、`runtime/managed-config-owner.ts` 的 config-owner semantics，以及上列真实调用者测试。`runtime/managed-config-owner.ts` 是 U2 的 single owner：`recover()` 及 uncertainty persistence caller 由 U2 定义/实现，U6 只在同一实例上消费 `recover()`/readiness，不另建 manager、不复制 fence 或持久化 caller。U4 只按 §4.1 调用 `[workControl]` primitive，不直接写这些文件；U6 在 U2 接缝冻结前不写这些文件；`cli/**`、`agent/**`、`console-host/**`、`ui/**` 的其他行为不归 U2。
 
 ## 12. 验收设计
 
@@ -885,5 +920,6 @@ typed 字段与终点：
 - CLI v3 默认模板、legacy Console 路径参数和真实 blackbox driver 是跨界依赖；driver 待 U7 实装，未实现前不得写入通过证据。
 - 当前 v2 `config.toml` 没有 legacy Console 文件指针；若集成 owner 不提供显式迁移输入，Console 迁移明确为“不适用并保持 disabled”，不得扫描目录猜文件。
 - U4 按需 Work、U6 Session/cancel 不归 U2；U2 只保证 v3 不再配置 `workId/requestId/payload`，startup orchestration 的删除与实际接缝归 D3/U4，并在 U2 配置接缝冻结后再由对应 owner 扩展。
+- U4 `[workControl]` parser/serializer/lock primitive 仍由 U2 顺序实现；launcher socket runtime 归 U4。当前均为设计契约，未合并、未安装。
 - 未确认旧 JSON 已被 v3 readback 等价验证前，旧文件不删除；删除动作留 U2 实现验证后显式执行。
 - 本文档是 design candidate；只有独立 design review PASS、实现红测/黑盒/U7 driver 可用后，才可称 U2 完成。

@@ -1,0 +1,43 @@
+# U4 公开 Work 入口设计 — 输入依赖绑定（非已接受 commit）
+generated: 2026-10-03
+base_branch: codex/u4-public-work-design-20261003
+base_head: b969e9740704977326c5054fb3afbeab8d523e36
+base_tree: b6464bbec1804ea0e3e58b0a955a4547586bb267
+
+[u2-config-candidate]
+status: NOT_MERGED_NOT_INSTALLED
+worktree: /Volumes/Intel/playground/agentteams/u2-config-impl-20261003
+head: b969e9740704977326c5054fb3afbeab8d523e36
+tree: 7cf779b6f2f6b729ce9eac60377927b974848a1a
+staged: true
+source_hashes: docs/evidence/776fcad-u2-config-impl-20261003/source-hashes.txt (21 entries, unchanged from author terminal tree 62499fe2)
+contract: agents.<id>.connect = {targetAgentId, capabilityId, capabilityVersion, operation, demands}; no workId/requestId/payload
+work_control: u2 final design addendum declares current tree lacks [workControl]; U2 owns internal.toml schema/parser/serializer/locked read-modify-write; U4 owns launcher socket lifecycle and calls U2 readLocalInternalWorkControl/writeLocalInternalWorkControl; launcher.generation/startToken remain sole refs
+
+[d3-u4-runner-candidate]
+status: NOT_MERGED_NOT_INSTALLED
+worktree: /Volumes/Intel/playground/agentteams/d3-u4-work-20261003
+head: de099b79f153e6fd220b98d5ee89f4777b7cfb53
+tree: c8ec9ba3d97d922f6c13262009aa71295cd0075c
+host_ts_sha256: 5ba2d5252e45003de041cb7612ca25d97b0b6f62b10a805dd998d24286a7658d
+protocol_ts_sha256: 48e17c494159934bfec251c6c198244ba0c879a1fcc7556e50d08112910e8d68
+build_mjs_sha256: a29b65fff239b87b49eae92b79537344fc222623327970eb198ef06e206182c9
+runner_rs_sha256: eeaf9bf2fad8f2434f92e2699abeede498bd91bba62106c15b90529adfe3a165
+runner_binary_sha256: ba59a2fde088fe6f96ab94e281ea08cea34d808ec6ea5336ef9ea659dca1934d
+sdk: pipeline_runtime@0.1.1
+graph_agent_work_sha256: 868eaca31896dff5d260fe0a5d87a8d1c0f005f7a378a7703f747fdda4a3f974
+graph_work_query_sha256: 9903e27c0833c11aee9bdb2803e530386d59cb64eff9c3bbdf90cdf90ca26bf0
+author_evidence: docs/evidence/4b6c377-d3-u4-20261003/results/d3-u4-work-results.json (10/10 socket harness cases, author only)
+
+[base-source-hashes]
+cli/agentteams.mjs: 65ac16b3f47b29b7687a874052cafe99f0e90781f0543321335936baedaa78fa
+runtime/local-process.ts: 56cbb7285fc81a2cdf6647ee1c2528d731e3e15fa655402e62ac8f5db8d47de7
+runtime/agent-process.ts: 355bb0f5f6cea2be7a45bacdf444935f13d17387d853ff125021cb9acfc5cc92
+runtime/local-supervisor.ts: 1e77d552f07601b4487d466389be376f70265402f908c1c0d2bf3daf83868380
+docs/design/dagpipe/graphs/agent-work.graph.json: 868eaca31896dff5d260fe0a5d87a8d1c0f005f7a378a7703f747fdda4a3f974
+docs/design/dagpipe/graphs/work-query.graph.json: 9903e27c0833c11aee9bdb2803e530386d59cb64eff9c3bbdf90cdf90ca26bf0
+
+[integration-conditions]
+- freeze U2 connect contract + U2 [workControl] parser/serializer + D3 host/protocol + U1 pack manifest into one candidate tree before implementation
+- independent design review PASS before product code
+- no product install/restart/admission is claimed by this phase
