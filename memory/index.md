@@ -387,6 +387,10 @@ _Empty._
 - tags: `agentteams`, `ai-reviewed`, `config`, `design`, `human-unreviewed`
 - details: [L2/u2-config-design-20261003.md](L2/u2-config-design-20261003.md)
 
+### U4 DAGpipe Work library delivered; installed user Work still pending
+- tags: `ai-reviewed`, `dagpipe`, `human-unreviewed`, `local-mvp`, `source-library-delivery`
+- details: [L2/u4-dagpipe-library-delivery-20261004.md](L2/u4-dagpipe-library-delivery-20261004.md)
+
 ### Local Work public entry design admitted; implementation pending
 - tags: `ai-reviewed`, `design-only`, `human-unreviewed`, `local-mvp`
 - details: [L2/u4-public-work-entry-design-5debd37.md](L2/u4-public-work-entry-design-5debd37.md)
