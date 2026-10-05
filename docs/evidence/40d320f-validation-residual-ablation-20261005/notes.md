@@ -24,11 +24,15 @@ DOM 证据使用真正的 Chromium headless shell；系统 Chrome 在 child sand
 
 review r1 后的追加修改只改 evidence notes、verification-map 措辞与 SDK module
 registry 的退役 glob；未触达 runtime、测试、依赖、构建脚本或产物输入形状。
-交付候选在 review 后重跑精确候选验证，结果与精确身份见外部 receipt：
+交付候选在 review 后重跑精确候选验证；精确身份（head/base commit）与全部执行
+计数只在外部 receipt 中记录，本文档不复制这些易变数字：
 `$HOME/.codex/task-evidence/agentteams/receipts/40d320f-validation-residual-ablation-20261005/exact-candidate-verify.json`。
-该 receipt 的 `candidate.head_commit` / `candidate.base_commit` 绑定被 review 的
-精确提交，并记录全量回归为 exit 0、80 个 test file（134 个 suite）、
-576/576 tests、0 failed、0 pending，官方 appsdk verify exit 0。
+该 receipt 绑定被 review 的精确提交，含全量回归与官方 appsdk verify 的 exit、
+数量、日志路径和文件哈希，是本单元计数的唯一真源。
+
+`.appsdk/maps/module-registry.json` 的 `owned_paths` 已在本候选移除退役的
+`dsh-adapter/**`；候选提交与集成基线上均已核对 `dsh-adapter` 在 `.appsdk/`
+下零引用，且源码目录不存在。
 
 此前的 575 PASS/1FAIL 是 c520894 修复落地前的 baseline 失败（local-two-agent
 ENOTEMPTY），已由 c520894 独立修复并合入 main；本消融不混入该修复、不跳过、
