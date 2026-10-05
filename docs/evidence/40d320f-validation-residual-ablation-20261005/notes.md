@@ -21,7 +21,7 @@ DOM 证据使用真正的 Chromium headless shell；系统 Chrome 在 child sand
 中失败，未以源码断言代替 DOM。父任务实际默认 Chrome 回归也通过该用例。
 
 候选 66cc94d52d7eceef42248a426485d325fd19e6da 的宿主全量回归通过：
-exit 0，80/80 test files、576/576 tests、0 failed、0 pending。
+exit 0，80 个 test file（134 个 suite）、576/576 tests、0 failed、0 pending。
 该候选只包含消融代码与失效路径删除。
 
 review r1 之后追加 commit dd52602234c0a77d578e68cc95490039793a22ee，只改
