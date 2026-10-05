@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { projectLocalChildConfigs, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalLauncherOwnership, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
+import { projectLocalChildConfigs, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, writeLocalInternalState, writeLocalLauncherOwnership, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
 
 export interface LocalDaemonIdentityProjection {
   readonly hostId: string
@@ -345,7 +345,23 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       if (config.internalPath !== undefined) {
         let failed = hadFailure || lifecycle === 'failed' || failures.length > 0
         const persisted: Record<string, LocalInternalDaemonState> = Object.fromEntries([...states.entries()].map(([id, state]) => [id, { ...state, state: failed ? 'failed' : 'stopped' as const }]))
-        try { await writeLocalInternalState(config.internalPath, persisted) } catch (error) { failures.push(error); failed = true }
+        // Daemon terminal records and the launcher terminal record share one
+        // transactional write. A partial publication could otherwise leave a
+        // durable successful launcher state behind a failed daemon set.
+        let terminalWriteSucceeded = true
+        try {
+          await writeLocalInternalRecoveryState(config.internalPath, persisted, {
+            pid: process.pid,
+            generation: lifecycleGeneration,
+            startToken,
+            state: failed ? 'failed' : 'stopped',
+            ...(failed && lastFailure !== undefined ? { error: lastFailure.message } : {}),
+          })
+        } catch (error) {
+          terminalWriteSucceeded = false
+          failures.push(error)
+        }
+        if (failures.length > 0) lastFailure = new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
         try {
           await writeLocalDaemonStatusProjection(config.internalPath, {
             version: 1,
@@ -357,20 +373,25 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
               state: failed ? 'failed' as const : 'stopped' as const,
             }])),
           })
-        } catch (error) { failures.push(error); failed = true }
-        const cleanupError = failures.length > 0 ? new AggregateError(failures, 'local daemon cleanup remains unconfirmed') : undefined
-        if (cleanupError !== undefined) lastFailure = cleanupError
-        try {
-          await writeLocalInternalLauncherState(config.internalPath, {
-            pid: process.pid,
-            generation: lifecycleGeneration,
-            startToken,
-            state: failed ? 'failed' : 'stopped',
-            ...(failed && lastFailure !== undefined ? { error: lastFailure.message } : {}),
-          })
         } catch (error) {
+          terminalWriteSucceeded = false
           failures.push(error)
           lastFailure = new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
+        }
+        if (!terminalWriteSucceeded) {
+          // The terminal publication is unconfirmed, so the durable launcher
+          // state must not keep claiming a clean stop.
+          const forced = lastFailure ?? new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
+          lastFailure = forced
+          try {
+            await writeLocalInternalRecoveryState(config.internalPath, persisted, {
+              pid: process.pid,
+              generation: lifecycleGeneration,
+              startToken,
+              state: 'failed',
+              error: forced.message,
+            })
+          } catch { /* The unconfirmed terminal publication stays the public failure. */ }
         }
       }
       if (failures.length > 0) throw lastFailure instanceof Error ? lastFailure : new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
