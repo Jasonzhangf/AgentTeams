@@ -4,6 +4,26 @@
 状态：D1/D2、U1/U3/U4/U5 的相应窄设计、U2 配置产品和 U1 基础包回执修复已交付。`6569e3e` 配置修复、`9262a49` SDK canonical records 身份修复已关闭；Relay `4e04166` 源码、U7 `3fd009a` 成功阶段持久化组件、Camo snapshot `f9c181f` 已经独立 review、实际提交验证、合入并推送。`f9c181f` 已关闭；Relay 慢浏览器验收与最终 BB13 仍 open。当前 U4 SDK 库因独立 r4 的两个 P1 退回修复；U3 在独立组合树回放完整真实浏览器 Work。十四份静态 graph 不代表安装后 DAGpipe Work；完整安装包、U5/U6 产品和同包 BB01–BB14 仍未交付。最新阶段记忆为 L2、ai-reviewed/human-unreviewed，官方 verify 99 nodes/source-consistent；不把组件、基础安装或模型配置当作完整 MVP。
 本文件接替旧 G0/L1-L5 的本地产品任务排序；交付质量仍引用 `teams-long-running-delivery.md`、`development-governance.md` 和当前 AGENTS。不是新 goal/subscription。
 
+## 迭代节奏与落地执行
+
+本轮按“先交付可用主线，再按后续增量收口”的节奏执行。每轮结束必须能说明用户实际多得到一个什么能力；不能把静态设计、组件测试、源码测试或基础包安装写成用户能力。
+
+| 轮次 | 目标 | 范围 | 验证证据 | 停止条件 |
+|---|---|---|---|---|
+| I0 清理与稳定 | 保留已完成成果，移除阻塞集成的小残差 | 40d320f 消融、c520894 stop publication、必要的宿主环境补验；不启动 U4/U5/U6 大实现 | 受影响 focused tests、host real replay、exact review PASS、main push receipt、own cleanup | 不改变用户可见 Work 行为；只关闭已知阻断或回归 |
+| I1 本地协作可用 | 普通用户安装后提交新 Work 并获得业务结果 | U3 真实服务声明、U4 DAGpipe Work open/request/close/query、安装入口、U1 必要打包修正 | 从安装副本执行 BB02/04/05/07/08/11；两次新请求返回不同真实结果；get-only 不重复执行；restart/stale 拒绝明确 | 安装后的真实 Work 可用，且不依赖 Console 数据转发 |
+| I2 观察与能力可用 | 可选 Console 发现、观察、配置，Agent Work 在 Console 关闭后仍成立 | U5 Console lifecycle、UI 发现/配置/授权、provider/model 配置入口、U3 browser capacity | 真实浏览器打开安装包 Console；BB03/06/09；关闭 Console 后新的 Agent Work 成功 | 观察面可选，不进入 Agent-to-Agent 数据路径 |
+| I3 模型会话可用 | Console→Agent→OpenCode 的真实 Session | U6 Session 设计 PASS 后实现消息、工具、权限、取消与 passive 拒绝 | 真实消息往返、tool dispatch/result、ask 正反、cancel、restart 后配置保留；BB10/12 | passive Agent 无 silent support；配置失败无 automatic failover |
+| I4 最终同包与重入验收 | 全部用户能力来自同一安装包，并可安全重入 | U7 统一 driver、BB01–BB14、final package、milestone review、阶段记忆、资源清理 | 同一安装包的 BB01–BB14；stage 失效/恢复矩阵；main remote receipt；L2 记忆；own cleanup complete | 只有 I1–I3 和 U7 最终黑盒齐备后才关闭 MVP |
+
+执行顺序遵守以下约束：
+
+1. 同一候选同一时间只合入一个交付单元；runtime、config、package、SDK graph/manifest 等共享 owner 不并发写。
+2. 每个单元只在作者完成 focused、真实入口和适用黑盒后进入 exact review；review 只判断架构与未发现的实质回归。
+3. 每轮结束后把已通过事实写入阶段记忆和节点 receipt；未完成项标为 `candidate`、`awaiting-integration`、`cleanup-pending` 或 `blocked`。
+4. I1 之前不把 U5/U6 当作本地协作主线的必要前置；I2/I3 之后不把 UI/Session 设计或源码证据写成已安装能力。
+5. I4 必须从最终同一安装包回放 BB01–BB14；分阶段证据只在输入仍有效时复用，不作为最终完成替代。
+
 ## 唯一交付目标
 
 普通用户安装一个 AgentTeams 包，只编辑 `~/.agentteams/config.toml` 即可启动本地 bridge、一个 provider 和一个 receiver；选择提供/使用的真实服务，反复提交新的请求并获得业务结果。可选 Console 能发现它们、观察协作、配置 provider/model，并通过有 Session 能力的 Agent 使用受管 OpenCode。关闭 Console 不终止 Agent Work；停止/重启保持配置，旧代次拒绝，资源有明确收口。
