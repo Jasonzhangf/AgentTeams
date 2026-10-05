@@ -1,24 +1,29 @@
 # 40d320f 校验残留消融
 
 Owner：Desktop 主任务；实施者：独立 GCM worker。
-候选已组合 origin/main 7739da440b52c7335a6662e32c0bccb29b6acb7d。
-状态：candidate / awaiting-baseline-repair；尚未 review、merge、push 或关闭。
+候选已组合 origin/main 7739da440b52c7335a6662e32c0bccb29b6acb7d，
+随后 rebase 至集成基线 6252db854c2bd8d63a100a051f76cfaf88fbbbe5。
+状态：candidate / awaiting-review。
 
 删除退役 DSH adapter、其专属测试及 separator 文本检查；移除 Vitest/module
 source/regression 的失效路径。该实现只被退役测试消费，不进入构建或安装包。
 删除 Agent 的 class/export-function 形式限制及 UI 旧文案、函数计数断言。
 保留跨 owner 导入、凭据、控制与业务分离、显式 action 和可访问性检查。
 SDK minimum_test_count=304 未调整，历史记录未重写。
-SDK module registry 中的旧 DSH 归属 glob 无消费者，待官方 map 刷新收口。
+SDK module registry 中的退役 DSH 归属 glob 已随本消融一并移除。
+separator 断言随退役 DSH adapter 整体消融；OpenCode 契约由
+opencode-adapter/tests/index.spec.ts 保留（PluginInput/Hooks、SDK info、
+notification projection），verification-map 不再声明已删除的 ClientContext/Slot
+负例。
 
 实施者：受影响68/68 PASS、typecheck0、既有交付图 validate0。
 DOM 证据使用真正的 Chromium headless shell；系统 Chrome 在 child sandbox
 中失败，未以源码断言代替 DOM。父任务实际默认 Chrome 回归也通过该用例。
 
-组合后首次全量553 PASS/23pending（package suite 初始化失败）；
-package 独立重放24/24 PASS；恢复全量575 PASS/1FAIL/0pending。
-当前失败是未修改的 local-two-agent 清理：ENOTEMPTY，最后留下 daemon-status.json。
-已按 c520894 独立建档、独立工作树诊断；不跳过、不混入本次消融、不声明全量 PASS。
+候选 66cc94d52d7eceef42248a426485d325fd19e6da 的宿主全量回归通过：
+exit 0，80/80 test files、576/576 tests、0 failed、0 pending。
+此前的 575 PASS/1FAIL 是 c520894 修复落地前的 baseline 失败（local-two-agent
+ENOTEMPTY），已由 c520894 独立修复；本消融不混入该修复、不跳过、不重写历史。
 
 原始笔记/失败报告/恢复报告及命令输出保存在本任务独占
 `$HOME/.codex/task-evidence/agentteams/receipts/40d320f-validation-residual-ablation-20261005/`；

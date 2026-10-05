@@ -333,8 +333,7 @@
         "session events resolve IDs from the SDK info shape",
         "permission.ask projects interactive notification identity",
         "event projection keeps session identity and notification kind only",
-        "question interaction is not fabricated when the current Hooks contract does not expose it",
-        "no ClientContext/Slot assumption"
+        "question interaction is not fabricated when the current Hooks contract does not expose it"
       ]
     },
     {
