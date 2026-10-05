@@ -16,9 +16,16 @@ import { createRelayConsoleClient } from './relay-console-client.ts'
 import { createConsoleHub } from './console-hub.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
 import { createConsoleHttpClient } from '../ui/teams-console/src/client/api.ts'
-import { startAgentProcess } from './agent-process.ts'
+import { loadAgentProcessConfig, startAgentProcess } from './agent-process.ts'
 import { createFileWorkStore, createWorkLedger, proposeWork, requestWork } from '../agent/work-resource.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
+import type { LocalServiceIntent } from './local-config.ts'
+import { buildRunner } from './dagpipe/build.mjs'
+import { runWorkExecution, type WorkCloseIntentControl, type WorkOpenIntentControl, type WorkRequestIntentControl } from './dagpipe/host.ts'
+
+const workOpenGraph = join(resolve(import.meta.dirname), '..', 'docs', 'design', 'dagpipe', 'graphs', 'work-open.graph.json')
+const workRequestGraph = join(resolve(import.meta.dirname), '..', 'docs', 'design', 'dagpipe', 'graphs', 'work-request.graph.json')
+const workCloseGraph = join(resolve(import.meta.dirname), '..', 'docs', 'design', 'dagpipe', 'graphs', 'work-close.graph.json')
 
 let directory: string
 let relay: RelayServer
@@ -69,6 +76,57 @@ function child(configPath: string, credential = 'Bearer provider', extraEnv: Nod
   return { process, ready, exited, output: () => output }
 }
 
+const searchService: LocalServiceIntent = {
+  capabilityId: 'file-search',
+  version: '1',
+  operations: ['search'],
+  resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }],
+}
+
+const browserService: LocalServiceIntent = {
+  capabilityId: 'browser',
+  version: '1',
+  operations: ['context.create', 'navigate', 'snapshot', 'context.destroy'],
+  resources: [
+    { resourceId: 'browser-context', capacity: 2, unit: 'context' },
+    { resourceId: 'browser-slot', capacity: 2, unit: 'slot' },
+  ],
+}
+
+const browserDemands = [
+  { resourceId: 'browser-context', amount: 1 },
+  { resourceId: 'browser-slot', amount: 1 },
+]
+
+it('accepts a complete legacy connect tuple and rejects partial tuples before publication', async () => {
+  const root = join(directory, 'connect-contract')
+  mkdirSync(join(root, 'files'), { recursive: true })
+  const base = {
+    version: 1, scopeId: 'scope', presenceIntervalMs: 1000,
+    identity: { hostId: 'consumer-host', machineId: 'test', agentId: 'consumer', accountId: 'account', agentKind: 'custom', label: 'Consumer' },
+    dataDirectory: './consumer-data', leasePort: await availablePort(),
+    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+    cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './files', profilePrefix: 'teams-connect' },
+    relay: { endpoint: 'wss://127.0.0.1:1', credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: join(directory, 'cert.pem'), connectTimeoutMs: 1000,
+      admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
+  }
+  const selection = { targetAgentId: 'provider', capabilityId: 'file-search', capabilityVersion: '1', operation: 'search', demands: [{ resourceId: 'search-slot', amount: 1 }] }
+  const write = (name: string, connect: unknown) => {
+    const path = join(root, name)
+    writeFileSync(path, JSON.stringify({ ...base, endpoint: { role: 'receiver', connect, services: [] } }))
+    return path
+  }
+  const env = { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer consumer' }
+  const complete = await loadAgentProcessConfig(write('complete.json',
+    { ...selection, workId: 'legacy-work', requestId: 'legacy-request', payload: { query: 'needle' } }), env)
+  expect(complete.endpoint?.connect).toMatchObject({ workId: 'legacy-work', requestId: 'legacy-request', payload: { query: 'needle' } })
+  const selectionOnly = await loadAgentProcessConfig(write('selection.json', selection), env)
+  expect(selectionOnly.endpoint?.connect?.workId).toBeUndefined()
+  await expect(loadAgentProcessConfig(write('work-only.json', { ...selection, workId: 'legacy-work' }), env)).rejects.toThrow(/workId, requestId and payload/)
+  await expect(loadAgentProcessConfig(write('payload-only.json', { ...selection, payload: { query: 'needle' } }), env)).rejects.toThrow(/workId, requestId and payload/)
+  await expect(loadAgentProcessConfig(write('pair-no-payload.json', { ...selection, workId: 'legacy-work', requestId: 'legacy-request' }), env)).rejects.toThrow(/workId, requestId and payload/)
+})
+
 it('loads control-protocol frames through a raw Node transform-types child', () => {
   const output = execFileSync(process.execPath, ['--experimental-transform-types', '--input-type=module', '-e', `
     import { parseTargetControlFrame } from './control-protocol/frames.ts'
@@ -94,6 +152,7 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
     scopeId: 'scope', dataDirectory: './data', leasePort: await availablePort(), presenceIntervalMs: 1000,
     policy: { revision: 1, allowedConsumers: ['consumer', 'initiator'], allowedManagers: ['consumer'] },
     cli: { camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './search', profilePrefix: 'teams-process-test' },
+    endpoint: { role: 'provider', services: [searchService] },
     relay: { endpoint: relay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: './cert.pem', connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
       requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 } }
   const path = join(directory, 'agent.json')
@@ -111,14 +170,14 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   expect(await secondProvider.ready).toMatchObject({ agentId: 'provider2', generation: 1 })
   const provider = (await consumer.directory(false)).find(peer => peer.declaration.identity.agentId === 'provider')!
   expect(provider.declaration.revision).toBe(2)
-  expect(provider.declaration.capabilities.map(item => item.capabilityId)).toContain('file-search')
+  expect(provider.declaration.capabilities.map(item => item.capabilityId)).toEqual(['file-search'])
   expect(provider.declaration.capabilities.find(item => item.capabilityId === 'file-search')!.operations[0]).toMatchObject({
     operation: 'search', inputSchema: { type: 'object', required: ['query'], additionalProperties: false,
       properties: { query: { type: 'string', minLength: 1 }, maxResults: { type: 'integer', minimum: 1 } } },
     outputSchema: { required: ['query', 'status', 'exitCode', 'matches', 'truncated', 'stdout', 'stderr'] },
   })
   const management = createRelayConsoleClient(consumer, 'provider', 2000)
-  expect((await management.readProjection()).agents[0]).toMatchObject({ agentId: 'provider', presence: 'online', capabilities: ['browser', 'file-search'] })
+  expect((await management.readProjection()).agents[0]).toMatchObject({ agentId: 'provider', presence: 'online', capabilities: ['file-search'] })
   expect(await management.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
   const directoryPeers = await consumer.directory(false)
   expect(directoryPeers.some(peer => peer.declaration.identity.agentId === 'consumer')).toBe(true)
@@ -149,8 +208,8 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
     expect(projected.agents).toHaveLength(2)
     expect(projected.agents.map(agent => agent.agentId)).toEqual(expect.arrayContaining(['provider', 'provider2']))
     expect(projected.agents.every(agent => agent.agentId !== 'consumer')).toBe(true)
-    expect(projected.agents.find(agent => agent.agentId === 'provider')).toMatchObject({ generation: 1, presence: 'online', capabilities: ['browser', 'file-search'] })
-    expect(projected.agents.find(agent => agent.agentId === 'provider2')).toMatchObject({ generation: 1, presence: 'online', capabilities: ['browser', 'file-search'] })
+    expect(projected.agents.find(agent => agent.agentId === 'provider')).toMatchObject({ generation: 1, presence: 'online', capabilities: ['file-search'] })
+    expect(projected.agents.find(agent => agent.agentId === 'provider2')).toMatchObject({ generation: 1, presence: 'online', capabilities: ['file-search'] })
     expect(projected.works).toEqual([])
     expect(projected.relations).toEqual([])
     expect(await httpClient.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
@@ -303,6 +362,7 @@ it('creates and closes an explicitly configured direct listener with the Agent p
     scopeId: 'scope', dataDirectory: './direct-process-data', leasePort: await availablePort(), presenceIntervalMs: 1000,
     policy: { revision: 1, allowedConsumers: ['consumer-a'], allowedManagers: [] },
     cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './search', profilePrefix: 'teams-direct-process' },
+    endpoint: { role: 'provider', services: [searchService] },
     relay: { endpoint: localRelay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: './cert.pem', connectTimeoutMs: 1000,
       admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536,
       maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
@@ -386,12 +446,14 @@ it('completes Agent-to-Agent Work between two independently started daemons with
   }
   writeFileSync(providerConfig, JSON.stringify({ ...base,
     identity: { hostId: 'provider-host-2', machineId: 'test', agentId: 'provider2', accountId: 'account', agentKind: 'custom', label: 'Provider 2' },
-    dataDirectory: './provider-data', leasePort: await availablePort(), policy: { revision: 1, allowedConsumers: ['consumer2'], allowedManagers: [] } }))
+    dataDirectory: './provider-data', leasePort: await availablePort(), policy: { revision: 1, allowedConsumers: ['consumer2'], allowedManagers: [] },
+    endpoint: { role: 'provider', services: [searchService] } }))
   writeFileSync(consumerConfig, JSON.stringify({ ...base,
     identity: { hostId: 'consumer-host-2', machineId: 'test', agentId: 'consumer2', accountId: 'account', agentKind: 'custom', label: 'Consumer 2' },
     dataDirectory: './consumer-data', leasePort: await availablePort(),
     cli: { ...base.cli, searchRoot: './consumer-files', profilePrefix: 'teams-cross-consumer' },
-    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] } }))
+    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+    endpoint: { role: 'provider', services: [] } }))
   mkdirSync(join(root, 'consumer-files'), { recursive: true })
   let provider: Awaited<ReturnType<typeof startAgentProcess>> | undefined
   let consumerAgent: Awaited<ReturnType<typeof startAgentProcess>> | undefined
@@ -408,11 +470,49 @@ it('completes Agent-to-Agent Work between two independently started daemons with
         demands: [{ resourceId: 'search-slot', amount: 1 }], payload: { query: 'direct daemon work needle' } } as const
       await expect(channel.request(request)).resolves.toMatchObject({ control: { state: 'succeeded' }, payload: { matches: [expect.objectContaining({ text: 'direct daemon work needle\n' })] } })
       await expect(channel.request(request)).resolves.toMatchObject({ control: { state: 'succeeded' } })
+      await expect(channel.request({ ...request, requestId: 'direct-no-match', payload: { query: 'absent needle' } })).resolves.toMatchObject({
+        control: { state: 'succeeded' }, payload: { status: 'no_match', matches: [] } })
+      await expect(channel.request({ ...request, requestId: 'direct-invalid', payload: {} })).resolves.toMatchObject({
+        control: { state: 'failed', error: { code: 'INVALID_INPUT' } } })
       await expect(channel.close('direct-work')).resolves.toMatchObject({ state: 'closed' })
     } finally { await channel.dispose() }
   } finally {
     await consumerAgent?.stop()
     await provider?.stop()
+  }
+}, 15000)
+
+it('boots a receiver-only Agent with declared services without local CLI initialization', async () => {
+  const root = join(directory, 'receiver-declared-services')
+  mkdirSync(root, { recursive: true })
+  const localRelay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
+    maxPayload: 65536, maxConnections: 4, maxGrants: 4, maxBufferedAmount: 65536, maxPendingMessages: 16, maxPendingBytes: 131072,
+    grantTtlMs: 5000, authenticate: credential => credential === 'Bearer receiver-only'
+      ? { accountId: 'account', scopeId: 'scope', agentId: 'receiver-only' } : null })
+  const configPath = join(root, 'receiver.json')
+  writeFileSync(configPath, JSON.stringify({
+    version: 1,
+    identity: { hostId: 'receiver-only-host', machineId: 'test', agentId: 'receiver-only', accountId: 'account', agentKind: 'custom', label: 'Receiver Only' },
+    scopeId: 'scope', dataDirectory: './receiver-data', leasePort: await availablePort(), presenceIntervalMs: 1000,
+    policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+    cli: { camoExecutable: '/missing/camo', searchExecutable: '/missing/rg', searchRoot: join(root, 'missing-root'), profilePrefix: 'teams-receiver-only' },
+    endpoint: {
+      role: 'receiver',
+      connect: { targetAgentId: 'provider', capabilityId: 'file-search', capabilityVersion: '1', operation: 'search', demands: [{ resourceId: 'search-slot', amount: 1 }] },
+      services: [searchService],
+    },
+    relay: { endpoint: localRelay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: join(directory, 'cert.pem'), connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
+      requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
+  }))
+  let receiver: Awaited<ReturnType<typeof startAgentProcess>> | undefined
+  try {
+    receiver = await startAgentProcess(configPath, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer receiver-only' })
+    const published = (await receiver.daemon.network.directory(false)).find(peer => peer.declaration.identity.agentId === 'receiver-only')
+    expect(published?.declaration.capabilities).toEqual([])
+    expect(receiver.statusProjection().capabilities).toEqual([])
+  } finally {
+    await receiver?.stop()
+    await localRelay.close()
   }
 }, 15000)
 
@@ -423,7 +523,7 @@ it('persists unknown state before refusing a restart with active Work', async ()
   const dataDirectory = join(root, 'data')
   const workFile = join(dataDirectory, 'work.json')
   const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg',
-    searchRoot: join(root, 'files'), profilePrefix: 'teams-recovery' })
+    searchRoot: join(root, 'files'), profilePrefix: 'teams-recovery', services: [searchService] })
   const provider = { accountId: 'account', scopeId: 'scope', agentId: 'provider2' }
   const consumer = { accountId: 'account', scopeId: 'scope', agentId: 'consumer2' }
   const ledger = createWorkLedger({ provider, generation: 1, capabilities: executor.capabilities, store: createFileWorkStore(workFile) })
@@ -442,6 +542,7 @@ it('persists unknown state before refusing a restart with active Work', async ()
     scopeId: provider.scopeId, dataDirectory, leasePort: await availablePort(), presenceIntervalMs: 1000,
     policy: { revision: 1, allowedConsumers: [consumer.agentId], allowedManagers: [] },
     cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: join(root, 'files'), profilePrefix: 'teams-recovery' },
+    endpoint: { role: 'provider', services: [searchService] },
     relay: { endpoint: relay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: join(directory, 'cert.pem'), connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
       requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 } }))
   const restarted = child(configPath, 'Bearer provider2')
@@ -466,6 +567,7 @@ it('recovers a stale work lock only after the previous daemon lease is reacquire
     scopeId: 'scope', dataDirectory, leasePort, presenceIntervalMs: 1000,
     policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
     cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: root, profilePrefix: 'teams-stale-lock' },
+    endpoint: { role: 'provider', services: [searchService] },
     relay: { endpoint: relay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: join(directory, 'cert.pem'), connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
       requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 } }))
   const process = child(configPath, 'Bearer stale-lock-agent')
@@ -475,3 +577,259 @@ it('recovers a stale work lock only after the previous daemon lease is reacquire
   expect((await process.exited).code).toBe(0)
   expect(existsSync(join(dataDirectory, 'runtime-owner.json'))).toBe(false)
 }, 15000)
+
+it('runs real persistent Camo browser Work through current SDK graphs and restores capacity', async () => {
+  const root = join(directory, 'camo-dagpipe')
+  mkdirSync(join(root, 'files'), { recursive: true })
+  const page = createHttpServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'text/html' })
+    response.end('<html><body><h1>camo-needle-dagpipe</h1></body></html>')
+  })
+  await new Promise<void>(resolve => page.listen(0, '127.0.0.1', resolve))
+  const pageAddress = page.address()
+  if (!pageAddress || typeof pageAddress === 'string') throw new Error('page port missing')
+  const url = `http://127.0.0.1:${pageAddress.port}/`
+  const profilePrefix = `teams-camo-u3-dagpipe-${Date.now().toString(36)}`
+  const ids = ['camo-provider', 'camo-consumer-1', 'camo-consumer-2', 'camo-consumer-3']
+  const localRelay = await createRelayServer({
+    host: '127.0.0.1',
+    port: 0,
+    key: readFileSync(join(directory, 'key.pem')),
+    cert,
+    maxPayload: 65536,
+    maxConnections: 16,
+    maxGrants: 8,
+    maxBufferedAmount: 65536,
+    maxPendingMessages: 16,
+    maxPendingBytes: 131072,
+    grantTtlMs: 5000,
+    authenticate: credential => credential?.startsWith('Bearer ') && ids.includes(credential.slice(7))
+      ? { accountId: 'account', scopeId: 'scope', agentId: credential.slice(7) }
+      : null,
+  })
+  const relayBlock = {
+    endpoint: localRelay.url,
+    credentialEnv: 'TEAMS_AGENT_TEST_AUTH',
+    caFile: join(directory, 'cert.pem'),
+    connectTimeoutMs: 1000,
+    admissionTimeoutMs: 1000,
+    requestTimeoutMs: 60000,
+    maxMessageBytes: 65536,
+    maxBufferedBytes: 65536,
+    maxPendingFrames: 16,
+    maxPendingRequests: 8,
+    maxDataConnections: 8,
+  }
+  const providerConfig = join(root, 'provider.json')
+  writeFileSync(providerConfig, JSON.stringify({
+    version: 1,
+    scopeId: 'scope',
+    presenceIntervalMs: 1000,
+    identity: { hostId: 'camo-provider-host', machineId: 'test', agentId: 'camo-provider', accountId: 'account', agentKind: 'custom', label: 'Camo Provider' },
+    dataDirectory: './provider-data',
+    leasePort: await availablePort(),
+    policy: { revision: 1, allowedConsumers: ['camo-consumer-1', 'camo-consumer-2', 'camo-consumer-3'], allowedManagers: [] },
+    cli: { camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './files', profilePrefix },
+    endpoint: { role: 'provider', services: [browserService] },
+    relay: relayBlock,
+  }))
+  const consumerConfig = async (id: string) => {
+    const path = join(root, `${id}.json`)
+    writeFileSync(path, JSON.stringify({
+      version: 1,
+      scopeId: 'scope',
+      presenceIntervalMs: 1000,
+      identity: { hostId: `${id}-host`, machineId: 'test', agentId: id, accountId: 'account', agentKind: 'custom', label: id },
+      dataDirectory: `./${id}-data`,
+      leasePort: await availablePort(),
+      policy: { revision: 1, allowedConsumers: [], allowedManagers: [] },
+      cli: { camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: './files', profilePrefix: `teams-${id}` },
+      endpoint: { role: 'provider', services: [] },
+      relay: relayBlock,
+    }))
+    return path
+  }
+  const built = await buildRunner()
+  const runnerPath = built.runnerPath
+  const projectId = 'agentteams-u3-browser-dagpipe'
+  const generationPromise = (agent: Awaited<ReturnType<typeof startAgentProcess>>) => agent.daemon.network.generation
+  const openIntent = (agentId: string, targetGeneration: number, workId: string, requestId: string, business: unknown): WorkOpenIntentControl => ({
+    receiverAgentId: agentId,
+    targetAgentId: 'camo-provider',
+    targetGeneration,
+    serviceSelection: 'capability',
+    capabilityId: 'browser',
+    capabilityVersion: '1',
+    operation: 'context.create',
+    workId,
+    requestId,
+    policyRevision: 1,
+    demands: browserDemands,
+  })
+  const requestIntent = (agentId: string, targetGeneration: number, workId: string, requestId: string, operation: string, business: unknown): WorkRequestIntentControl => ({
+    receiverAgentId: agentId,
+    targetAgentId: 'camo-provider',
+    targetGeneration,
+    serviceSelection: 'capability',
+    capabilityId: 'browser',
+    capabilityVersion: '1',
+    operation,
+    workId,
+    requestId,
+    policyRevision: 1,
+    demands: browserDemands,
+  })
+  const closeIntent = (agentId: string, targetGeneration: number, workId: string): WorkCloseIntentControl => ({
+    receiverAgentId: agentId,
+    targetAgentId: 'camo-provider',
+    targetGeneration,
+    serviceSelection: 'capability',
+    capabilityId: 'browser',
+    capabilityVersion: '1',
+    operation: 'context.create',
+    workId,
+  })
+  const agents: Awaited<ReturnType<typeof startAgentProcess>>[] = []
+  const camoReceipts: Record<string, unknown> = {}
+  try {
+    const provider = await startAgentProcess(providerConfig, { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer camo-provider' })
+    agents.push(provider)
+    const targetGeneration = generationPromise(provider)
+    const consumerIds = ['camo-consumer-1', 'camo-consumer-2', 'camo-consumer-3']
+    const consumers: Awaited<ReturnType<typeof startAgentProcess>>[] = []
+    for (const id of consumerIds) consumers.push(await startAgentProcess(await consumerConfig(id), { ...process.env, TEAMS_AGENT_TEST_AUTH: `Bearer ${id}` }))
+    agents.push(...consumers)
+
+    const openWork = async (consumer: Awaited<ReturnType<typeof startAgentProcess>>, id: string, workId: string, requestId: string, business: unknown) => {
+      return runWorkExecution(consumer.consumerWork, {
+        runnerPath,
+        graphPath: workOpenGraph,
+        projectId,
+        executionId: `${id}-open`,
+        attemptId: '1',
+        intent: { control: openIntent(id, targetGeneration, workId, requestId, business), business },
+      })
+    }
+    const firstOpenStart = Date.now()
+    const first = await openWork(consumers[0], consumerIds[0], 'browser-work-1', 'browser-open-1', { initialUrl: url })
+    const firstContextId = (first.business as { contextId?: string } | undefined)?.contextId
+    expect(firstContextId).toMatch(/^browser-context-/)
+    expect(first.control).toMatchObject({ workClosure: 'retained', requestState: 'succeeded', providerAgentId: 'camo-provider', targetGeneration })
+    expect(first.cleanup).toEqual({ channelsOpened: 1, channelsDisposed: 1 })
+    const firstContextFingerprint = createHash('sha256').update(JSON.stringify(['camo-provider', 'browser-work-1'])).digest('hex')
+    const firstProfile = `${profilePrefix}-${firstContextFingerprint}`
+    camoReceipts['first-context'] = { contextId: firstContextId, profile: firstProfile }
+    const firstCreateMs = Date.now() - firstOpenStart
+    camoReceipts['first-open-ms'] = firstCreateMs
+
+    const second = await openWork(consumers[1], consumerIds[1], 'browser-work-2', 'browser-open-2', { initialUrl: url })
+    const secondContextId = (second.business as { contextId?: string } | undefined)?.contextId
+    expect(secondContextId).toMatch(/^browser-context-/)
+    expect(secondContextId).not.toBe(firstContextId)
+    expect(second.control).toMatchObject({ workClosure: 'retained', requestState: 'succeeded' })
+    camoReceipts['second-context'] = secondContextId
+
+    const third = await openWork(consumers[2], consumerIds[2], 'browser-work-3', 'browser-open-3', { initialUrl: url })
+    expect(third.control).toMatchObject({ requestState: 'failed', workClosure: 'retained' })
+    expect(third.business).toBeUndefined()
+    camoReceipts['third-denial'] = third.control
+
+    // The real create can exceed the default 5000 ms Relay admission deadline.
+    // If it did not, hold the admitted Work past that deadline before the next request.
+    if (firstCreateMs < 5200) await new Promise(resolveDelay => setTimeout(resolveDelay, 5200 - firstCreateMs))
+    camoReceipts['held-beyond-grant-deadline-ms'] = Math.max(firstCreateMs, 5200)
+
+    const navigate = async (consumer: Awaited<ReturnType<typeof startAgentProcess>>, id: string, workId: string, requestId: string, business: unknown) => {
+      return runWorkExecution(consumer.consumerWork, {
+        runnerPath,
+        graphPath: workRequestGraph,
+        projectId,
+        executionId: `${id}-${requestId}`,
+        attemptId: '1',
+        intent: { control: requestIntent(id, targetGeneration, workId, requestId, 'navigate', business), business },
+      })
+    }
+    const navigated = await navigate(consumers[0], consumerIds[0], 'browser-work-1', 'browser-nav-1', { contextId: firstContextId, url })
+    expect(navigated.control).toMatchObject({ requestState: 'succeeded', workClosure: 'retained' })
+    expect(navigated.business).toMatchObject({ contextId: firstContextId, navigated: true })
+
+    const snapshotted = await runWorkExecution(consumers[0].consumerWork, {
+      runnerPath,
+      graphPath: workRequestGraph,
+      projectId,
+      executionId: 'camo-consumer-1-snapshot',
+      attemptId: '1',
+      intent: { control: requestIntent(consumerIds[0], targetGeneration, 'browser-work-1', 'browser-snapshot-1', 'snapshot', { contextId: firstContextId }), business: { contextId: firstContextId } },
+    })
+    expect(snapshotted.control).toMatchObject({ requestState: 'succeeded', workClosure: 'retained' })
+    expect(snapshotted.business).toMatchObject({
+      contextId: firstContextId,
+      url,
+      html: '<html><head></head><body><h1>camo-needle-dagpipe</h1></body></html>',
+    })
+    expect(snapshotted.business.html).toEqual('<html><head></head><body><h1>camo-needle-dagpipe</h1></body></html>')
+    camoReceipts['snapshot'] = snapshotted.business
+
+    const destroyed = await runWorkExecution(consumers[0].consumerWork, {
+      runnerPath,
+      graphPath: workRequestGraph,
+      projectId,
+      executionId: 'camo-consumer-1-destroy',
+      attemptId: '1',
+      intent: { control: requestIntent(consumerIds[0], targetGeneration, 'browser-work-1', 'browser-destroy-1', 'context.destroy', { contextId: firstContextId }), business: { contextId: firstContextId } },
+    })
+    expect(destroyed.control).toMatchObject({ requestState: 'succeeded', workClosure: 'retained' })
+    expect(destroyed.business).toMatchObject({ contextId: firstContextId, profile: firstProfile, state: 'stopped' })
+    camoReceipts['destroy'] = destroyed.business
+
+    const closedFirst = await runWorkExecution(consumers[0].consumerWork, {
+      runnerPath,
+      graphPath: workCloseGraph,
+      projectId,
+      executionId: 'camo-consumer-1-close',
+      attemptId: '1',
+      intent: { control: closeIntent(consumerIds[0], targetGeneration, 'browser-work-1') },
+    })
+    expect(closedFirst.control).toMatchObject({ workClosure: 'closed' })
+    expect(closedFirst.control.requestState).toBeUndefined()
+    camoReceipts['first-close'] = closedFirst.control
+
+    const retriedThird = await runWorkExecution(consumers[2].consumerWork, {
+      runnerPath,
+      graphPath: workRequestGraph,
+      projectId,
+      executionId: 'camo-consumer-3-retry',
+      attemptId: '1',
+      intent: { control: requestIntent(consumerIds[2], targetGeneration, 'browser-work-3', 'browser-create-3-retry', 'context.create', { initialUrl: url }), business: { initialUrl: url } },
+    })
+    expect(retriedThird.control).toMatchObject({ requestState: 'succeeded', workClosure: 'retained' })
+    const retriedThirdContextId = (retriedThird.business as { contextId?: string } | undefined)?.contextId
+    expect(retriedThirdContextId).toMatch(/^browser-context-/)
+    expect(retriedThirdContextId).not.toBe(firstContextId)
+    expect(retriedThirdContextId).not.toBe(secondContextId)
+    camoReceipts['retried-third'] = retriedThird.control
+
+    const closedSecond = await runWorkExecution(consumers[1].consumerWork, {
+      runnerPath,
+      graphPath: workCloseGraph,
+      projectId,
+      executionId: 'camo-consumer-2-close',
+      attemptId: '1',
+      intent: { control: closeIntent(consumerIds[1], targetGeneration, 'browser-work-2') },
+    })
+    const closedThird = await runWorkExecution(consumers[2].consumerWork, {
+      runnerPath,
+      graphPath: workCloseGraph,
+      projectId,
+      executionId: 'camo-consumer-3-close',
+      attemptId: '1',
+      intent: { control: closeIntent(consumerIds[2], targetGeneration, 'browser-work-3') },
+    })
+    expect(closedSecond.control).toMatchObject({ workClosure: 'closed' })
+    expect(closedThird.control).toMatchObject({ workClosure: 'closed' })
+  } finally {
+    for (const agent of agents.reverse()) await agent.stop().catch(() => undefined)
+    await new Promise<void>(resolveClose => page.close(() => resolveClose()))
+    await localRelay.close()
+  }
+}, 300000)

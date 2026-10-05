@@ -73,10 +73,14 @@ it('replays a config-driven local Relay bridge across independent daemon process
   writeFileSync(providerConfig, JSON.stringify({ ...base,
     identity: { hostId: 'provider-host', machineId: 'local-machine', agentId: 'provider', accountId: 'local-account', agentKind: 'custom', label: 'Provider' },
     dataDirectory: providerData, leasePort: providerLeasePort, policy: { revision: 1, allowedConsumers: ['driver'], allowedManagers: ['console'] },
+    endpoint: { role: 'provider', services: [{ capabilityId: 'file-search', version: '1', operations: ['search'],
+      resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }] }] },
     relay: { ...base.relay, credentialEnv: 'TEAMS_PROVIDER_AUTH' } }))
   writeFileSync(consumerConfig, JSON.stringify({ ...base,
     identity: { hostId: 'consumer-host', machineId: 'local-machine', agentId: 'consumer', accountId: 'local-account', agentKind: 'custom', label: 'Consumer' },
     dataDirectory: consumerData, leasePort: consumerLeasePort, policy: { revision: 1, allowedConsumers: [], allowedManagers: ['console'] },
+    endpoint: { role: 'receiver', connect: { targetAgentId: 'provider', capabilityId: 'file-search', capabilityVersion: '1',
+      operation: 'search', demands: [{ resourceId: 'search-slot', amount: 1 }] }, services: [] },
     relay: { ...base.relay, credentialEnv: 'TEAMS_CONSUMER_AUTH' } }))
   writeFileSync(localConfigPath, `version = 1\n\n[relay]\nconfig = ${JSON.stringify(relayConfig)}\n\n[daemons.provider]\nconfig = ${JSON.stringify(providerConfig)}\n\n[daemons.consumer]\nconfig = ${JSON.stringify(consumerConfig)}\n`)
 

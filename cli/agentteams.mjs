@@ -295,32 +295,37 @@ async function defaultConfigText() {
 async function initCommand(configPath, configText, localConfig) {
   await localConfig.initializeLocalConfig(configPath, configText)
   return `initialized ${configPath}
-Edit config.toml, then run ${CLI_NAME} start, ${CLI_NAME} status, ${CLI_NAME} work, or ${CLI_NAME} stop.`
+Edit config.toml, then run ${CLI_NAME} start, ${CLI_NAME} status, or ${CLI_NAME} stop.`
 }
 
 export async function agentteamsCommand(argv = process.argv.slice(2), options = {}) {
   const parsed = parseArgs(argv, options)
   const configPath = parsed.configPath ?? defaultConfigPath(options.home)
   const env = localEnv(options.env)
-  const runtime = options.runtime ?? await defaultRuntime()
 
   if (parsed.command === 'init') {
+    const runtime = options.runtime ?? await defaultRuntime()
     const localConfig = runtime.localConfig ?? (await defaultRuntime()).localConfig
     return await initCommand(configPath, options.configText ?? await defaultConfigText(), localConfig)
   }
   if (parsed.command === 'start') {
+    const runtime = options.runtime ?? await defaultRuntime()
     const status = await runtime.startLocalProcess(configPath, { env, ...RUNTIME_CHILD_ENTRIES })
     return formatStatus('started', status)
   }
   if (parsed.command === 'status') {
+    const runtime = options.runtime ?? await defaultRuntime()
     const status = await runtime.statusLocalProcess(configPath)
     return formatStatus('status', status, true)
   }
   if (parsed.command === 'work') {
-    const result = await runtime.runLocalConfiguredWork(configPath, env, RUNTIME_CHILD_ENTRIES)
-    return `succeeded agent=${result.agentId} work=${result.workId} request=${result.requestId} state=${result.state}`
+    // The selection-only v3 connect carries no Work identity, so the public
+    // startup-receipt poll cannot start Work. Fail before launcher, socket or
+    // provider side effects until the U4 submit/query request entry exists.
+    throw new AgentTeamsCliError(`work is not implemented yet: no public new-request entry exists; ${CLI_NAME} work submit/query arrives with the U4 local-work seam`)
   }
   if (parsed.command === 'stop') {
+    const runtime = options.runtime ?? await defaultRuntime()
     const status = await runtime.stopLocalProcess(configPath, parsed.generation)
     return formatStatus('stopped', status)
   }

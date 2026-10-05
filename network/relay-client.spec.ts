@@ -308,7 +308,9 @@ it('executes a real CLI Work between registered daemons over Relay without a Con
   mkdirSync(searchRoot)
   writeFileSync(join(searchRoot, 'sample.txt'), 'remote work needle\n')
   const executor = createCliWorkExecutor({ searchRoot, profilePrefix: 'teams-network-work-test',
-    camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg' })
+    camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg',
+    services: [{ capabilityId: 'file-search', version: '1', operations: ['search'],
+      resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }] }] })
   const providerOptions = clientOptions('provider')
   let host!: ReturnType<typeof createWorkHost>
   const provider = await startAgentDaemon({ presenceIntervalMs: 1000, relay: {

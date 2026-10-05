@@ -167,7 +167,7 @@ async function startHarness(options: {
   writeFileSync(join(searchRoot, 'alpha.txt'), 'alpha marker 4b6c377\n')
   writeFileSync(join(searchRoot, 'beta.txt'), 'beta marker 4b6c377\n')
 
-  const relay = await createRelayServer({
+const relay = await createRelayServer({
     host: '127.0.0.1',
     port: 0,
     key,
@@ -187,8 +187,15 @@ async function startHarness(options: {
   const base = createCliWorkExecutor({
     searchRoot,
     profilePrefix: 'teams-d3-u4-work-test',
-    camoExecutable: '/opt/homebrew/bin/camo',
     searchExecutable: '/opt/homebrew/bin/rg',
+    services: [
+      {
+        capabilityId: 'file-search',
+        version: '1',
+        operations: ['search'],
+        resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }],
+      },
+    ],
   })
   let executed = 0
   const executor: CliWorkExecutor = {

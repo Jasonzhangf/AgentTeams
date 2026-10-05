@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -131,48 +130,17 @@ async function waitForProcessesGone(pids, timeoutMs = 2_000) {
   fail(`owned process cleanup is unconfirmed: ${alive.join(', ')}`)
 }
 
-async function selectOwnedPorts(count) {
-  const servers = []
-  try {
-    for (let index = 0; index < count; index += 1) {
-      const server = createServer()
-      await new Promise((resolveListen, rejectListen) => {
-        const failed = error => {
-          server.off('listening', ready)
-          rejectListen(error)
-        }
-        const ready = () => {
-          server.off('error', failed)
-          resolveListen()
-        }
-        server.once('error', failed)
-        server.once('listening', ready)
-        server.listen(0, '127.0.0.1')
-      })
-      servers.push(server)
-    }
-    const ports = servers.map(server => {
-      const address = server.address()
-      if (address === null || typeof address === 'string') fail('owned port selection returned no TCP address')
-      return address.port
-    })
-    if (ports.length !== count || new Set(ports).size !== count) fail('owned port selection returned duplicate ports')
-    return ports
-  } finally {
-    await Promise.all(servers.map(server => new Promise(resolveClose => server.close(() => resolveClose()))))
-  }
-}
-
 function parseCliStatus(stdout) {
   const state = /(?:^|\s)state=([^\s]+)/u.exec(stdout)?.[1]
   const generation = Number(/(?:^|\s)generation=(\d+)(?:\s|$)/u.exec(stdout)?.[1])
   const pid = Number(/(?:^|\s)pid=(\d+)(?:\s|$)/u.exec(stdout)?.[1])
-  const endpoints = [...stdout.matchAll(/endpoint=(\S+) identity=(\S+) role=(\S+) presence=(\S+) generation=(\d+) capabilities=/gu)].map(match => ({
+  const endpoints = [...stdout.matchAll(/endpoint=(\S+) identity=(\S+) role=(\S+) presence=(\S+) generation=(\d+) capabilities=(\S+)/gu)].map(match => ({
     agentId: match[1],
     identity: match[2],
     role: match[3],
     presence: match[4],
     generation: Number(match[5]),
+    capabilities: match[6] === '-' ? [] : match[6].split(','),
   }))
   return {
     state,
@@ -182,53 +150,60 @@ function parseCliStatus(stdout) {
   }
 }
 
-function fixtureRelayConfig(ports, configDirectory) {
-  return {
-    version: 1,
-    listen: { host: '127.0.0.1', port: ports.relay },
-    tls: { keyFile: join(configDirectory, 'relay-key.pem'), certFile: join(configDirectory, 'relay-cert.pem') },
-    limits: {
-      maxPayload: 65536,
-      maxConnections: 8,
-      maxGrants: 8,
-      maxBufferedAmount: 65536,
-      maxPendingMessages: 8,
-      maxPendingBytes: 131072,
-      grantTtlMs: 5000,
-    },
-    credentials: [
-      {
-        credentialEnv: 'AGENTTEAMS_PROVIDER_AUTH',
-        identity: { accountId: 'installed-local', scopeId: 'installed-local', agentId: 'installed-provider' },
-      },
-      {
-        credentialEnv: 'AGENTTEAMS_RECEIVER_AUTH',
-        identity: { accountId: 'installed-local', scopeId: 'installed-local', agentId: 'installed-receiver' },
-      },
-    ],
-  }
-}
+function fixtureConfigText(searchExecutable) {
+  return `version = 3
 
-function fixtureConfigText(ports, searchExecutable) {
-  const endpoint = (id, role, leasePort, connect = '') => `
-[endpoints.${id}]
+[bridge]
 enabled = true
-role = "${role}"
-identity = { hostId = "installed-local", machineId = "installed-smoke", agentId = "${id}", accountId = "installed-local", agentKind = "custom", label = "${role === 'provider' ? 'InstalledProvider' : 'InstalledReceiver'}" }
-scopeId = "installed-local"
-dataDirectory = "data/${id}"
-leasePort = ${leasePort}
-presenceIntervalMs = 500
-policy = { revision = 1, allowedConsumers = ${role === 'provider' ? '["installed-receiver"]' : '[]'}, allowedManagers = [] }
-cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(searchExecutable)}, searchRoot = "files", profilePrefix = "teams-installed-${id}" }
-relay = { endpoint = "wss://127.0.0.1:${ports.relay}", credentialEnv = "${role === 'provider' ? 'AGENTTEAMS_PROVIDER_AUTH' : 'AGENTTEAMS_RECEIVER_AUTH'}", caFile = "relay-cert.pem", connectTimeoutMs = 2000, admissionTimeoutMs = 2000, requestTimeoutMs = 5000, maxMessageBytes = 65536, maxBufferedBytes = 65536, maxPendingFrames = 8, maxPendingRequests = 4, maxDataConnections = 4 }
-${connect}`
-  return `version = 2
 
-[relay]
-config = "relay.json"
-${endpoint('installed-provider', 'provider', ports.providerLease)}
-${endpoint('installed-receiver', 'receiver', ports.receiverLease, `connect = { targetAgentId = "installed-provider", capabilityId = "file-search", capabilityVersion = "1", operation = "search", workId = "installed-search", requestId = "installed-search-1", demands = [{ resourceId = "search-slot", amount = 1 }], payload = { query = "installed" } }\n`)}`
+[agents.installed-provider]
+enabled = true
+role = "provider"
+label = "InstalledProvider"
+
+[agents.installed-provider.identity]
+hostId = "installed-local"
+machineId = "installed-smoke"
+accountId = "installed-local"
+agentKind = "custom"
+label = "InstalledProvider"
+
+[agents.installed-provider.runtime]
+scopeId = "installed-local"
+dataDirectory = "data/installed-provider"
+policy = { revision = 1, allowedConsumers = ["installed-receiver"], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(searchExecutable)}, searchRoot = "files", profilePrefix = "teams-installed-provider" }
+
+[agents.installed-provider.services.file-search]
+version = "1"
+operations = ["search"]
+resources = [{ resourceId = "search-slot", capacity = 2, unit = "slot" }]
+
+[agents.installed-receiver]
+enabled = true
+role = "receiver"
+label = "InstalledReceiver"
+
+[agents.installed-receiver.identity]
+hostId = "installed-local"
+machineId = "installed-smoke"
+accountId = "installed-local"
+agentKind = "custom"
+label = "InstalledReceiver"
+
+[agents.installed-receiver.runtime]
+scopeId = "installed-local"
+dataDirectory = "data/installed-receiver"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(searchExecutable)}, searchRoot = "files", profilePrefix = "teams-installed-receiver" }
+
+[agents.installed-receiver.connect]
+targetAgentId = "installed-provider"
+capabilityId = "file-search"
+capabilityVersion = "1"
+operation = "search"
+demands = [{ resourceId = "search-slot", amount = 1 }]
+`
 }
 
 function lifecycleState(configPath, installedRootReal) {
@@ -244,24 +219,39 @@ function lifecycleState(configPath, installedRootReal) {
     assert(record.generation === launcher.generation, `installed lifecycle ${id} generation does not match launcher`)
     return { id, pid: record.pid, entryPath: record.entryPath, generation: record.generation, startToken: record.startToken }
   })
+  const relayProjection = JSON.parse(internal.relay?.config ?? '')
+  assert(relayProjection?.listen?.port > 0 && Number.isSafeInteger(relayProjection.listen.port), 'installed lifecycle relay port is not a positive safe integer')
+  const daemonConfigs = Object.fromEntries(['installed-provider', 'installed-receiver'].map(id => {
+    const record = daemons?.[id]
+    assert(record?.config !== undefined, `installed lifecycle ${id} projection is missing`)
+    return [id, JSON.parse(record.config)]
+  }))
+  const ports = {
+    relay: relayProjection.listen.port,
+    'installed-provider': daemonConfigs['installed-provider'].leasePort,
+    'installed-receiver': daemonConfigs['installed-receiver'].leasePort,
+  }
+  for (const port of Object.values(ports)) {
+    assert(Number.isSafeInteger(port) && port > 0 && port <= 65535, `installed lifecycle port is invalid: ${port}`)
+  }
+  assert(new Set(Object.values(ports)).size === Object.keys(ports).length, 'installed lifecycle port allocation contains duplicates')
+  const services = Object.fromEntries(['installed-provider', 'installed-receiver'].map(id => [
+    id,
+    daemonConfigs[id].endpoint?.services ?? [],
+  ]))
   return {
     internalPath,
     launcher: { pid: launcher.pid, generation: launcher.generation, startToken: launcher.startToken },
     processes,
+    ports,
+    services,
   }
 }
 
-async function runInstalledLifecycle({ cli, cliEnv, configPath, relayPath, installedRootReal }) {
+async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootReal }) {
   const rg = (await run('which', ['rg'], { cwd: dirname(configPath), env: cliEnv })).stdout.trim()
   assert(rg.startsWith('/'), `owned rg executable is not absolute: ${rg}`)
-  const [relayPort, providerLeasePort, receiverLeasePort] = await selectOwnedPorts(3)
-  const ports = { relay: relayPort, providerLease: providerLeasePort, receiverLease: receiverLeasePort }
-  const configDirectory = dirname(configPath)
-  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
-    '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1',
-    '-keyout', join(configDirectory, 'relay-key.pem'), '-out', join(configDirectory, 'relay-cert.pem')], { stdio: 'ignore' })
-  writeFileSync(configPath, fixtureConfigText(ports, rg), { encoding: 'utf8', mode: 0o600 })
-  writeFileSync(relayPath, `${JSON.stringify(fixtureRelayConfig(ports, configDirectory), null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+  writeFileSync(configPath, fixtureConfigText(rg), { encoding: 'utf8', mode: 0o600 })
 
   let activeGeneration
   let lifecycle
@@ -276,6 +266,17 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, relayPath, insta
       `installed lifecycle directory is not online: ${startStatus.stdout.trim()}`)
     const startInternal = lifecycleState(configPath, installedRootReal)
     assert(startInternal.launcher.generation === startParsed.generation, 'installed lifecycle start generation is inconsistent')
+    const providerEndpoint = startParsed.endpoints.find(endpoint => endpoint.agentId === 'installed-provider')
+    const receiverEndpoint = startParsed.endpoints.find(endpoint => endpoint.agentId === 'installed-receiver')
+    assert(providerEndpoint !== undefined, 'installed lifecycle start did not publish the provider endpoint')
+    assert(receiverEndpoint !== undefined, 'installed lifecycle start did not publish the receiver endpoint')
+    assert(providerEndpoint.capabilities.some(capability => capability.startsWith('file-search@1:search[search-slot:2:slot]')),
+      `installed provider did not publish file-search from public status: ${startStatus.stdout.trim()}`)
+    assert(receiverEndpoint.capabilities.length === 0, `installed receiver must not publish capabilities: ${startStatus.stdout.trim()}`)
+    assert(startInternal.services['installed-provider'].some(service => service.capabilityId === 'file-search' && service.version === '1'
+      && service.operations.includes('search') && service.resources.some(resource => resource.resourceId === 'search-slot' && resource.capacity === 2 && resource.unit === 'slot')),
+      'installed internal daemon projection does not declare the expected file-search service')
+    assert(startInternal.services['installed-receiver'].length === 0, 'installed internal receiver projection must not declare services')
 
     const firstStop = await run(cli, ['stop', '--config', configPath, '--generation', String(activeGeneration)], { cwd: dirname(configPath), env: cliEnv })
     await waitForProcessesGone([startInternal.launcher.pid, ...startInternal.processes.map(process => process.pid)])
@@ -305,7 +306,7 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, relayPath, insta
 
     lifecycle = {
       status: 'passed',
-      fixture: { kind: 'v2', note: 'generated by the U1 smoke harness; not final user-TOML or U2 evidence', ports },
+      fixture: { kind: 'v3', note: 'installed v3 user-intent fixture compiled by the installed runtime; internal ports and declarations are read back from internal.toml', ports: startInternal.ports },
       start: { ...startParsed, ...startInternal, command: { stdout: start.stdout, stderr: start.stderr } },
       stop: { generation: startParsed.generation, stdout: firstStop.stdout, stderr: firstStop.stderr },
       restart: { ...restartParsed, ...restartInternal, command: { stdout: restart.stdout, stderr: restart.stderr } },
@@ -461,7 +462,12 @@ export async function runPackageUserSmoke(options = {}) {
     assert(installedBytes.sha256 === packContent.sha256,
       `installed content ${installedBytes.sha256} does not match staged pack content ${packContent.sha256}`)
 
-    const cliEnv = { ...process.env, HOME: testHome }
+    const cliEnv = {
+      ...process.env,
+      HOME: testHome,
+      AGENTTEAMS_INSTALLED_PROVIDER_AUTH: 'fixture-provider',
+      AGENTTEAMS_INSTALLED_RECEIVER_AUTH: 'fixture-receiver',
+    }
     const init = await run(cli, ['init'], { cwd: temporaryRoot, env: cliEnv })
     const status = await run(cli, ['status'], { cwd: temporaryRoot, env: cliEnv })
     const stop = await run(cli, ['stop'], { cwd: temporaryRoot, env: cliEnv })
@@ -502,12 +508,11 @@ export async function runPackageUserSmoke(options = {}) {
         cli,
         cliEnv,
         configPath: join(testHome, '.agentteams', 'config.toml'),
-        relayPath: join(testHome, '.agentteams', 'relay.json'),
         installedRootReal,
       })
       receipt.lifecycle_scope = {
         entrypoint: 'installed npm tarball CLI start/status/stop',
-        fixture: 'v2-test-config-generated-by-u1-smoke',
+        fixture: 'v3-user-intent-config-compiled-by-installed-runtime',
         final_user_config_evidence: false,
       }
     } else {

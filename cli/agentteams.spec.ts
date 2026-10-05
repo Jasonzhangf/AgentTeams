@@ -1,6 +1,7 @@
 import { createPrivateKey, X509Certificate } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { existsSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -115,7 +116,7 @@ describe('agentteams CLI', () => {
     }
   })
 
-  it('routes start/status/work/stop arguments to the runtime local launcher owner', async () => {
+  it('routes start/status/stop arguments to the runtime local launcher owner', async () => {
     const calls = []
     const configPath = '/tmp/agentteams-cli-config.toml'
     const runtime = {
@@ -131,32 +132,39 @@ describe('agentteams CLI', () => {
         calls.push({ kind: 'stop', path, generation })
         return { configPath: path, internalPath: '/tmp/internal.toml', generation, state: 'stopped' }
       },
-      runLocalConfiguredWork: async (path, env, options) => {
-        calls.push({ kind: 'work', path, env, options })
-        return { configPath: path, agentId: 'receiver', workId: 'configured-search', requestId: 'configured-search-1', state: 'succeeded' }
-      },
     }
 
     const env = {}
     expect(await agentteamsCommand(['start', '--config', configPath], { runtime, env })).toContain('state=running generation=6')
     expect(await agentteamsCommand(['status', '--config', configPath], { runtime })).toContain('state=running')
     expect(await agentteamsCommand(['stop', '--config', configPath, '--generation', '3'], { runtime })).toContain('state=stopped')
-    expect(await agentteamsCommand(['work', '--config', configPath], { runtime, env })).toContain('agent=receiver work=configured-search')
 
     expect(calls.map(call => [call.kind, call.path, call.generation])).toEqual([
       ['start', configPath, undefined],
       ['status', configPath, undefined],
       ['stop', configPath, 3],
-      ['work', configPath, undefined],
     ])
     expect(calls[0].options.env).toMatchObject({ AGENTTEAMS_PROVIDER_AUTH: 'local-provider', AGENTTEAMS_RECEIVER_AUTH: 'local-receiver' })
     expect(calls[0].options.relayEntry).toMatch(/relay-process\.js$/)
     expect(calls[0].options.agentEntry).toMatch(/agent-process\.js$/)
-    expect(calls[3].env).toMatchObject({ AGENTTEAMS_PROVIDER_AUTH: 'local-provider', AGENTTEAMS_RECEIVER_AUTH: 'local-receiver' })
-    expect(calls[3].options.relayEntry).toMatch(/relay-process\.js$/)
-    expect(calls[3].options.agentEntry).toMatch(/agent-process\.js$/)
-    expect(calls[0].options.relayEntry).toBe(calls[3].options.relayEntry)
-    expect(calls[0].options.agentEntry).toBe(calls[3].options.agentEntry)
+  })
+
+  it('rejects the public bare work command before any launcher, socket or provider side effect', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-work-blocked-'))
+    const configPath = '/tmp/agentteams-cli-work-blocked.toml'
+    const env = {}
+    const sideEffects: Array<readonly [string, unknown, unknown]> = []
+    const runtime = {
+      runLocalConfiguredWork: async (path, callEnv, options) => {
+        sideEffects.push(['runLocalConfiguredWork', [path, callEnv, options], undefined])
+        return { configPath: path, agentId: 'receiver', workId: 'configured-search', requestId: 'configured-search-1', state: 'succeeded' }
+      },
+    }
+    await expect(agentteamsCommand(['work', '--config', configPath], { runtime, env })).rejects.toThrow(
+      /work is not implemented yet: no public new-request entry exists/u,
+    )
+    expect(sideEffects).toEqual([])
+    await rm(home, { recursive: true, force: true })
   })
 
   it('formats the authoritative endpoint status projection without reconstructing it from config', async () => {
@@ -243,6 +251,34 @@ describe('agentteams CLI', () => {
       await rm(home, { recursive: true, force: true })
     }
   }, 60_000)
+
+  it('rejects the real outside-cwd public bare work entry with a nonzero exit and no launcher', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-work-entry-home-'))
+    const cwd = await mkdtemp(join(tmpdir(), 'agentteams-cli-work-entry-cwd-'))
+    const before = existsSync(join(home, '.agentteams')) ? readdirSync(join(home, '.agentteams')) : []
+    let code: number | undefined
+    let stderr = ''
+    try {
+      try {
+        await execFileAsync(process.execPath, [cliEntry, 'work'], {
+          cwd,
+          env: { ...process.env, HOME: home },
+        })
+      } catch (error) {
+        const failure = error as { code?: number; stderr?: string }
+        code = failure.code
+        stderr = failure.stderr ?? ''
+      }
+      expect(code).not.toBe(0)
+      expect(stderr).toContain('work is not implemented yet: no public new-request entry exists')
+      expect(stderr).toContain('U4 local-work seam')
+      const after = existsSync(join(home, '.agentteams')) ? readdirSync(join(home, '.agentteams')) : []
+      expect(after).toEqual(before)
+    } finally {
+      await rm(home, { recursive: true, force: true })
+      await rm(cwd, { recursive: true, force: true })
+    }
+  }, 30_000)
 
   it('surfaces explicit parsing and runtime errors', async () => {
     await expect(agentteamsCommand([])).rejects.toThrow(/usage:/i)

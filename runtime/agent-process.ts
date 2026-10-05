@@ -26,7 +26,7 @@ import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
 import { createDirectWssListener, type DirectWssListener } from '../network/direct-listener.ts'
 import { assertJsonValue } from '../control-protocol/json-value.ts'
 import type { JsonValue, ResourceDemand } from '../control-protocol/agent-services.ts'
-import { writeLocalInternalConfiguredWorkIfCurrent, type LocalLauncherControl } from './local-config.ts'
+import { writeLocalInternalConfiguredWorkIfCurrent, type LocalLauncherControl, type LocalServiceIntent } from './local-config.ts'
 import type { LocalDaemonEndpointProjection } from './local-supervisor.ts'
 
 export interface AgentConnectionIntent {
@@ -34,15 +34,16 @@ export interface AgentConnectionIntent {
   readonly capabilityId: string
   readonly capabilityVersion: string
   readonly operation: string
-  readonly workId: string
-  readonly requestId: string
+  readonly workId?: string
+  readonly requestId?: string
   readonly demands: readonly ResourceDemand[]
-  readonly payload: JsonValue
+  readonly payload?: JsonValue
 }
 
 export interface AgentEndpointConfig {
   readonly role: 'provider' | 'receiver' | 'hybrid'
   readonly connect?: AgentConnectionIntent
+  readonly services: readonly LocalServiceIntent[]
 }
 
 export interface AgentProcessConfig {
@@ -111,7 +112,7 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
   const directListener = input.directListener === undefined ? undefined : loadDirectListenerConfig(input.directListener, declaration, configPath, env)
   let endpoint: AgentEndpointConfig | undefined
   if (input.endpoint !== undefined) {
-    const endpointInput = object(input.endpoint, ['role', 'connect'], 'endpoint')
+    const endpointInput = object(input.endpoint, ['role', 'connect', 'services'], 'endpoint')
     if (endpointInput.role !== 'provider' && endpointInput.role !== 'receiver' && endpointInput.role !== 'hybrid') throw new RelayProtocolError('INVALID_INPUT', 'endpoint.role is invalid')
     let connect: AgentConnectionIntent | undefined
     if (endpointInput.connect !== undefined) {
@@ -122,14 +123,56 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
         const demand = object(item, ['resourceId', 'amount'], `endpoint.connect.demands[${index}]`)
         return { resourceId: text(demand.resourceId, `endpoint.connect.demands[${index}].resourceId`), amount: number(demand.amount, `endpoint.connect.demands[${index}].amount`) }
       })
-      if (!Object.hasOwn(connection, 'payload')) throw new RelayProtocolError('INVALID_INPUT', 'endpoint.connect.payload is required')
-      try { assertJsonValue(connection.payload, 'endpoint.connect.payload') }
-      catch (error) { throw new RelayProtocolError('INVALID_INPUT', error instanceof Error ? error.message : 'endpoint.connect.payload must contain only JSON values') }
-      connect = { targetAgentId: field('targetAgentId'), capabilityId: field('capabilityId'), capabilityVersion: field('capabilityVersion'), operation: field('operation'),
-        workId: field('workId'), requestId: field('requestId'), demands, payload: connection.payload as JsonValue }
+      const hasWorkId = connection.workId !== undefined
+      const hasRequestId = connection.requestId !== undefined
+      const hasPayload = connection.payload !== undefined
+      if (hasWorkId || hasRequestId || hasPayload) {
+        if (!hasWorkId || !hasRequestId || !hasPayload) {
+          throw new RelayProtocolError('INVALID_INPUT', 'endpoint.connect legacy Work requires workId, requestId and payload together')
+        }
+        try { assertJsonValue(connection.payload, 'endpoint.connect.payload') }
+        catch (error) { throw new RelayProtocolError('INVALID_INPUT', error instanceof Error ? error.message : 'endpoint.connect.payload must contain only JSON values') }
+      }
+      connect = {
+        targetAgentId: field('targetAgentId'),
+        capabilityId: field('capabilityId'),
+        capabilityVersion: field('capabilityVersion'),
+        operation: field('operation'),
+        demands,
+        ...(hasWorkId && hasRequestId && hasPayload
+          ? { workId: field('workId'), requestId: field('requestId'), payload: connection.payload as JsonValue }
+          : {}),
+      }
     }
     if ((endpointInput.role === 'receiver' || endpointInput.role === 'hybrid') && connect === undefined) throw new RelayProtocolError('INVALID_INPUT', 'receiver endpoint requires endpoint.connect')
-    endpoint = { role: endpointInput.role, ...(connect === undefined ? {} : { connect }) }
+    const services = endpointInput.services === undefined ? [] : (() => {
+      if (!Array.isArray(endpointInput.services)) throw new RelayProtocolError('INVALID_INPUT', 'endpoint.services must be an array')
+      return endpointInput.services.map((value, index) => {
+        const service = object(value, ['capabilityId', 'version', 'operations', 'resources'], `endpoint.services[${index}]`)
+        const operations = service.operations
+        if (!Array.isArray(operations) || operations.some(operation => typeof operation !== 'string' || operation.length === 0)) {
+          throw new RelayProtocolError('INVALID_INPUT', `endpoint.services[${index}].operations must be a string array`)
+        }
+        const resources = service.resources
+        if (!Array.isArray(resources) || resources.length === 0) throw new RelayProtocolError('INVALID_INPUT', `endpoint.services[${index}].resources must be a non-empty array`)
+        return {
+          capabilityId: text(service.capabilityId, `endpoint.services[${index}].capabilityId`),
+          version: text(service.version, `endpoint.services[${index}].version`),
+          operations: operations.map((operation, operationIndex) => text(operation, `endpoint.services[${index}].operations[${operationIndex}]`)),
+          resources: resources.map((resourceValue, resourceIndex) => {
+            const resource = object(resourceValue, ['resourceId', 'capacity', 'unit'], `endpoint.services[${index}].resources[${resourceIndex}]`)
+            const unit = resource.unit
+            if (unit !== 'slot' && unit !== 'context') throw new RelayProtocolError('INVALID_INPUT', `endpoint.services[${index}].resources[${resourceIndex}].unit is invalid`)
+            return {
+              resourceId: text(resource.resourceId, `endpoint.services[${index}].resources[${resourceIndex}].resourceId`),
+              capacity: number(resource.capacity, `endpoint.services[${index}].resources[${resourceIndex}].capacity`),
+              unit: unit as 'slot' | 'context',
+            }
+          }),
+        }
+      })
+    })()
+    endpoint = { role: endpointInput.role, ...(connect === undefined ? {} : { connect }), services }
   }
   return {
     declaration, dataDirectory: location(input.dataDirectory, 'dataDirectory'), leasePort: number(input.leasePort, 'leasePort', 65535),
@@ -202,6 +245,9 @@ export interface ConfiguredWorkReceipt {
 }
 
 export async function runConfiguredWork(client: AgentWorkClient, intent: AgentConnectionIntent, policyRevision: number): Promise<ConfiguredWorkReceipt> {
+  if (intent.workId === undefined || intent.requestId === undefined || intent.payload === undefined) {
+    throw new RelayProtocolError('INVALID_INPUT', 'configured Work requires explicit workId, requestId and payload')
+  }
   const target = await client.findProvider({ providerAgentId: intent.targetAgentId, capabilityId: intent.capabilityId, capabilityVersion: intent.capabilityVersion, operation: intent.operation })
   const channel = await client.open(target)
   try {
@@ -218,6 +264,9 @@ export async function runConfiguredWork(client: AgentWorkClient, intent: AgentCo
 }
 export async function startAgentProcess(configPath: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcess> {
   const config = await loadAgentProcessConfig(configPath, env)
+  const services = config.endpoint?.role === 'receiver' ? [] : config.endpoint?.services ?? []
+  const executor = createCliWorkExecutor({ services, ...config.cli })
+  const advertisedCapabilities = config.endpoint?.role === 'receiver' ? [] : executor.capabilities
   const ownership = await ownDataDirectory(config)
   const lease = ownership.server
   let daemon: AgentDaemon | undefined
@@ -229,8 +278,6 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   const ready = new Promise<void>((resolve, reject) => { readyResolve = resolve; readyReject = reject })
   void ready.catch(() => undefined) // Startup failure is also returned to the caller.
   try {
-    const executor = createCliWorkExecutor(config.cli)
-    const advertisedCapabilities = config.endpoint?.role === 'receiver' ? [] : executor.capabilities
     let host!: ReturnType<typeof createWorkHost>
     let ledger: WorkLedger | undefined
     const resolveCredentialValue = async (reference: string) => {
@@ -372,7 +419,15 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       scopeId: config.declaration.scopeId,
       agentId: config.declaration.identity.agentId,
     }, { timeoutMs: config.relay.requestTimeoutMs, maxPending: config.relay.maxPendingRequests })
-    const configuredWork = config.endpoint?.connect === undefined ? undefined : runConfiguredWork(consumerWork, config.endpoint.connect, config.policyRevision)
+    const configuredConnect = config.endpoint?.connect
+    const configuredWork = configuredConnect === undefined ||
+      configuredConnect.workId === undefined || configuredConnect.requestId === undefined || configuredConnect.payload === undefined
+      ? undefined
+      : runConfiguredWork(consumerWork, configuredConnect as AgentConnectionIntent & {
+          readonly workId: string
+          readonly requestId: string
+          readonly payload: JsonValue
+        }, config.policyRevision)
     readyResolve()
     const live = daemon
     let stopping: Promise<void> | undefined

@@ -35,11 +35,26 @@ const work: AgentWork = { workId: 'w', consumerAgentId: 'consumer', providerAgen
 const browserWork: AgentWork = { ...work, capabilityId: 'browser' }
 const heldBrowserContext: ResourceAllocation = { allocationId: 'browser-allocation', workId: 'w',
   resourceId: 'browser-context', amount: 1, scope: 'work', state: 'held' }
+const searchIntent = {
+  capabilityId: 'file-search',
+  version: '1',
+  operations: ['search'],
+  resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' as const }],
+}
+const browserIntent = {
+  capabilityId: 'browser',
+  version: '1',
+  operations: ['context.create', 'navigate', 'snapshot', 'context.destroy'],
+  resources: [
+    { resourceId: 'browser-context', capacity: 2, unit: 'context' as const },
+    { resourceId: 'browser-slot', capacity: 2, unit: 'slot' as const },
+  ],
+}
 
 it('runs real fixed-root search through provider admission and trusted completion', async () => {
   const root = fixture()
   const executor = createCliWorkExecutor({ camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg',
-    searchRoot: root, profilePrefix: 'teams-test-executor' })
+    searchRoot: root, profilePrefix: 'teams-test-executor', services: [searchIntent] })
   const provider = { accountId: 'account', scopeId: 'scope', agentId: 'provider' }
   const consumer = { ...provider, agentId: 'consumer' }
   const ledger = createWorkLedger({ provider, generation: 1, capabilities: executor.capabilities,
@@ -55,31 +70,34 @@ it('runs real fixed-root search through provider admission and trusted completio
 })
 
 it('rejects mismatched operation envelopes before invoking a process', async () => {
-  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
-    searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
+  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg',
+    searchRoot: fixture(), profilePrefix: 'teams-test-executor', services: [searchIntent] })
   const result = await executor.execute(work, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
     operation: 'search', demands: [] }, payload: { operation: 'context.destroy', query: 'x' } }, [])
   expect(result).toMatchObject({ outcome: 'failed', error: { code: 'INVALID_INPUT' } })
 })
 
 it('preserves a missing browser context error code through the executor boundary', async () => {
-  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
-    searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
+  const { executable } = browserFixture()
+  const executor = createCliWorkExecutor({ camoExecutable: executable, searchExecutable: '/missing/rg',
+    searchRoot: fixture(), profilePrefix: 'teams-test-executor', services: [browserIntent] })
   const result = await executor.execute({ ...work, capabilityId: 'browser' }, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
     operation: 'snapshot', demands: [] }, payload: { contextId: 'missing' } }, [])
   expect(result).toMatchObject({ outcome: 'failed', error: { code: 'NOT_FOUND' } })
 })
 
 it('does not report a lost browser owner as destroyed', async () => {
-  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
-    searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
+  const { executable } = browserFixture()
+  const executor = createCliWorkExecutor({ camoExecutable: executable, searchExecutable: '/missing/rg',
+    searchRoot: fixture(), profilePrefix: 'teams-test-executor', services: [browserIntent] })
 
   await expect(executor.destroy(browserWork, [heldBrowserContext])).rejects.toMatchObject({ error: { code: 'UNAVAILABLE' } })
 })
 
 it('keeps a same-process parse failure as an explicit no-resource fact', async () => {
-  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
-    searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
+  const { executable } = browserFixture()
+  const executor = createCliWorkExecutor({ camoExecutable: executable, searchExecutable: '/missing/rg',
+    searchRoot: fixture(), profilePrefix: 'teams-test-executor', services: [browserIntent] })
   const result = await executor.execute(browserWork, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
     operation: 'context.create', demands: [] }, payload: { operation: 'search' } }, [])
   expect(result).toMatchObject({ outcome: 'failed', error: { code: 'INVALID_INPUT' } })
@@ -88,8 +106,9 @@ it('keeps a same-process parse failure as an explicit no-resource fact', async (
 })
 
 it('does not turn a post-restart parse failure into a no-resource fact', async () => {
-  const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/missing/rg',
-    searchRoot: fixture(), profilePrefix: 'teams-test-executor' })
+  const { executable } = browserFixture()
+  const executor = createCliWorkExecutor({ camoExecutable: executable, searchExecutable: '/missing/rg',
+    searchRoot: fixture(), profilePrefix: 'teams-test-executor', services: [browserIntent] })
   const result = await executor.execute(browserWork, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
     operation: 'context.create', demands: [] }, payload: { operation: 'search' } }, [heldBrowserContext])
   expect(result).toMatchObject({ outcome: 'failed', error: { code: 'INVALID_INPUT' } })
@@ -100,7 +119,7 @@ it('does not turn a post-restart parse failure into a no-resource fact', async (
 it('keeps a successful local browser destruction fact for a repeated close', async () => {
   const { root, executable } = browserFixture()
   const executor = createCliWorkExecutor({ camoExecutable: executable, searchExecutable: '/missing/rg',
-    searchRoot: root, profilePrefix: 'teams-test-executor' })
+    searchRoot: root, profilePrefix: 'teams-test-executor', services: [browserIntent] })
   const result = await executor.execute(browserWork, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
     operation: 'context.create', demands: [] }, payload: {} }, [])
   expect(result).toMatchObject({ outcome: 'succeeded', payload: { contextId: expect.any(String) } })
@@ -114,7 +133,7 @@ it('preserves real CLI failure output through durable Work state and the wire er
   const executable = join(root, 'failing-search')
   writeFileSync(executable, '#!/bin/sh\nprintf "partial output\\n"\nprintf "failure detail\\n" >&2\nexit 7\n', { mode: 0o700 })
   const executor = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: executable,
-    searchRoot: root, profilePrefix: 'teams-test-executor' })
+    searchRoot: root, profilePrefix: 'teams-test-executor', services: [searchIntent] })
   const provider = { accountId: 'account', scopeId: 'scope', agentId: 'provider' }
   const consumer = { ...provider, agentId: 'consumer' }
   const store = createFileWorkStore(join(root, 'ledger.json'))
@@ -129,4 +148,28 @@ it('preserves real CLI failure output through durable Work state and the wire er
   expect(parseWorkWireFrame(JSON.stringify(reply))).toMatchObject({ control: { state: 'failed', error: expected } })
   expect(createWorkLedger({ provider, generation: 2, capabilities: executor.capabilities, store }).snapshot.requests[0].error).toMatchObject(expected)
   expect(ledger.snapshot.allocations.every(item => item.state === 'released')).toBe(true)
+})
+
+it('compiles only enabled services and leaves the receiver executor empty', () => {
+  const root = fixture()
+  const enabled = createCliWorkExecutor({ camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg',
+    searchRoot: root, profilePrefix: 'teams-test-executor', services: [searchIntent, browserIntent] })
+  const disabled = createCliWorkExecutor({ camoExecutable: '/missing/camo', searchExecutable: '/opt/homebrew/bin/rg',
+    searchRoot: root, profilePrefix: 'teams-test-executor', services: [searchIntent] })
+  const receiver = createCliWorkExecutor({ services: [] })
+  expect(enabled.capabilities.map(item => item.capabilityId)).toEqual(['file-search', 'browser'])
+  expect(disabled.capabilities.map(item => item.capabilityId)).toEqual(['file-search'])
+  expect(receiver.capabilities).toEqual([])
+  expect(() => createCliWorkExecutor({ services: [{ capabilityId: 'unknown', version: '1', operations: [], resources: [] }] })).toThrow(/UNSUPPORTED_OPERATION/)
+  expect(() => createCliWorkExecutor({ camoExecutable: '/missing/camo', profilePrefix: 'teams-disabled-browser',
+    services: [{ ...browserIntent, resources: browserIntent.resources }] })).toThrow(/camoExecutable/)
+  expect(() => createCliWorkExecutor({ camoExecutable: '/opt/homebrew/bin/camo', profilePrefix: 'not-owned', services: [browserIntent] })).toThrow(/profile prefix/)
+  expect(() => createCliWorkExecutor({ services: [{ ...browserIntent, operations: ['navigate'] }] })).toThrow(/UNSUPPORTED_OPERATION/)
+})
+
+it('reports an unsupported execution without instantiating a disabled adapter', async () => {
+  const executor = createCliWorkExecutor({ services: [] })
+  const result = await executor.execute(work, { control: { workId: 'w', requestId: 'r', targetGeneration: 1,
+    operation: 'search', demands: [] }, payload: { query: 'x' } }, [])
+  expect(result).toMatchObject({ outcome: 'failed', error: { code: 'UNSUPPORTED_OPERATION' } })
 })
