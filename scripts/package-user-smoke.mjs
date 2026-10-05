@@ -267,6 +267,7 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
   // an actual match instead of an empty no-match summary.
   mkdirSync(join(dirname(configPath), 'files'), { recursive: true })
   writeFileSync(join(dirname(configPath), 'files', 'needle.txt'), 'installed work needle\n', { encoding: 'utf8' })
+  writeFileSync(join(dirname(configPath), 'files', 'beta.txt'), 'installed work beta\n', { encoding: 'utf8' })
 
   let activeGeneration
   let lifecycle
@@ -344,7 +345,7 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
     const binding = ['--provider', 'installed-provider', '--provider-generation', providerGeneration,
       '--capability-id', 'file-search', '--capability-version', '1']
     const requested = JSON.parse((await run(cli, workArgs('request', '--work-id', opened.control.workId, ...binding,
-      '--operation', 'search', '--demands', demands, '--payload', '{"query":"second"}'), { cwd: dirname(configPath), env: cliEnv })).stdout)
+      '--operation', 'search', '--demands', demands, '--payload', '{"query":"beta"}'), { cwd: dirname(configPath), env: cliEnv })).stdout)
     assert(requested.status === 'completed', `installed Work request did not complete: ${JSON.stringify(requested).slice(0, 400)}`)
     assert(requested.control?.workId === opened.control.workId, 'installed Work request did not continue the opened Work')
     assert(requested.control?.requestId !== opened.control.requestId, 'installed Work request must use a fresh request identity')
