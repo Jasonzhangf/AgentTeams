@@ -93,7 +93,14 @@ function openControl(workId: string, requestId: string, targetGeneration: number
 
 function requestControl(workId: string, requestId: string, targetGeneration: number): WorkRequestIntentControl {
   return {
-    ...submitControl(workId, requestId),
+    receiverAgentId: 'consumer',
+    targetAgentId: 'provider',
+    capabilityId: 'file-search',
+    capabilityVersion: '1',
+    operation: 'search',
+    workId,
+    requestId,
+    demands: [{ resourceId: 'search-slot', amount: 1 }],
     serviceSelection: 'capability',
     targetGeneration,
   }
@@ -642,9 +649,9 @@ describe('Teams DAGpipe SDK Work runner and Node host', () => {
       { label: 'policyRevision', mutate: () => undefined, field: 'policyRevision' },
     ]
     const graphCases = [
-      { label: 'one-shot', graphPath: agentWorkGraph, control: submitControl('work-malformed', 'req-malformed'), business: { query: 'alpha marker' } },
-      { label: 'work-open', graphPath: workOpenGraph, control: openControl('work-malformed-open', 'req-malformed-open', generation), business: { query: 'alpha marker' } },
-      { label: 'work-request', graphPath: workRequestGraph, control: requestControl('work-malformed-request', 'req-malformed-request', generation), business: { query: 'alpha marker' } },
+      { label: 'one-shot', graphPath: agentWorkGraph, control: submitControl('work-malformed', 'req-malformed'), business: { query: 'alpha marker' }, requiresPolicyRevision: true },
+      { label: 'work-open', graphPath: workOpenGraph, control: openControl('work-malformed-open', 'req-malformed-open', generation), business: { query: 'alpha marker' }, requiresPolicyRevision: true },
+      { label: 'work-request', graphPath: workRequestGraph, control: requestControl('work-malformed-request', 'req-malformed-request', generation), business: { query: 'alpha marker' }, requiresPolicyRevision: false },
     ]
     const queryOnlyCases = [
       {
@@ -675,6 +682,7 @@ describe('Teams DAGpipe SDK Work runner and Node host', () => {
     try {
       for (const graphCase of graphCases) {
         for (const mutationCase of mutationCases) {
+          if (mutationCase.field === 'policyRevision' && !graphCase.requiresPolicyRevision) continue
           const hostCalls: HostCallFrame[] = []
           const revisionBefore = harness.ledger.snapshot.revision
           const control = { ...(graphCase.control as Record<string, unknown>) }

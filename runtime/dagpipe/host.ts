@@ -550,8 +550,10 @@ function validateExecutionIntent(
     if (persistent && control.linkGeneration !== undefined) {
       throw new HostProtocolError('INVALID_INPUT', `${graph} forbids linkGeneration`);
     }
-    if (agentWork || graph === 'work-open.graph.json' || graph === 'work-request.graph.json') {
+    if (agentWork || graph === 'work-open.graph.json') {
       requiredInteger((control as Partial<WorkIntentControl>).policyRevision, 'intent.control.policyRevision');
+    }
+    if (agentWork || graph === 'work-open.graph.json' || graph === 'work-request.graph.json') {
       decodeResourceDemands((control as Partial<WorkIntentControl>).demands, 'intent.control.demands');
       if (business === undefined) throw new HostProtocolError('INVALID_INPUT', 'intent.business is required for Work execution');
     }

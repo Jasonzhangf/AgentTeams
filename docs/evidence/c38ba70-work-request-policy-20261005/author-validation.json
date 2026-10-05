@@ -1,0 +1,2218 @@
+{
+  "at": "2026-10-05T05:11:38.585Z",
+  "issue": "c38ba70",
+  "base": "be6faf18a1bea5610412a578124bbf5e454ab435",
+  "sourceHashes": {
+    "runtime/dagpipe/host.ts": "b1df09d6015ed1e5b5e49845c704b3048306359834fca48403fba3541f5c4641",
+    "runtime/dagpipe-work.spec.ts": "4696b8af9efe576bfcb91e6fd100db53b3874f5b54096d0418df3128b82bd0dd"
+  },
+  "blackbox": "real runWorkExecution registered SDK Operators/compile/runtime with Relay/two daemons/realrg/provider ledger; no installed CLI completion",
+  "gates": [
+    {
+      "name": "red-focused",
+      "exit": 1,
+      "rawOutput": "\n RUN  v4.1.11 /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005\n\n   Compiling proc-macro2 v1.0.107\n   Compiling unicode-ident v1.0.26\n   Compiling quote v1.0.47\n   Compiling serde_core v1.0.229\n   Compiling zmij v1.0.23\n   Compiling serde_json v1.0.151\n   Compiling serde v1.0.229\n   Compiling itoa v1.0.18\n   Compiling memchr v2.8.3\n   Compiling syn v3.0.6\n   Compiling serde_derive v1.0.229\n   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)\n   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005/runtime/dagpipe/.build/build-hkgVve)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.71s\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > runs two real submits with distinct identities and real search results, then observes the original request without replay\n × runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > opens, continues, queries, and closes one persistent Work through the five approved graphs 264ms\n   → expected 'failed' to be 'completed' // Object.is equality\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects a stale persistent open generation before any Work effect\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects an incomplete persistent capability binding before any host or provider effect\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects every required malformed input before any host or provider effect\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects missing Operators and missing effects at compile with zero business effects\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > surfaces provider permission, operation and generation rejections explicitly\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > fails explicitly on host EOF and makes no further host call\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects a bad host-call correlation on the real stdio port without any Work effect\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns completed for only one valid correlated execution.result and preserves its business\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects malformed-json from the real runner port and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects missing-control from the real runner port and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects unknown-frame from the real runner port and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-compiled and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-identity and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-journal and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-bad-identity and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame duplicate-final and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame malformed-after-valid-result and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame host-call-after-valid-result and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns an explicit runner failure and cleans up when the runner exits before the host response\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns an explicit unknown result with retained provider responsibility when the request link drops\n\n⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯\n\n FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > opens, continues, queries, and closes one persistent Work through the five approved graphs\nAssertionError: expected 'failed' to be 'completed' // Object.is equality\n\nExpected: \"completed\"\nReceived: \"failed\"\n\n ❯ runtime/dagpipe-work.spec.ts:480:32\n    478|       })\n    479|\n    480|       expect(requested.status).toBe('completed')\n       |                                ^\n    481|       expect(requested.control).toMatchObject({\n    482|         workId: 'work-persistent',\n\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯\n\n\n Test Files  1 failed (1)\n      Tests  1 failed | 21 skipped (22)\n   Start at  22:02:44\n   Duration  5.69s (transform 171ms, setup 0ms, import 234ms, tests 5.33s, environment 0ms)\n\n",
+      "sha256": "da212784c8964175802d7e3b25776de3381f28717c675589506e6ced083cc18c"
+    },
+    {
+      "name": "green-focused",
+      "exit": 0,
+      "rawOutput": "\n RUN  v4.1.11 /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005\n\n   Compiling proc-macro2 v1.0.107\n   Compiling quote v1.0.47\n   Compiling unicode-ident v1.0.26\n   Compiling serde_core v1.0.229\n   Compiling zmij v1.0.23\n   Compiling serde v1.0.229\n   Compiling serde_json v1.0.151\n   Compiling itoa v1.0.18\n   Compiling memchr v2.8.3\n   Compiling syn v3.0.6\n   Compiling serde_derive v1.0.229\n   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)\n   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005/runtime/dagpipe/.build/build-y5L3Re)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.56s\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > runs two real submits with distinct identities and real search results, then observes the original request without replay\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > opens, continues, queries, and closes one persistent Work through the five approved graphs 412ms\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects a stale persistent open generation before any Work effect\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects an incomplete persistent capability binding before any host or provider effect\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects every required malformed input before any host or provider effect\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects missing Operators and missing effects at compile with zero business effects\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > surfaces provider permission, operation and generation rejections explicitly\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > fails explicitly on host EOF and makes no further host call\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects a bad host-call correlation on the real stdio port without any Work effect\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns completed for only one valid correlated execution.result and preserves its business\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects malformed-json from the real runner port and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects missing-control from the real runner port and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects unknown-frame from the real runner port and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-compiled and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-identity and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-journal and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-bad-identity and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame duplicate-final and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame malformed-after-valid-result and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame host-call-after-valid-result and terminates the exact child\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns an explicit runner failure and cleans up when the runner exits before the host response\n ↓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns an explicit unknown result with retained provider responsibility when the request link drops\n\n Test Files  1 passed (1)\n      Tests  1 passed | 21 skipped (22)\n   Start at  22:03:49\n   Duration  5.71s (transform 207ms, setup 0ms, import 273ms, tests 5.32s, environment 0ms)\n\n",
+      "sha256": "27a6104c013bd0453eab477cb9d03be5a180eeb9dc11010fe40fc9c594a95a0c"
+    },
+    {
+      "name": "full-spec-green",
+      "exit": 0,
+      "rawOutput": "\n RUN  v4.1.11 /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005\n\n   Compiling proc-macro2 v1.0.107\n   Compiling quote v1.0.47\n   Compiling unicode-ident v1.0.26\n   Compiling serde_core v1.0.229\n   Compiling zmij v1.0.23\n   Compiling serde_json v1.0.151\n   Compiling serde v1.0.229\n   Compiling memchr v2.8.3\n   Compiling itoa v1.0.18\n   Compiling syn v3.0.6\n   Compiling serde_derive v1.0.229\n   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)\n   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005/runtime/dagpipe/.build/build-SDtI2G)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.61s\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > runs two real submits with distinct identities and real search results, then observes the original request without replay 410ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > opens, continues, queries, and closes one persistent Work through the five approved graphs 182ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects a stale persistent open generation before any Work effect 14ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects an incomplete persistent capability binding before any host or provider effect 9ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects every required malformed input before any host or provider effect 22ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects missing Operators and missing effects at compile with zero business effects 34ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > surfaces provider permission, operation and generation rejections explicitly 62ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > fails explicitly on host EOF and makes no further host call 4ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects a bad host-call correlation on the real stdio port without any Work effect 71ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns completed for only one valid correlated execution.result and preserves its business 73ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects malformed-json from the real runner port and terminates the exact child 75ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects missing-control from the real runner port and terminates the exact child 76ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects unknown-frame from the real runner port and terminates the exact child 73ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-compiled and terminates the exact child 73ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-identity and terminates the exact child 70ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-journal and terminates the exact child 70ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-bad-identity and terminates the exact child 69ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame duplicate-final and terminates the exact child 69ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame malformed-after-valid-result and terminates the exact child 70ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame host-call-after-valid-result and terminates the exact child 71ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns an explicit runner failure and cleans up when the runner exits before the host response 68ms\n ✓ runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns an explicit unknown result with retained provider responsibility when the request link drops 2052ms\n\n Test Files  1 passed (1)\n      Tests  22 passed (22)\n   Start at  22:05:20\n   Duration  9.14s (transform 237ms, setup 0ms, import 306ms, tests 8.65s, environment 0ms)\n\n",
+      "sha256": "fa90e51233f31bc0e9b8700e79b5c39a6c90ba7f1f728c72c6712dae05397049"
+    },
+    {
+      "name": "typecheck",
+      "exit": 0,
+      "rawOutput": "\n> agentteams@0.1.0 typecheck /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005\n> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck\n\n\n> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005/opencode-adapter\n> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean\n\nℹ tsdown v0.22.14 powered by rolldown v1.2.7\nℹ config file: /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005/opencode-adapter/tsdown.config.ts \nℹ entry: src/index.ts\nℹ target: es2022\nℹ tsconfig: tsconfig.json\nℹ Build start\nℹ lib/index.mjs    16.95 kB │ gzip: 4.25 kB\nℹ lib/index.d.mts  13.85 kB │ gzip: 3.21 kB\nℹ 2 files, total: 30.80 kB\n✔ Build complete in 1743ms\n\n> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005/opencode-adapter\n> tsc --noEmit\n\n\n> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005/console-host\n> tsc --noEmit\n\n\n> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005/ui/teams-console\n> tsc -p tsconfig.json --noEmit\n\n",
+      "sha256": "43414cefec3089d0d6a588dff1e92232fc679023fc648a7084dae4ff48e77df9"
+    },
+    {
+      "name": "build-runtime",
+      "exit": 0,
+      "rawOutput": "\n> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005\n> node -e \"require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })\" && tsc -p tsconfig.runtime.json\n\n",
+      "sha256": "311fb1e739824c0e0cb56ab008d57c14742ad4fa9e032d15ff7862179a9ed3a0"
+    },
+    {
+      "name": "graph-validate",
+      "exit": 0,
+      "rawOutput": "### validate work-request\nvalid DAG: agentteams.work-request@1 (4 nodes, 3 edges, 4 waves)\noperator bindings are syntactically present; project compile() remains the authoritative registry/schema/effect gate\nexit=0\n### validate work-open\nvalid DAG: agentteams.work-open@1 (5 nodes, 4 edges, 5 waves)\noperator bindings are syntactically present; project compile() remains the authoritative registry/schema/effect gate\nexit=0\n### validate agent-work\nvalid DAG: agentteams.agent-work@2 (5 nodes, 4 edges, 5 waves)\noperator bindings are syntactically present; project compile() remains the authoritative registry/schema/effect gate\nexit=0\n### validate work-close\nvalid DAG: agentteams.work-close@1 (3 nodes, 2 edges, 3 waves)\noperator bindings are syntactically present; project compile() remains the authoritative registry/schema/effect gate\nexit=0\n### validate work-query\nvalid DAG: agentteams.work-query@1 (4 nodes, 3 edges, 4 waves)\noperator bindings are syntactically present; project compile() remains the authoritative registry/schema/effect gate\nexit=0\n",
+      "sha256": "7b1258cdec17e4733604ad35d6989d20ee0638dc2a1bafbcf0017064bfe6b145"
+    }
+  ],
+  "typedContinuation": {
+    "graph": "agentteams.work-request@1",
+    "status": "completed",
+    "nodeSchedule": [
+      "resolve-service",
+      "open-link",
+      "continue-work",
+      "return-held-work"
+    ],
+    "hostOperations": [
+      "agentWork.findProvider",
+      "agentWork.open",
+      "agentWork.request",
+      "agentWork.dispose"
+    ],
+    "no_duplicate_admit": true,
+    "result_match": "./beta.txt"
+  },
+  "retainedAdmissionNegatives": [
+    {
+      "case": "malformed-input-one-shot-policyRevision",
+      "error": "INVALID_INPUT: intent.control.policyRevision must be a safe integer",
+      "hostOperations": [],
+      "cleanup": {
+        "channelsOpened": 0,
+        "channelsDisposed": 0
+      }
+    },
+    {
+      "case": "malformed-input-work-open-policyRevision",
+      "error": "INVALID_INPUT: intent.control.policyRevision must be a safe integer",
+      "hostOperations": [],
+      "cleanup": {
+        "channelsOpened": 0,
+        "channelsDisposed": 0
+      }
+    }
+  ],
+  "sdkConsumerReceipt": {
+    "protocol": "teams-u4-sdk-persistent-work-results",
+    "runner": "/Volumes/Intel/playground/agentteams/c38ba70-work-request-policy-20261005/runtime/dagpipe/.build/build-SDtI2G/target/aarch64-apple-darwin/debug/teams-dagpipe-runner",
+    "cases": [
+      {
+        "case": "submit-and-query",
+        "first": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "agentteams.agent-work",
+            "graphVersion": "2",
+            "executionId": "exec-alpha",
+            "attemptId": "1",
+            "workId": "work-alpha",
+            "requestId": "req-alpha",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "workClosure": "closed"
+          },
+          "business": {
+            "exitCode": 0,
+            "matches": [
+              {
+                "line": 1,
+                "path": "./alpha.txt",
+                "raw": {
+                  "data": {
+                    "absolute_offset": 0,
+                    "line_number": 1,
+                    "lines": {
+                      "text": "alpha marker 4b6c377\n"
+                    },
+                    "path": {
+                      "text": "./alpha.txt"
+                    },
+                    "submatches": [
+                      {
+                        "end": 12,
+                        "match": {
+                          "text": "alpha marker"
+                        },
+                        "start": 0
+                      }
+                    ]
+                  },
+                  "type": "match"
+                },
+                "text": "alpha marker 4b6c377\n"
+              }
+            ],
+            "query": "alpha marker",
+            "status": "matched",
+            "stderr": "",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"lines\":{\"text\":\"alpha marker 4b6c377\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"alpha marker\"},\"start\":0,\"end\":12}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":12208,\"human\":\"0.000012s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":21,\"bytes_printed\":258,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003205s\",\"nanos\":3204875,\"secs\":0},\"stats\":{\"bytes_printed\":258,\"bytes_searched\":21,\"elapsed\":{\"human\":\"0.000012s\",\"nanos\":12208,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "truncated": false
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.agent-work",
+            "graphVersion": "2",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.propose",
+              "agentWork.request",
+              "agentWork.close",
+              "agentWork.dispose"
+            ]
+          }
+        },
+        "second": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "agentteams.agent-work",
+            "graphVersion": "2",
+            "executionId": "exec-beta",
+            "attemptId": "1",
+            "workId": "work-beta",
+            "requestId": "req-beta",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "workClosure": "closed"
+          },
+          "business": {
+            "exitCode": 0,
+            "matches": [
+              {
+                "line": 1,
+                "path": "./beta.txt",
+                "raw": {
+                  "data": {
+                    "absolute_offset": 0,
+                    "line_number": 1,
+                    "lines": {
+                      "text": "beta marker 4b6c377\n"
+                    },
+                    "path": {
+                      "text": "./beta.txt"
+                    },
+                    "submatches": [
+                      {
+                        "end": 11,
+                        "match": {
+                          "text": "beta marker"
+                        },
+                        "start": 0
+                      }
+                    ]
+                  },
+                  "type": "match"
+                },
+                "text": "beta marker 4b6c377\n"
+              }
+            ],
+            "query": "beta marker",
+            "status": "matched",
+            "stderr": "",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./beta.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"lines\":{\"text\":\"beta marker 4b6c377\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"beta marker\"},\"start\":0,\"end\":11}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":18708,\"human\":\"0.000019s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":20,\"bytes_printed\":254,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003195s\",\"nanos\":3194834,\"secs\":0},\"stats\":{\"bytes_printed\":254,\"bytes_searched\":20,\"elapsed\":{\"human\":\"0.000019s\",\"nanos\":18708,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "truncated": false
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.agent-work",
+            "graphVersion": "2",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.propose",
+              "agentWork.request",
+              "agentWork.close",
+              "agentWork.dispose"
+            ]
+          }
+        },
+        "observed": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "agentteams.work-query",
+            "graphVersion": "1",
+            "executionId": "exec-query-alpha",
+            "attemptId": "1",
+            "workId": "work-alpha",
+            "requestId": "req-alpha",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "observed": true
+          },
+          "business": {
+            "exitCode": 0,
+            "matches": [
+              {
+                "line": 1,
+                "path": "./alpha.txt",
+                "raw": {
+                  "data": {
+                    "absolute_offset": 0,
+                    "line_number": 1,
+                    "lines": {
+                      "text": "alpha marker 4b6c377\n"
+                    },
+                    "path": {
+                      "text": "./alpha.txt"
+                    },
+                    "submatches": [
+                      {
+                        "end": 12,
+                        "match": {
+                          "text": "alpha marker"
+                        },
+                        "start": 0
+                      }
+                    ]
+                  },
+                  "type": "match"
+                },
+                "text": "alpha marker 4b6c377\n"
+              }
+            ],
+            "query": "alpha marker",
+            "status": "matched",
+            "stderr": "",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"lines\":{\"text\":\"alpha marker 4b6c377\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"alpha marker\"},\"start\":0,\"end\":12}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":12208,\"human\":\"0.000012s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":21,\"bytes_printed\":258,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003205s\",\"nanos\":3204875,\"secs\":0},\"stats\":{\"bytes_printed\":258,\"bytes_searched\":21,\"elapsed\":{\"human\":\"0.000012s\",\"nanos\":12208,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "truncated": false
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.work-query",
+            "graphVersion": "1",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "query-request",
+              "return-observation"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "query-request",
+              "return-observation"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.get",
+              "agentWork.dispose"
+            ]
+          }
+        }
+      },
+      {
+        "case": "persistent-open-request-query-close",
+        "opened": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "agentteams.work-open",
+            "graphVersion": "1",
+            "executionId": "exec-persistent-open",
+            "attemptId": "1",
+            "workId": "work-persistent",
+            "requestId": "req-persistent-open",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "workClosure": "retained"
+          },
+          "business": {
+            "exitCode": 0,
+            "matches": [
+              {
+                "line": 1,
+                "path": "./alpha.txt",
+                "raw": {
+                  "data": {
+                    "absolute_offset": 0,
+                    "line_number": 1,
+                    "lines": {
+                      "text": "alpha marker 4b6c377\n"
+                    },
+                    "path": {
+                      "text": "./alpha.txt"
+                    },
+                    "submatches": [
+                      {
+                        "end": 12,
+                        "match": {
+                          "text": "alpha marker"
+                        },
+                        "start": 0
+                      }
+                    ]
+                  },
+                  "type": "match"
+                },
+                "text": "alpha marker 4b6c377\n"
+              }
+            ],
+            "query": "alpha marker",
+            "status": "matched",
+            "stderr": "",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"lines\":{\"text\":\"alpha marker 4b6c377\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"alpha marker\"},\"start\":0,\"end\":12}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":18125,\"human\":\"0.000018s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":21,\"bytes_printed\":258,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003312s\",\"nanos\":3311958,\"secs\":0},\"stats\":{\"bytes_printed\":258,\"bytes_searched\":21,\"elapsed\":{\"human\":\"0.000018s\",\"nanos\":18125,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "truncated": false
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.work-open",
+            "graphVersion": "1",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "return-held-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "return-held-work"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.propose",
+              "agentWork.request",
+              "agentWork.dispose"
+            ]
+          }
+        },
+        "requested": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "agentteams.work-request",
+            "graphVersion": "1",
+            "executionId": "exec-persistent-request",
+            "attemptId": "1",
+            "workId": "work-persistent",
+            "requestId": "req-persistent-next",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "workClosure": "retained"
+          },
+          "business": {
+            "exitCode": 0,
+            "matches": [
+              {
+                "line": 1,
+                "path": "./beta.txt",
+                "raw": {
+                  "data": {
+                    "absolute_offset": 0,
+                    "line_number": 1,
+                    "lines": {
+                      "text": "beta marker 4b6c377\n"
+                    },
+                    "path": {
+                      "text": "./beta.txt"
+                    },
+                    "submatches": [
+                      {
+                        "end": 11,
+                        "match": {
+                          "text": "beta marker"
+                        },
+                        "start": 0
+                      }
+                    ]
+                  },
+                  "type": "match"
+                },
+                "text": "beta marker 4b6c377\n"
+              }
+            ],
+            "query": "beta marker",
+            "status": "matched",
+            "stderr": "",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./beta.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"lines\":{\"text\":\"beta marker 4b6c377\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"beta marker\"},\"start\":0,\"end\":11}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":20292,\"human\":\"0.000020s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":20,\"bytes_printed\":254,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.004447s\",\"nanos\":4446958,\"secs\":0},\"stats\":{\"bytes_printed\":254,\"bytes_searched\":20,\"elapsed\":{\"human\":\"0.000020s\",\"nanos\":20292,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "truncated": false
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.work-request",
+            "graphVersion": "1",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "continue-work",
+              "return-held-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "continue-work",
+              "return-held-work"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.request",
+              "agentWork.dispose"
+            ]
+          }
+        },
+        "observed": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "agentteams.work-query",
+            "graphVersion": "1",
+            "executionId": "exec-persistent-query",
+            "attemptId": "1",
+            "workId": "work-persistent",
+            "requestId": "req-persistent-next",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "linkGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "observed": true
+          },
+          "business": {
+            "exitCode": 0,
+            "matches": [
+              {
+                "line": 1,
+                "path": "./beta.txt",
+                "raw": {
+                  "data": {
+                    "absolute_offset": 0,
+                    "line_number": 1,
+                    "lines": {
+                      "text": "beta marker 4b6c377\n"
+                    },
+                    "path": {
+                      "text": "./beta.txt"
+                    },
+                    "submatches": [
+                      {
+                        "end": 11,
+                        "match": {
+                          "text": "beta marker"
+                        },
+                        "start": 0
+                      }
+                    ]
+                  },
+                  "type": "match"
+                },
+                "text": "beta marker 4b6c377\n"
+              }
+            ],
+            "query": "beta marker",
+            "status": "matched",
+            "stderr": "",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./beta.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"lines\":{\"text\":\"beta marker 4b6c377\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"beta marker\"},\"start\":0,\"end\":11}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":20292,\"human\":\"0.000020s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":20,\"bytes_printed\":254,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.004447s\",\"nanos\":4446958,\"secs\":0},\"stats\":{\"bytes_printed\":254,\"bytes_searched\":20,\"elapsed\":{\"human\":\"0.000020s\",\"nanos\":20292,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "truncated": false
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.work-query",
+            "graphVersion": "1",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "query-request",
+              "return-observation"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "query-request",
+              "return-observation"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.get",
+              "agentWork.dispose"
+            ]
+          }
+        },
+        "closed": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "agentteams.work-close",
+            "graphVersion": "1",
+            "executionId": "exec-persistent-close",
+            "attemptId": "1",
+            "workId": "work-persistent",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "workClosure": "closed"
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.work-close",
+            "graphVersion": "1",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "close-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "close-work"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.close",
+              "agentWork.dispose"
+            ]
+          }
+        }
+      },
+      {
+        "case": "persistent-stale-generation",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-persistent-stale",
+            "attemptId": "1",
+            "workId": "work-persistent-stale",
+            "requestId": "req-persistent-stale",
+            "providerAgentId": "provider",
+            "targetGeneration": 2,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "STALE_GENERATION",
+              "message": "Provider provider generation 2 is not current",
+              "operation": "agentWork.findProvider"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service"
+            ],
+            "nodeCompletion": [],
+            "hostOperations": [
+              "agentWork.findProvider"
+            ],
+            "errorKind": "operator"
+          }
+        }
+      },
+      {
+        "case": "persistent-incomplete-binding",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-persistent-incomplete",
+            "attemptId": "1",
+            "workId": "work-persistent-incomplete",
+            "requestId": "req-persistent-incomplete",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "work-open.graph.json requires serviceSelection=capability"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-one-shot-requestId",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-one-shot-requestId",
+            "attemptId": "1",
+            "workId": "work-malformed",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.requestId must be a non-empty string"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-one-shot-demands",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-one-shot-demands",
+            "attemptId": "1",
+            "workId": "work-malformed",
+            "requestId": "req-malformed",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.demands must be an array"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-one-shot-business",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-one-shot-business",
+            "attemptId": "1",
+            "workId": "work-malformed",
+            "requestId": "req-malformed",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.business is required for Work execution"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-one-shot-policyRevision",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-one-shot-policyRevision",
+            "attemptId": "1",
+            "workId": "work-malformed",
+            "requestId": "req-malformed",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.policyRevision must be a safe integer"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-work-open-requestId",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-work-open-requestId",
+            "attemptId": "1",
+            "workId": "work-malformed-open",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.requestId must be a non-empty string"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-work-open-demands",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-work-open-demands",
+            "attemptId": "1",
+            "workId": "work-malformed-open",
+            "requestId": "req-malformed-open",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.demands must be an array"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-work-open-business",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-work-open-business",
+            "attemptId": "1",
+            "workId": "work-malformed-open",
+            "requestId": "req-malformed-open",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.business is required for Work execution"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-work-open-policyRevision",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-work-open-policyRevision",
+            "attemptId": "1",
+            "workId": "work-malformed-open",
+            "requestId": "req-malformed-open",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.policyRevision must be a safe integer"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-work-request-requestId",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-work-request-requestId",
+            "attemptId": "1",
+            "workId": "work-malformed-request",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.requestId must be a non-empty string"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-work-request-demands",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-work-request-demands",
+            "attemptId": "1",
+            "workId": "work-malformed-request",
+            "requestId": "req-malformed-request",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.demands must be an array"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "malformed-input-work-request-business",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-malformed-work-request-business",
+            "attemptId": "1",
+            "workId": "work-malformed-request",
+            "requestId": "req-malformed-request",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.business is required for Work execution"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "query-only-endpoint-query-missing-requestId",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-query-only-endpoint-query-missing-requestId",
+            "attemptId": "1",
+            "workId": "work-query",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.requestId must be a non-empty string"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "query-only-capability-query-missing-target-generation",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-query-only-capability-query-missing-target-generation",
+            "attemptId": "1",
+            "workId": "work-query",
+            "requestId": "req-query",
+            "providerAgentId": "provider",
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "INVALID_INPUT",
+              "message": "intent.control.targetGeneration is required for capability query"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "query-only-close-without-business",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-query-only-close-without-business",
+            "attemptId": "1",
+            "workId": "work-query",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "workClosure": "close-failed",
+            "error": {
+              "code": "FORBIDDEN",
+              "message": "FORBIDDEN: Work is not owned by this authenticated consumer",
+              "operation": "agentWork.close"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "close-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "close-work"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.close",
+              "agentWork.dispose"
+            ]
+          }
+        }
+      },
+      {
+        "case": "compile-rejections",
+        "missingOperator": {
+          "graph_id": "agentteams.agent-work",
+          "graph_version": "2",
+          "message": "node `resolve-service` references missing operator `teams.missing-operator@1`",
+          "stage": "compile",
+          "type": "compile.failure"
+        },
+        "missingEffects": {
+          "graph_id": "agentteams.agent-work",
+          "graph_version": "2",
+          "message": "node `resolve-service` requires undeclared capability `directory.read`",
+          "stage": "compile",
+          "type": "compile.failure"
+        },
+        "submitGraph": {
+          "capabilities": [
+            "agent.work.close",
+            "agent.work.get",
+            "agent.work.propose",
+            "agent.work.request",
+            "directory.read",
+            "network.close",
+            "network.connect"
+          ],
+          "graph_id": "agentteams.agent-work",
+          "graph_version": "2",
+          "node_ids": [
+            "resolve-service",
+            "open-link",
+            "admit-work",
+            "request-work",
+            "settle-work"
+          ],
+          "type": "compile.result"
+        },
+        "openGraph": {
+          "capabilities": [
+            "agent.work.close",
+            "agent.work.get",
+            "agent.work.propose",
+            "agent.work.request",
+            "directory.read",
+            "network.close",
+            "network.connect"
+          ],
+          "graph_id": "agentteams.work-open",
+          "graph_version": "1",
+          "node_ids": [
+            "resolve-service",
+            "open-link",
+            "admit-work",
+            "request-work",
+            "return-held-work"
+          ],
+          "type": "compile.result"
+        },
+        "requestGraph": {
+          "capabilities": [
+            "agent.work.close",
+            "agent.work.get",
+            "agent.work.propose",
+            "agent.work.request",
+            "directory.read",
+            "network.close",
+            "network.connect"
+          ],
+          "graph_id": "agentteams.work-request",
+          "graph_version": "1",
+          "node_ids": [
+            "resolve-service",
+            "open-link",
+            "continue-work",
+            "return-held-work"
+          ],
+          "type": "compile.result"
+        },
+        "closeGraph": {
+          "capabilities": [
+            "agent.work.close",
+            "agent.work.get",
+            "agent.work.propose",
+            "agent.work.request",
+            "directory.read",
+            "network.close",
+            "network.connect"
+          ],
+          "graph_id": "agentteams.work-close",
+          "graph_version": "1",
+          "node_ids": [
+            "resolve-service",
+            "open-link",
+            "close-work"
+          ],
+          "type": "compile.result"
+        },
+        "queryGraph": {
+          "capabilities": [
+            "agent.work.close",
+            "agent.work.get",
+            "agent.work.propose",
+            "agent.work.request",
+            "directory.read",
+            "network.close",
+            "network.connect"
+          ],
+          "graph_id": "agentteams.work-query",
+          "graph_version": "1",
+          "node_ids": [
+            "resolve-service",
+            "open-link",
+            "query-request",
+            "return-observation"
+          ],
+          "type": "compile.result"
+        }
+      },
+      {
+        "case": "rejections",
+        "denied": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-forbidden",
+            "attemptId": "1",
+            "workId": "work-forbidden",
+            "requestId": "req-forbidden",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "FORBIDDEN",
+              "message": "Work proposal was rejected",
+              "operation": "agentWork.propose"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.propose",
+              "agentWork.dispose"
+            ],
+            "errorKind": "operator"
+          }
+        },
+        "wrongOperation": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-unsupported",
+            "attemptId": "1",
+            "workId": "work-unsupported",
+            "requestId": "req-unsupported",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "read",
+            "error": {
+              "code": "UNSUPPORTED_OPERATION",
+              "message": "Capability file-search does not support read",
+              "operation": "agentWork.findProvider"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service"
+            ],
+            "nodeCompletion": [],
+            "hostOperations": [
+              "agentWork.findProvider"
+            ],
+            "errorKind": "operator"
+          }
+        },
+        "staleGeneration": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-stale",
+            "attemptId": "1",
+            "workId": "work-stale",
+            "requestId": "req-stale",
+            "providerAgentId": "provider",
+            "targetGeneration": 2,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "STALE_GENERATION",
+              "message": "target generation is stale",
+              "operation": "agentWork.open"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link"
+            ],
+            "nodeCompletion": [
+              "resolve-service"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open"
+            ],
+            "errorKind": "operator"
+          }
+        }
+      },
+      {
+        "case": "host-eof",
+        "hostCalls": 1,
+        "final": {
+          "journal": [
+            {
+              "graph_id": "agentteams.agent-work",
+              "graph_version": "2",
+              "identity": {
+                "attempt_id": "1",
+                "execution_id": "exec-eof",
+                "graph_id": "agentteams.agent-work",
+                "graph_version": "2",
+                "project_id": "agentteams-d3-u4-work"
+              },
+              "kind": "execution_started"
+            },
+            {
+              "kind": "node_scheduled",
+              "node_id": "resolve-service"
+            },
+            {
+              "input_arc_refs": [
+                "arc://exec-eof/work.intent@1"
+              ],
+              "kind": "node_started",
+              "node_id": "resolve-service"
+            },
+            {
+              "arc_ref": "arc://exec-eof/work.intent@1",
+              "kind": "arc_read",
+              "node_id": "resolve-service"
+            },
+            {
+              "effects": [
+                "directory.read"
+              ],
+              "invocation_index": null,
+              "kind": "operator_started",
+              "node_id": "resolve-service",
+              "operator": "teams.resolve-peer-service",
+              "operator_version": "1",
+              "replay": "replayable"
+            },
+            {
+              "error_kind": "operator",
+              "kind": "node_failed",
+              "node_id": "resolve-service"
+            },
+            {
+              "error_kind": "operator",
+              "kind": "execution_failed"
+            }
+          ],
+          "kind": "operator",
+          "message": "HOST_EOF: host EOF before host.result/host.error",
+          "type": "execution.failure"
+        }
+      },
+      {
+        "case": "bad-correlation",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-bad-correlation",
+            "attemptId": "1",
+            "workId": "work-bad-correlation",
+            "requestId": "req-bad-correlation",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "host.call request_id mismatch: expected exec-bad-correlation/resolve-service/1, got wrong-correlation"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "runner-failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        }
+      },
+      {
+        "case": "valid-only-terminal",
+        "receipt": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "agentteams.agent-work",
+            "graphVersion": "2",
+            "executionId": "exec-bad-final",
+            "attemptId": "1",
+            "workId": "work-bad-final",
+            "requestId": "req-bad-final",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "serviceSelection": "endpoint",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "workClosure": "closed"
+          },
+          "business": {
+            "query": "fixture marker"
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.agent-work",
+            "graphVersion": "2",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7018
+      },
+      {
+        "case": "invalid-runner-malformed-json",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-invalid-malformed-json",
+            "attemptId": "1",
+            "workId": "work-invalid-malformed-json",
+            "requestId": "req-invalid-malformed-json",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "runner frame is not JSON: Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "runner-failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7075
+      },
+      {
+        "case": "invalid-runner-missing-control",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-invalid-missing-control",
+            "attemptId": "1",
+            "workId": "work-invalid-missing-control",
+            "requestId": "req-invalid-missing-control",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "host.call lacks control object"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "runner-failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7143
+      },
+      {
+        "case": "invalid-runner-unknown-frame",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-invalid-unknown-frame",
+            "attemptId": "1",
+            "workId": "work-invalid-unknown-frame",
+            "requestId": "req-invalid-unknown-frame",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "runner frame has unsupported type \"unknown.frame\""
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "runner-failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7190
+      },
+      {
+        "case": "malformed-final-execution-result-missing-compiled",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-bad-final",
+            "attemptId": "1",
+            "workId": "work-bad-final",
+            "requestId": "req-bad-final",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "runner frame lacks execution.result.compiled"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "runner-failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7245
+      },
+      {
+        "case": "malformed-final-execution-result-missing-identity",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-bad-final",
+            "attemptId": "1",
+            "workId": "work-bad-final",
+            "requestId": "req-bad-final",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "runner frame lacks execution.result.identity"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "runner-failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7301
+      },
+      {
+        "case": "malformed-final-execution-result-missing-journal",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-bad-final",
+            "attemptId": "1",
+            "workId": "work-bad-final",
+            "requestId": "req-bad-final",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "runner frame lacks execution.result.journal"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "runner-failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7354
+      },
+      {
+        "case": "malformed-final-execution-result-bad-identity",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-bad-final",
+            "attemptId": "1",
+            "workId": "work-bad-final",
+            "requestId": "req-bad-final",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "runner final identity mismatch"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "runner-failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7355
+      },
+      {
+        "case": "malformed-final-duplicate-final",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-bad-final",
+            "attemptId": "1",
+            "workId": "work-bad-final",
+            "requestId": "req-bad-final",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "runner emitted a second terminal frame"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7359
+      },
+      {
+        "case": "malformed-final-malformed-after-valid-result",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-bad-final",
+            "attemptId": "1",
+            "workId": "work-bad-final",
+            "requestId": "req-bad-final",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "runner frame has unsupported type \"not-a-runner-frame\""
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7360
+      },
+      {
+        "case": "malformed-final-host-call-after-valid-result",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-bad-final",
+            "attemptId": "1",
+            "workId": "work-bad-final",
+            "requestId": "req-bad-final",
+            "providerAgentId": "provider",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "HOST_PROTOCOL",
+              "message": "runner emitted a host.call after its terminal frame"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "settle-work"
+            ],
+            "hostOperations": []
+          }
+        },
+        "runnerPid": 7361
+      },
+      {
+        "case": "early-exit-before-host-response",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-early-exit",
+            "attemptId": "1",
+            "workId": "work-early-exit",
+            "requestId": "req-early-exit",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "EXECUTION_FAILED",
+              "message": "runner exited without a final frame"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 0,
+            "channelsDisposed": 0
+          },
+          "evidence": {
+            "execution": "runner-failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [],
+            "nodeCompletion": [],
+            "hostOperations": [
+              "agentWork.findProvider"
+            ]
+          }
+        },
+        "runnerPid": 7362
+      },
+      {
+        "case": "link-drop-retained",
+        "receipt": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "exec-drop",
+            "attemptId": "1",
+            "workId": "work-drop",
+            "requestId": "req-drop",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "deliveryState": "unconfirmed",
+            "error": {
+              "code": "RESULT_UNKNOWN",
+              "message": "Work reply deadline elapsed; do not replay",
+              "deliveryState": "unconfirmed",
+              "operation": "agentWork.request"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "admit-work"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.propose",
+              "agentWork.request",
+              "agentWork.dispose"
+            ],
+            "errorKind": "operator"
+          }
+        },
+        "observed": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-d3-u4-work",
+            "graphId": "agentteams.work-query",
+            "graphVersion": "1",
+            "executionId": "exec-drop-query",
+            "attemptId": "1",
+            "workId": "work-drop",
+            "requestId": "req-drop",
+            "providerAgentId": "provider",
+            "targetGeneration": 1,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "observed": true
+          },
+          "business": {
+            "exitCode": 0,
+            "matches": [
+              {
+                "line": 1,
+                "path": "./alpha.txt",
+                "raw": {
+                  "data": {
+                    "absolute_offset": 0,
+                    "line_number": 1,
+                    "lines": {
+                      "text": "alpha marker 4b6c377\n"
+                    },
+                    "path": {
+                      "text": "./alpha.txt"
+                    },
+                    "submatches": [
+                      {
+                        "end": 12,
+                        "match": {
+                          "text": "alpha marker"
+                        },
+                        "start": 0
+                      }
+                    ]
+                  },
+                  "type": "match"
+                },
+                "text": "alpha marker 4b6c377\n"
+              }
+            ],
+            "query": "alpha marker",
+            "status": "matched",
+            "stderr": "",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"lines\":{\"text\":\"alpha marker 4b6c377\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"alpha marker\"},\"start\":0,\"end\":12}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":12625,\"human\":\"0.000013s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":21,\"bytes_printed\":258,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003254s\",\"nanos\":3254042,\"secs\":0},\"stats\":{\"bytes_printed\":258,\"bytes_searched\":21,\"elapsed\":{\"human\":\"0.000013s\",\"nanos\":12625,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "truncated": false
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.work-query",
+            "graphVersion": "1",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "query-request",
+              "return-observation"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "query-request",
+              "return-observation"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.get",
+              "agentWork.dispose"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "limits": "worker approximate note times not authoritative; raw command outcomes and parent observation timestamps govern; installation/actual installed SDK package and whole MVP still separate"
+}
