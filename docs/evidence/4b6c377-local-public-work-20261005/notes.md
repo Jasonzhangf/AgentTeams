@@ -7,3 +7,14 @@
 2026-10-05 08:30:00 -0700 | public-cli-replay | blocked | init exit=1 with listen EPERM 127.0.0.1; start/work/stop did not reach a running launcher because init created no config | public-cli-replay/transcript-summary.txt | keep blocker in final report
 2026-10-05 08:44:18 -0700 | cli-socket-client-test | passed | CLI suite 14 tests: 9 passed, 5 failed only in init loopback EPERM | vitest-cli-final.log | final compile build
 2026-10-05 08:45:00 -0700 | final-build-gates | passed | tsc exit=0, build:runtime exit=0, diff check exit=0, runtime artifacts emitted | final-restored-exit-codes.txt, runtime-artifacts-restored.txt | report INCOMPLETE due sandbox acceptance blocker
+2026-10-05 09:14:00 -0700 | socket-root-fix | passed | local-supervisor projection-failure fixture now reserves the launcher before start and uses a short temp root; suite green | host log: vitest-local-supervisor.log under the unit receipt directory | rerun the affected socket suites
+2026-10-05 09:16:00 -0700 | affected-socket-suites | passed | 7 suites, all green on the host shell | host receipt: affected.json under the unit receipt directory | run the installed public replay
+2026-10-05 09:28:00 -0700 | installed-public-work | passed | staged final pack installed outside the source tree; public CLI submit/query returned real provider matches and the query observed the original request | host receipt: installed-runtime-smoke.receipt.json under the unit receipt directory | run full regression on this exact candidate
+2026-10-05 09:30:00 -0700 | full-regression | passed | pnpm test exit 0 with 0 failed, 0 pending, 0 todo | generated/validation/regression.json | start independent review
+
+The `blocked` entries above are the worker-process record from the GCM sandbox, which
+denies loopback/Unix-socket `listen` and `/bin/ps`. They are kept because they document
+why the acceptance replay had to move to the host shell. The authoritative acceptance
+evidence is the host-side receipt set under the unit receipt directory outside this
+repository; all mutable counts, hashes and candidate identities live there so this file
+never quotes its own revision.
