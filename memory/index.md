@@ -47,6 +47,10 @@ _Empty._
 - tags: `N3`, `ai-reviewed`, `human-unreviewed`, `network`, `runtime`
 - details: [L2/8ea5f7c-n3-runtime-assembly-20260910.md](L2/8ea5f7c-n3-runtime-assembly-20260910.md)
 
+### U3 declared service source delivery and installed BASE proof
+- tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`, `services`, `u3`
+- details: [L2/9b84aaa-source-services-delivery-20261005.md](L2/9b84aaa-source-services-delivery-20261005.md)
+
 ### U3 service-intent design delivered at be4541c
 - tags: `agentteams`, `ai-reviewed`, `design-only`, `human-unreviewed`, `local-mvp`, `u3`
 - details: [L2/9b84aaa-u3-service-design-20261004.md](L2/9b84aaa-u3-service-design-20261004.md)
