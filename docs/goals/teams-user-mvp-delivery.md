@@ -5,10 +5,9 @@
 不代表当前执行状态；历史验收不证明新请求、统一用户配置、Console 和 Session 已交付。
 
 本文件是用户路径 brief，不是新的 goal、subscription 或 task graph。唯一的长程目标、派单
-顺序、owner、review、integration、push、memory 和 cleanup 真源仍是
-[teams-long-running-delivery.md](teams-long-running-delivery.md)；阶段依赖仍由
-[teams-development-plan.md](teams-development-plan.md) 的 G0/L1-L5 定义。本 brief 只把
-产品目标翻译成用户可以执行的路径，供下一次 `/goal` 引用。
+责任与阶段记忆要求见 [teams-long-running-delivery.md](teams-long-running-delivery.md)，
+当前阶段顺序与验收以 [teams-user-delivery-plan.md](teams-user-delivery-plan.md) 为准。
+本历史 brief 不再定义 G0/L1-L5 的当前派单顺序。
 
 ## 用户看到的结果
 

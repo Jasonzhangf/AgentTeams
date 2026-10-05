@@ -3,8 +3,8 @@
 授权：用户要求主任务主导完成整个 AgentTeams，监督/分配子任务，负责进度、冲突、
 协作、提交合并、工作树关闭和资源清理；每阶段执行记忆管理、二级审核并更新 AppSDK memory。
 主任务：`01a07497-8e08-7e90-be56-c9f69d72bb26`。本文件定义执行责任和收尾条件，
-阶段依赖参考 [开发计划](teams-development-plan.md)；当前 MVP 收口的唯一验收入口是本文件
-的 MVP profile。不另建重复任务图。
+当前产品范围、阶段依赖与黑盒完成条件以 [用户交付计划](teams-user-delivery-plan.md) 为准。
+本文件只维护长程责任和阶段记忆要求，不另建任务图或验收清单。
 
 ## 当前收口 profile：Phase 1 Local Network MVP
 
@@ -20,75 +20,14 @@ Agent 之间的数据路径。公网 Relay、NAT/STUN、双 NAT、direct transpo
 本阶段的 mapped live gates 是 `teams-peer-work-execution` 和 `teams-console-offline-work`；
 公网/NAT 证据只由对应的 `*-public-nat` 后续 gates 收集，不得成为本地 profile 的隐含前置。
 
-### MVP 完成条件
+产品完成以用户交付计划中的 BB01–BB14 和最终收口条件为准。本文件不另列较窄的
+“一次 Work”验收或过期的 Endpoint/browser backlog，避免把组件通过当成用户 MVP 完成。
 
-以下条件全部满足才允许关闭本轮 profile；任何单项缺失都保留为 open 或
-cleanup-pending：
+## 主任务与实施 worker
 
-1. **真实本地 daemon 主链**：同一集成候选从 `~/.agentteams/config.toml` 启动至少两个
-   独立 daemon 进程和其本地 bridge。两个 daemon 完成登录/注册、identity/generation、
-   directory、capability/resource 广播、匹配和 Work proposal/request/result/close。不能用
-   进程内函数调用或 Console 转发代替真实 socket。
-2. **最小被动能力**：至少一个 passive capability Agent 声明能力和容量，并通过固定 CLI
-   operation 完成一次真实本地请求；固定目录 `file-search` 作为确定性验收能力，browser
-   capability/adapter 保持可编译和受测试。
-3. **资源与幂等**：provider 的容量分配不能超卖；重复 request 不重复执行；成功、取消
-   或确认销毁后释放 allocation；provider 重启后旧 generation 明确拒绝，新 generation
-   重新发现并完成 Work；至少保留一对多容量的 focused regression。
-4. **Provider 配置最小闭环**：Teams 自己保存多个 provider instance、模型目录、accepted
-   revision 和 effective revision。RCC `127.0.0.1:4444` 是主 provider，canonical instance
-   `goaichat-openai`（来自 `goaichat_openai` 配置）是显式 backup provider；两者都通过真实 OpenCode 入口完成 catalog/apply/readback 和
-   重启读回。不得加入隐式 failover，凭据不得进入业务 payload、metadata 或声明。
-5. **UI daemon discovery**：UI 从权威 directory projection 读取 daemon identity、presence、
-   generation、capability 和 resource；不复制 runtime/network 台账。Console 关闭后 Work 仍
-   完成；UI 视觉增强、关系图和移动布局不属于本轮门禁。
-6. **工程交付闭环**：每个 delivery unit 具备 issue、独立 worktree/branch、candidate
-   测试、独立 exact review、integration SHA、mainline 验证、远端 push receipt、memory
-   Level 2（`ai-reviewed`,`human-unreviewed`）和 cleanup receipt。目标关闭前根树干净，
-   自有工作树、进程、监听、临时目录和 branch 均已安全回收。
-
-### 明确的 post-MVP backlog
-
-- 公网 Relay、STUN/ICE、NAT-to-NAT direct 和 direct/relay 自动候选编排；
-- Endpoint E1/E2 完整注册、发现、AppSDK admission 和 Work 绑定；
-- master/slave 与关系治理、撤销、离线关系投影；
-- browser 多 profile、真实桌面/手机蜂窝回放和更完整 CLI 能力；
-- Console 完整 UI 可访问性、移动布局和关系/Work 深度投影；
-- provider 自动 failover、复杂模型策略、组织/计费和生产平台能力。
-
-## 范围与完成定义
-
-推进上述 Local Network MVP profile 所需的公共契约、本地 bridge、daemon/network、
-provider/OpenCode、Agent Work/资源、最小 passive CLI 和 UI daemon projection。公网 Relay、
-direct、Endpoint、关系、移动端和完整 UI 的 live acceptance 保留为 post-MVP backlog；它们不能被本阶段 receipt
-伪装成已完成，但适用的 source regression gate 仍然执行。
-MVP 完成必须同时具备：
-
-- 已确认本阶段功能逐项通过当前候选的适用测试、构建、daemon 启停/重启和真实本地 socket
-  入口验收；两个独立 daemon、capability/resource、Work 和 Console 全离线继续执行均留证。
-- 主任务审核、用户选择的独立 Codex exact review（本目标不使用 AGY Review）、集成候选验证通过，已授权提交与合并具有远端
-  主线 receipt。
-- 每阶段的有效结论经过 memory Level 2 审核并由官方 memory CLI 更新/verify。
-- 本任务及子任务拥有的工作树、临时服务/端口、锁和协作claim已逐项安全收尾；保留对象
-  必须有明确用途和后续责任，不能把仍有保留义务的资源写成已清理。
-- 当前进度、未完成与残留资源有准确交接。全部满足后才将长期目标标为完成并停止监督。
-
-范围按既有首版计划收敛，不自动扩展为任意未来插件或生产平台。真实设备、网络、凭据
-不足时先完成不依赖它们的工作，再提出具体所需环境；不能用mock、health或历史回放补票。
-
-## 主任务与三个长期辅助session
-
-| owner | session | 独占实施范围 |
-|---|---|---|
-| 主任务 | `01a07497-8e08-7e90-be56-c9f69d72bb26` | 公共协议、N2、Agent Host装配、公共maps/产物绑定、集成与最终审核 |
-| N1 Luna/max | `01a074db-feaf-7010-9f58-cd56208afc06` | `server/**`；本轮临时独占根package/lock的ws依赖变更 |
-| C1 Luna/max | `01a074db-feaf-7010-9f58-cd4763fc3837` | `config/**`、`opencode-adapter/**` |
-| W1 Luna/max | `01a074db-feaf-7010-9f58-cd8e8e3ef7cf` | `agent/**` |
-
-这些已有辅助 session 只按当前 MVP delivery unit 复用，不创建新的 goal/subscription；B1/U1/R1
-等后续波次不属于本轮收口。
-主任务使用紧凑状态查询和结果通知检查进度，优先解决首次阻断，不反复让辅助任务全仓探索。
-分屏查看使用已有独立任务入口；创建/显示界面与实际执行状态分别核实。
+Desktop 主任务负责架构、依赖、派单、验收、集成、推送和自有资源管理。
+按当前 `codex-orchestrator` 为独立实施范围新建 `codex exec --profile gcm`；只传当前
+任务合同。worker 身份、范围和状态从本任务笔记与实际执行结果读取，不复用旧 session 表。
 
 并发写入必须有路径归属。公共接口变更先由主任务决定并统一通知；冲突交由主任务协调，
 禁止双方各加fallback或兼容层。不能覆盖其他worker修改。已隔离的独立开发不依赖
@@ -96,24 +35,11 @@ Collab 或 tmux；不得伪造登记/claim，确实依赖共享锁的操作等�
 
 ## 每阶段闭环
 
-1. 查当前主线、阶段依赖、已有L2记忆和实际子任务状态；绑定owner、路径、工作树、验收。
-2. 从最新origin/main建立clean工作树。实现前读受影响maps；红测→最小实现→定向验证。
-3. 补齐适用回归、typecheck/build和真实入口。服务验证前声明实际部署操作。
-4. 主任务审查候选、证据真伪和消融；用户选择的独立 Codex exact review 通过后，执行精确集成候选验证；本目标不使用 AGY Review。
-5. 候选稳定后，主任务从worker run notes提取最小阶段记忆，去重并写为L3；主任务复核
-   实际测试及来源证据后通过官方promote升为L2，标记AI已复核、尚未经人类复核并verify。
-   无需另一个agent审核；代码review不自动等于memory事实复核。
-6. 提交、推送、PR合并并确认远端receipt；新增/修订集成状态记忆另经L2审核，不预写成功。
-7. 归档必要证据，确认没有唯一未合并改动/未跟踪工作，停本任务服务、释放claim和工作树。
-   有依赖时先保留并记录，实际移除后才记closed；完成清理记忆后阶段才closed。
-
-阶段状态、适用门禁与证据复用统一由 [开发管控](../development-governance.md#阶段证据与复用)
-定义；本文件不再重复维护全字段指纹和独立复用记录要求。现有任务笔记引用有效原始
-证据并说明相关输入和复用依据即可。缺失、失效或冲突证据不能复用。
+工程交付遵循项目 `AGENTS.md` 所引用的交付闭环与
+[开发管控](../development-governance.md)。阶段状态与证据复用由开发管控维护；
+本文件不再另列实现、验证、review 和集成步骤。适用的工程证据、下述阶段 L2 与
+自有资源收尾齐备后才关闭阶段；有保留责任时明确记录，不预写完成。
 阶段收尾记忆可作为独立小提交，不为增加一条已核实的 receipt 重复整个产品运行回放。
-
-只重跑实际受影响的验证；不能因为恢复任务、切换阶段名称、提交记录或重新打开
-Console 就全量重跑。main、远端及 runtime 的可变状态在对应动作边界刷新。
 
 ## 每阶段 AppSDK memory / Level 2
 
@@ -135,19 +61,17 @@ promote --id <id> --level 2 --evidence <真实审核引用>→verify/get核实�
 
 ## 提交与资源管理
 
-主任务管理候选提交和PR合并队列；辅助任务先交付已验证候选，收到明确安排后才commit。
+主任务管理候选提交和集成队列；worker 的 commit、merge 和 push 范围由任务合同明确。
 合并不使用保护绕过或强推。主线保持代码开发只读，允许已授权集成同步和验证。
 不自动清理其他项目、其他任务、含唯一工作或仍被引用的目录。临时证据在删除前转存到
 任务可保留的证据目录，不能仅留下/tmp路径后宣布清理完成。服务停止仅按明确PID/服务名。
-Collab记录只能由记录owner更新，主任务通知原owner关闭，不冒充其身份。
-
-当前工作树库存需逐个核实：治理/设计/P0、主开发、三条Luna实施，以及应用自动创建的
-三个旧阅读工作树。已合并不等于可删：先检查未跟踪证据、unique commits、session绑定
-和活跃进程。当前设计工作树的未提交差异需证明已被基准完整收录后再决定归档/关闭。
+本目标独立执行，不把 Collab 身份、注册或外部 Master 作为前置。
+资源库存从任务笔记与 `git worktree list --porcelain` 读取，不在本合同保存会过期的
+工作树名单。按项目 `AGENTS.md` 的资源规则核销；保留对象必须记录 owner、用途和解除条件。
 
 ## 持续监督与中断恢复
 
-以本任务的长期goal为执行目标；线程heartbeat用于恢复检查和监督，不另起第二个主开发者。
-每次恢复先查goal、最新阶段/记忆、子任务状态、Git和资源实际状态，再执行下一可做动作。
+以本任务的 active goal 为执行目标。恢复先读当前节点笔记，再刷新当前动作依赖的
+goal、worker、Git 或资源状态；不因唤醒重查所有未变对象。
 无变化不重复发状态。里程碑完成、实质失败、需要用户输入或全部完成时通知用户。
 停止/暂停用户指令立即生效；自动运行不扩大已授权的生产、凭据或设备操作范围。
