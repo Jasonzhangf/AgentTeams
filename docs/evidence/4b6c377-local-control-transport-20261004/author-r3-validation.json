@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-05T05:58:00.398Z",
+  "base": "9a95b63f3b44d7eb7f5cf4f53e40743b2f3bce0a",
+  "source_owner": "runtime",
+  "changed_paths": [
+    "docs/architecture/function-map.json",
+    "docs/architecture/mainline-call-map.json",
+    "docs/architecture/module-registry.json",
+    "docs/architecture/resource-map.json",
+    "docs/architecture/verification-map.json",
+    "docs/evidence/4b6c377-local-control-transport-20261004/author-r2-validation.json",
+    "docs/evidence/4b6c377-local-control-transport-20261004/current-main-validation.json",
+    "docs/evidence/4b6c377-local-control-transport-20261004/notes.md",
+    "docs/evidence/4b6c377-local-control-transport-20261004/socket-evidence.json",
+    "runtime/local-work-control.spec.ts",
+    "runtime/local-work-control.ts"
+  ],
+  "tests": {
+    "socket_passed": 15,
+    "socket_failed": 0,
+    "raw": "r3-parent-socket-green.json"
+  },
+  "causal_pair": {
+    "red": "r3-author-command-output.json#r3-red-decoder.log",
+    "green": "r3-author-command-output.json#r3-green-decoder.log"
+  },
+  "typecheck": {
+    "exit": 0,
+    "raw": "r3-author-command-output.json#r3-typecheck.log"
+  },
+  "build_runtime": {
+    "exit": 0,
+    "raw": "r3-author-command-output.json#r3-build-runtime.log"
+  },
+  "reused_evidence": [
+    "prior current-main 45 process/config PASS: those inputs unchanged",
+    "r2 causal positive demands/prototype/replydrain evidence: unchanged owner guarantees"
+  ],
+  "limitations": [
+    "AF_UNIX blocked in child sandbox; parent actual raw Unixsocket suite passed",
+    "not installed Work CLI acceptance",
+    "r2 review FAIL is historical, current r3 review required"
+  ]
+}

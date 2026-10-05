@@ -1,0 +1,212 @@
+{
+  "generatedAt": "2026-10-05T02:03:53.630Z",
+  "evidence": [
+    {
+      "case": "success-preservation",
+      "response": {
+        "kind": "work.result",
+        "requestId": "corr-1",
+        "receipt": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-local-work",
+            "graphId": "agentteams.submit",
+            "graphVersion": "1",
+            "executionId": "execution-1",
+            "attemptId": "attempt-1",
+            "workId": "work-1",
+            "requestId": "request-1",
+            "providerAgentId": "provider-1",
+            "targetGeneration": 12,
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "workClosure": "retained"
+          },
+          "business": {
+            "text": "alpha",
+            "nested": [
+              1,
+              null,
+              {
+                "key": "value"
+              }
+            ]
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.submit",
+            "graphVersion": "1",
+            "nodeSchedule": [
+              "resolve-service",
+              "execute-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "execute-work"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.request"
+            ]
+          }
+        }
+      },
+      "sideEffects": [
+        {
+          "kind": "work.submit",
+          "accepted": true
+        }
+      ],
+      "socketAfterHandler": {
+        "exists": true,
+        "mode": 384,
+        "isSocket": true
+      }
+    },
+    {
+      "case": "own-socket-cleanup-after-success",
+      "socket": {
+        "exists": false
+      }
+    },
+    {
+      "case": "five-modes-and-query-selections",
+      "requestKinds": [
+        "work.submit",
+        "work.query",
+        "work.query",
+        "work.open",
+        "work.request",
+        "work.close"
+      ],
+      "responseCorrelations": [
+        "corr-1",
+        "corr-q1",
+        "corr-q2",
+        "corr-o",
+        "corr-r",
+        "corr-c"
+      ]
+    },
+    {
+      "case": "authorization-before-handler",
+      "errors": [
+        {
+          "kind": "work.error",
+          "requestId": "corr-1",
+          "error": {
+            "code": "NOT_AUTHORIZED",
+            "message": "Work start token does not match the current launcher"
+          }
+        },
+        {
+          "kind": "work.error",
+          "requestId": "corr-1",
+          "error": {
+            "code": "STALE_GENERATION",
+            "message": "Work request targets a stale launcher generation"
+          }
+        },
+        {
+          "kind": "work.error",
+          "requestId": "corr-1",
+          "error": {
+            "code": "RECEIVER_NOT_FOUND",
+            "message": "Work receiver missing-receiver is not available"
+          }
+        }
+      ],
+      "handlerCalls": 0
+    },
+    {
+      "case": "closed-frame-rejection",
+      "codes": {
+        "unknown": "HOST_PROTOCOL",
+        "topExtra": "HOST_PROTOCOL",
+        "controlExtra": "HOST_PROTOCOL",
+        "missingWorkId": "HOST_PROTOCOL",
+        "closeBusiness": "HOST_PROTOCOL",
+        "queryBusiness": "HOST_PROTOCOL"
+      },
+      "validCorrelation": "corr-1"
+    },
+    {
+      "case": "pre-dispatch-eof",
+      "partial": "",
+      "calls": 0,
+      "socketRemoved": true
+    },
+    {
+      "case": "pre-dispatch-eof",
+      "partial": "{\"kind\":",
+      "calls": 0,
+      "socketRemoved": true
+    },
+    {
+      "case": "idle-peer-close",
+      "calls": 0,
+      "socketRemoved": true
+    },
+    {
+      "case": "handler-error-shutdown",
+      "error": "owned handler failed",
+      "socketRemoved": true
+    },
+    {
+      "case": "post-dispatch-peer-disconnect",
+      "admissionClosedBeforeDrain": true,
+      "acceptedHandlerDrained": true,
+      "sideEffects": [
+        {
+          "kind": "work.submit",
+          "accepted": true
+        }
+      ]
+    },
+    {
+      "case": "admission-closure",
+      "acceptedBeforeClose": {
+        "kind": "work.submit",
+        "requestId": "corr-before-close",
+        "control": {
+          "receiverAgentId": "receiver-1",
+          "expectedLauncherGeneration": 7,
+          "startToken": "token-7",
+          "executionId": "execution-1",
+          "attemptId": "attempt-1",
+          "workId": "work-1",
+          "requestId": "request-1"
+        },
+        "business": {
+          "text": "alpha",
+          "nested": [
+            1,
+            null,
+            {
+              "key": "value"
+            }
+          ]
+        }
+      },
+      "rejectedAfterClose": true,
+      "socket": {
+        "exists": false
+      }
+    },
+    {
+      "case": "do-not-replace-or-alter-existing-socket",
+      "preserved": "existing-owner\n"
+    },
+    {
+      "case": "overlong-socket-path-rejected",
+      "socketPathBytes": 194,
+      "residualSocket": false
+    }
+  ]
+}

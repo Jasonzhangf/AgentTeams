@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-05T06:44:13.447Z",
+  "base": "468111a785ca21bb398369ce10b865be973be61c",
+  "owner": "runtime",
+  "source_hashes": {
+    "runtime/local-work-control.ts": "7191976f90d279627b7d14cb122139e125369e9f24aab76616675edc02ebb0d3",
+    "runtime/local-work-control.spec.ts": "f6f9298b8acfe9eb6d2d4ce85d54bfc0bb699934491432728bc0885b97c1e749"
+  },
+  "source_byte_equivalent_to_r3": true,
+  "public_entry": {
+    "passed": 15,
+    "failed": 0,
+    "raw": "current-r4-public-socket.json",
+    "entry": "sendLocalWorkControlRequest / raw AF_UNIX socket -> startLocalWorkControlListener -> decoder -> handler"
+  },
+  "fix_evidence": {
+    "endpoint_query": "Current line215 invokes variant-specific exact envelope keys before returning endpoint",
+    "demands": "Current line192 invokes exact resourceId/amount keys before positive-amount normalization",
+    "red_green": "r3-author-command-output.json preserves owning decoder RED1/GREEN0 raw bytes; source unchanged"
+  },
+  "reused": {
+    "typecheck": "r3-author-command-output.json#r3-typecheck.log exit0; source/dependencies unchanged",
+    "runtime_build": "r3-author-command-output.json#r3-build-runtime.log exit0; actual new artifact rebuilt by official compile",
+    "adjacent45": "author-r2-validation.json public config/process45; its inputs unchanged except documentation and deletion of unrelated historical-only test",
+    "topology": "Existing five Work graphs and admitted socket design are unchanged"
+  },
+  "historical_evidence": [
+    "author-r2-validation.json belongs its named pre-two-P1 input",
+    "author-r3-validation.json belongs 9a95 source and current fixed bytes",
+    "current-main-validation.json and socket-evidence.json are older named inputs",
+    "r3 review FAIL retained externally, not integration permission"
+  ],
+  "limitations": [
+    "Socket library seam only; installed CLI assembly/whole MVP incomplete"
+  ],
+  "next": "Refresh compile/smoke/verify for latest doc-only main; reuse unchanged public replay/type/build inputs; independent r4 on exact candidate"
+}
