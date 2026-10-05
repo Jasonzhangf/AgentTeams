@@ -252,6 +252,11 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
   const rg = (await run('which', ['rg'], { cwd: dirname(configPath), env: cliEnv })).stdout.trim()
   assert(rg.startsWith('/'), `owned rg executable is not absolute: ${rg}`)
   writeFileSync(configPath, fixtureConfigText(rg), { encoding: 'utf8', mode: 0o600 })
+  // The provider declares `searchRoot = "files"`, resolved beside the config.
+  // Give the installed Work replay one real input so the capability must return
+  // an actual match instead of an empty no-match summary.
+  mkdirSync(join(dirname(configPath), 'files'), { recursive: true })
+  writeFileSync(join(dirname(configPath), 'files', 'needle.txt'), 'installed work needle\n', { encoding: 'utf8' })
 
   let activeGeneration
   let lifecycle
@@ -291,6 +296,8 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
     assert(receiptA.control?.requestState === 'succeeded', `installed Work submit requestState=${receiptA.control?.requestState}`)
     assert(typeof receiptA.control?.graphId === 'string' && receiptA.control.graphId.length > 0, 'installed Work submit did not run a DAGpipe graph')
     assert(receiptA.evidence?.execution === 'completed', `installed Work submit evidence=${receiptA.evidence?.execution}`)
+    assert(receiptA.business?.status === 'matched' && Array.isArray(receiptA.business?.matches) && receiptA.business.matches.length > 0,
+      `installed Work submit did not return a real provider match: ${submitA.stdout.trim()}`)
 
     const submitB = await run(cli, ['work', 'submit', '--config', configPath, '--receiver', 'installed-receiver', '--payload', '{"query":"second"}'], { cwd: dirname(configPath), env: cliEnv })
     const receiptB = JSON.parse(submitB.stdout)
