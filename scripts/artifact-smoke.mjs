@@ -19,16 +19,33 @@ assert.ok(existsSync(artifact), 'staged package root is missing')
 const rootPackage = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
 const packageJson = JSON.parse(readFileSync(resolve(artifact, 'package.json'), 'utf8'))
 const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'))
+assert.ok(receipt.mode === 'base' || receipt.mode === 'final', `receipt.mode must be base or final, got ${receipt.mode}`)
 assert.equal(packageJson.name, 'agentteams')
 assert.equal(packageJson.version, rootPackage.version)
-assert.deepEqual(packageJson.files, rootPackage.files)
+const expectedFiles = receipt.mode === 'base'
+  ? rootPackage.files.filter(file => file !== 'runtime/dagpipe')
+  : rootPackage.files
+assert.deepEqual(packageJson.files, expectedFiles)
 assert.deepEqual(packageJson.dependencies, rootPackage.dependencies)
-assert.equal(receipt.mode, 'base')
 assert.equal(receipt.release_eligible, false)
 assert.equal(receipt.version, rootPackage.version)
 assert.equal(existsSync(resolve(artifact, 'runtime', 'package.json')), false)
 assert.equal(existsSync(resolve(artifact, 'static', 'console.html')), false)
 assert.equal(existsSync(resolve(artifact, 'ui', 'index.js')), false)
+if (receipt.mode === 'final') {
+  assert.equal(receipt.sdk.included, true, 'final receipt must declare included SDK assets')
+  for (const path of [
+    'runtime/dagpipe/manifest.json',
+    'runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner',
+    'runtime/dagpipe/graphs/agent-work.graph.json',
+    'runtime/dagpipe/graphs/work-open.graph.json',
+    'runtime/dagpipe/graphs/work-request.graph.json',
+    'runtime/dagpipe/graphs/work-close.graph.json',
+    'runtime/dagpipe/graphs/work-query.graph.json',
+  ]) {
+    assert.ok(existsSync(resolve(artifact, path)), `final staged pack is missing ${path}`)
+  }
+}
 
 for (const relativePath of [
   'cli/agentteams.mjs',
@@ -107,7 +124,7 @@ try {
   })
   assert.equal(session.status, 200)
   assert.deepEqual(received, { target: { agentId: 'a', sessionId: 's' }, payload })
-  console.log('Packaged Console smoke passed: one staged pack root, actual Basic auth, static/UI bytes, and owner-denied API. No provider or cross-device claim.')
+  console.log(`Packaged Console smoke passed: one staged ${receipt.mode} pack root, actual Basic auth, static/UI bytes, and owner-denied API. No provider or cross-device claim.`)
 } finally {
   server.closeAllConnections?.()
   await new Promise(resolvePromise => server.close(resolvePromise))

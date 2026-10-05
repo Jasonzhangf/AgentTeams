@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { runPackageUserSmoke } from './package-user-smoke.mjs'
 
@@ -30,6 +30,14 @@ function parseOptions(argv) {
 
 try {
   const options = parseOptions(process.argv.slice(2))
+  const packageReceiptPath = resolve(options.packRoot, '..', 'package-receipt.json')
+  if (!existsSync(packageReceiptPath)) {
+    throw new Error(`installed runtime smoke: staged package receipt is missing: ${packageReceiptPath}`)
+  }
+  const stagedMode = JSON.parse(readFileSync(packageReceiptPath, 'utf8')).mode
+  if (stagedMode !== 'base' && stagedMode !== 'final') {
+    throw new Error(`installed runtime smoke: unsupported staged package mode: ${stagedMode}`)
+  }
   const receipt = await runPackageUserSmoke({
     packRoot: options.packRoot,
     receiptPath: options.receiptPath,
@@ -38,9 +46,12 @@ try {
   if (receipt.lifecycle?.status !== 'passed') {
     throw new Error('installed runtime smoke: INSTALLED_LIFECYCLE_UNAVAILABLE: no installed start/restart evidence was produced')
   }
+  if (receipt.mode !== stagedMode) {
+    throw new Error(`installed runtime smoke: receipt mode ${receipt.mode} does not match staged package mode ${stagedMode}`)
+  }
   const receiptSha256 = createHash('sha256').update(readFileSync(options.receiptPath)).digest('hex')
   console.log(`u1-installed-receipt ${options.receiptPath} sha256:${receiptSha256}`)
-  console.log('Installed runtime smoke passed: the staged base package was installed outside the source tree and consumed through installed CLI/Relay/Agent lifecycle plus Console entrypoints.')
+  console.log(`Installed runtime smoke passed: the staged ${stagedMode} package was installed outside the source tree and consumed through installed CLI/Relay/Agent lifecycle plus Console entrypoints.`)
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error))
   process.exitCode = 1

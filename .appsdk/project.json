@@ -118,6 +118,14 @@
         "generated/modules/teams-source/lib/generated/runtime-lib/server/relay-process.js",
         "generated/modules/teams-source/lib/generated/runtime-lib/agent/work-resource.js",
         "generated/modules/teams-source/lib/generated/runtime-lib/config/runtime-config.js",
+        "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/endpoint-ref.js",
+        "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/json-value.js",
+        "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/relay-codec.js",
+        "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/work-wire.js",
+        "generated/modules/teams-source/lib/generated/runtime-lib/network/work-channel.js",
+        "generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-work-client.js",
+        "generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/host.js",
+        "generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/protocol.js",
         "generated/modules/teams-source/lib/console-host/lib/index.mjs",
         "generated/modules/teams-source/lib/console-host/lib/index.d.mts",
         "generated/modules/teams-source/lib/console-host/static/console.html",
@@ -125,7 +133,14 @@
         "generated/modules/teams-source/lib/ui/teams-console/index.js",
         "generated/modules/teams-source/lib/ui/teams-console/browser.js",
         "generated/modules/teams-source/lib/ui/teams-console/client/render.js",
-        "generated/modules/teams-source/lib/ui/teams-console/assets/agentbrowser-icon.jpg"
+        "generated/modules/teams-source/lib/ui/teams-console/assets/agentbrowser-icon.jpg",
+        "generated/modules/teams-source/lib/runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner",
+        "generated/modules/teams-source/lib/runtime/dagpipe/manifest.json",
+        "generated/modules/teams-source/lib/runtime/dagpipe/graphs/agent-work.graph.json",
+        "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-open.graph.json",
+        "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-request.graph.json",
+        "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-close.graph.json",
+        "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-query.graph.json"
       ],
       "build": {
         "args": [

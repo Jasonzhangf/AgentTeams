@@ -1,11 +1,13 @@
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { candidatePackReceipt, installedLifecycleReceipt } from '../scripts/lifecycle-adapter.mjs'
+import { verifyInstalledRuntime } from '../scripts/package-sdk-smoke.mjs'
 import { currentCandidateIdentity } from '../scripts/receipt-identity.mjs'
 
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
@@ -16,6 +18,7 @@ const maxBuffer = 32 * 1024 * 1024
 
 let evidenceDir: string
 let installedReceiptPath: string
+let installedSdkReceiptPath: string
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -61,6 +64,70 @@ async function runInstalledSmoke(receipt = installedReceiptPath): Promise<void> 
   })
 }
 
+async function runInstalledSdkSmoke(receipt = installedSdkReceiptPath): Promise<void> {
+  await execFileAsync(process.execPath, ['scripts/package-sdk-smoke.mjs', '--receipt-path', receipt], {
+    cwd: root,
+    env: process.env,
+    maxBuffer,
+  })
+}
+
+async function runArtifactSmoke(): Promise<void> {
+  await execFileAsync(process.execPath, ['scripts/artifact-smoke.mjs'], {
+    cwd: root,
+    env: process.env,
+    maxBuffer,
+  })
+}
+
+async function createStagedModeFixture(mode?: string): Promise<{ root: string; packRoot: string; marker: string; binDir: string }> {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'u1-staged-mode-'))
+  const fixturePackRoot = join(fixtureRoot, 'lib')
+  const binDir = join(fixtureRoot, 'bin')
+  const marker = join(fixtureRoot, 'npm-invoked')
+  await mkdir(fixturePackRoot)
+  await mkdir(binDir)
+  const rootPackage = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { name: string; version: string }
+  await writeFile(join(fixturePackRoot, 'package.json'), `${JSON.stringify({
+    name: rootPackage.name,
+    version: rootPackage.version,
+  }, null, 2)}\n`)
+  await writeFile(join(fixtureRoot, 'package-receipt.json'), `${JSON.stringify(mode === undefined ? {} : { mode }, null, 2)}\n`)
+  const npmPath = join(binDir, 'npm')
+  await writeFile(npmPath, `#!/bin/sh\ntouch ${JSON.stringify(marker)}\nexit 97\n`)
+  await chmod(npmPath, 0o755)
+  return { root: fixtureRoot, packRoot: fixturePackRoot, marker, binDir }
+}
+
+function sha256Text(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+async function createInstalledRuntimeFixture(): Promise<{ root: string; manifest: Record<string, unknown> }> {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'u1-installed-runtime-'))
+  const runtimeRoot = join(fixtureRoot, 'runtime', 'dagpipe')
+  const runner = join(runtimeRoot, 'bin', 'darwin-arm64', 'agentteams-dagpipe-runner')
+  await mkdir(join(runtimeRoot, 'bin', 'darwin-arm64'), { recursive: true })
+  await mkdir(join(runtimeRoot, 'graphs'), { recursive: true })
+  const runnerContent = 'runtime-fixture-runner\n'
+  await writeFile(runner, runnerContent)
+  await chmod(runner, 0o755)
+  const graphIds = ['agent-work', 'work-open', 'work-request', 'work-close', 'work-query']
+  const graphs = []
+  for (const id of graphIds) {
+    const content = `${JSON.stringify({ id, version: '1' })}\n`
+    await writeFile(join(runtimeRoot, 'graphs', `${id}.graph.json`), content)
+    graphs.push({ id, path: `graphs/${id}.graph.json`, sha256: sha256Text(content) })
+  }
+  const manifest = {
+    schemaVersion: 1,
+    runner: { path: 'bin/darwin-arm64/agentteams-dagpipe-runner', sha256: sha256Text(runnerContent) },
+    graphs,
+  }
+  await writeFile(join(runtimeRoot, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  return { root: fixtureRoot, manifest }
+}
+
 async function tamperedReceipt(name: string, mutate: (receipt: any) => void): Promise<string> {
   const receipt = JSON.parse(await readFile(installedReceiptPath, 'utf8'))
   mutate(receipt)
@@ -91,10 +158,36 @@ async function createIdentityFixtureRepo(): Promise<string> {
   return repo
 }
 
+it('rejects omitted, empty, incomplete, or mispathed installed graph manifests', async () => {
+  const fixture = await createInstalledRuntimeFixture()
+  try {
+    expect(() => verifyInstalledRuntime(fixture.root)).not.toThrow()
+    for (const mutate of [
+      (manifest: any) => { delete manifest.graphs },
+      (manifest: any) => { manifest.graphs = [] },
+      (manifest: any) => { manifest.graphs = manifest.graphs.filter((graph: any) => graph.id !== 'work-close') },
+    ]) {
+      const manifest = structuredClone(fixture.manifest)
+      mutate(manifest)
+      await writeFile(join(fixture.root, 'runtime', 'dagpipe', 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+      expect(() => verifyInstalledRuntime(fixture.root)).toThrow(/installed manifest graph set does not match packaged graphs/u)
+    }
+    const mispathed = structuredClone(fixture.manifest)
+    const graphPath = join(fixture.root, 'runtime', 'dagpipe', 'graphs', 'agent-work.graph.json')
+    await copyFile(graphPath, join(fixture.root, 'runtime', 'dagpipe', 'graphs', 'agent-work-copy.graph.json'))
+    mispathed.graphs.find((graph: any) => graph.id === 'agent-work').path = 'graphs/agent-work-copy.graph.json'
+    await writeFile(join(fixture.root, 'runtime', 'dagpipe', 'manifest.json'), `${JSON.stringify(mispathed, null, 2)}\n`)
+    expect(() => verifyInstalledRuntime(fixture.root)).toThrow(/installed graph agent-work path is wrong/u)
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true })
+  }
+})
+
 describe('agentteams install package', () => {
   beforeAll(async () => {
     evidenceDir = await mkdtemp(join(tmpdir(), 'u1-package-install-spec-'))
     installedReceiptPath = join(evidenceDir, 'installed-runtime-smoke.receipt.json')
+    installedSdkReceiptPath = join(evidenceDir, 'installed-sdk-smoke.receipt.json')
     await execFileAsync('pnpm', ['build'], { cwd: root, env: process.env, maxBuffer })
     await execFileAsync(process.execPath, ['scripts/package-artifact.mjs', '--mode', 'base'], {
       cwd: root,
@@ -189,7 +282,7 @@ describe('agentteams install package', () => {
       cpu: ['arm64'],
       dependencies: rootPackage.dependencies,
     })
-    expect(receipt).toMatchObject({ mode: 'base', release_eligible: false, version: rootPackage.version })
+    expect(receipt).toMatchObject({ mode: 'base', release_eligible: false, version: rootPackage.version, sdk: { included: false } })
 
     const required = [
       'cli/agentteams.mjs',
@@ -215,9 +308,13 @@ describe('agentteams install package', () => {
     }
     expect(packedFiles).toEqual(receiptFiles)
 
-    expect(await exists(join(packRoot, 'runtime', 'package.json'))).toBe(false)
+    expect(await exists(join(packRoot, 'runtime', 'dagpipe'))).toBe(false)
     expect(await exists(join(packRoot, 'node_modules'))).toBe(false)
   }, 30_000)
+
+  it('passes the public artifact smoke against the staged base pack', async () => {
+    await expect(runArtifactSmoke()).resolves.toBeUndefined()
+  }, 60_000)
 
   it('packs and installs the base tarball for public CLI and Console consumers', async () => {
     await execFileAsync(process.execPath, ['scripts/package-artifact.mjs', '--mode', 'base'], {
@@ -228,17 +325,89 @@ describe('agentteams install package', () => {
     await expect(runPackageUserSmoke()).resolves.toBeUndefined()
   }, 300_000)
 
-  it('requires explicit base mode until the final SDK build interface exists', async () => {
-    let error: unknown
-    try {
-      await execFileAsync(process.execPath, ['scripts/package-artifact.mjs'], { cwd: root, env: process.env })
-    } catch (caught) {
-      error = caught
-    }
-    expect(error).toMatchObject({
-      stderr: expect.stringContaining('final mode requires the frozen D3/U4 SDK build receipt interface'),
+  it('records base asset success without claiming installed lifecycle evidence', async () => {
+    await runPackageUserSmoke()
+    const baseReceipt = await readJson(join(evidenceDir, 'package-user-smoke.receipt.json'))
+    expect(baseReceipt).toMatchObject({
+      mode: 'base',
+      release_eligible: false,
+      lifecycle: { status: 'not_run' },
     })
+    expect(baseReceipt).not.toHaveProperty('deployment_restart')
+  }, 300_000)
+
+  it.each([
+    ['missing', undefined, /staged package receipt mode must be base or final, got undefined/u],
+    ['unsupported', 'preview', /staged package receipt mode must be base or final, got preview/u],
+  ])('rejects %s staged package mode before installed effects', async (_name, mode, message) => {
+    const fixture = await createStagedModeFixture(mode)
+    try {
+      await expect(execFileAsync(process.execPath, [
+        'scripts/package-user-smoke.mjs',
+        '--pack-root', fixture.packRoot,
+        '--receipt-path', join(fixture.packRoot, '..', 'package-user-smoke.receipt.json'),
+      ], {
+        cwd: root,
+        env: { ...process.env, PATH: `${fixture.binDir}:${process.env.PATH}` },
+        maxBuffer,
+      })).rejects.toMatchObject({ stderr: expect.stringMatching(message) })
+      expect(await exists(fixture.marker)).toBe(false)
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true })
+    }
   })
+
+  it('rejects an unsupported staged mode at the installed lifecycle consumer before installed effects', async () => {
+    const fixture = await createStagedModeFixture('preview')
+    try {
+      await expect(execFileAsync(process.execPath, [
+        'scripts/installed-runtime-smoke.mjs',
+        '--pack-root', fixture.packRoot,
+        '--receipt-path', join(fixture.packRoot, '..', 'installed-runtime-smoke.receipt.json'),
+      ], {
+        cwd: root,
+        env: { ...process.env, PATH: `${fixture.binDir}:${process.env.PATH}` },
+        maxBuffer,
+      })).rejects.toMatchObject({ stderr: expect.stringMatching(/unsupported staged package mode: preview/u) })
+      expect(await exists(fixture.marker)).toBe(false)
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true })
+    }
+  })
+
+  it('produces the final SDK package by default', async () => {
+    await execFileAsync(process.execPath, ['scripts/package-artifact.mjs'], { cwd: root, env: process.env, maxBuffer })
+    const finalReceipt = await readJson(receiptPath)
+    expect(finalReceipt).toMatchObject({ mode: 'final', release_eligible: false, sdk: { included: true } })
+    const required = [
+      'runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner',
+      'runtime/dagpipe/manifest.json',
+      'runtime/dagpipe/graphs/agent-work.graph.json',
+      'runtime/dagpipe/graphs/work-open.graph.json',
+      'runtime/dagpipe/graphs/work-request.graph.json',
+      'runtime/dagpipe/graphs/work-close.graph.json',
+      'runtime/dagpipe/graphs/work-query.graph.json',
+      'generated/runtime-lib/control-protocol/endpoint-ref.js',
+      'generated/runtime-lib/control-protocol/json-value.js',
+      'generated/runtime-lib/control-protocol/relay-codec.js',
+      'generated/runtime-lib/control-protocol/work-wire.js',
+      'generated/runtime-lib/network/work-channel.js',
+      'generated/runtime-lib/runtime/agent-work-client.js',
+      'generated/runtime-lib/runtime/dagpipe/host.js',
+      'generated/runtime-lib/runtime/dagpipe/protocol.js',
+    ]
+    for (const path of required) expect(await exists(join(packRoot, path)), path).toBe(true)
+    const finalFiles = finalReceipt.files as string[]
+    for (const path of required) {
+      if (path.startsWith('generated/runtime-lib/')) {
+        expect(finalFiles, `final package receipt is missing ${path}`).toContain(path)
+      }
+    }
+    await expect(runInstalledSdkSmoke()).resolves.toBeUndefined()
+    const receipt = await readJson(installedSdkReceiptPath)
+    expect(receipt).toMatchObject({ mode: 'final', release_eligible: false, status: 'passed' })
+    expect(receipt.candidate).toEqual(finalReceipt.candidate)
+  }, 300_000)
 
   it('consumes the staged runtime library through the public runtime smoke', async () => {
     const { stdout } = await execFileAsync(process.execPath, ['scripts/runtime-smoke.mjs'], {
@@ -249,21 +418,15 @@ describe('agentteams install package', () => {
     expect(stdout).toContain('Packaged runtime smoke passed')
   }, 60_000)
 
-  it('records base asset success without claiming installed lifecycle evidence', async () => {
-    await runPackageUserSmoke()
-    const baseReceipt = await readJson(join(evidenceDir, 'package-user-smoke.receipt.json'))
-    expect(baseReceipt).toMatchObject({
-      release_eligible: false,
-      lifecycle: { status: 'not_run' },
-    })
-    expect(baseReceipt).not.toHaveProperty('deployment_restart')
-  }, 300_000)
-
   it('requires real installed start/restart lifecycle evidence', async () => {
     await runInstalledSmoke()
 
     const installedReceipt = await readJson(installedReceiptPath)
+    const stagedReceipt = await readJson(receiptPath)
+    expect(stagedReceipt.mode).toBe('final')
+    expect(installedReceipt.mode).toBe(stagedReceipt.mode)
     expect(installedReceipt).toMatchObject({
+      mode: 'final',
       release_eligible: false,
       lifecycle: {
         status: 'passed',

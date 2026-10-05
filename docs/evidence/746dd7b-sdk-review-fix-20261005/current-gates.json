@@ -1,0 +1,127 @@
+{
+  "at": "2026-10-05T08:28:18.630Z",
+  "issue": "746dd7b",
+  "state": "author-validated-awaiting-exact-review",
+  "validationCandidate": {
+    "head_commit": "3bf42b2922b6550ce13b9cacb1a9f337b8f6524e",
+    "base_commit": "3bf42b2922b6550ce13b9cacb1a9f337b8f6524e",
+    "tree_hash": "b6534e8a5dc3b9b5baa7ecbbc65eee24b4872832",
+    "indexed_tree_hash": "e80be8a2116f2f60aeca242e1e0a4b75b6c7a2f8",
+    "source_state": "staged"
+  },
+  "publicPackage": {
+    "passed": 23,
+    "pending": 0,
+    "failed": 0,
+    "receipt": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-review-fix-20261005/host-public-tests.json"
+  },
+  "regression": {
+    "passed": 582,
+    "failed": 0,
+    "pending": 0,
+    "command": "pnpm exec vitest run --config vitest.config.ts --maxWorkers=2 --reporter=json",
+    "receipt": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-review-fix-20261005/bounded-regression.json",
+    "originalFailure": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-review-fix-20261005/original-regression.json",
+    "failedFileReplay": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-review-fix-20261005/baseline-failure-replay.json",
+    "realDomEvidence": "Original full regression used TEAMS_CONSOLE_REAL_DOM=1; focus-dom case PASS. Reuse that exact unchanged UI input evidence; bounded regression had default DOM environment."
+  },
+  "gates": {
+    "typecheck": 0,
+    "guideCompile": 0,
+    "compile": 0,
+    "smoke": 0,
+    "verifyCommand": 0,
+    "verifyAssessment": "development_ready true; delivery_assessed false; not MVP closure",
+    "receiptRoot": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-review-fix-20261005"
+  },
+  "installedLifecycle": {
+    "mode": "final",
+    "status": "passed",
+    "startGeneration": 1,
+    "restartGeneration": 2,
+    "startPid": 68261,
+    "restartPid": 69019,
+    "cleanup": {
+      "temporary_root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-hvML1N",
+      "removed": true
+    },
+    "receipt": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-review-fix-20261005/current-installed-runtime.receipt.json"
+  },
+  "installedSdk": {
+    "mode": "final",
+    "status": "passed",
+    "entrypoint": "installed npm tarball -> installed compiled runWorkExecution -> packaged DAGpipe runner -> real provider rg marker",
+    "result": {
+      "status": "completed",
+      "control": {
+        "projectId": "agentteams-installed-sdk-smoke",
+        "graphId": "agentteams.agent-work",
+        "graphVersion": "2",
+        "executionId": "exec-installed-alpha",
+        "attemptId": "1",
+        "workId": "work-installed-alpha",
+        "requestId": "req-installed-alpha",
+        "providerAgentId": "provider",
+        "targetGeneration": 1,
+        "capabilityId": "file-search",
+        "capabilityVersion": "1",
+        "operation": "search",
+        "requestState": "succeeded",
+        "workClosure": "closed"
+      },
+      "matches": [
+        {
+          "path": "./alpha.txt",
+          "text": "alpha marker sdk-final-pack\n"
+        }
+      ]
+    },
+    "compileNegatives": {
+      "missingOperator": {
+        "graph_id": "agentteams.agent-work",
+        "graph_version": "2",
+        "message": "node `resolve-service` references missing operator `teams.missing-installed-operator@1`",
+        "stage": "compile",
+        "type": "compile.failure"
+      },
+      "missingEffects": {
+        "graph_id": "agentteams.agent-work",
+        "graph_version": "2",
+        "message": "node `resolve-service` requires undeclared capability `directory.read`",
+        "stage": "compile",
+        "type": "compile.failure"
+      }
+    },
+    "tamperNegatives": [
+      {
+        "name": "missing-runner",
+        "message": "package SDK smoke: installed runner is missing"
+      },
+      {
+        "name": "missing-manifest",
+        "message": "package SDK smoke: installed runtime manifest is missing"
+      },
+      {
+        "name": "missing-graph",
+        "message": "package SDK smoke: installed graph work-query is missing"
+      },
+      {
+        "name": "runner-hash-mismatch",
+        "message": "package SDK smoke: installed runner hash does not match manifest"
+      },
+      {
+        "name": "graph-hash-mismatch",
+        "message": "package SDK smoke: installed graph agent-work hash does not match manifest"
+      }
+    ],
+    "cleanup": {
+      "temporary_root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-sdk-smoke-c8CgAY",
+      "removed": true
+    },
+    "receipt": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-review-fix-20261005/current-installed-sdk.receipt.json"
+  },
+  "remaining": [
+    "Independent current exact review, candidate commit/admission and main push/cleanup",
+    "Public installed Work CLI/receiver assembly; Console/Session; final same-pack BB01-BB14 and milestone"
+  ]
+}

@@ -407,6 +407,8 @@ export async function runPackageUserSmoke(options = {}) {
   assert(packPackage.version === rootPackage.version, `pack root version ${packPackage.version} does not match root ${rootPackage.version}`)
   const packageReceiptPath = resolve(packRoot, '..', 'package-receipt.json')
   const packageReceipt = JSON.parse(readFileSync(packageReceiptPath, 'utf8'))
+  assert(packageReceipt.mode === 'base' || packageReceipt.mode === 'final',
+    `staged package receipt mode must be base or final, got ${packageReceipt.mode}`)
   assertCandidateIdentity(packageReceipt.candidate, currentCandidateIdentity(root), 'staged package')
   assert(packageReceipt.pack_root === relative(root, packRoot).split(sep).join('/'),
     `staged package receipt pack root ${packageReceipt.pack_root} does not match ${packRoot}`)
@@ -488,7 +490,7 @@ export async function runPackageUserSmoke(options = {}) {
 
     receipt = {
       schema_version: 1,
-      mode: 'base',
+      mode: packageReceipt.mode,
       release_eligible: false,
       candidate: packageReceipt.candidate,
       package: { name: installedPackage.name, version: installedPackage.version, pack_root: relative(root, packRoot).split(sep).join('/') },
@@ -521,7 +523,7 @@ export async function runPackageUserSmoke(options = {}) {
   } catch (error) {
     receipt = {
       schema_version: 1,
-      mode: 'base',
+      mode: packageReceipt.mode,
       release_eligible: false,
       status: 'failed',
       error: error instanceof Error ? error.message : String(error),

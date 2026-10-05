@@ -1,0 +1,1300 @@
+{
+  "at": "2026-10-05T07:05:51.558Z",
+  "base": "468111a785ca21bb398369ce10b865be973be61c",
+  "publicTests": {
+    "passed": 19,
+    "failed": 0,
+    "raw": "current-package-public.json"
+  },
+  "gates": {
+    "compile": {
+      "exit": 0,
+      "raw": "{\n  \"artifact_hash\": \"sha256:938d025c6ef5c8ad858007dce6be83254cb063d77ecc432f3b3df814eae5f52c\",\n  \"artifact_paths\": [\n    \"generated/modules/teams-source/package-receipt.json\",\n    \"generated/modules/teams-source/lib/package.json\",\n    \"generated/modules/teams-source/lib/cli/agentteams.mjs\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/network/wss-connection.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/network/relay-login.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-runtime.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-process.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-config.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-process.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-supervisor.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-process.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/server/relay.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/server/relay-process.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/agent/work-resource.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/config/runtime-config.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/endpoint-ref.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/json-value.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/relay-codec.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/work-wire.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/network/work-channel.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-work-client.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/host.js\",\n    \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/protocol.js\",\n    \"generated/modules/teams-source/lib/console-host/lib/index.mjs\",\n    \"generated/modules/teams-source/lib/console-host/lib/index.d.mts\",\n    \"generated/modules/teams-source/lib/console-host/static/console.html\",\n    \"generated/modules/teams-source/lib/console-host/static/console-entry.js\",\n    \"generated/modules/teams-source/lib/ui/teams-console/index.js\",\n    \"generated/modules/teams-source/lib/ui/teams-console/browser.js\",\n    \"generated/modules/teams-source/lib/ui/teams-console/client/render.js\",\n    \"generated/modules/teams-source/lib/ui/teams-console/assets/agentbrowser-icon.jpg\",\n    \"generated/modules/teams-source/lib/runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner\",\n    \"generated/modules/teams-source/lib/runtime/dagpipe/manifest.json\",\n    \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/agent-work.graph.json\",\n    \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-open.graph.json\",\n    \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-request.graph.json\",\n    \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-close.graph.json\",\n    \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-query.graph.json\"\n  ],\n  \"artifact_schema\": 1,\n  \"artifacts\": [\n    {\n      \"hash\": \"sha256:6581218cba22c7494e39b5c6973d9fd1e1ef444bc1b121b643a07b5d144d710e\",\n      \"path\": \"generated/modules/teams-source/package-receipt.json\"\n    },\n    {\n      \"hash\": \"sha256:61245da2a196b46ec22bcbb550578b89e31d1c691635e10af29aa0f400a7cb50\",\n      \"path\": \"generated/modules/teams-source/lib/package.json\"\n    },\n    {\n      \"hash\": \"sha256:26def72f878ad891134d2f16c5d81e94ef9972e08bb4da76f777f55472ede87d\",\n      \"path\": \"generated/modules/teams-source/lib/cli/agentteams.mjs\"\n    },\n    {\n      \"hash\": \"sha256:33fdd0abdebbc00597c547014a5b501300ea487c5d76db6ef219af23e47e00c3\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/network/wss-connection.js\"\n    },\n    {\n      \"hash\": \"sha256:2542c4bcd0333a79b5f218c8a1e1f1526052f1f927582116447e9cbd09991f8b\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/network/relay-login.js\"\n    },\n    {\n      \"hash\": \"sha256:49d83acbe1889cfe7d393fc504e57c28404851880994d54287e6634c75039c97\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-runtime.js\"\n    },\n    {\n      \"hash\": \"sha256:4b795bacfb5204cc6b94e8efa9e573fe3d4de51fbba5dbe3da9fb6d672800947\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-process.js\"\n    },\n    {\n      \"hash\": \"sha256:6f0229c10a20c88c91648a0b5cdea2f61896960999ed9ee6f9e764ec0eaa3e2d\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-config.js\"\n    },\n    {\n      \"hash\": \"sha256:3e5245a8be41dab68e8e28c2f50964539611f0614d74f5678f398f0eac706724\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-process.js\"\n    },\n    {\n      \"hash\": \"sha256:686368b156fcdd5f5e5911fcb31676ab13c08b81c81cfb6a5e436895845fd56b\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-supervisor.js\"\n    },\n    {\n      \"hash\": \"sha256:3e22a575b73cb371b2b1a2c31d26113a765f3e40aef19dcec7908882a51626e4\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-process.js\"\n    },\n    {\n      \"hash\": \"sha256:7d2144d5263ea956fba4025b158f60cfb1c21a7213e7213e7534e7c602f8806c\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/server/relay.js\"\n    },\n    {\n      \"hash\": \"sha256:3387737036e7c54a6b8c54c370ce6a06fff25c0e43d70aafd67e3f310d4106bf\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/server/relay-process.js\"\n    },\n    {\n      \"hash\": \"sha256:c86065ecf8128ac0c5c427803bbb135e35ea804069912d8e8f26d3acb9396902\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/agent/work-resource.js\"\n    },\n    {\n      \"hash\": \"sha256:ddfbe5bdcbb37d438fa3bd844d70410cfbe7a925317fd1d954e6b0beb202a3fb\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/config/runtime-config.js\"\n    },\n    {\n      \"hash\": \"sha256:92a958a058f6aceadb0dbca90753008c6f957975921eab4446f09ec934f33e09\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/endpoint-ref.js\"\n    },\n    {\n      \"hash\": \"sha256:c29a7049f267407dfa1737fd4d6889a0952c569a4e1807bd3d4111d59c30d18f\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/json-value.js\"\n    },\n    {\n      \"hash\": \"sha256:5a43e3095b1f825a06783294cefad38aa1a24b29e485d49c6f645ff8ffac2741\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/relay-codec.js\"\n    },\n    {\n      \"hash\": \"sha256:2861b4896e5363be12b473ae9fbd18c89214be1e6f7e0f1e798691be3eebe01d\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/work-wire.js\"\n    },\n    {\n      \"hash\": \"sha256:1c3fcc905d69e8eeec4abdaff2122f23cb3bfd2b2eabb24cf0d97407950e0be9\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/network/work-channel.js\"\n    },\n    {\n      \"hash\": \"sha256:dc5aad448210f2b9426f32a9a6144c968fc076f14ffc4138ab58ed690a0e4b14\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-work-client.js\"\n    },\n    {\n      \"hash\": \"sha256:5306e2c52fccc0193060b1f2e4105d23c76a5b700dd43ab7f0543b25e69da105\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/host.js\"\n    },\n    {\n      \"hash\": \"sha256:b7dc82d7dd18e6d435d307dfe28ad3b7f79644ec301a3cdb2f9830212d9f88f0\",\n      \"path\": \"generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/protocol.js\"\n    },\n    {\n      \"hash\": \"sha256:5649b9da614b75aaa5556239c695088854ac45c736f1571e5d2fa39876b5f034\",\n      \"path\": \"generated/modules/teams-source/lib/console-host/lib/index.mjs\"\n    },\n    {\n      \"hash\": \"sha256:6c29e62d816696e3d6a3d46b3608379ab772cbc8b650a5fd59f8b57233d83dc4\",\n      \"path\": \"generated/modules/teams-source/lib/console-host/lib/index.d.mts\"\n    },\n    {\n      \"hash\": \"sha256:2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21\",\n      \"path\": \"generated/modules/teams-source/lib/console-host/static/console.html\"\n    },\n    {\n      \"hash\": \"sha256:da3abef3af6da4d6119bff1e195a1b4bfca83982981e0f093943b544836f0b15\",\n      \"path\": \"generated/modules/teams-source/lib/console-host/static/console-entry.js\"\n    },\n    {\n      \"hash\": \"sha256:a5ee64c2b8aabc7ae6b92b4eee4840ddca81190976d5b3b0490034f2c555ce95\",\n      \"path\": \"generated/modules/teams-source/lib/ui/teams-console/index.js\"\n    },\n    {\n      \"hash\": \"sha256:e0c26f25c15308a638ec4fca5d2cc58b50df3d266a647495248377ca92d52aa9\",\n      \"path\": \"generated/modules/teams-source/lib/ui/teams-console/browser.js\"\n    },\n    {\n      \"hash\": \"sha256:671127e93ce66cd79ad308aeb134e906725faa1cbea66126aae9e5d154f6af12\",\n      \"path\": \"generated/modules/teams-source/lib/ui/teams-console/client/render.js\"\n    },\n    {\n      \"hash\": \"sha256:e310c0ee9f7ebb9da88f68498a90e6cd83f4540541574251c90da5e83e736587\",\n      \"path\": \"generated/modules/teams-source/lib/ui/teams-console/assets/agentbrowser-icon.jpg\"\n    },\n    {\n      \"hash\": \"sha256:b9e41eaec1e334b4979c1f717e721c6983e366c82b7bdbfa1a8c84a453561f90\",\n      \"path\": \"generated/modules/teams-source/lib/runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner\"\n    },\n    {\n      \"hash\": \"sha256:66cdcb1819e38f4c521a4894bef4137eabfa4ab066e234e8e2ee6a33bebe4cd0\",\n      \"path\": \"generated/modules/teams-source/lib/runtime/dagpipe/manifest.json\"\n    },\n    {\n      \"hash\": \"sha256:868eaca31896dff5d260fe0a5d87a8d1c0f005f7a378a7703f747fdda4a3f974\",\n      \"path\": \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/agent-work.graph.json\"\n    },\n    {\n      \"hash\": \"sha256:a31a356c5f2b22e3ced58213b3e3723e73304b4fd9ff0fe1c148d8c6db6843f6\",\n      \"path\": \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-open.graph.json\"\n    },\n    {\n      \"hash\": \"sha256:cb19ed740057304decd76eb64bb33a44fac89ca4e061f220ffcd15bf07c028b8\",\n      \"path\": \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-request.graph.json\"\n    },\n    {\n      \"hash\": \"sha256:0682d0937d504b9daa66b91133348089289716df62abfbee41bbce004896d34f\",\n      \"path\": \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-close.graph.json\"\n    },\n    {\n      \"hash\": \"sha256:9903e27c0833c11aee9bdb2803e530386d59cb64eff9c3bbdf90cdf90ca26bf0\",\n      \"path\": \"generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-query.graph.json\"\n    }\n  ],\n  \"build\": {\n    \"args\": [\n      \"build:governance\"\n    ],\n    \"program\": \"pnpm\",\n    \"working_directory\": \".\"\n  },\n  \"contract_hash\": \"sha256:84f71c5555dd129cb6d4381c9465d8fe2a9e5cb6ab7361456cf45f4909a03c76\",\n  \"dependency_hashes\": [],\n  \"deployment_operations\": [\n    \"install\",\n    \"restart\"\n  ],\n  \"module_id\": \"teams-source\",\n  \"public_api_hash\": \"sha256:567c8e0bb931eea66121b4b4d9433c14c3d2a189de43d0d2d615e77c236e0ab3\",\n  \"source_hash\": \"sha256:90bd573a8f984ddff780dd2542b49f8fe6eedfda5c8a40ef560fb2088b6ba89c\",\n  \"stage\": \"source_implemented\"\n}\n{\n  \"artifact_hash\": \"sha256:ee065449413f220aa801e909ec1fabce329a030fd14bc87fea9204c3d10c4ec4\",\n  \"artifact_schema\": 1,\n  \"modules\": [\n    {\n      \"active_artifact\": \"active/lib/teams-source/**\",\n      \"generated_outputs\": [\n        \"generated/modules/teams-source/**\"\n      ],\n      \"module_id\": \"teams-source\",\n      \"owned_paths\": [\n        \"agent/**\",\n        \"agent-host/**\",\n        \"cli-adapter/**\",\n        \"endpoint/**\",\n        \"config/**\",\n        \"control-protocol/**\",\n        \"network/**\",\n        \"runtime/**\",\n        \"server/**\",\n        \"opencode-adapter/src/**\",\n        \"opencode-adapter/tests/**\",\n        \"opencode-adapter/separator.spec.ts\",\n        \"opencode-adapter/package.json\",\n        \"opencode-adapter/tsconfig.json\",\n        \"opencode-adapter/tsdown.config.ts\",\n        \"console-host/src/**\",\n        \"console-host/tests/**\",\n        \"console-host/static/**\",\n        \"console-host/package.json\",\n        \"console-host/tsconfig.json\",\n        \"console-host/vitest.config.ts\",\n        \"ui/teams-console/src/**\",\n        \"ui/teams-console/tests/**\",\n        \"ui/teams-console/package.json\",\n        \"ui/teams-console/tsconfig.json\",\n        \"ui/teams-console/vitest.config.ts\",\n        \"ui/teams-console/tsconfig.build.json\",\n        \"ui/teams-console/fixture/**\",\n        \"ui/teams-console/assets/**\",\n        \"dsh-adapter/**\",\n        \"memory-plugin/**\",\n        \"search-plugin/**\",\n        \"docs/**\",\n        \"scripts/**\",\n        \"AGENTS.md\",\n        \"README.md\",\n        \"package.json\",\n        \"pnpm-workspace.yaml\",\n        \"pnpm-lock.yaml\",\n        \"tsconfig.json\",\n        \"tsconfig.runtime.json\",\n        \"vitest.config.ts\",\n        \".gitignore\"\n      ],\n      \"regression\": {\n        \"allow_skipped\": false,\n        \"command\": {\n          \"args\": [\n            \"test\"\n          ],\n          \"program\": \"pnpm\",\n          \"working_directory\": \".\"\n        },\n        \"input_paths\": [\n          \"agent/**\",\n          \"agent-host/**\",\n          \"endpoint/**\",\n          \"config/**\",\n          \"control-protocol/**\",\n          \"network/**\",\n          \"runtime/**\",\n          \"server/**\",\n          \"opencode-adapter/src/**\",\n          \"opencode-adapter/tests/**\",\n          \"opencode-adapter/separator.spec.ts\",\n          \"opencode-adapter/package.json\",\n          \"opencode-adapter/tsconfig.json\",\n          \"opencode-adapter/tsdown.config.ts\",\n          \"console-host/src/**\",\n          \"console-host/tests/**\",\n          \"console-host/static/**\",\n          \"console-host/package.json\",\n          \"console-host/tsconfig.json\",\n          \"console-host/vitest.config.ts\",\n          \"ui/teams-console/src/**\",\n          \"ui/teams-console/tests/**\",\n          \"ui/teams-console/package.json\",\n          \"ui/teams-console/tsconfig.json\",\n          \"ui/teams-console/vitest.config.ts\",\n          \"ui/teams-console/tsconfig.build.json\",\n          \"ui/teams-console/fixture/**\",\n          \"ui/teams-console/assets/**\",\n          \"dsh-adapter/**\",\n          \"memory-plugin/**\",\n          \"search-plugin/**\",\n          \"scripts/**\",\n          \"package.json\",\n          \"pnpm-lock.yaml\",\n          \"pnpm-workspace.yaml\",\n          \"tsconfig.json\",\n          \"tsconfig.runtime.json\",\n          \"vitest.config.ts\",\n          \"docs/architecture/**\"\n        ],\n        \"minimum_test_count\": 304,\n        \"ordinary_mode_after_freeze\": \"disabled\",\n        \"reenable_on\": [\n          \"source_change\",\n          \"contract_change\",\n          \"public_api_change\",\n          \"artifact_change\",\n          \"dependency_change\"\n        ],\n        \"required_before_freeze\": true,\n        \"suite_id\": \"teams-source-regression\"\n      },\n      \"source_owner\": \"teams-source\",\n      \"stage\": \"source_implemented\"\n    }\n  ],\n  \"project_id\": \"agentteams\",\n  \"sdk\": {\n    \"bundle_manifest\": \".appsdk/contracts/sdk-bundle.manifest.json\",\n    \"name\": \"appsdk\",\n    \"resource_record\": \".appsdk/sdk-resources.json\",\n    \"version\": \"0.1.0010\"\n  }\n}\n"
+    },
+    "smoke": {
+      "exit": 0,
+      "raw": "\n> agentteams@0.1.0 smoke /Volumes/Intel/playground/agentteams/u1-sdk-final-20261005\n> node scripts/artifact-smoke.mjs && node scripts/runtime-smoke.mjs\n\nPackaged Console smoke passed: one staged final pack root, actual Basic auth, static/UI bytes, and owner-denied API. No provider or cross-device claim.\nPackaged runtime smoke passed: real TLS Relay, daemon library admission/directory, stop and fresh generation. No OS process deployment, executor or NAT claim.\n"
+    },
+    "installed-runtime": {
+      "exit": 0,
+      "raw": "u1-installed-receipt /Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-final-20261005/current-installed/installed-runtime.receipt.json sha256:1c77a3b05a9ba543deed74470ea060b6995dfb9bd7608c03f1044fa11933d062\nInstalled runtime smoke passed: the staged final package was installed outside the source tree and consumed through installed CLI/Relay/Agent lifecycle plus Console entrypoints.\n"
+    },
+    "installed-sdk": {
+      "exit": 0,
+      "raw": "Installed SDK consumer smoke passed\n"
+    },
+    "verify": {
+      "exit": 0,
+      "raw": "{\"baseline_status\":\"current\",\"command_ok\":true,\"delivery_assessed\":false,\"delivery_verified\":false,\"development_ready\":true,\"ok\":false,\"project_id\":\"agentteams\",\"reason\":\"delivery_not_evaluated\",\"stage\":\"contract_bound\",\"test_governance\":{\"mode\":\"off\",\"objects\":[],\"status\":\"not_selected\"}}\n"
+    }
+  },
+  "installed_sdk": {
+    "schema_version": 1,
+    "mode": "final",
+    "release_eligible": false,
+    "status": "passed",
+    "candidate": {
+      "head_commit": "468111a785ca21bb398369ce10b865be973be61c",
+      "base_commit": "468111a785ca21bb398369ce10b865be973be61c",
+      "tree_hash": "b987b97d9fc5ea213845e594d455f7770ed6d740",
+      "indexed_tree_hash": "3a9a367ad11f103bf8e953fa4aea0063931abacb",
+      "source_state": "staged"
+    },
+    "package": {
+      "name": "agentteams",
+      "version": "0.1.0",
+      "pack_root": "generated/modules/teams-source/lib"
+    },
+    "tarball": {
+      "filename": "agentteams-0.1.0.tgz",
+      "sha256": "e9accd8004e9045ba5c7f8d1f75f7392deb8742cc72b2e502d3aaa5e87ae8345"
+    },
+    "install": {
+      "prefix": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-sdk-smoke-Dj0Mzt/prefix",
+      "home": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-sdk-smoke-Dj0Mzt/home",
+      "installed_root": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-sdk-smoke-Dj0Mzt/prefix/node_modules/agentteams",
+      "installed_content_sha256": "16a297169108368edbd67b681cc944303dafb19f6bf633e65bc2a775bf274dab"
+    },
+    "runtime": {
+      "manifest_sha256": "66cdcb1819e38f4c521a4894bef4137eabfa4ab066e234e8e2ee6a33bebe4cd0",
+      "runner_sha256": "b9e41eaec1e334b4979c1f717e721c6983e366c82b7bdbfa1a8c84a453561f90",
+      "graphs": {
+        "agent-work": "868eaca31896dff5d260fe0a5d87a8d1c0f005f7a378a7703f747fdda4a3f974",
+        "work-open": "a31a356c5f2b22e3ced58213b3e3723e73304b4fd9ff0fe1c148d8c6db6843f6",
+        "work-request": "cb19ed740057304decd76eb64bb33a44fac89ca4e061f220ffcd15bf07c028b8",
+        "work-close": "0682d0937d504b9daa66b91133348089289716df62abfbee41bbce004896d34f",
+        "work-query": "9903e27c0833c11aee9bdb2803e530386d59cb64eff9c3bbdf90cdf90ca26bf0"
+      }
+    },
+    "consumer": {
+      "entrypoint": "installed npm tarball -> installed compiled runWorkExecution -> packaged DAGpipe runner -> real provider rg marker",
+      "run_result": {
+        "status": "completed",
+        "control": {
+          "projectId": "agentteams-installed-sdk-smoke",
+          "graphId": "agentteams.agent-work",
+          "graphVersion": "2",
+          "executionId": "exec-installed-alpha",
+          "attemptId": "1",
+          "workId": "work-installed-alpha",
+          "requestId": "req-installed-alpha",
+          "providerAgentId": "provider",
+          "targetGeneration": 1,
+          "capabilityId": "file-search",
+          "capabilityVersion": "1",
+          "operation": "search",
+          "requestState": "succeeded",
+          "workClosure": "closed"
+        },
+        "business": {
+          "exitCode": 0,
+          "matches": [
+            {
+              "line": 1,
+              "path": "./alpha.txt",
+              "raw": {
+                "data": {
+                  "absolute_offset": 0,
+                  "line_number": 1,
+                  "lines": {
+                    "text": "alpha marker sdk-final-pack\n"
+                  },
+                  "path": {
+                    "text": "./alpha.txt"
+                  },
+                  "submatches": [
+                    {
+                      "end": 12,
+                      "match": {
+                        "text": "alpha marker"
+                      },
+                      "start": 0
+                    }
+                  ]
+                },
+                "type": "match"
+              },
+              "text": "alpha marker sdk-final-pack\n"
+            }
+          ],
+          "query": "alpha marker",
+          "status": "matched",
+          "stderr": "",
+          "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"lines\":{\"text\":\"alpha marker sdk-final-pack\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"alpha marker\"},\"start\":0,\"end\":12}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./alpha.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":25167,\"human\":\"0.000025s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":28,\"bytes_printed\":265,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.005032s\",\"nanos\":5031916,\"secs\":0},\"stats\":{\"bytes_printed\":265,\"bytes_searched\":28,\"elapsed\":{\"human\":\"0.000025s\",\"nanos\":25167,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+          "truncated": false
+        },
+        "evidence": {
+          "execution": "completed",
+          "graphId": "agentteams.agent-work",
+          "graphVersion": "2",
+          "nodeSchedule": [
+            "resolve-service",
+            "open-link",
+            "admit-work",
+            "request-work",
+            "settle-work"
+          ],
+          "nodeCompletion": [
+            "resolve-service",
+            "open-link",
+            "admit-work",
+            "request-work",
+            "settle-work"
+          ],
+          "hostOperations": [
+            "agentWork.findProvider",
+            "agentWork.open",
+            "agentWork.propose",
+            "agentWork.request",
+            "agentWork.close",
+            "agentWork.dispose"
+          ]
+        },
+        "cleanup": {
+          "channelsOpened": 1,
+          "channelsDisposed": 1
+        }
+      },
+      "compile": {
+        "missingOperator": {
+          "graph_id": "agentteams.agent-work",
+          "graph_version": "2",
+          "message": "node `resolve-service` references missing operator `teams.missing-installed-operator@1`",
+          "stage": "compile",
+          "type": "compile.failure"
+        },
+        "missingEffects": {
+          "graph_id": "agentteams.agent-work",
+          "graph_version": "2",
+          "message": "node `resolve-service` requires undeclared capability `directory.read`",
+          "stage": "compile",
+          "type": "compile.failure"
+        }
+      },
+      "tamper_failures": [
+        {
+          "name": "missing-runner",
+          "message": "package SDK smoke: installed runner is missing"
+        },
+        {
+          "name": "missing-manifest",
+          "message": "package SDK smoke: installed runtime manifest is missing"
+        },
+        {
+          "name": "missing-graph",
+          "message": "package SDK smoke: installed graph work-query is missing"
+        },
+        {
+          "name": "runner-hash-mismatch",
+          "message": "package SDK smoke: installed runner hash does not match manifest"
+        },
+        {
+          "name": "graph-hash-mismatch",
+          "message": "package SDK smoke: installed graph agent-work hash does not match manifest"
+        }
+      ]
+    },
+    "cleanup": {
+      "temporary_root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-sdk-smoke-Dj0Mzt",
+      "removed": true
+    }
+  },
+  "installed_lifecycle": {
+    "schema_version": 1,
+    "mode": "base",
+    "release_eligible": false,
+    "candidate": {
+      "head_commit": "468111a785ca21bb398369ce10b865be973be61c",
+      "base_commit": "468111a785ca21bb398369ce10b865be973be61c",
+      "tree_hash": "b987b97d9fc5ea213845e594d455f7770ed6d740",
+      "indexed_tree_hash": "3a9a367ad11f103bf8e953fa4aea0063931abacb",
+      "source_state": "staged"
+    },
+    "package": {
+      "name": "agentteams",
+      "version": "0.1.0",
+      "pack_root": "generated/modules/teams-source/lib"
+    },
+    "pack": {
+      "root": "generated/modules/teams-source/lib",
+      "content_sha256": "16a297169108368edbd67b681cc944303dafb19f6bf633e65bc2a775bf274dab",
+      "files": [
+        "cli/agentteams.mjs",
+        "console-host/lib/index.d.mts",
+        "console-host/lib/index.mjs",
+        "console-host/static/console-entry.js",
+        "console-host/static/console.html",
+        "generated/runtime-lib/agent-host/cli-executor.d.ts",
+        "generated/runtime-lib/agent-host/cli-executor.js",
+        "generated/runtime-lib/agent-host/console-ingress.d.ts",
+        "generated/runtime-lib/agent-host/console-ingress.js",
+        "generated/runtime-lib/agent-host/work-host.d.ts",
+        "generated/runtime-lib/agent-host/work-host.js",
+        "generated/runtime-lib/agent-host/work-ingress.d.ts",
+        "generated/runtime-lib/agent-host/work-ingress.js",
+        "generated/runtime-lib/agent/work-resource.d.ts",
+        "generated/runtime-lib/agent/work-resource.js",
+        "generated/runtime-lib/cli-adapter/browser-cli.d.ts",
+        "generated/runtime-lib/cli-adapter/browser-cli.js",
+        "generated/runtime-lib/cli-adapter/cli.d.ts",
+        "generated/runtime-lib/cli-adapter/cli.js",
+        "generated/runtime-lib/cli-adapter/contracts.d.ts",
+        "generated/runtime-lib/cli-adapter/contracts.js",
+        "generated/runtime-lib/cli-adapter/fixed-process.d.ts",
+        "generated/runtime-lib/cli-adapter/fixed-process.js",
+        "generated/runtime-lib/cli-adapter/operation-declarations.d.ts",
+        "generated/runtime-lib/cli-adapter/operation-declarations.js",
+        "generated/runtime-lib/cli-adapter/search-cli.d.ts",
+        "generated/runtime-lib/cli-adapter/search-cli.js",
+        "generated/runtime-lib/config/provider-model-client.d.ts",
+        "generated/runtime-lib/config/provider-model-client.js",
+        "generated/runtime-lib/config/runtime-config.d.ts",
+        "generated/runtime-lib/config/runtime-config.js",
+        "generated/runtime-lib/console-host/src/auth.d.ts",
+        "generated/runtime-lib/console-host/src/auth.js",
+        "generated/runtime-lib/console-host/src/http-api.d.ts",
+        "generated/runtime-lib/console-host/src/http-api.js",
+        "generated/runtime-lib/console-host/src/server.d.ts",
+        "generated/runtime-lib/console-host/src/server.js",
+        "generated/runtime-lib/control-protocol/agent-message.d.ts",
+        "generated/runtime-lib/control-protocol/agent-message.js",
+        "generated/runtime-lib/control-protocol/agent-services.d.ts",
+        "generated/runtime-lib/control-protocol/agent-services.js",
+        "generated/runtime-lib/control-protocol/console-api.d.ts",
+        "generated/runtime-lib/control-protocol/console-api.js",
+        "generated/runtime-lib/control-protocol/console-wire.d.ts",
+        "generated/runtime-lib/control-protocol/console-wire.js",
+        "generated/runtime-lib/control-protocol/endpoint-ref.d.ts",
+        "generated/runtime-lib/control-protocol/endpoint-ref.js",
+        "generated/runtime-lib/control-protocol/frames.d.ts",
+        "generated/runtime-lib/control-protocol/frames.js",
+        "generated/runtime-lib/control-protocol/json-value.d.ts",
+        "generated/runtime-lib/control-protocol/json-value.js",
+        "generated/runtime-lib/control-protocol/relation-report.d.ts",
+        "generated/runtime-lib/control-protocol/relation-report.js",
+        "generated/runtime-lib/control-protocol/relay-admission.d.ts",
+        "generated/runtime-lib/control-protocol/relay-admission.js",
+        "generated/runtime-lib/control-protocol/relay-codec.d.ts",
+        "generated/runtime-lib/control-protocol/relay-codec.js",
+        "generated/runtime-lib/control-protocol/work-wire.d.ts",
+        "generated/runtime-lib/control-protocol/work-wire.js",
+        "generated/runtime-lib/endpoint/compile.d.ts",
+        "generated/runtime-lib/endpoint/compile.js",
+        "generated/runtime-lib/endpoint/errors.d.ts",
+        "generated/runtime-lib/endpoint/errors.js",
+        "generated/runtime-lib/endpoint/types.d.ts",
+        "generated/runtime-lib/endpoint/types.js",
+        "generated/runtime-lib/endpoint/validate.d.ts",
+        "generated/runtime-lib/endpoint/validate.js",
+        "generated/runtime-lib/network/account-directory.d.ts",
+        "generated/runtime-lib/network/account-directory.js",
+        "generated/runtime-lib/network/console-channel.d.ts",
+        "generated/runtime-lib/network/console-channel.js",
+        "generated/runtime-lib/network/direct-listener.d.ts",
+        "generated/runtime-lib/network/direct-listener.js",
+        "generated/runtime-lib/network/direct-route.d.ts",
+        "generated/runtime-lib/network/direct-route.js",
+        "generated/runtime-lib/network/peer-route.d.ts",
+        "generated/runtime-lib/network/peer-route.js",
+        "generated/runtime-lib/network/relay-client.d.ts",
+        "generated/runtime-lib/network/relay-client.js",
+        "generated/runtime-lib/network/relay-login.d.ts",
+        "generated/runtime-lib/network/relay-login.js",
+        "generated/runtime-lib/network/route-plan.d.ts",
+        "generated/runtime-lib/network/route-plan.js",
+        "generated/runtime-lib/network/target-transport.d.ts",
+        "generated/runtime-lib/network/target-transport.js",
+        "generated/runtime-lib/network/work-channel.d.ts",
+        "generated/runtime-lib/network/work-channel.js",
+        "generated/runtime-lib/network/wss-connection.d.ts",
+        "generated/runtime-lib/network/wss-connection.js",
+        "generated/runtime-lib/opencode-adapter/src/index.d.ts",
+        "generated/runtime-lib/opencode-adapter/src/index.js",
+        "generated/runtime-lib/opencode-adapter/src/managed-config.d.ts",
+        "generated/runtime-lib/opencode-adapter/src/managed-config.js",
+        "generated/runtime-lib/runtime/agent-daemon.d.ts",
+        "generated/runtime-lib/runtime/agent-daemon.js",
+        "generated/runtime-lib/runtime/agent-data.d.ts",
+        "generated/runtime-lib/runtime/agent-data.js",
+        "generated/runtime-lib/runtime/agent-process.d.ts",
+        "generated/runtime-lib/runtime/agent-process.js",
+        "generated/runtime-lib/runtime/agent-work-client.d.ts",
+        "generated/runtime-lib/runtime/agent-work-client.js",
+        "generated/runtime-lib/runtime/console-config.d.ts",
+        "generated/runtime-lib/runtime/console-config.js",
+        "generated/runtime-lib/runtime/console-hub.d.ts",
+        "generated/runtime-lib/runtime/console-hub.js",
+        "generated/runtime-lib/runtime/console-process.d.ts",
+        "generated/runtime-lib/runtime/console-process.js",
+        "generated/runtime-lib/runtime/console-runtime.d.ts",
+        "generated/runtime-lib/runtime/console-runtime.js",
+        "generated/runtime-lib/runtime/console-work-projection.d.ts",
+        "generated/runtime-lib/runtime/console-work-projection.js",
+        "generated/runtime-lib/runtime/dagpipe/host.d.ts",
+        "generated/runtime-lib/runtime/dagpipe/host.js",
+        "generated/runtime-lib/runtime/dagpipe/protocol.d.ts",
+        "generated/runtime-lib/runtime/dagpipe/protocol.js",
+        "generated/runtime-lib/runtime/local-config.d.ts",
+        "generated/runtime-lib/runtime/local-config.js",
+        "generated/runtime-lib/runtime/local-process.d.ts",
+        "generated/runtime-lib/runtime/local-process.js",
+        "generated/runtime-lib/runtime/local-supervisor.d.ts",
+        "generated/runtime-lib/runtime/local-supervisor.js",
+        "generated/runtime-lib/runtime/managed-config-owner.d.ts",
+        "generated/runtime-lib/runtime/managed-config-owner.js",
+        "generated/runtime-lib/runtime/managed-opencode.d.ts",
+        "generated/runtime-lib/runtime/managed-opencode.js",
+        "generated/runtime-lib/runtime/process-config.d.ts",
+        "generated/runtime-lib/runtime/process-config.js",
+        "generated/runtime-lib/runtime/relay-console-client.d.ts",
+        "generated/runtime-lib/runtime/relay-console-client.js",
+        "generated/runtime-lib/server/directory.d.ts",
+        "generated/runtime-lib/server/directory.js",
+        "generated/runtime-lib/server/endpoint-discovery.d.ts",
+        "generated/runtime-lib/server/endpoint-discovery.js",
+        "generated/runtime-lib/server/relay-process.d.ts",
+        "generated/runtime-lib/server/relay-process.js",
+        "generated/runtime-lib/server/relay.d.ts",
+        "generated/runtime-lib/server/relay.js",
+        "package.json",
+        "runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner",
+        "runtime/dagpipe/graphs/agent-work.graph.json",
+        "runtime/dagpipe/graphs/work-close.graph.json",
+        "runtime/dagpipe/graphs/work-open.graph.json",
+        "runtime/dagpipe/graphs/work-query.graph.json",
+        "runtime/dagpipe/graphs/work-request.graph.json",
+        "runtime/dagpipe/manifest.json",
+        "ui/teams-console/assets/README.md",
+        "ui/teams-console/assets/agentbrowser-icon.jpg",
+        "ui/teams-console/browser.d.ts",
+        "ui/teams-console/browser.js",
+        "ui/teams-console/canonical/agent-message.d.ts",
+        "ui/teams-console/canonical/agent-services.d.ts",
+        "ui/teams-console/canonical/console-api.d.ts",
+        "ui/teams-console/canonical/endpoint-ref.d.ts",
+        "ui/teams-console/canonical/frames.d.ts",
+        "ui/teams-console/canonical/json-value.d.ts",
+        "ui/teams-console/canonical/relation-report.d.ts",
+        "ui/teams-console/client/api.d.ts",
+        "ui/teams-console/client/api.js",
+        "ui/teams-console/client/controller.d.ts",
+        "ui/teams-console/client/controller.js",
+        "ui/teams-console/client/focus.d.ts",
+        "ui/teams-console/client/focus.js",
+        "ui/teams-console/client/index.d.ts",
+        "ui/teams-console/client/index.js",
+        "ui/teams-console/client/locale.d.ts",
+        "ui/teams-console/client/locale.js",
+        "ui/teams-console/client/model.d.ts",
+        "ui/teams-console/client/model.js",
+        "ui/teams-console/client/protocol.d.ts",
+        "ui/teams-console/client/protocol.js",
+        "ui/teams-console/client/render.d.ts",
+        "ui/teams-console/client/render.js",
+        "ui/teams-console/client/styles.d.ts",
+        "ui/teams-console/client/styles.js",
+        "ui/teams-console/fixture-browser.d.ts",
+        "ui/teams-console/fixture-browser.js",
+        "ui/teams-console/fixture.d.ts",
+        "ui/teams-console/fixture.js",
+        "ui/teams-console/index.d.ts",
+        "ui/teams-console/index.js"
+      ]
+    },
+    "tarball": {
+      "filename": "agentteams-0.1.0.tgz",
+      "sha256": "e9accd8004e9045ba5c7f8d1f75f7392deb8742cc72b2e502d3aaa5e87ae8345",
+      "content_sha256": "16a297169108368edbd67b681cc944303dafb19f6bf633e65bc2a775bf274dab",
+      "files": [
+        "cli/agentteams.mjs",
+        "console-host/lib/index.d.mts",
+        "console-host/lib/index.mjs",
+        "console-host/static/console-entry.js",
+        "console-host/static/console.html",
+        "generated/runtime-lib/agent-host/cli-executor.d.ts",
+        "generated/runtime-lib/agent-host/cli-executor.js",
+        "generated/runtime-lib/agent-host/console-ingress.d.ts",
+        "generated/runtime-lib/agent-host/console-ingress.js",
+        "generated/runtime-lib/agent-host/work-host.d.ts",
+        "generated/runtime-lib/agent-host/work-host.js",
+        "generated/runtime-lib/agent-host/work-ingress.d.ts",
+        "generated/runtime-lib/agent-host/work-ingress.js",
+        "generated/runtime-lib/agent/work-resource.d.ts",
+        "generated/runtime-lib/agent/work-resource.js",
+        "generated/runtime-lib/cli-adapter/browser-cli.d.ts",
+        "generated/runtime-lib/cli-adapter/browser-cli.js",
+        "generated/runtime-lib/cli-adapter/cli.d.ts",
+        "generated/runtime-lib/cli-adapter/cli.js",
+        "generated/runtime-lib/cli-adapter/contracts.d.ts",
+        "generated/runtime-lib/cli-adapter/contracts.js",
+        "generated/runtime-lib/cli-adapter/fixed-process.d.ts",
+        "generated/runtime-lib/cli-adapter/fixed-process.js",
+        "generated/runtime-lib/cli-adapter/operation-declarations.d.ts",
+        "generated/runtime-lib/cli-adapter/operation-declarations.js",
+        "generated/runtime-lib/cli-adapter/search-cli.d.ts",
+        "generated/runtime-lib/cli-adapter/search-cli.js",
+        "generated/runtime-lib/config/provider-model-client.d.ts",
+        "generated/runtime-lib/config/provider-model-client.js",
+        "generated/runtime-lib/config/runtime-config.d.ts",
+        "generated/runtime-lib/config/runtime-config.js",
+        "generated/runtime-lib/console-host/src/auth.d.ts",
+        "generated/runtime-lib/console-host/src/auth.js",
+        "generated/runtime-lib/console-host/src/http-api.d.ts",
+        "generated/runtime-lib/console-host/src/http-api.js",
+        "generated/runtime-lib/console-host/src/server.d.ts",
+        "generated/runtime-lib/console-host/src/server.js",
+        "generated/runtime-lib/control-protocol/agent-message.d.ts",
+        "generated/runtime-lib/control-protocol/agent-message.js",
+        "generated/runtime-lib/control-protocol/agent-services.d.ts",
+        "generated/runtime-lib/control-protocol/agent-services.js",
+        "generated/runtime-lib/control-protocol/console-api.d.ts",
+        "generated/runtime-lib/control-protocol/console-api.js",
+        "generated/runtime-lib/control-protocol/console-wire.d.ts",
+        "generated/runtime-lib/control-protocol/console-wire.js",
+        "generated/runtime-lib/control-protocol/endpoint-ref.d.ts",
+        "generated/runtime-lib/control-protocol/endpoint-ref.js",
+        "generated/runtime-lib/control-protocol/frames.d.ts",
+        "generated/runtime-lib/control-protocol/frames.js",
+        "generated/runtime-lib/control-protocol/json-value.d.ts",
+        "generated/runtime-lib/control-protocol/json-value.js",
+        "generated/runtime-lib/control-protocol/relation-report.d.ts",
+        "generated/runtime-lib/control-protocol/relation-report.js",
+        "generated/runtime-lib/control-protocol/relay-admission.d.ts",
+        "generated/runtime-lib/control-protocol/relay-admission.js",
+        "generated/runtime-lib/control-protocol/relay-codec.d.ts",
+        "generated/runtime-lib/control-protocol/relay-codec.js",
+        "generated/runtime-lib/control-protocol/work-wire.d.ts",
+        "generated/runtime-lib/control-protocol/work-wire.js",
+        "generated/runtime-lib/endpoint/compile.d.ts",
+        "generated/runtime-lib/endpoint/compile.js",
+        "generated/runtime-lib/endpoint/errors.d.ts",
+        "generated/runtime-lib/endpoint/errors.js",
+        "generated/runtime-lib/endpoint/types.d.ts",
+        "generated/runtime-lib/endpoint/types.js",
+        "generated/runtime-lib/endpoint/validate.d.ts",
+        "generated/runtime-lib/endpoint/validate.js",
+        "generated/runtime-lib/network/account-directory.d.ts",
+        "generated/runtime-lib/network/account-directory.js",
+        "generated/runtime-lib/network/console-channel.d.ts",
+        "generated/runtime-lib/network/console-channel.js",
+        "generated/runtime-lib/network/direct-listener.d.ts",
+        "generated/runtime-lib/network/direct-listener.js",
+        "generated/runtime-lib/network/direct-route.d.ts",
+        "generated/runtime-lib/network/direct-route.js",
+        "generated/runtime-lib/network/peer-route.d.ts",
+        "generated/runtime-lib/network/peer-route.js",
+        "generated/runtime-lib/network/relay-client.d.ts",
+        "generated/runtime-lib/network/relay-client.js",
+        "generated/runtime-lib/network/relay-login.d.ts",
+        "generated/runtime-lib/network/relay-login.js",
+        "generated/runtime-lib/network/route-plan.d.ts",
+        "generated/runtime-lib/network/route-plan.js",
+        "generated/runtime-lib/network/target-transport.d.ts",
+        "generated/runtime-lib/network/target-transport.js",
+        "generated/runtime-lib/network/work-channel.d.ts",
+        "generated/runtime-lib/network/work-channel.js",
+        "generated/runtime-lib/network/wss-connection.d.ts",
+        "generated/runtime-lib/network/wss-connection.js",
+        "generated/runtime-lib/opencode-adapter/src/index.d.ts",
+        "generated/runtime-lib/opencode-adapter/src/index.js",
+        "generated/runtime-lib/opencode-adapter/src/managed-config.d.ts",
+        "generated/runtime-lib/opencode-adapter/src/managed-config.js",
+        "generated/runtime-lib/runtime/agent-daemon.d.ts",
+        "generated/runtime-lib/runtime/agent-daemon.js",
+        "generated/runtime-lib/runtime/agent-data.d.ts",
+        "generated/runtime-lib/runtime/agent-data.js",
+        "generated/runtime-lib/runtime/agent-process.d.ts",
+        "generated/runtime-lib/runtime/agent-process.js",
+        "generated/runtime-lib/runtime/agent-work-client.d.ts",
+        "generated/runtime-lib/runtime/agent-work-client.js",
+        "generated/runtime-lib/runtime/console-config.d.ts",
+        "generated/runtime-lib/runtime/console-config.js",
+        "generated/runtime-lib/runtime/console-hub.d.ts",
+        "generated/runtime-lib/runtime/console-hub.js",
+        "generated/runtime-lib/runtime/console-process.d.ts",
+        "generated/runtime-lib/runtime/console-process.js",
+        "generated/runtime-lib/runtime/console-runtime.d.ts",
+        "generated/runtime-lib/runtime/console-runtime.js",
+        "generated/runtime-lib/runtime/console-work-projection.d.ts",
+        "generated/runtime-lib/runtime/console-work-projection.js",
+        "generated/runtime-lib/runtime/dagpipe/host.d.ts",
+        "generated/runtime-lib/runtime/dagpipe/host.js",
+        "generated/runtime-lib/runtime/dagpipe/protocol.d.ts",
+        "generated/runtime-lib/runtime/dagpipe/protocol.js",
+        "generated/runtime-lib/runtime/local-config.d.ts",
+        "generated/runtime-lib/runtime/local-config.js",
+        "generated/runtime-lib/runtime/local-process.d.ts",
+        "generated/runtime-lib/runtime/local-process.js",
+        "generated/runtime-lib/runtime/local-supervisor.d.ts",
+        "generated/runtime-lib/runtime/local-supervisor.js",
+        "generated/runtime-lib/runtime/managed-config-owner.d.ts",
+        "generated/runtime-lib/runtime/managed-config-owner.js",
+        "generated/runtime-lib/runtime/managed-opencode.d.ts",
+        "generated/runtime-lib/runtime/managed-opencode.js",
+        "generated/runtime-lib/runtime/process-config.d.ts",
+        "generated/runtime-lib/runtime/process-config.js",
+        "generated/runtime-lib/runtime/relay-console-client.d.ts",
+        "generated/runtime-lib/runtime/relay-console-client.js",
+        "generated/runtime-lib/server/directory.d.ts",
+        "generated/runtime-lib/server/directory.js",
+        "generated/runtime-lib/server/endpoint-discovery.d.ts",
+        "generated/runtime-lib/server/endpoint-discovery.js",
+        "generated/runtime-lib/server/relay-process.d.ts",
+        "generated/runtime-lib/server/relay-process.js",
+        "generated/runtime-lib/server/relay.d.ts",
+        "generated/runtime-lib/server/relay.js",
+        "package.json",
+        "runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner",
+        "runtime/dagpipe/graphs/agent-work.graph.json",
+        "runtime/dagpipe/graphs/work-close.graph.json",
+        "runtime/dagpipe/graphs/work-open.graph.json",
+        "runtime/dagpipe/graphs/work-query.graph.json",
+        "runtime/dagpipe/graphs/work-request.graph.json",
+        "runtime/dagpipe/manifest.json",
+        "ui/teams-console/assets/README.md",
+        "ui/teams-console/assets/agentbrowser-icon.jpg",
+        "ui/teams-console/browser.d.ts",
+        "ui/teams-console/browser.js",
+        "ui/teams-console/canonical/agent-message.d.ts",
+        "ui/teams-console/canonical/agent-services.d.ts",
+        "ui/teams-console/canonical/console-api.d.ts",
+        "ui/teams-console/canonical/endpoint-ref.d.ts",
+        "ui/teams-console/canonical/frames.d.ts",
+        "ui/teams-console/canonical/json-value.d.ts",
+        "ui/teams-console/canonical/relation-report.d.ts",
+        "ui/teams-console/client/api.d.ts",
+        "ui/teams-console/client/api.js",
+        "ui/teams-console/client/controller.d.ts",
+        "ui/teams-console/client/controller.js",
+        "ui/teams-console/client/focus.d.ts",
+        "ui/teams-console/client/focus.js",
+        "ui/teams-console/client/index.d.ts",
+        "ui/teams-console/client/index.js",
+        "ui/teams-console/client/locale.d.ts",
+        "ui/teams-console/client/locale.js",
+        "ui/teams-console/client/model.d.ts",
+        "ui/teams-console/client/model.js",
+        "ui/teams-console/client/protocol.d.ts",
+        "ui/teams-console/client/protocol.js",
+        "ui/teams-console/client/render.d.ts",
+        "ui/teams-console/client/render.js",
+        "ui/teams-console/client/styles.d.ts",
+        "ui/teams-console/client/styles.js",
+        "ui/teams-console/fixture-browser.d.ts",
+        "ui/teams-console/fixture-browser.js",
+        "ui/teams-console/fixture.d.ts",
+        "ui/teams-console/fixture.js",
+        "ui/teams-console/index.d.ts",
+        "ui/teams-console/index.js"
+      ]
+    },
+    "install": {
+      "prefix": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/prefix",
+      "cli_realpath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/prefix/node_modules/agentteams/cli/agentteams.mjs",
+      "installed_content_sha256": "16a297169108368edbd67b681cc944303dafb19f6bf633e65bc2a775bf274dab",
+      "installed_files": 180
+    },
+    "cli": {
+      "init": {
+        "stdout": "initialized /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/config.toml\nEdit config.toml, then run agentteams start, agentteams status, or agentteams stop.\n",
+        "stderr": ""
+      },
+      "status": {
+        "stdout": "status state=stopped generation=0 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/internal.toml endpoints=missing\n",
+        "stderr": ""
+      },
+      "stop": {
+        "stdout": "stopped state=stopped generation=0 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/internal.toml\n",
+        "stderr": ""
+      }
+    },
+    "console": {
+      "unauthorized": 401,
+      "page": 200,
+      "consoleEntry": 200,
+      "browser": 200,
+      "icon": 200,
+      "crossSite": 401
+    },
+    "cleanup": {
+      "temporary_root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF",
+      "removed": true
+    },
+    "lifecycle": {
+      "status": "passed",
+      "fixture": {
+        "kind": "v3",
+        "note": "installed v3 user-intent fixture compiled by the installed runtime; internal ports and declarations are read back from internal.toml",
+        "ports": {
+          "relay": 53680,
+          "installed-provider": 53703,
+          "installed-receiver": 53704
+        }
+      },
+      "start": {
+        "state": "running",
+        "generation": 1,
+        "pid": 73305,
+        "endpoints": [
+          {
+            "agentId": "installed-provider",
+            "identity": "installed-local/installed-smoke/installed-provider/installed-local/custom/InstalledProvider",
+            "role": "provider",
+            "presence": "online",
+            "generation": 1,
+            "capabilities": [
+              "file-search@1:search[search-slot:2:slot]"
+            ]
+          },
+          {
+            "agentId": "installed-receiver",
+            "identity": "installed-local/installed-smoke/installed-receiver/installed-local/custom/InstalledReceiver",
+            "role": "receiver",
+            "presence": "online",
+            "generation": 1,
+            "capabilities": []
+          }
+        ],
+        "internalPath": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/internal.toml",
+        "launcher": {
+          "pid": 73305,
+          "generation": 1,
+          "startToken": "b17735fb-f88f-497f-b078-33da8947a684"
+        },
+        "processes": [
+          {
+            "id": "relay",
+            "pid": 73369,
+            "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/prefix/node_modules/agentteams/generated/runtime-lib/server/relay-process.js",
+            "generation": 1,
+            "startToken": "b17735fb-f88f-497f-b078-33da8947a684"
+          },
+          {
+            "id": "installed-provider",
+            "pid": 73433,
+            "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
+            "generation": 1,
+            "startToken": "b17735fb-f88f-497f-b078-33da8947a684"
+          },
+          {
+            "id": "installed-receiver",
+            "pid": 73482,
+            "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
+            "generation": 1,
+            "startToken": "b17735fb-f88f-497f-b078-33da8947a684"
+          }
+        ],
+        "ports": {
+          "relay": 53680,
+          "installed-provider": 53703,
+          "installed-receiver": 53704
+        },
+        "services": {
+          "installed-provider": [
+            {
+              "capabilityId": "file-search",
+              "version": "1",
+              "operations": [
+                "search"
+              ],
+              "resources": [
+                {
+                  "resourceId": "search-slot",
+                  "capacity": 2,
+                  "unit": "slot"
+                }
+              ]
+            }
+          ],
+          "installed-receiver": []
+        },
+        "command": {
+          "stdout": "started state=running generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/internal.toml pid=73305\n",
+          "stderr": ""
+        }
+      },
+      "stop": {
+        "generation": 1,
+        "stdout": "stopped state=stopped generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/internal.toml pid=73305\n",
+        "stderr": ""
+      },
+      "restart": {
+        "state": "running",
+        "generation": 2,
+        "pid": 73768,
+        "endpoints": [
+          {
+            "agentId": "installed-provider",
+            "identity": "installed-local/installed-smoke/installed-provider/installed-local/custom/InstalledProvider",
+            "role": "provider",
+            "presence": "online",
+            "generation": 1,
+            "capabilities": [
+              "file-search@1:search[search-slot:2:slot]"
+            ]
+          },
+          {
+            "agentId": "installed-receiver",
+            "identity": "installed-local/installed-smoke/installed-receiver/installed-local/custom/InstalledReceiver",
+            "role": "receiver",
+            "presence": "online",
+            "generation": 1,
+            "capabilities": []
+          }
+        ],
+        "internalPath": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/internal.toml",
+        "launcher": {
+          "pid": 73768,
+          "generation": 2,
+          "startToken": "c91cb627-9190-44cb-af80-e39e9042664b"
+        },
+        "processes": [
+          {
+            "id": "relay",
+            "pid": 73817,
+            "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/prefix/node_modules/agentteams/generated/runtime-lib/server/relay-process.js",
+            "generation": 2,
+            "startToken": "c91cb627-9190-44cb-af80-e39e9042664b"
+          },
+          {
+            "id": "installed-provider",
+            "pid": 73866,
+            "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
+            "generation": 2,
+            "startToken": "c91cb627-9190-44cb-af80-e39e9042664b"
+          },
+          {
+            "id": "installed-receiver",
+            "pid": 73993,
+            "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
+            "generation": 2,
+            "startToken": "c91cb627-9190-44cb-af80-e39e9042664b"
+          }
+        ],
+        "ports": {
+          "relay": 53680,
+          "installed-provider": 53703,
+          "installed-receiver": 53704
+        },
+        "services": {
+          "installed-provider": [
+            {
+              "capabilityId": "file-search",
+              "version": "1",
+              "operations": [
+                "search"
+              ],
+              "resources": [
+                {
+                  "resourceId": "search-slot",
+                  "capacity": 2,
+                  "unit": "slot"
+                }
+              ]
+            }
+          ],
+          "installed-receiver": []
+        },
+        "command": {
+          "stdout": "started state=running generation=2 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/internal.toml pid=73768\n",
+          "stderr": ""
+        }
+      },
+      "final_stop": {
+        "generation": 2,
+        "stdout": "stopped state=stopped generation=2 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-1cJXOF/home/.agentteams/internal.toml pid=73768\n",
+        "stderr": ""
+      }
+    },
+    "lifecycle_scope": {
+      "entrypoint": "installed npm tarball CLI start/status/stop",
+      "fixture": "v3-user-intent-config-compiled-by-installed-runtime",
+      "final_user_config_evidence": false
+    }
+  },
+  "limits": "installed SDK package slice; new public CLI Work/Console/Session/BB01-BB14 not complete",
+  "evidence_publication": {
+    "testedIndexedTree": "3a9a367ad11f103bf8e953fa4aea0063931abacb",
+    "pathsChangedSinceInstall": [
+      "docs/evidence/746dd7b-sdk-final-pack-20261004/current-final-gates.json",
+      "docs/evidence/746dd7b-sdk-final-pack-20261004/current-package-public.json",
+      "docs/evidence/746dd7b-sdk-final-pack-20261004/notes.md"
+    ],
+    "productSourceAndArtifacts": "unchanged; only current evidence publication and notes"
+  },
+  "reused": {
+    "sourcePrepTypecheck": {
+      "raw": "\n> agentteams@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005\n> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck\n\n\n> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005/opencode-adapter\n> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean\n\nℹ tsdown v0.22.14 powered by rolldown v1.2.7\nℹ config file: /Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005/opencode-adapter/tsdown.config.ts \nℹ entry: src/index.ts\nℹ target: es2022\nℹ tsconfig: tsconfig.json\nℹ Build start\nℹ lib/index.mjs    16.95 kB │ gzip: 4.25 kB\nℹ lib/index.d.mts  13.85 kB │ gzip: 3.21 kB\nℹ 2 files, total: 30.80 kB\n✔ Build complete in 1057ms\n\n> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005/opencode-adapter\n> tsc --noEmit\n\n\n> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005/console-host\n> tsc --noEmit\n\n\n> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005/ui/teams-console\n> tsc -p tsconfig.json --noEmit\n\n",
+      "author": "# U1 SDK current source preparation final report\n\nStatus: DONE for source preparation. This is not full U1/MVP delivery.\n\n## Candidate identity\n\n- Issue: `746dd7b`\n- Worker: `gcm-u1-sdk-current-prep`\n- Worktree: `/Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005`\n- Branch: `codex/u1-sdk-current-prep-20261005`\n- Base/HEAD: `9a95b63f3b44d7eb7f5cf4f53e40743b2f3bce0a`\n- Source state: staged delta, no unstaged tracked changes\n\n## Scope and actual delta\n\nThe staged candidate contains exactly the allowed 13 paths:\n\n```text\n.appsdk/guidance/compiled.json\n.appsdk/project.json\ncli/package-install.spec.ts\ndocs/architecture/function-map.json\ndocs/architecture/mainline-call-map.json\ndocs/architecture/verification-map.json\ndocs/evidence/746dd7b-sdk-final-pack-20261004/notes.md\npackage.json\nscripts/artifact-smoke.mjs\nscripts/installed-runtime-smoke.mjs\nscripts/package-artifact.mjs\nscripts/package-sdk-smoke.mjs\ntsconfig.runtime.json\n```\n\nNo product source was changed in this preparation step. The parent applied the frozen unit and staged it; I verified the composition and reused the staged changes.\n\nWiring verified:\n\n- `scripts/package-artifact.mjs` is the sole package producer.\n- Final mode calls the existing `runtime/dagpipe/build.mjs` `buildRunner()` entry once.\n- Final mode stages the compiled `runtime/dagpipe/host.js` and `protocol.js`, the runner, manifest, and five Work graphs.\n- `runtime/dagpipe/runner/src/bin/runner.rs` registers the ten Operators used by `agent-work@2`, `work-open@1`, `work-request@1`, `work-close@1`, and `work-query@1`.\n- `.appsdk/project.json` binds the compiled host/protocol, transitive control-protocol/network runtime modules, runner, manifest, and five graph outputs.\n- `docs/architecture/function-map.json`, `mainline-call-map.json`, and `verification-map.json` bind the final package path and keep `release_eligible=false`.\n- The new host continuation fix removes `policyRevision` only for `work-request`; the one-shot `agent-work` path still requires and uses it. The staged smoke is compatible.\n\nNo combination error was found, so there is no product diff beyond the parent-applied frozen unit.\n\n## Commands and exits\n\nAll raw logs are in `/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-current-prep-20261005/`.\n\n| Command | Exit | Evidence |\n| --- | --- | --- |\n| `pnpm typecheck` | 0 | `typecheck.log` |\n| `pnpm build` | 0 | `build.log` |\n| `node -e ... buildRunner()` | 0 | `runner-build.log` |\n| `dagpipe graph validate` for all five graphs | 0 | `graph-validate.log` |\n| `appsdk guide compile` | 0 | `guide-compile.log` |\n| `git diff --cached --check` | 0 | terminal result recorded in `run-notes.md` |\n\nRunner build result:\n\n- Receipt protocol: `teams-dagpipe-runner-build-receipt`\n- Receipt version: `2`\n- SDK: `pipeline_runtime@0.1.1`\n- Target: `aarch64-apple-darwin`\n- Runner SHA256: `67af81b67c16b698b87533d8fd1d1cf771aca7685e1bc63b4c157dd8eaa90da0`\n- Graph hashes matched the current five graph sources.\n\n## Reused, run, and not run\n\nReused as source input:\n\n- The parent-applied frozen 13-path delta.\n- Historical source/package evidence in `docs/evidence/746dd7b-sdk-final-pack-20261004/notes.md` and the old candidate receipt.\n\nRun in this preparation step:\n\n- `pnpm typecheck`\n- `pnpm build`\n- Real `buildRunner()` entry\n- Five `dagpipe graph validate` commands\n- `appsdk guide compile`\n\nNot run by design:\n\n- `scripts/package-sdk-smoke.mjs` and installed lifecycle/CLI/launcher/ps-dependent black-box tests\n- 53-test/full verify\n- Review, admission, integration, commit, merge, push, memory, and cleanup\n\nThe primary owns these gates after candidate freeze. Old installed evidence does not prove the current final package.\n\n## Open obligations\n\n- Current final package source-level candidate is prepared, but no current installed SDK/consumer receipt exists for this SHA.\n- The primary must freeze the candidate, rebuild the package, run the current installed SDK/consumer and affected public-entry tests, then run the official gate and independent review.\n- `docs/architecture/resource-map.json:14` is outside the allowed write set and still has stale wording that final mode includes \"two graphs\" and that the package is not present. The staged producer and package paths use five graphs. The primary should reconcile this map text during integration if that file remains authoritative.\n- Do not claim full U1/MVP, review PASS, admission, or delivery for this source-preparation result.\n\n## Resource state\n\n- The source-preparation worktree is retained for primary integration. The parent owns its eventual cleanup under the task contract.\n- Temporary build output is confined to ignored `generated/**` and `runtime/dagpipe/.build/**`.\n- Evidence notes and logs are retained in `/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-current-prep-20261005/`.\n",
+      "scope": "unchanged product TS/dependencies; removed historical receipt-only test now covered by current public19"
+    },
+    "sdk36": {
+      "exit": 0,
+      "report": {
+        "numTotalTestSuites": 5,
+        "numPassedTestSuites": 5,
+        "numFailedTestSuites": 0,
+        "numPendingTestSuites": 0,
+        "numTotalTests": 36,
+        "numPassedTests": 36,
+        "numFailedTests": 0,
+        "numPendingTests": 0,
+        "numTodoTests": 0,
+        "snapshot": {
+          "added": 0,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0,
+          "didUpdate": false
+        },
+        "startTime": 1791179925670,
+        "success": true,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [],
+                "fullName": "matches an online provider by capability, version, and operation",
+                "status": "passed",
+                "title": "matches an online provider by capability, version, and operation",
+                "duration": 2.3076659999999833,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "honors an explicitly configured provider when multiple peers advertise the same operation",
+                "status": "passed",
+                "title": "honors an explicitly configured provider when multiple peers advertise the same operation",
+                "duration": 0.25354200000001015,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "resolves capability selection only from the exact provider declaration and returns no Endpoint",
+                "status": "passed",
+                "title": "resolves capability selection only from the exact provider declaration and returns no Endpoint",
+                "duration": 0.4621670000000222,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "keeps capability selection separate from Endpoint admission and rejects stale exact generations",
+                "status": "passed",
+                "title": "keeps capability selection separate from Endpoint admission and rejects stale exact generations",
+                "duration": 0.6037919999999986,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "selects a visible Endpoint and carries its revision into the Work proposal",
+                "status": "passed",
+                "title": "selects a visible Endpoint and carries its revision into the Work proposal",
+                "duration": 0.1837500000000034,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "does not match an operation declared only by a different capability version",
+                "status": "passed",
+                "title": "does not match an operation declared only by a different capability version",
+                "duration": 0.45145800000000236,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "reports an explicit match failure for missing capability",
+                "status": "passed",
+                "title": "reports an explicit match failure for missing capability",
+                "duration": 0.15933300000000372,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "reports an explicit match failure for unsupported version",
+                "status": "passed",
+                "title": "reports an explicit match failure for unsupported version",
+                "duration": 0.1612920000000031,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "reports an explicit match failure for unsupported operation",
+                "status": "passed",
+                "title": "reports an explicit match failure for unsupported operation",
+                "duration": 0.41458399999999074,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "reports an explicit match failure for offline provider",
+                "status": "passed",
+                "title": "reports an explicit match failure for offline provider",
+                "duration": 0.12333300000000236,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "exposes the full consumer channel and carries target generation only in control",
+                "status": "passed",
+                "title": "exposes the full consumer channel and carries target generation only in control",
+                "duration": 1.8911669999999958,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "accepts an equivalent Endpoint reference regardless of property order",
+                "status": "passed",
+                "title": "accepts an equivalent Endpoint reference regardless of property order",
+                "duration": 0.3090830000000153,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [],
+                "fullName": "maps provider work errors and rejected proposals to explicit protocol errors",
+                "status": "passed",
+                "title": "maps provider work errors and rejected proposals to explicit protocol errors",
+                "duration": 0.567875000000015,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              }
+            ],
+            "startTime": 1791179925936,
+            "endTime": 1791179925944.5679,
+            "status": "passed",
+            "message": "",
+            "name": "/Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005/runtime/agent-work-client.spec.ts"
+          },
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "DAGpipe runner build isolation"
+                ],
+                "fullName": "DAGpipe runner build isolation keeps two concurrent native build consumers immutable and usable",
+                "status": "passed",
+                "title": "keeps two concurrent native build consumers immutable and usable",
+                "duration": 6503.991167,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              }
+            ],
+            "startTime": 1791179925876,
+            "endTime": 1791179932379.9912,
+            "status": "passed",
+            "message": "",
+            "name": "/Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005/runtime/dagpipe-build.spec.ts"
+          },
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host runs two real submits with distinct identities and real search results, then observes the original request without replay",
+                "status": "passed",
+                "title": "runs two real submits with distinct identities and real search results, then observes the original request without replay",
+                "duration": 469.85049999999956,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host opens, continues, queries, and closes one persistent Work through the five approved graphs",
+                "status": "passed",
+                "title": "opens, continues, queries, and closes one persistent Work through the five approved graphs",
+                "duration": 201.01041700000042,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host rejects a stale persistent open generation before any Work effect",
+                "status": "passed",
+                "title": "rejects a stale persistent open generation before any Work effect",
+                "duration": 14.34991700000046,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host rejects an incomplete persistent capability binding before any host or provider effect",
+                "status": "passed",
+                "title": "rejects an incomplete persistent capability binding before any host or provider effect",
+                "duration": 10.845916999999645,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host rejects every required malformed input before any host or provider effect",
+                "status": "passed",
+                "title": "rejects every required malformed input before any host or provider effect",
+                "duration": 22.376750000000357,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host rejects missing Operators and missing effects at compile with zero business effects",
+                "status": "passed",
+                "title": "rejects missing Operators and missing effects at compile with zero business effects",
+                "duration": 34.35474999999951,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host surfaces provider permission, operation and generation rejections explicitly",
+                "status": "passed",
+                "title": "surfaces provider permission, operation and generation rejections explicitly",
+                "duration": 65.8414159999993,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host fails explicitly on host EOF and makes no further host call",
+                "status": "passed",
+                "title": "fails explicitly on host EOF and makes no further host call",
+                "duration": 3.5175409999992553,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host rejects a bad host-call correlation on the real stdio port without any Work effect",
+                "status": "passed",
+                "title": "rejects a bad host-call correlation on the real stdio port without any Work effect",
+                "duration": 197.19825000000128,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns completed for only one valid correlated execution.result and preserves its business",
+                "status": "passed",
+                "title": "returns completed for only one valid correlated execution.result and preserves its business",
+                "duration": 179.5685829999984,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host rejects malformed-json from the real runner port and terminates the exact child",
+                "status": "passed",
+                "title": "rejects malformed-json from the real runner port and terminates the exact child",
+                "duration": 182.2716670000009,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host rejects missing-control from the real runner port and terminates the exact child",
+                "status": "passed",
+                "title": "rejects missing-control from the real runner port and terminates the exact child",
+                "duration": 71.8183339999996,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host rejects unknown-frame from the real runner port and terminates the exact child",
+                "status": "passed",
+                "title": "rejects unknown-frame from the real runner port and terminates the exact child",
+                "duration": 71.40241699999933,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-compiled and terminates the exact child",
+                "status": "passed",
+                "title": "returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-compiled and terminates the exact child",
+                "duration": 73.05379200000061,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-identity and terminates the exact child",
+                "status": "passed",
+                "title": "returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-identity and terminates the exact child",
+                "duration": 72.09266699999898,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-journal and terminates the exact child",
+                "status": "passed",
+                "title": "returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-journal and terminates the exact child",
+                "duration": 71.58370900000045,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-bad-identity and terminates the exact child",
+                "status": "passed",
+                "title": "returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-bad-identity and terminates the exact child",
+                "duration": 76.43854199999987,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns one HOST_PROTOCOL receipt for malformed terminal frame duplicate-final and terminates the exact child",
+                "status": "passed",
+                "title": "returns one HOST_PROTOCOL receipt for malformed terminal frame duplicate-final and terminates the exact child",
+                "duration": 71.75129099999867,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns one HOST_PROTOCOL receipt for malformed terminal frame malformed-after-valid-result and terminates the exact child",
+                "status": "passed",
+                "title": "returns one HOST_PROTOCOL receipt for malformed terminal frame malformed-after-valid-result and terminates the exact child",
+                "duration": 71.21974999999838,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns one HOST_PROTOCOL receipt for malformed terminal frame host-call-after-valid-result and terminates the exact child",
+                "status": "passed",
+                "title": "returns one HOST_PROTOCOL receipt for malformed terminal frame host-call-after-valid-result and terminates the exact child",
+                "duration": 70.11733400000048,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns an explicit runner failure and cleans up when the runner exits before the host response",
+                "status": "passed",
+                "title": "returns an explicit runner failure and cleans up when the runner exits before the host response",
+                "duration": 191.83749999999964,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              },
+              {
+                "ancestorTitles": [
+                  "Teams DAGpipe SDK Work runner and Node host"
+                ],
+                "fullName": "Teams DAGpipe SDK Work runner and Node host returns an explicit unknown result with retained provider responsibility when the request link drops",
+                "status": "passed",
+                "title": "returns an explicit unknown result with retained provider responsibility when the request link drops",
+                "duration": 2047.0627089999998,
+                "failureMessages": [],
+                "meta": {},
+                "tags": []
+              }
+            ],
+            "startTime": 1791179933161,
+            "endTime": 1791179937432.0627,
+            "status": "passed",
+            "message": "",
+            "name": "/Volumes/Intel/playground/agentteams/u1-sdk-current-prep-20261005/runtime/dagpipe-work.spec.ts"
+          }
+        ]
+      },
+      "scope": "unchanged SDK/WorkClient sources, five Work graphs and dependencies; package/install identities are current receipts only"
+    }
+  }
+}

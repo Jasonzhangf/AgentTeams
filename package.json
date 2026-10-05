@@ -8,7 +8,8 @@
     "generated/runtime-lib",
     "console-host/lib",
     "console-host/static",
-    "ui/teams-console"
+    "ui/teams-console",
+    "runtime/dagpipe"
   ],
   "bin": {
     "agentteams": "./cli/agentteams.mjs"
@@ -28,9 +29,9 @@
     "typecheck": "pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck",
     "build": "pnpm --dir opencode-adapter build && pnpm --dir console-host build && pnpm --dir ui/teams-console build && pnpm build:runtime",
     "build:runtime": "node -e \"require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })\" && tsc -p tsconfig.runtime.json",
-    "build:governance": "pnpm build && node scripts/package-artifact.mjs --mode base",
+    "build:governance": "pnpm build && node scripts/package-artifact.mjs --mode final",
     "lifecycle:admission": "node scripts/lifecycle-adapter.mjs",
-    "smoke:installed": "pnpm build:governance && node scripts/installed-runtime-smoke.mjs",
+    "smoke:installed": "pnpm build:governance && node scripts/installed-runtime-smoke.mjs && node scripts/package-sdk-smoke.mjs",
     "smoke": "node scripts/artifact-smoke.mjs && node scripts/runtime-smoke.mjs",
     "verify": "pnpm test && pnpm typecheck && appsdk guide compile && appsdk compile && pnpm smoke && appsdk verify"
   },

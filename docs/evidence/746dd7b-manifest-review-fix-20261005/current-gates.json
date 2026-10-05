@@ -1,0 +1,57 @@
+{
+  "status": "author_validated",
+  "issue": "746dd7b",
+  "base": "53c683183a0c61609d3aa9f053ff8147d700fd26",
+  "tested_product_tree": "7c798668ed73373ba809091f74163d4a2fc6de80",
+  "public_package": {
+    "passed": 24,
+    "failed": 0,
+    "skipped": 0,
+    "receipt": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-manifest-review-fix-20261005/host-package-tests.json"
+  },
+  "phases": {
+    "guide": 0,
+    "compile": 0,
+    "smoke": 0,
+    "verify": 0,
+    "installed-runtime": 0,
+    "installed-sdk": 0
+  },
+  "typecheck": {
+    "mode": "executed",
+    "receipt": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-manifest-review-fix-20261005/typecheck.log"
+  },
+  "source_regression": {
+    "mode": "reused",
+    "passed": 582,
+    "receipt": "../746dd7b-sdk-review-fix-20261005/current-gates.json",
+    "raw": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-sdk-review-fix-20261005/bounded-regression.json",
+    "reason": "No runtime/network/agent/Console/config/graph sources changed versus previous exact reviewed candidate; current SDK smoke, public package test and affected maps changed and were rerun. Original real Chrome result remains separately bound; bounded full report alone was not real-DOM evidence."
+  },
+  "installed_runtime": {
+    "receipt": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-manifest-review-fix-20261005/current-installed-runtime.receipt.json",
+    "mode": "final",
+    "lifecycle": "passed",
+    "cleanup": {
+      "temporary_root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-package-user-7LnWJK",
+      "removed": true
+    }
+  },
+  "installed_sdk": {
+    "receipt": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/u1-manifest-review-fix-20261005/current-installed-sdk.receipt.json",
+    "mode": "final",
+    "status": "passed",
+    "cleanup": {
+      "temporary_root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-sdk-smoke-n7QOuS",
+      "removed": true
+    }
+  },
+  "not_proven": [
+    "installed public Work CLI",
+    "BB01-BB14",
+    "MVP completion",
+    "independent review PASS",
+    "commit/merge/push of this candidate"
+  ],
+  "timestamp": "2026-10-05T09:31:18.977Z"
+}
