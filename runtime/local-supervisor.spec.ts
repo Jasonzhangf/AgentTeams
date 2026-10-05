@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { createLocalSupervisor, localDaemonStatusProjectionPath } from './local-supervisor.ts'
 import { planLocalProcesses } from './local-supervisor.ts'
-import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig } from './local-config.ts'
+import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig, writeLocalInternalLauncherState } from './local-config.ts'
 import type { LocalConfig } from './local-config.ts'
 
 it('plans relay first, then only enabled independent daemons', () => {
@@ -103,7 +103,10 @@ it('rejects startup when an earlier ready child exits during a later child start
 })
 
 it('does not publish stopped when the final status projection cannot be written', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'teams-local-supervisor-projection-fail-'))
+  // Keep the temporary root short: the launcher publishes its Work control socket
+  // at <root>/.internal/work-control.sock, and macOS rejects unix socket paths
+  // longer than 104 bytes with a misleading EADDRINUSE.
+  const root = await mkdtemp(join(tmpdir(), 'at-projection-fail-'))
   try {
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
@@ -135,7 +138,11 @@ cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", sear
 relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
 `)
     const config = await loadLocalConfig(join(root, 'config.toml'))
-    const supervisor = createLocalSupervisor(config, { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 2000, stopTimeoutMs: 2000 })
+    // The public start path reserves the launcher before the supervisor runs and
+    // publishes the Work control refs only while that exact reservation is live.
+    const startToken = 'projection-fail-start-token'
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 1, startToken, state: 'starting' })
+    const supervisor = createLocalSupervisor(config, { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 2000, stopTimeoutMs: 2000, startToken })
     await supervisor.start()
     const projectionPath = localDaemonStatusProjectionPath(config.internalPath!)
     await rm(projectionPath)

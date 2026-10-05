@@ -278,6 +278,35 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
       'installed internal daemon projection does not declare the expected file-search service')
     assert(startInternal.services['installed-receiver'].length === 0, 'installed internal receiver projection must not declare services')
 
+    // Public Work submit/query through the installed CLI. The submit must reach
+    // the installed receiver daemon, run the installed DAGpipe runner, and return
+    // a receipt that keeps the Work identity; the query must observe the original
+    // request without executing provider work again.
+    const submitA = await run(cli, ['work', 'submit', '--config', configPath, '--receiver', 'installed-receiver', '--payload', '{"query":"needle"}'], { cwd: dirname(configPath), env: cliEnv })
+    const receiptA = JSON.parse(submitA.stdout)
+    assert(receiptA.status === 'completed', `installed Work submit did not complete: ${submitA.stdout.trim()}`)
+    assert(receiptA.control?.workId !== undefined && receiptA.control?.requestId !== undefined, 'installed Work submit did not return Work identity')
+    assert(receiptA.control?.providerAgentId === 'installed-provider', `installed Work submit lost the provider identity: ${submitA.stdout.trim()}`)
+    assert(receiptA.control?.capabilityId === 'file-search' && receiptA.control?.capabilityVersion === '1', `installed Work submit lost the capability identity: ${submitA.stdout.trim()}`)
+    assert(receiptA.control?.requestState === 'succeeded', `installed Work submit requestState=${receiptA.control?.requestState}`)
+    assert(typeof receiptA.control?.graphId === 'string' && receiptA.control.graphId.length > 0, 'installed Work submit did not run a DAGpipe graph')
+    assert(receiptA.evidence?.execution === 'completed', `installed Work submit evidence=${receiptA.evidence?.execution}`)
+
+    const submitB = await run(cli, ['work', 'submit', '--config', configPath, '--receiver', 'installed-receiver', '--payload', '{"query":"second"}'], { cwd: dirname(configPath), env: cliEnv })
+    const receiptB = JSON.parse(submitB.stdout)
+    assert(receiptB.status === 'completed', `second installed Work submit did not complete: ${submitB.stdout.trim()}`)
+    assert(receiptB.control.workId !== receiptA.control.workId && receiptB.control.requestId !== receiptA.control.requestId,
+      'a new installed Work submit must use fresh execution identity')
+
+    const query = await run(cli, ['work', 'query', '--config', configPath, '--receiver', 'installed-receiver', '--work-id', receiptA.control.workId, '--request-id', receiptA.control.requestId], { cwd: dirname(configPath), env: cliEnv })
+    const observed = JSON.parse(query.stdout)
+    assert(observed.status === 'completed', `installed Work query did not complete: ${query.stdout.trim()}`)
+    assert(observed.control?.workId === receiptA.control.workId && observed.control?.requestId === receiptA.control.requestId,
+      'installed Work query did not return the original Work identity')
+    assert(observed.control?.observed === true, 'installed Work query did not report an observation of the original request')
+    assert(observed.control?.executionId !== receiptA.control.executionId, 'installed Work query reused the submit execution identity')
+    assert(JSON.stringify(observed.business) === JSON.stringify(receiptA.business), 'installed Work query business result differs from the original submit')
+
     const firstStop = await run(cli, ['stop', '--config', configPath, '--generation', String(activeGeneration)], { cwd: dirname(configPath), env: cliEnv })
     await waitForProcessesGone([startInternal.launcher.pid, ...startInternal.processes.map(process => process.pid)])
     activeGeneration = undefined
@@ -310,6 +339,20 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
       start: { ...startParsed, ...startInternal, command: { stdout: start.stdout, stderr: start.stderr } },
       stop: { generation: startParsed.generation, stdout: firstStop.stdout, stderr: firstStop.stderr },
       restart: { ...restartParsed, ...restartInternal, command: { stdout: restart.stdout, stderr: restart.stderr } },
+      work: {
+        submit: {
+          workId: receiptA.control.workId,
+          requestId: receiptA.control.requestId,
+          providerAgentId: receiptA.control.providerAgentId,
+          capabilityId: receiptA.control.capabilityId,
+          capabilityVersion: receiptA.control.capabilityVersion,
+          requestState: receiptA.control.requestState,
+          graphId: receiptA.control.graphId,
+          business: receiptA.business,
+        },
+        second_submit: { workId: receiptB.control.workId, requestId: receiptB.control.requestId },
+        query: { workId: observed.control.workId, requestId: observed.control.requestId, observed: observed.control.observed, business: observed.business },
+      },
       final_stop: { generation: restartParsed.generation, stdout: secondStop.stdout, stderr: secondStop.stderr },
     }
     return lifecycle
