@@ -1,0 +1,4 @@
+{
+  "originalLogSha256": "b8c8c2a882cf95c5b48c11c247244d7070bcf6143465438b973eef5d36e0b12e",
+  "stdoutAndStderr": "valid DAG: agentteams.daemon-stop@1 (5 nodes, 4 edges, 5 waves)\noperator bindings are syntactically present; project compile() remains the authoritative registry/schema/effect gate\n"
+}

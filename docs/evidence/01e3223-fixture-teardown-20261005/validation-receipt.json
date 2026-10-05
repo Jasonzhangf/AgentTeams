@@ -1,0 +1,45 @@
+{
+  "at": "2026-10-05T03:30:32.035Z",
+  "issue": "01e3223",
+  "base": "bca92a0411a2a787bf0189896623e7eb08124586",
+  "validatedSourceOnlyTree": "9a3a8e0aaa7e537b674d9e7db67e147458ad8819",
+  "testFile": "runtime/local-process.spec.ts",
+  "testFileSha256": "fed699c332e484c8441601d34a90bdc7427796033653ed52e7bb4e57ed80224e",
+  "gates": [
+    {
+      "command": "pnpm exec vitest run runtime/local-process.spec.ts runtime/local-config.spec.ts --reporter verbose",
+      "exit": 0,
+      "raw": "mapped45.json",
+      "rawSha256": "2869b5df5228b6a34111344e46db9c49f0d9ba6ff2c7eecb1ca1f55df36b88e4",
+      "originalRawLog": "mapped45.log",
+      "originalRawLogSha256": "7c718711823f1fed16f85d17b9055513cef8369c99b66fe7b78e31881581d557"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exit": 0,
+      "raw": "typecheck.json",
+      "rawSha256": "7f37be61444fee08e4c5b242ef52743937f361ca199fb305edb97ab4c1190194",
+      "originalRawLog": "typecheck.log",
+      "originalRawLogSha256": "2d49015976354c6c47e3d531f50be87ddc2e0076d5142801aa92eb68c49c8484"
+    },
+    {
+      "command": "pnpm build:runtime",
+      "exit": 0,
+      "raw": "build.json",
+      "rawSha256": "0db62c4fcb244be3f6012bd5f29513205cd08901824021defe7b97b319abd496",
+      "originalRawLog": "build.log",
+      "originalRawLogSha256": "c7da1aaeb115dea6bd81d3a098c4cb9e0ab8a9a9e729c2dc31b719fa3bdbe5ee"
+    },
+    {
+      "command": "dagpipe graph validate docs/design/dagpipe/graphs/daemon-stop.graph.json",
+      "exit": 0,
+      "raw": "graph.json",
+      "rawSha256": "73a39de04d3e20717fad23764b0fe07c347c0c447cede9d50b0781f2be532c99",
+      "originalRawLog": "graph.log",
+      "originalRawLogSha256": "b8c8c2a882cf95c5b48c11c247244d7070bcf6143465438b973eef5d36e0b12e"
+    }
+  ],
+  "reentry": "Only evidence files added after author validation. Runtime/test/lock/config/tool inputs unchanged; reuse the source-bound results.",
+  "deployment": "test fixture only; product runtime unchanged, no install/restart required",
+  "causalEvidence": "External causal-receipt.json and controlled-signal-red/green logs; old failure exact interleaving unconfirmed"
+}

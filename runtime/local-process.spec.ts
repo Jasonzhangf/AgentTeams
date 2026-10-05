@@ -353,6 +353,7 @@ it('rejects a live PID reuse even when the persisted launcher owner record match
   const path = join(root, 'config.toml')
   let internalPath: string | undefined
   let fake: ReturnType<typeof spawnProcess> | undefined
+  let originalLauncher: Awaited<ReturnType<typeof readLocalInternalConfig>>['launcher']
   try {
     const relay = join(root, 'relay.mjs')
     const agent = join(root, 'agent.mjs')
@@ -378,6 +379,7 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     const first = await startLocalProcess(path, { relayEntry: relay, agentEntry: agent, nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 3000 })
     internalPath = first.internalPath
     const internal = await readLocalInternalConfig(internalPath)
+    originalLauncher = internal.launcher
     const token = internal.launcher?.startToken
     fake = spawnProcess(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
     await new Promise(resolveReady => fake?.once('spawn', resolveReady))
@@ -385,12 +387,23 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     await writeLocalLauncherOwnership(internalPath, { version: 1, pid: fake.pid!, startToken: token! })
     await writeLocalInternalLauncherState(internalPath, { pid: fake.pid!, generation: first.generation, startToken: token!, state: 'running' })
     await expect(statusLocalProcess(path)).resolves.toMatchObject({ state: 'failed', generation: first.generation })
-    fake.kill('SIGTERM')
-    fake = undefined
   } finally {
-    if (fake !== undefined && fake.pid !== undefined) fake.kill('SIGTERM')
-    if (internalPath !== undefined) {
-      try { await stopLocalProcess(path) } catch { /* cleanup is best effort for test-only paths */ }
+    if (fake !== undefined && fake.exitCode === null && fake.signalCode === null) {
+      const fakeProcess = fake
+      const fakeExited = new Promise<void>(resolveExit => fakeProcess.once('exit', () => resolveExit()))
+      fakeProcess.kill('SIGTERM')
+      await fakeExited
+    }
+    if (internalPath !== undefined && originalLauncher?.pid !== undefined) {
+      await writeLocalLauncherOwnership(internalPath, { version: 1, pid: originalLauncher.pid, startToken: originalLauncher.startToken! })
+      await writeLocalInternalLauncherState(internalPath, originalLauncher)
+      await stopLocalProcess(path, originalLauncher.generation)
+      let exited = false
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        try { process.kill(originalLauncher.pid, 0) } catch { exited = true; break }
+        await new Promise(resolveDelay => setTimeout(resolveDelay, 50))
+      }
+      expect(exited).toBe(true)
     }
     await rm(root, { recursive: true, force: true })
   }

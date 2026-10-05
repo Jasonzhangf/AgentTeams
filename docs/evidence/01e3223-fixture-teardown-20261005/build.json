@@ -1,0 +1,4 @@
+{
+  "originalLogSha256": "c7da1aaeb115dea6bd81d3a098c4cb9e0ab8a9a9e729c2dc31b719fa3bdbe5ee",
+  "stdoutAndStderr": "\n> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/01e3223-pid-fixture-cleanup-20261005\n> node -e \"require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })\" && tsc -p tsconfig.runtime.json\n\n"
+}
