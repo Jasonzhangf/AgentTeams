@@ -26,11 +26,11 @@ exit 0，80/80 test files、576/576 tests、0 failed、0 pending。
 
 review r1 之后追加 commit dd52602234c0a77d578e68cc95490039793a22ee，只改
 evidence notes、verification-map 措辞与 SDK module registry 的退役 glob；
-未触达 runtime、测试、依赖、构建脚本或产物输入形状。dd52602 仍在集成基线
-6252db8 之上，且已在其自身候选上重跑全量回归：exit 0，
-134/134 suites、576/576 tests、0 failed、0 pending、0 skipped，
-receipt `$HOME/.codex/task-evidence/agentteams/receipts/40d320f-validation-residual-ablation-20261005/current-regression-dd52602.json`；
-官方 appsdk verify 同候选 exit 0（stage contract_bound）。
+未触达 runtime、测试、依赖、构建脚本或产物输入形状。
+精确候选验证在 review 后运行，绑定到最终交付 commit 的外部 receipt：
+`$HOME/.codex/task-evidence/agentteams/receipts/40d320f-validation-residual-ablation-20261005/exact-candidate-verify.json`。
+该 receipt 的 `candidate.head_commit` 与本文件所属 commit 一致，并记录全量回归
+与官方 appsdk verify 的 exit、计数与 receipt 文件身份。
 
 此前的 575 PASS/1FAIL 是 c520894 修复落地前的 baseline 失败（local-two-agent
 ENOTEMPTY），已由 c520894 独立修复并合入；本消融不混入该修复、不跳过、不重写历史。
