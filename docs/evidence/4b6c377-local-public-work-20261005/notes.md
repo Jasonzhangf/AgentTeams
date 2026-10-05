@@ -11,6 +11,8 @@
 2026-10-05 09:16:00 -0700 | affected-socket-suites | passed | 7 suites, all green on the host shell | host receipt: affected.json under the unit receipt directory | run the installed public replay
 2026-10-05 09:28:00 -0700 | installed-public-work | passed | staged final pack installed outside the source tree; public CLI submit/query returned real provider matches and the query observed the original request | host receipt: installed-runtime-smoke.receipt.json under the unit receipt directory | run full regression on this exact candidate
 2026-10-05 09:30:00 -0700 | full-regression | passed | pnpm test exit 0 with 0 failed, 0 pending, 0 todo | generated/validation/regression.json | start independent review
+2026-10-05 10:22:00 -0700 | independent-review-r1 | failed | two P1: work open required an explicit --provider-generation instead of resolving the selected Agent's typed status projection; the installed gate exercised submit/query only although open/request/close are now public entries | external receipt: reviews/public-work-receiver-fix-20261005-r1/review.final.md | fix both and revalidate
+2026-10-05 10:32:00 -0700 | review-r1-fix | passed | open resolves targetGeneration from the selected Agent's typed local daemon status projection and fails before dispatch when neither source exists; the installed gate now runs open/request/query/close plus the unresolvable-provider negative | host receipt: installed-runtime-smoke.receipt.json under the unit receipt directory | full regression and independent r2 on this exact candidate
 
 The `blocked` entries above are the worker-process record from the GCM sandbox, which
 denies loopback/Unix-socket `listen` and `/bin/ps`. They are kept because they document
