@@ -1,7 +1,7 @@
-# Control Protocol v2 组件进度与当前计划入口
+# Control Protocol v2 历史组件基线
 
-状态：历史阶段已重新归类。当前实施顺序唯一入口为
-[teams-development-plan.md](teams-development-plan.md)。
+当前实施顺序和验收见[用户交付计划](teams-user-delivery-plan.md)。
+下表仅记录迁移时的组件分类，不维护当前执行状态或第二份实施计划。
 
 ## 已有源码基线
 
@@ -25,5 +25,5 @@ OpenCode 仅用于推理型 Agent；Teams 独立管理多 LLM provider，参考 
 配置接口。Phase 1 验证本地网络 bridge 与 Console 离线后的 Agent Work；公网/NAT/relay
 属于后续阶段。
 
-不再沿旧 Phase 字母把纯状态组件记作网络完成。下一步按当前计划 P0、并行模块、I1 和 V1，
-分别绑定源码、真实产物、适用测试、入口证据和 review。
+不沿旧 Phase 字母把纯状态组件记作网络完成。当前任务依赖、真实入口验收与
+后续公网范围均由用户交付计划维护；本历史基线不要求执行旧 P0/I1/V1 顺序。

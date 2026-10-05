@@ -20,7 +20,7 @@ Phase 1 先覆盖本地网络 bridge，Console 不充当必经业务中继。公
 - [控制协议 v2](docs/design/teams-control-protocol-v2-master-agent-host.md)
 - [Agent 关系与通信](docs/design/teams-agent-relation-communication-v1.md)
 - [Provider 配置与 OpenMinis 参考](docs/design/teams-provider-config.md)
-- [下一步开发计划](docs/goals/teams-development-plan.md)
+- [用户 MVP 交付计划](docs/goals/teams-user-delivery-plan.md)
 - [架构 maps](docs/architecture/)
 
 ## 当前进度

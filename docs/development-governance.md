@@ -19,8 +19,9 @@
    clean worktree；保持主线只读。
 2. 绑定受影响 feature/owner/路径/调用边/验收。先定位真源，比较删除、复用与直接实现。
 3. 关键行为先红测后最小修改；同步受影响 maps。探索与验证写本任务独占 run notes。
-4. 根目录安装 `pnpm install --frozen-lockfile`；先执行当前阶段需要的定向验证，再按
-   重入规则决定是否需要全量 `pnpm verify`。
+4. 新 worktree 或依赖输入变化时，在根目录安装 `pnpm install --frozen-lockfile`；
+   依赖未变且已可用时复用。先执行当前阶段需要的定向验证，再按重入规则决定
+   是否需要全量 `pnpm verify`。
 5. 完成适用实际入口证据，再按本目标已获用户选择的独立 Codex exact review 路由
    审查精确候选；AGY Review 不属于本目标的 review gate。变更后重跑受影响验证和 review。
 6. commit、push、合并、安装、发布分别按授权执行；review PASS 不等于这些动作完成。
@@ -113,6 +114,7 @@ Guidance 使用声明的项目 AGENTS 和官方治理 Skill，保持 advisory；
 移除旧 preparation 和错误生命周期 producer；旧记录仍在归档中。
 归档位于本机临时目录，不能当长期发布档案。
 
-旧设计工作树保留；其已确认的架构修订转入当前工作树。主线未修改，未 commit、
-push 或 merge。当前安装的 AppSDK 0.1.6 没有可用的 `verify-git-main-protection`
-操作；本轮不声称已安装或验证 Git hooks，工作树边界由上述开发合同执行。
+reset 当时保留了旧设计工作树并转入已确认的架构修订；当时尚未 commit、push 或
+merge，AppSDK 0.1.6 也未提供 `verify-git-main-protection` 操作。这些是迁移时的
+历史事实，不说明当前 Git、worktree、工具版本或 hook 状态。当前状态从实际工具
+与任务节点笔记读取，工作树边界由当前开发合同执行。
