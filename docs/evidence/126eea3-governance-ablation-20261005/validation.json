@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-05T06:06:41.385Z",
+  "issue": "126eea3",
+  "base": "9a95b63f3b44d7eb7f5cf4f53e40743b2f3bce0a",
+  "owner": "development-governance",
+  "source_hashes": {
+    "AGENTS.md": "73e7e17ee694534065a3a288651535b4c3ae9235cf9800fac28b85c339c0bc56",
+    "docs/development-governance.md": "0dc4c9095c2a38c33dd49eb514eebfc5d719a4bb050e6324dc1f3f17b4b9bd48",
+    "cli/package-install.spec.ts": "6183a540ab55f47db1a15bdd44f1da2d333beade42d895025c37895117397945"
+  },
+  "tests": {
+    "exit": 0,
+    "passed": 19,
+    "failed": 0,
+    "raw": "public-tests.json"
+  },
+  "typecheck": {
+    "exit": 0,
+    "raw": "command-output.json#typecheck"
+  },
+  "guide_compile": {
+    "exit": 0,
+    "raw": "command-output.json#guide_compile"
+  },
+  "deleted": [
+    "Historical-only frozen 20261003 receipt check and duplicate complete package/installed replays",
+    "Unused frozen path, sha256 helper, crypto import",
+    "Root playground, unconditional Collab registration and per-stage universal fingerprints/reuse record duplication",
+    "Unconditional full lifecycle admission triggered solely by committing metadata/test maintenance"
+  ],
+  "retained": [
+    "Actual public npm install/CLI/Console/lifecycle/generation and receipt identity/artifact negatives",
+    "Official SDK minimum_test_count=304 and skip/todo/only prohibition",
+    "Applicable formal lifecycle/release admission and missing/invalidated-stage rerun",
+    "Mutable origin/main and runtime action boundary refresh; clean worktree, review and remote receipts"
+  ],
+  "not_applicable": [
+    "No protocol/runtime/SDK schema/source or deployment changed",
+    "No need to rerun unrelated full UI/network suites for test deletion/documentation cleanup",
+    "No claim of formal lifecycle admission, release, full MVP or memory promotion"
+  ],
+  "graph": {
+    "reused": "docs/design/dagpipe/graphs/version-delivery.graph.json",
+    "topology_changed": false
+  },
+  "parent_notes": "notes.md"
+}

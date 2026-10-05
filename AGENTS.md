@@ -64,8 +64,8 @@
   placeholder builds, or historical lifecycle evidence producers.
 - Before implementation read the resource, function, mainline, module, and
   verification maps. Bind every change to one feature and one owner.
-- Use one clean worktree below `playground/` for one semantic milestone.
-  Keep main and other workers' dirty state untouched.
+- Use one clean worktree below `/Volumes/Intel/playground/agentteams/<unit>` for
+  one semantic milestone. Keep main and other workers' dirty state untouched.
 - Append exploration, hypothesis, first divergence, intervention, root cause,
   and verification evidence to the current run notes.
 - Update maps and tests in the same change when ownership, paths, call edges, or
@@ -73,11 +73,14 @@
 
 ## Verification contract
 
-- Run focused tests first, then the mapped regression suite, typecheck/build,
+- Run focused tests first, then the mapped affected gates, typecheck/build,
   AppSDK compile/verify, and required OpenCode install/restart/live replay.
-- `pnpm verify` runs the local source/governance baseline. Current library
-  artifacts have no service install/restart operations; deployment changes must
-  bind their real operations and public-entrypoint evidence before validation.
+  Reuse valid evidence for unchanged mapped stages.
+- `pnpm verify` runs the local source/governance baseline. The base package
+  already has real installed lifecycle gates for its current scope: npm tarball
+  install, installed CLI/Console entrypoints, and installed Relay plus two
+  Agent start/restart. Deployment changes must bind their own real operations
+  and public-entrypoint evidence before validation.
 - Runtime changes require evidence from the user-observable entrypoint. Camo
   desktop and mobile replays are separate evidence; desktop layout is not mobile
   evidence.

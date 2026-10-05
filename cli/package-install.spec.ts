@@ -1,6 +1,5 @@
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +11,6 @@ import { currentCandidateIdentity } from '../scripts/receipt-identity.mjs'
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)))
 const packRoot = join(root, 'generated', 'modules', 'teams-source', 'lib')
 const receiptPath = join(root, 'generated', 'modules', 'teams-source', 'package-receipt.json')
-const frozenEvidenceDir = join(root, 'docs', 'evidence', '746dd7b-u1-package-20261003')
 const execFileAsync = promisify(execFile)
 const maxBuffer = 32 * 1024 * 1024
 
@@ -30,10 +28,6 @@ async function exists(path: string): Promise<boolean> {
 
 async function readJson(path: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
-}
-
-async function sha256(path: string): Promise<string> {
-  return createHash('sha256').update(await readFile(path)).digest('hex')
 }
 
 async function packFiles(): Promise<string[]> {
@@ -414,14 +408,4 @@ describe('agentteams install package', () => {
       expectedCandidateIdentity: packageReceipt.candidate,
     })).toThrow(/restart did not prove a new launcher/u)
   })
-
-  it('leaves the frozen 20261003 receipts byte-unchanged across public smoke runs', async () => {
-    const frozenPackage = join(frozenEvidenceDir, 'package-user-smoke.receipt.json')
-    const frozenInstalled = join(frozenEvidenceDir, 'installed-runtime-smoke.receipt.json')
-    const before = await Promise.all([sha256(frozenPackage), sha256(frozenInstalled)])
-    await runPackageUserSmoke()
-    await runInstalledSmoke(join(evidenceDir, 'frozen-check.receipt.json'))
-    const after = await Promise.all([sha256(frozenPackage), sha256(frozenInstalled)])
-    expect(after).toEqual(before)
-  }, 300_000)
 })
