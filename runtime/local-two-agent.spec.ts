@@ -9,6 +9,10 @@ const { startLocalProcess, statusLocalProcess, stopLocalProcess } = await import
     : './local-process.ts'
 )
 
+function processAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true } catch { return false }
+}
+
 it('starts two independent daemons from v3 config.toml, publishes enabled services and restarts cleanly', async () => {
   const root = mkdtempSync(join(tmpdir(), 'teams-two-agent-'))
   let started = false
@@ -88,6 +92,7 @@ demands = [{ resourceId = "search-slot", amount = 1 }]
       nodeArguments: compiled ? [] : ['--experimental-transform-types'], env: { AGENTTEAMS_PROVIDER_AUTH: 'provider-secret', AGENTTEAMS_CONSUMER_AUTH: 'consumer-secret' }, startupTimeoutMs: 15000 })
     started = true
     expect(first).toMatchObject({ state: 'running', generation: 1 })
+    expect(first.pid).toBeGreaterThan(0)
     expect(await statusLocalProcess(configPath)).toMatchObject({ state: 'running', generation: 1 })
     const config = await loadLocalConfig(configPath)
     const internal = readFileSync(config.internalPath!, 'utf8')
@@ -121,17 +126,34 @@ demands = [{ resourceId = "search-slot", amount = 1 }]
     ])
     const stopped = await readLocalInternalConfig(config.internalPath!)
     expect.soft(Object.values(stopped.daemons ?? {}).map(daemon => daemon.state)).toEqual(['stopped', 'stopped', 'stopped'])
+    expect(processAlive(first.pid!)).toBe(false)
+    expect(JSON.parse(readFileSync(join(agentteams, '.internal', 'daemon-status.json'), 'utf8'))).toMatchObject({
+      generation: first.generation,
+      daemons: {
+        provider: { presence: 'offline', state: 'stopped' },
+        consumer: { presence: 'offline', state: 'stopped' },
+      },
+    })
     const second = await startLocalProcess(configPath, { relayEntry: compiled ? resolve('generated/runtime-lib/server/relay-process.js') : resolve('server/relay-process.ts'),
       agentEntry: compiled ? resolve('generated/runtime-lib/runtime/agent-process.js') : resolve('runtime/agent-process.ts'),
       nodeArguments: compiled ? [] : ['--experimental-transform-types'], env: { AGENTTEAMS_PROVIDER_AUTH: 'provider-secret', AGENTTEAMS_CONSUMER_AUTH: 'consumer-secret' }, startupTimeoutMs: 15000 })
     started = true
     expect(second).toMatchObject({ state: 'running', generation: 2 })
+    expect(second.pid).toBeGreaterThan(0)
     const restartedInternal = await readLocalInternalConfig(config.internalPath!)
     expect.soft(restartedInternal.daemons?.relay?.orphaned).toBe(false)
     await stopLocalProcess(configPath, second.generation)
     started = false
     const secondStopped = await readLocalInternalConfig(config.internalPath!)
     expect.soft(Object.values(secondStopped.daemons ?? {}).map(daemon => daemon.state)).toEqual(['stopped', 'stopped', 'stopped'])
+    expect(processAlive(second.pid!)).toBe(false)
+    expect(JSON.parse(readFileSync(join(agentteams, '.internal', 'daemon-status.json'), 'utf8'))).toMatchObject({
+      generation: second.generation,
+      daemons: {
+        provider: { presence: 'offline', state: 'stopped' },
+        consumer: { presence: 'offline', state: 'stopped' },
+      },
+    })
   } finally {
     try { if (started) await stopLocalProcess(join(root, '.agentteams', 'config.toml')) } finally { rmSync(root, { recursive: true, force: true }) }
   }

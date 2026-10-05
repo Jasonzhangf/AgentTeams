@@ -343,18 +343,9 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         }
       }
       if (config.internalPath !== undefined) {
-        const failed = hadFailure || lifecycle === 'failed' || failures.length > 0
+        let failed = hadFailure || lifecycle === 'failed' || failures.length > 0
         const persisted: Record<string, LocalInternalDaemonState> = Object.fromEntries([...states.entries()].map(([id, state]) => [id, { ...state, state: failed ? 'failed' : 'stopped' as const }]))
-        try { await writeLocalInternalState(config.internalPath, persisted) } catch (error) { failures.push(error) }
-        try {
-          await writeLocalInternalLauncherState(config.internalPath, {
-            pid: process.pid,
-            generation: lifecycleGeneration,
-            startToken,
-            state: failed ? 'failed' : 'stopped',
-            ...(failed && lastFailure !== undefined ? { error: lastFailure.message } : {}),
-          })
-        } catch (error) { failures.push(error) }
+        try { await writeLocalInternalState(config.internalPath, persisted) } catch (error) { failures.push(error); failed = true }
         try {
           await writeLocalDaemonStatusProjection(config.internalPath, {
             version: 1,
@@ -366,9 +357,23 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
               state: failed ? 'failed' as const : 'stopped' as const,
             }])),
           })
-        } catch (error) { failures.push(error) }
+        } catch (error) { failures.push(error); failed = true }
+        const cleanupError = failures.length > 0 ? new AggregateError(failures, 'local daemon cleanup remains unconfirmed') : undefined
+        if (cleanupError !== undefined) lastFailure = cleanupError
+        try {
+          await writeLocalInternalLauncherState(config.internalPath, {
+            pid: process.pid,
+            generation: lifecycleGeneration,
+            startToken,
+            state: failed ? 'failed' : 'stopped',
+            ...(failed && lastFailure !== undefined ? { error: lastFailure.message } : {}),
+          })
+        } catch (error) {
+          failures.push(error)
+          lastFailure = new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
+        }
       }
-      if (failures.length > 0) throw new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
+      if (failures.length > 0) throw lastFailure instanceof Error ? lastFailure : new AggregateError(failures, 'local daemon cleanup remains unconfirmed')
       children.clear()
       states.clear()
       lifecycle = 'stopped'

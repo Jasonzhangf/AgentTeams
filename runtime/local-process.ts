@@ -266,7 +266,12 @@ async function waitForLauncherState(internalPath: string, configPath: string, ex
   while (Date.now() < deadline) {
     const internal = await readLocalInternalConfig(internalPath)
     last = internal.launcher
-    if (last?.state === expected && (expected === 'stopped' || (expected === 'failed' ? !processAlive(last.pid) : processAlive(last.pid) && await processOwnsStartToken(last.pid, last.startToken, configPath)))) {
+    const terminalProcessExited = last !== undefined && last.pid > 0 && !processAlive(last.pid)
+    if (last?.state === expected && (
+      (expected === 'stopped' || expected === 'failed')
+        ? terminalProcessExited
+        : processAlive(last.pid) && await processOwnsStartToken(last.pid, last.startToken, configPath)
+    )) {
       return statusFromInternal(internalPath, last)
     }
     if (last?.state === 'failed' && expected !== 'failed') throw new LocalProcessError('NOT_RUNNING', last.error ?? 'local supervisor failed')

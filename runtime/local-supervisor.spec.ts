@@ -1,9 +1,10 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { createLocalSupervisor, localDaemonStatusProjectionPath } from './local-supervisor.ts'
 import { planLocalProcesses } from './local-supervisor.ts'
+import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig } from './local-config.ts'
 import type { LocalConfig } from './local-config.ts'
 
 it('plans relay first, then only enabled independent daemons', () => {
@@ -98,5 +99,51 @@ it('rejects startup when an earlier ready child exits during a later child start
     const supervisor = createLocalSupervisor(config(root), { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 1000, stopTimeoutMs: 1000 })
     await expect(supervisor.start()).rejects.toThrow(/exited unexpectedly|failed during startup/)
     expect(supervisor.state()).toBe('stopped')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('does not publish stopped when the final status projection cannot be written', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-local-supervisor-projection-fail-'))
+  try {
+    const relay = join(root, 'relay.mjs')
+    const agent = join(root, 'agent.mjs')
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `
+const generation = Number(process.env.TEAMS_LOCAL_LAUNCHER_GENERATION ?? 1)
+process.send?.({ kind: 'daemon.status', agentId: 'browser', generation,
+  endpoint: { agentId: 'browser', identity: { hostId: 'browser-host', machineId: 'machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
+    role: 'provider', presence: 'online', state: 'online', generation, capabilities: [] } })
+process.send?.({ kind: 'daemon.registered', agentId: 'browser', generation })
+setInterval(() => {}, 1000)
+process.once('SIGTERM', () => process.exit(0))
+`)
+    await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48020 } }))
+    await writeLocalConfig(join(root, 'config.toml'), `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.browser]
+role = "provider"
+identity = { hostId = "browser-host", machineId = "machine", agentId = "browser", accountId = "account", agentKind = "custom", label = "Browser" }
+scopeId = "scope"
+dataDirectory = "data/browser"
+leasePort = 48120
+presenceIntervalMs = 100
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-browser" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
+`)
+    const config = await loadLocalConfig(join(root, 'config.toml'))
+    const supervisor = createLocalSupervisor(config, { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 2000, stopTimeoutMs: 2000 })
+    await supervisor.start()
+    const projectionPath = localDaemonStatusProjectionPath(config.internalPath!)
+    await rm(projectionPath)
+    await mkdir(projectionPath)
+
+    await expect(supervisor.stop()).rejects.toThrow(/cleanup remains unconfirmed/)
+    const internal = await readLocalInternalConfig(config.internalPath!)
+    expect(internal.launcher).toMatchObject({ state: 'failed', error: expect.stringContaining('cleanup remains unconfirmed') })
+    expect(supervisor.state()).toBe('failed')
   } finally { await rm(root, { recursive: true, force: true }) }
 })
