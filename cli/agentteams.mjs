@@ -263,7 +263,7 @@ function resolveWorkReceiver(parsed, internal) {
   throw new AgentTeamsCliError(`expected exactly one Work receiver; pass --receiver (found ${ids.length === 0 ? 'none' : ids})`)
 }
 
-function buildWorkFrame(parsed, workControl, receiver) {
+function buildWorkFrame(parsed, workControl, receiver, openTargetGeneration) {
   const connect = receiver.connect
   const base = {
     receiverAgentId: receiver.id,
@@ -297,12 +297,15 @@ function buildWorkFrame(parsed, workControl, receiver) {
   }
   const binding = {
     targetAgentId: parsed.provider ?? connect.targetAgentId,
-    targetGeneration: requireFlag(parsed, 'providerGeneration', '--provider-generation'),
+    // open fixes the target generation before dispatch from the explicit flag or
+    // from the selected Agent's typed local daemon status projection; request and
+    // close must carry the generation captured by open and stay explicit.
+    targetGeneration: parsed.subcommand === 'open' ? openTargetGeneration : requireFlag(parsed, 'providerGeneration', '--provider-generation'),
     capabilityId: parsed.capabilityId ?? connect.capabilityId,
     capabilityVersion: parsed.capabilityVersion ?? connect.capabilityVersion,
     operation: parsed.operation ?? connect.operation,
   }
-  if (binding.targetAgentId === undefined || binding.capabilityId === undefined || binding.capabilityVersion === undefined || binding.operation === undefined) {
+  if (binding.targetAgentId === undefined || binding.targetGeneration === undefined || binding.capabilityId === undefined || binding.capabilityVersion === undefined || binding.operation === undefined) {
     throw new AgentTeamsCliError(`work ${parsed.subcommand} requires an explicit provider/capability binding`)
   }
   if (parsed.subcommand === 'open') {
@@ -316,10 +319,23 @@ function buildWorkFrame(parsed, workControl, receiver) {
   return { kind: 'work.close', requestId: base.requestId, control: { ...base, ...binding } }
 }
 
+async function resolveOpenTargetGeneration(parsed, receiver, statusLocalProcess, configPath) {
+  if (parsed.providerGeneration !== undefined) return parsed.providerGeneration
+  const targetAgentId = parsed.provider ?? receiver.connect.targetAgentId
+  if (targetAgentId === undefined) throw new AgentTeamsCliError('work open requires an explicit provider binding before dispatch')
+  const status = await statusLocalProcess(configPath)
+  const endpoint = (status.endpoints ?? []).find(candidate => candidate.agentId === targetAgentId)
+  if (endpoint === undefined || !Number.isSafeInteger(endpoint.generation) || endpoint.generation < 0) {
+    throw new AgentTeamsCliError(`work open requires --provider-generation or a published status projection for provider ${targetAgentId}`)
+  }
+  return endpoint.generation
+}
+
 async function workCommand(parsed, options) {
   const runtime = options.runtime ?? await defaultRuntime()
   const localConfig = runtime.localConfig ?? (await defaultRuntime()).localConfig
   const localWorkControl = runtime.localWorkControl ?? (await defaultRuntime()).localWorkControl
+  const statusLocalProcess = runtime.statusLocalProcess ?? (await defaultRuntime()).statusLocalProcess
   const configPath = parsed.configPath ?? defaultConfigPath(options.home)
   const internalPath = resolve(dirname(configPath), 'internal.toml')
   let workControl
@@ -331,7 +347,8 @@ async function workCommand(parsed, options) {
   }
   const internal = await localConfig.readLocalInternalConfig(internalPath)
   const receiver = resolveWorkReceiver(parsed, internal)
-  const frame = buildWorkFrame(parsed, workControl, receiver)
+  const openTargetGeneration = parsed.subcommand === 'open' ? await resolveOpenTargetGeneration(parsed, receiver, statusLocalProcess, configPath) : undefined
+  const frame = buildWorkFrame(parsed, workControl, receiver, openTargetGeneration)
   const reply = await localWorkControl.sendLocalWorkControlRequest({ socketPath: workControl.socketPath, frame, ...(options.workTimeoutMs === undefined ? {} : { timeoutMs: options.workTimeoutMs }) })
   if (reply.kind === 'work.error') throw new AgentTeamsCliError(JSON.stringify({ status: 'failed', error: reply.error }))
   if (reply.receipt.status === 'failed') throw new AgentTeamsCliError(JSON.stringify(reply.receipt))

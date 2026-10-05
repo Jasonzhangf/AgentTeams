@@ -59,6 +59,16 @@ function hashFile(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
+/** Run a command that must fail, returning its combined failure output. */
+async function runExpectFailure(command, args, options) {
+  try {
+    await execFileAsync(command, args, { ...options, maxBuffer: 32 * 1024 * 1024 })
+  } catch (error) {
+    return `${error?.stderr ?? ''}${error?.stdout ?? ''}${error?.message ?? String(error)}`
+  }
+  fail(`${command} ${args.join(' ')} was expected to fail`)
+}
+
 function hashDirectory(directory) {
   const files = []
   const visit = path => {
@@ -314,6 +324,53 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
     assert(observed.control?.executionId !== receiptA.control.executionId, 'installed Work query reused the submit execution identity')
     assert(JSON.stringify(observed.business) === JSON.stringify(receiptA.business), 'installed Work query business result differs from the original submit')
 
+    // Persistent Work open/request/query/close through the same installed CLI.
+    // open must fix the provider generation from the installed typed status
+    // projection because no --provider-generation is passed.
+    const demands = '[{"resourceId":"search-slot","amount":1}]'
+    const workArgs = (...args) => ['work', ...args, '--config', configPath, '--receiver', 'installed-receiver']
+    const opened = JSON.parse((await run(cli, workArgs('open', '--operation', 'search', '--demands', demands, '--payload', '{"query":"needle"}'), { cwd: dirname(configPath), env: cliEnv })).stdout)
+    assert(opened.status === 'completed', `installed Work open did not complete: ${JSON.stringify(opened).slice(0, 400)}`)
+    assert(opened.control?.workId !== undefined && opened.control?.requestId !== undefined, 'installed Work open did not return Work identity')
+    assert(opened.control?.providerAgentId === 'installed-provider', `installed Work open lost the provider identity: ${JSON.stringify(opened.control)}`)
+    assert(Number.isSafeInteger(opened.control?.targetGeneration) && opened.control.targetGeneration > 0,
+      `installed Work open did not fix a real provider generation from the status projection: ${JSON.stringify(opened.control)}`)
+    assert(opened.control?.capabilityId === 'file-search' && opened.control?.capabilityVersion === '1' && opened.control?.operation === 'search',
+      `installed Work open did not echo the open binding: ${JSON.stringify(opened.control)}`)
+    assert(opened.control?.workClosure === 'retained', `installed Work open closure=${opened.control?.workClosure}`)
+    assert(opened.business?.status === 'matched' && opened.business.matches.length > 0, 'installed Work open did not return a real provider match')
+
+    const providerGeneration = String(opened.control.targetGeneration)
+    const binding = ['--provider', 'installed-provider', '--provider-generation', providerGeneration,
+      '--capability-id', 'file-search', '--capability-version', '1']
+    const requested = JSON.parse((await run(cli, workArgs('request', '--work-id', opened.control.workId, ...binding,
+      '--operation', 'search', '--demands', demands, '--payload', '{"query":"second"}'), { cwd: dirname(configPath), env: cliEnv })).stdout)
+    assert(requested.status === 'completed', `installed Work request did not complete: ${JSON.stringify(requested).slice(0, 400)}`)
+    assert(requested.control?.workId === opened.control.workId, 'installed Work request did not continue the opened Work')
+    assert(requested.control?.requestId !== opened.control.requestId, 'installed Work request must use a fresh request identity')
+    assert(requested.control?.workClosure === 'retained', `installed Work request closure=${requested.control?.workClosure}`)
+    assert(requested.business?.status === 'matched' && requested.business.matches.length > 0, 'installed Work request did not return a real provider match')
+
+    const persistentQuery = JSON.parse((await run(cli, workArgs('query', '--service-selection', 'capability',
+      '--work-id', opened.control.workId, '--request-id', requested.control.requestId, ...binding, '--operation', 'search'),
+      { cwd: dirname(configPath), env: cliEnv })).stdout)
+    assert(persistentQuery.status === 'completed', `installed persistent Work query did not complete: ${JSON.stringify(persistentQuery).slice(0, 400)}`)
+    assert(persistentQuery.control?.observed === true && persistentQuery.control?.workId === opened.control.workId,
+      'installed persistent Work query did not observe the opened Work')
+
+    const closed = JSON.parse((await run(cli, workArgs('close', '--work-id', opened.control.workId, ...binding, '--operation', 'search'),
+      { cwd: dirname(configPath), env: cliEnv })).stdout)
+    assert(closed.status === 'completed', `installed Work close did not complete: ${JSON.stringify(closed).slice(0, 400)}`)
+    assert(closed.control?.workId === opened.control.workId && closed.control?.workClosure === 'closed',
+      `installed Work close did not reach the closed terminal state: ${JSON.stringify(closed.control)}`)
+
+    // An open that can resolve neither an explicit generation nor a published
+    // projection must fail before any socket dispatch or provider effect.
+    const missingProvider = await runExpectFailure(cli, workArgs('open', '--provider', 'missing-provider', '--operation', 'search', '--payload', '{}'),
+      { cwd: dirname(configPath), env: cliEnv })
+    assert(missingProvider.includes('published status projection for provider missing-provider'),
+      `installed Work open with an unresolvable provider did not fail explicitly: ${missingProvider}`)
+
     const firstStop = await run(cli, ['stop', '--config', configPath, '--generation', String(activeGeneration)], { cwd: dirname(configPath), env: cliEnv })
     await waitForProcessesGone([startInternal.launcher.pid, ...startInternal.processes.map(process => process.pid)])
     activeGeneration = undefined
@@ -359,6 +416,29 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
         },
         second_submit: { workId: receiptB.control.workId, requestId: receiptB.control.requestId },
         query: { workId: observed.control.workId, requestId: observed.control.requestId, observed: observed.control.observed, business: observed.business },
+        persistent: {
+          open: {
+            workId: opened.control.workId,
+            requestId: opened.control.requestId,
+            providerAgentId: opened.control.providerAgentId,
+            targetGeneration: opened.control.targetGeneration,
+            targetGenerationSource: 'typed local daemon status projection',
+            capabilityId: opened.control.capabilityId,
+            capabilityVersion: opened.control.capabilityVersion,
+            operation: opened.control.operation,
+            workClosure: opened.control.workClosure,
+            business: opened.business,
+          },
+          request: {
+            requestId: requested.control.requestId,
+            workId: requested.control.workId,
+            workClosure: requested.control.workClosure,
+            business: requested.business,
+          },
+          query: { workId: persistentQuery.control.workId, requestId: persistentQuery.control.requestId, observed: persistentQuery.control.observed },
+          close: { workId: closed.control.workId, workClosure: closed.control.workClosure },
+          unresolvable_provider_open_failed_before_dispatch: true,
+        },
       },
       final_stop: { generation: restartParsed.generation, stdout: secondStop.stdout, stderr: secondStop.stderr },
     }

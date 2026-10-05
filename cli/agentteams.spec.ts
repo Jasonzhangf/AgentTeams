@@ -56,9 +56,14 @@ config = ${JSON.stringify(receiverConfig)}
   return { home, configPath, internalPath, generation, startToken, socketPath }
 }
 
-function workCommandRuntime(frames: LocalWorkControlRequest[]) {
+function workCommandRuntime(frames: LocalWorkControlRequest[], statusGeneration = 7) {
   return {
     localConfig: { readLocalInternalConfig, readLocalInternalWorkControl },
+    statusLocalProcess: async () => ({
+      state: 'running',
+      generation: 7,
+      endpoints: [{ agentId: 'provider', role: 'provider', presence: 'online', generation: statusGeneration }],
+    }),
     localWorkControl: {
       sendLocalWorkControlRequest: async ({ frame }: { frame: LocalWorkControlRequest }) => {
         frames.push(frame)
@@ -277,6 +282,57 @@ describe('agentteams CLI', () => {
       await agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'receiver', '--payload', '[1,{"nested":true}]'], { runtime: workCommandRuntime(frames) })
       expect(frames).toHaveLength(1)
       expect(frames[0]).toMatchObject({ business: [1, { nested: true }] })
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
+  it('fixes the open target generation from the typed status projection before dispatch', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    try {
+      await agentteamsCommand(['work', 'open', '--config', context.configPath, '--receiver', 'receiver',
+        '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search',
+        '--demands', '[{"resourceId":"search-slot","amount":1}]', '--payload', '{"query":"needle"}'], { runtime: workCommandRuntime(frames, 11) })
+      expect(frames).toHaveLength(1)
+      expect(frames[0]).toMatchObject({ kind: 'work.open', control: {
+        targetAgentId: 'provider', targetGeneration: 11, capabilityId: 'file-search', capabilityVersion: '1', operation: 'search',
+      } })
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses an open with neither an explicit generation nor a published provider projection', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames)
+    runtime.statusLocalProcess = async () => ({ state: 'running', generation: 7, endpoints: [] })
+    try {
+      const failure = await agentteamsCommand(['work', 'open', '--config', context.configPath, '--receiver', 'receiver',
+        '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search', '--payload', '{}'], { runtime })
+        .catch((error: Error) => error)
+      expect(failure).toBeInstanceOf(Error)
+      expect(failure.message).toContain('work open requires --provider-generation or a published status projection for provider provider')
+      expect(frames).toHaveLength(0)
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps request and close on an explicit provider generation', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames)
+    try {
+      for (const subcommand of ['request', 'close']) {
+        const failure = await agentteamsCommand(['work', subcommand, '--config', context.configPath, '--receiver', 'receiver',
+          '--work-id', 'work-1', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search'], { runtime })
+          .catch((error: Error) => error)
+        expect(failure).toBeInstanceOf(Error)
+        expect(failure.message).toContain('--provider-generation is required')
+      }
+      expect(frames).toHaveLength(0)
     } finally {
       await rm(context.home, { recursive: true, force: true })
     }
