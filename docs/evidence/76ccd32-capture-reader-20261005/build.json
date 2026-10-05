@@ -1,0 +1,4 @@
+{
+  "originalLogSha256": "a25b25da4b69f7da3c2d4274dcf375cf081aaf101f50616689f34178d86e93ff",
+  "stdoutAndStderr": "\n> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/76ccd32-reader-minimal-20261005\n> node -e \"require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })\" && tsc -p tsconfig.runtime.json\n\n"
+}

@@ -1,0 +1,6 @@
+{
+  "command": "dagpipe graph validate docs/design/dagpipe/graphs/daemon-start.graph.json",
+  "exit": 0,
+  "originalLogSha256": "95a7e5f48cdda9ace95eea2baa83d01b85011788d31818b1a0a3dede8ce727f8",
+  "stdoutAndStderr": "valid DAG: agentteams.daemon-start@1 (6 nodes, 5 edges, 6 waves)\noperator bindings are syntactically present; project compile() remains the authoritative registry/schema/effect gate\n"
+}

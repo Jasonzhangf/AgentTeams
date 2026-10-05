@@ -539,7 +539,8 @@ payload = { query = "needle" }
     await expect(runLocalConfiguredWork(path, {}, options)).rejects.toMatchObject({ code: 'START_TIMEOUT' })
     let captured = ''
     for (let attempt = 0; attempt < 40 && captured === ''; attempt += 1) {
-      try { captured = await readFile(capturedPath, 'utf8') } catch { await new Promise(resolveDelay => setTimeout(resolveDelay, 50)) }
+      try { captured = await readFile(capturedPath, 'utf8') } catch { /* launcher may not have written the capture yet */ }
+      if (captured === '') await new Promise(resolveDelay => setTimeout(resolveDelay, 50))
     }
     expect(captured).toContain('TEAMS_LOCAL_RELAY_ENTRY=/explicit/relay.mjs')
     expect(captured).toContain('TEAMS_LOCAL_AGENT_ENTRY=/explicit/agent.mjs')

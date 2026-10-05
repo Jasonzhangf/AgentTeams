@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-05T03:54:24.712Z",
+  "issue": "76ccd32",
+  "base": "bca92a0411a2a787bf0189896623e7eb08124586",
+  "validatedSourceOnlyTree": "b84cc50e8600bc4ec9787a87833ec802f9ef71a5",
+  "testFileSha256": "d2200be4aa1cf3c1eca21f49e5896633baa004ca41f32364ec7d62d85e2833a4",
+  "gates": [
+    {
+      "gate": "primary-focused",
+      "exit": 0,
+      "raw": "focused.json",
+      "rawSha256": "98e9df53665e4853e1b3b2d4d016abe2e6a3f7f9a7a0b755a0f97505a8d2126a",
+      "originalRaw": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/76ccd32-reader-minimal-20261005/primary-focused.log",
+      "originalRawSha256": "7cd227e152bef26211da2e75fae9e11b5675422c737e4074e1d28c90ca5d0945"
+    },
+    {
+      "gate": "primary-regression45",
+      "exit": 0,
+      "raw": "mapped45.json",
+      "rawSha256": "a200440dd870c9d1f563c7eb688dd4f41f28a28923976c9716ae4604e77c2a17",
+      "originalRaw": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/76ccd32-reader-minimal-20261005/primary-regression45.log",
+      "originalRawSha256": "51ab3fab1adab74d5610252542e0e046fc523579e844924f8da05e744f907d6e"
+    },
+    {
+      "gate": "primary-typecheck",
+      "exit": 0,
+      "raw": "typecheck.json",
+      "rawSha256": "d0658455cc1ecb0fbcb60734889b8aa0e71f9befb94f00f4a461695cf8ce6bc8",
+      "originalRaw": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/76ccd32-reader-minimal-20261005/primary-typecheck.log",
+      "originalRawSha256": "4887809174390cca6f6de1bb1f8c997fb6bdf4355d829c2472df0c80754c866a"
+    },
+    {
+      "gate": "primary-build",
+      "exit": 0,
+      "raw": "build.json",
+      "rawSha256": "b737220227b7cc7009229df0a0aee54328f108e8b2a22f479d6609bc5716a55e",
+      "originalRaw": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/76ccd32-reader-minimal-20261005/primary-build.log",
+      "originalRawSha256": "a25b25da4b69f7da3c2d4274dcf375cf081aaf101f50616689f34178d86e93ff"
+    }
+  ],
+  "graph": "graph.json",
+  "reuse": "Only evidence publication; tested source and environment unchanged.",
+  "causalReceipt": "/Users/fanzhang/.codex/task-evidence/agentteams/receipts/start-options-diagnosis-20261005/primary-controlled-publication.json",
+  "limits": [
+    "Original shell writer timing/termination remains unconfirmed.",
+    "No runtime product source changes; no daemon install/restart applies.",
+    "Independent review/main integration/push/cleanup pending."
+  ]
+}
