@@ -1,9 +1,32 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { projectLocalChildConfigs, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, writeLocalInternalState, writeLocalLauncherOwnership, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
+import { projectLocalChildConfigs, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, writeLocalInternalState, writeLocalInternalWorkControl, writeLocalLauncherOwnership, type LocalConfig, type LocalInternalDaemonState } from './local-config.ts'
+import { startLocalWorkControlListener, type LocalWorkControlHandlerInput, type LocalWorkControlReply, type LocalWorkControlRequest, type LocalWorkControlServer } from './local-work-control.ts'
+import type { ProjectExecutionReceipt } from './dagpipe/host.ts'
+
+/** Launcher -> receiver child typed Work frame; business payload stays in `frame`. */
+export interface LocalWorkChildRequest {
+  readonly kind: 'work.control'
+  readonly localCorrelation: string
+  readonly receiverAgentId: string
+  readonly expectedLauncherGeneration: number
+  readonly expectedAgentGeneration: number
+  readonly frame: LocalWorkControlRequest
+}
+
+/** Receiver child -> launcher typed Work reply keyed by the local correlation. */
+export interface LocalWorkChildReply {
+  readonly kind: 'work.reply'
+  readonly localCorrelation: string
+  readonly reply: LocalWorkControlReply
+}
+
+export function localWorkControlSocketPath(internalPath: string): string {
+  return resolve(dirname(internalPath), '.internal', 'work-control.sock')
+}
 
 export interface LocalDaemonIdentityProjection {
   readonly hostId: string
@@ -313,6 +336,12 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   const states = new Map<string, LocalInternalDaemonState>()
   const endpoints = new Map<string, LocalDaemonEndpointProjection>()
   const unwatch = new Map<string, () => void>()
+  const receivers = Object.fromEntries(config.daemons
+    .filter(daemon => daemon.enabled && (daemon.role === 'receiver' || daemon.role === 'hybrid') && daemon.connection !== undefined)
+    .map(daemon => [daemon.id, true]))
+  const socketPath = config.internalPath === undefined ? undefined : localWorkControlSocketPath(config.internalPath)
+  const pendingWork = new Map<string, (reply: LocalWorkControlReply) => void>()
+  let workControl: LocalWorkControlServer | undefined
   let lifecycle: LocalSupervisorState = 'stopped'
   let lastFailure: Error | undefined
   let lifecycleGeneration = 0
@@ -321,6 +350,47 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   const startToken = options.startToken ?? randomUUID()
   let reservedLauncherGeneration: number | undefined
 
+  const forwardWork = async (input: LocalWorkControlHandlerInput): Promise<ProjectExecutionReceipt | { readonly code: string; readonly message: string }> => {
+    const receiverId = input.frame.control.receiverAgentId
+    const child = children.get(receiverId)
+    if (child === undefined || child.exitCode !== null || child.signalCode !== null) {
+      return { code: 'RECEIVER_NOT_FOUND', message: `Work receiver ${receiverId} is not available` }
+    }
+    const endpoint = endpoints.get(receiverId)
+    if (endpoint === undefined) return { code: 'RECEIVER_NOT_FOUND', message: `Work receiver ${receiverId} has no live status projection` }
+    const localCorrelation = randomUUID()
+    const request: LocalWorkChildRequest = {
+      kind: 'work.control',
+      localCorrelation,
+      receiverAgentId: receiverId,
+      expectedLauncherGeneration: lifecycleGeneration,
+      expectedAgentGeneration: endpoint.generation,
+      frame: input.frame,
+    }
+    let reply: LocalWorkControlReply
+    try {
+      reply = await new Promise<LocalWorkControlReply>((resolveReply, rejectReply) => {
+        const timer = setTimeout(() => { pendingWork.delete(localCorrelation); rejectReply(new Error('receiver did not answer the local Work request')) }, 120_000)
+        pendingWork.set(localCorrelation, value => { clearTimeout(timer); resolveReply(value) })
+        if (typeof child.send !== 'function') {
+          clearTimeout(timer)
+          pendingWork.delete(localCorrelation)
+          rejectReply(new Error('receiver child has no IPC channel'))
+          return
+        }
+        child.send(request, error => {
+          if (error === null || error === undefined) return
+          clearTimeout(timer)
+          pendingWork.delete(localCorrelation)
+          rejectReply(error)
+        })
+      })
+    } catch (cause) {
+      return { code: 'LOCAL_CONTROL_UNAVAILABLE', message: cause instanceof Error ? cause.message : 'local Work forwarding failed' }
+    }
+    return reply.kind === 'work.result' ? reply.receipt : reply.error
+  }
+
   const stop = (): Promise<void> => {
     if (stopping) return stopping
     let operation!: Promise<void>
@@ -328,6 +398,13 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       const hadFailure = lifecycle === 'failed' || lastFailure !== undefined
       lifecycle = 'stopping'
       const failures: unknown[] = []
+      try { await workControl?.close() } catch (error) { failures.push(error) }
+      workControl = undefined
+      for (const resolvePending of pendingWork.values()) resolvePending({ kind: 'work.error', requestId: 'unknown', error: { code: 'LOCAL_CONTROL_UNAVAILABLE', message: 'local Work listener is stopping' } })
+      pendingWork.clear()
+      if (config.internalPath !== undefined) {
+        try { await writeLocalInternalWorkControl(config.internalPath, undefined) } catch (error) { failures.push(error) }
+      }
       for (const spec of [...specs].reverse()) {
         const child = children.get(spec.id)
         if (!child) continue
@@ -479,6 +556,15 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
               endpoints.set(spec.id, endpoint)
             }
             states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(launcherGeneration === undefined ? {} : { generation: launcherGeneration }) })
+            child.on('message', (message: unknown) => {
+              if (typeof message !== 'object' || message === null) return
+              const reply = message as { readonly kind?: unknown; readonly localCorrelation?: unknown; readonly reply?: unknown }
+              if (reply.kind !== 'work.reply' || typeof reply.localCorrelation !== 'string') return
+              const resolvePending = pendingWork.get(reply.localCorrelation)
+              if (resolvePending === undefined) return
+              pendingWork.delete(reply.localCorrelation)
+              resolvePending(reply.reply as LocalWorkControlReply)
+            })
           } else states.set(spec.id, { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(launcherGeneration === undefined ? {} : { generation: launcherGeneration }) })
           if (lifecycle !== 'starting') throw lastFailure ?? new Error(`local ${spec.kind} failed during startup`)
           if (child.exitCode !== null || child.signalCode !== null) {
@@ -506,6 +592,32 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
             lifecycleGeneration = internal.launcher.generation
           } else lifecycleGeneration += 1
         } else lifecycleGeneration += 1
+        // Open the local Work control socket and publish its exact refs before the
+        // launcher advertises running; admission stays closed until listen succeeds.
+        if (socketPath !== undefined && config.internalPath !== undefined) {
+          try {
+            const stale = await lstat(socketPath)
+            if (stale.isSocket()) await rm(socketPath, { force: true })
+          } catch (cause) {
+            if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause
+          }
+          workControl = await startLocalWorkControlListener({
+            socketPath,
+            launcherGeneration: lifecycleGeneration,
+            startToken,
+            receivers,
+            handler: async input => {
+              const result = await forwardWork(input)
+              await input.respond(result)
+              return result
+            },
+          })
+          await writeLocalInternalWorkControl(config.internalPath, {
+            socketPath,
+            launcherGeneration: lifecycleGeneration,
+            launcherStartToken: startToken,
+          })
+        }
         if (config.internalPath !== undefined) {
           await writeLocalInternalState(config.internalPath, Object.fromEntries(states.entries()))
           await writeLocalLauncherOwnership(config.internalPath, { version: 1, pid: process.pid, startToken })

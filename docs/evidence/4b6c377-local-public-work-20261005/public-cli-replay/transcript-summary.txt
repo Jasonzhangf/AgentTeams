@@ -1,0 +1,20 @@
+replay_home=/private/tmp/teams-public-replay-4b6c377-6u6DQV
+step exit codes:
+step-1-init.exit=1
+step-2-start.exit=1
+step-3-submit-A.exit=1
+step-4-submit-B.exit=1
+step-5-stop.exit=1
+step stderr:
+step-1-init.stderr: listen EPERM: operation not permitted 127.0.0.1 
+step-2-start.stderr: local config cannot be read: /private/tmp/teams-public-replay-4b6c377-6u6DQV/home/.agentteams/config.toml 
+step-3-submit-A.stderr: local Work control is unavailable: internal config cannot be read: /private/tmp/teams-public-replay-4b6c377-6u6DQV/home/.agentteams/internal.toml 
+step-4-submit-B.stderr: local Work control is unavailable: internal config cannot be read: /private/tmp/teams-public-replay-4b6c377-6u6DQV/home/.agentteams/internal.toml 
+step-5-stop.stderr: local config cannot be read: /private/tmp/teams-public-replay-4b6c377-6u6DQV/home/.agentteams/config.toml 
+
+step stdout:
+step-1-init.stdout: 
+step-2-start.stdout: 
+step-3-submit-A.stdout: 
+step-4-submit-B.stdout: 
+step-5-stop.stdout: 

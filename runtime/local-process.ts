@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { createLocalSupervisor, readLocalDaemonStatusProjection, type LocalDaemonEndpointProjection, type LocalSupervisor } from './local-supervisor.ts'
-import { defaultLocalConfigPath, loadLocalConfig, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalConfig, type LocalInternalLauncherConfig } from './local-config.ts'
+import { defaultLocalConfigPath, loadLocalConfig, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalInternalLauncherConfig } from './local-config.ts'
 
 const execFile = promisify(execFileCallback)
 
@@ -466,36 +466,6 @@ export async function stopLocalProcess(configPath = defaultLocalConfigPath(), ex
     process.kill(launcher.pid, 'SIGTERM')
     return await waitForLauncherState(config.internalPath!, config.configPath, launcher.state === 'failed' ? 'failed' : 'stopped')
   })
-}
-
-export interface LocalConfiguredWorkResult {
-  readonly configPath: string
-  readonly agentId: string
-  readonly workId: string
-  readonly requestId: string
-  readonly state: 'succeeded'
-}
-
-export async function runLocalConfiguredWork(configPath = defaultLocalConfigPath(), env: NodeJS.ProcessEnv = process.env, options: LocalProcessStartOptions = {}): Promise<LocalConfiguredWorkResult> {
-  const config: LocalConfig = await loadLocalConfig(configPath)
-  const receiver = config.daemons.find(daemon => daemon.enabled && daemon.connection !== undefined)
-  if (receiver?.connection === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no enabled receiver connection intent')
-  if (config.internalPath === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no runtime internal state')
-  const before = await statusLocalProcess(configPath)
-  const running = before.state === 'running' ? before : await startLocalProcess(configPath, { ...options, env: { ...env, ...options.env } })
-  const expectedGeneration = running.generation
-  const deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
-    const internal = await readLocalInternalConfig(config.internalPath)
-    const record = internal.configuredWork
-    if (record?.generation === expectedGeneration && record.workId === receiver.connection.workId && record.requestId === receiver.connection.requestId) {
-      return { configPath: config.configPath, agentId: record.agentId, workId: record.workId, requestId: record.requestId, state: record.state }
-    }
-    const launcher = await statusLocalProcess(configPath)
-    if (launcher.state === 'failed') throw new LocalProcessError('NOT_RUNNING', launcher.error ?? 'local configured Work failed')
-    await new Promise(resolveDelay => setTimeout(resolveDelay, 50))
-  }
-  throw new LocalProcessError('START_TIMEOUT', 'local configured Work did not complete')
 }
 
 const invokedPath = process.argv[1] === undefined ? undefined : resolve(process.argv[1])

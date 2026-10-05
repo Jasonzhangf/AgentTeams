@@ -633,7 +633,7 @@ U2 只定义/实现 config-owner startup/reconcile 端口和上述 persistence c
 
 `phase` 推进规则固定为：`prepared` -> `config-committed` -> `verified`。`prepared` 表示 pending 已 durable、`config.toml` 尚未被本迁移替换；`config-committed` 表示目标 `config.toml` 已等于 `intendedSourceHash`，但逐 daemon recovery 尚未完成 readback 验证；`verified` 表示所有逐 daemon 恢复数据与 readback 等价。任何冲突或异常都保留当前 phase 与 pending record，不得向前伪造。
 
-parser/startup owner 是 `loadLocalConfig(path)`：它在读取/解析普通 v2/v3 配置之前，先读取 `internal.toml` 的 `[migration]`；若存在非 `verified` pending，就调用同一文件内的 `resumePendingMigration()`。实际调用 `loadLocalConfig` 的公开入口是 `runLocalProcess`、`startLocalProcess`、`statusLocalProcess`、`stopLocalProcess`、`runLocalConfiguredWork`，以及 `init` 结束时的初始化校验；这些入口不得各自实现迁移分支。`startAgentProcess` 消费 `loadLocalConfig` 已生成的 internal projection，不重新读取 legacy JSON。
+parser/startup owner 是 `loadLocalConfig(path)`：它在读取/解析普通 v2/v3 配置之前，先读取 `internal.toml` 的 `[migration]`；若存在非 `verified` pending，就调用同一文件内的 `resumePendingMigration()`。实际调用 `loadLocalConfig` 的公开入口是 `runLocalProcess`、`startLocalProcess`、`statusLocalProcess`、`stopLocalProcess`，以及 `init` 结束时的初始化校验；这些入口不得各自实现迁移分支。`startAgentProcess` 消费 `loadLocalConfig` 已生成的 internal projection，不重新读取 legacy JSON。新的 Work 请求从运行中 receiver 的公开 control socket 进入，不再轮询启动时的 configured Work receipt。
 
 ### 8.2 唯一 write order
 

@@ -1,0 +1,581 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005
+
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+ ❯ cli/agentteams.spec.ts (13 tests | 5 failed) 2308ms
+     × init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it 67ms
+     × fails init explicitly before creating config when local bridge TLS material is incomplete 13ms
+     × does not overwrite a config created by a concurrent init 17ms
+     × does not create or overwrite an editable relay config 8ms
+     × direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts 97ms
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005/runtime/dagpipe/.build/build-utDcxe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.33s
+ ❯ runtime/dagpipe-work.spec.ts (22 tests | 21 failed) 535875ms
+     × runs two real submits with distinct identities and real search results, then observes the original request without replay 30006ms
+     × opens, continues, queries, and closes one persistent Work through the five approved graphs 45002ms
+     × rejects a stale persistent open generation before any Work effect 30002ms
+     × rejects an incomplete persistent capability binding before any host or provider effect 30001ms
+     × rejects every required malformed input before any host or provider effect 45002ms
+     × rejects missing Operators and missing effects at compile with zero business effects 30002ms
+     × surfaces provider permission, operation and generation rejections explicitly 30002ms
+     × rejects a bad host-call correlation on the real stdio port without any Work effect 20002ms
+     × returns completed for only one valid correlated execution.result and preserves its business 20001ms
+     × rejects malformed-json from the real runner port and terminates the exact child 20002ms
+     × rejects missing-control from the real runner port and terminates the exact child 20002ms
+     × rejects unknown-frame from the real runner port and terminates the exact child 20002ms
+     × returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-compiled and terminates the exact child 20002ms
+     × returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-identity and terminates the exact child 20002ms
+     × returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-journal and terminates the exact child 20002ms
+     × returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-bad-identity and terminates the exact child 20001ms
+     × returns one HOST_PROTOCOL receipt for malformed terminal frame duplicate-final and terminates the exact child 20001ms
+     × returns one HOST_PROTOCOL receipt for malformed terminal frame malformed-after-valid-result and terminates the exact child 20002ms
+     × returns one HOST_PROTOCOL receipt for malformed terminal frame host-call-after-valid-result and terminates the exact child 20001ms
+     × returns an explicit runner failure and cleans up when the runner exits before the host response 20001ms
+     × returns an explicit unknown result with retained provider responsibility when the request link drops 30001ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 26 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > does not create or overwrite an editable relay config
+Error: listen EPERM: operation not permitted 127.0.0.1
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/26]⎯
+
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > fails init explicitly before creating config when local bridge TLS material is incomplete
+AssertionError: expected [Function] to throw error matching /TLS material is incomplete/i but got 'listen EPERM: operation not permitted…'
+
+- Expected:
+/TLS material is incomplete/i
+
++ Received:
+"listen EPERM: operation not permitted 127.0.0.1"
+
+ ❯ cli/agentteams.spec.ts:155:58
+    153|       await mkdir(tlsDirectory, { recursive: true, mode: 0o700 })
+    154|       await writeFile(join(tlsDirectory, 'relay-key.pem'), 'sentinel\n…
+    155|       await expect(agentteamsCommand(['init'], { home })).rejects.toTh…
+       |                                                          ^
+    156|       expect(await readFile(join(tlsDirectory, 'relay-key.pem'), 'utf8…
+    157|       await expect(readFile(join(directory, 'config.toml'), 'utf8')).r…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/26]⎯
+
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > does not overwrite a config created by a concurrent init
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ cli/agentteams.spec.ts:172:71
+    170|         agentteamsCommand(['init'], { home, configText: DEFAULT_CONFIG…
+    171|       ])
+    172|       expect(results.filter(result => result.status === 'fulfilled')).…
+       |                                                                       ^
+    173|       expect(results.filter(result => result.status === 'rejected')).t…
+    174|       const rejected = results.find(result => result.status === 'rejec…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/26]⎯
+
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts
+Error: Command failed: /opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005/cli/agentteams.mjs init
+listen EPERM: operation not permitted 127.0.0.1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > runs two real submits with distinct identities and real search results, then observes the original request without replay
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:326:3
+    324|
+    325| describe('Teams DAGpipe SDK Work runner and Node host', () => {
+    326|   it('runs two real submits with distinct identities and real search r…
+       |   ^
+    327|     const harness = await startHarness()
+    328|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > opens, continues, queries, and closes one persistent Work through the five approved graphs
+Error: Test timed out in 45000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:416:3
+    414|   }, 30_000)
+    415|
+    416|   it('opens, continues, queries, and closes one persistent Work throug…
+       |   ^
+    417|     const harness = await startHarness()
+    418|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects a stale persistent open generation before any Work effect
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:577:3
+    575|   }, 45_000)
+    576|
+    577|   it('rejects a stale persistent open generation before any Work effec…
+       |   ^
+    578|     const harness = await startHarness()
+    579|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects an incomplete persistent capability binding before any host or provider effect
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:607:3
+    605|   }, 30_000)
+    606|
+    607|   it('rejects an incomplete persistent capability binding before any h…
+       |   ^
+    608|     const harness = await startHarness()
+    609|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects every required malformed input before any host or provider effect
+Error: Test timed out in 45000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:642:3
+    640|   }, 30_000)
+    641|
+    642|   it('rejects every required malformed input before any host or provid…
+       |   ^
+    643|     const harness = await startHarness()
+    644|     const generation = harness.provider.network.generation
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects missing Operators and missing effects at compile with zero business effects
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:748:3
+    746|   }, 45_000)
+    747|
+    748|   it('rejects missing Operators and missing effects at compile with ze…
+       |   ^
+    749|     const harness = await startHarness()
+    750|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > surfaces provider permission, operation and generation rejections explicitly
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:794:3
+    792|   }, 30_000)
+    793|
+    794|   it('surfaces provider permission, operation and generation rejection…
+       |   ^
+    795|     const forbidden = await startHarness({ authorizeWork: () => false …
+    796|     const unsupported = await startHarness()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects a bad host-call correlation on the real stdio port without any Work effect
+Error: Test timed out in 20000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:882:3
+    880|   }, 20_000)
+    881|
+    882|   it('rejects a bad host-call correlation on the real stdio port witho…
+       |   ^
+    883|     const harness = await startHarness()
+    884|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns completed for only one valid correlated execution.result and preserves its business
+Error: Test timed out in 20000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:906:3
+    904|   }, 20_000)
+    905|
+    906|   it('returns completed for only one valid correlated execution.result…
+       |   ^
+    907|     const harness = await startHarness()
+    908|     const fixtureDirectory = mkdtempSync(join(tmpdir(), 'teams-d3-u4-v…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects malformed-json from the real runner port and terminates the exact child
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects missing-control from the real runner port and terminates the exact child
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > rejects unknown-frame from the real runner port and terminates the exact child
+Error: Test timed out in 20000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:956:5
+    954|     ['unknown-frame', 'unsupported type'],
+    955|   ] as const) {
+    956|     it(`rejects ${kind} from the real runner port and terminates the e…
+       |     ^
+    957|       const harness = await startHarness()
+    958|       const fixtureDirectory = mkdtempSync(join(tmpdir(), 'teams-d3-u4…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-compiled and terminates the exact child
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-identity and terminates the exact child
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-journal and terminates the exact child
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-bad-identity and terminates the exact child
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame duplicate-final and terminates the exact child
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame malformed-after-valid-result and terminates the exact child
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns one HOST_PROTOCOL receipt for malformed terminal frame host-call-after-valid-result and terminates the exact child
+Error: Test timed out in 20000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:1010:5
+    1008|     ['host-call-after-valid-result', 'host.call after its terminal fra…
+    1009|   ] as const) {
+    1010|     it(`returns one HOST_PROTOCOL receipt for malformed terminal frame…
+       |     ^
+    1011|       const harness = await startHarness()
+    1012|       const fixtureDirectory = mkdtempSync(join(tmpdir(), 'teams-d3-u4…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns an explicit runner failure and cleans up when the runner exits before the host response
+Error: Test timed out in 20000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:1049:3
+    1047|   }
+    1048|
+    1049|   it('returns an explicit runner failure and cleans up when the runner…
+       |   ^
+    1050|     const harness = await startHarness()
+    1051|     const fixtureDirectory = mkdtempSync(join(tmpdir(), 'teams-d3-u4-e…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/26]⎯
+
+ FAIL  runtime/dagpipe-work.spec.ts > Teams DAGpipe SDK Work runner and Node host > returns an explicit unknown result with retained provider responsibility when the request link drops
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/dagpipe-work.spec.ts:1084:3
+    1082|   }, 20_000)
+    1083|
+    1084|   it('returns an explicit unknown result with retained provider respon…
+       |   ^
+    1085|     const harness = await startHarness({ dropReplyForWorkId: 'work-dro…
+    1086|     try {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/26]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 21 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "runs two real submits with distinct identities and real search results, then observes the original request without replay". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "opens, continues, queries, and closes one persistent Work through the five approved graphs". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "rejects a stale persistent open generation before any Work effect". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "rejects an incomplete persistent capability binding before any host or provider effect". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "rejects every required malformed input before any host or provider effect". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "rejects missing Operators and missing effects at compile with zero business effects". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "surfaces provider permission, operation and generation rejections explicitly". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "rejects a bad host-call correlation on the real stdio port without any Work effect". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns completed for only one valid correlated execution.result and preserves its business". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "rejects malformed-json from the real runner port and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "rejects missing-control from the real runner port and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "rejects unknown-frame from the real runner port and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-compiled and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-identity and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-missing-journal and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns one HOST_PROTOCOL receipt for malformed terminal frame execution-result-bad-identity and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns one HOST_PROTOCOL receipt for malformed terminal frame duplicate-final and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns one HOST_PROTOCOL receipt for malformed terminal frame malformed-after-valid-result and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns one HOST_PROTOCOL receipt for malformed terminal frame host-call-after-valid-result and terminates the exact child". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns an explicit runner failure and cleans up when the runner exits before the host response". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: listen EPERM: operation not permitted 127.0.0.1
+ ❯ Server.setupListenHandle [as _listen2] node:net:1918:21
+ ❯ listenInCluster node:net:1997:12
+ ❯ node:net:2206:7
+ ❯ processTicksAndRejections node:internal/process/task_queues:89:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+This error originated in "runtime/dagpipe-work.spec.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "returns an explicit unknown result with retained provider responsibility when the request link drops". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  2 failed (2)
+      Tests  26 failed | 9 passed (35)
+     Errors  21 errors
+   Start at  08:31:19
+   Duration  536.27s (transform 355ms, setup 0ms, import 382ms, tests 538.18s, environment 0ms)
+

@@ -1,7 +1,8 @@
 import { createServer, type Server } from 'node:net'
 import { readFile, mkdir, open, link, unlink, rename } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { object, text, number, loadDirectListenerConfig, loadRelayConfig, type DirectListenerConfig } from './process-config.ts'
 import { parseAgentDeclaration, RelayProtocolError } from '../control-protocol/relay-codec.ts'
@@ -24,20 +25,18 @@ import { createTomlRuntimeConfigPersistence, defaultLocalConfigPath } from './lo
 import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
 import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
 import { createDirectWssListener, type DirectWssListener } from '../network/direct-listener.ts'
-import { assertJsonValue } from '../control-protocol/json-value.ts'
-import type { JsonValue, ResourceDemand } from '../control-protocol/agent-services.ts'
-import { writeLocalInternalConfiguredWorkIfCurrent, type LocalLauncherControl, type LocalServiceIntent } from './local-config.ts'
-import type { LocalDaemonEndpointProjection } from './local-supervisor.ts'
+import type { ResourceDemand } from '../control-protocol/agent-services.ts'
+import { type LocalServiceIntent } from './local-config.ts'
+import type { LocalDaemonEndpointProjection, LocalWorkChildReply, LocalWorkChildRequest } from './local-supervisor.ts'
+import type { LocalWorkControlRequest } from './local-work-control.ts'
+import { runWorkExecution, type ProjectExecutionReceipt, type WorkExecutionRequest } from './dagpipe/host.ts'
 
 export interface AgentConnectionIntent {
   readonly targetAgentId: string
   readonly capabilityId: string
   readonly capabilityVersion: string
   readonly operation: string
-  readonly workId?: string
-  readonly requestId?: string
   readonly demands: readonly ResourceDemand[]
-  readonly payload?: JsonValue
 }
 
 export interface AgentEndpointConfig {
@@ -116,32 +115,19 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
     if (endpointInput.role !== 'provider' && endpointInput.role !== 'receiver' && endpointInput.role !== 'hybrid') throw new RelayProtocolError('INVALID_INPUT', 'endpoint.role is invalid')
     let connect: AgentConnectionIntent | undefined
     if (endpointInput.connect !== undefined) {
-      const connection = object(endpointInput.connect, ['targetAgentId', 'capabilityId', 'capabilityVersion', 'operation', 'workId', 'requestId', 'demands', 'payload'], 'endpoint.connect')
+      const connection = object(endpointInput.connect, ['targetAgentId', 'capabilityId', 'capabilityVersion', 'operation', 'demands'], 'endpoint.connect')
       const field = (key: string) => text(connection[key], `endpoint.connect.${key}`)
       if (!Array.isArray(connection.demands) || connection.demands.length === 0) throw new RelayProtocolError('INVALID_INPUT', 'endpoint.connect.demands must be non-empty')
       const demands = connection.demands.map((item, index) => {
         const demand = object(item, ['resourceId', 'amount'], `endpoint.connect.demands[${index}]`)
         return { resourceId: text(demand.resourceId, `endpoint.connect.demands[${index}].resourceId`), amount: number(demand.amount, `endpoint.connect.demands[${index}].amount`) }
       })
-      const hasWorkId = connection.workId !== undefined
-      const hasRequestId = connection.requestId !== undefined
-      const hasPayload = connection.payload !== undefined
-      if (hasWorkId || hasRequestId || hasPayload) {
-        if (!hasWorkId || !hasRequestId || !hasPayload) {
-          throw new RelayProtocolError('INVALID_INPUT', 'endpoint.connect legacy Work requires workId, requestId and payload together')
-        }
-        try { assertJsonValue(connection.payload, 'endpoint.connect.payload') }
-        catch (error) { throw new RelayProtocolError('INVALID_INPUT', error instanceof Error ? error.message : 'endpoint.connect.payload must contain only JSON values') }
-      }
       connect = {
         targetAgentId: field('targetAgentId'),
         capabilityId: field('capabilityId'),
         capabilityVersion: field('capabilityVersion'),
         operation: field('operation'),
         demands,
-        ...(hasWorkId && hasRequestId && hasPayload
-          ? { workId: field('workId'), requestId: field('requestId'), payload: connection.payload as JsonValue }
-          : {}),
       }
     }
     if ((endpointInput.role === 'receiver' || endpointInput.role === 'hybrid') && connect === undefined) throw new RelayProtocolError('INVALID_INPUT', 'receiver endpoint requires endpoint.connect')
@@ -233,35 +219,183 @@ async function ownDataDirectory(config: AgentProcessConfig): Promise<{ readonly 
 export interface AgentProcess {
   readonly daemon: AgentDaemon
   readonly consumerWork: AgentWorkClient
-  readonly configuredWork?: Promise<ConfiguredWorkReceipt>
+  readonly executeWork: (frame: LocalWorkControlRequest) => Promise<ProjectExecutionReceipt>
   readonly closed: Promise<void>
   readonly statusProjection: () => LocalDaemonEndpointProjection
   stop(): Promise<void>
 }
 
-export interface ConfiguredWorkReceipt {
-  readonly workId: string
-  readonly requestId: string
+const WORK_GRAPH: Readonly<Record<LocalWorkControlRequest['kind'], { readonly file: string; readonly id: string }>> = {
+  'work.submit': { file: 'agent-work.graph.json', id: 'agent-work' },
+  'work.query': { file: 'work-query.graph.json', id: 'work-query' },
+  'work.open': { file: 'work-open.graph.json', id: 'work-open' },
+  'work.request': { file: 'work-request.graph.json', id: 'work-request' },
+  'work.close': { file: 'work-close.graph.json', id: 'work-close' },
 }
 
-export async function runConfiguredWork(client: AgentWorkClient, intent: AgentConnectionIntent, policyRevision: number): Promise<ConfiguredWorkReceipt> {
-  if (intent.workId === undefined || intent.requestId === undefined || intent.payload === undefined) {
-    throw new RelayProtocolError('INVALID_INPUT', 'configured Work requires explicit workId, requestId and payload')
+/** Nearest ancestor directory holding the package.json; the installed pack root in every layout. */
+function packageRootOf(start: string): string {
+  let directory = resolve(start)
+  while (true) {
+    if (existsSync(resolve(directory, 'package.json'))) return directory
+    const parent = resolve(directory, '..')
+    if (parent === directory) throw new Error('agentteams package root cannot be resolved from the runtime module')
+    directory = parent
   }
-  const target = await client.findProvider({ providerAgentId: intent.targetAgentId, capabilityId: intent.capabilityId, capabilityVersion: intent.capabilityVersion, operation: intent.operation })
-  const channel = await client.open(target)
-  try {
-    const work = await channel.propose({ workId: intent.workId, capabilityId: intent.capabilityId, capabilityVersion: intent.capabilityVersion, policyRevision })
-    const workId = work.workId
-    const result = await channel.request({ workId, requestId: intent.requestId, operation: intent.operation, demands: intent.demands, payload: intent.payload })
-    if (result.control.state !== 'succeeded') {
-      if (result.control.state === 'failed' || result.control.state === 'cancelled') await channel.close(workId)
-      throw new RelayProtocolError(result.control.error?.code ?? 'RESULT_UNKNOWN', result.control.error?.message ?? 'configured Work did not succeed')
-    }
-    await channel.close(workId)
-    return { workId, requestId: intent.requestId }
-  } finally { await channel.dispose() }
 }
+
+function dagpipeRoot(): string {
+  return resolve(packageRootOf(dirname(fileURLToPath(import.meta.url))), 'runtime', 'dagpipe')
+}
+
+interface DagpipeManifest {
+  readonly runner: { readonly path: string; readonly sha256: string }
+  readonly graphs: readonly { readonly id: string; readonly path: string; readonly sha256: string }[]
+}
+
+function sha256(content: Buffer): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+interface DagpipeArtifacts { readonly runnerPath: string; readonly graphPath: string }
+
+/**
+ * Resolve the installed runner and graph from the pack root and verify their
+ * manifest hashes before any provider side effect.
+ */
+async function resolveDagpipeArtifacts(kind: LocalWorkControlRequest['kind']): Promise<DagpipeArtifacts | { readonly code: string; readonly message: string }> {
+  if (process.platform !== 'darwin' || process.arch !== 'arm64') {
+    return { code: 'UNSUPPORTED_PLATFORM', message: `local Work requires darwin-arm64, received ${process.platform}-${process.arch}` }
+  }
+  const root = dagpipeRoot()
+  const manifestPath = resolve(root, 'manifest.json')
+  let manifest: DagpipeManifest
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as DagpipeManifest
+  } catch (cause) {
+    return { code: 'DAGPIPE_RUNNER_MISSING', message: `dagpipe manifest is unavailable: ${manifestPath}: ${cause instanceof Error ? cause.message : String(cause)}` }
+  }
+  const graph = WORK_GRAPH[kind]
+  const runnerPath = resolve(root, manifest.runner.path)
+  let runnerBytes: Buffer
+  try { runnerBytes = await readFile(runnerPath) }
+  catch (cause) { return { code: 'DAGPIPE_RUNNER_MISSING', message: `dagpipe runner is unavailable: ${runnerPath}: ${cause instanceof Error ? cause.message : String(cause)}` } }
+  if (sha256(runnerBytes) !== manifest.runner.sha256) return { code: 'RUNNER_HASH_MISMATCH', message: `dagpipe runner hash does not match the manifest: ${runnerPath}` }
+  const graphEntry = manifest.graphs.find(entry => entry.id === graph.id || entry.path === `graphs/${graph.file}`)
+  if (graphEntry === undefined) return { code: 'DAGPIPE_RUNNER_MISSING', message: `dagpipe manifest does not declare graph ${graph.id}` }
+  const graphPath = resolve(root, graphEntry.path)
+  let graphBytes: Buffer
+  try { graphBytes = await readFile(graphPath) }
+  catch (cause) { return { code: 'DAGPIPE_RUNNER_MISSING', message: `dagpipe graph is unavailable: ${graphPath}: ${cause instanceof Error ? cause.message : String(cause)}` } }
+  if (sha256(graphBytes) !== graphEntry.sha256) return { code: 'GRAPH_HASH_MISMATCH', message: `dagpipe graph hash does not match the manifest: ${graphPath}` }
+  return { runnerPath, graphPath }
+}
+
+function failedProjectReceipt(frame: LocalWorkControlRequest, error: { readonly code: string; readonly message: string }): ProjectExecutionReceipt {
+  return {
+    status: 'failed',
+    control: {
+      projectId: 'agentteams-local-work',
+      graphId: '',
+      graphVersion: '',
+      executionId: frame.control.executionId,
+      attemptId: frame.control.attemptId,
+      workId: frame.control.workId,
+      requestId: frame.control.requestId,
+      error,
+    },
+    cleanup: { channelsOpened: 0, channelsDisposed: 0 },
+    evidence: { execution: 'failed', graphId: '', graphVersion: '', nodeSchedule: [], nodeCompletion: [], hostOperations: [] },
+  }
+}
+
+function workIntent(
+  frame: LocalWorkControlRequest,
+  receiverAgentId: string,
+  connect: AgentConnectionIntent | undefined,
+  policyRevision: number,
+): WorkExecutionRequest['intent'] | { readonly code: string; readonly message: string } {
+  const base = { receiverAgentId, workId: frame.control.workId, requestId: frame.control.requestId }
+  if (frame.kind === 'work.submit') {
+    if (connect === undefined) return { code: 'INVALID_INPUT', message: 'receiver has no endpoint.connect service intent for submit' }
+    return {
+      control: {
+        ...base,
+        targetAgentId: connect.targetAgentId,
+        capabilityId: connect.capabilityId,
+        capabilityVersion: connect.capabilityVersion,
+        operation: connect.operation,
+        policyRevision,
+        demands: connect.demands,
+      },
+      business: frame.business,
+    }
+  }
+  if (frame.kind === 'work.query') {
+    if (frame.control.serviceSelection === 'capability') {
+      return {
+        control: {
+          ...base,
+          targetAgentId: frame.control.targetAgentId,
+          targetGeneration: frame.control.targetGeneration,
+          ...(frame.control.linkGeneration === undefined ? {} : { linkGeneration: frame.control.linkGeneration }),
+          serviceSelection: 'capability',
+          capabilityId: frame.control.capabilityId,
+          capabilityVersion: frame.control.capabilityVersion,
+          operation: frame.control.operation,
+        },
+      }
+    }
+    if (connect === undefined) return { code: 'INVALID_INPUT', message: 'receiver has no endpoint.connect service intent for endpoint query' }
+    return {
+      control: {
+        ...base,
+        targetAgentId: connect.targetAgentId,
+        serviceSelection: 'endpoint',
+        capabilityId: connect.capabilityId,
+        capabilityVersion: connect.capabilityVersion,
+        operation: connect.operation,
+      },
+    }
+  }
+  const control = {
+    ...base,
+    targetAgentId: frame.control.targetAgentId,
+    targetGeneration: frame.control.targetGeneration,
+    serviceSelection: 'capability' as const,
+    capabilityId: frame.control.capabilityId,
+    capabilityVersion: frame.control.capabilityVersion,
+    operation: frame.control.operation,
+  }
+  if (frame.kind === 'work.close') return { control }
+  const persistent = { ...control, demands: frame.control.demands }
+  if (frame.kind === 'work.open') {
+    return { control: { ...persistent, policyRevision: frame.control.policyRevision ?? policyRevision }, business: frame.business }
+  }
+  return { control: persistent, business: frame.business }
+}
+
+async function executeProjectWork(input: {
+  readonly frame: LocalWorkControlRequest
+  readonly client: AgentWorkClient
+  readonly connect: AgentConnectionIntent | undefined
+  readonly policyRevision: number
+  readonly receiverAgentId: string
+}): Promise<ProjectExecutionReceipt> {
+  const artifacts = await resolveDagpipeArtifacts(input.frame.kind)
+  if ('code' in artifacts) return failedProjectReceipt(input.frame, artifacts)
+  const intent = workIntent(input.frame, input.receiverAgentId, input.connect, input.policyRevision)
+  if ('code' in intent) return failedProjectReceipt(input.frame, intent)
+  return await runWorkExecution(input.client, {
+    runnerPath: artifacts.runnerPath,
+    graphPath: artifacts.graphPath,
+    projectId: 'agentteams-local-work',
+    executionId: input.frame.control.executionId,
+    attemptId: input.frame.control.attemptId,
+    intent,
+  })
+}
+
 export async function startAgentProcess(configPath: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcess> {
   const config = await loadAgentProcessConfig(configPath, env)
   const services = config.endpoint?.role === 'receiver' ? [] : config.endpoint?.services ?? []
@@ -419,15 +553,6 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       scopeId: config.declaration.scopeId,
       agentId: config.declaration.identity.agentId,
     }, { timeoutMs: config.relay.requestTimeoutMs, maxPending: config.relay.maxPendingRequests })
-    const configuredConnect = config.endpoint?.connect
-    const configuredWork = configuredConnect === undefined ||
-      configuredConnect.workId === undefined || configuredConnect.requestId === undefined || configuredConnect.payload === undefined
-      ? undefined
-      : runConfiguredWork(consumerWork, configuredConnect as AgentConnectionIntent & {
-          readonly workId: string
-          readonly requestId: string
-          readonly payload: JsonValue
-        }, config.policyRevision)
     readyResolve()
     const live = daemon
     let stopping: Promise<void> | undefined
@@ -465,7 +590,10 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         resources: capability.resources.map(resource => ({ resourceId: resource.resourceId, capacity: resource.capacity, unit: resource.unit })),
       })),
     })
-    return { daemon: live, consumerWork: consumerWork!, ...(configuredWork === undefined ? {} : { configuredWork }), statusProjection, stop, closed }
+    const connect = config.endpoint?.connect
+    const executeWork = (frame: LocalWorkControlRequest): Promise<ProjectExecutionReceipt> =>
+      executeProjectWork({ frame, client: consumerWork!, connect, policyRevision: config.policyRevision, receiverAgentId: config.declaration.identity.agentId })
+    return { daemon: live, consumerWork: consumerWork!, executeWork, statusProjection, stop, closed }
   } catch (error) {
     readyReject(error)
     try { await directListener?.close(); await daemon?.stop(); await configBinding?.owner.stop() } finally { await closeLease(lease) }
@@ -475,41 +603,44 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
 
 export async function runAgentProcess(argv = process.argv.slice(2)): Promise<void> {
   if (!((argv.length === 2 || argv.length === 4) && argv[0] === '--config' && (argv.length === 2 || (argv[2] === '--launcher-start-token' && argv[3].trim() !== '')))) throw new RelayProtocolError('INVALID_INPUT', 'usage: agent-process --config <file>')
-  const launcherControl = captureLocalLauncherControl(process.env)
   const handle = await startAgentProcess(argv[1])
   const stop = () => { void handle.stop().catch(error => { process.exitCode = 1; console.error(error.message) }) }
   process.once('SIGINT', stop); process.once('SIGTERM', stop)
-  if (handle.configuredWork !== undefined) {
-    try {
-      const configuredWork = await handle.configuredWork
-      if (launcherControl !== undefined) {
-        await writeLocalInternalConfiguredWorkIfCurrent(launcherControl.internalPath, {
-          agentId: handle.daemon.status().agentId,
-          workId: configuredWork.workId,
-          requestId: configuredWork.requestId,
-          generation: launcherControl.generation,
-          state: 'succeeded',
-        }, { generation: launcherControl.generation, startToken: launcherControl.startToken })
-      }
-    } catch (error) { await handle.stop(); throw error }
+  // The launcher forwards typed Work frames over this child's IPC channel. The
+  // receiver binds its own registered identity and executes through the sole
+  // AgentWorkClient + runWorkExecution path; it never rebuilds control state.
+  const onMessage = (message: unknown) => {
+    if (typeof message !== 'object' || message === null) return
+    const request = message as Partial<LocalWorkChildRequest>
+    if (request.kind !== 'work.control' || typeof request.localCorrelation !== 'string' || request.frame === undefined) return
+    const localCorrelation = request.localCorrelation
+    const frame = request.frame
+    void (async () => {
+      const reply: LocalWorkChildReply = await (async () => {
+        if (request.receiverAgentId !== handle.daemon.status().agentId) {
+          return { kind: 'work.reply', localCorrelation, reply: { kind: 'work.error', requestId: frame.requestId, error: { code: 'RECEIVER_NOT_FOUND', message: 'Work request reached a different receiver identity' } } }
+        }
+        if (request.expectedAgentGeneration !== handle.daemon.network.generation) {
+          return { kind: 'work.reply', localCorrelation, reply: { kind: 'work.error', requestId: frame.requestId, error: { code: 'STALE_GENERATION', message: 'Work request targets a stale receiver generation' } } }
+        }
+        try {
+          const receipt = await handle.executeWork(frame)
+          return { kind: 'work.reply', localCorrelation, reply: { kind: 'work.result', requestId: frame.requestId, receipt } }
+        } catch (error) {
+          const code = (error as { readonly code?: unknown }).code
+          return { kind: 'work.reply', localCorrelation, reply: { kind: 'work.error', requestId: frame.requestId, error: { code: typeof code === 'string' && code.length > 0 ? code : 'EXECUTION_FAILED', message: error instanceof Error ? error.message : 'receiver Work execution failed' } } }
+        }
+      })()
+      process.send?.(reply)
+    })()
   }
+  process.on('message', onMessage)
   const status = handle.daemon.status()
   // Preserve the established first readiness frame for external child readers;
   // the typed status projection follows on the same IPC channel.
   process.send?.({ kind: 'daemon.registered', agentId: status.agentId, generation: status.generation })
   process.send?.({ kind: 'daemon.status', agentId: status.agentId, generation: status.generation, endpoint: handle.statusProjection() })
-  try { await handle.closed } finally { process.off('SIGINT', stop); process.off('SIGTERM', stop) }
-}
-
-function captureLocalLauncherControl(env: NodeJS.ProcessEnv): (LocalLauncherControl & { readonly internalPath: string }) | undefined {
-  const internalPath = env.TEAMS_LOCAL_INTERNAL_PATH
-  if (internalPath === undefined) return undefined
-  const generation = Number(env.TEAMS_LOCAL_LAUNCHER_GENERATION)
-  const startToken = env.TEAMS_LOCAL_START_TOKEN
-  if (!Number.isSafeInteger(generation) || generation < 0 || startToken === undefined || startToken.length === 0) {
-    throw new RelayProtocolError('INVALID_INPUT', 'local launcher control values are required for configured Work')
-  }
-  return { internalPath, generation, startToken }
+  try { await handle.closed } finally { process.off('SIGINT', stop); process.off('SIGTERM', stop); process.off('message', onMessage) }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   void runAgentProcess().catch(error => { console.error(error instanceof Error ? error.message : 'Agent startup failed'); process.exitCode = 1 })

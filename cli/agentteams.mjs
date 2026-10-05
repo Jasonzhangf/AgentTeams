@@ -3,6 +3,7 @@
 import { execFile } from 'node:child_process'
 import { access } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +20,7 @@ const execFileAsync = promisify(execFile)
 const RUNTIME_ARTIFACTS = {
   localConfig: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-config.js'),
   localProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-process.js'),
+  localWorkControl: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-work-control.js'),
   relay: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'server', 'relay-process.js'),
   agent: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'agent-process.js'),
 }
@@ -98,6 +100,10 @@ function usage() {
   return `usage: ${CLI_NAME} init|start|status|work|stop [--config <path>] [--generation <n>]`
 }
 
+function workUsage() {
+  return `usage: ${CLI_NAME} work submit|query|open|request|close --config <path> [flags]`
+}
+
 function valueAfter(argv, index, flag) {
   const value = argv[index + 1]
   if (value === undefined || value.startsWith('--')) throw new AgentTeamsCliError(`${flag} requires a value`)
@@ -109,7 +115,8 @@ function parseArgs(argv, options) {
   if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
     throw new AgentTeamsCliError(usage())
   }
-  if (!['init', 'start', 'status', 'work', 'stop'].includes(command)) {
+  if (command === 'work') return parseWorkArgs(argv.slice(1), options)
+  if (!['init', 'start', 'status', 'stop'].includes(command)) {
     throw new AgentTeamsCliError(`unknown command: ${command}\n${usage()}`)
   }
   const parsed = {
@@ -150,6 +157,185 @@ function parseArgs(argv, options) {
 
 function defaultConfigPath(home) {
   return resolve(home ?? homedir(), '.agentteams', 'config.toml')
+}
+
+const WORK_SUBCOMMANDS = ['submit', 'query', 'open', 'request', 'close']
+
+function parseWorkArgs(argv, options) {
+  const subcommand = argv[0]
+  if (subcommand === undefined || subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    throw new AgentTeamsCliError(workUsage())
+  }
+  if (!WORK_SUBCOMMANDS.includes(subcommand)) throw new AgentTeamsCliError(`unknown work subcommand: ${subcommand}\n${workUsage()}`)
+  const parsed = {
+    command: 'work',
+    subcommand,
+    configPath: options.config === undefined ? undefined : resolve(options.config),
+    generation: undefined,
+    payload: undefined,
+    payloadProvided: false,
+    workId: undefined,
+    requestId: undefined,
+    receiver: undefined,
+    provider: undefined,
+    providerGeneration: undefined,
+    capabilityId: undefined,
+    capabilityVersion: undefined,
+    operation: undefined,
+    demands: undefined,
+    serviceSelection: undefined,
+    linkGeneration: undefined,
+  }
+  const strings = { '--work-id': 'workId', '--request-id': 'requestId', '--receiver': 'receiver', '--provider': 'provider', '--capability-id': 'capabilityId', '--capability-version': 'capabilityVersion', '--operation': 'operation', '--service-selection': 'serviceSelection' }
+  const integers = { '--generation': 'generation', '--provider-generation': 'providerGeneration', '--link-generation': 'linkGeneration' }
+  for (let index = 1; index < argv.length; index += 1) {
+    const argument = argv[index]
+    const equals = argument.indexOf('=')
+    const name = equals > 0 ? argument.slice(0, equals) : argument
+    const inline = equals > 0 ? argument.slice(equals + 1) : undefined
+    const take = flag => {
+      if (inline !== undefined) {
+        if (inline.length === 0) throw new AgentTeamsCliError(`${flag} requires a value`)
+        return inline
+      }
+      const value = valueAfter(argv, index, flag)
+      index += 1
+      return value
+    }
+    if (name === '--config') {
+      parsed.configPath = resolve(take(argument))
+    } else if (name === '--payload') {
+      const raw = take(argument)
+      try { parsed.payload = JSON.parse(raw) } catch { throw new AgentTeamsCliError('--payload must be valid JSON') }
+      parsed.payloadProvided = true
+    } else if (name === '--demands') {
+      const raw = take(argument)
+      try { parsed.demands = JSON.parse(raw) } catch { throw new AgentTeamsCliError('--demands must be valid JSON') }
+      if (!Array.isArray(parsed.demands)) throw new AgentTeamsCliError('--demands must be a JSON array')
+    } else if (Object.hasOwn(strings, name)) {
+      parsed[strings[name]] = take(argument)
+    } else if (Object.hasOwn(integers, name)) {
+      const value = Number(take(argument))
+      if (!Number.isSafeInteger(value) || value < 0) throw new AgentTeamsCliError(`${name} must be a non-negative integer`)
+      parsed[integers[name]] = value
+    } else {
+      throw new AgentTeamsCliError(`unknown argument: ${argument}\n${workUsage()}`)
+    }
+  }
+  return parsed
+}
+
+function requireFlag(parsed, key, flag) {
+  const value = parsed[key]
+  if (value === undefined) throw new AgentTeamsCliError(`${flag} is required for work ${parsed.subcommand}`)
+  return value
+}
+
+function requirePayload(parsed) {
+  if (parsed.payloadProvided !== true) throw new AgentTeamsCliError(`--payload is required for work ${parsed.subcommand}`)
+  return parsed.payload
+}
+
+function workReceiverCandidates(internal) {
+  const candidates = []
+  for (const [id, daemon] of Object.entries(internal.daemons ?? {})) {
+    if (daemon.enabled === false) continue
+    if (daemon.role !== 'receiver' && daemon.role !== 'hybrid') continue
+    if (typeof daemon.config !== 'string') continue
+    let projection
+    try { projection = JSON.parse(daemon.config) } catch { continue }
+    const connect = projection?.endpoint?.connect
+    if (connect === null || typeof connect !== 'object' || Array.isArray(connect)) continue
+    candidates.push({ id, connect })
+  }
+  return candidates
+}
+
+function resolveWorkReceiver(parsed, internal) {
+  const candidates = workReceiverCandidates(internal)
+  if (parsed.receiver !== undefined) {
+    const match = candidates.find(candidate => candidate.id === parsed.receiver)
+    if (match === undefined) throw new AgentTeamsCliError(`receiver ${parsed.receiver} is not an available Work receiver`)
+    return match
+  }
+  if (candidates.length === 1) return candidates[0]
+  const ids = candidates.map(candidate => candidate.id).join(', ')
+  throw new AgentTeamsCliError(`expected exactly one Work receiver; pass --receiver (found ${ids.length === 0 ? 'none' : ids})`)
+}
+
+function buildWorkFrame(parsed, workControl, receiver) {
+  const connect = receiver.connect
+  const base = {
+    receiverAgentId: receiver.id,
+    expectedLauncherGeneration: workControl.launcherGeneration,
+    startToken: workControl.launcherStartToken,
+    executionId: randomUUID(),
+    attemptId: randomUUID(),
+    workId: parsed.workId ?? randomUUID(),
+    requestId: parsed.requestId ?? randomUUID(),
+  }
+  if (parsed.subcommand === 'submit') {
+    return { kind: 'work.submit', requestId: base.requestId, control: { ...base }, business: requirePayload(parsed) }
+  }
+  if (parsed.subcommand === 'query') {
+    if (parsed.workId === undefined || parsed.requestId === undefined) throw new AgentTeamsCliError('work query requires --work-id and --request-id')
+    const selection = parsed.serviceSelection ?? 'endpoint'
+    if (selection === 'capability') {
+      return { kind: 'work.query', requestId: base.requestId, control: {
+        ...base,
+        serviceSelection: 'capability',
+        targetAgentId: requireFlag(parsed, 'provider', '--provider'),
+        targetGeneration: requireFlag(parsed, 'providerGeneration', '--provider-generation'),
+        capabilityId: requireFlag(parsed, 'capabilityId', '--capability-id'),
+        capabilityVersion: requireFlag(parsed, 'capabilityVersion', '--capability-version'),
+        operation: requireFlag(parsed, 'operation', '--operation'),
+        ...(parsed.linkGeneration === undefined ? {} : { linkGeneration: parsed.linkGeneration }),
+      } }
+    }
+    if (selection !== 'endpoint') throw new AgentTeamsCliError('--service-selection must be endpoint or capability')
+    return { kind: 'work.query', requestId: base.requestId, control: { ...base, serviceSelection: 'endpoint' } }
+  }
+  const binding = {
+    targetAgentId: parsed.provider ?? connect.targetAgentId,
+    targetGeneration: requireFlag(parsed, 'providerGeneration', '--provider-generation'),
+    capabilityId: parsed.capabilityId ?? connect.capabilityId,
+    capabilityVersion: parsed.capabilityVersion ?? connect.capabilityVersion,
+    operation: parsed.operation ?? connect.operation,
+  }
+  if (binding.targetAgentId === undefined || binding.capabilityId === undefined || binding.capabilityVersion === undefined || binding.operation === undefined) {
+    throw new AgentTeamsCliError(`work ${parsed.subcommand} requires an explicit provider/capability binding`)
+  }
+  if (parsed.subcommand === 'open') {
+    return { kind: 'work.open', requestId: base.requestId, control: { ...base, ...binding, demands: parsed.demands ?? [] }, business: requirePayload(parsed) }
+  }
+  if (parsed.subcommand === 'request') {
+    if (parsed.workId === undefined) throw new AgentTeamsCliError('work request requires --work-id')
+    return { kind: 'work.request', requestId: base.requestId, control: { ...base, ...binding, demands: parsed.demands ?? [] }, business: requirePayload(parsed) }
+  }
+  if (parsed.workId === undefined) throw new AgentTeamsCliError('work close requires --work-id')
+  return { kind: 'work.close', requestId: base.requestId, control: { ...base, ...binding } }
+}
+
+async function workCommand(parsed, options) {
+  const runtime = options.runtime ?? await defaultRuntime()
+  const localConfig = runtime.localConfig ?? (await defaultRuntime()).localConfig
+  const localWorkControl = runtime.localWorkControl ?? (await defaultRuntime()).localWorkControl
+  const configPath = parsed.configPath ?? defaultConfigPath(options.home)
+  const internalPath = resolve(dirname(configPath), 'internal.toml')
+  let workControl
+  try { workControl = await localConfig.readLocalInternalWorkControl(internalPath) }
+  catch (error) { throw new AgentTeamsCliError(`local Work control is unavailable: ${error instanceof Error ? error.message : String(error)}`) }
+  if (workControl === undefined) throw new AgentTeamsCliError('local Work control is unavailable: no running launcher published a control socket')
+  if (parsed.generation !== undefined && parsed.generation !== workControl.launcherGeneration) {
+    throw new AgentTeamsCliError(`stale launcher generation: expected=${parsed.generation} current=${workControl.launcherGeneration}`)
+  }
+  const internal = await localConfig.readLocalInternalConfig(internalPath)
+  const receiver = resolveWorkReceiver(parsed, internal)
+  const frame = buildWorkFrame(parsed, workControl, receiver)
+  const reply = await localWorkControl.sendLocalWorkControlRequest({ socketPath: workControl.socketPath, frame, ...(options.workTimeoutMs === undefined ? {} : { timeoutMs: options.workTimeoutMs }) })
+  if (reply.kind === 'work.error') throw new AgentTeamsCliError(JSON.stringify({ status: 'failed', error: reply.error }))
+  if (reply.receipt.status === 'failed') throw new AgentTeamsCliError(JSON.stringify(reply.receipt))
+  return JSON.stringify(reply.receipt)
 }
 
 function localEnv(env) {
@@ -268,11 +454,12 @@ async function defaultRuntime() {
         throw new AgentTeamsCliError(`cli runtime artifacts are missing (${missing.join(', ')}); run pnpm build:runtime first`)
       }
       try {
-        const [localConfig, localProcess] = await Promise.all([
+        const [localConfig, localProcess, localWorkControl] = await Promise.all([
           import(RUNTIME_ARTIFACTS.localConfig),
           import(RUNTIME_ARTIFACTS.localProcess),
+          import(RUNTIME_ARTIFACTS.localWorkControl),
         ])
-        return { localConfig, ...localProcess }
+        return { localConfig, localWorkControl, ...localProcess }
       } catch (error) {
         throw new AgentTeamsCliError(`cli runtime artifacts could not be loaded; run pnpm build:runtime first: ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -319,10 +506,7 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
     return formatStatus('status', status, true)
   }
   if (parsed.command === 'work') {
-    // The selection-only v3 connect carries no Work identity, so the public
-    // startup-receipt poll cannot start Work. Fail before launcher, socket or
-    // provider side effects until the U4 submit/query request entry exists.
-    throw new AgentTeamsCliError(`work is not implemented yet: no public new-request entry exists; ${CLI_NAME} work submit/query arrives with the U4 local-work seam`)
+    return await workCommand(parsed, options)
   }
   if (parsed.command === 'stop') {
     const runtime = options.runtime ?? await defaultRuntime()

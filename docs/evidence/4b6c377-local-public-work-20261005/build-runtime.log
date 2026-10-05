@@ -1,0 +1,4 @@
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+

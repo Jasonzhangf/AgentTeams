@@ -417,7 +417,8 @@ export async function runPackageUserSmoke(options = {}) {
   assert(packageReceipt.content_sha256 === packContent.sha256,
     `staged package receipt content ${packageReceipt.content_sha256} does not match pack ${packContent.sha256}`)
 
-  const temporaryRoot = mkdtempSync(join(tmpdir(), 'agentteams-package-user-'))
+  // Keep the installed HOME's Unix control socket within macOS sun_path.
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'at'))
   const prefix = join(temporaryRoot, 'prefix')
   const testHome = join(temporaryRoot, 'home')
   const npmCache = join(temporaryRoot, 'npm-cache')

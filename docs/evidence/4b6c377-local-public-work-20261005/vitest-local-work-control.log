@@ -1,0 +1,315 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005
+
+stdout | runtime/local-work-control.spec.ts
+u4-socket-receipt /Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005/generated/u4-receipts/local-work-control-jm55mR/socket-evidence.json
+
+ ❯ runtime/local-work-control.spec.ts (15 tests | 13 failed) 30ms
+   × validates the closed local Work frame once and preserves arbitrary business JSON through real Unix sockets 7ms
+   × covers all five admitted modes and both query selections with explicit ownership 1ms
+   × keeps endpoint and capability query selections closed over the public decoder and raw Unix sockets 1ms
+   × rejects launcher authorization before business dispatch without touching the selected receiver 1ms
+   × fails closed malformed, unknown, extra, missing and mismatched-control frames as HOST_PROTOCOL 1ms
+   × rejects unknown demand keys and non-positive amounts on real raw socket frames before handler dispatch 1ms
+   × fails closed on prototype-key kinds at the public decoder and over a real socket 1ms
+   × closes after a peer disconnects without a complete frame ("") 1ms
+   × closes after a peer disconnects without a complete frame ("{\"kind\":") 1ms
+   × closes an idle peer without dispatching business 1ms
+   × reports handler failure to the caller and retains the cause for shutdown 1ms
+   × drains an already accepted dispatch after disconnect and closes admission before waiting 1ms
+   × stops accepting new Work and leaves existing dispatch to complete 1ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  runtime/local-work-control.spec.ts > validates the closed local Work frame once and preserves arbitrary business JSON through real Unix sockets
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-success-uIv9xm/.internal/work-control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:177:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-success-uIv9xm/.internal/work-control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:177:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-success-uIv9xm/.internal/work-control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > covers all five admitted modes and both query selections with explicit ownership
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-modes-yNqJBN/.internal/work-control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:214:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-modes-yNqJBN/.internal/work-control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:214:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-modes-yNqJBN/.internal/work-control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > keeps endpoint and capability query selections closed over the public decoder and raw Unix sockets
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-query-selection-tTmRxI/.internal/work-control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:303:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-query-selection-tTmRxI/.internal/work-control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:303:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-query-selection-tTmRxI/.internal/work-control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > rejects launcher authorization before business dispatch without touching the selected receiver
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-denied-cbJraa/.internal/work-control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:376:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-denied-cbJraa/.internal/work-control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:376:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-denied-cbJraa/.internal/work-control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > fails closed malformed, unknown, extra, missing and mismatched-control frames as HOST_PROTOCOL
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-protocol-YQDktU/.internal/work-control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:413:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-protocol-YQDktU/.internal/work-control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:413:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-protocol-YQDktU/.internal/work-control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > rejects unknown demand keys and non-positive amounts on real raw socket frames before handler dispatch
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-demands-zoP4TL/.internal/work-control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:479:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-demands-zoP4TL/.internal/work-control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:479:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-demands-zoP4TL/.internal/work-control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > fails closed on prototype-key kinds at the public decoder and over a real socket
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-protokind-LTaSGq/.internal/work-control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:543:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-protokind-LTaSGq/.internal/work-control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:543:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-protokind-LTaSGq/.internal/work-control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > closes after a peer disconnects without a complete frame ("")
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-eof-LjJHBO/control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:586:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-eof-LjJHBO/control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:586:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-eof-LjJHBO/control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > closes after a peer disconnects without a complete frame ("{\"kind\":")
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-eof-fii30Y/control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:586:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-eof-fii30Y/control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:586:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-eof-fii30Y/control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > closes an idle peer without dispatching business
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-idle-VUV0cS/control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:606:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-idle-VUV0cS/control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:606:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-idle-VUV0cS/control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > reports handler failure to the caller and retains the cause for shutdown
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-handler-error-sZJWT1/control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:625:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-handler-error-sZJWT1/control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:625:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-handler-error-sZJWT1/control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > drains an already accepted dispatch after disconnect and closes admission before waiting
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-disconnect-ZxBOa0/.internal/work-control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:648:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-disconnect-ZxBOa0/.internal/work-control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:648:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-disconnect-ZxBOa0/.internal/work-control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/13]⎯
+
+ FAIL  runtime/local-work-control.spec.ts > stops accepting new Work and leaves existing dispatch to complete
+LocalWorkControlError: cannot listen local Work socket: listen EPERM: operation not permitted /tmp/teams-local-work-control-close-KSyiLN/.internal/work-control.sock
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:372:11
+    370|       })
+    371|     }
+    372|     throw new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `cann…
+       |           ^
+    373|   }
+    374|
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:691:18
+
+Caused by: Error: listen EPERM: operation not permitted /tmp/teams-local-work-control-close-KSyiLN/.internal/work-control.sock
+ ❯ runtime/local-work-control.ts:350:12
+ ❯ startLocalWorkControlListener runtime/local-work-control.ts:339:18
+ ❯ startServer runtime/local-work-control.spec.ts:125:18
+ ❯ runtime/local-work-control.spec.ts:691:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '/tmp/teams-local-work-control-close-KSyiLN/.internal/work-control.sock', port: -1 }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/13]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  13 failed | 2 passed (15)
+   Start at  08:01:05
+   Duration  238ms (transform 52ms, setup 0ms, import 66ms, tests 30ms, environment 0ms)
+

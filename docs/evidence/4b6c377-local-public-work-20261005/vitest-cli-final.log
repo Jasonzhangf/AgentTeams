@@ -1,0 +1,67 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005
+
+ ❯ cli/agentteams.spec.ts (14 tests | 5 failed) 2413ms
+     × init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it 72ms
+     × fails init explicitly before creating config when local bridge TLS material is incomplete 14ms
+     × does not overwrite a config created by a concurrent init 17ms
+     × does not create or overwrite an editable relay config 9ms
+     × direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts 96ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > does not create or overwrite an editable relay config
+Error: listen EPERM: operation not permitted 127.0.0.1
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > fails init explicitly before creating config when local bridge TLS material is incomplete
+AssertionError: expected [Function] to throw error matching /TLS material is incomplete/i but got 'listen EPERM: operation not permitted…'
+
+- Expected:
+/TLS material is incomplete/i
+
++ Received:
+"listen EPERM: operation not permitted 127.0.0.1"
+
+ ❯ cli/agentteams.spec.ts:156:58
+    154|       await mkdir(tlsDirectory, { recursive: true, mode: 0o700 })
+    155|       await writeFile(join(tlsDirectory, 'relay-key.pem'), 'sentinel\n…
+    156|       await expect(agentteamsCommand(['init'], { home })).rejects.toTh…
+       |                                                          ^
+    157|       expect(await readFile(join(tlsDirectory, 'relay-key.pem'), 'utf8…
+    158|       await expect(readFile(join(directory, 'config.toml'), 'utf8')).r…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > does not overwrite a config created by a concurrent init
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ cli/agentteams.spec.ts:173:71
+    171|         agentteamsCommand(['init'], { home, configText: DEFAULT_CONFIG…
+    172|       ])
+    173|       expect(results.filter(result => result.status === 'fulfilled')).…
+       |                                                                       ^
+    174|       expect(results.filter(result => result.status === 'rejected')).t…
+    175|       const rejected = results.find(result => result.status === 'rejec…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  cli/agentteams.spec.ts > agentteams CLI > direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts
+Error: Command failed: /opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005/cli/agentteams.mjs init
+listen EPERM: operation not permitted 127.0.0.1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 9 passed (14)
+   Start at  08:50:02
+   Duration  2.69s (transform 218ms, setup 0ms, import 133ms, tests 2.41s, environment 0ms)
+

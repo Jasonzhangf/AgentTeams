@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { configSourceHash, createTomlRuntimeConfigPersistence, defaultLocalConfigPath, initializeLocalConfig, loadLocalConfig, parseConfigUserSections, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, resumePendingMigration, writeLocalConfig, writeLocalInternalConfiguredWork, writeLocalInternalConfiguredWorkIfCurrent, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalInternalWorkControl } from './local-config.ts'
+import { configSourceHash, createTomlRuntimeConfigPersistence, defaultLocalConfigPath, initializeLocalConfig, loadLocalConfig, parseConfigUserSections, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, resumePendingMigration, writeLocalConfig, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalInternalWorkControl } from './local-config.ts'
 import { parse as parseToml } from 'toml'
 import { providerIntentFingerprint } from '../config/runtime-config.ts'
 
@@ -112,10 +112,7 @@ targetAgentId = "provider"
 capabilityId = "file-search"
 capabilityVersion = "1"
 operation = "search"
-workId = "configured-search"
-requestId = "configured-search-1"
 demands = [{ resourceId = "search-slot", amount = 1 }]
-payload = { query = "needle" }
 `)
     await writeFile(join(directory, '.agentteams', 'relay.json'), JSON.stringify({
       version: 1,
@@ -161,37 +158,6 @@ it('rejects a v2 endpoint named relay before process planning creates duplicate 
   try {
     await writeLocalConfig(path, 'version = 2\n[relay]\nconfig = "relay.json"\n[endpoints.relay]\nrole = "provider"\n')
     await expect(loadLocalConfig(path)).rejects.toThrow(/endpoints\.relay.*reserved/i)
-  } finally { await rm(directory, { recursive: true, force: true }) }
-})
-
-it('rejects non-JSON TOML payload values instead of coercing them during materialization', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'teams-endpoint-config-json-'))
-  const path = join(directory, 'config.toml')
-  try {
-    await writeLocalConfig(path, `version = 2
-[relay]
-config = "relay.json"
-[endpoints.consumer]
-role = "receiver"
-identity = { hostId = "host", machineId = "machine", agentId = "consumer", accountId = "account", agentKind = "custom", label = "Consumer" }
-scopeId = "scope"
-dataDirectory = "data"
-leasePort = 48031
-presenceIntervalMs = 100
-policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
-cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-consumer" }
-relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", caFile = "relay.pem", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
-[endpoints.consumer.connect]
-targetAgentId = "provider"
-capabilityId = "file-search"
-capabilityVersion = "1"
-operation = "search"
-workId = "configured-search"
-requestId = "configured-search-1"
-demands = [{ resourceId = "search-slot", amount = 1 }]
-payload = 1970-01-01T00:00:00Z
-`)
-    await expect(loadLocalConfig(path)).rejects.toThrow(/payload.*plain JSON object|payload.*JSON/i)
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
@@ -323,40 +289,21 @@ it('quotes dotted daemon ids in internal.toml so the persisted key remains exact
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
-it('serializes concurrent internal state and configured-work updates without dropping either field', async () => {
+it('serializes concurrent internal state and Work control updates without dropping either field', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-internal-write-lock-'))
   const path = join(directory, 'internal.toml')
   try {
+    const socketPath = join(directory, '.internal', 'work-control.sock')
+    await writeLocalInternalLauncherState(path, { pid: 101, generation: 1, startToken: 'start-token-1', state: 'running' })
     for (let iteration = 0; iteration < 20; iteration += 1) {
       await Promise.all([
         writeLocalInternalState(path, { provider: { pid: 4200 + iteration, generation: iteration + 1, state: 'online' } }),
-        writeLocalInternalConfiguredWork(path, { agentId: 'consumer', workId: `work-${iteration}`, requestId: `request-${iteration}`, generation: iteration + 1, state: 'succeeded' }),
+        writeLocalInternalWorkControl(path, { socketPath, launcherGeneration: 1, launcherStartToken: 'start-token-1' }),
       ])
       const internal = await readLocalInternalConfig(path)
       expect(internal.daemons?.provider?.generation).toBe(iteration + 1)
-      expect(internal.configuredWork?.workId).toBe(`work-${iteration}`)
+      expect(internal.workControl).toEqual({ socketPath, launcherGeneration: 1, launcherStartToken: 'start-token-1' })
     }
-  } finally { await rm(directory, { recursive: true, force: true }) }
-})
-
-it('rejects configured Work receipts when the launcher start control changed', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'teams-internal-stale-work-'))
-  const path = join(directory, 'internal.toml')
-  try {
-    await writeLocalInternalLauncherState(path, { pid: 101, generation: 1, startToken: 'start-token-1', state: 'running' })
-    await expect(writeLocalInternalConfiguredWorkIfCurrent(path,
-      { agentId: 'consumer', workId: 'work-1', requestId: 'request-1', generation: 1, state: 'succeeded' },
-      { generation: 1, startToken: 'start-token-1' })).resolves.toBe(path)
-    const first = await readLocalInternalConfig(path)
-    expect(first.configuredWork).toMatchObject({ workId: 'work-1', generation: 1 })
-
-    await writeLocalInternalLauncherState(path, { pid: 102, generation: 2, startToken: 'start-token-2', state: 'running' })
-    await expect(writeLocalInternalConfiguredWorkIfCurrent(path,
-      { agentId: 'consumer', workId: 'work-2', requestId: 'request-2', generation: 1, state: 'succeeded' },
-      { generation: 1, startToken: 'start-token-1' })).rejects.toThrow(/stale/)
-    const second = await readLocalInternalConfig(path)
-    expect(second.configuredWork).toMatchObject({ workId: 'work-1', generation: 1 })
-    expect(second.configuredWork?.workId).not.toBe('work-2')
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
@@ -464,6 +411,49 @@ it('parses v3 user intent without reading relay or provider JSON and records int
     const reused = parseToml(await readFile(second.internalPath!, 'utf8')) as { sourceRevision: number; relay: { config: string } }
     expect(reused.sourceRevision).toBe(1)
     expect(JSON.parse(reused.relay.config)).toMatchObject({ listen: { port: relay.listen.port } })
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('preserves a payload-free service-only receiver connection in the returned spec and internal/child projections', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-v3-receiver-connection-'))
+  const agentteams = join(directory, '.agentteams')
+  const path = join(agentteams, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_PRIMARY_CONFIG)
+    await writeFile(join(agentteams, 'internal.toml'), `version = 2
+
+[relay]
+config = ${JSON.stringify(JSON.stringify({ listen: { port: 49101 } }))}
+
+[daemon.provider]
+enabled = true
+role = "provider"
+config = ${JSON.stringify(JSON.stringify({ leasePort: 49102 }))}
+
+[daemon.receiver]
+enabled = true
+role = "receiver"
+config = ${JSON.stringify(JSON.stringify({ leasePort: 49103 }))}
+`)
+    const loaded = await loadLocalConfig(path)
+    const expectedConnection = {
+      targetAgentId: 'provider',
+      capabilityId: 'file-search',
+      capabilityVersion: '1',
+      operation: 'search',
+      demands: [{ resourceId: 'search-slot', amount: 1 }],
+    }
+    const receiver = loaded.daemons.find(daemon => daemon.id === 'receiver')!
+    expect(receiver).toMatchObject({ role: 'receiver', connection: expectedConnection })
+    expect(receiver.services).toBeUndefined()
+
+    const internal = await readLocalInternalConfig(loaded.internalPath!)
+    const internalReceiver = JSON.parse(internal.daemons!.receiver!.config!) as { endpoint: unknown }
+    expect(internalReceiver.endpoint).toEqual({ role: 'receiver', connect: expectedConnection })
+
+    await projectLocalChildConfigs(loaded.internalPath!)
+    const childReceiver = JSON.parse(await readFile(receiver.configPath, 'utf8')) as { endpoint: unknown }
+    expect(childReceiver.endpoint).toEqual({ role: 'receiver', connect: expectedConnection })
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 

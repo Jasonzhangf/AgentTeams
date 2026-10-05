@@ -1,17 +1,97 @@
 import { createPrivateKey, X509Certificate } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { existsSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { agentteamsCommand, DEFAULT_CONFIG_TEXT } from './agentteams.mjs'
+import { readLocalInternalConfig, readLocalInternalWorkControl, writeLocalInternalLauncherState, writeLocalInternalWorkControl } from '../runtime/local-config.ts'
+import type { LocalWorkControlRequest } from '../runtime/local-work-control.ts'
+import { sendLocalWorkControlRequest } from '../runtime/local-work-control.ts'
 
 const cliEntry = fileURLToPath(new URL('./agentteams.mjs', import.meta.url))
 const rootDirectory = fileURLToPath(new URL('../', import.meta.url))
 const execFileAsync = promisify(execFile)
+
+async function initializeWorkCommandHome() {
+  const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-work-'))
+  const directory = join(home, '.agentteams')
+  const configPath = join(directory, 'config.toml')
+  const internalPath = join(directory, 'internal.toml')
+  const generation = 7
+  const startToken = 'work-command-token'
+  const socketPath = join(directory, '.internal', 'work-control.sock')
+  const receiverConfig = JSON.stringify({
+    version: 1,
+    endpoint: {
+      role: 'receiver',
+      connect: {
+        targetAgentId: 'provider',
+        capabilityId: 'file-search',
+        capabilityVersion: '1',
+        operation: 'search',
+        demands: [{ resourceId: 'search-slot', amount: 1 }],
+      },
+      services: [],
+    },
+  })
+  await mkdir(directory, { recursive: true })
+  await writeFile(configPath, 'version = 3\n')
+  await writeFile(internalPath, `version = 2
+
+[launcher]
+pid = 7101
+generation = ${generation}
+startToken = ${JSON.stringify(startToken)}
+state = "running"
+
+[daemon."receiver"]
+enabled = true
+role = "receiver"
+config = ${JSON.stringify(receiverConfig)}
+`)
+  await writeLocalInternalWorkControl(internalPath, { socketPath, launcherGeneration: generation, launcherStartToken: startToken })
+  return { home, configPath, internalPath, generation, startToken, socketPath }
+}
+
+function workCommandRuntime(frames: LocalWorkControlRequest[]) {
+  return {
+    localConfig: { readLocalInternalConfig, readLocalInternalWorkControl },
+    localWorkControl: {
+      sendLocalWorkControlRequest: async ({ frame }: { frame: LocalWorkControlRequest }) => {
+        frames.push(frame)
+        return {
+          kind: 'work.result',
+          requestId: frame.requestId,
+          receipt: {
+            status: 'completed',
+            control: {
+              projectId: 'agentteams-local-work',
+              graphId: 'agentteams.test',
+              graphVersion: '1',
+              executionId: frame.control.executionId,
+              attemptId: frame.control.attemptId,
+              workId: frame.control.workId,
+              requestId: frame.control.requestId,
+            },
+            ...('business' in frame ? { business: frame.business } : {}),
+            cleanup: { channelsOpened: 0, channelsDisposed: 0 },
+            evidence: {
+              execution: 'completed',
+              graphId: 'agentteams.test',
+              graphVersion: '1',
+              nodeSchedule: [],
+              nodeCompletion: [],
+              hostOperations: [],
+            },
+          },
+        }
+      },
+    },
+  }
+}
 
 describe('agentteams CLI', () => {
   beforeAll(async () => {
@@ -149,22 +229,121 @@ describe('agentteams CLI', () => {
     expect(calls[0].options.agentEntry).toMatch(/agent-process\.js$/)
   })
 
-  it('rejects the public bare work command before any launcher, socket or provider side effect', async () => {
-    const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-work-blocked-'))
-    const configPath = '/tmp/agentteams-cli-work-blocked.toml'
-    const env = {}
-    const sideEffects: Array<readonly [string, unknown, unknown]> = []
-    const runtime = {
-      runLocalConfiguredWork: async (path, callEnv, options) => {
-        sideEffects.push(['runLocalConfiguredWork', [path, callEnv, options], undefined])
-        return { configPath: path, agentId: 'receiver', workId: 'configured-search', requestId: 'configured-search-1', state: 'succeeded' }
-      },
+  it('builds service-only public Work frames with explicit receiver and fresh identities', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames)
+    try {
+      await agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'receiver', '--payload', '{"query":"needle"}'], { runtime })
+      await agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'receiver', '--payload', '{"query":"needle"}'], { runtime })
+      await agentteamsCommand(['work', 'query', '--config', context.configPath, '--receiver', 'receiver', '--work-id', 'work-original', '--request-id', 'request-original'], { runtime })
+      await agentteamsCommand(['work', 'query', '--config', context.configPath, '--receiver', 'receiver', '--service-selection', 'capability', '--work-id', 'work-original', '--request-id', 'request-original', '--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search', '--link-generation', '8'], { runtime })
+      await agentteamsCommand(['work', 'open', '--config', context.configPath, '--receiver', 'receiver', '--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search', '--demands', '[{"resourceId":"search-slot","amount":1}]', '--payload', 'null'], { runtime })
+      await agentteamsCommand(['work', 'request', '--config', context.configPath, '--receiver', 'receiver', '--work-id', 'work-1', '--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search', '--demands', '[{"resourceId":"search-slot","amount":1}]', '--payload', '{"contextId":"ctx"}'], { runtime })
+      await agentteamsCommand(['work', 'close', '--config', context.configPath, '--receiver', 'receiver', '--work-id', 'work-1', '--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search'], { runtime })
+
+      expect(frames.map(frame => frame.kind)).toEqual([
+        'work.submit', 'work.submit', 'work.query', 'work.query', 'work.open', 'work.request', 'work.close',
+      ])
+      const [firstSubmit, secondSubmit, endpointQuery, capabilityQuery, open, request, close] = frames
+      expect(firstSubmit!.control).toMatchObject({ receiverAgentId: 'receiver', expectedLauncherGeneration: 7, startToken: context.startToken })
+      expect(firstSubmit!.control.workId).not.toBe(secondSubmit!.control.workId)
+      expect(firstSubmit!.requestId).not.toBe(secondSubmit!.requestId)
+      expect(firstSubmit).toMatchObject({ business: { query: 'needle' } })
+      expect(endpointQuery).toMatchObject({ control: { serviceSelection: 'endpoint', workId: 'work-original', requestId: 'request-original' } })
+      expect(capabilityQuery).toMatchObject({
+        control: {
+          serviceSelection: 'capability', workId: 'work-original', requestId: 'request-original',
+          targetAgentId: 'provider', targetGeneration: 7, linkGeneration: 8,
+          capabilityId: 'file-search', capabilityVersion: '1', operation: 'search',
+        },
+      })
+      expect(open).toMatchObject({
+        control: { targetAgentId: 'provider', targetGeneration: 7, capabilityId: 'file-search', capabilityVersion: '1', operation: 'search' },
+        business: null,
+      })
+      expect(request).toMatchObject({ control: { workId: 'work-1', targetAgentId: 'provider', targetGeneration: 7 }, business: { contextId: 'ctx' } })
+      expect(close).toMatchObject({ control: { workId: 'work-1', targetAgentId: 'provider', targetGeneration: 7, operation: 'search' } })
+      expect(close).not.toHaveProperty('business')
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
     }
-    await expect(agentteamsCommand(['work', '--config', configPath], { runtime, env })).rejects.toThrow(
-      /work is not implemented yet: no public new-request entry exists/u,
-    )
-    expect(sideEffects).toEqual([])
-    await rm(home, { recursive: true, force: true })
+  })
+
+  it('retains an arbitrary JSON payload without rewriting it', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    try {
+      await agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'receiver', '--payload', '[1,{"nested":true}]'], { runtime: workCommandRuntime(frames) })
+      expect(frames).toHaveLength(1)
+      expect(frames[0]).toMatchObject({ business: [1, { nested: true }] })
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
+  it('sends Work requests from the public CLI through the local control socket client', async () => {
+    const context = await initializeWorkCommandHome()
+    try {
+      const failure = await agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'receiver', '--payload', '{"query":"socket"}'], {
+        runtime: {
+          localConfig: { readLocalInternalConfig, readLocalInternalWorkControl },
+          localWorkControl: { sendLocalWorkControlRequest },
+          startLocalProcess: undefined,
+        },
+      }).catch(error => error as Error)
+      expect(failure).toBeInstanceOf(Error)
+      expect(failure.message).toContain('local Work control socket is unavailable')
+      expect(failure.message).toContain(context.socketPath)
+    } finally { await rm(context.home, { recursive: true, force: true }) }
+  })
+
+  it('reports a failed Work receipt as an error while preserving its complete identity', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames)
+    const send = runtime.localWorkControl.sendLocalWorkControlRequest
+    let failedReceipt: unknown
+    runtime.localWorkControl.sendLocalWorkControlRequest = async input => {
+      const reply = await send(input)
+      failedReceipt = { ...reply.receipt, status: 'failed', control: {
+        ...reply.receipt.control,
+        error: { code: 'DAGPIPE_RUNNER_MISSING', message: 'installed runner is absent' },
+      } }
+      return { ...reply, receipt: failedReceipt } as typeof reply
+    }
+    try {
+      const command = agentteamsCommand(['work', 'submit', '--config', context.configPath,
+        '--receiver', 'receiver', '--work-id', 'failed-work', '--request-id', 'failed-request',
+        '--payload', '{}'], { runtime })
+      const failure = await command.catch((error: Error) => error)
+      expect(failure).toBeInstanceOf(Error)
+      expect(failure.message).toBe(JSON.stringify(failedReceipt))
+      expect(frames).toHaveLength(1)
+      expect(JSON.parse(failure.message)).toMatchObject({ status: 'failed',
+        control: { workId: 'failed-work', requestId: 'failed-request',
+          executionId: frames[0].control.executionId, attemptId: frames[0].control.attemptId } })
+    } finally { await rm(context.home, { recursive: true, force: true }) }
+  })
+
+  it('rejects malformed Work inputs and config before dispatch', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames)
+    try {
+      await expect(agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'receiver', '--payload', '{'], { runtime })).rejects.toThrow(/--payload must be valid JSON/)
+      await expect(agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'receiver'], { runtime })).rejects.toThrow(/--payload is required/)
+      await expect(agentteamsCommand(['work', 'query', '--config', context.configPath, '--receiver', 'receiver', '--work-id', 'work-1'], { runtime })).rejects.toThrow(/work query requires --work-id and --request-id/)
+      await expect(agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'missing', '--payload', '{}'], { runtime })).rejects.toThrow(/receiver missing is not an available Work receiver/)
+      await expect(agentteamsCommand(['work', 'submit', '--config', join(context.home, 'missing.toml'), '--receiver', 'receiver', '--payload', '{}'], { runtime })).rejects.toThrow(/local Work control is unavailable/)
+      expect(frames).toEqual([])
+
+      await writeLocalInternalLauncherState(context.internalPath, { pid: 7102, generation: 8, startToken: 'replacement-token', state: 'running' })
+      await expect(agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'receiver', '--payload', '{}'], { runtime })).rejects.toThrow(/workControl.launcherGeneration must exactly match launcher.generation/)
+      expect(frames).toEqual([])
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
   })
 
   it('formats the authoritative endpoint status projection without reconstructing it from config', async () => {
@@ -251,34 +430,6 @@ describe('agentteams CLI', () => {
       await rm(home, { recursive: true, force: true })
     }
   }, 60_000)
-
-  it('rejects the real outside-cwd public bare work entry with a nonzero exit and no launcher', async () => {
-    const home = await mkdtemp(join(tmpdir(), 'agentteams-cli-work-entry-home-'))
-    const cwd = await mkdtemp(join(tmpdir(), 'agentteams-cli-work-entry-cwd-'))
-    const before = existsSync(join(home, '.agentteams')) ? readdirSync(join(home, '.agentteams')) : []
-    let code: number | undefined
-    let stderr = ''
-    try {
-      try {
-        await execFileAsync(process.execPath, [cliEntry, 'work'], {
-          cwd,
-          env: { ...process.env, HOME: home },
-        })
-      } catch (error) {
-        const failure = error as { code?: number; stderr?: string }
-        code = failure.code
-        stderr = failure.stderr ?? ''
-      }
-      expect(code).not.toBe(0)
-      expect(stderr).toContain('work is not implemented yet: no public new-request entry exists')
-      expect(stderr).toContain('U4 local-work seam')
-      const after = existsSync(join(home, '.agentteams')) ? readdirSync(join(home, '.agentteams')) : []
-      expect(after).toEqual(before)
-    } finally {
-      await rm(home, { recursive: true, force: true })
-      await rm(cwd, { recursive: true, force: true })
-    }
-  }, 30_000)
 
   it('surfaces explicit parsing and runtime errors', async () => {
     await expect(agentteamsCommand([])).rejects.toThrow(/usage:/i)

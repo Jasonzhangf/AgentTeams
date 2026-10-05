@@ -6,8 +6,6 @@ import { createHash, createPrivateKey, createPublicKey, randomUUID, X509Certific
 import { parse as parseToml } from 'toml'
 import { createServer as createNetServer } from 'node:net'
 import { promisify } from 'node:util'
-import { assertJsonValue } from '../control-protocol/json-value.ts'
-import type { JsonValue } from '../control-protocol/agent-services.ts'
 import { providerIntentFingerprint, RuntimeConfigError } from '../config/runtime-config.ts'
 import type {
   AgentModelBinding,
@@ -58,10 +56,7 @@ export interface LocalConnectionIntent {
   readonly capabilityId: string
   readonly capabilityVersion: string
   readonly operation: string
-  readonly workId: string
-  readonly requestId: string
   readonly demands: readonly { readonly resourceId: string; readonly amount: number }[]
-  readonly payload: JsonValue
 }
 
 export interface LocalConfig {
@@ -84,7 +79,6 @@ export interface LocalInternalConfig {
   readonly updatedAt?: string
   readonly launcher?: LocalInternalLauncherConfig
   readonly workControl?: LocalInternalWorkControl
-  readonly configuredWork?: LocalInternalConfiguredWork
   readonly relay?: {
     readonly projectionPath?: string
     readonly config?: string
@@ -190,14 +184,6 @@ export interface LocalInternalWorkControl {
   readonly socketPath: string
   readonly launcherGeneration: number
   readonly launcherStartToken: string
-}
-
-export interface LocalInternalConfiguredWork {
-  readonly agentId: string
-  readonly workId: string
-  readonly requestId: string
-  readonly generation: number
-  readonly state: 'succeeded'
 }
 
 export interface LocalLauncherControl {
@@ -394,7 +380,7 @@ function localPath(value: string, baseDirectory: string): string {
 
 function connection(value: unknown, label: string): LocalConnectionIntent {
   const input = object(value, label)
-  fields(input, ['targetAgentId', 'capabilityId', 'capabilityVersion', 'operation', 'workId', 'requestId', 'demands', 'payload'], label)
+  fields(input, ['targetAgentId', 'capabilityId', 'capabilityVersion', 'operation', 'demands'], label)
   const textField = (key: string): string => requiredString(input[key], `${label}.${key}`)
   if (!Array.isArray(input.demands) || input.demands.length === 0) throw new LocalConfigError(`${label}.demands must be a non-empty array`)
   const demands = input.demands.map((value, index) => {
@@ -404,11 +390,8 @@ function connection(value: unknown, label: string): LocalConnectionIntent {
     if (!Number.isSafeInteger(item.amount) || (item.amount as number) < 1) throw new LocalConfigError(`${label}.demands[${index}].amount must be positive`)
     return { resourceId, amount: item.amount as number }
   })
-  if (!Object.hasOwn(input, 'payload')) throw new LocalConfigError(`${label}.payload is required`)
-  try { assertJsonValue(input.payload, `${label}.payload`) }
-  catch (cause) { throw new LocalConfigError(cause instanceof Error ? cause.message : `${label}.payload must contain only JSON values`, cause) }
   return { targetAgentId: textField('targetAgentId'), capabilityId: textField('capabilityId'), capabilityVersion: textField('capabilityVersion'),
-    operation: textField('operation'), workId: textField('workId'), requestId: textField('requestId'), demands, payload: input.payload }
+    operation: textField('operation'), demands }
 }
 
 function endpointConfig(input: Record<string, unknown>, id: string, configPath: string): { readonly spec: LocalDaemonSpec; readonly json: Record<string, unknown> } {
@@ -564,13 +547,6 @@ function serializeLocalInternalConfig(internal: LocalInternalConfig): string {
       socketPath: workControl.socketPath,
       launcherGeneration: workControl.launcherGeneration,
       launcherStartToken: workControl.launcherStartToken,
-    }
-  }
-  if (internal.configuredWork !== undefined) {
-    const work = internal.configuredWork
-    root.configuredWork = {
-      agentId: work.agentId, workId: work.workId, requestId: work.requestId,
-      generation: work.generation, state: work.state,
     }
   }
   if (internal.daemons !== undefined) {
@@ -1037,20 +1013,6 @@ export async function readLocalInternalConfig(path: string): Promise<LocalIntern
   })()
   const workControl = root.workControl === undefined ? undefined : parseWorkControlTable(object(root.workControl, 'workControl'), internalPath)
   if (workControl !== undefined) exactWorkControlRefs(workControl, launcher)
-  const configuredWork = root.configuredWork === undefined ? undefined : (() => {
-    const input = object(root.configuredWork, 'configuredWork')
-    return {
-      agentId: requiredString(input.agentId, 'configuredWork.agentId'),
-      workId: requiredString(input.workId, 'configuredWork.workId'),
-      requestId: requiredString(input.requestId, 'configuredWork.requestId'),
-      generation: (() => {
-        const value = optionalNumber(input.generation, 'configuredWork.generation')
-        if (value === undefined) throw new LocalConfigError('configuredWork.generation is required')
-        return value
-      })(),
-      state: oneOf(input.state, ['succeeded'] as const, 'configuredWork.state'),
-    }
-  })()
   const consoleRuntime = root.consoleRuntime === undefined ? undefined : parseConsoleRuntimeTable(object(root.consoleRuntime, 'consoleRuntime'))
   const configRuntime = root.configRuntime === undefined ? undefined : parseConfigRuntimeTable(object(root.configRuntime, 'configRuntime'))
   const migration = root.migration === undefined ? undefined : parseMigrationTable(object(root.migration, 'migration'))
@@ -1064,7 +1026,6 @@ export async function readLocalInternalConfig(path: string): Promise<LocalIntern
     ...(root.updatedAt === undefined ? {} : { updatedAt: textOrUndefined(root.updatedAt, 'updatedAt') }),
     ...(launcher === undefined ? {} : { launcher }),
     ...(workControl === undefined ? {} : { workControl }),
-    ...(configuredWork === undefined ? {} : { configuredWork }),
     ...(root.relay === undefined ? {} : (() => {
       const relay = object(root.relay, 'relay')
       return { relay: {
@@ -1243,7 +1204,7 @@ function localServiceIntent(service: TomlRecord): LocalServiceIntent {
   }
 }
 
-function parseV3Connect(id: string, value: unknown): TomlRecord {
+function parseV3Connect(id: string, value: unknown): LocalConnectionIntent {
   const input = object(value, `agents.${id}.connect`)
   fields(input, ['targetAgentId', 'capabilityId', 'capabilityVersion', 'operation', 'demands'], `agents.${id}.connect`)
   const demands = input.demands === undefined ? [] : (() => {
@@ -1290,7 +1251,7 @@ interface CompiledV3Agent {
   readonly identity: TomlRecord
   readonly runtime: ReturnType<typeof parseV3Runtime>
   readonly services: readonly TomlRecord[]
-  readonly connect?: TomlRecord
+  readonly connect?: LocalConnectionIntent
 }
 
 interface CompiledV3Config {
@@ -1441,6 +1402,7 @@ async function compileV3Config(
       enabled: agent.enabled,
       configPath: projectionPath,
       role: agent.role,
+      ...(agent.connect === undefined ? {} : { connection: agent.connect }),
       ...(agent.services.length === 0 ? {} : { services: agent.services.map(localServiceIntent) }),
     })
     daemonProjections[agent.id] = { projectionPath, enabled: agent.enabled, role: agent.role, config: JSON.stringify(json) }
@@ -1779,7 +1741,6 @@ export async function loadLocalConfig(path = defaultLocalConfigPath()): Promise<
       generatedAt: existing?.generatedAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...(existing?.launcher === undefined ? {} : { launcher: existing.launcher }),
-      ...(existing?.configuredWork === undefined ? {} : { configuredWork: existing.configuredWork }),
       relay: { ...(reusable ? existing!.relay : {}), projectionPath: relayProjectionPath, config: reusable ? existing!.relay!.config : JSON.stringify(relayConfig) },
       daemons: daemonProjections,
     }
@@ -1808,7 +1769,6 @@ export async function loadLocalConfig(path = defaultLocalConfigPath()): Promise<
       await writeLocalInternalConfig(internalPath, {
         ...internal,
         ...(latest?.launcher === undefined ? {} : { launcher: latest.launcher }),
-        ...(latest?.configuredWork === undefined ? {} : { configuredWork: latest.configuredWork }),
         daemons: mergedDaemons,
       })
     })
@@ -1994,37 +1954,6 @@ export async function writeLocalInternalWorkControl(
     const next = { ...existing, updatedAt: new Date().toISOString() }
     delete next.workControl
     return writeLocalInternalConfig(internalPath, next)
-  })
-}
-
-export async function writeLocalInternalConfiguredWork(path: string, configuredWork: LocalInternalConfiguredWork): Promise<string> {
-  const internalPath = localPath(path, process.cwd())
-  return withLocalInternalConfigLock(internalPath, async () => {
-    let existing: LocalInternalConfig
-    try { existing = await readLocalInternalConfig(internalPath) }
-    catch (error) {
-      const cause = (error as { cause?: NodeJS.ErrnoException })?.cause
-      if (cause?.code === 'ENOENT') existing = { version: 1 }
-      else throw error
-    }
-    if (existing.configuredWork?.generation !== undefined && existing.configuredWork.generation > configuredWork.generation) return internalPath
-    return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), configuredWork })
-  })
-}
-
-export async function writeLocalInternalConfiguredWorkIfCurrent(
-  path: string,
-  configuredWork: LocalInternalConfiguredWork,
-  expectedLauncher: LocalLauncherControl,
-): Promise<string> {
-  const internalPath = localPath(path, process.cwd())
-  return withLocalInternalConfigLock(internalPath, async () => {
-    const existing = await readLocalInternalConfig(internalPath)
-    const current = existing.launcher
-    if (current === undefined || current.generation !== expectedLauncher.generation || current.startToken !== expectedLauncher.startToken) {
-      throw new LocalConfigError('configured Work receipt is stale: launcher does not match child start control')
-    }
-    return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), configuredWork })
   })
 }
 

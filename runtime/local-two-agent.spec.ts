@@ -14,7 +14,7 @@ function processAlive(pid: number): boolean {
 }
 
 it('starts two independent daemons from v3 config.toml, publishes enabled services and restarts cleanly', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'teams-two-agent-'))
+  const root = mkdtempSync(join(tmpdir(), 'at-'))
   let started = false
   try {
     const agentteams = join(root, '.agentteams')

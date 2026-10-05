@@ -429,41 +429,41 @@ async function handleConnection(peer: Socket, options: LocalWorkControlListenerO
     const line = await receiveLine(peer)
     if (line === undefined) return
 
-      let decoded: LocalWorkControlRequest
-      try {
-        decoded = decodeLocalWorkControlRequest(JSON.parse(line))
-      } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'invalid Work request'
-        await sendReply(peer, { kind: 'work.error', requestId: 'unknown', error: { code: 'HOST_PROTOCOL', message } })
-        return
-      }
-      correlation = decoded.requestId
+    let decoded: LocalWorkControlRequest
+    try {
+      decoded = decodeLocalWorkControlRequest(JSON.parse(line))
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'invalid Work request'
+      await sendReply(peer, { kind: 'work.error', requestId: 'unknown', error: { code: 'HOST_PROTOCOL', message } })
+      return
+    }
+    correlation = decoded.requestId
 
-      if (decoded.control.startToken !== options.startToken) {
-        await sendReply(peer, error('NOT_AUTHORIZED', 'Work start token does not match the current launcher', decoded.requestId))
-        return
-      }
-      if (decoded.control.expectedLauncherGeneration !== options.launcherGeneration) {
-        await sendReply(peer, error('STALE_GENERATION', 'Work request targets a stale launcher generation', decoded.requestId))
-        return
-      }
-      if (options.receivers[decoded.control.receiverAgentId] !== true) {
-        await sendReply(peer, error('RECEIVER_NOT_FOUND', `Work receiver ${decoded.control.receiverAgentId} is not available`, decoded.requestId))
-        return
-      }
+    if (decoded.control.startToken !== options.startToken) {
+      await sendReply(peer, error('NOT_AUTHORIZED', 'Work start token does not match the current launcher', decoded.requestId))
+      return
+    }
+    if (decoded.control.expectedLauncherGeneration !== options.launcherGeneration) {
+      await sendReply(peer, error('STALE_GENERATION', 'Work request targets a stale launcher generation', decoded.requestId))
+      return
+    }
+    if (options.receivers[decoded.control.receiverAgentId] !== true) {
+      await sendReply(peer, error('RECEIVER_NOT_FOUND', `Work receiver ${decoded.control.receiverAgentId} is not available`, decoded.requestId))
+      return
+    }
 
-      admit()
-      await options.handler({
-        frame: decoded,
-        peer,
-        disconnected: disconnected(peer),
-        respond: async result => {
-          const reply: LocalWorkControlReply = 'status' in result
-            ? { kind: 'work.result', requestId: decoded.requestId, receipt: result }
-            : error(result.code, result.message, decoded.requestId)
-          return sendReply(peer, reply)
-        },
-      })
+    admit()
+    await options.handler({
+      frame: decoded,
+      peer,
+      disconnected: disconnected(peer),
+      respond: async result => {
+        const reply: LocalWorkControlReply = 'status' in result
+          ? { kind: 'work.result', requestId: decoded.requestId, receipt: result }
+          : error(result.code, result.message, decoded.requestId)
+        return sendReply(peer, reply)
+      },
+    })
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : 'local Work control handler failed'
     try {

@@ -98,7 +98,7 @@ const browserDemands = [
   { resourceId: 'browser-slot', amount: 1 },
 ]
 
-it('accepts a complete legacy connect tuple and rejects partial tuples before publication', async () => {
+it('accepts service-only connect intent and rejects retired startup Work fields before publication', async () => {
   const root = join(directory, 'connect-contract')
   mkdirSync(join(root, 'files'), { recursive: true })
   const base = {
@@ -117,14 +117,11 @@ it('accepts a complete legacy connect tuple and rejects partial tuples before pu
     return path
   }
   const env = { ...process.env, TEAMS_AGENT_TEST_AUTH: 'Bearer consumer' }
-  const complete = await loadAgentProcessConfig(write('complete.json',
-    { ...selection, workId: 'legacy-work', requestId: 'legacy-request', payload: { query: 'needle' } }), env)
-  expect(complete.endpoint?.connect).toMatchObject({ workId: 'legacy-work', requestId: 'legacy-request', payload: { query: 'needle' } })
   const selectionOnly = await loadAgentProcessConfig(write('selection.json', selection), env)
-  expect(selectionOnly.endpoint?.connect?.workId).toBeUndefined()
-  await expect(loadAgentProcessConfig(write('work-only.json', { ...selection, workId: 'legacy-work' }), env)).rejects.toThrow(/workId, requestId and payload/)
-  await expect(loadAgentProcessConfig(write('payload-only.json', { ...selection, payload: { query: 'needle' } }), env)).rejects.toThrow(/workId, requestId and payload/)
-  await expect(loadAgentProcessConfig(write('pair-no-payload.json', { ...selection, workId: 'legacy-work', requestId: 'legacy-request' }), env)).rejects.toThrow(/workId, requestId and payload/)
+  expect(selectionOnly.endpoint?.connect).toEqual(selection)
+  await expect(loadAgentProcessConfig(write('work.json', { ...selection, workId: 'legacy-work' }), env)).rejects.toThrow(/endpoint\.connect has unsupported field workId/)
+  await expect(loadAgentProcessConfig(write('request.json', { ...selection, requestId: 'legacy-request' }), env)).rejects.toThrow(/endpoint\.connect has unsupported field requestId/)
+  await expect(loadAgentProcessConfig(write('payload.json', { ...selection, payload: { query: 'needle' } }), env)).rejects.toThrow(/endpoint\.connect has unsupported field payload/)
 })
 
 it('loads control-protocol frames through a raw Node transform-types child', () => {

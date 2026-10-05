@@ -1,0 +1,41 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005
+
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/public-work-receiver-fix-20261005/runtime/dagpipe/.build/build-3t51OM)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.32s
+ ❯ runtime/local-work-real-entry.spec.ts (1 test | 1 failed) 5466ms
+   × keeps public Work submit identity through the real runner and queries without replay 5466ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  runtime/local-work-real-entry.spec.ts > keeps public Work submit identity through the real runner and queries without replay
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ runtime/local-work-real-entry.spec.ts:102:1
+    100| }
+    101|
+    102| it('keeps public Work submit identity through the real runner and quer…
+       | ^
+    103|   const built = await buildRunner()
+    104|   const calls: string[] = []
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  08:07:57
+   Duration  5.67s (transform 64ms, setup 0ms, import 83ms, tests 5.47s, environment 0ms)
+
