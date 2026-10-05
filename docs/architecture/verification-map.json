@@ -249,8 +249,7 @@
       "checks": [
         "agent does not import network/config/server",
         "agent remains upper-layer task/session owner",
-        "agent modules expose only pure functions and types",
-        "agent-boundary.spec scans every agent source for forbidden cross-owner imports"
+        "agent-boundary.spec scans listed agent sources for forbidden cross-owner imports"
       ]
     },
     {

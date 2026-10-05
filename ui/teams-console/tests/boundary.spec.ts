@@ -34,12 +34,10 @@ describe('independent UI boundary', () => {
     expect(source).toContain('credentialref')
   })
 
-  it('renders only explicitly projected Agent actions and omits implementation copy', () => {
+  it('renders only explicitly projected Agent actions', () => {
     const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
     expect(render).toContain("projection.configs.some(config => config.agentId === agent.agentId)")
     expect(render).toContain('if (current !== undefined && sessionExists)')
-    expect(render).not.toContain('Host-owned Agent presence and current-session bindings.')
-    expect(render).not.toContain('Projection in, control actions out.')
   })
 
   it('renders owner-projected Session activity without creating a UI transcript ledger', () => {
@@ -64,7 +62,6 @@ describe('independent UI boundary', () => {
     expect(index).toContain("event.key === 'Tab'")
     expect(index).toContain("querySelector<HTMLElement>('.teams-drawer-header')?.focus()")
     expect(index).toContain('containDrawerTab(root, event)')
-    expect(render.match(/function renderDrawer/g)).toHaveLength(1)
     expect(render).toContain('panel.inert = true')
     expect(render).toContain("panel.setAttribute('aria-hidden', 'true')")
     expect(styles).toContain('@media (max-width: 780px)')

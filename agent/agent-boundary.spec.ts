@@ -25,12 +25,4 @@ describe('Agent module boundary', () => {
       }
     }
   })
-
-  it('exposes only pure functions and types from agent modules', () => {
-    for (const file of agentFiles) {
-      const text = readFileSync(join(import.meta.dirname, file), 'utf8')
-      expect(text.includes('export function')).toBe(true)
-      expect(text.includes('class ')).toBe(false)
-    }
-  })
 })

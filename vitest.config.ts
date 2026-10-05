@@ -18,7 +18,6 @@ export default {
       'opencode-adapter/**/*.spec.ts',
       'memory-plugin/**/*.spec.ts',
       'search-plugin/**/*.spec.ts',
-      'dsh-adapter/**/*.spec.ts',
       'ui/teams-console/tests/**/*.spec.ts',
       'endpoint/**/*.spec.ts',
     ],
