@@ -69,6 +69,31 @@ async function runExpectFailure(command, args, options) {
   fail(`${command} ${args.join(' ')} was expected to fail`)
 }
 
+/** Extract the first balanced JSON object from combined command output. */
+function firstJsonObject(text) {
+  const start = text.indexOf('{')
+  if (start < 0) fail(`expected a JSON receipt in the command output: ${text.slice(0, 400)}`)
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === '"') inString = false
+      continue
+    }
+    if (character === '"') inString = true
+    else if (character === '{') depth += 1
+    else if (character === '}') {
+      depth -= 1
+      if (depth === 0) return JSON.parse(text.slice(start, index + 1))
+    }
+  }
+  fail(`unterminated JSON receipt in the command output: ${text.slice(0, 400)}`)
+}
+
 function hashDirectory(directory) {
   const files = []
   const visit = path => {
@@ -381,7 +406,7 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
     const lostOutput = await runExpectFailure(cli, workArgs('open', '--provider', 'installed-provider',
       '--provider-generation', providerGeneration, '--capability-id', 'file-search', '--capability-version', '1',
       '--operation', 'search', '--demands', demands, '--payload', '{"query":"needle"}'), { cwd: dirname(configPath), env: cliEnv })
-    const lostReceipt = JSON.parse(lostOutput.slice(lostOutput.indexOf('{')))
+    const lostReceipt = firstJsonObject(lostOutput)
     assert(lostReceipt.status === 'failed', `installed Work open with a lost socket did not report failure: ${JSON.stringify(lostReceipt).slice(0, 400)}`)
     assert(lostReceipt.control?.deliveryState === 'unconfirmed',
       `installed Work open with a lost socket did not report an unconfirmed delivery: ${JSON.stringify(lostReceipt.control)}`)
