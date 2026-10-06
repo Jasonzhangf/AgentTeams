@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { agentteamsCommand, DEFAULT_CONFIG_TEXT } from './agentteams.mjs'
 import { readLocalInternalConfig, readLocalInternalWorkControl, writeLocalInternalLauncherState, writeLocalInternalWorkControl } from '../runtime/local-config.ts'
 import type { LocalWorkControlRequest } from '../runtime/local-work-control.ts'
-import { sendLocalWorkControlRequest } from '../runtime/local-work-control.ts'
+import { failedLocalWorkReceipt, sendLocalWorkControlRequest } from '../runtime/local-work-control.ts'
 
 const cliEntry = fileURLToPath(new URL('./agentteams.mjs', import.meta.url))
 const rootDirectory = fileURLToPath(new URL('../', import.meta.url))
@@ -65,6 +65,7 @@ function workCommandRuntime(frames: LocalWorkControlRequest[], statusGeneration 
       endpoints: [{ agentId: 'provider', role: 'provider', presence: 'online', generation: statusGeneration, ...(capabilities === undefined ? {} : { capabilities }) }],
     }),
     localWorkControl: {
+      failedLocalWorkReceipt,
       sendLocalWorkControlRequest: async ({ frame }: { frame: LocalWorkControlRequest }) => {
         frames.push(frame)
         return {
@@ -481,7 +482,7 @@ describe('agentteams CLI', () => {
       const failure = await agentteamsCommand(['work', 'submit', '--config', context.configPath, '--receiver', 'receiver', '--payload', '{"query":"socket"}'], {
         runtime: {
           localConfig: { readLocalInternalConfig, readLocalInternalWorkControl },
-          localWorkControl: { sendLocalWorkControlRequest },
+          localWorkControl: { failedLocalWorkReceipt, sendLocalWorkControlRequest },
           startLocalProcess: undefined,
         },
       }).catch(error => error as Error)

@@ -49,7 +49,7 @@
 
 ## 行为改造与 delivery units
 
-D0/D1 已交付启动、Work、配置、观察、Session、停止、版本交付及独立 Work 查询八图；U5 增加 Console 启动/停止/状态三图，U4 增加持久 Work open/request/close 三图，共十四份 graph。B2 的 one-shot 提交与持久生命周期、B8 的只读原请求查询分别闭环。图已静态治理，安装后的产品 Work 尚未接上 DAGpipe SDK runtime。
+D0/D1 已交付启动、Work、配置、观察、Session、停止、版本交付及独立 Work 查询八图；U5 增加 Console 启动/停止/状态三图，U4 增加持久 Work open/request/close 三图，共十四份 graph。B2 的 one-shot 提交与持久生命周期、B8 的只读原请求查询分别闭环。图已静态治理，安装后的产品 Work 已接上 DAGpipe SDK runtime，并由安装包 smoke 从公开入口回放。
 后续每个 unit 从当时最新 origin/main 建外置独立 clean worktree `/Volumes/Intel/playground/agentteams/<unit>`；记录唯一 owner、base、allowed paths、验收、candidate tree。只有已确认可复现缺陷/需跨轮跟踪的内容进入 AppSDK bug，先查询去重，不预造 bug ID。
 
 ### 首先关闭的 gap
@@ -57,12 +57,12 @@ D0/D1 已交付启动、Work、配置、观察、Session、停止、版本交付
 | Gap | 已有事实与欠缺 | 关闭责任 |
 |---|---|---|
 | Session 窄设计尚未准入 | D1、U2、U3、U4、U5 的相应设计已准入。U6 五轮均为实际 code_failure；第五轮 finding 的修订候选已冻结，但没有独立 PASS，追加审查的决定仍待处理。只阻断 U6 接缝，不重做其他已交付设计 | U6 |
-| DAGpipe 没有执行安装后的产品请求 | D2 能力与 U4 r8 设计已交付；当前五图库已有 26 个真实 SDK/Relay/provider consumer，但尚未集成。独立 r4 阻断了缺字段时先产生 provider 副作用、畸形/重复终态不返回唯一 typed receipt 两项，当前 owner 修复并补红绿。CLI/launcher/receiver、安装 runner/manifest/五图仍缺 | D3/U4；库验证不关闭安装后的 Work |
+| DAGpipe 没有执行安装后的产品请求 | D2 能力与 U4 r8 设计已交付；当前五图库已有 26 个真实 SDK/Relay/provider consumer，但尚未集成。独立 r4 阻断了缺字段时先产生 provider 副作用、畸形/重复终态不返回唯一 typed receipt 两项，当前 owner 修复并补红绿。公开 CLI/launcher/receiver 入口与安装 runner/manifest/五图已由本单元接上，安装包 smoke 从公开入口回放成功与失败路径；仍缺 U7 统一 driver 与最终同包用户黑盒 | D3/U4；库验证不关闭安装后的 Work |
 | 安装对象尚未形成完整用户包 | U1 基础包修复 `233bedc` 已通过独立 r5、实际提交 SHA 上的 526 tests 与安装/认证 Console/Relay/两 daemon 重启，合入并推送；候选身份与 launcher PID 校验已修复。基础模式 `release_eligible=false`，最终 runner、Console 生命周期与同包黑盒仍缺 | U1 最终组包；U7 不代替 U1 安装证据 |
 | 配置单元已交付，全服务启动仍待 consumer | U2 `228de8f` 已实现 v3 用户 TOML、内部材料、per-daemon accepted/effective、短锁 CAS 与 durable uncertain/recovery；独立产品 r3 PASS、提交后正式准入及真实配置入口通过，issue `776fcad` 已关闭。daemon JSON `endpoint.services` 的解码/执行属于 U3，用户现有 HOME 配置尚未迁移；配置通过不是 BB02/BB10 最终同包通过 | U2 已收口；U3 关闭服务接缝 |
 | 服务声明与实际能力不一致 | 主线 executor 的服务声明仍待 U3 集成。当前候选已证明真实 file-search、启用服务/资源、两个真实 Camo context、第三超容量拒绝、navigate 与持有超过默认 grant 准入期限。`f9c181f` 已补 snapshot 格式缺边；完整 snapshot/destroy/close/容量恢复正在回放，未取得当前 U3 产品 PASS | U3；组合树中的 SDK 依赖未接纳，不直接提交混合候选 |
 | v3 reload 错标 bridge Relay 归属 | `6569e3e` 已交付并关闭：fix `254cbef`、独立 exact PASS、实际提交 admission/安装双 daemon 重启、push、L2 `47e1400` 与回收齐备。原 Relay 非 orphan 与真实 v3 binding 已验证 | 已关闭；复用有效证据，不再派修旧缺陷 |
-| work 没有按用户请求执行 | 当前 CLI 读取 startup configuredWork 回执；缺每次调用创建新任务及显示真实结果的路径 | D3/U4 |
+| work 没有按用户请求执行 | 公开 `work submit`/`query`/`open`/`request`/`close` 每次调用生成新 Work 身份并返回真实 provider 结果；安装包 smoke 已覆盖成功、持久与失败/未确认路径。已不再是 startup configuredWork 回执。仍缺 U7 统一 driver 的端到端用户黑盒 | D3/U4；剩余由 U7 收口 |
 | UI 与 Session 用户路径未闭合 | U5 Console 设计已 PASS/main/push/L2，但同包 launcher 生命周期仍待 U4 控制通道；daemon Session 投影/sendSession 接线仍待 U6。U6 只消费 U2 唯一 recover/readiness，不新增恢复 owner；设计不代替 BB09/BB12 | U5 + U6 |
 | 最终同包 gate 失效与用户黑盒尚未齐备 | `3fd009a` 成功阶段持久化组件已交付 `e9e3cb4`：实际提交 532/79 files、focused20；真实 smoke86 后仅重跑 smoke，复用原 verify receipt/nonempty IDs/log，actual verify1/smoke2；第三次调用幂等。还缺最终同包 BB13 的图/源码/配置/环境失效矩阵与统一 driver | D4/U7；组件通过不关闭最终 BB13 |
 

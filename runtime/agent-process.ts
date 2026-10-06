@@ -28,8 +28,8 @@ import { createDirectWssListener, type DirectWssListener } from '../network/dire
 import type { ResourceDemand } from '../control-protocol/agent-services.ts'
 import { type LocalServiceIntent } from './local-config.ts'
 import type { LocalDaemonEndpointProjection, LocalWorkChildReply, LocalWorkChildRequest } from './local-supervisor.ts'
-import type { LocalWorkControlReply, LocalWorkControlRequest } from './local-work-control.ts'
-import { runWorkExecution, type ProjectExecutionControl, type ProjectExecutionReceipt, type WorkExecutionRequest } from './dagpipe/host.ts'
+import { failedLocalWorkReceipt, type LocalWorkControlReply, type LocalWorkControlRequest } from './local-work-control.ts'
+import { runWorkExecution, type ProjectExecutionReceipt, type WorkExecutionRequest } from './dagpipe/host.ts'
 
 export interface AgentConnectionIntent {
   readonly targetAgentId: string
@@ -291,60 +291,6 @@ async function resolveDagpipeArtifacts(kind: LocalWorkControlRequest['kind']): P
   return { runnerPath, graphPath }
 }
 
-/**
- * The fixed binding the caller already committed to before dispatch. A failed or
- * unconfirmed receipt must carry it, so the caller can query or close the Work
- * with the original identity instead of rebuilding it from config or logs.
- */
-function frameBinding(frame: LocalWorkControlRequest): Partial<ProjectExecutionControl> {
-  if (frame.kind === 'work.submit') return {}
-  if (frame.kind === 'work.query') {
-    if (frame.control.serviceSelection !== 'capability') return { serviceSelection: 'endpoint' }
-    const control = frame.control
-    return {
-      providerAgentId: control.targetAgentId,
-      targetGeneration: control.targetGeneration,
-      ...(control.linkGeneration === undefined ? {} : { linkGeneration: control.linkGeneration }),
-      serviceSelection: 'capability',
-      capabilityId: control.capabilityId,
-      capabilityVersion: control.capabilityVersion,
-      operation: control.operation,
-    }
-  }
-  const control = frame.control
-  return {
-    providerAgentId: control.targetAgentId,
-    targetGeneration: control.targetGeneration,
-    capabilityId: control.capabilityId,
-    capabilityVersion: control.capabilityVersion,
-    operation: control.operation,
-  }
-}
-
-function failedProjectReceipt(
-  frame: LocalWorkControlRequest,
-  error: { readonly code: string; readonly message: string },
-  deliveryState?: 'unconfirmed',
-): ProjectExecutionReceipt {
-  return {
-    status: 'failed',
-    control: {
-      projectId: 'agentteams-local-work',
-      graphId: '',
-      graphVersion: '',
-      executionId: frame.control.executionId,
-      attemptId: frame.control.attemptId,
-      workId: frame.control.workId,
-      requestId: frame.control.requestId,
-      ...frameBinding(frame),
-      ...(deliveryState === undefined ? {} : { deliveryState }),
-      error,
-    },
-    cleanup: { channelsOpened: 0, channelsDisposed: 0 },
-    evidence: { execution: 'failed', graphId: '', graphVersion: '', nodeSchedule: [], nodeCompletion: [], hostOperations: [] },
-  }
-}
-
 function workIntent(
   frame: LocalWorkControlRequest,
   receiverAgentId: string,
@@ -419,9 +365,9 @@ async function executeProjectWork(input: {
   readonly receiverAgentId: string
 }): Promise<ProjectExecutionReceipt> {
   const artifacts = await resolveDagpipeArtifacts(input.frame.kind)
-  if ('code' in artifacts) return failedProjectReceipt(input.frame, artifacts)
+  if ('code' in artifacts) return failedLocalWorkReceipt(input.frame, artifacts)
   const intent = workIntent(input.frame, input.receiverAgentId, input.connect, input.policyRevision)
-  if ('code' in intent) return failedProjectReceipt(input.frame, intent)
+  if ('code' in intent) return failedLocalWorkReceipt(input.frame, intent)
   return await runWorkExecution(input.client, {
     runnerPath: artifacts.runnerPath,
     graphPath: artifacts.graphPath,
@@ -664,7 +610,7 @@ export async function resolveWorkChildReply(
     return {
       kind: 'work.result',
       requestId: frame.requestId,
-      receipt: failedProjectReceipt(frame, {
+      receipt: failedLocalWorkReceipt(frame, {
         code: typeof code === 'string' && code.length > 0 ? code : 'EXECUTION_FAILED',
         message: error instanceof Error ? error.message : 'receiver Work execution failed',
       }, 'unconfirmed'),

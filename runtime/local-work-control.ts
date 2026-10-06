@@ -5,7 +5,7 @@ import { dirname } from 'node:path'
 import type { Duplex } from 'node:stream'
 import { assertEnvelopeKeys, assertJsonValue } from '../control-protocol/json-value.ts'
 import type { JsonValue, ResourceDemand } from '../control-protocol/agent-services.ts'
-import type { ProjectExecutionReceipt } from './dagpipe/host.ts'
+import type { ProjectExecutionControl, ProjectExecutionReceipt } from './dagpipe/host.ts'
 
 export type LocalWorkControlKind = 'work.submit' | 'work.query' | 'work.open' | 'work.request' | 'work.close'
 
@@ -81,6 +81,66 @@ export class LocalWorkControlError extends Error {
   ) {
     super(message, options)
     this.name = 'LocalWorkControlError'
+  }
+}
+
+/**
+ * The binding a persistent Work frame already fixed. A failed or unconfirmed
+ * receipt must carry it, so the caller can query or close the Work with the
+ * original identity instead of rebuilding it from config or logs.
+ */
+export function localWorkFrameBinding(frame: LocalWorkControlRequest): Partial<ProjectExecutionControl> {
+  if (frame.kind === 'work.submit') return {}
+  if (frame.kind === 'work.query') {
+    if (frame.control.serviceSelection !== 'capability') return { serviceSelection: 'endpoint' }
+    const control = frame.control
+    return {
+      providerAgentId: control.targetAgentId,
+      targetGeneration: control.targetGeneration,
+      ...(control.linkGeneration === undefined ? {} : { linkGeneration: control.linkGeneration }),
+      serviceSelection: 'capability',
+      capabilityId: control.capabilityId,
+      capabilityVersion: control.capabilityVersion,
+      operation: control.operation,
+    }
+  }
+  const control = frame.control
+  return {
+    providerAgentId: control.targetAgentId,
+    targetGeneration: control.targetGeneration,
+    capabilityId: control.capabilityId,
+    capabilityVersion: control.capabilityVersion,
+    operation: control.operation,
+  }
+}
+
+/**
+ * The single owner of the failed or unconfirmed Work receipt shape. The CLI
+ * pre-dispatch refusal path and the receiver post-dispatch path both build it
+ * from the frame they already hold, so the projectId literal, the generated
+ * identity and the fixed binding projection cannot diverge between them.
+ */
+export function failedLocalWorkReceipt(
+  frame: LocalWorkControlRequest,
+  error: { readonly code: string; readonly message: string },
+  deliveryState?: 'unconfirmed',
+): ProjectExecutionReceipt {
+  return {
+    status: 'failed',
+    control: {
+      projectId: 'agentteams-local-work',
+      graphId: '',
+      graphVersion: '',
+      executionId: frame.control.executionId,
+      attemptId: frame.control.attemptId,
+      workId: frame.control.workId,
+      requestId: frame.control.requestId,
+      ...localWorkFrameBinding(frame),
+      ...(deliveryState === undefined ? {} : { deliveryState }),
+      error,
+    },
+    cleanup: { channelsOpened: 0, channelsDisposed: 0 },
+    evidence: { execution: 'failed', graphId: '', graphVersion: '', nodeSchedule: [], nodeCompletion: [], hostOperations: [] },
   }
 }
 

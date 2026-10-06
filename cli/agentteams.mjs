@@ -390,7 +390,7 @@ async function workCommand(parsed, options) {
     // The frame was already dispatched locally, so the provider may have accepted
     // or executed it. Keep the generated identity and the fixed binding and report
     // the delivery as unconfirmed; the user can then query or close with them.
-    throw new AgentTeamsCliError(JSON.stringify(failedWorkReceipt(frame, {
+    throw new AgentTeamsCliError(JSON.stringify(localWorkControl.failedLocalWorkReceipt(frame, {
       code: 'LOCAL_CONTROL_UNAVAILABLE',
       message: cause instanceof Error ? cause.message : String(cause),
     }, 'unconfirmed')))
@@ -399,47 +399,10 @@ async function workCommand(parsed, options) {
     // Explicit refusals happen before dispatch; anything else means the local
     // delivery left the CLI without a terminal receipt.
     const beforeDispatch = ['NOT_AUTHORIZED', 'STALE_GENERATION', 'RECEIVER_NOT_FOUND', 'INVALID_INPUT'].includes(reply.error.code)
-    throw new AgentTeamsCliError(JSON.stringify(failedWorkReceipt(frame, reply.error, beforeDispatch ? undefined : 'unconfirmed')))
+    throw new AgentTeamsCliError(JSON.stringify(localWorkControl.failedLocalWorkReceipt(frame, reply.error, beforeDispatch ? undefined : 'unconfirmed')))
   }
   if (reply.receipt.status === 'failed') throw new AgentTeamsCliError(JSON.stringify(reply.receipt))
   return JSON.stringify(reply.receipt)
-}
-
-/**
- * A failed or unconfirmed receipt never drops the identity the CLI already
- * generated or the binding it already fixed, because the caller needs both to
- * query or close the Work with the original identity.
- */
-function failedWorkReceipt(frame, error, deliveryState) {
-  const { control } = frame
-  const binding = frame.kind === 'work.submit'
-    ? {}
-    : {
-        ...(control.targetAgentId === undefined ? {} : { providerAgentId: control.targetAgentId }),
-        ...(control.targetGeneration === undefined ? {} : { targetGeneration: control.targetGeneration }),
-        ...(control.linkGeneration === undefined ? {} : { linkGeneration: control.linkGeneration }),
-        ...(control.serviceSelection === undefined ? {} : { serviceSelection: control.serviceSelection }),
-        ...(control.capabilityId === undefined ? {} : { capabilityId: control.capabilityId }),
-        ...(control.capabilityVersion === undefined ? {} : { capabilityVersion: control.capabilityVersion }),
-        ...(control.operation === undefined ? {} : { operation: control.operation }),
-      }
-  return {
-    status: 'failed',
-    control: {
-      projectId: 'agentteams-local-work',
-      graphId: '',
-      graphVersion: '',
-      executionId: control.executionId,
-      attemptId: control.attemptId,
-      workId: control.workId,
-      requestId: control.requestId,
-      ...binding,
-      ...(deliveryState === undefined ? {} : { deliveryState }),
-      error,
-    },
-    cleanup: { channelsOpened: 0, channelsDisposed: 0 },
-    evidence: { execution: 'failed', graphId: '', graphVersion: '', nodeSchedule: [], nodeCompletion: [], hostOperations: [] },
-  }
 }
 
 function localEnv(env) {
