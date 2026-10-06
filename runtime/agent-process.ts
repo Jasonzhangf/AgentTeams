@@ -28,8 +28,8 @@ import { createDirectWssListener, type DirectWssListener } from '../network/dire
 import type { ResourceDemand } from '../control-protocol/agent-services.ts'
 import { type LocalServiceIntent } from './local-config.ts'
 import type { LocalDaemonEndpointProjection, LocalWorkChildReply, LocalWorkChildRequest } from './local-supervisor.ts'
-import type { LocalWorkControlRequest } from './local-work-control.ts'
-import { runWorkExecution, type ProjectExecutionReceipt, type WorkExecutionRequest } from './dagpipe/host.ts'
+import type { LocalWorkControlReply, LocalWorkControlRequest } from './local-work-control.ts'
+import { runWorkExecution, type ProjectExecutionControl, type ProjectExecutionReceipt, type WorkExecutionRequest } from './dagpipe/host.ts'
 
 export interface AgentConnectionIntent {
   readonly targetAgentId: string
@@ -291,7 +291,41 @@ async function resolveDagpipeArtifacts(kind: LocalWorkControlRequest['kind']): P
   return { runnerPath, graphPath }
 }
 
-function failedProjectReceipt(frame: LocalWorkControlRequest, error: { readonly code: string; readonly message: string }): ProjectExecutionReceipt {
+/**
+ * The fixed binding the caller already committed to before dispatch. A failed or
+ * unconfirmed receipt must carry it, so the caller can query or close the Work
+ * with the original identity instead of rebuilding it from config or logs.
+ */
+function frameBinding(frame: LocalWorkControlRequest): Partial<ProjectExecutionControl> {
+  if (frame.kind === 'work.submit') return {}
+  if (frame.kind === 'work.query') {
+    if (frame.control.serviceSelection !== 'capability') return { serviceSelection: 'endpoint' }
+    const control = frame.control
+    return {
+      providerAgentId: control.targetAgentId,
+      targetGeneration: control.targetGeneration,
+      ...(control.linkGeneration === undefined ? {} : { linkGeneration: control.linkGeneration }),
+      serviceSelection: 'capability',
+      capabilityId: control.capabilityId,
+      capabilityVersion: control.capabilityVersion,
+      operation: control.operation,
+    }
+  }
+  const control = frame.control
+  return {
+    providerAgentId: control.targetAgentId,
+    targetGeneration: control.targetGeneration,
+    capabilityId: control.capabilityId,
+    capabilityVersion: control.capabilityVersion,
+    operation: control.operation,
+  }
+}
+
+function failedProjectReceipt(
+  frame: LocalWorkControlRequest,
+  error: { readonly code: string; readonly message: string },
+  deliveryState?: 'unconfirmed',
+): ProjectExecutionReceipt {
   return {
     status: 'failed',
     control: {
@@ -302,6 +336,8 @@ function failedProjectReceipt(frame: LocalWorkControlRequest, error: { readonly 
       attemptId: frame.control.attemptId,
       workId: frame.control.workId,
       requestId: frame.control.requestId,
+      ...frameBinding(frame),
+      ...(deliveryState === undefined ? {} : { deliveryState }),
       error,
     },
     cleanup: { channelsOpened: 0, channelsDisposed: 0 },
@@ -601,6 +637,41 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   }
 }
 
+/**
+ * Build the typed reply for one launcher Work frame. Exported so the failure
+ * contract — identity, fixed binding and unconfirmed delivery — is verifiable
+ * without spawning a daemon.
+ */
+export async function resolveWorkChildReply(
+  handle: Pick<AgentProcess, 'daemon' | 'executeWork'>,
+  request: LocalWorkChildRequest,
+): Promise<LocalWorkControlReply> {
+  const frame = request.frame
+  if (request.receiverAgentId !== handle.daemon.status().agentId) {
+    return { kind: 'work.error', requestId: frame.requestId, error: { code: 'RECEIVER_NOT_FOUND', message: 'Work request reached a different receiver identity' } }
+  }
+  if (request.expectedAgentGeneration !== handle.daemon.network.generation) {
+    return { kind: 'work.error', requestId: frame.requestId, error: { code: 'STALE_GENERATION', message: 'Work request targets a stale receiver generation' } }
+  }
+  try {
+    return { kind: 'work.result', requestId: frame.requestId, receipt: await handle.executeWork(frame) }
+  } catch (error) {
+    // A throw here means the execution did not reach a terminal receipt. The
+    // provider may already have accepted or executed the Work, so report the
+    // typed failed receipt with the original identity and binding and mark the
+    // local delivery unconfirmed instead of collapsing to a bare error.
+    const code = (error as { readonly code?: unknown }).code
+    return {
+      kind: 'work.result',
+      requestId: frame.requestId,
+      receipt: failedProjectReceipt(frame, {
+        code: typeof code === 'string' && code.length > 0 ? code : 'EXECUTION_FAILED',
+        message: error instanceof Error ? error.message : 'receiver Work execution failed',
+      }, 'unconfirmed'),
+    }
+  }
+}
+
 export async function runAgentProcess(argv = process.argv.slice(2)): Promise<void> {
   if (!((argv.length === 2 || argv.length === 4) && argv[0] === '--config' && (argv.length === 2 || (argv[2] === '--launcher-start-token' && argv[3].trim() !== '')))) throw new RelayProtocolError('INVALID_INPUT', 'usage: agent-process --config <file>')
   const handle = await startAgentProcess(argv[1])
@@ -614,23 +685,12 @@ export async function runAgentProcess(argv = process.argv.slice(2)): Promise<voi
     const request = message as Partial<LocalWorkChildRequest>
     if (request.kind !== 'work.control' || typeof request.localCorrelation !== 'string' || request.frame === undefined) return
     const localCorrelation = request.localCorrelation
-    const frame = request.frame
     void (async () => {
-      const reply: LocalWorkChildReply = await (async () => {
-        if (request.receiverAgentId !== handle.daemon.status().agentId) {
-          return { kind: 'work.reply', localCorrelation, reply: { kind: 'work.error', requestId: frame.requestId, error: { code: 'RECEIVER_NOT_FOUND', message: 'Work request reached a different receiver identity' } } }
-        }
-        if (request.expectedAgentGeneration !== handle.daemon.network.generation) {
-          return { kind: 'work.reply', localCorrelation, reply: { kind: 'work.error', requestId: frame.requestId, error: { code: 'STALE_GENERATION', message: 'Work request targets a stale receiver generation' } } }
-        }
-        try {
-          const receipt = await handle.executeWork(frame)
-          return { kind: 'work.reply', localCorrelation, reply: { kind: 'work.result', requestId: frame.requestId, receipt } }
-        } catch (error) {
-          const code = (error as { readonly code?: unknown }).code
-          return { kind: 'work.reply', localCorrelation, reply: { kind: 'work.error', requestId: frame.requestId, error: { code: typeof code === 'string' && code.length > 0 ? code : 'EXECUTION_FAILED', message: error instanceof Error ? error.message : 'receiver Work execution failed' } } }
-        }
-      })()
+      const reply: LocalWorkChildReply = {
+        kind: 'work.reply',
+        localCorrelation,
+        reply: await resolveWorkChildReply(handle, request as LocalWorkChildRequest),
+      }
       process.send?.(reply)
     })()
   }

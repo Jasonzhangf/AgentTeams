@@ -372,6 +372,77 @@ describe('agentteams CLI', () => {
     }
   })
 
+  it('preserves the generated identity and fixed binding when the local dispatch is unconfirmed', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames)
+    runtime.localWorkControl.sendLocalWorkControlRequest = async ({ frame }: { frame: LocalWorkControlRequest }) => {
+      frames.push(frame)
+      throw new Error('local Work control socket is unavailable: connection reset')
+    }
+    try {
+      for (const subcommand of ['open', 'request', 'close']) {
+        const failure = await agentteamsCommand(['work', subcommand, '--config', context.configPath, '--receiver', 'receiver',
+          '--work-id', 'work-1', '--provider', 'provider', '--provider-generation', '7',
+          '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search',
+          ...(subcommand === 'close' ? [] : ['--payload', '{}'])], { runtime })
+          .catch((error: Error) => error)
+        expect(failure, `${subcommand} must fail`).toBeInstanceOf(Error)
+        const receipt = JSON.parse(failure.message)
+        const frame = frames.at(-1)!
+        expect(receipt.status).toBe('failed')
+        expect(receipt.control.deliveryState).toBe('unconfirmed')
+        expect(receipt.control.error.code).toBe('LOCAL_CONTROL_UNAVAILABLE')
+        expect(receipt.control.workId).toBe(frame.control.workId)
+        expect(receipt.control.requestId).toBe(frame.control.requestId)
+        expect(receipt.control.executionId).toBe(frame.control.executionId)
+        expect(receipt.control.attemptId).toBe(frame.control.attemptId)
+        expect(receipt.control.providerAgentId).toBe('provider')
+        expect(receipt.control.targetGeneration).toBe(7)
+        expect(receipt.control.capabilityId).toBe('file-search')
+        expect(receipt.control.capabilityVersion).toBe('1')
+        expect(receipt.control.operation).toBe('search')
+      }
+      expect(frames).toHaveLength(3)
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves the generated identity and fixed binding on a receiver error reply', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames)
+    let code = 'HOST_PROTOCOL'
+    runtime.localWorkControl.sendLocalWorkControlRequest = async ({ frame }: { frame: LocalWorkControlRequest }) => {
+      frames.push(frame)
+      return { kind: 'work.error', requestId: frame.requestId, error: { code, message: `reply rejected with ${code}` } }
+    }
+    try {
+      const confirm = async (expectedDeliveryState: string | undefined) => {
+        const failure = await agentteamsCommand(['work', 'open', '--config', context.configPath, '--receiver', 'receiver',
+          '--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search',
+          '--capability-version', '1', '--operation', 'search', '--payload', '{}'], { runtime })
+          .catch((error: Error) => error)
+        const receipt = JSON.parse(failure.message)
+        const frame = frames.at(-1)!
+        expect(receipt.status).toBe('failed')
+        expect(receipt.control.deliveryState).toBe(expectedDeliveryState)
+        expect(receipt.control.error.code).toBe(code)
+        expect(receipt.control.workId).toBe(frame.control.workId)
+        expect(receipt.control.providerAgentId).toBe('provider')
+        expect(receipt.control.targetGeneration).toBe(7)
+        expect(receipt.control.capabilityId).toBe('file-search')
+        expect(receipt.control.operation).toBe('search')
+      }
+      await confirm('unconfirmed')
+      code = 'STALE_GENERATION'
+      await confirm(undefined)
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
   it('sends Work requests from the public CLI through the local control socket client', async () => {
     const context = await initializeWorkCommandHome()
     try {

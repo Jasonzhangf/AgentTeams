@@ -16,7 +16,8 @@ import { createRelayConsoleClient } from './relay-console-client.ts'
 import { createConsoleHub } from './console-hub.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
 import { createConsoleHttpClient } from '../ui/teams-console/src/client/api.ts'
-import { loadAgentProcessConfig, startAgentProcess } from './agent-process.ts'
+import { loadAgentProcessConfig, resolveWorkChildReply, startAgentProcess } from './agent-process.ts'
+import type { LocalWorkControlRequest } from './local-work-control.ts'
 import { createFileWorkStore, createWorkLedger, proposeWork, requestWork } from '../agent/work-resource.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 import type { LocalServiceIntent } from './local-config.ts'
@@ -512,6 +513,54 @@ it('boots a receiver-only Agent with declared services without local CLI initial
     await localRelay.close()
   }
 }, 15000)
+
+it('keeps Work identity and the fixed binding when receiver execution throws', async () => {
+  const frame = {
+    kind: 'work.open',
+    requestId: 'req-throw',
+    control: {
+      receiverAgentId: 'receiver', expectedLauncherGeneration: 3, startToken: 'token',
+      executionId: 'exec-throw', attemptId: 'attempt-throw', workId: 'work-throw', requestId: 'req-throw',
+      targetAgentId: 'provider', targetGeneration: 9, capabilityId: 'browser', capabilityVersion: '1',
+      operation: 'context.create', demands: browserDemands, policyRevision: 1,
+    },
+    business: {},
+  } as unknown as LocalWorkControlRequest
+  const request = {
+    kind: 'work.control', localCorrelation: 'corr-throw', receiverAgentId: 'receiver',
+    expectedLauncherGeneration: 3, expectedAgentGeneration: 9, frame,
+  } as unknown as Parameters<typeof resolveWorkChildReply>[1]
+  const handle = {
+    daemon: { status: () => ({ agentId: 'receiver' }), network: { generation: 9 } },
+    executeWork: async () => { throw Object.assign(new Error('runner result lacks output ARC'), { code: 'HOST_PROTOCOL' }) },
+  } as unknown as Parameters<typeof resolveWorkChildReply>[0]
+  const reply = await resolveWorkChildReply(handle, request)
+  expect(reply.kind).toBe('work.result')
+  if (reply.kind !== 'work.result') throw new Error('expected a typed Work result receipt')
+  expect(reply.receipt.status).toBe('failed')
+  // The caller keeps everything it needs to query or close the Work with the
+  // original identity after a post-dispatch failure.
+  expect(reply.receipt.control).toMatchObject({
+    executionId: 'exec-throw', attemptId: 'attempt-throw', workId: 'work-throw', requestId: 'req-throw',
+    providerAgentId: 'provider', targetGeneration: 9, capabilityId: 'browser', capabilityVersion: '1',
+    operation: 'context.create', deliveryState: 'unconfirmed',
+    error: { code: 'HOST_PROTOCOL', message: 'runner result lacks output ARC' },
+  })
+})
+
+it('refuses a Work frame for another receiver identity before dispatch', async () => {
+  const frame = { kind: 'work.open', requestId: 'req-other', control: {}, business: {} } as unknown as LocalWorkControlRequest
+  const request = {
+    kind: 'work.control', localCorrelation: 'corr-other', receiverAgentId: 'someone-else',
+    expectedLauncherGeneration: 3, expectedAgentGeneration: 9, frame,
+  } as unknown as Parameters<typeof resolveWorkChildReply>[1]
+  const handle = {
+    daemon: { status: () => ({ agentId: 'receiver' }), network: { generation: 9 } },
+    executeWork: async () => { throw new Error('execution must not run for another receiver identity') },
+  } as unknown as Parameters<typeof resolveWorkChildReply>[0]
+  const reply = await resolveWorkChildReply(handle, request)
+  expect(reply).toEqual({ kind: 'work.error', requestId: 'req-other', error: { code: 'RECEIVER_NOT_FOUND', message: 'Work request reached a different receiver identity' } })
+})
 
 it('persists unknown state before refusing a restart with active Work', async () => {
   const root = join(directory, 'recovery')

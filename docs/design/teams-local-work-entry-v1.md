@@ -1,6 +1,11 @@
 # Teams 本地公开 Work 入口 v1（设计）
 
-状态：设计候选，未实现、未安装、未 review。本文只闭合「公开 CLI → receiver 已授权
+状态：设计已实现。公开 CLI 的 submit/query 与持久 open/request/query/close 已接线并有安装
+产物证据，证据见 `docs/evidence/4b6c377-local-public-work-20261005/`。本文件继续作为该接缝
+的唯一设计真源；当前实现覆盖以 `docs/architecture/verification-map.json` 的 `teams-l1-cli`
+和 `docs/architecture/mainline-call-map.json` 的 work 链为准，尚未覆盖的部分（BB 驱动矩阵、
+Console offline、最终用户验收）在各 map 中单独标注为 PENDING。本文只闭合「公开 CLI →
+receiver 已授权
 network client → 已装 DAGpipe host」缺失的接缝，不改 graph 拓扑，不新增 scheduler、
 ledger、fallback 或第二套控制真源。写入范围仅本文件与
 `docs/evidence/4b6c377-u4-persistent-design-20261004/**`（r2 的 graph 写入范围见下方修订
