@@ -1,6 +1,6 @@
 # Teams U6 Session 窄设计：Console 到真实 OpenCode Session
 
-状态：`DESIGN-ONLY / UNVERIFIED`。本文只闭合 U6 编码前设计，不代表产品能力已经实现。当前 `Console -> Agent -> managed OpenCode` 的 Session 路径在产品代码中尚未接通，不得用本文、单测、health 或旧证据宣称 PASS。
+状态：`HISTORICAL PRE-IMPLEMENTATION DESIGN / UNVERIFIED DELIVERY`。本文正文冻结为 U6 编码前设计，记录当时的缺口。正文中“拟新增”“当前不存在”等表述只描述设计时刻，不代表当前实现状态。当前实现状态和验证证据以 `docs/architecture/*.json` 与本任务候选提交为准；`Console -> Agent -> managed OpenCode` 的安装后真实 Session 验收仍为 UNVERIFIED。
 
 设计修订输入：
 
@@ -867,7 +867,7 @@ targeted rg/read checks for create.model removal, event union, cancel outcome, e
 
 ### 12.2 U6 产品实现后的 focused 合同
 
-以下命令是实施合同，当前不可运行通过；不得把它们记成现有证据。
+以下命令是设计时刻的实施合同；它们已不再是当前实现状态的唯一依据。当前实现证据必须绑定候选提交，见 `docs/architecture/verification-map.json` 的 `teams-managed-session-contract`。
 
 ```text
 pnpm install --frozen-lockfile
@@ -949,6 +949,8 @@ pnpm --dir opencode-adapter run build
 命令：`scripts/blackbox-user-mvp.mjs --case BB12`（U7 待实现）。当前为 `PENDING`。
 
 ## 13. 依赖、完成判定与资源清理
+
+以下内容记录设计时刻的完成判定，不是当前候选的交付状态。
 
 | 依赖 | 交接条件 |
 |---|---|

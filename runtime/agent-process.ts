@@ -176,6 +176,16 @@ function sessionFailure(code: ConsoleServiceErrorCode, message: string, status?:
   return { ok: false, error: { code, message, ...(status === undefined ? {} : { status }) } }
 }
 
+type CurrentManagedRuntimeReadiness = Extract<ManagedRuntimeReadiness, { readonly state: 'current' }>
+
+/** Single owner for Session-command readiness admission across typed commands and the message ingress. */
+function sessionReadiness(readiness: ManagedRuntimeReadiness):
+  | { readonly ok: true; readonly readiness: CurrentManagedRuntimeReadiness }
+  | { readonly ok: false; readonly result: Extract<ConsoleCommandResultV1, { readonly ok: false }> } {
+  if (readiness.state === 'current') return { ok: true, readiness }
+  return { ok: false, result: sessionFailure(readiness.state === 'changing' ? 'CONFLICT' : 'UNAVAILABLE', `Session runtime is ${readiness.state}`) }
+}
+
 /** Expected adapter failures stay resultized so the owner keeps `current`; anything else keeps uncertainty. */
 function containExpectedAdapterError(error: unknown): Extract<ConsoleCommandResultV1, { readonly ok: false }> | undefined {
   if (!(error instanceof OpenCodeAdapterError)) return undefined
@@ -294,23 +304,31 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     return replacing
   }
   const useAdapter = async <T>(
-    operation: (client: OpenCodeSessionClient & OpenCodeEventClient, handle: ManagedEffectiveHandle) => Promise<T>,
+    operation: (client: OpenCodeSessionClient & OpenCodeEventClient, handle: ManagedEffectiveHandle, markDispatched: () => void) => Promise<T>,
     precondition?: (handle: ManagedEffectiveHandle) => ConsoleCommandResultV1 | undefined,
-  ): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly result: ConsoleCommandResultV1; readonly preDispatch: boolean }> =>
-    await deps.owner.use(async handle => {
-      const rejected = precondition?.(handle)
-      if (rejected !== undefined) return { ok: false as const, result: rejected, preDispatch: true as const }
-      const client = createClient({ url: handle.url, authorization: handle.authorization })
-      try { return { ok: true as const, value: await operation(client, handle) } }
-      catch (error) {
-        const contained = containExpectedAdapterError(error)
-        if (contained !== undefined) {
-          const status = contained.error.status
-          return { ok: false as const, result: contained, preDispatch: status !== undefined && status >= 400 && status < 500 }
+  ): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly result: ConsoleCommandResultV1; readonly preDispatch: boolean }> => {
+    const readiness = sessionReadiness(deps.owner.readiness())
+    if (!readiness.ok) return { ok: false, result: readiness.result, preDispatch: true }
+    try {
+      return await deps.owner.use(async handle => {
+        const rejected = precondition?.(handle)
+        if (rejected !== undefined) return { ok: false as const, result: rejected, preDispatch: true as const }
+        const client = createClient({ url: handle.url, authorization: handle.authorization })
+        let dispatched = false
+        try { return { ok: true as const, value: await operation(client, handle, () => { dispatched = true }) } }
+        catch (error) {
+          const contained = containExpectedAdapterError(error)
+          if (contained !== undefined) return { ok: false as const, result: contained, preDispatch: !dispatched }
+          throw error
         }
-        throw error
+      })
+    } catch (error) {
+      if (error instanceof RuntimeConfigError) {
+        return { ok: false, result: sessionFailure(error.code === 'CONFLICT' ? 'CONFLICT' : 'UNAVAILABLE', error.message), preDispatch: true }
       }
-    })
+      throw error
+    }
+  }
   const emitCancelEvent = (event: ConsoleSessionEventView): void => { buffer(event) }
   const cancelUnknown = (record: SessionOperationRecord, abortOperationId: string | undefined, reason: SessionCancelUnknownDetail['reason'], baseAccepted: boolean | undefined): ConsoleCommandResultV1 => ({
     ok: false,
@@ -376,8 +394,9 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       return { ok: true, result: created as unknown as JsonValue }
     },
     sendSession: async (sessionId, payload) => {
-      const readiness = deps.owner.readiness()
-      if (readiness.state !== 'current') return sessionFailure(readiness.state === 'changing' ? 'CONFLICT' : 'UNAVAILABLE', `Session runtime is ${readiness.state}`)
+      const ready = sessionReadiness(deps.owner.readiness())
+      if (!ready.ok) return ready.result
+      const readiness = ready.readiness
       let decoded
       try { decoded = decodeOpenCodeSessionMessage(payload) } catch (error) {
         const contained = containExpectedAdapterError(error)
@@ -391,7 +410,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       const streamChange = ensureStream()
       if (streamChange !== undefined) await streamChange
       const outcome = await useAdapter(
-        async (client, handle) => await promptOpenCodeSession(client, sessionId, decoded.text, handle.modelTarget, record.requestMessageId),
+        async (client, handle, markDispatched) => await promptOpenCodeSession(client, sessionId, decoded.text, handle.modelTarget, record.requestMessageId, markDispatched),
         handle => handle.effectiveRevision === record.effectiveRevision
           ? undefined
           : sessionFailure('CONFLICT', `Session runtime changed from revision ${record.effectiveRevision} to ${handle.effectiveRevision}`),
@@ -413,8 +432,8 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       return { ok: true }
     },
     cancelSession: async sessionId => {
-      const readiness = deps.owner.readiness()
-      if (readiness.state !== 'current') return sessionFailure(readiness.state === 'changing' ? 'CONFLICT' : 'UNAVAILABLE', `Session runtime is ${readiness.state}`)
+      const ready = sessionReadiness(deps.owner.readiness())
+      if (!ready.ok) return ready.result
       const record = operations.get(sessionId)
       if (record === undefined) return sessionFailure('CONFLICT', 'No active prompt to cancel for this session')
       if (record.abortOperationId !== undefined) return sessionFailure('CONFLICT', 'A cancel is already in flight for this session')

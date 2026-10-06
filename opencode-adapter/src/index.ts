@@ -365,6 +365,7 @@ export async function promptOpenCodeSession(
   text: string,
   target: OpenCodeModelTarget,
   messageId: string,
+  onDispatch?: () => void,
 ): Promise<OpenCodePromptBinding | undefined> {
   if (text.trim() === '') throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', 'OpenCode message must not be empty')
   const selectedTarget = validateOpenCodeModelTarget(target)
@@ -375,6 +376,7 @@ export async function promptOpenCodeSession(
     parts: [{ type: 'text' as const, text }] as [{ type: 'text'; text: string }],
     model: selectedTarget,
   }
+  onDispatch?.()
   const result = await client.session.prompt({ path: { id: sessionId }, body })
   const response = unwrapOpenCodeResponse(result, 'session.prompt', true)
   const info = asRecord(asRecord(response)?.info)

@@ -19,6 +19,7 @@ import { createConsoleHttpClient } from '../ui/teams-console/src/client/api.ts'
 import { createSessionHost, loadAgentProcessConfig, projectRuntimeAgentRow, resolveWorkChildReply, startAgentProcess } from './agent-process.ts'
 import type { ManagedEffectiveHandle, ManagedRuntimeReadiness } from './managed-config-owner.ts'
 import { OpenCodeAdapterError, type OpenCodeEventClient, type OpenCodeSdkEvent, type OpenCodeSessionClient } from '../opencode-adapter/src/index.ts'
+import { RuntimeConfigError } from '../config/runtime-config.ts'
 import type { LocalWorkControlRequest } from './local-work-control.ts'
 import { createFileWorkStore, createWorkLedger, proposeWork, requestWork } from '../agent/work-resource.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
@@ -908,7 +909,7 @@ function sessionEventChannel() {
   }
 }
 
-function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean } = {}) {
+function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean; readiness?: ManagedRuntimeReadiness; useError?: RuntimeConfigError } = {}) {
   let channel = sessionEventChannel()
   let subscriptions = 0
   const prompts: { sessionId: string; text: string; messageId?: string }[] = []
@@ -946,10 +947,14 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
   }
   let handle: ManagedEffectiveHandle = { url: 'http://127.0.0.1:1', authorization: 'Bearer x', effectiveRevision: 3, modelTarget: { providerID: 'p', modelID: 'm' } }
   let uncertain = false
+  const currentReadiness = (): ManagedRuntimeReadiness => options.readiness
+    ?? (uncertain ? { state: 'uncertain', effectiveRevision: 3 } : { state: 'current', effectiveRevision: 3, modelTarget: handle.modelTarget, activeOperations: 0 })
   const owner = {
-    readiness: (): ManagedRuntimeReadiness => uncertain ? { state: 'uncertain', effectiveRevision: 3 } : { state: 'current', effectiveRevision: 3, modelTarget: handle.modelTarget, activeOperations: 0 },
+    readiness: currentReadiness,
     currentHandle: () => handle,
     use: async <T>(operation: (handle: ManagedEffectiveHandle) => Promise<T>): Promise<T> => {
+      if (currentReadiness().state !== 'current') throw new RuntimeConfigError({ code: 'UNAVAILABLE', message: 'Managed runtime is not available' })
+      if (options.useError) throw options.useError
       try { return await operation(handle) } catch (error) { uncertain = true; throw error }
     },
   }
@@ -1028,13 +1033,13 @@ describe('Session host admission, cancel causality and observation', () => {
     expect(await cancel).toMatchObject({ ok: true, result: { reconciliation: 'confirmed', finalState: 'cancelled', messageId: 'assistant-sync' } })
   })
 
-  it('releases the record only for a pre-dispatch rejection', async () => {
+  it('keeps the record when the SDK prompt is reached even for an expected HTTP rejection', async () => {
     const rejected = sessionHarness({ promptError: new OpenCodeAdapterError('session.prompt', 'NOT_FOUND', 'missing session', 404) })
     expect(await rejected.host.sendSession('s1', { text: 'hi' })).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
     expect(rejected.isUncertain()).toBe(false)
-    // The server rejected the prompt before dispatch, so admission reopens.
-    expect(await rejected.host.sendSession('s1', { text: 'retry' })).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
-    expect(rejected.prompts).toHaveLength(2)
+    // The SDK prompt call was reached, so the record stays owned even though the server rejected it.
+    expect(await rejected.host.sendSession('s1', { text: 'retry' })).toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
+    expect(rejected.prompts).toHaveLength(1)
 
     // A failed exchange is not proof that nothing was dispatched, so it propagates and the
     // runtime goes uncertain instead of reopening admission.
@@ -1042,6 +1047,31 @@ describe('Session host admission, cancel causality and observation', () => {
     await expect(upstream.host.sendSession('s1', { text: 'hi' })).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
     expect(upstream.isUncertain()).toBe(true)
     expect(upstream.prompts).toHaveLength(1)
+  })
+
+  it('releases the record when prompt validation rejects before the SDK call', async () => {
+    const h = sessionHarness()
+    expect(await h.host.sendSession('s1', { text: '   ' })).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
+    expect(h.prompts).toHaveLength(0)
+    expect(await h.host.sendSession('s1', { text: 'retry' })).toMatchObject({ ok: true })
+    expect(h.prompts).toHaveLength(1)
+  })
+
+  it('returns typed owner refusal for create, open and permission reply', async () => {
+    const unavailable = sessionHarness({ readiness: { state: 'no-current' } })
+    expect(await unavailable.host.createSession()).toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+    expect(await unavailable.host.openSession('s1')).toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+    expect(await unavailable.host.replyPermission('s1', 'p1', 'once')).toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+
+    const changing = sessionHarness({ readiness: { state: 'changing' } })
+    expect(await changing.host.createSession()).toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
+  })
+
+  it('converts a concurrent owner use refusal into a typed result', async () => {
+    const h = sessionHarness({ useError: new RuntimeConfigError({ code: 'CONFLICT', message: 'Managed runtime has active operations' }) })
+    expect(await h.host.createSession()).toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
+    expect(await h.host.openSession('s1')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
+    expect(await h.host.replyPermission('s1', 'p1', 'once')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
   })
 
   it('keeps cancel unknown without abort until the owned message id is bound', async () => {
