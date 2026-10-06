@@ -587,7 +587,7 @@ async function consoleControl(
   if (workControl.launcherGeneration !== launcher.generation || workControl.launcherStartToken !== launcher.startToken) {
     throw new LocalProcessError('STALE_OWNER', 'local Work control refs do not match the running launcher')
   }
-  const send = async (): Promise<LocalWorkControlReply> => await sendLocalConsoleControlRequest({
+  const send = () => sendLocalConsoleControlRequest({
     socketPath: workControl.socketPath,
     frame: {
       kind,
