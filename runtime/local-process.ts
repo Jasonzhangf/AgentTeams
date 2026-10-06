@@ -4,8 +4,9 @@ import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
-import { createLocalSupervisor, readLocalDaemonStatusProjection, type LocalDaemonEndpointProjection, type LocalSupervisor } from './local-supervisor.ts'
-import { defaultLocalConfigPath, loadLocalConfig, readLocalInternalConfig, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalInternalLauncherConfig } from './local-config.ts'
+import { classifyLocalConsoleStatus, createLocalSupervisor, readLocalDaemonStatusProjection, type LocalDaemonEndpointProjection, type LocalSupervisor } from './local-supervisor.ts'
+import { defaultLocalConfigPath, loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalInternalLauncherConfig } from './local-config.ts'
+import { sendLocalConsoleControlRequest, type LocalConsoleControlKind, type LocalConsolePublicStatus } from './local-work-control.ts'
 
 const execFile = promisify(execFileCallback)
 
@@ -17,10 +18,11 @@ export interface LocalLauncherStatus {
   readonly state: 'stopped' | 'starting' | 'running' | 'failed'
   readonly error?: string
   readonly endpoints?: readonly LocalDaemonEndpointProjection[]
+  readonly console?: LocalConsolePublicStatus
 }
 
 export class LocalProcessError extends Error {
-  constructor(readonly code: 'NOT_RUNNING' | 'STALE_GENERATION' | 'STALE_OWNER' | 'START_TIMEOUT' | 'ALREADY_RUNNING' | 'STARTING' | 'INVALID_STATUS', message: string) {
+  constructor(readonly code: 'NOT_RUNNING' | 'STALE_GENERATION' | 'STALE_OWNER' | 'START_TIMEOUT' | 'ALREADY_RUNNING' | 'STARTING' | 'INVALID_STATUS' | 'CONSOLE_NOT_RUNNING' | 'CONSOLE_DISABLED' | 'CONSOLE_CREDENTIAL_MISSING' | 'CONSOLE_PORT_OCCUPIED' | 'CONSOLE_ASSET_MISSING' | 'CONSOLE_RETAINED' | 'CONSOLE_START_FAILED' | 'CONSOLE_STATUS_UNAVAILABLE' | 'CONSOLE_PROCESS_EXITED', message: string) {
     super(message)
     this.name = 'LocalProcessError'
   }
@@ -32,7 +34,14 @@ export interface LocalProcessStartOptions {
   readonly nodeArguments?: readonly string[]
   readonly relayEntry?: string
   readonly agentEntry?: string
+  readonly consoleEntry?: string
   readonly startupTimeoutMs?: number
+}
+
+export interface LocalConsoleLifecycleOptions {
+  /** Launcher generation guard; a mismatch returns STALE_GENERATION. */
+  readonly expectedLauncherGeneration?: number
+  readonly timeoutMs?: number
 }
 
 export function parseLocalProcessArgs(argv: readonly string[]): string {
@@ -58,6 +67,7 @@ export async function runLocalProcess(
   createSupervisor: LocalSupervisorFactory = config => createLocalSupervisor(config, {
     ...(process.env.TEAMS_LOCAL_RELAY_ENTRY === undefined ? {} : { relayEntry: process.env.TEAMS_LOCAL_RELAY_ENTRY }),
     ...(process.env.TEAMS_LOCAL_AGENT_ENTRY === undefined ? {} : { agentEntry: process.env.TEAMS_LOCAL_AGENT_ENTRY }),
+    ...(process.env.TEAMS_LOCAL_CONSOLE_ENTRY === undefined ? {} : { consoleEntry: process.env.TEAMS_LOCAL_CONSOLE_ENTRY }),
     ...(process.env.TEAMS_LOCAL_NODE_ARGUMENTS === undefined ? {} : { nodeArguments: process.env.TEAMS_LOCAL_NODE_ARGUMENTS.split('\0').filter(Boolean) }),
     ...(process.env.TEAMS_LOCAL_START_TOKEN === undefined ? {} : { startToken: process.env.TEAMS_LOCAL_START_TOKEN }),
     ...(launcherGenerationFromEnv(process.env.TEAMS_LOCAL_LAUNCHER_GENERATION) === undefined ? {} : { launcherGeneration: launcherGenerationFromEnv(process.env.TEAMS_LOCAL_LAUNCHER_GENERATION)! }),
@@ -320,6 +330,7 @@ export async function startLocalProcess(configPath = defaultLocalConfigPath(), o
     const childEnv = { ...process.env, ...options.env }
     if (options.relayEntry !== undefined) childEnv.TEAMS_LOCAL_RELAY_ENTRY = options.relayEntry
     if (options.agentEntry !== undefined) childEnv.TEAMS_LOCAL_AGENT_ENTRY = options.agentEntry
+    if (options.consoleEntry !== undefined) childEnv.TEAMS_LOCAL_CONSOLE_ENTRY = options.consoleEntry
     const childNodeArguments = options.nodeArguments ?? sourceNodeArguments()
     if (childNodeArguments.length > 0) childEnv.TEAMS_LOCAL_NODE_ARGUMENTS = childNodeArguments.join('\0')
     childEnv.TEAMS_LOCAL_START_TOKEN = startToken
@@ -374,9 +385,34 @@ export async function statusLocalProcess(configPath = defaultLocalConfigPath()):
   if (config.internalPath === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no runtime internal state')
   const internal = await readLocalInternalConfig(config.internalPath)
   const launcher = internal.launcher
-  if (launcher === undefined) return { configPath: config.configPath, internalPath: config.internalPath, generation: 0, state: 'stopped' }
+  const consoleStatus = async (state: LocalLauncherStatus['state'], generation: number): Promise<LocalConsolePublicStatus> => {
+    try {
+      return await classifyLocalConsoleStatus(config, internal, process.env, { state, generation })
+    } catch {
+      const enabled = config.console?.enabled === true
+      return {
+        enabled,
+        state: enabled ? 'failed' : 'disabled',
+        generation: internal.consoleRuntime?.generation ?? 0,
+        launcherState: state,
+        launcherGeneration: generation,
+        credential: 'missing',
+        ...(enabled ? { error: { code: 'CONSOLE_STATUS_UNAVAILABLE', message: 'Console status cannot be observed' } } : {}),
+      }
+    }
+  }
+  const launcherState: LocalLauncherStatus['state'] = launcher === undefined
+    ? 'stopped'
+    : launcher.state === 'running' && launcher.pid !== undefined && !processAlive(launcher.pid)
+      ? 'failed'
+      : launcher.state
+  const console = await consoleStatus(launcherState, launcher?.generation ?? 0)
+  const withConsole = (status: LocalLauncherStatus): LocalLauncherStatus => ({ ...status, console })
+  if (launcher === undefined) {
+    return withConsole({ configPath: config.configPath, internalPath: config.internalPath, generation: 0, state: 'stopped' })
+  }
   if (launcher.state === 'running' && launcher.pid !== undefined && !processAlive(launcher.pid)) {
-    return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor pid is not alive' }
+    return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor pid is not alive' })
   }
   if (launcher.state === 'running' && launcher.pid !== undefined && !(await processOwnsStartToken(launcher.pid, launcher.startToken, config.configPath))) {
     return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor start token does not match persisted ownership' }
@@ -438,9 +474,9 @@ export async function statusLocalProcess(configPath = defaultLocalConfigPath()):
   if (launcher.state === 'running' && endpoints?.some(endpoint => endpoint.state !== 'online' || endpoint.presence !== 'online')) {
     throw new LocalProcessError('INVALID_STATUS', 'runtime daemon status projection is not online')
   }
-  return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
+  return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
     ...(launcher.error === undefined ? {} : { error: launcher.error }),
-    ...(endpoints === undefined ? {} : { endpoints }) }
+    ...(endpoints === undefined ? {} : { endpoints }) })
 }
 
 export async function stopLocalProcess(configPath = defaultLocalConfigPath(), expectedGeneration?: number): Promise<LocalLauncherStatus> {
@@ -466,6 +502,64 @@ export async function stopLocalProcess(configPath = defaultLocalConfigPath(), ex
     process.kill(launcher.pid, 'SIGTERM')
     return await waitForLauncherState(config.internalPath!, config.configPath, launcher.state === 'failed' ? 'failed' : 'stopped')
   })
+}
+
+async function consoleControl(
+  kind: LocalConsoleControlKind,
+  configPath: string,
+  options: LocalConsoleLifecycleOptions,
+): Promise<LocalConsolePublicStatus> {
+  const config = await loadLocalConfig(configPath)
+  if (config.internalPath === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no runtime internal state')
+  // The launcher materializes child projections during startup. A status-only
+  // caller must do the same so a persisted enabled intent is observable before
+  // the first Console child starts; this is still the U2 projection owner.
+  await projectLocalChildConfigs(config.internalPath)
+  const internal = await readLocalInternalConfig(config.internalPath)
+  const launcher = internal.launcher
+  const running = launcher?.state === 'running' && launcher.pid !== undefined && launcher.pid > 0 && processAlive(launcher.pid)
+  if (!running) {
+    if (kind === 'console.status') {
+      const status = await classifyLocalConsoleStatus(config, internal, process.env, { state: launcher?.state ?? 'stopped', generation: launcher?.generation ?? 0 })
+      return status
+    }
+    throw new LocalProcessError('CONSOLE_NOT_RUNNING', `launcher is not running; cannot ${kind === 'console.start' ? 'start' : 'stop'} Console`)
+  }
+  if (options.expectedLauncherGeneration !== undefined && options.expectedLauncherGeneration !== launcher.generation) {
+    throw new LocalProcessError('STALE_GENERATION', `stale local supervisor generation expected=${options.expectedLauncherGeneration} current=${launcher.generation}`)
+  }
+  const workControl = await readLocalInternalWorkControl(config.internalPath)
+  if (workControl === undefined) throw new LocalProcessError('CONSOLE_NOT_RUNNING', 'local Work control is unavailable: no running launcher published a control socket')
+  if (workControl.launcherGeneration !== launcher.generation || workControl.launcherStartToken !== launcher.startToken) {
+    throw new LocalProcessError('STALE_OWNER', 'local Work control refs do not match the running launcher')
+  }
+  const reply = await sendLocalConsoleControlRequest({
+    socketPath: workControl.socketPath,
+    frame: {
+      kind,
+      correlationId: randomUUID(),
+      expectedLauncherGeneration: launcher.generation,
+    },
+    ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+  })
+  if (reply.ok !== true) {
+    const consoleCodes = new Set(['CONSOLE_DISABLED', 'CONSOLE_CREDENTIAL_MISSING', 'CONSOLE_PORT_OCCUPIED', 'CONSOLE_ASSET_MISSING', 'CONSOLE_RETAINED', 'CONSOLE_START_FAILED', 'CONSOLE_STATUS_UNAVAILABLE', 'CONSOLE_PROCESS_EXITED', 'STALE_GENERATION'])
+    const code = consoleCodes.has(reply.error.code) ? reply.error.code as LocalProcessError['code'] : 'CONSOLE_START_FAILED'
+    throw new LocalProcessError(code, reply.error.message)
+  }
+  return reply.status
+}
+
+export async function consoleStatusLocalProcess(configPath = defaultLocalConfigPath(), options: LocalConsoleLifecycleOptions = {}): Promise<LocalConsolePublicStatus> {
+  return await consoleControl('console.status', configPath, options)
+}
+
+export async function consoleStartLocalProcess(configPath = defaultLocalConfigPath(), options: LocalConsoleLifecycleOptions = {}): Promise<LocalConsolePublicStatus> {
+  return await consoleControl('console.start', configPath, options)
+}
+
+export async function consoleStopLocalProcess(configPath = defaultLocalConfigPath(), options: LocalConsoleLifecycleOptions = {}): Promise<LocalConsolePublicStatus> {
+  return await consoleControl('console.stop', configPath, options)
 }
 
 const invokedPath = process.argv[1] === undefined ? undefined : resolve(process.argv[1])

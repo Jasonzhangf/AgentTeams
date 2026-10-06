@@ -512,13 +512,13 @@
     {
       "resource_id": "console-runtime-facts",
       "owner": "runtime",
-      "status": "design",
+      "status": "partial",
       "kind": "control_resource",
       "truth_store": "internal.toml [consoleRuntime] only; [console] remains U2 projection/config and shares no writable field with U5",
       "allowed_operations": ["read_runtime_facts", "patch_owned_runtime_facts", "clear_owned_optional_fact", "persist_atomic"],
       "forbidden_relations": ["user_intent", "credential_value", "daemon_lifecycle", "work_drain", "business_payload", "session_payload"],
       "required_gates": ["teams-console-lifecycle-topology", "teams-u5-console-lifecycle-design"],
-      "note": "U2 owns the closed [consoleRuntime] schema/serializer and the typed same-lock patch port (writeLocalInternalConsoleRuntime); U5 owns lifecycle field semantics and is the only intended caller. No second store, lock or copy exists; the U5 start/stop/status caller is still design-only."
+      "note": "U2 owns the closed [consoleRuntime] schema/serializer and the typed same-lock patch port (writeLocalInternalConsoleRuntime); U5 owns lifecycle field semantics and is the only caller. No second store, lock or copy exists. Source start/stop/status callers are implemented; installed lifecycle and browser acceptance remain downstream."
     }
   ]
 }

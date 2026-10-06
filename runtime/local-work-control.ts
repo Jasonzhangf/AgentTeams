@@ -6,6 +6,7 @@ import type { Duplex } from 'node:stream'
 import { assertEnvelopeKeys, assertJsonValue } from '../control-protocol/json-value.ts'
 import type { JsonValue, ResourceDemand } from '../control-protocol/agent-services.ts'
 import type { ProjectExecutionControl, ProjectExecutionReceipt } from './dagpipe/host.ts'
+import type { ConsoleRuntimeState } from './local-config.ts'
 
 export type LocalWorkControlKind = 'work.submit' | 'work.query' | 'work.open' | 'work.request' | 'work.close'
 
@@ -68,6 +69,37 @@ export type LocalWorkControlRequest =
 export type LocalWorkControlReply =
   | { readonly kind: 'work.result'; readonly requestId: string; readonly receipt: ProjectExecutionReceipt }
   | { readonly kind: 'work.error'; readonly requestId: string; readonly error: { readonly code: string; readonly message: string } }
+
+export type LocalConsoleControlKind = 'console.status' | 'console.start' | 'console.stop'
+
+export interface LocalConsoleControlRequest {
+  readonly kind: LocalConsoleControlKind
+  readonly correlationId: string
+  readonly expectedLauncherGeneration: number
+  readonly expectedConsoleGeneration?: number
+}
+
+/** Credential is a resolution state, never the secret value. */
+export interface LocalConsolePublicStatus {
+  readonly enabled: boolean
+  readonly state: ConsoleRuntimeState | 'disabled'
+  readonly generation: number
+  readonly launcherState: 'stopped' | 'starting' | 'running' | 'stopping' | 'failed'
+  readonly launcherGeneration: number
+  readonly credential: 'configured' | 'missing'
+  readonly url?: string
+  readonly origin?: string
+  readonly pid?: number
+  readonly identityRef?: string
+  readonly error?: { readonly code: string; readonly message: string }
+}
+
+export type LocalConsoleControlReply =
+  | { readonly kind: 'console.result'; readonly correlationId: string; readonly ok: true; readonly status: LocalConsolePublicStatus }
+  | { readonly kind: 'console.result'; readonly correlationId: string; readonly ok: false; readonly error: { readonly code: string; readonly message: string } }
+
+export type LocalControlRequest = LocalWorkControlRequest | LocalConsoleControlRequest
+export type LocalControlReply = LocalWorkControlReply | LocalConsoleControlReply
 
 export type LocalWorkControlDelivery = 'written' | 'unconfirmed'
 
@@ -151,17 +183,29 @@ export interface LocalWorkControlHandlerInput {
   respond(reply: ProjectExecutionReceipt | { readonly code: string; readonly message: string }): Promise<LocalWorkControlDelivery>
 }
 
+export interface LocalConsoleControlHandlerInput {
+  readonly frame: LocalConsoleControlRequest
+  respond(reply: LocalConsoleControlReply): Promise<LocalWorkControlDelivery>
+}
+
 export interface LocalWorkControlListenerOptions {
   readonly socketPath: string
   readonly launcherGeneration: number
   readonly startToken: string
   readonly receivers: Readonly<Record<string, boolean>>
   readonly handler: (input: LocalWorkControlHandlerInput) => Promise<ProjectExecutionReceipt | { readonly code: string; readonly message: string }>
+  readonly consoleHandler?: (input: LocalConsoleControlHandlerInput) => Promise<void>
 }
 
 export interface LocalWorkControlSendOptions {
   readonly socketPath: string
   readonly frame: LocalWorkControlRequest
+  readonly timeoutMs?: number
+}
+
+export interface LocalConsoleControlSendOptions {
+  readonly socketPath: string
+  readonly frame: LocalConsoleControlRequest
   readonly timeoutMs?: number
 }
 
@@ -189,12 +233,20 @@ const CONTROL_KEYS: Record<LocalWorkControlKind, readonly string[]> = {
 const QUERY_ENDPOINT_CONTROL_KEYS = ['serviceSelection', 'receiverAgentId', 'expectedLauncherGeneration', 'startToken', 'executionId', 'attemptId', 'workId', 'requestId']
 const QUERY_CAPABILITY_CONTROL_KEYS = [...QUERY_ENDPOINT_CONTROL_KEYS, 'targetAgentId', 'targetGeneration', 'capabilityId', 'capabilityVersion', 'operation', 'linkGeneration']
 
-export function encodeLocalWorkControlFrame(frame: LocalWorkControlRequest | LocalWorkControlReply): string {
+export function encodeLocalWorkControlFrame(frame: LocalControlRequest | LocalControlReply): string {
   return `${JSON.stringify(frame)}\n`
 }
 
 function protocol(message: string): LocalWorkControlError {
   return new LocalWorkControlError('HOST_PROTOCOL', message)
+}
+
+function assertControlEnvelopeKeys(value: Record<string, unknown>, allowed: readonly string[], path: string): void {
+  try {
+    assertEnvelopeKeys(value, allowed, path)
+  } catch (cause) {
+    throw protocol(cause instanceof Error ? cause.message : `${path} has invalid fields`)
+  }
 }
 
 function plainObject(value: unknown, label: string): Record<string, unknown> {
@@ -317,6 +369,36 @@ export function decodeLocalWorkControlRequest(value: unknown): LocalWorkControlR
   return { kind: 'work.submit', requestId: correlation, control: base, business: frame.business }
 }
 
+const CONSOLE_CONTROL_KEYS = ['kind', 'correlationId', 'expectedLauncherGeneration', 'expectedConsoleGeneration'] as const
+const CONSOLE_KINDS: readonly LocalConsoleControlKind[] = ['console.status', 'console.start', 'console.stop']
+
+export function decodeLocalConsoleControlRequest(value: unknown): LocalConsoleControlRequest {
+  const frame = plainObject(value, 'request')
+  if (typeof frame.kind !== 'string' || !(CONSOLE_KINDS as readonly string[]).includes(frame.kind)) {
+    throw protocol(`request.kind must be one of ${CONSOLE_KINDS.join(', ')}`)
+  }
+  assertControlEnvelopeKeys(frame, CONSOLE_CONTROL_KEYS, 'request')
+  const expectedConsoleGeneration = optionalInteger(frame.expectedConsoleGeneration, 'expectedConsoleGeneration')
+  return {
+    kind: frame.kind as LocalConsoleControlKind,
+    correlationId: requiredString(frame.correlationId, 'correlationId'),
+    expectedLauncherGeneration: requiredInteger(frame.expectedLauncherGeneration, 'expectedLauncherGeneration'),
+    ...(expectedConsoleGeneration === undefined ? {} : { expectedConsoleGeneration }),
+  }
+}
+
+export function decodeLocalControlRequest(value: unknown): LocalControlRequest {
+  const frame = plainObject(value, 'request')
+  if (typeof frame.kind === 'string' && (CONSOLE_KINDS as readonly string[]).includes(frame.kind)) {
+    return decodeLocalConsoleControlRequest(value)
+  }
+  return decodeLocalWorkControlRequest(value)
+}
+
+function isConsoleControlRequest(frame: LocalControlRequest): frame is LocalConsoleControlRequest {
+  return frame.kind === 'console.status' || frame.kind === 'console.start' || frame.kind === 'console.stop'
+}
+
 export function decodeLocalWorkControlReply(value: unknown, expectedRequestId: string): LocalWorkControlReply {
   const frame = plainObject(value, 'reply')
   const requestId = requiredString(frame.requestId, 'requestId')
@@ -334,6 +416,58 @@ export function decodeLocalWorkControlReply(value: unknown, expectedRequestId: s
     return { kind, requestId, error: { code: requiredString(error.code, 'error.code'), message: requiredString(error.message, 'error.message') } }
   }
   throw protocol('reply.kind must be work.result or work.error')
+}
+
+export function decodeLocalConsoleControlReply(value: unknown, expectedCorrelationId: string): LocalConsoleControlReply {
+  const frame = plainObject(value, 'reply')
+  if (frame.kind !== 'console.result') throw protocol('reply.kind must be console.result')
+  const correlationId = requiredString(frame.correlationId, 'correlationId')
+  if (correlationId !== expectedCorrelationId) throw protocol('reply correlationId must match the request correlation')
+  if (frame.ok === true) {
+    assertControlEnvelopeKeys(frame, ['kind', 'correlationId', 'ok', 'status'], 'reply')
+    const status = plainObject(frame.status, 'status')
+    const state = status.state
+    if (state !== 'disabled' && state !== 'stopped' && state !== 'starting' && state !== 'online'
+      && state !== 'stopping' && state !== 'failed' && state !== 'retained') {
+      throw protocol('status.state is invalid')
+    }
+    const launcherState = status.launcherState
+    if (launcherState !== 'stopped' && launcherState !== 'starting' && launcherState !== 'running' && launcherState !== 'stopping' && launcherState !== 'failed') {
+      throw protocol('status.launcherState is invalid')
+    }
+    const credential = status.credential
+    if (credential !== 'configured' && credential !== 'missing') throw protocol('status.credential is invalid')
+    if (typeof status.enabled !== 'boolean') throw protocol('status.enabled must be a boolean')
+    return {
+      kind: 'console.result',
+      correlationId,
+      ok: true,
+      status: {
+        enabled: status.enabled,
+        state,
+        generation: requiredInteger(status.generation, 'status.generation'),
+        launcherState,
+        launcherGeneration: requiredInteger(status.launcherGeneration, 'status.launcherGeneration'),
+        credential,
+        ...(status.url === undefined ? {} : { url: requiredString(status.url, 'status.url') }),
+        ...(status.origin === undefined ? {} : { origin: requiredString(status.origin, 'status.origin') }),
+        ...(status.pid === undefined ? {} : { pid: requiredInteger(status.pid, 'status.pid') }),
+        ...(status.identityRef === undefined ? {} : { identityRef: requiredString(status.identityRef, 'status.identityRef') }),
+        ...(status.error === undefined ? {} : (() => {
+          const error = plainObject(status.error, 'status.error')
+          assertControlEnvelopeKeys(error, ['code', 'message'], 'status.error')
+          return { error: { code: requiredString(error.code, 'status.error.code'), message: requiredString(error.message, 'status.error.message') } }
+        })()),
+      },
+    }
+  }
+  if (frame.ok === false) {
+    assertControlEnvelopeKeys(frame, ['kind', 'correlationId', 'ok', 'error'], 'reply')
+    const error = plainObject(frame.error, 'error')
+    assertControlEnvelopeKeys(error, ['code', 'message'], 'error')
+    return { kind: 'console.result', correlationId, ok: false, error: { code: requiredString(error.code, 'error.code'), message: requiredString(error.message, 'error.message') } }
+  }
+  throw protocol('reply.ok must be true or false')
 }
 
 async function prepareSocketDirectory(path: string): Promise<void> {
@@ -489,38 +623,64 @@ async function handleConnection(peer: Socket, options: LocalWorkControlListenerO
     const line = await receiveLine(peer)
     if (line === undefined) return
 
-    let decoded: LocalWorkControlRequest
+    let decoded: LocalControlRequest
     try {
-      decoded = decodeLocalWorkControlRequest(JSON.parse(line))
+      decoded = decodeLocalControlRequest(JSON.parse(line))
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'invalid Work request'
-      await sendReply(peer, { kind: 'work.error', requestId: 'unknown', error: { code: 'HOST_PROTOCOL', message } })
+      let requestedKind: unknown
+      try { requestedKind = (JSON.parse(line) as { readonly kind?: unknown }).kind } catch { /* the decode error already describes the frame */ }
+      if (typeof requestedKind === 'string' && requestedKind.startsWith('console.')) {
+        await sendReply(peer, consoleError('HOST_PROTOCOL', message))
+      } else {
+        await sendReply(peer, { kind: 'work.error', requestId: 'unknown', error: { code: 'HOST_PROTOCOL', message } })
+      }
       return
     }
-    correlation = decoded.requestId
 
-    if (decoded.control.startToken !== options.startToken) {
-      await sendReply(peer, error('NOT_AUTHORIZED', 'Work start token does not match the current launcher', decoded.requestId))
+    if (isConsoleControlRequest(decoded)) {
+      correlation = decoded.correlationId
+      if (decoded.expectedLauncherGeneration !== options.launcherGeneration) {
+        await sendReply(peer, consoleError('STALE_GENERATION', 'Console request targets a stale launcher generation', decoded.correlationId))
+        return
+      }
+      if (options.consoleHandler === undefined) {
+        await sendReply(peer, consoleError('LOCAL_CONTROL_UNAVAILABLE', 'Console lifecycle handler is not available on this launcher', decoded.correlationId))
+        return
+      }
+      admit()
+      await options.consoleHandler({
+        frame: decoded,
+        respond: async reply => sendReply(peer, reply),
+      })
       return
     }
-    if (decoded.control.expectedLauncherGeneration !== options.launcherGeneration) {
-      await sendReply(peer, error('STALE_GENERATION', 'Work request targets a stale launcher generation', decoded.requestId))
+
+    const workFrame = decoded
+    correlation = workFrame.requestId
+
+    if (workFrame.control.startToken !== options.startToken) {
+      await sendReply(peer, error('NOT_AUTHORIZED', 'Work start token does not match the current launcher', workFrame.requestId))
       return
     }
-    if (options.receivers[decoded.control.receiverAgentId] !== true) {
-      await sendReply(peer, error('RECEIVER_NOT_FOUND', `Work receiver ${decoded.control.receiverAgentId} is not available`, decoded.requestId))
+    if (workFrame.control.expectedLauncherGeneration !== options.launcherGeneration) {
+      await sendReply(peer, error('STALE_GENERATION', 'Work request targets a stale launcher generation', workFrame.requestId))
+      return
+    }
+    if (options.receivers[workFrame.control.receiverAgentId] !== true) {
+      await sendReply(peer, error('RECEIVER_NOT_FOUND', `Work receiver ${workFrame.control.receiverAgentId} is not available`, workFrame.requestId))
       return
     }
 
     admit()
     await options.handler({
-      frame: decoded,
+      frame: workFrame,
       peer,
       disconnected: disconnected(peer),
       respond: async result => {
         const reply: LocalWorkControlReply = 'status' in result
-          ? { kind: 'work.result', requestId: decoded.requestId, receipt: result }
-          : error(result.code, result.message, decoded.requestId)
+          ? { kind: 'work.result', requestId: workFrame.requestId, receipt: result }
+          : error(result.code, result.message, workFrame.requestId)
         return sendReply(peer, reply)
       },
     })
@@ -541,7 +701,11 @@ function error(code: string, message: string, requestId = 'unknown'): LocalWorkC
   return { kind: 'work.error', requestId, error: { code, message } }
 }
 
-async function sendReply(peer: Duplex, reply: LocalWorkControlReply): Promise<LocalWorkControlDelivery> {
+function consoleError(code: string, message: string, correlationId = 'unknown'): LocalConsoleControlReply {
+  return { kind: 'console.result', correlationId, ok: false, error: { code, message } }
+}
+
+async function sendReply(peer: Duplex, reply: LocalControlReply): Promise<LocalWorkControlDelivery> {
   if (!peer.writable || peer.destroyed) return 'unconfirmed'
   await new Promise<void>((resolveWrite, rejectWrite) => {
     peer.write(encodeLocalWorkControlFrame(reply), (writeError: Error | null | undefined) => writeError ? rejectWrite(writeError) : resolveWrite())
@@ -588,6 +752,64 @@ export async function sendLocalWorkControlRequest(options: LocalWorkControlSendO
       const text = buffered.slice(0, index)
       try {
         resolve(decodeLocalWorkControlReply(JSON.parse(text), frame.requestId))
+        settled = true
+      } catch (cause) {
+        fail(cause)
+      }
+    })
+    socket.once('connect', () => {
+      socket.write(encodeLocalWorkControlFrame(frame), writeError => {
+        if (writeError) fail(writeError)
+      })
+    })
+  }).finally(() => {
+    socket.setTimeout(0)
+    socket.destroy()
+  })
+
+  socket.setTimeout(timeoutMs)
+  return result
+}
+
+export async function sendLocalConsoleControlRequest(options: LocalConsoleControlSendOptions): Promise<LocalConsoleControlReply> {
+  const timeoutMs = options.timeoutMs ?? 30_000
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw protocol('timeoutMs must be a positive integer')
+  const frame = decodeLocalConsoleControlRequest(options.frame)
+  const socket = createConnection({ path: options.socketPath })
+  socket.setEncoding('utf8')
+
+  const result = new Promise<LocalConsoleControlReply>((resolve, reject) => {
+    let buffered = ''
+    let settled = false
+    const fail = (cause: unknown) => {
+      if (settled) return
+      settled = true
+      reject(cause instanceof LocalWorkControlError ? cause : new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', `local Console control socket is unavailable: ${cause instanceof Error ? cause.message : String(cause)}`, { cause }))
+    }
+
+    socket.once('error', fail)
+    socket.once('timeout', () => fail(new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', 'local Console control request timed out')))
+    socket.once('close', () => {
+      if (buffered.trim()) {
+        const text = buffered.trim()
+        const index = text.indexOf('\n')
+        try {
+          resolve(decodeLocalConsoleControlReply(JSON.parse(index >= 0 ? text.slice(0, index) : text), frame.correlationId))
+          return
+        } catch (cause) {
+          fail(cause)
+          return
+        }
+      }
+      if (!settled) fail(new LocalWorkControlError('LOCAL_CONTROL_UNAVAILABLE', 'local Console control socket closed before reply'))
+    })
+    socket.on('data', chunk => {
+      buffered += chunk.toString('utf8')
+      const index = buffered.indexOf('\n')
+      if (index < 0) return
+      const text = buffered.slice(0, index)
+      try {
+        resolve(decodeLocalConsoleControlReply(JSON.parse(text), frame.correlationId))
         settled = true
       } catch (cause) {
         fail(cause)

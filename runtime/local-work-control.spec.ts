@@ -8,10 +8,15 @@ import type { ResourceDemand } from '../control-protocol/agent-services.ts'
 import type { ProjectExecutionReceipt } from './dagpipe/host.ts'
 import {
   decodeLocalWorkControlRequest,
+  decodeLocalControlRequest,
+  decodeLocalConsoleControlReply,
   decodeLocalWorkControlReply,
   LocalWorkControlError,
+  sendLocalConsoleControlRequest,
   sendLocalWorkControlRequest,
   startLocalWorkControlListener,
+  type LocalConsoleControlRequest,
+  type LocalConsolePublicStatus,
   type LocalWorkControlDelivery,
   type LocalWorkControlRequest,
   type LocalWorkControlServer,
@@ -403,6 +408,71 @@ it('rejects launcher authorization before business dispatch without touching the
   expect(missingReceiver).toEqual({ kind: 'work.error', requestId: 'corr-1', error: { code: 'RECEIVER_NOT_FOUND', message: expect.any(String) } })
   expect(calls).toHaveLength(0)
   evidence.push({ case: 'authorization-before-handler', errors: [unauthorized, stale, missingReceiver], handlerCalls: calls.length })
+  await server.close()
+})
+
+it('serves console.status/start/stop on the same launcher socket as Work and keeps the two verbs independent', async () => {
+  const root = await tempRoot('teams-local-console-union-')
+  const socketPath = join(root, '.internal', 'work-control.sock')
+  const workCalls: LocalWorkControlRequest[] = []
+  const consoleCalls: LocalConsoleControlRequest[] = []
+  const consoleStatus: LocalConsolePublicStatus = {
+    enabled: true,
+    state: 'online',
+    generation: 2,
+    launcherState: 'running',
+    launcherGeneration: 7,
+    credential: 'configured',
+    url: 'http://127.0.0.1:51234',
+    origin: 'http://127.0.0.1:51234',
+    pid: 4242,
+    identityRef: 'console:local',
+  }
+  const server = await startLocalWorkControlListener({
+    socketPath,
+    launcherGeneration: 7,
+    startToken: 'token-7',
+    receivers: { 'receiver-1': true },
+    handler: async input => {
+      workCalls.push(input.frame)
+      const result = receipt(input.frame.kind)
+      await input.respond(result)
+      return result
+    },
+    consoleHandler: async input => {
+      consoleCalls.push(input.frame)
+      await input.respond({ kind: 'console.result', correlationId: input.frame.correlationId, ok: true, status: consoleStatus })
+    },
+  })
+  sockets.push(server)
+
+  const stale = await sendLocalConsoleControlRequest({
+    socketPath,
+    frame: { kind: 'console.start', correlationId: 'console-stale', expectedLauncherGeneration: 6 },
+    timeoutMs: 2000,
+  })
+  const responses = await Promise.all((['console.status', 'console.start', 'console.stop'] as const).map(kind =>
+    sendLocalConsoleControlRequest({
+      socketPath,
+      frame: { kind, correlationId: `corr-${kind}`, expectedLauncherGeneration: 7, expectedConsoleGeneration: 2 },
+      timeoutMs: 2000,
+    })))
+  const work = await sendLocalWorkControlRequest({ socketPath, frame: request(), timeoutMs: 2000 })
+
+  expect(stale).toMatchObject({ kind: 'console.result', ok: false, error: { code: 'STALE_GENERATION' } })
+  expect(responses.map(reply => reply.ok)).toEqual([true, true, true])
+  expect(responses.map(reply => reply.kind === 'console.result' && reply.ok ? reply.status : undefined)).toEqual([consoleStatus, consoleStatus, consoleStatus])
+  expect(consoleCalls.map(frame => frame.kind)).toEqual(['console.status', 'console.start', 'console.stop'])
+  expect(consoleCalls.map(frame => frame.expectedConsoleGeneration)).toEqual([2, 2, 2])
+  expect(work.kind).toBe('work.result')
+  expect(workCalls.map(frame => frame.kind)).toEqual(['work.submit'])
+
+  expect(decodeLocalControlRequest({ kind: 'console.status', correlationId: 'c', expectedLauncherGeneration: 7 }))
+    .toEqual({ kind: 'console.status', correlationId: 'c', expectedLauncherGeneration: 7 })
+  expect(() => decodeLocalControlRequest({ kind: 'console.stop', correlationId: 'c', expectedLauncherGeneration: 7, port: 51234 })).toThrowError(LocalWorkControlError)
+  expect(decodeLocalConsoleControlReply({ kind: 'console.result', correlationId: 'c', ok: false, error: { code: 'CONSOLE_DISABLED', message: 'disabled' } }, 'c'))
+    .toEqual({ kind: 'console.result', correlationId: 'c', ok: false, error: { code: 'CONSOLE_DISABLED', message: 'disabled' } })
+  evidence.push({ case: 'console-work-same-socket', stale, responseKinds: responses.map(reply => reply.kind), work: work.kind, consoleCalls: consoleCalls.map(frame => frame.kind) })
   await server.close()
 })
 

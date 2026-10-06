@@ -1,6 +1,7 @@
 import { chmod, lstat, mkdir, open, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { createHash, createPrivateKey, createPublicKey, randomUUID, X509Certificate } from 'node:crypto'
 import { parse as parseToml } from 'toml'
@@ -64,9 +65,16 @@ export interface LocalConfig {
   readonly configPath: string
   readonly relay: LocalRelaySpec
   readonly daemons: readonly LocalDaemonSpec[]
+  /** U2 projection ref for the optional Console child; absent when console is disabled. */
+  readonly console?: LocalConsoleSpec
   readonly internalPath?: string
   readonly bridge?: { readonly enabled: boolean }
   readonly v3Input?: { readonly agents: Readonly<Record<string, unknown>>; readonly console?: Readonly<Record<string, unknown>> }
+}
+
+export interface LocalConsoleSpec {
+  readonly enabled: true
+  readonly configPath: string
 }
 
 export interface LocalInternalConfig {
@@ -1232,7 +1240,11 @@ function relayCredentialEnv(agentId: string): string {
 }
 
 async function pickOrReusePort(internal: LocalInternalConfig | undefined, key: 'relay' | string, fallback: () => Promise<number>): Promise<number> {
-  const persisted = key === 'relay' ? internal?.relay?.config : internal?.daemons?.[key]?.config
+  const persisted = key === 'relay'
+    ? internal?.relay?.config
+    : key === 'console'
+      ? internal?.console?.config
+      : internal?.daemons?.[key]?.config
   if (persisted !== undefined) {
     const value = parseProjectionConfig(persisted, `internal ${key} projection`) as { listen?: { port?: unknown }; leasePort?: unknown }
     const port = value.listen?.port ?? value.leasePort
@@ -1242,6 +1254,32 @@ async function pickOrReusePort(internal: LocalInternalConfig | undefined, key: '
     return port as number
   }
   return fallback()
+}
+
+const CONSOLE_IDENTITY = {
+  hostId: 'local',
+  machineId: 'local',
+  agentId: '__console',
+  accountId: 'local',
+  agentKind: 'custom' as const,
+  label: 'AgentTeams Console',
+}
+
+const CONSOLE_CREDENTIAL_ENV = 'AGENTTEAMS_CONSOLE_AUTH'
+
+/**
+ * Asset roots are derived from the installed package, never from user intent.
+ * Source runs resolve to the repository root; compiled runtime-lib runs resolve
+ * to the package root three directories above the emitted runtime directory.
+ */
+function consoleAssetRoots(): { readonly staticRoot: string; readonly uiRoot: string } {
+  const runtimeDirectory = dirname(fileURLToPath(import.meta.url))
+  const tail = runtimeDirectory.split(/[\\/]/).slice(-3).join('/')
+  const packageRoot = tail === 'generated/runtime-lib/runtime' ? resolve(runtimeDirectory, '..', '..', '..') : resolve(runtimeDirectory, '..')
+  return {
+    staticRoot: resolve(packageRoot, 'console-host', 'static'),
+    uiRoot: resolve(packageRoot, 'ui', 'teams-console'),
+  }
 }
 
 interface CompiledV3Agent {
@@ -1419,16 +1457,50 @@ async function compileV3Config(
       const consolePath = resolve(projectionDirectory, 'console.json')
       const consolePort = await pickOrReusePort(existing, 'console', availableTcpPort)
       const existingConsole = readExistingProjection(existing?.console?.config)
+      const assets = consoleAssetRoots()
+      const agentIds = consoleInput.agentIds === undefined ? [] : (() => {
+        if (!Array.isArray(consoleInput.agentIds) || consoleInput.agentIds.some(id => typeof id !== 'string' || id.length === 0)
+          || new Set(consoleInput.agentIds).size !== consoleInput.agentIds.length) {
+          throw new LocalConfigError('console.agentIds must be an array of unique non-empty strings')
+        }
+        return [...consoleInput.agentIds] as string[]
+      })()
       const consoleConfig: TomlRecord = {
         ...existingConsole,
         version: 1,
         enabled: true,
-        username: requiredString(consoleInput.username, 'console.username'),
-        passwordEnv: requiredString(consoleInput.passwordEnv, 'console.passwordEnv'),
-        listen: { ...(isTomlRecord(existingConsole?.listen) ? existingConsole.listen : {}), host: '127.0.0.1', port: consolePort },
-        ...(consoleInput.agentIds === undefined ? {} : { agentIds: consoleInput.agentIds }),
+        identity: { ...CONSOLE_IDENTITY },
+        scopeId: 'local',
+        presenceIntervalMs: 500,
+        agentIds,
+        listen: {
+          ...(isTomlRecord(existingConsole?.listen) ? existingConsole.listen : {}),
+          host: '127.0.0.1',
+          port: consolePort,
+          origin: `http://127.0.0.1:${consolePort}`,
+        },
+        auth: { username: requiredString(consoleInput.username, 'console.username'), passwordEnv: requiredString(consoleInput.passwordEnv, 'console.passwordEnv') },
+        staticRoot: assets.staticRoot,
+        uiRoot: assets.uiRoot,
+        relay: {
+          endpoint: `wss://127.0.0.1:${relayPort}`,
+          credentialEnv: CONSOLE_CREDENTIAL_ENV,
+          caFile: tlsPaths.certFile,
+          connectTimeoutMs: 1000,
+          admissionTimeoutMs: 1000,
+          requestTimeoutMs: 1000,
+          maxMessageBytes: 65536,
+          maxBufferedBytes: 65536,
+          maxPendingFrames: 8,
+          maxPendingRequests: 4,
+          maxDataConnections: 4,
+        },
       }
       consoleProjection = { projectionPath: consolePath, config: JSON.stringify(consoleConfig) }
+      ;(relayConfig.credentials as TomlRecord[]).push({
+        credentialEnv: CONSOLE_CREDENTIAL_ENV,
+        identity: { accountId: CONSOLE_IDENTITY.accountId, scopeId: 'local', agentId: CONSOLE_IDENTITY.agentId },
+      })
     }
   }
 
@@ -1642,7 +1714,7 @@ async function persistLocalV3ConfigLocked(
     generatedAt: latest?.generatedAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     relay: { projectionPath: result.relayProjectionPath, config: JSON.stringify(result.relayConfig) },
-    ...(result.consoleProjection === undefined ? {} : { console: result.consoleProjection }),
+    console: result.consoleProjection,
     daemons,
     configRuntime: latest?.configRuntime ?? { accepted: {}, effective: {}, catalogs: {} },
   })
@@ -1651,6 +1723,7 @@ async function persistLocalV3ConfigLocked(
     configPath,
     relay: result.relay,
     daemons: result.daemons,
+    ...(result.consoleProjection === undefined ? {} : { console: { enabled: true as const, configPath: result.consoleProjection.projectionPath } }),
     internalPath,
     bridge: parsed.bridge ?? { enabled: true },
     ...(parsed.v3Input === undefined ? {} : { v3Input: parsed.v3Input }),

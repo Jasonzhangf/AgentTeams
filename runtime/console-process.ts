@@ -32,7 +32,9 @@ export async function loadConsoleProcessConfig(path: string, env: NodeJS.Process
 }
 
 export async function runConsoleProcess(argv = process.argv.slice(2)): Promise<void> {
-  if (argv.length !== 2 || argv[0] !== '--config') throw new RelayProtocolError('INVALID_INPUT', 'usage: console-process --config <file>')
+  // The launcher appends its own start token, exactly as it does for Relay and
+  // Agent children; the Console projection path is the only editable argument.
+  if (argv.length < 2 || argv[0] !== '--config') throw new RelayProtocolError('INVALID_INPUT', 'usage: console-process --config <file> [--launcher-start-token <token>]')
   const handle = await startConsoleRuntime(await loadConsoleProcessConfig(argv[1]))
   const stop = () => { void handle.stop().catch(() => { process.exitCode = 1; console.error('Console shutdown failed') }) }
   process.once('SIGINT', stop); process.once('SIGTERM', stop)
@@ -41,7 +43,12 @@ export async function runConsoleProcess(argv = process.argv.slice(2)): Promise<v
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   void runConsoleProcess().catch(error => {
-    console.error('Console process failed:', error instanceof RelayProtocolError ? error.code : 'UNAVAILABLE')
+    const code = (error as NodeJS.ErrnoException | undefined)?.code === 'EADDRINUSE'
+      ? 'CONSOLE_PORT_OCCUPIED'
+      : error instanceof RelayProtocolError
+        ? error.code
+        : 'UNAVAILABLE'
+    console.error('Console process failed:', code, error instanceof Error ? error.message : String(error))
     process.exitCode = 1
   })
 }

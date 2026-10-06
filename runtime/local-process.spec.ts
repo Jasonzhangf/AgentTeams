@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig, writeLocalInternalLauncherState, writeLocalLauncherOwnership, writeLocalInternalState } from './local-config.ts'
-import { runLocalProcess, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
+import { consoleStatusLocalProcess, runLocalProcess, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
 import type { LocalSupervisor } from './local-supervisor.ts'
 
 const persistedAgentReadySource = `
@@ -14,6 +14,52 @@ process.send?.({ kind: 'daemon.status', agentId: 'browser', generation,
   endpoint: { agentId: 'browser', identity: { hostId: 'browser-host', machineId: 'machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
     role: 'provider', presence: 'online', state: 'online', generation, capabilities: [] } })
 `
+
+it('reports launcher=stopped for console status without inventing online state', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-console-status-stopped-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, `version = 3
+
+[bridge]
+enabled = true
+
+[agents.provider]
+enabled = true
+role = "provider"
+label = "Local provider"
+
+[agents.provider.identity]
+hostId = "local"
+machineId = "local"
+accountId = "local"
+agentKind = "custom"
+label = "Local provider"
+
+[agents.provider.runtime]
+scopeId = "local"
+dataDirectory = "data/provider"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-provider" }
+
+[console]
+enabled = true
+username = "admin"
+passwordEnv = "AGENTTEAMS_CONSOLE_PASSWORD"
+`)
+    const status = await consoleStatusLocalProcess(path)
+    expect(status).toMatchObject({
+      enabled: true,
+      state: 'stopped',
+      launcherState: 'stopped',
+      launcherGeneration: 0,
+    })
+    expect(status).not.toHaveProperty('url')
+    expect(status).not.toHaveProperty('pid')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 it('turns a post-ready supervisor failure into cleanup and a nonzero launcher result', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-local-process-'))
