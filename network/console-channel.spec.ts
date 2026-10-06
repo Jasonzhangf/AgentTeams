@@ -73,3 +73,34 @@ it('invokes the owner after a delayed send even when the client deadline is shor
     await serving
   } finally { release() }
 })
+
+it('rejects a projection reply that carries another Agent Session event', async () => {
+  const left = mockSocket()
+  const right = mockSocket()
+  const originalLeftSend = left.send.bind(left)
+  const originalRightSend = right.send.bind(right)
+  left.send = async frame => { await originalLeftSend(frame); right.deliver(frame) }
+  right.send = async frame => { await originalRightSend(frame); left.deliver(frame) }
+  const serving = serveConsole(right, async request => ({
+    kind: 'console.projection.result',
+    correlationId: request.correlationId,
+    projection: {
+      version: 1,
+      agents: [],
+      sessions: [],
+      notifications: [],
+      configs: [],
+      works: [],
+      relations: [],
+      sessionEvents: [{ eventId: 'e', agentId: 'other', sessionId: 's', kind: 'message', state: 'completed', messageId: 'm', role: 'assistant' }],
+    },
+  }), 1000)
+  try {
+    await expect(requestConsole(left, { kind: 'console.projection', correlationId: 'r', targetGeneration: 1, agentId: 'a' }, 1000))
+      .rejects.toMatchObject({ code: 'INVALID_INPUT' })
+    await serving
+  } finally {
+    await left.close()
+    await right.close()
+  }
+})

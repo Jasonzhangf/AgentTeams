@@ -172,12 +172,12 @@ const SESSION_EVENT_BUFFER_LIMIT = 200
 const ABORT_RECONCILE_TIMEOUT_MS = 5_000
 const EXPECTED_ADAPTER_CODES: readonly string[] = ['NOT_FOUND', 'INVALID_INPUT', 'FORBIDDEN', 'UNAUTHENTICATED', 'UNSUPPORTED_OPERATION']
 
-function sessionFailure(code: ConsoleServiceErrorCode, message: string, status?: number): ConsoleCommandResultV1 {
+function sessionFailure(code: ConsoleServiceErrorCode, message: string, status?: number): Extract<ConsoleCommandResultV1, { readonly ok: false }> {
   return { ok: false, error: { code, message, ...(status === undefined ? {} : { status }) } }
 }
 
 /** Expected adapter failures stay resultized so the owner keeps `current`; anything else keeps uncertainty. */
-function containExpectedAdapterError(error: unknown): ConsoleCommandResultV1 | undefined {
+function containExpectedAdapterError(error: unknown): Extract<ConsoleCommandResultV1, { readonly ok: false }> | undefined {
   if (!(error instanceof OpenCodeAdapterError)) return undefined
   if (!EXPECTED_ADAPTER_CODES.includes(error.code)) return undefined
   return sessionFailure(error.code as ConsoleServiceErrorCode, error.message, error.status)
@@ -203,7 +203,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
   let observation: SessionObservationState = { state: 'live' }
   let dropped = 0
   let currentSession: { readonly sessionId: string; readonly title?: string } | undefined
-  let stream: { readonly fingerprint: string; readonly controller: AbortController; readonly done: Promise<void> } | undefined
+  let stream: { readonly fingerprint: string; readonly controller: AbortController; readonly done: Promise<void>; ended: boolean } | undefined
   let replacing: Promise<void> | undefined
   let disposed = false
 
@@ -263,22 +263,24 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     if (disposed) return
     const controller = new AbortController()
     const client = createClient({ url: handle.url, authorization: handle.authorization })
-    const done = consume(client, controller)
-    stream = { fingerprint, controller, done }
+    const record = { fingerprint, controller, done: Promise.resolve(), ended: false }
+    record.done = consume(client, controller).finally(() => { record.ended = true })
+    stream = record
+    observation = { state: 'live' }
   }
   const ensureStream = (): void | Promise<void> => {
     if (replacing !== undefined) return replacing
     const handle = deps.owner.currentHandle()
     if (handle === undefined) return
     const fingerprint = `${handle.url}\u0000${handle.effectiveRevision}\u0000${handle.pid ?? ''}`
-    if (stream !== undefined && stream.fingerprint === fingerprint) return
+    if (stream !== undefined && !stream.ended && stream.fingerprint === fingerprint) return
     const previous = stream
     if (previous === undefined) {
       startStream(handle, fingerprint)
       return
     }
     stream = undefined
-    previous.controller.abort()
+    if (!previous.ended) previous.controller.abort()
     replacing = (async () => {
       try {
         await previous.done
@@ -291,13 +293,21 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     })()
     return replacing
   }
-  const useAdapter = async <T>(operation: (client: OpenCodeSessionClient & OpenCodeEventClient) => Promise<T>): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly result: ConsoleCommandResultV1 }> =>
+  const useAdapter = async <T>(
+    operation: (client: OpenCodeSessionClient & OpenCodeEventClient, handle: ManagedEffectiveHandle) => Promise<T>,
+    precondition?: (handle: ManagedEffectiveHandle) => ConsoleCommandResultV1 | undefined,
+  ): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly result: ConsoleCommandResultV1; readonly preDispatch: boolean }> =>
     await deps.owner.use(async handle => {
+      const rejected = precondition?.(handle)
+      if (rejected !== undefined) return { ok: false as const, result: rejected, preDispatch: true as const }
       const client = createClient({ url: handle.url, authorization: handle.authorization })
-      try { return { ok: true as const, value: await operation(client) } }
+      try { return { ok: true as const, value: await operation(client, handle) } }
       catch (error) {
         const contained = containExpectedAdapterError(error)
-        if (contained !== undefined) return { ok: false as const, result: contained }
+        if (contained !== undefined) {
+          const status = contained.error.status
+          return { ok: false as const, result: contained, preDispatch: status !== undefined && status >= 400 && status < 500 }
+        }
         throw error
       }
     })
@@ -380,16 +390,19 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       operations.set(sessionId, record)
       const streamChange = ensureStream()
       if (streamChange !== undefined) await streamChange
-      const outcome = await useAdapter(async client => await promptOpenCodeSession(client, sessionId, decoded.text, readiness.modelTarget, record.requestMessageId))
+      const outcome = await useAdapter(
+        async (client, handle) => await promptOpenCodeSession(client, sessionId, decoded.text, handle.modelTarget, record.requestMessageId),
+        handle => handle.effectiveRevision === record.effectiveRevision
+          ? undefined
+          : sessionFailure('CONFLICT', `Session runtime changed from revision ${record.effectiveRevision} to ${handle.effectiveRevision}`),
+      )
       const current = operations.get(sessionId)
       const owned = current !== undefined && current.operationId === record.operationId
       if (!outcome.ok) {
         // A transport return is not proof that the prompt ended, so only an explicit
         // pre-dispatch rejection may release the not-yet-started record. Every other
         // failure keeps it owned, and a later prompt still conflicts.
-        const status = outcome.result.ok === false ? outcome.result.error.status : undefined
-        const rejectedBeforeDispatch = status !== undefined && status >= 400 && status < 500
-        if (rejectedBeforeDispatch && owned && current.promptMessageId === undefined) operations.delete(sessionId)
+        if (outcome.preDispatch && owned && current.promptMessageId === undefined) operations.delete(sessionId)
         return outcome.result
       }
       // The synchronous response binds the assistant identity only when it names this

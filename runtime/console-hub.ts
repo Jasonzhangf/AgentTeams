@@ -73,7 +73,8 @@ export function createConsoleHub(
         } catch (error) {
           throw new RelayProtocolError('INVALID_INPUT', error instanceof Error ? error.message : 'Console projection requires work and relation observations')
         }
-        for (const rows of [projection.agents, projection.sessions, projection.configs, projection.notifications, observed.works, observed.relations]) {
+        for (const rows of [projection.agents, projection.sessions, projection.configs, projection.notifications,
+          projection.sessionEvents ?? [], observed.works, observed.relations]) {
           if (rows.some(row => row.agentId !== agentId)) throw new RelayProtocolError('INVALID_INPUT', 'Console projection crossed its Agent owner')
         }
         const projectedAgents = projection.agents.length === 0 && directoryAgent ? [directoryAgent] : projection.agents.map(agent => ({

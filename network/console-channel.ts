@@ -47,7 +47,8 @@ export async function requestConsole(socket: WssConnection, input: ConsoleWireRe
       if (reply.correlationId !== request.correlationId) throw new RelayProtocolError('INVALID_INPUT', 'Console reply correlation mismatch')
       if (reply.kind === 'console.projection.result') {
         if (request.kind !== 'console.projection') throw new RelayProtocolError('INVALID_INPUT', 'Unexpected Console projection reply')
-        for (const rows of [reply.projection.agents, reply.projection.sessions, reply.projection.notifications, reply.projection.configs]) {
+        for (const rows of [reply.projection.agents, reply.projection.sessions, reply.projection.notifications,
+          reply.projection.configs, reply.projection.sessionEvents ?? []]) {
           if (rows.some(row => row.agentId !== request.agentId)) throw new RelayProtocolError('INVALID_INPUT', 'Console projection belongs to another Agent')
         }
       } else if (request.kind === 'console.projection' && reply.result.ok) throw new RelayProtocolError('INVALID_INPUT', 'Console projection missing from reply')

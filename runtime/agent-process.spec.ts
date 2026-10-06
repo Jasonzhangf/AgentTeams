@@ -909,7 +909,8 @@ function sessionEventChannel() {
 }
 
 function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean } = {}) {
-  const channel = sessionEventChannel()
+  let channel = sessionEventChannel()
+  let subscriptions = 0
   const prompts: { sessionId: string; text: string; messageId?: string }[] = []
   const pendingPrompts: (() => void)[] = []
   let abortCalls = 0
@@ -937,9 +938,13 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
       status: async () => ({ data: {} }),
     },
     postSessionIdPermissionsPermissionId: async () => ({ data: {} }),
-    event: { subscribe: async () => ({ data: { stream: channel.stream } }) },
+    event: { subscribe: async () => {
+      subscriptions += 1
+      if (subscriptions > 1) channel = sessionEventChannel()
+      return { data: { stream: channel.stream } }
+    } },
   }
-  const handle: ManagedEffectiveHandle = { url: 'http://127.0.0.1:1', authorization: 'Bearer x', effectiveRevision: 3, modelTarget: { providerID: 'p', modelID: 'm' } }
+  let handle: ManagedEffectiveHandle = { url: 'http://127.0.0.1:1', authorization: 'Bearer x', effectiveRevision: 3, modelTarget: { providerID: 'p', modelID: 'm' } }
   let uncertain = false
   const owner = {
     readiness: (): ManagedRuntimeReadiness => uncertain ? { state: 'uncertain', effectiveRevision: 3 } : { state: 'current', effectiveRevision: 3, modelTarget: handle.modelTarget, activeOperations: 0 },
@@ -949,7 +954,16 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
     },
   }
   const host = createSessionHost({ agentId: 'agent', generation: () => 7, owner, createClient: () => client })
-  return { host, channel, prompts, abortCalls: () => abortCalls, isUncertain: () => uncertain, releasePrompt: () => { for (const resolve of pendingPrompts.splice(0)) resolve() } }
+  return {
+    host,
+    get channel() { return channel },
+    prompts,
+    abortCalls: () => abortCalls,
+    subscriptions: () => subscriptions,
+    replaceHandle: (next: ManagedEffectiveHandle) => { handle = next },
+    isUncertain: () => uncertain,
+    releasePrompt: () => { for (const resolve of pendingPrompts.splice(0)) resolve() },
+  }
 }
 const tick = () => new Promise<void>(resolve => setTimeout(resolve, 0))
 
@@ -1158,6 +1172,51 @@ describe('Session host admission, cancel causality and observation', () => {
     const failing = sessionHarness({ getError: new OpenCodeAdapterError('session.get', 'NOT_FOUND', 'missing', 404) })
     expect(await failing.host.openSession('missing')).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
     expect(failing.isUncertain()).toBe(false)
+  })
+
+  it('restarts one event consumer after an SSE end on the next explicit Session action', async () => {
+    const h = sessionHarness()
+    await h.host.ensureStream()
+    await tick()
+    expect(h.subscriptions()).toBe(1)
+    h.channel.end()
+    await tick()
+    expect(h.host.observation()).toMatchObject({ state: 'lost', reason: 'stream-ended' })
+
+    expect(await h.host.openSession('existing-1')).toEqual({ ok: true })
+    expect(h.subscriptions()).toBe(2)
+    expect(h.host.observation()).toEqual({ state: 'live' })
+    await h.host.dispose()
+  })
+
+  it('fails typed when the owner handle changes during the ensureStream await', async () => {
+    const h = sessionHarness()
+    h.replaceHandle({
+      url: 'http://127.0.0.1:0',
+      authorization: 'Bearer old',
+      effectiveRevision: 2,
+      modelTarget: { providerID: 'p2', modelID: 'm2' },
+    })
+    await h.host.ensureStream()
+    h.replaceHandle({
+      url: 'http://127.0.0.1:1',
+      authorization: 'Bearer x',
+      effectiveRevision: 3,
+      modelTarget: { providerID: 'p3', modelID: 'm3' },
+    })
+    const replacement: ManagedEffectiveHandle = {
+      url: 'http://127.0.0.1:2',
+      authorization: 'Bearer y',
+      effectiveRevision: 4,
+      modelTarget: { providerID: 'p4', modelID: 'm4' },
+    }
+    queueMicrotask(() => { h.replaceHandle(replacement) })
+
+    expect(await h.host.sendSession('s1', { text: 'must not reach the replacement child' })).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    })
+    expect(h.prompts).toEqual([])
   })
 
   it('restarts the one event stream for a new child pid and awaits the previous consumer', async () => {

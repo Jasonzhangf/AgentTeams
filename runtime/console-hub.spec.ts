@@ -36,6 +36,23 @@ it('rejects a cross-Agent projection instead of merging it into another owner', 
   await expect(client.readProjection()).rejects.toMatchObject({ code: 'INVALID_INPUT' })
 })
 
+it('rejects a cross-Agent Session event and accepts the owned event', async () => {
+  const event = (agentId: string) => ({ eventId: 'e', agentId, sessionId: 's', kind: 'message' as const, state: 'completed' as const,
+    messageId: 'm', role: 'assistant' as const })
+  const projection = (agentId: string) => ({ version: 1 as const, agents: [], sessions: [], configs: [], notifications: [],
+    works: [], relations: [], sessionEvents: [event(agentId)] })
+  const binding = (agentId: string) => ({
+    readProjection: async () => projection(agentId),
+    command: async () => ({ ok: true as const }),
+    sendSession: async () => ({ ok: true as const }),
+  })
+
+  await expect(createConsoleHub([{ agentId: 'a', client: binding('other') }]).readProjection())
+    .rejects.toMatchObject({ code: 'INVALID_INPUT' })
+  await expect(createConsoleHub([{ agentId: 'a', client: binding('a') }]).readProjection())
+    .resolves.toMatchObject({ sessionEvents: [event('a')] })
+})
+
 it('merges owner Work and relation observations and rejects a missing observation', async () => {
   const work = {
     agentId: 'a', workId: 'w', consumerAgentId: 'c', providerAgentId: 'a',
