@@ -23,8 +23,6 @@ import {
   createOpenCodeSession,
   cancelOpenCodeSession,
   promptOpenCodeSession,
-  readOpenCodeSessionMessages,
-  readOpenCodeSessionStatus,
   decodeOpenCodeSessionMessage,
   projectOpenCodeSessionEvent,
   subscribeOpenCodeEvents,
@@ -437,13 +435,10 @@ describe('OpenCode Teams adapter', () => {
     await expect(createOpenCodeSession(client as never, '')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
   })
 
-  it('returns raw abort acceptance and reads messages and status through the SDK', async () => {
+  it('returns raw abort acceptance through the SDK', async () => {
     await expect(cancelOpenCodeSession({ session: { abort: async () => ({ data: true }) } } as never, 's')).resolves.toBe(true)
     await expect(cancelOpenCodeSession({ session: { abort: async () => ({ data: false }) } } as never, 's')).resolves.toBe(false)
     await expect(cancelOpenCodeSession({ session: { abort: async () => ({ data: undefined }) } } as never, 's')).resolves.toBeUndefined()
-    const entries = [{ info: { id: 'm' }, parts: [{ id: 'p' }] }]
-    await expect(readOpenCodeSessionMessages({ session: { messages: async () => ({ data: entries }) } } as never, 's')).resolves.toEqual(entries)
-    await expect(readOpenCodeSessionStatus({ session: { status: async () => ({ data: { s: { type: 'idle' } } }) } } as never)).resolves.toEqual({ s: { type: 'idle' } })
   })
 
   it('dispatches a prompt with the owner messageID and binds only a matching assistant response', async () => {
@@ -494,6 +489,16 @@ describe('OpenCode Teams adapter', () => {
     expect(projectOpenCodeSessionEvent({ type: 'permission.replied', properties: { sessionID: 's', permissionID: 'p' } })).toMatchObject({ kind: 'invalid' })
     expect(projectOpenCodeSessionEvent({ type: 'session.error', properties: {} })).toMatchObject({ kind: 'invalid' })
     expect(projectOpenCodeSessionEvent({ properties: {} })).toMatchObject({ kind: 'invalid' })
+  })
+
+  it('classifies recognized non-outcome SDK events as intentionally ignored, never as projection loss', () => {
+    // session.created/status/idle are members of the installed SDK Event union but carry no
+    // projection outcome. They are deliberately ignored, not an unsupported/loss signal.
+    for (const type of ['session.created', 'session.updated', 'session.status', 'session.idle', 'session.deleted', 'session.compacted']) {
+      expect(projectOpenCodeSessionEvent({ type, properties: { sessionID: 's' } })).toMatchObject({ kind: 'ignored' })
+    }
+    // A genuinely unknown tag still fails explicitly.
+    expect(projectOpenCodeSessionEvent({ type: 'not.a.real.event', properties: {} })).toMatchObject({ kind: 'unsupported' })
   })
 
   it('forwards the real SDK event stream and stops on abort', async () => {

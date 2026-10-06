@@ -239,6 +239,17 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     pendingCancels.delete(sessionId)
     pending.resolve(messageId)
   }
+  // A replaced child cannot speak for the records or buffers its predecessor owned.
+  const fenceReplacedRuntime = (handle: ManagedEffectiveHandle): void => {
+    const generation = deps.generation()
+    for (const [sessionId, record] of operations) {
+      if (record.runtimeGeneration === generation && record.effectiveRevision === handle.effectiveRevision) continue
+      operations.delete(sessionId)
+      const pending = pendingCancels.get(sessionId)
+      if (pending !== undefined) { pendingCancels.delete(sessionId); pending.resolve(undefined) }
+    }
+    buffers.clear()
+  }
   const correlate = (event: ConsoleSessionEventView, parentMessageId: string | undefined): void => {
     const record = operations.get(event.sessionId)
     if (record === undefined) return
@@ -259,6 +270,9 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     try {
       for await (const raw of subscribeOpenCodeEvents(client, controller.signal)) {
         const projected = projectOpenCodeSessionEvent(raw)
+        // Recognized non-outcome events are intentionally ignored; only a genuinely
+        // unparseable/foreign event is projection loss.
+        if (projected.kind === 'ignored') continue
         if (projected.kind !== 'event') { degrade(projected.reason); continue }
         const event: ConsoleSessionEventView = { ...projected.event, agentId: deps.agentId }
         buffer(event)
@@ -297,6 +311,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
         const current = deps.owner.currentHandle()
         if (disposed || current === undefined) return
         const currentFingerprint = `${current.url}\u0000${current.effectiveRevision}\u0000${current.pid ?? ''}`
+        if (currentFingerprint !== previous.fingerprint) fenceReplacedRuntime(current)
         if ((stream as { readonly fingerprint: string } | undefined)?.fingerprint === currentFingerprint) return
         startStream(current, currentFingerprint)
       } finally { replacing = undefined }
@@ -436,6 +451,12 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       if (!ready.ok) return ready.result
       const record = operations.get(sessionId)
       if (record === undefined) return sessionFailure('CONFLICT', 'No active prompt to cancel for this session')
+      // The record snapshot must still match the live handle before abort may reach it:
+      // a replaced child cannot prove the owned prompt's causality.
+      const handle = deps.owner.currentHandle()
+      if (handle === undefined || record.runtimeGeneration !== deps.generation() || record.effectiveRevision !== handle.effectiveRevision) {
+        return cancelUnknown(record, undefined, 'stale-generation', undefined)
+      }
       if (record.abortOperationId !== undefined) return sessionFailure('CONFLICT', 'A cancel is already in flight for this session')
       if (record.promptMessageId === undefined) {
         emitCancelEvent(cancelEvent(record, undefined, { state: 'unknown', reason: 'ambiguous-owner' }))
@@ -846,24 +867,28 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       if (typeof value !== 'string' || value.length === 0) throw new RuntimeConfigError({ code: 'CREDENTIAL_UNAVAILABLE', message: `credential ${reference} is unavailable` })
       return value
     }
+    const agentId = config.declaration.identity.agentId
     const openCode = config.openCode
-    configBinding = openCode === undefined ? undefined : await (async () => {
-      const agentId = config.declaration.identity.agentId
-      const configPath = env.TEAMS_LOCAL_CONFIG_PATH ?? defaultLocalConfigPath(env.HOME)
-      const internalPath = env.TEAMS_LOCAL_INTERNAL_PATH ?? resolve(configPath, '..', 'internal.toml')
-      const persistence = createTomlRuntimeConfigPersistence({ configPath, internalPath, agentId })
-      const store = createRuntimeConfigStore(persistence, { agentId })
+    // Session capability follows the accepted/effective [agents.*.model] binding, so the store is
+    // read whenever the launcher supplied the local config; openCode only carries launch parameters.
+    const localConfigPath = env.TEAMS_LOCAL_CONFIG_PATH ?? (openCode === undefined ? undefined : defaultLocalConfigPath(env.HOME))
+    const localStore = localConfigPath === undefined ? undefined : (() => {
+      const internalPath = env.TEAMS_LOCAL_INTERNAL_PATH ?? resolve(localConfigPath, '..', 'internal.toml')
+      const persistence = createTomlRuntimeConfigPersistence({ configPath: localConfigPath, internalPath, agentId })
+      return { internalPath, persistence, store: createRuntimeConfigStore(persistence, { agentId }) }
+    })()
+    const configStore = localStore?.store
+    if (openCode !== undefined && localStore !== undefined) {
       const owner = createManagedConfigOwner({ agentId, executable: openCode.executable,
         directory: openCode.directory, port: openCode.port, startupTimeoutMs: openCode.startupTimeoutMs,
         stopTimeoutMs: openCode.stopTimeoutMs, resolveCredential: resolveCredentialValue,
-        persistence: createManagedConfigOwnerPersistence({ agentId, internalPath, persistence }) })
-      const binding = createConsoleConfigBinding({ agentId, store,
+        persistence: createManagedConfigOwnerPersistence({ agentId, internalPath: localStore.internalPath, persistence: localStore.persistence }) })
+      const binding = createConsoleConfigBinding({ agentId, store: localStore.store,
         models: createOpenAIModelCatalogClient(), credentials: { resolve: async reference => ({ kind: 'bearer', value: await resolveCredentialValue(reference) }) }, applier: owner })
-      const created = { binding, owner, store }
-      configBinding = created
+      configBinding = { binding, owner, store: localStore.store }
       // Reconcile the exact current target before Session/command ingress opens.
       await owner.recover(async () => {
-        const current = await store.read()
+        const current = await localStore.store.read()
         const modelBinding = current.agents[agentId]
         const provider = modelBinding === undefined ? undefined : current.providers[modelBinding.primary.providerInstanceId]
         return provider === undefined ? undefined : { target: targetIdentityFor(current, provider), config: current }
@@ -879,8 +904,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         },
       })
       await sessionHost.ensureStream()
-      return created
-    })()
+    }
     const allowed = (consumer: { agentId: string }) => config.allowedConsumers.includes(consumer.agentId)
     const policy = { revision: config.policyRevision, authorizeWork: allowed, authorizeRequest: allowed }
     // One runtime management row per Agent. A passive Agent never calls an owner.
@@ -894,19 +918,16 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         capabilities: advertisedCapabilities.map(item => item.capabilityId),
         ...(generation === undefined ? {} : { generation }),
       }
-      if (configBinding === undefined || sessionHost === undefined) {
-        return projectRuntimeAgentRow({ ...base, sessionCapable: false })
-      }
-      const current = await configBinding.store.read()
-      if (current.agents[config.declaration.identity.agentId] === undefined) {
+      const current = configStore === undefined ? undefined : await configStore.read()
+      if (current === undefined || current.agents[config.declaration.identity.agentId] === undefined) {
         return projectRuntimeAgentRow({ ...base, sessionCapable: false })
       }
       return projectRuntimeAgentRow({
         ...base,
         sessionCapable: true,
-        readiness: configBinding.owner.readiness(),
-        observation: sessionHost.observation(),
-        currentSessionId: sessionHost.currentSessionId(),
+        readiness: configBinding?.owner.readiness() ?? { state: 'no-current' },
+        observation: sessionHost?.observation(),
+        currentSessionId: sessionHost?.currentSessionId(),
       })
     }
     const consoleClient: ConsoleClientV1 = {

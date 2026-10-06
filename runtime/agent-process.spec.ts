@@ -350,6 +350,61 @@ process.once('SIGINT', () => server.close(() => process.exit(0)))
   expect(first.output()).not.toContain('Bearer provider')
 }, 15000)
 
+it('projects an Agent with an accepted model binding but no openCode launch block as session capable', async () => {
+  const localRelay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
+    maxPayload: 65536, maxConnections: 8, maxGrants: 4, maxBufferedAmount: 65536, maxPendingMessages: 8, maxPendingBytes: 131072, grantTtlMs: 5000,
+    authenticate: credential => (credential === 'Bearer binding-consumer' || credential === 'Bearer binding-only')
+      ? { accountId: 'account', scopeId: 'scope', agentId: credential.slice(7) } : null })
+  const bindingConsumer = await createRelayClient({ transport: { endpoint: localRelay.url, credential: 'Bearer binding-consumer', ca: cert, connectTimeoutMs: 1000,
+    maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 8 },
+    declaration: { identity: { hostId: 'binding-consumer', machineId: 'test', agentId: 'binding-consumer', accountId: 'account', agentKind: 'custom', label: 'Consumer' },
+      scopeId: 'scope', revision: 1, capabilities: [], routes: [] },
+    admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxPendingRequests: 8, maxDataConnections: 8 })
+  const root = join(directory, 'binding-only')
+  mkdirSync(root, { recursive: true })
+  const bindingConfigPath = join(root, 'config.toml')
+  writeFileSync(bindingConfigPath, [
+    'version = 3',
+    '',
+    '[providers.probe]',
+    'protocol = "openai-chat"',
+    'apiBaseUrl = "http://127.0.0.1:1/v1"',
+    'label = "Probe"',
+    'enabled = true',
+    '',
+    '[[models]]',
+    'provider = "probe"',
+    'id = "probe-model"',
+    '',
+    '[agents.binding-only.model]',
+    'primary = { provider = "probe", model = "probe-model" }',
+    '',
+  ].join('\n'))
+  const bindingInternalPath = join(root, 'internal.toml')
+  writeFileSync(bindingInternalPath, 'version = 2\n')
+  const bindingAgentConfig = join(root, 'agent.json')
+  writeFileSync(bindingAgentConfig, JSON.stringify({
+    version: 1,
+    identity: { hostId: 'binding-only-host', machineId: 'test', agentId: 'binding-only', accountId: 'account', agentKind: 'custom', label: 'Binding Only' },
+    scopeId: 'scope', dataDirectory: join(root, 'data'), leasePort: await availablePort(), presenceIntervalMs: 1000,
+    policy: { revision: 1, allowedConsumers: ['binding-consumer'], allowedManagers: ['binding-consumer'] },
+    cli: { camoExecutable: '/opt/homebrew/bin/camo', searchExecutable: '/opt/homebrew/bin/rg', searchRoot: root, profilePrefix: 'teams-binding-test' },
+    relay: { endpoint: localRelay.url, credentialEnv: 'TEAMS_AGENT_TEST_AUTH', caFile: join(directory, 'cert.pem'), connectTimeoutMs: 1000,
+      admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
+  }))
+  try {
+    const bindingChild = child(bindingAgentConfig, 'Bearer binding-only', { TEAMS_LOCAL_CONFIG_PATH: bindingConfigPath, TEAMS_LOCAL_INTERNAL_PATH: bindingInternalPath })
+    expect(await bindingChild.ready).toMatchObject({ agentId: 'binding-only' })
+    const projection = await createRelayConsoleClient(bindingConsumer, 'binding-only', 8000).readProjection()
+    expect(projection.agents[0]).toMatchObject({ sessionCapable: true, sessionAvailability: 'no-current' })
+    bindingChild.process.kill('SIGTERM')
+    expect((await bindingChild.exited).code).toBe(0)
+  } finally {
+    await bindingConsumer.close()
+    await localRelay.close()
+  }
+}, 15000)
+
 it('creates and closes an explicitly configured direct listener with the Agent process', async () => {
   const localRelay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
     maxPayload: 65536, maxConnections: 4, maxGrants: 4, maxBufferedAmount: 65536, maxPendingMessages: 16, maxPendingBytes: 131072,
@@ -935,8 +990,6 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
         if (options.abortHold) await new Promise<void>(resolve => { pendingPrompts.push(resolve) })
         return options.abortResponse === 'absent' ? { data: undefined } : { data: options.abortAccepted ?? true }
       },
-      messages: async () => ({ data: [] }),
-      status: async () => ({ data: {} }),
     },
     postSessionIdPermissionsPermissionId: async () => ({ data: {} }),
     event: { subscribe: async () => {
@@ -948,7 +1001,7 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
   let handle: ManagedEffectiveHandle = { url: 'http://127.0.0.1:1', authorization: 'Bearer x', effectiveRevision: 3, modelTarget: { providerID: 'p', modelID: 'm' } }
   let uncertain = false
   const currentReadiness = (): ManagedRuntimeReadiness => options.readiness
-    ?? (uncertain ? { state: 'uncertain', effectiveRevision: 3 } : { state: 'current', effectiveRevision: 3, modelTarget: handle.modelTarget, activeOperations: 0 })
+    ?? (uncertain ? { state: 'uncertain', effectiveRevision: handle.effectiveRevision } : { state: 'current', effectiveRevision: handle.effectiveRevision, modelTarget: handle.modelTarget, activeOperations: 0 })
   const owner = {
     readiness: currentReadiness,
     currentHandle: () => handle,
@@ -1204,6 +1257,46 @@ describe('Session host admission, cancel causality and observation', () => {
     expect(failing.isUncertain()).toBe(false)
   })
 
+  it('keeps observation live for recognized non-outcome events and degrades only on genuine loss', async () => {
+    const h = sessionHarness()
+    await h.host.ensureStream()
+    await tick()
+    for (const type of ['session.created', 'session.status', 'session.idle']) {
+      h.channel.push({ type, properties: { sessionID: 's' } })
+      await tick()
+    }
+    expect(h.host.observation()).toEqual({ state: 'live' })
+    expect(h.host.sessionEvents()).toEqual([])
+    // A genuinely unparseable/foreign tag is still a projection loss.
+    h.channel.push({ type: 'mystery.event', properties: {} })
+    await tick()
+    expect(h.host.observation()).toMatchObject({ state: 'degraded', reason: 'projection-loss', droppedEvents: 1 })
+  })
+
+  it('fences a stale operation record on child replacement and rejects cancel typed before abort', async () => {
+    const h = sessionHarness({ holdPrompt: true })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: h.prompts[0].messageId! } } })
+    await tick()
+    // The child is replaced with a new effective revision while the prompt record is bound.
+    h.replaceHandle({ url: 'http://127.0.0.1:9', authorization: 'Bearer replacement', effectiveRevision: 4, pid: 2, modelTarget: { providerID: 'p4', modelID: 'm4' } })
+    // Before re-pointing the stream, a cancel must refuse the mismatched snapshot and never abort
+    // through the replacement child.
+    const rejected = await h.host.cancelSession('s1')
+    expect(rejected).toMatchObject({ ok: false, error: { code: 'RESULT_UNKNOWN', detail: { reason: 'stale-generation', runtimeGeneration: 7, effectiveRevision: 3 } } })
+    expect(h.abortCalls()).toBe(0)
+    // Re-pointing the stream fences the stale record, so a fresh prompt is admitted and reaches
+    // the replacement child instead of conflicting with a dead operation.
+    await h.host.ensureStream()
+    const fresh = h.host.sendSession('s1', { text: 'fresh' })
+    await tick()
+    expect(h.prompts.map(item => item.sessionId)).toEqual(['s1', 's1'])
+    h.releasePrompt()
+    expect(await fresh).toMatchObject({ ok: true })
+    await prompt
+  })
+
   it('restarts one event consumer after an SSE end on the next explicit Session action', async () => {
     const h = sessionHarness()
     await h.host.ensureStream()
@@ -1273,8 +1366,6 @@ describe('Session host admission, cancel causality and observation', () => {
         create: async () => ({ data: { id: 's' } }),
         prompt: async () => ({ data: {} }),
         abort: async () => ({ data: true }),
-        messages: async () => ({ data: [] }),
-        status: async () => ({ data: {} }),
       },
       postSessionIdPermissionsPermissionId: async () => ({ data: {} }),
       event: {

@@ -176,21 +176,8 @@ export interface OpenCodeSessionClient {
     create(options?: { body?: { readonly parentID?: string; readonly title?: string }; query?: { readonly directory?: string } }): Promise<OpenCodeSdkResult<Session>>
     prompt(options: { path: { id: string }; body: OpenCodeSessionPromptBody }): Promise<OpenCodeSdkResult<unknown>>
     abort(options: { path: { id: string } }): Promise<OpenCodeSdkResult<boolean>>
-    messages(options: { path: { id: string }; query?: { readonly directory?: string; readonly limit?: number } }): Promise<OpenCodeSdkResult<readonly OpenCodeSessionMessageEntry[]>>
-    status(options?: { query?: { readonly directory?: string } }): Promise<OpenCodeSdkResult<Readonly<Record<string, OpenCodeSessionStatus>>>>
   }
   readonly postSessionIdPermissionsPermissionId: (options: { path: { id: string; permissionID: string }; body: { response: 'once' | 'always' | 'reject' } }) => Promise<OpenCodeSdkResult<unknown>>
-}
-
-/** 1.18.23 `session.messages` entry: one opaque message info plus its parts. */
-export type OpenCodeSessionMessageEntry = {
-  readonly info: unknown
-  readonly parts: readonly unknown[]
-}
-
-/** 1.18.23 `session.status` value, keyed by session id. */
-export interface OpenCodeSessionStatus {
-  readonly type: 'idle' | 'retry' | 'busy'
 }
 
 /** Raw SDK event; only the wire `type` and opaque `properties` are read by the pure classifier. */
@@ -212,6 +199,7 @@ export interface OpenCodeEventClient {
 /** Single-event classification result produced only by `projectOpenCodeSessionEvent`. */
 export type OpenCodeSessionEventProjection =
   | { readonly kind: 'event'; readonly event: ConsoleSessionEventView; readonly parentMessageId?: string }
+  | { readonly kind: 'ignored'; readonly reason: string; readonly raw: JsonValue }
   | { readonly kind: 'unsupported'; readonly reason: string; readonly raw: JsonValue }
   | { readonly kind: 'invalid'; readonly reason: string; readonly raw: JsonValue }
 
@@ -420,21 +408,6 @@ export async function cancelOpenCodeSession(client: OpenCodeSessionClient, sessi
   return unwrapOpenCodeResponse(result, 'session.abort', true)
 }
 
-/** Reads the real message/part list for one session; identity is preserved verbatim. */
-export async function readOpenCodeSessionMessages(client: OpenCodeSessionClient, sessionId: string): Promise<readonly OpenCodeSessionMessageEntry[]> {
-  const result = await client.session.messages({ path: { id: sessionId } })
-  const messages = unwrapOpenCodeResponse(result, 'session.messages')
-  if (messages === undefined) throw new OpenCodeAdapterError('session.messages', 'INVALID_RESPONSE', 'OpenCode session.messages returned no data')
-  return messages
-}
-
-/** Reads session-level status as a supporting observation; never the sole cancel confirmation. */
-export async function readOpenCodeSessionStatus(client: OpenCodeSessionClient): Promise<Readonly<Record<string, OpenCodeSessionStatus>>> {
-  const result = await client.session.status({})
-  const status = unwrapOpenCodeResponse(result, 'session.status')
-  return status ?? {}
-}
-
 export type OpenCodeSessionMessageV1 = {
   readonly text: string
 }
@@ -528,6 +501,23 @@ const OBSERVED_PART_TAGS: Readonly<Record<string, ObservedPartType>> = {
   patch: 'patch', agent: 'agent', retry: 'retry', compaction: 'compaction', subtask: 'subtask',
 } as const
 
+/**
+ * Members of the installed SDK `Event` union that carry no Session projection
+ * outcome. They are recognized and deliberately ignored: a healthy child emits
+ * these routinely, so they are not loss and must not degrade observation.
+ */
+const IGNORED_EVENT_TAGS: readonly string[] = [
+  'server.connected', 'server.instance.disposed',
+  'installation.updated', 'installation.update-available',
+  'lsp.client.diagnostics', 'lsp.updated',
+  'message.removed', 'message.part.removed',
+  'session.status', 'session.idle', 'session.compacted',
+  'session.created', 'session.updated', 'session.deleted', 'session.diff',
+  'file.edited', 'file.watcher.updated', 'todo.updated', 'command.executed',
+  'vcs.branch.updated', 'tui.prompt.append', 'tui.command.execute', 'tui.toast.show',
+  'pty.created', 'pty.updated', 'pty.exited', 'pty.deleted',
+]
+
 function eventBase(type: string, sessionId: string, messageId?: string): { readonly eventId: string; readonly sessionId: string } {
   return { eventId: `${type}:${sessionId}:${messageId ?? ''}`, sessionId }
 }
@@ -581,6 +571,9 @@ export function projectOpenCodeSessionEvent(raw: unknown): OpenCodeSessionEventP
     const decision = response === 'once' || response === 'always' || response === 'reject' ? response : 'unknown'
     return { kind: 'event', event: { ...eventBase(type, sessionId), agentId: '', kind: 'permission', state: 'resolved', permissionId, decision, ...(decision === 'unknown' ? { rawResponse: response } : {}) } }
   }
+  // A recognized SDK event with no Session projection outcome is intentionally ignored,
+  // never counted as projection loss. Only genuinely unknown tags fail below.
+  if (IGNORED_EVENT_TAGS.includes(type)) return { kind: 'ignored', reason: `recognized non-outcome OpenCode event ${type}`, raw: rawJson }
   return { kind: 'unsupported', reason: `unsupported OpenCode event ${type}`, raw: rawJson }
 }
 
