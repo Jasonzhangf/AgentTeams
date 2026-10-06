@@ -788,7 +788,14 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         throw new LocalConsoleLifecycleError('STALE_GENERATION', `stale Console generation expected=${expectedConsoleGeneration} current=${status.generation}`)
       }
       const child = children.get('console')
-      if (status.state === 'online' && child !== undefined && child.exitCode === null && child.signalCode === null) return status
+      const ownedLiveChild = child !== undefined && child.exitCode === null && child.signalCode === null
+      if (ownedLiveChild) {
+        if (status.state === 'online') return status
+        // A Console child this launcher still owns may never be replaced. Spawning
+        // a second child would overwrite the persisted identity and leave the first
+        // one holding the reused Console port with no owner left to stop it.
+        throw new LocalConsoleLifecycleError('CONSOLE_RETAINED', `Console child ${child.pid} is still owned by this launcher in state ${status.state}`)
+      }
       return await startConsoleChild()
     })
     consoleLifecycle = operation.catch(() => statusFromRuntime())

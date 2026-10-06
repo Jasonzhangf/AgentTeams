@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalLauncherState } from './local-config.ts'
+import { projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState } from './local-config.ts'
 import { createLocalSupervisor, planLocalProcesses, type LocalSupervisor } from './local-supervisor.ts'
 
 const V3_CONSOLE_CONFIG = `version = 3
@@ -236,3 +236,30 @@ it('serializes Console start and stop so a queued stop cannot be overtaken by a 
     await rm(harnessResult.root, { recursive: true, force: true })
   }
 }, 20_000)
+
+it('never spawns a second Console child while it still owns a live one', async () => {
+  const harnessResult = await harness('teams-console-single-owner-')
+  const supervisor = supervisorFor(harnessResult)
+  try {
+    await reserve(harnessResult)
+    await supervisor.start()
+    const started = await supervisor.consoleStart()
+    const ownedPid = (await readLocalInternalConfig(harnessResult.config.internalPath!)).consoleRuntime!.pid!
+    // The child is still alive and owned by this launcher, but its durable state
+    // is no longer online. A second start must not replace it: the persisted
+    // identity would move to the new child while the first one keeps the reused
+    // Console port with no owner left to stop it.
+    await writeLocalInternalConsoleRuntime(harnessResult.config.internalPath!, {
+      enabled: true,
+      state: 'retained',
+      error: { code: 'CONSOLE_RETAINED', message: 'Console exit was unconfirmed' },
+    })
+    await expect(supervisor.consoleStart()).rejects.toMatchObject({ code: 'CONSOLE_RETAINED' })
+    const internal = await readLocalInternalConfig(harnessResult.config.internalPath!)
+    expect(internal.consoleRuntime).toMatchObject({ state: 'retained', pid: ownedPid, url: started.url })
+    expect(() => process.kill(ownedPid, 0)).not.toThrow()
+  } finally {
+    try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
+    await rm(harnessResult.root, { recursive: true, force: true })
+  }
+}, 15_000)
