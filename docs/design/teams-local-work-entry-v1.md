@@ -664,7 +664,7 @@ typed 帧扩展（封闭 union，一次连接一次请求；未列字段视为 `
 ```text
 CLI → launcher: { "kind": "work.open",    "requestId": "<corr>", "control": { "receiverAgentId", "expectedLauncherGeneration", "startToken", "executionId", "attemptId", "workId": "<fresh>", "requestId": "<fresh>", "targetAgentId": "<fixed-before-dispatch>", "targetGeneration": <fixed-before-dispatch>, "capabilityId", "capabilityVersion", "operation", "demands", "policyRevision"? }, "business": "<JsonValue>" }
 CLI → launcher: { "kind": "work.request", "requestId": "<corr>", "control": { "receiverAgentId", "expectedLauncherGeneration", "startToken", "executionId", "attemptId", "workId": "<original>", "requestId": "<fresh>", "targetAgentId": "<original>", "targetGeneration": <original>, "capabilityId": "<original>", "capabilityVersion": "<original>", "operation", "demands" }, "business": "<JsonValue>" }
-CLI → launcher: { "kind": "work.close",   "requestId": "<corr>", "control": { "receiverAgentId", "expectedLauncherGeneration", "startToken", "executionId", "attemptId", "workId": "<original>", "targetAgentId": "<original>", "targetGeneration": <original>, "capabilityId": "<original>", "capabilityVersion": "<original>", "operation": "<captured open operation>" } }
+CLI → launcher: { "kind": "work.close",   "requestId": "<corr>", "control": { "receiverAgentId", "expectedLauncherGeneration", "startToken", "executionId", "attemptId", "workId": "<original>", "requestId": "<fresh>", "targetAgentId": "<original>", "targetGeneration": <original>, "capabilityId": "<original>", "capabilityVersion": "<original>", "operation": "<captured open operation>" } }
 CLI → launcher: { "kind": "work.query",   "requestId": "<corr>", "control": { "serviceSelection": "capability", "receiverAgentId", "expectedLauncherGeneration", "startToken", "executionId": "<fresh>", "attemptId": "<fresh>", "workId": "<original>", "requestId": "<original>", "targetAgentId": "<original>", "targetGeneration": <original>, "capabilityId": "<original>", "capabilityVersion": "<original>", "operation": "<original request operation>", "linkGeneration"?: <current> } }
 launcher → CLI: { "kind": "work.result", "requestId": "<corr>", "receipt": "<ProjectExecutionReceipt>" }
 launcher → CLI: { "kind": "work.error",  "requestId": "<corr>", "error": { "code", "message" } }
@@ -686,7 +686,7 @@ provider ledger 再权威校验原 `workId` 与 consumer 归属，不匹配即
 `NOT_FOUND`/`FORBIDDEN`。**不使用** `admission`/`closure` 之类的 route-skip 控制字段：
 「继续」由图选择（无 admit 节点）表达，「保留」由图选择（`return-held-work`）表达。
 
-以下均为同一实现单元的 **PENDING typed host/runner 契约**：open/request/close 的
+以下均为同一实现单元的 typed host/runner 契约（当时标为 **PENDING**，现已实现）：open/request/close 的
 `targetAgentId`/`targetGeneration` 必须贯穿 `service.resolved`、`link.verified` 以及
 admit/continue/close Operator 输入，不能在预校验后丢弃。open 的 target 已由 CLI 在
 dispatch 前固定，`resolve-service` 只校验该精确 provider 声明与代次；request/close 在
@@ -759,21 +759,21 @@ admission 拒绝。此区分不新增 U2 配置字段、resolver、ledger 或 sc
 - `work-request.graph.json`（**新增**）：`agentteams.work-request@1`，单输入
   `work.request.intent`、单输出 `work.held.receipt`，4 节点 `resolve-service → open-link →
   continue-work → return-held-work`；**结构上无 `admit-work`**，故不可能 repropose。
-  `continue-work` 绑定 **PENDING** `teams.continue-provider-work@1`，输入是
+  `continue-work` 绑定 `teams.continue-provider-work@1`（当时标为 **PENDING**，现已注册），输入是
   `work.request.link`（当前已验证 link + 原 service 绑定 + 原 `workId` + fresh
   `requestId` + 本次 `operation` + `demands` + 原业务 payload），不是 `AdmittedWork`，
   也不携带任何本地 `accepted`
   自证字段。该 Operator 只调用既有 `agentWork.request` host 端口；provider
   `WorkHost.request` 以已认证 consumer + durable `workId` 为权威接纳检查。现有
   `teams.request-provider-work@1` 的 `AdmittedWork → WorkOutcome` 契约只继续服务
-  `work-open`/`agent-work`，其行为契约表中的输入描述必须在实现单元同步为这组未来契约；
-  本 docs phase 明确标记为 **PENDING contract update**，不宣称当前已注册或已可运行。
+  `work-open`/`agent-work`，其行为契约表中的输入描述已在实现单元同步为这组契约；
+  本 docs phase 当时标记为 **PENDING contract update**，不宣称当时已注册或已可运行，该更新现已完成。
 - `work-close.graph.json`（**新增**）：`agentteams.work-close@1`，单输入
   `work.close.intent`、单输出 `work.close.receipt`，3 节点 `resolve-service → open-link →
-  close-work`；末节点为新 Operator `teams.close-provider-work`（**required /
-  unimplemented**，provider-authoritative close，不走 `settle-provider-work` 的
+  close-work`；末节点为 Operator `teams.close-provider-work`（**required，已实现**，
+  provider-authoritative close，不走 `settle-provider-work` 的
   request-completion ARC）。
-- 三个新 Operator 的 registry/契约更新义务（**未来实现，非本修订写入**）：
+- 三个新 Operator 的 registry/契约更新（当时为**未来实现，非本修订写入**；现已全部完成）：
   - `teams.return-held-work`：host 映射 `agentWork.dispose` **仅此一个**端口；返回业务结果
     与 `workClosure: retained`，**不**发 `agentWork.close`。
   - `teams.continue-provider-work`：host 映射既有 `agentWork.request`；输入
