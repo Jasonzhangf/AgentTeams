@@ -118,7 +118,7 @@
       "owner": "runtime",
       "status": "partial",
       "design_doc": "docs/design/teams-behavior-contracts.md",
-      "note": "Work DAGpipe SDK host adapter and runner are implemented as a source-level library consumer (runtime/dagpipe/** with real compiled SDK and provider-ledger tests), and AgentWorkClient capability selection is implemented. Launcher local Work ingress remains design-only runtime scope. Provider ledger and admission remain Agent-owned; no second daemon or scheduler. Installed CLI/receiver/package and blackbox evidence remain pending.",
+      "note": "Work DAGpipe SDK host adapter and runner are implemented as a source-level library consumer (runtime/dagpipe/** with real compiled SDK and provider-ledger tests), and AgentWorkClient capability selection is implemented. The launcher local Work ingress is delivered for the exact candidate: the public CLI/launcher/receiver path and the installed runtime consumer are covered by the installed package user smoke, which drives installed submit/query plus persistent open/request/query/close against installed runtime artifacts. Provider ledger and admission remain Agent-owned; no second daemon or scheduler. The BB driver matrix, Console-offline Work and final user acceptance remain pending.",
       "owned_paths": [
         "runtime/**"
       ],

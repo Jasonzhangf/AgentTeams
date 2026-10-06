@@ -398,10 +398,16 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       const hadFailure = lifecycle === 'failed' || lastFailure !== undefined
       lifecycle = 'stopping'
       const failures: unknown[] = []
-      try { await workControl?.close() } catch (error) { failures.push(error) }
-      workControl = undefined
+      // Stop must not depend on a receiver reply. Closing the listener stops new
+      // admissions synchronously, but its drain also waits for every accepted
+      // handler, and an accepted handler waits for the receiver child reply up
+      // to the forwarding timeout. Release the in-flight forwards first, so a
+      // hung or exited receiver cannot hold stop and child cleanup open.
+      const closingControl = workControl?.close()
       for (const resolvePending of pendingWork.values()) resolvePending({ kind: 'work.error', requestId: 'unknown', error: { code: 'LOCAL_CONTROL_UNAVAILABLE', message: 'local Work listener is stopping' } })
       pendingWork.clear()
+      try { await closingControl } catch (error) { failures.push(error) }
+      workControl = undefined
       if (config.internalPath !== undefined) {
         try { await writeLocalInternalWorkControl(config.internalPath, undefined) } catch (error) { failures.push(error) }
       }

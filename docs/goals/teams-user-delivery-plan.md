@@ -56,7 +56,7 @@ D0/D1 已交付启动、Work、配置、观察、Session、停止、版本交付
 
 | Gap | 已有事实与欠缺 | 关闭责任 |
 |---|---|---|
-| Session 窄设计尚未准入 | D1、U2、U3、U4、U5 的相应设计已准入。U6 五轮均为实际 code_failure；第五轮 finding 的修订候选已冻结，但没有独立 PASS，追加审查的决定仍待处理。只阻断 U6 接缝，不重做其他已交付设计 | U6 |
+| Session 窄设计尚未准入 | D1、U2、U3、U4、U5 的相应设计已准入。U6 六轮均为实际 code_failure；第六轮四条 finding（提交后证据仍称未提交、能力门控用了 U2 已删除的用户配置 `openCode`、事件观测缺 ingress/生命周期/清理、瞬态事件丢失污染 owner readiness）已由重构候选修复，但尚未取得独立 PASS，下一轮设计审查待执行。只阻断 U6 接缝，不重做其他已交付设计 | U6 |
 | DAGpipe 没有执行安装后的产品请求 | D2 能力与 U4 r8 设计已交付；当前五图库已有 26 个真实 SDK/Relay/provider consumer，但尚未集成。独立 r4 阻断了缺字段时先产生 provider 副作用、畸形/重复终态不返回唯一 typed receipt 两项，当前 owner 修复并补红绿。公开 CLI/launcher/receiver 入口与安装 runner/manifest/五图已由本单元接上，安装包 smoke 从公开入口回放成功与失败路径；仍缺 U7 统一 driver 与最终同包用户黑盒 | D3/U4；库验证不关闭安装后的 Work |
 | 安装对象尚未形成完整用户包 | U1 基础包修复 `233bedc` 已通过独立 r5、实际提交 SHA 上的 526 tests 与安装/认证 Console/Relay/两 daemon 重启，合入并推送；候选身份与 launcher PID 校验已修复。基础模式 `release_eligible=false`，最终 runner、Console 生命周期与同包黑盒仍缺 | U1 最终组包；U7 不代替 U1 安装证据 |
 | 配置单元已交付，全服务启动仍待 consumer | U2 `228de8f` 已实现 v3 用户 TOML、内部材料、per-daemon accepted/effective、短锁 CAS 与 durable uncertain/recovery；独立产品 r3 PASS、提交后正式准入及真实配置入口通过，issue `776fcad` 已关闭。daemon JSON `endpoint.services` 的解码/执行属于 U3，用户现有 HOME 配置尚未迁移；配置通过不是 BB02/BB10 最终同包通过 | U2 已收口；U3 关闭服务接缝 |

@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { createLocalSupervisor, localDaemonStatusProjectionPath } from './local-supervisor.ts'
+import { createLocalSupervisor, localDaemonStatusProjectionPath, localWorkControlSocketPath } from './local-supervisor.ts'
 import { planLocalProcesses } from './local-supervisor.ts'
 import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig, writeLocalInternalLauncherState } from './local-config.ts'
+import { sendLocalWorkControlRequest } from './local-work-control.ts'
 import type { LocalConfig } from './local-config.ts'
 
 it('plans relay first, then only enabled independent daemons', () => {
@@ -152,5 +153,98 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     const internal = await readLocalInternalConfig(config.internalPath!)
     expect(internal.launcher).toMatchObject({ state: 'failed', error: expect.stringContaining('cleanup remains unconfirmed') })
     expect(supervisor.state()).toBe('failed')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+async function waitForFile(path: string, timeoutMs = 10_000): Promise<string> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    try {
+      return await readFile(path, 'utf8')
+    } catch {
+      if (Date.now() > deadline) throw new Error(`timed out waiting for ${path}`)
+      await new Promise(resolveWait => setTimeout(resolveWait, 25))
+    }
+  }
+}
+
+it('stops without waiting for a receiver that never answers an in-flight Work request', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-local-stop-'))
+  try {
+    const relay = join(root, 'relay.mjs')
+    const agent = join(root, 'agent.mjs')
+    const forwarded = join(root, 'forwarded-work-frame')
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    // The receiver publishes a live status projection and accepts the forwarded
+    // Work frame, records that it arrived and then never answers it. This is the
+    // real public boundary of the local Work ingress: the launcher owns the
+    // socket and forwards to the receiver child over IPC.
+    await writeFile(agent, `import { writeFileSync } from 'node:fs'
+const generation = 1
+process.send?.({ kind: 'daemon.status', endpoint: { agentId: 'receiver',
+  identity: { hostId: 'receiver-host', machineId: 'machine', agentId: 'receiver', accountId: 'account', agentKind: 'custom', label: 'Receiver' },
+  role: 'receiver', presence: 'online', state: 'online', generation, capabilities: [] } })
+process.send?.({ kind: 'daemon.registered', agentId: 'receiver', generation })
+process.on('message', message => { if (message?.kind === 'work.control') writeFileSync(${JSON.stringify(forwarded)}, 'forwarded') })
+setInterval(() => {}, 1000)
+process.once('SIGTERM', () => process.exit(0))
+`)
+    await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48021 } }))
+    await writeLocalConfig(join(root, 'config.toml'), `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.receiver]
+role = "receiver"
+identity = { hostId = "receiver-host", machineId = "machine", agentId = "receiver", accountId = "account", agentKind = "custom", label = "Receiver" }
+scopeId = "scope"
+dataDirectory = "data/receiver"
+leasePort = 48121
+presenceIntervalMs = 100
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+connect = { targetAgentId = "provider", capabilityId = "file-search", capabilityVersion = "1", operation = "search", demands = [{ resourceId = "slot", amount = 1 }] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-receiver" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
+`)
+    const config = await loadLocalConfig(join(root, 'config.toml'))
+    const startToken = 'stop-with-inflight-work'
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 1, startToken, state: 'starting' })
+    const supervisor = createLocalSupervisor(config, { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 4000, stopTimeoutMs: 3000, startToken })
+    await supervisor.start()
+    expect(supervisor.state()).toBe('running')
+
+    const inFlight = sendLocalWorkControlRequest({
+      socketPath: localWorkControlSocketPath(config.internalPath!),
+      frame: {
+        kind: 'work.submit',
+        requestId: 'corr-inflight',
+        control: {
+          receiverAgentId: 'receiver',
+          expectedLauncherGeneration: supervisor.generation(),
+          startToken,
+          executionId: 'execution-inflight',
+          attemptId: 'attempt-inflight',
+          workId: 'work-inflight',
+          requestId: 'request-inflight',
+        },
+        business: { text: 'never answered' },
+      },
+      timeoutMs: 120_000,
+    })
+    // The forward is only in flight once the receiver child has the frame. The
+    // receiver never replies, so the launcher is waiting on the 120s forwarding
+    // timeout when stop arrives.
+    await expect(waitForFile(forwarded)).resolves.toBe('forwarded')
+
+    const startedAt = Date.now()
+    await supervisor.stop()
+    const elapsedMs = Date.now() - startedAt
+
+    expect(supervisor.state()).toBe('stopped')
+    // Releasing the in-flight forward must not wait for the receiver reply, so
+    // stop stays far below the forwarding timeout and still terminates children.
+    expect(elapsedMs).toBeLessThan(5000)
+    await expect(inFlight).resolves.toMatchObject({ kind: 'work.error', error: { code: 'LOCAL_CONTROL_UNAVAILABLE' } })
   } finally { await rm(root, { recursive: true, force: true }) }
 })
