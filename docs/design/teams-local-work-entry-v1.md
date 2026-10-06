@@ -517,8 +517,7 @@ req_a=$(node -e 'console.log(require(process.argv[1]).control.requestId)' "$ev/s
 结论：缺口是**公开控制语义 + 三个新 Operator 绑定**，不是 provider 执行能力。最小扩展 =
 三张独立 SESE graph（open / request / close），复用既有 `resolve/open/admit/request`
 Operator 与既有 host 端口；新增 `teams.return-held-work@1`、
-`teams.continue-provider-work@1`、`teams.close-provider-work@1`（全部 **required /
-unimplemented**）。
+`teams.continue-provider-work@1`、`teams.close-provider-work@1`（全部 **required**，现已实现）。
 
 ### 11.2 中文语义 DAG（成功路径，各自 SESE，无回边，无图内分支）
 
@@ -633,7 +632,7 @@ agentteams work close   --config <path> --work-id <id> --provider <agentId> --pr
   request 另带本次 operation，close 带 open operation。Work/consumer/provider/generation/
   capability/version 在 Work 生命周期内 immutable；operation 只在单个 request 内固定。
   禁止从旧 receipt、日志、business、snapshot 或“当前 config 应该没变”的假设补字段。
-- **PENDING** `AgentWorkClient` typed selection：`runtime/agent-work-client.ts` 的
+- `AgentWorkClient` typed selection（当时标为 **PENDING**，现已实现）：`runtime/agent-work-client.ts` 的
   `findProvider` 增加显式 discriminated `serviceSelection`。持久图 intents/ARCs 与持久
   query 传 `{ kind: 'capability' }`，只匹配 `peer.declaration.capabilities` 的
   capabilityId/version/operation，并返回不带 `endpoint` 的 `AgentWorkTarget`；one-shot
@@ -698,7 +697,7 @@ resolve 后必须比较原代次，并以原 provider/generation/capability/vers
 并用新 generation 替换原绑定，也不得先做 Endpoint selection 再把 Endpoint 剥掉。若
 channel 在操作前失效，显式失败并保留未确认边界，不重开到新实例。
 
-`ProjectExecutionReceipt.control` 的 **PENDING held-work 扩展**必须从最终
+`ProjectExecutionReceipt.control` 的 held-work 扩展（当时标为 **PENDING**，现已实现）必须从最终
 `work.held.receipt` ARC 投影 `workId`、`requestId`、`providerAgentId`、`targetGeneration`、
 `capabilityId`、`capabilityVersion`、本次 `operation`、适用的 `deliveryState` 与
 `workClosure`；open 的最终 ARC 回显 CLI 在 dispatch 前已固定的 provider/generation/
@@ -727,8 +726,8 @@ selection + 原 `providerAgentId` 解析 provider 当前代次并用于 `agentWo
 重启后的 get 仍以 provider durable ledger 为权威：`WorkHost.get` 按已认证 consumer + 原
 `workId` 读取 provider 自己的账本，命中即返回原 WorkReply，未命中/非归属显式
 `NOT_FOUND`/`FORBIDDEN`。request/close 不受此放宽影响：仍绑定原 `targetGeneration`，代次不等
-即显式 `STALE_GENERATION`。该 capability query 是 **PENDING typed contract**，与持久图同一
-实现单元落地；本轮不注册 Operator、不声明 runtime/SDK/install PASS。
+即显式 `STALE_GENERATION`。该 capability query 的 typed contract 与持久图属同一
+实现单元，现已落地；本修订当时不注册 Operator、不声明 runtime/SDK/install PASS。
 
 one-shot 保持 `[agents.<receiver>.connect]` 的固定 operation/demands 契约。
 持久模式的 connect 意图用于初始 provider/capability/version 选择和 initial open 意图；
@@ -752,7 +751,7 @@ admission 拒绝。此区分不新增 U2 配置字段、resolver、ledger 或 sc
   单输出 `work.held.receipt`，5 节点 `resolve-service → open-link → admit-work →
   request-work → return-held-work`；复用既有 Operator `teams.resolve-peer-service` /
   `teams.open-work-link` / `teams.admit-provider-work` / `teams.request-provider-work`，
-  末节点为新 Operator `teams.return-held-work`（**required / unimplemented**）。
+  末节点为 Operator `teams.return-held-work`（**required**，现已实现）。
   `work.open.intent` **必须**携带 CLI 在 dispatch 前固定的 `targetAgentId`/`targetGeneration`/
   `capabilityId`/`capabilityVersion`/initial `operation`；`resolve-service` 只校验该精确
   provider 声明与代次，不后选 provider、不改绑其他 epoch；binding 缺失即失败且无副作用。
@@ -791,14 +790,14 @@ admission 拒绝。此区分不新增 U2 配置字段、resolver、ledger 或 sc
     `work-request` / `work-close` 不得安装或运行。
 - 当前 `host.ts` 的 failure receipt 只用 `context.admittedWorkId` 判断
   `RESULT_UNKNOWN → retained`，该字段只在本地 `agentWork.propose` 成功时设置。它是
-  **PENDING host/runner contract change**：continue/close 必须从 provider 返回的 typed
+  **当时标为 PENDING 的 host/runner contract change**（现已实现）：continue/close 必须从 provider 返回的 typed
   reply/confirmation 或显式 transport-unconfirmed error 生成责任，不得从本地 propose
   状态、日志、business、snapshot 或 receipt 反推 provider allocation。具体终点见 §11.6。
-- `ProjectExecutionReceipt.control.deliveryState: 'unconfirmed'` 也是 **PENDING typed
-  receipt extension**，当前 D3 host 没有该字段；实现单元必须在同一 host/runner contract
+- `ProjectExecutionReceipt.control.deliveryState: 'unconfirmed'` 也是当时标为 **PENDING** 的 typed
+  receipt extension，当时 D3 host 没有该字段；实现单元已在同一 host/runner contract
   change 中显式加入并测试，不能把现有 `RESULT_UNKNOWN` 异常文本冒充 provider unknown。
 - `runtime/agent-work-client.ts` 与对应 `runtime/agent-work-client.spec.ts` 的
-  **PENDING** typed selection 变更必须与 host/runner 同一实现单元完成：capability mode
+  typed selection 变更（当时标为 **PENDING**）已与 host/runner 在同一实现单元完成：capability mode
   只匹配 provider capability declaration，返回不带 Endpoint 的 target；endpoint mode
   保留既有 Endpoint admission 与固定 operation；测试必须覆盖 capability selection
   不读取 Endpoint、Endpoint selection 不被 capability fallback 替换，以及 generation
@@ -823,7 +822,7 @@ admission 拒绝。此区分不新增 U2 配置字段、resolver、ledger 或 sc
   continue 结果才可写 `requestState=unknown`、`workClosure=retained` 并附 owner 与显式
   `work query` 恢复动作。Work-scoped 分配保持占用；无 provider 确认前不得释放。
 - **transport unconfirmed**：本地投递后 socket 断连、超时或 receiver 退出而没有 provider
-  typed 终态时，只报告已生成身份与 **PENDING** `deliveryState=unconfirmed`。不得写
+  typed 终态时，只报告已生成身份与 `deliveryState=unconfirmed`（当时标为 **PENDING**，现已实现）。不得写
   `requestState=unknown`/`workClosure=retained` 来推定 provider 已分配资源，也不得自动
   重发或自动 close；该 obligation 通过原身份显式查询/关闭解除。持久 open/request/close 的
   unconfirmed `control` 仍携带 CLI 在 dispatch 前固定的完整 binding 与生成的
