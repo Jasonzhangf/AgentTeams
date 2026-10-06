@@ -1,9 +1,10 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { spawn as spawnProcess } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalLauncherState, writeLocalLauncherOwnership, writeLocalInternalState } from './local-config.ts'
+import { loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalLauncherOwnership, writeLocalInternalState } from './local-config.ts'
 import { consoleStatusLocalProcess, runLocalProcess, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
 import type { LocalSupervisor } from './local-supervisor.ts'
 
@@ -675,3 +676,91 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     await rm(root, { recursive: true, force: true })
   }
 }, 20000)
+
+it('stops a retained Console child when the launcher is already stopped', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-retained-console-'))
+  const path = join(root, 'config.toml')
+  const childPath = join(root, 'retained-console.mjs')
+  let child: ReturnType<typeof spawnProcess> | undefined
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    const startToken = 'retained-console-token'
+    await writeFile(childPath, 'setInterval(() => {}, 1000)\nprocess.once("SIGTERM", () => process.exit(0))\n')
+    child = spawnProcess(process.execPath, [
+      childPath,
+      '--config',
+      config.console!.configPath,
+      '--launcher-start-token',
+      startToken,
+    ], { stdio: 'ignore' })
+    await new Promise<void>(resolveSpawn => child?.once('spawn', resolveSpawn))
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 1, startToken: 'stopped-launcher', state: 'stopped' })
+    await writeLocalInternalConsoleRuntime(config.internalPath!, {
+      enabled: true,
+      pid: child.pid,
+      generation: 1,
+      startToken,
+      entryPath: childPath,
+      state: 'retained',
+      error: { code: 'CONSOLE_RETAINED', message: 'Console exit was unconfirmed' },
+    })
+
+    await expect(stopLocalProcess(path)).resolves.toMatchObject({ state: 'stopped' })
+    expect(() => process.kill(child!.pid!, 0)).toThrow()
+    const recovered = await readLocalInternalConfig(config.internalPath!)
+    expect(recovered.consoleRuntime).toMatchObject({ enabled: true, state: 'stopped' })
+    expect(recovered.consoleRuntime?.pid).toBeUndefined()
+  } finally {
+    if (child !== undefined && child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM')
+      await new Promise<void>(resolveExit => child?.once('exit', resolveExit))
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('keeps Console status read-only and independent from daemon projections', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-independent-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    const consoleProjection = config.console!.configPath
+    const daemonProjection = config.daemons[0]!.configPath
+    await mkdir(daemonProjection, { recursive: true })
+
+    await expect(consoleStatusLocalProcess(path)).resolves.toMatchObject({
+      enabled: true,
+      state: 'stopped',
+      launcherState: 'stopped',
+    })
+    expect(existsSync(consoleProjection)).toBe(false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('does not report a dead launcher as running in Console status', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-dead-launcher-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    const dead = spawnProcess(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' })
+    await new Promise<void>(resolveExit => dead.once('exit', resolveExit))
+    await writeLocalInternalLauncherState(config.internalPath!, {
+      pid: dead.pid!,
+      generation: 1,
+      startToken: 'dead-launcher-token',
+      state: 'running',
+    })
+
+    await expect(consoleStatusLocalProcess(path)).resolves.toMatchObject({
+      launcherState: 'failed',
+      launcherGeneration: 1,
+    })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)

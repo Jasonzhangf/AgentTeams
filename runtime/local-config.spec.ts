@@ -809,6 +809,37 @@ config = "{\\"version\\":1}"
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
+it('rejects unknown or malformed [consoleRuntime] before any rewrite', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-console-runtime-schema-'))
+  const internalPath = join(directory, '.agentteams', 'internal.toml')
+  const base = `version = 2
+sourceRevision = 4
+sourceHash = "sha256:source"
+sourcePath = ${JSON.stringify(join(directory, '.agentteams', 'config.toml'))}
+
+[consoleRuntime]
+enabled = true
+pid = 202
+generation = 1
+startToken = "console-1"
+state = "online"
+url = "http://127.0.0.1:51123"
+origin = "http://127.0.0.1:51123"
+identityRef = "console:local"
+`
+  try {
+    await mkdir(join(directory, '.agentteams'), { recursive: true })
+    await writeFile(internalPath, `${base}unknown = "drop-me"\n`)
+    await expect(readLocalInternalConfig(internalPath)).rejects.toThrow(/unsupported fields/)
+
+    await writeFile(internalPath, base.replace('pid = 202\n', 'pid = -1\n'))
+    await expect(readLocalInternalConfig(internalPath)).rejects.toThrow(/pid must be a positive safe integer/)
+
+    await writeFile(internalPath, base.replace('startToken = "console-1"\n', '').replace('generation = 1\n', ''))
+    await expect(readLocalInternalConfig(internalPath)).rejects.toThrow(/state=online requires/)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
 it('round-trips work control through the public internal adapter and removes only that table', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-work-control-public-'))
   const internalPath = join(directory, '.agentteams', 'internal.toml')

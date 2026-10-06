@@ -8,6 +8,7 @@ import { parse as parseToml } from 'toml'
 import { createServer as createNetServer } from 'node:net'
 import { promisify } from 'node:util'
 import { providerIntentFingerprint, RuntimeConfigError } from '../config/runtime-config.ts'
+import { processAlive } from './local-ownership.ts'
 import type {
   AgentModelBinding,
   ConfigApplyError,
@@ -699,6 +700,48 @@ export interface ConsoleRuntimePatch {
   readonly error?: ConsoleRuntimeError | null
 }
 
+function validateConsoleRuntime(value: LocalInternalConsoleRuntime, label = 'consoleRuntime'): void {
+  if (value.generation !== undefined && (!Number.isSafeInteger(value.generation) || value.generation < 0)) throw new LocalConfigError(`${label}.generation must be a non-negative safe integer`)
+  if (value.pid !== undefined && (!Number.isSafeInteger(value.pid) || value.pid <= 0)) throw new LocalConfigError(`${label}.pid must be a positive safe integer`)
+  if (value.error !== undefined && (typeof value.error.code !== 'string' || value.error.code.length === 0 || typeof value.error.message !== 'string' || value.error.message.length === 0)) {
+    throw new LocalConfigError(`${label}.error requires a typed code and non-empty message`)
+  }
+  for (const key of ['url', 'origin'] as const) {
+    const candidate = value[key]
+    if (candidate === undefined) continue
+    let parsed: URL
+    try { parsed = new URL(candidate) } catch { throw new LocalConfigError(`${label}.${key} must be an absolute URL`) }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new LocalConfigError(`${label}.${key} must be http(s)`)
+  }
+  switch (value.state) {
+    case 'starting':
+      if (value.pid === undefined || value.startToken === undefined) throw new LocalConfigError(`${label} state=starting requires pid and startToken`)
+      break
+    case 'online':
+      for (const key of ['pid', 'startToken', 'generation', 'url', 'origin', 'identityRef'] as const) {
+        if (value[key] === undefined) throw new LocalConfigError(`${label} state=online requires ${key}`)
+      }
+      if (value.error !== undefined) throw new LocalConfigError(`${label} state=online must clear error`)
+      break
+    case 'stopped':
+    case 'disabled':
+      for (const key of ['pid', 'startToken', 'url', 'origin', 'error'] as const) {
+        if (value[key] !== undefined) throw new LocalConfigError(`${label} state=${value.state} must clear ${key}`)
+      }
+      break
+    case 'failed':
+      if (value.error === undefined) throw new LocalConfigError(`${label} state=failed requires a typed error`)
+      if (value.url !== undefined || value.origin !== undefined) throw new LocalConfigError(`${label} state=failed must clear url and origin`)
+      break
+    case 'stopping':
+    case 'retained':
+    case undefined:
+      break
+    default:
+      throw new LocalConfigError(`${label}.state is invalid`)
+  }
+}
+
 function applyConsoleRuntimePatch(current: LocalInternalConsoleRuntime, patch: ConsoleRuntimePatch): LocalInternalConsoleRuntime {
   const value = <T>(patched: T | null | undefined, existing: T | undefined): T | undefined =>
     patched === undefined ? existing : patched === null ? undefined : patched
@@ -714,41 +757,17 @@ function applyConsoleRuntimePatch(current: LocalInternalConsoleRuntime, patch: C
     identityRef: value(patch.identityRef, current.identityRef),
     error: value(patch.error, current.error),
   }
-  if (next.generation !== undefined && (!Number.isSafeInteger(next.generation) || next.generation < 0)) throw new LocalConfigError('consoleRuntime.generation must be a non-negative safe integer')
-  if (next.pid !== undefined && (!Number.isSafeInteger(next.pid) || next.pid <= 0)) throw new LocalConfigError('consoleRuntime.pid must be a positive safe integer')
-  if (next.error !== undefined && (typeof next.error.code !== 'string' || next.error.code.length === 0 || typeof next.error.message !== 'string' || next.error.message.length === 0)) {
-    throw new LocalConfigError('consoleRuntime.error requires a typed code and non-empty message')
+  if (next.state === 'stopped' || next.state === 'disabled') {
+    const terminal = { ...next, pid: undefined, startToken: undefined, url: undefined, origin: undefined, error: undefined }
+    validateConsoleRuntime(terminal)
+    return terminal
   }
-  for (const key of ['url', 'origin'] as const) {
-    const candidate = next[key]
-    if (candidate === undefined) continue
-    let parsed: URL
-    try { parsed = new URL(candidate) } catch { throw new LocalConfigError(`consoleRuntime.${key} must be an absolute URL`) }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new LocalConfigError(`consoleRuntime.${key} must be http(s)`)
+  if (next.state === 'failed') {
+    const failed = { ...next, url: undefined, origin: undefined }
+    validateConsoleRuntime(failed)
+    return failed
   }
-  switch (next.state) {
-    case 'starting':
-      if (next.pid === undefined || next.startToken === undefined) throw new LocalConfigError('consoleRuntime state=starting requires pid and startToken')
-      break
-    case 'online':
-      for (const key of ['pid', 'startToken', 'generation', 'url', 'origin', 'identityRef'] as const) {
-        if (next[key] === undefined) throw new LocalConfigError(`consoleRuntime state=online requires ${key}`)
-      }
-      if (next.error !== undefined) throw new LocalConfigError('consoleRuntime state=online must clear error')
-      break
-    case 'stopped':
-    case 'disabled':
-      return { ...next, pid: undefined, startToken: undefined, url: undefined, origin: undefined, error: undefined }
-    case 'failed':
-      if (next.error === undefined) throw new LocalConfigError('consoleRuntime state=failed requires a typed error')
-      return { ...next, url: undefined, origin: undefined }
-    case 'stopping':
-    case 'retained':
-    case undefined:
-      break
-    default:
-      throw new LocalConfigError('consoleRuntime.state is invalid')
-  }
+  validateConsoleRuntime(next)
   return next
 }
 
@@ -767,11 +786,6 @@ export async function writeLocalInternalConsoleRuntime(path: string, patch: Read
     const next = applyConsoleRuntimePatch(current, patch)
     return writeLocalInternalConfig(internalPath, { ...existing, version: existing.version, consoleRuntime: next, updatedAt: new Date().toISOString() })
   })
-}
-
-function processAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true }
-  catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' }
 }
 
 function launcherOwnershipPath(path: string): string {
@@ -848,7 +862,8 @@ export async function withLocalInternalConfigLock<T>(path: string, task: () => P
 const CONSOLE_RUNTIME_STATES = ['disabled', 'stopped', 'starting', 'online', 'stopping', 'failed', 'retained'] as const
 
 function parseConsoleRuntimeTable(input: Record<string, unknown>): LocalInternalConsoleRuntime {
-  return {
+  fields(input, ['enabled', 'pid', 'generation', 'startToken', 'entryPath', 'state', 'url', 'origin', 'identityRef', 'error'], 'consoleRuntime')
+  const parsed: LocalInternalConsoleRuntime = {
     ...(input.enabled === undefined ? {} : { enabled: boolean(input.enabled, true, 'consoleRuntime.enabled') }),
     ...(input.pid === undefined ? {} : { pid: optionalNumber(input.pid, 'consoleRuntime.pid') }),
     ...(input.generation === undefined ? {} : { generation: optionalNumber(input.generation, 'consoleRuntime.generation') }),
@@ -860,9 +875,12 @@ function parseConsoleRuntimeTable(input: Record<string, unknown>): LocalInternal
     ...(input.identityRef === undefined ? {} : { identityRef: requiredString(input.identityRef, 'consoleRuntime.identityRef') }),
     ...(input.error === undefined ? {} : (() => {
       const errorInput = object(input.error, 'consoleRuntime.error')
+      fields(errorInput, ['code', 'message'], 'consoleRuntime.error')
       return { error: { code: requiredString(errorInput.code, 'consoleRuntime.error.code'), message: requiredString(errorInput.message, 'consoleRuntime.error.message') } }
     })()),
   }
+  validateConsoleRuntime(parsed)
+  return parsed
 }
 
 function parseConfigRuntimeTable(input: Record<string, unknown>): LocalInternalConfigRuntime {
@@ -1092,6 +1110,11 @@ function parseProjectionConfig(config: string, projectionPath: string): Record<s
     if (cause instanceof LocalConfigError) throw cause
     throw new LocalConfigError(`projection config is not valid JSON: ${projectionPath}`, cause)
   }
+}
+
+export function parseLocalConsoleProjectionConfig(config: string | undefined): Record<string, unknown> | undefined {
+  if (config === undefined) return undefined
+  return parseProjectionConfig(config, 'internal console')
 }
 
 function readExistingProjection(config: string | undefined): TomlRecord | undefined {

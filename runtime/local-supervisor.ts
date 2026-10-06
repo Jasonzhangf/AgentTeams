@@ -1,9 +1,11 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
 import { access, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { createConnection } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { projectLocalChildConfigs, readLocalInternalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, writeLocalInternalState, writeLocalInternalWorkControl, writeLocalLauncherOwnership, type ConsoleRuntimeState, type LocalConfig, type LocalInternalConfig, type LocalInternalDaemonState } from './local-config.ts'
+import { parseLocalConsoleProjectionConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, writeLocalInternalState, writeLocalInternalWorkControl, writeLocalLauncherOwnership, type ConsoleRuntimeState, type LocalConfig, type LocalInternalConfig, type LocalInternalDaemonState } from './local-config.ts'
+import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
 import { startLocalWorkControlListener, type LocalConsoleControlReply, type LocalConsolePublicStatus, type LocalWorkControlHandlerInput, type LocalWorkControlReply, type LocalWorkControlRequest, type LocalWorkControlServer } from './local-work-control.ts'
 import type { ProjectExecutionReceipt } from './dagpipe/host.ts'
 
@@ -253,11 +255,6 @@ export function planLocalProcesses(config: LocalConfig, options: Pick<LocalSuper
   return specs
 }
 
-function processAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true }
-  catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' }
-}
-
 async function readConsoleProjectionFile(path: string | undefined): Promise<Record<string, unknown> | undefined> {
   if (path === undefined) return undefined
   let text: string
@@ -283,6 +280,39 @@ function consoleCredentialFromProjection(projection: Record<string, unknown> | u
   return typeof value === 'string' && value.length > 0 ? 'configured' : 'missing'
 }
 
+async function ownsConsoleRuntime(config: LocalConfig, internal: LocalInternalConfig): Promise<boolean> {
+  const runtime = internal.consoleRuntime
+  const projectionPath = internal.console?.projectionPath ?? config.console?.configPath
+  if (runtime?.pid === undefined || runtime.entryPath === undefined || runtime.startToken === undefined || projectionPath === undefined) return false
+  if (!processAlive(runtime.pid)) return false
+  const command = await processCommand(runtime.pid)
+  return command !== undefined && processOwnsConfigCommand(command, projectionPath, runtime.entryPath, runtime.startToken)
+}
+
+async function consoleListenerAlive(url: string | undefined, timeoutMs = 250): Promise<boolean> {
+  if (url === undefined) return false
+  let parsed: URL
+  try { parsed = new URL(url) }
+  catch { return false }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+  const port = parsed.port === '' ? (parsed.protocol === 'https:' ? 443 : 80) : Number(parsed.port)
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) return false
+  return await new Promise<boolean>(resolveProbe => {
+    let settled = false
+    const socket = createConnection({ host: parsed.hostname, port })
+    const timer = setTimeout(() => finish(false), timeoutMs)
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.destroy()
+      resolveProbe(value)
+    }
+    socket.once('connect', () => finish(true))
+    socket.once('error', () => finish(false))
+  })
+}
+
 /**
  * Read-only Console classification shared by the supervisor socket handler and
  * the public CLI status path. It never writes runtime facts and never invents
@@ -297,7 +327,9 @@ export async function classifyLocalConsoleStatus(
     generation: internal.launcher?.generation ?? 0,
   },
 ): Promise<LocalConsolePublicStatus> {
-  const projection = await readConsoleProjectionFile(config.console?.configPath)
+  const projection = internal.console?.config === undefined
+    ? await readConsoleProjectionFile(config.console?.configPath)
+    : parseLocalConsoleProjectionConfig(internal.console.config)
   const runtime = internal.consoleRuntime
   const enabled = config.console?.enabled === true && projection?.enabled === true
   const credential = consoleCredentialFromProjection(projection, env)
@@ -313,9 +345,12 @@ export async function classifyLocalConsoleStatus(
   }
   let state: ConsoleRuntimeState = runtime?.state ?? 'stopped'
   let error = runtime?.error
-  if ((state === 'online' || state === 'starting') && (runtime?.pid === undefined || !processAlive(runtime.pid))) {
+  if ((state === 'online' || state === 'starting') && !(await ownsConsoleRuntime(config, internal))) {
     state = 'failed'
-    error = { code: 'CONSOLE_PROCESS_EXITED', message: `Console pid=${runtime?.pid ?? 'missing'} is not alive` }
+    error = { code: 'CONSOLE_PROCESS_EXITED', message: `Console pid=${runtime?.pid ?? 'missing'} is not owned by this launcher` }
+  } else if (state === 'online' && !(await consoleListenerAlive(runtime?.url))) {
+    state = 'failed'
+    error = { code: 'CONSOLE_PROCESS_EXITED', message: `Console listener is not accepting connections at ${runtime?.url ?? 'the persisted URL'}` }
   }
   return {
     enabled: true,
@@ -450,8 +485,14 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   const startToken = options.startToken ?? randomUUID()
   let reservedLauncherGeneration: number | undefined
   let activeChildEnv: NodeJS.ProcessEnv = { ...process.env, ...options.env }
-  let consoleStarting: Promise<LocalConsolePublicStatus> | undefined
-  let consoleStopping: Promise<LocalConsolePublicStatus> | undefined
+  let consoleLifecycle: Promise<LocalConsolePublicStatus> = Promise.resolve({
+    enabled: config.console?.enabled === true,
+    state: config.console?.enabled === true ? 'stopped' : 'disabled',
+    generation: 0,
+    launcherState: 'stopped',
+    launcherGeneration: 0,
+    credential: 'missing',
+  })
 
   const readConsoleProjection = (): Promise<Record<string, unknown> | undefined> => readConsoleProjectionFile(config.console?.configPath)
   const consoleCredentialState = (projection: Record<string, unknown> | undefined): 'configured' | 'missing' => consoleCredentialFromProjection(projection, activeChildEnv)
@@ -482,43 +523,23 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   }
 
   async function consoleStatusRead(): Promise<LocalConsolePublicStatus> {
-    const projection = await readConsoleProjection()
     const internal = config.internalPath === undefined ? undefined : await readLocalInternalConfig(config.internalPath)
-    const runtime = internal?.consoleRuntime
-    const launcher = internal?.launcher
-    const enabled = config.console?.enabled === true && projection?.enabled === true
-    const credential = consoleCredentialState(projection)
-    const launcherState = launcher?.state ?? (lifecycle === 'running' ? 'running' : 'stopped')
-    const launcherGeneration = launcher?.generation ?? lifecycleGeneration
-    if (!enabled) {
+    if (internal === undefined) {
+      const projection = await readConsoleProjection()
+      const enabled = config.console?.enabled === true && projection?.enabled === true
       return {
-        enabled: false,
-        state: 'disabled',
-        generation: runtime?.generation ?? 0,
-        launcherState,
-        launcherGeneration,
-        credential,
+        enabled,
+        state: enabled ? 'stopped' : 'disabled',
+        generation: 0,
+        launcherState: lifecycle,
+        launcherGeneration: lifecycleGeneration,
+        credential: consoleCredentialState(projection),
       }
     }
-    let state: ConsoleRuntimeState = runtime?.state ?? 'stopped'
-    let error = runtime?.error
-    if ((state === 'online' || state === 'starting') && (runtime?.pid === undefined || !processAlive(runtime.pid))) {
-      state = 'failed'
-      error = { code: 'CONSOLE_PROCESS_EXITED', message: `Console pid=${runtime?.pid ?? 'missing'} is not alive` }
-    }
-    return {
-      enabled: true,
-      state,
-      generation: runtime?.generation ?? 0,
-      launcherState,
-      launcherGeneration,
-      credential,
-      ...(state === 'online' && runtime?.url !== undefined ? { url: runtime.url, origin: runtime.origin } : {}),
-      ...(state === 'online' && runtime?.pid !== undefined ? { pid: runtime.pid } : {}),
-      ...(state === 'starting' && runtime?.pid !== undefined ? { pid: runtime.pid } : {}),
-      ...(runtime?.identityRef === undefined ? {} : { identityRef: runtime.identityRef }),
-      ...(error === undefined ? {} : { error }),
-    }
+    return await classifyLocalConsoleStatus(config, internal, activeChildEnv, {
+      state: internal.launcher?.state ?? lifecycle,
+      generation: internal.launcher?.generation ?? lifecycleGeneration,
+    })
   }
 
   const statusFromRuntime = async (): Promise<LocalConsolePublicStatus> => {
@@ -632,15 +653,46 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         try { await waitForExit(child, stopTimeoutMs) }
         catch { cleaned = false }
       }
-      unwatch.get('console')?.()
-      unwatch.delete('console')
-      children.delete('console')
       const code = consoleErrorCode(cause)
       const message = cause instanceof Error ? cause.message : String(cause)
       if (cleaned) {
+        unwatch.get('console')?.()
+        unwatch.delete('console')
+        children.delete('console')
         await patchConsole({ enabled: true, state: 'failed', pid: null, startToken: null, error: { code, message } })
       } else {
-        await patchConsole({ enabled: true, state: 'retained', error: { code: 'CONSOLE_RETAINED', message } })
+        const unwatchChild = (): void => { child.off('exit', onExit); child.off('error', onError) }
+        const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+          if (children.get('console') !== child) return
+          unwatch.get('console')?.()
+          unwatch.delete('console')
+          children.delete('console')
+          void patchConsole({
+            enabled: true,
+            state: 'failed',
+            pid: null,
+            startToken: null,
+            error: { code: 'CONSOLE_PROCESS_EXITED', message: `Console exited unexpectedly code=${code ?? 'null'} signal=${signal ?? 'null'}` },
+          }).catch(() => undefined)
+        }
+        const onError = (cause: Error) => {
+          if (children.get('console') !== child) return
+          unwatch.get('console')?.()
+          unwatch.delete('console')
+          children.delete('console')
+          void patchConsole({
+            enabled: true,
+            state: 'failed',
+            pid: null,
+            startToken: null,
+            error: { code: 'CONSOLE_PROCESS_EXITED', message: cause.message },
+          }).catch(() => undefined)
+        }
+        children.set('console', child)
+        child.once('exit', onExit)
+        child.once('error', onError)
+        unwatch.set('console', unwatchChild)
+        await patchConsole({ enabled: true, pid: child.pid, generation, startToken: childStartToken, entryPath: spec.entry, state: 'retained', error: { code: 'CONSOLE_RETAINED', message } })
       }
       throw new LocalConsoleLifecycleError(code, message)
     }
@@ -654,8 +706,13 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
     }
     const child = children.get('console')
     if (child === undefined || child.exitCode !== null || child.signalCode !== null) {
-      await patchConsole({ enabled: true, state: 'stopped', pid: null, startToken: null, url: null, origin: null, error: null })
-      return await statusFromRuntime()
+      if (status.state === 'stopped' || status.state === 'disabled') return status
+      // A failed record means the child already exited and cleared its pid; it
+      // is honest terminal truth, not an unconfirmed retained child.
+      if (status.state === 'failed') return status
+      const message = `Console state=${status.state} has no owned live child; termination is unconfirmed`
+      await patchConsole({ enabled: true, state: 'retained', error: { code: 'CONSOLE_RETAINED', message } })
+      throw new LocalConsoleLifecycleError('CONSOLE_RETAINED', message)
     }
     await patchConsole({ enabled: true, state: 'stopping' })
     child.kill('SIGTERM')
@@ -680,9 +737,24 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
         try {
           const internal = await readLocalInternalConfig(config.internalPath)
           if (internal.consoleRuntime?.state === 'online' || internal.consoleRuntime?.state === 'starting') {
-            await patchConsole({ enabled: true, state: 'stopped', pid: null, startToken: null, url: null, origin: null, error: null })
+            if (await ownsConsoleRuntime(config, internal)) {
+              const pid = internal.consoleRuntime.pid
+              if (pid !== undefined) {
+                process.kill(pid, 'SIGTERM')
+                const deadline = Date.now() + stopTimeoutMs
+                while (Date.now() < deadline && processAlive(pid)) await new Promise(resolveDelay => setTimeout(resolveDelay, 25))
+                if (processAlive(pid)) throw new LocalConsoleLifecycleError('CONSOLE_RETAINED', `owned Console pid=${pid} did not exit after SIGTERM`)
+              }
+              await patchConsole({ enabled: true, state: 'stopped', pid: null, startToken: null, url: null, origin: null, error: null })
+            } else {
+              throw new LocalConsoleLifecycleError('CONSOLE_RETAINED', 'persisted Console child cannot be validated for shutdown')
+            }
           }
-        } catch { /* console cleanup must not mask launcher cleanup */ }
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause)
+          try { await patchConsole({ enabled: true, state: 'retained', error: { code: 'CONSOLE_RETAINED', message } }) } catch { /* preserve the original retained reason */ }
+          throw new LocalConsoleLifecycleError('CONSOLE_RETAINED', message)
+        }
       }
       return
     }
@@ -699,14 +771,14 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause)
       try { await patchConsole({ enabled: true, state: 'retained', error: { code: 'CONSOLE_RETAINED', message } }) } catch { /* retained responsibility stays explicit in the report */ }
+      throw new LocalConsoleLifecycleError('CONSOLE_RETAINED', message)
     }
   }
 
   const consoleStart = (expectedConsoleGeneration?: number): Promise<LocalConsolePublicStatus> => {
     if (lifecycle !== 'running') return Promise.reject(new LocalConsoleLifecycleError('NOT_RUNNING', 'launcher is not running'))
-    if (consoleStarting !== undefined) return consoleStarting
-    let operation!: Promise<LocalConsolePublicStatus>
-    operation = (async () => {
+    const operation = consoleLifecycle.then(async () => {
+      if (lifecycle !== 'running') throw new LocalConsoleLifecycleError('NOT_RUNNING', 'launcher is not running')
       const status = await consoleStatusRead()
       if (!status.enabled) {
         await patchConsole({ enabled: false, state: 'disabled', pid: null, startToken: null, url: null, origin: null, error: null })
@@ -718,20 +790,14 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       const child = children.get('console')
       if (status.state === 'online' && child !== undefined && child.exitCode === null && child.signalCode === null) return status
       return await startConsoleChild()
-    })().finally(() => {
-      if (consoleStarting === operation) consoleStarting = undefined
     })
-    consoleStarting = operation
+    consoleLifecycle = operation.catch(() => statusFromRuntime())
     return operation
   }
 
   const consoleStop = (expectedConsoleGeneration?: number): Promise<LocalConsolePublicStatus> => {
-    if (consoleStopping !== undefined) return consoleStopping
-    let operation!: Promise<LocalConsolePublicStatus>
-    operation = stopConsoleChild(expectedConsoleGeneration).finally(() => {
-      if (consoleStopping === operation) consoleStopping = undefined
-    })
-    consoleStopping = operation
+    const operation = consoleLifecycle.then(async () => await stopConsoleChild(expectedConsoleGeneration))
+    consoleLifecycle = operation.catch(() => statusFromRuntime())
     return operation
   }
 
@@ -793,7 +859,11 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       pendingWork.clear()
       try { await closingControl } catch (error) { failures.push(error) }
       workControl = undefined
-      await shutdownConsole()
+      // The single Console lifecycle owner must settle before launcher cleanup.
+      // Otherwise a Console start that is already queued could spawn a child
+      // after shutdownConsole observed no child and orphaned it.
+      await consoleLifecycle.catch(() => undefined)
+      await shutdownConsole().catch(error => { failures.push(error); lastFailure = error instanceof Error ? error : new Error('Console cleanup remains unconfirmed') })
       if (config.internalPath !== undefined) {
         try { await writeLocalInternalWorkControl(config.internalPath, undefined) } catch (error) { failures.push(error) }
       }

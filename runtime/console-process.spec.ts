@@ -34,9 +34,15 @@ passwordEnv = "AGENTTEAMS_CONSOLE_PASSWORD"
 `
 
 const CONSOLE_CHILD_SOURCE = `
-process.send?.({ kind: 'console.listening', url: process.env.CONSOLE_CHILD_URL ?? 'http://127.0.0.1:51234' })
+const { createServer } = await import('node:net')
+const listener = createServer()
+listener.listen(0, '127.0.0.1', () => {
+  const address = listener.address()
+  if (typeof address !== 'object' || address === null) throw new Error('Console listener has no TCP address')
+  process.send?.({ kind: 'console.listening', url: 'http://127.0.0.1:' + address.port })
+})
+process.once('SIGTERM', () => listener.close(() => process.exit(0)))
 setInterval(() => {}, 1000)
-process.once('SIGTERM', () => process.exit(0))
 `
 
 async function harness(prefix: string, options: { readonly consoleEnabled?: boolean; readonly consoleChildSource?: string } = {}) {
@@ -99,9 +105,11 @@ it('starts an enabled Console child, persists real lifecycle facts, and stops on
     await reserve(harnessResult)
     await supervisor.start()
     const started = await supervisor.consoleStart()
-    expect(started).toMatchObject({ enabled: true, state: 'online', generation: 1, credential: 'configured', url: 'http://127.0.0.1:51234', origin: 'http://127.0.0.1:51234', identityRef: 'console:local' })
+    expect(started).toMatchObject({ enabled: true, state: 'online', generation: 1, credential: 'configured', identityRef: 'console:local' })
+    expect(started.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
+    expect(started.origin).toBe(started.url)
     const internal = await readLocalInternalConfig(harnessResult.config.internalPath!)
-    expect(internal.consoleRuntime).toMatchObject({ enabled: true, state: 'online', generation: 1, url: 'http://127.0.0.1:51234', origin: 'http://127.0.0.1:51234', identityRef: 'console:local' })
+    expect(internal.consoleRuntime).toMatchObject({ enabled: true, state: 'online', generation: 1, url: started.url, origin: started.origin, identityRef: 'console:local' })
     expect(internal.consoleRuntime?.pid).toBeGreaterThan(0)
     const consolePid = internal.consoleRuntime!.pid!
     const daemonPid = internal.daemons?.provider?.pid
@@ -206,3 +214,25 @@ it('rejects a stale Console generation without rewriting durable facts', async (
     await rm(harnessResult.root, { recursive: true, force: true })
   }
 }, 15_000)
+
+it('serializes Console start and stop so a queued stop cannot be overtaken by a late start', async () => {
+  const harnessResult = await harness('teams-console-serialize-')
+  const supervisor = supervisorFor(harnessResult)
+  try {
+    await reserve(harnessResult)
+    await supervisor.start()
+    // Start and stop are issued together. The single lifecycle owner must run
+    // them in order, so the stop observes and terminates the started child
+    // instead of racing ahead of the spawn and leaving an orphaned Console.
+    const starting = supervisor.consoleStart()
+    const stopping = supervisor.consoleStop()
+    await Promise.allSettled([starting, stopping])
+    const internal = await readLocalInternalConfig(harnessResult.config.internalPath!)
+    expect(internal.consoleRuntime).toMatchObject({ state: 'stopped' })
+    expect(internal.consoleRuntime?.pid).toBeUndefined()
+    expect(supervisor.state()).toBe('running')
+  } finally {
+    try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
+    await rm(harnessResult.root, { recursive: true, force: true })
+  }
+}, 20_000)

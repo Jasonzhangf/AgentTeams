@@ -204,6 +204,7 @@
         "docs/design/dagpipe/graphs/console-status.graph.json",
         "runtime/local-config.ts",
         "runtime/local-config.spec.ts",
+        "runtime/local-ownership.ts",
         "runtime/local-process.ts",
         "runtime/local-process.spec.ts",
         "runtime/local-supervisor.ts",

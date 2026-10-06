@@ -1,14 +1,12 @@
-import { execFile as execFileCallback, spawn, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { open, readFile, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { classifyLocalConsoleStatus, createLocalSupervisor, readLocalDaemonStatusProjection, type LocalDaemonEndpointProjection, type LocalSupervisor } from './local-supervisor.ts'
-import { defaultLocalConfigPath, loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalInternalLauncherConfig } from './local-config.ts'
+import { defaultLocalConfigPath, loadLocalConfig, readLocalInternalConfig, readLocalInternalWorkControl, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalInternalLauncherConfig } from './local-config.ts'
+import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
 import { sendLocalConsoleControlRequest, type LocalConsoleControlKind, type LocalConsolePublicStatus } from './local-work-control.ts'
-
-const execFile = promisify(execFileCallback)
 
 export interface LocalLauncherStatus {
   readonly configPath: string
@@ -112,54 +110,12 @@ export async function runLocalProcess(
   }
 }
 
-function processAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true }
-  catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' }
-}
-
-async function processCommand(pid: number): Promise<string | undefined> {
-  try { return (await execFile('ps', ['-p', String(pid), '-o', 'command='])).stdout }
-  catch { return undefined }
-}
-
-function splitProcessCommand(command: string): readonly string[] {
-  const args: string[] = []
-  let current = ''
-  let quote: '"' | "'" | undefined
-  let escaped = false
-  for (const character of command.trim()) {
-    if (escaped) { current += character; escaped = false; continue }
-    if (character === '\\' && quote !== "'") { escaped = true; continue }
-    if (quote !== undefined) {
-      if (character === quote) quote = undefined
-      else current += character
-      continue
-    }
-    if (character === '"' || character === "'") { quote = character; continue }
-    if (/\s/.test(character)) {
-      if (current.length > 0) { args.push(current); current = '' }
-    } else current += character
-  }
-  if (escaped) current += '\\'
-  if (current.length > 0) args.push(current)
-  return args
-}
-
-function processOwnsConfigCommand(command: string, configPath: string, entryPath: string, startToken: string | undefined): boolean {
-  if (startToken === undefined) return false
-  const args = splitProcessCommand(command)
-  const entryIndex = args.findIndex(argument => resolve(argument) === resolve(entryPath))
-  return entryIndex >= 0 && args[entryIndex + 1] === '--config' && args[entryIndex + 2] === resolve(configPath) && args[entryIndex + 3] === '--launcher-start-token' && args[entryIndex + 4] === startToken
-}
-
 async function processOwnsStartToken(pid: number, startToken: string | undefined, configPath: string): Promise<boolean> {
   if (startToken === undefined) return false
   const command = await processCommand(pid)
   if (command === undefined) return false
-  const args = splitProcessCommand(command)
   const entryPath = fileURLToPath(import.meta.url)
-  const entryIndex = args.findIndex(argument => resolve(argument) === resolve(entryPath))
-  return entryIndex >= 0 && args[entryIndex + 1] === '--config' && args[entryIndex + 2] === resolve(configPath) && args[entryIndex + 3] === '--start-token' && args[entryIndex + 4] === startToken
+  return processOwnsConfigCommand(command, configPath, entryPath, startToken, '--start-token')
 }
 
 async function waitForProcessExit(pid: number, deadlineMs: number): Promise<void> {
@@ -210,6 +166,47 @@ async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLoca
     process.kill(candidate.pid, 'SIGTERM')
     await waitForProcessExit(candidate.pid, 2_000)
   }
+}
+
+async function stopRetainedConsoleRuntime(
+  config: Awaited<ReturnType<typeof loadLocalConfig>>,
+  internal: Awaited<ReturnType<typeof readLocalInternalConfig>>,
+): Promise<void> {
+  const runtime = internal.consoleRuntime
+  if (runtime === undefined || runtime.state === undefined) return
+  if (runtime.state === 'stopped' || runtime.state === 'disabled' || runtime.state === 'failed') return
+  if (config.internalPath === undefined) return
+  const projectionPath = internal.console?.projectionPath ?? config.console?.configPath
+  if (runtime.pid !== undefined && processAlive(runtime.pid)) {
+    if (runtime.entryPath === undefined || runtime.startToken === undefined || projectionPath === undefined) {
+      const message = `retained Console pid=${runtime.pid} has incomplete ownership facts`
+      await writeLocalInternalConsoleRuntime(config.internalPath, { enabled: runtime.enabled, state: 'retained', pid: runtime.pid, startToken: runtime.startToken ?? null, entryPath: runtime.entryPath ?? null, error: { code: 'CONSOLE_RETAINED', message } })
+      throw new LocalProcessError('CONSOLE_RETAINED', message)
+    }
+    const command = await processCommand(runtime.pid)
+    if (command === undefined || !processOwnsConfigCommand(command, projectionPath, runtime.entryPath, runtime.startToken)) {
+      const message = `retained Console pid=${runtime.pid} does not match its persisted ownership`
+      await writeLocalInternalConsoleRuntime(config.internalPath, { enabled: runtime.enabled, state: 'retained', pid: runtime.pid, startToken: runtime.startToken, entryPath: runtime.entryPath, error: { code: 'CONSOLE_RETAINED', message } })
+      throw new LocalProcessError('CONSOLE_RETAINED', message)
+    }
+    process.kill(runtime.pid, 'SIGTERM')
+    try {
+      await waitForProcessExit(runtime.pid, 2_000)
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      await writeLocalInternalConsoleRuntime(config.internalPath, { enabled: runtime.enabled, state: 'retained', pid: runtime.pid, startToken: runtime.startToken, entryPath: runtime.entryPath, error: { code: 'CONSOLE_RETAINED', message } })
+      throw new LocalProcessError('CONSOLE_RETAINED', message)
+    }
+  }
+  await writeLocalInternalConsoleRuntime(config.internalPath, {
+    enabled: runtime.enabled,
+    state: 'stopped',
+    pid: null,
+    startToken: null,
+    url: null,
+    origin: null,
+    error: null,
+  })
 }
 
 async function recoverDeadLauncher(internalPath: string, configPath: string, internal: Awaited<ReturnType<typeof readLocalInternalConfig>>, launcher: LocalInternalLauncherConfig, state: 'stopped' | 'failed' = launcher.state === 'failed' ? 'failed' : 'stopped'): Promise<void> {
@@ -510,7 +507,15 @@ export async function stopLocalProcess(configPath = defaultLocalConfigPath(), ex
   return await withLauncherStartLock(config.internalPath, async () => {
     const internal = await readLocalInternalConfig(config.internalPath!)
     const launcher = internal.launcher
-    if (launcher === undefined || launcher.state === 'stopped') return { configPath: config.configPath, internalPath: config.internalPath!, generation: launcher?.generation ?? 0, state: 'stopped' as const }
+    if (launcher === undefined || launcher.state === 'stopped') {
+      try {
+        await stopRetainedConsoleRuntime(config, internal)
+      } catch (error) {
+        if (error instanceof LocalProcessError) throw error
+        throw new LocalProcessError('CONSOLE_RETAINED', error instanceof Error ? error.message : String(error))
+      }
+      return { configPath: config.configPath, internalPath: config.internalPath!, generation: launcher?.generation ?? 0, state: 'stopped' as const }
+    }
     if (launcher.state === 'starting' && launcher.pid === 0) {
       throw new LocalProcessError('STARTING', `local supervisor generation=${launcher.generation} has not published a PID`)
     }
@@ -536,20 +541,31 @@ async function consoleControl(
 ): Promise<LocalConsolePublicStatus> {
   const config = await loadLocalConfig(configPath)
   if (config.internalPath === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no runtime internal state')
-  // The launcher materializes child projections during startup. A status-only
-  // caller must do the same so a persisted enabled intent is observable before
-  // the first Console child starts; this is still the U2 projection owner.
-  await projectLocalChildConfigs(config.internalPath)
   const internal = await readLocalInternalConfig(config.internalPath)
   const launcher = internal.launcher
-  const running = launcher?.state === 'running' && launcher.pid !== undefined && launcher.pid > 0 && processAlive(launcher.pid)
+  const launcherOwned = launcher !== undefined
+    && launcher.state === 'running'
+    && launcher.pid !== undefined
+    && launcher.pid > 0
+    && processAlive(launcher.pid)
+    && await processOwnsStartToken(launcher.pid, launcher.startToken, config.configPath)
+  const effectiveLauncherState: LocalLauncherStatus['state'] = launcher === undefined
+    ? 'stopped'
+    : launcher.state === 'running' && !launcherOwned
+      ? 'failed'
+      : launcher.state
+  const running = effectiveLauncherState === 'running'
   if (!running) {
     if (kind === 'console.status') {
-      const status = await classifyLocalConsoleStatus(config, internal, process.env, { state: launcher?.state ?? 'stopped', generation: launcher?.generation ?? 0 })
+      const status = await classifyLocalConsoleStatus(config, internal, process.env, { state: effectiveLauncherState, generation: launcher?.generation ?? 0 })
       return status
     }
-    throw new LocalProcessError('CONSOLE_NOT_RUNNING', `launcher is not running; cannot ${kind === 'console.start' ? 'start' : 'stop'} Console`)
+    const reason = effectiveLauncherState === 'failed'
+      ? 'launcher ownership cannot be verified'
+      : 'launcher is not running'
+    throw new LocalProcessError('CONSOLE_NOT_RUNNING', `${reason}; cannot ${kind === 'console.start' ? 'start' : 'stop'} Console`)
   }
+  if (launcher === undefined) throw new LocalProcessError('CONSOLE_NOT_RUNNING', 'launcher is not running; cannot control Console')
   if (options.expectedLauncherGeneration !== undefined && options.expectedLauncherGeneration !== launcher.generation) {
     throw new LocalProcessError('STALE_GENERATION', `stale local supervisor generation expected=${options.expectedLauncherGeneration} current=${launcher.generation}`)
   }
