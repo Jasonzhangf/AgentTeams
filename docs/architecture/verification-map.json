@@ -459,6 +459,20 @@
         "status never invents online availability and never exposes credential values"
       ],
       "note": "Design acceptance only. Planned black-box commands and evidence remain pending until U2 and U5 implementation."
+    },
+    {
+      "gate_id": "teams-managed-session-contract",
+      "status": "partial",
+      "required": true,
+      "command": "pnpm exec vitest run --no-file-parallelism control-protocol/console-api.spec.ts control-protocol/console-wire.spec.ts opencode-adapter/tests/index.spec.ts runtime/agent-process.spec.ts agent-host/console-ingress.spec.ts",
+      "checks": [
+        "one runtime|directory Agent row per daemon and the Session capability is gated on the U2-derived [agents.*.model] binding",
+        "session.create/session.cancel and the closed Session event union with typed cancel unknown detail are validated at the Console wire boundary, including the confirmed cancel shape",
+        "per-session prompt admission releases the record only on a trusted terminal binding; abort true/false, idle, transport return and cancel-unknown keep it owned",
+        "subscribeOpenCodeEvents only wraps the real client.event.subscribe, forwards the caller AbortSignal and never retries, buffers or reconnects on its own",
+        "the installed package declares and resolves @opencode-ai/sdk, and the UI build ships the canonical console contract the browser client loads"
+      ],
+      "note": "Source contract and focused runtime/CLI checks are implemented on the exact candidate. Live Console backend binding, real managed-OpenCode Session replay through the installed Console and browser acceptance remain downstream host gates."
     }
   ]
 }

@@ -341,9 +341,23 @@ function validatePromptMessageId(messageId: string | undefined): string | undefi
 }
 
 /**
+ * Assistant identity the synchronous prompt response proves for this exact request.
+ * Absent whenever the response does not name this session's assistant message.
+ */
+export interface OpenCodePromptBinding {
+  readonly messageId: string
+  readonly sessionId: string
+  readonly parentId: string
+}
+
+/**
  * Dispatches one SDK prompt with an explicit, owner-resolved model target and an
  * owner-allocated user messageID. Both are required in the Session dispatch
  * path; the messageID is the SDK body field, never a Teams business part.
+ *
+ * The synchronous `{ info, parts }` response is one of the two allowed binding
+ * sources, so it is decoded rather than discarded: a response only binds when it
+ * names an assistant message whose session and parent are this request's.
  */
 export async function promptOpenCodeSession(
   client: OpenCodeSessionClient,
@@ -351,7 +365,7 @@ export async function promptOpenCodeSession(
   text: string,
   target: OpenCodeModelTarget,
   messageId: string,
-): Promise<void> {
+): Promise<OpenCodePromptBinding | undefined> {
   if (text.trim() === '') throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', 'OpenCode message must not be empty')
   const selectedTarget = validateOpenCodeModelTarget(target)
   if (selectedTarget === undefined) throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', 'OpenCode prompt requires an effective model target')
@@ -362,7 +376,14 @@ export async function promptOpenCodeSession(
     model: selectedTarget,
   }
   const result = await client.session.prompt({ path: { id: sessionId }, body })
-  unwrapOpenCodeResponse(result, 'session.prompt', true)
+  const response = unwrapOpenCodeResponse(result, 'session.prompt', true)
+  const info = asRecord(asRecord(response)?.info)
+  const assistantId = info === undefined ? undefined : stringField(info.id)
+  const boundSession = info === undefined ? undefined : stringField(info.sessionID)
+  const parentId = info === undefined ? undefined : stringField(info.parentID)
+  if (assistantId === undefined || boundSession === undefined || parentId === undefined) return undefined
+  if (boundSession !== sessionId || parentId !== validatedMessageId) return undefined
+  return { messageId: assistantId, sessionId: boundSession, parentId }
 }
 
 /**
@@ -601,7 +622,10 @@ function classifyPart(type: string, properties: Readonly<Record<string, unknown>
   const rawPart = part as unknown as JsonValue
   if (partType === 'text' || partType === 'reasoning') {
     if (typeof part.text !== 'string') return { kind: 'invalid', reason: `${partType} part is missing text`, raw }
-    const completed = part.time !== undefined
+    // The installed SDK types `time` as `{ start, end? }`, so a streaming part that only
+    // carries `start` is still pending; only a present `end` proves completion.
+    const time = asRecord(part.time)
+    const completed = time !== undefined && time.end !== undefined
     return { kind: 'event', event: { ...base, agentId: '', kind: 'part', state: completed ? 'completed' : 'pending', messageId, partId, partType, text: part.text } }
   }
   if (partType === 'tool') {

@@ -445,13 +445,20 @@ describe('OpenCode Teams adapter', () => {
     await expect(readOpenCodeSessionStatus({ session: { status: async () => ({ data: { s: { type: 'idle' } } }) } } as never)).resolves.toEqual({ s: { type: 'idle' } })
   })
 
-  it('dispatches a prompt with the owner messageID and effective model target', async () => {
+  it('dispatches a prompt with the owner messageID and binds only a matching assistant response', async () => {
     const bodies: unknown[] = []
     const client = { session: { prompt: async ({ body }: { body: unknown }) => { bodies.push(body) } } }
-    await promptOpenCodeSession(client as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, 'req-1')
+    await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, 'req-1')).resolves.toBeUndefined()
     expect(bodies).toEqual([{ messageID: 'req-1', parts: [{ type: 'text', text: 'hello' }], model: { providerID: 'p', modelID: 'm' } }])
     await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: '', modelID: 'm' }, 'req-2')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
     await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, ' ')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+    const responding = (info: unknown) => ({ session: { prompt: async () => ({ data: { info, parts: [] } }) } })
+    await expect(promptOpenCodeSession(responding({ id: 'a1', sessionID: 's', parentID: 'req-1' }) as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, 'req-1'))
+      .resolves.toEqual({ messageId: 'a1', sessionId: 's', parentId: 'req-1' })
+    // A response for another session, another request, or without identity never binds.
+    for (const info of [{ id: 'a1', sessionID: 'other', parentID: 'req-1' }, { id: 'a1', sessionID: 's', parentID: 'other' }, { sessionID: 's', parentID: 'req-1' }, { id: 'a1', sessionID: 's' }, undefined]) {
+      await expect(promptOpenCodeSession(responding(info) as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, 'req-1')).resolves.toBeUndefined()
+    }
   })
 
   it('decodes only the closed text payload before any side effect', () => {
@@ -467,6 +474,11 @@ describe('OpenCode Teams adapter', () => {
       .toMatchObject({ kind: 'event', parentMessageId: 'req', event: { kind: 'final', state: 'completed' } })
     expect(part({ type: 'text', text: 'hi' })).toMatchObject({ kind: 'event', event: { kind: 'part', partType: 'text' } })
     expect(part({ type: 'reasoning', text: 'why' })).toMatchObject({ kind: 'event', event: { kind: 'part', partType: 'reasoning' } })
+    // The SDK types `time` as `{ start, end? }`: only a present `end` proves completion.
+    expect(part({ type: 'text', text: 'hi', time: { start: 1 } })).toMatchObject({ kind: 'event', event: { kind: 'part', state: 'pending' } })
+    expect(part({ type: 'text', text: 'hi', time: { start: 1, end: 2 } })).toMatchObject({ kind: 'event', event: { kind: 'part', state: 'completed' } })
+    expect(part({ type: 'reasoning', text: 'why', time: { start: 1 } })).toMatchObject({ kind: 'event', event: { kind: 'part', state: 'pending' } })
+    expect(part({ type: 'reasoning', text: 'why', time: { start: 1, end: 2 } })).toMatchObject({ kind: 'event', event: { kind: 'part', state: 'completed' } })
     expect(part({ type: 'file', filename: 'a' })).toMatchObject({ kind: 'event', event: { kind: 'part', state: 'observed', partType: 'file' } })
     expect(part({ type: 'tool', tool: 'bash', callID: 'c', state: { status: 'running', input: { command: 'ls' } } })).toMatchObject({ kind: 'event', event: { kind: 'tool', state: 'running' } })
     expect(projectOpenCodeSessionEvent({ type: 'permission.updated', properties: { id: 'p', sessionID: 's', messageID: 'm', title: 'T', metadata: {} } })).toMatchObject({ kind: 'event', event: { kind: 'permission', state: 'pending' } })

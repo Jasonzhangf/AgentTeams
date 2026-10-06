@@ -321,8 +321,22 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       operations.set(sessionId, record)
       const outcome = await useAdapter(async client => await promptOpenCodeSession(client, sessionId, decoded.text, readiness.modelTarget, record.requestMessageId))
       const current = operations.get(sessionId)
-      if (current !== undefined && current.operationId === record.operationId && current.promptMessageId === undefined) operations.delete(sessionId)
-      return outcome.ok ? { ok: true } : outcome.result
+      const owned = current !== undefined && current.operationId === record.operationId
+      if (!outcome.ok) {
+        // A transport return is not proof that the prompt ended, so only an explicit
+        // pre-dispatch rejection may release the not-yet-started record. Every other
+        // failure keeps it owned, and a later prompt still conflicts.
+        const status = outcome.result.ok === false ? outcome.result.error.status : undefined
+        const rejectedBeforeDispatch = status !== undefined && status >= 400 && status < 500
+        if (rejectedBeforeDispatch && owned && current.promptMessageId === undefined) operations.delete(sessionId)
+        return outcome.result
+      }
+      // The synchronous response binds the assistant identity only when it names this
+      // request; an unbound return keeps the record so admission stays closed.
+      if (owned && current.promptMessageId === undefined && outcome.value !== undefined) {
+        operations.set(sessionId, { ...current, promptMessageId: outcome.value.messageId })
+      }
+      return { ok: true }
     },
     cancelSession: async sessionId => {
       const readiness = deps.owner.readiness()

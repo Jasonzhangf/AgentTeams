@@ -908,7 +908,7 @@ function sessionEventChannel() {
   }
 }
 
-function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean; getError?: OpenCodeAdapterError } = {}) {
+function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; bindPrompt?: boolean } = {}) {
   const channel = sessionEventChannel()
   const prompts: { sessionId: string; text: string; messageId?: string }[] = []
   const pendingPrompts: (() => void)[] = []
@@ -923,7 +923,9 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
       create: async () => ({ data: { id: 'created-1', title: 'New' } }),
       prompt: async ({ path, body }) => {
         prompts.push({ sessionId: path.id, text: body.parts[0].text, messageId: body.messageID })
+        if (options.promptError) throw options.promptError
         if (options.holdPrompt) await new Promise<void>(resolve => { pendingPrompts.push(resolve) })
+        if (options.bindPrompt) return { data: { info: { id: 'assistant-sync', sessionID: path.id, parentID: body.messageID }, parts: [] } }
         return { data: {} }
       },
       abort: async () => { abortCalls += 1; return { data: options.abortAccepted ?? true } },
@@ -974,6 +976,44 @@ describe('Session host admission, cancel causality and observation', () => {
     await first
     await other
     expect(h.isUncertain()).toBe(false)
+  })
+
+  it('keeps the record when a prompt resolves without a trusted assistant binding', async () => {
+    const h = sessionHarness()
+    expect(await h.host.sendSession('s1', { text: 'hi' })).toMatchObject({ ok: true })
+    // The prompt transport returned without proving an assistant identity, so the record
+    // stays owned: a second prompt still conflicts and cancel stays unknown instead of
+    // aborting a prompt whose assistant message was never bound.
+    expect(await h.host.sendSession('s1', { text: 'again' })).toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
+    expect(h.prompts).toHaveLength(1)
+    expect(await h.host.cancelSession('s1')).toMatchObject({ ok: false, error: { code: 'RESULT_UNKNOWN', detail: { reason: 'ambiguous-owner' } } })
+    expect(h.abortCalls()).toBe(0)
+  })
+
+  it('binds the assistant identity the synchronous prompt response proves', async () => {
+    const h = sessionHarness({ bindPrompt: true, abortAccepted: true })
+    expect(await h.host.sendSession('s1', { text: 'hi' })).toMatchObject({ ok: true })
+    const cancel = h.host.cancelSession('s1')
+    await tick()
+    expect(h.abortCalls()).toBe(1)
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-sync', role: 'assistant', sessionID: 's1', parentID: h.prompts[0].messageId!, error: { name: 'MessageAbortedError', data: {} } } } })
+    expect(await cancel).toMatchObject({ ok: true, result: { reconciliation: 'confirmed', finalState: 'cancelled', messageId: 'assistant-sync' } })
+  })
+
+  it('releases the record only for a pre-dispatch rejection', async () => {
+    const rejected = sessionHarness({ promptError: new OpenCodeAdapterError('session.prompt', 'NOT_FOUND', 'missing session', 404) })
+    expect(await rejected.host.sendSession('s1', { text: 'hi' })).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
+    expect(rejected.isUncertain()).toBe(false)
+    // The server rejected the prompt before dispatch, so admission reopens.
+    expect(await rejected.host.sendSession('s1', { text: 'retry' })).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
+    expect(rejected.prompts).toHaveLength(2)
+
+    // A failed exchange is not proof that nothing was dispatched, so it propagates and the
+    // runtime goes uncertain instead of reopening admission.
+    const upstream = sessionHarness({ promptError: new OpenCodeAdapterError('session.prompt', 'UPSTREAM_ERROR', 'boom', 503) })
+    await expect(upstream.host.sendSession('s1', { text: 'hi' })).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
+    expect(upstream.isUncertain()).toBe(true)
+    expect(upstream.prompts).toHaveLength(1)
   })
 
   it('keeps cancel unknown without abort until the owned message id is bound', async () => {

@@ -728,3 +728,18 @@ export function parseSessionCancelUnknownDetail(value: unknown): SessionCancelUn
   optionalText(detail.abortOperationId, 'cancel detail abortOperationId')
   return detail as unknown as SessionCancelUnknownDetail
 }
+
+/** Closed validation of a confirmed cancel result; only the unique-owned abort shape passes. */
+export function parseSessionCancelConfirmed(value: unknown): SessionCancelConfirmed {
+  const result = object(value)
+  assertEnvelopeKeys(result, ['kind', 'sessionId', 'operationId', 'promptMessageId', 'runtimeGeneration', 'effectiveRevision', 'baseAccepted', 'reconciliation', 'finalState', 'messageId', 'errorName', 'abortOperationId', 'causalEvidence'], 'Session cancel result')
+  if (result.kind !== 'session.cancel') throw new Error('Session cancel result kind is invalid')
+  text(result.sessionId); text(result.operationId); text(result.promptMessageId)
+  revision(result.runtimeGeneration); revision(result.effectiveRevision)
+  if (result.baseAccepted !== true) throw new Error('Session cancel result must record an accepted abort')
+  if (result.reconciliation !== 'confirmed' || result.finalState !== 'cancelled') throw new Error('Session cancel result must be confirmed and cancelled')
+  text(result.messageId); text(result.abortOperationId)
+  if (result.errorName !== 'MessageAbortedError') throw new Error('Session cancel result error name is invalid')
+  if (result.causalEvidence !== 'unique-owned-message') throw new Error('Session cancel result causal evidence is invalid')
+  return result as unknown as SessionCancelConfirmed
+}

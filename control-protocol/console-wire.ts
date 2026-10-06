@@ -4,6 +4,7 @@ import {
   parseConsoleCommand,
   parseConsoleSessionEvent,
   parseConsoleWorkRelationProjection,
+  parseSessionCancelConfirmed,
   parseSessionCancelUnknownDetail,
   parseSessionCreateResult,
   type ConsoleCommandV1,
@@ -129,9 +130,11 @@ function commandResult(value: unknown): void {
     assertEnvelopeKeys(result, ['ok', 'result'], 'Console success')
     if (result.result !== undefined) {
       assertJsonValue(result.result, 'Console success result')
-      if (typeof result.result === 'object' && result.result !== null && !Array.isArray(result.result)
-        && (result.result as Record<string, unknown>).kind === 'session.create') {
-        parseSessionCreateResult(result.result)
+      const payload = result.result
+      if (typeof payload === 'object' && payload !== null && !Array.isArray(payload)) {
+        const kind = (payload as Record<string, unknown>).kind
+        if (kind === 'session.create') parseSessionCreateResult(payload)
+        else if (kind === 'session.cancel') parseSessionCancelConfirmed(payload)
       }
     }
   } else {

@@ -76,6 +76,20 @@ it('closes create results and preserves cancel baseAccepted three-state', () => 
     { ok: true, result: { kind: 'session.create', agentId: 'a', sessionId: 's', model: 'm' } },
     { ok: true, result: { kind: 'session.create', agentId: 'a' } },
   ]) expect(() => parseConsoleWireReply(JSON.stringify(createFrame(invalid)))).toThrow()
+  const cancelConfirmed = (extra: Record<string, unknown> = {}) => ({ ok: true, result: {
+    kind: 'session.cancel', sessionId: 's', operationId: 'o', promptMessageId: 'm', runtimeGeneration: 1, effectiveRevision: 2,
+    baseAccepted: true, reconciliation: 'confirmed', finalState: 'cancelled', messageId: 'm', errorName: 'MessageAbortedError',
+    abortOperationId: 'ab', causalEvidence: 'unique-owned-message', ...extra } })
+  expect(parseConsoleWireReply(JSON.stringify(createFrame(cancelConfirmed()))))
+    .toMatchObject({ result: { ok: true, result: { kind: 'session.cancel', finalState: 'cancelled' } } })
+  for (const invalid of [
+    cancelConfirmed({ errorName: 'UnknownError' }),
+    cancelConfirmed({ causalEvidence: 'guessed-owner' }),
+    cancelConfirmed({ reconciliation: 'unknown' }),
+    cancelConfirmed({ baseAccepted: false }),
+    cancelConfirmed({ extra: true }),
+    { ok: true, result: { kind: 'session.cancel', sessionId: 's' } },
+  ]) expect(() => parseConsoleWireReply(JSON.stringify(createFrame(invalid)))).toThrow()
   const cancelDetail = (baseAccepted?: boolean) => ({ ok: false, error: { code: 'RESULT_UNKNOWN', message: 'cancel unknown', detail: {
     kind: 'session.cancel', sessionId: 's', operationId: 'o', promptMessageId: 'm', runtimeGeneration: 1, effectiveRevision: 2,
     ...(baseAccepted === undefined ? {} : { baseAccepted }), reconciliation: 'unknown', finalState: 'unknown', reason: 'no-final', abortOperationId: 'ab' } } })
