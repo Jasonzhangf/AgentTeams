@@ -7,8 +7,11 @@ import { startConsoleRuntime, type ConsoleRuntimeOptions } from './console-runti
 
 export async function loadConsoleProcessConfig(path: string, env: NodeJS.ProcessEnv = process.env): Promise<ConsoleRuntimeOptions> {
   const configPath = resolve(path)
+  // The compiled projection carries the user-intent `enabled` flag that the
+  // launcher's status owner reads back from this same file; the child accepts it
+  // and never decides from it, because a disabled Console is never started.
   const input = object(JSON.parse(await readFile(configPath, 'utf8')),
-    ['version', 'identity', 'scopeId', 'presenceIntervalMs', 'agentIds', 'listen', 'auth', 'staticRoot', 'uiRoot', 'relay'], 'Console config')
+    ['version', 'enabled', 'identity', 'scopeId', 'presenceIntervalMs', 'agentIds', 'listen', 'auth', 'staticRoot', 'uiRoot', 'relay'], 'Console config')
   if (input.version !== 1) throw new RelayProtocolError('UNSUPPORTED_VERSION', 'Console config version must be 1')
   const location = (value: unknown, label: string) => resolve(dirname(configPath), text(value, label))
   const listen = object(input.listen, ['host', 'port', 'origin', 'certFile', 'keyFile'], 'Console listen')

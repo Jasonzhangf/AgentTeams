@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { configSourceHash, createTomlRuntimeConfigPersistence, defaultLocalConfigPath, initializeLocalConfig, loadLocalConfig, parseConfigUserSections, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, resumePendingMigration, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalInternalWorkControl } from './local-config.ts'
 import { parse as parseToml } from 'toml'
+import { loadConsoleProcessConfig } from './console-process.ts'
 import { providerIntentFingerprint } from '../config/runtime-config.ts'
 
 it('loads a persisted TOML launcher config and resolves paths relative to the file', async () => {
@@ -721,6 +722,12 @@ agentIds = ["provider", "receiver"]
     expect(projection.staticRoot).toMatch(/console-host\/static$/)
     expect(projection.uiRoot).toMatch(/ui\/teams-console$/)
     expect(projection.relay.endpoint).toMatch(/^wss:\/\/127\.0\.0\.1:\d+$/)
+    // The materialized projection is the Console child's only config source and
+    // the launcher status owner's enablement evidence, so it must satisfy the
+    // child loader contract. An empty environment fails on the missing
+    // credential, never on an unsupported projection field.
+    await projectLocalChildConfigs(loaded.internalPath!)
+    await expect(loadConsoleProcessConfig(loaded.console!.configPath, {})).rejects.toThrow(/credential/)
     const persistedPort = projection.listen.port
 
     const reloaded = await loadLocalConfig(configPath)
