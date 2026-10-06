@@ -372,6 +372,29 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
     assert(missingProvider.includes('published status projection for provider missing-provider'),
       `installed Work open with an unresolvable provider did not fail explicitly: ${missingProvider}`)
 
+    // A lost local socket after the CLI already fixed the binding must still
+    // return a typed failed receipt carrying the generated identity and the
+    // fixed binding, so the caller can query or close with the original identity.
+    const workControlSocket = parseToml(readFileSync(join(dirname(configPath), 'internal.toml'), 'utf8')).workControl?.socketPath
+    assert(typeof workControlSocket === 'string' && workControlSocket !== '', 'installed lifecycle has no recorded Work control socket')
+    rmSync(workControlSocket, { force: true })
+    const lostOutput = await runExpectFailure(cli, workArgs('open', '--provider', 'installed-provider',
+      '--provider-generation', providerGeneration, '--capability-id', 'file-search', '--capability-version', '1',
+      '--operation', 'search', '--demands', demands, '--payload', '{"query":"needle"}'), { cwd: dirname(configPath), env: cliEnv })
+    const lostReceipt = JSON.parse(lostOutput.slice(lostOutput.indexOf('{')))
+    assert(lostReceipt.status === 'failed', `installed Work open with a lost socket did not report failure: ${JSON.stringify(lostReceipt).slice(0, 400)}`)
+    assert(lostReceipt.control?.deliveryState === 'unconfirmed',
+      `installed Work open with a lost socket did not report an unconfirmed delivery: ${JSON.stringify(lostReceipt.control)}`)
+    assert(typeof lostReceipt.control?.workId === 'string' && lostReceipt.control.workId !== ''
+      && typeof lostReceipt.control?.requestId === 'string' && typeof lostReceipt.control?.executionId === 'string'
+      && typeof lostReceipt.control?.attemptId === 'string',
+      `installed Work open with a lost socket dropped the generated identity: ${JSON.stringify(lostReceipt.control)}`)
+    assert(lostReceipt.control?.providerAgentId === 'installed-provider'
+      && lostReceipt.control?.targetGeneration === Number(providerGeneration)
+      && lostReceipt.control?.capabilityId === 'file-search' && lostReceipt.control?.capabilityVersion === '1'
+      && lostReceipt.control?.operation === 'search',
+      `installed Work open with a lost socket dropped the fixed binding: ${JSON.stringify(lostReceipt.control)}`)
+
     const firstStop = await run(cli, ['stop', '--config', configPath, '--generation', String(activeGeneration)], { cwd: dirname(configPath), env: cliEnv })
     await waitForProcessesGone([startInternal.launcher.pid, ...startInternal.processes.map(process => process.pid)])
     activeGeneration = undefined
@@ -439,6 +462,16 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
           query: { workId: persistentQuery.control.workId, requestId: persistentQuery.control.requestId, observed: persistentQuery.control.observed },
           close: { workId: closed.control.workId, workClosure: closed.control.workClosure },
           unresolvable_provider_open_failed_before_dispatch: true,
+          lost_socket_receipt: {
+            status: lostReceipt.status,
+            deliveryState: lostReceipt.control.deliveryState,
+            providerAgentId: lostReceipt.control.providerAgentId,
+            targetGeneration: lostReceipt.control.targetGeneration,
+            capabilityId: lostReceipt.control.capabilityId,
+            capabilityVersion: lostReceipt.control.capabilityVersion,
+            operation: lostReceipt.control.operation,
+            identityPreserved: true,
+          },
         },
       },
       final_stop: { generation: restartParsed.generation, stdout: secondStop.stdout, stderr: secondStop.stderr },
