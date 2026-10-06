@@ -295,16 +295,26 @@ function buildWorkFrame(parsed, workControl, receiver, openTargetGeneration) {
     if (selection !== 'endpoint') throw new AgentTeamsCliError('--service-selection must be endpoint or capability')
     return { kind: 'work.query', requestId: base.requestId, control: { ...base, serviceSelection: 'endpoint' } }
   }
-  const binding = {
-    targetAgentId: parsed.provider ?? connect.targetAgentId,
-    // open fixes the target generation before dispatch from the explicit flag or
-    // from the selected Agent's typed local daemon status projection; request and
-    // close must carry the generation captured by open and stay explicit.
-    targetGeneration: parsed.subcommand === 'open' ? openTargetGeneration : requireFlag(parsed, 'providerGeneration', '--provider-generation'),
-    capabilityId: parsed.capabilityId ?? connect.capabilityId,
-    capabilityVersion: parsed.capabilityVersion ?? connect.capabilityVersion,
-    operation: parsed.operation ?? connect.operation,
-  }
+  // open may derive a missing binding from the receiver's already-explicit connect
+  // intent and the status projection. request/close operate on an existing Work, so
+  // they must carry the exact original binding from the open receipt; the mutable
+  // connect intent can never stand in for it.
+  const persistent = parsed.subcommand !== 'open'
+  const binding = persistent
+    ? {
+        targetAgentId: requireFlag(parsed, 'provider', '--provider'),
+        targetGeneration: requireFlag(parsed, 'providerGeneration', '--provider-generation'),
+        capabilityId: requireFlag(parsed, 'capabilityId', '--capability-id'),
+        capabilityVersion: requireFlag(parsed, 'capabilityVersion', '--capability-version'),
+        operation: requireFlag(parsed, 'operation', '--operation'),
+      }
+    : {
+        targetAgentId: parsed.provider ?? connect.targetAgentId,
+        targetGeneration: openTargetGeneration,
+        capabilityId: parsed.capabilityId ?? connect.capabilityId,
+        capabilityVersion: parsed.capabilityVersion ?? connect.capabilityVersion,
+        operation: parsed.operation ?? connect.operation,
+      }
   if (binding.targetAgentId === undefined || binding.targetGeneration === undefined || binding.capabilityId === undefined || binding.capabilityVersion === undefined || binding.operation === undefined) {
     throw new AgentTeamsCliError(`work ${parsed.subcommand} requires an explicit provider/capability binding`)
   }

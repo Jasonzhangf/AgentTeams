@@ -320,6 +320,39 @@ describe('agentteams CLI', () => {
     }
   })
 
+  it('requires the original explicit binding for request and close even when connect declares it', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames)
+    // The receiver's connect intent declares provider/file-search/1/search, so a
+    // connect-derived binding would silently succeed here. request/close must not
+    // fall back to it.
+    const bindings: Array<[string, string]> = [
+      ['--provider', 'provider'],
+      ['--provider-generation', '7'],
+      ['--capability-id', 'file-search'],
+      ['--capability-version', '1'],
+      ['--operation', 'search'],
+    ]
+    try {
+      for (const subcommand of ['request', 'close']) {
+        for (const omitted of bindings) {
+          const argv = ['work', subcommand, '--config', context.configPath, '--receiver', 'receiver', '--work-id', 'work-1']
+          for (const [flag, value] of bindings) {
+            if (flag === omitted[0]) continue
+            argv.push(flag, value)
+          }
+          const failure = await agentteamsCommand(argv, { runtime }).catch((error: Error) => error)
+          expect(failure, `${subcommand} without ${omitted[0]} must fail`).toBeInstanceOf(Error)
+          expect(failure.message).toContain(`${omitted[0]} is required for work ${subcommand}`)
+        }
+      }
+      expect(frames).toHaveLength(0)
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
   it('keeps request and close on an explicit provider generation', async () => {
     const context = await initializeWorkCommandHome()
     const frames: LocalWorkControlRequest[] = []
@@ -330,7 +363,8 @@ describe('agentteams CLI', () => {
           '--work-id', 'work-1', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search'], { runtime })
           .catch((error: Error) => error)
         expect(failure).toBeInstanceOf(Error)
-        expect(failure.message).toContain('--provider-generation is required')
+        expect(failure.message).toContain('is required')
+        expect(failure.message).not.toContain(context.configPath)
       }
       expect(frames).toHaveLength(0)
     } finally {
