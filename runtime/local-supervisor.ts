@@ -573,7 +573,8 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   async function startConsoleChild(): Promise<LocalConsolePublicStatus> {
     const projection = await readConsoleProjection()
     if (config.console?.enabled !== true || projection?.enabled !== true) {
-      await patchConsole({ enabled: false, state: 'disabled', pid: null, startToken: null, url: null, origin: null, error: null })
+      // CONSOLE_DISABLED is a rejection with zero child, zero port and zero
+      // [consoleRuntime] write, so a disabled Console never gains a runtime row.
       throw new LocalConsoleLifecycleError('CONSOLE_DISABLED', 'Console is disabled; set [console].enabled=true in config.toml')
     }
     if (consoleCredentialState(projection) !== 'configured') {
@@ -781,7 +782,8 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       if (lifecycle !== 'running') throw new LocalConsoleLifecycleError('NOT_RUNNING', 'launcher is not running')
       const status = await consoleStatusRead()
       if (!status.enabled) {
-        await patchConsole({ enabled: false, state: 'disabled', pid: null, startToken: null, url: null, origin: null, error: null })
+        // CONSOLE_DISABLED is a rejection with zero child, zero port and zero
+        // [consoleRuntime] write, so a disabled Console never gains a runtime row.
         throw new LocalConsoleLifecycleError('CONSOLE_DISABLED', 'Console is disabled; set [console].enabled=true in config.toml')
       }
       if (expectedConsoleGeneration !== undefined && expectedConsoleGeneration !== status.generation) {

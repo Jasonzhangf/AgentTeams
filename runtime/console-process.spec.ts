@@ -263,3 +263,20 @@ it('never spawns a second Console child while it still owns a live one', async (
     await rm(harnessResult.root, { recursive: true, force: true })
   }
 }, 15_000)
+
+it('rejects a disabled Console without writing a runtime row', async () => {
+  const harnessResult = await harness('teams-console-disabled-', { consoleEnabled: false })
+  const supervisor = supervisorFor(harnessResult)
+  try {
+    await reserve(harnessResult)
+    await supervisor.start()
+    // CONSOLE_DISABLED is a rejection with zero child, zero port and zero
+    // [consoleRuntime] write, so a disabled Console never gains a durable row.
+    expect((await readLocalInternalConfig(harnessResult.config.internalPath!)).consoleRuntime).toBeUndefined()
+    await expect(supervisor.consoleStart()).rejects.toMatchObject({ code: 'CONSOLE_DISABLED' })
+    expect((await readLocalInternalConfig(harnessResult.config.internalPath!)).consoleRuntime).toBeUndefined()
+  } finally {
+    try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
+    await rm(harnessResult.root, { recursive: true, force: true })
+  }
+}, 15_000)

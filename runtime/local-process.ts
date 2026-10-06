@@ -534,6 +534,19 @@ export async function stopLocalProcess(configPath = defaultLocalConfigPath(), ex
   })
 }
 
+/**
+ * A Console status observation that cannot read the launcher, its control socket or the
+ * Console child is a typed observation failure. It never reports a silent healthy state,
+ * and it never leaks an unrelated control code such as the Work socket being unavailable.
+ */
+async function consoleStatusObservation<T>(read: () => Promise<T>): Promise<T> {
+  try {
+    return await read()
+  } catch (cause) {
+    throw new LocalProcessError('CONSOLE_STATUS_UNAVAILABLE', cause instanceof Error ? cause.message : String(cause))
+  }
+}
+
 async function consoleControl(
   kind: LocalConsoleControlKind,
   configPath: string,
@@ -557,8 +570,8 @@ async function consoleControl(
   const running = effectiveLauncherState === 'running'
   if (!running) {
     if (kind === 'console.status') {
-      const status = await classifyLocalConsoleStatus(config, internal, process.env, { state: effectiveLauncherState, generation: launcher?.generation ?? 0 })
-      return status
+      return await consoleStatusObservation(async () =>
+        await classifyLocalConsoleStatus(config, internal, process.env, { state: effectiveLauncherState, generation: launcher?.generation ?? 0 }))
     }
     const reason = effectiveLauncherState === 'failed'
       ? 'launcher ownership cannot be verified'
@@ -574,7 +587,7 @@ async function consoleControl(
   if (workControl.launcherGeneration !== launcher.generation || workControl.launcherStartToken !== launcher.startToken) {
     throw new LocalProcessError('STALE_OWNER', 'local Work control refs do not match the running launcher')
   }
-  const reply = await sendLocalConsoleControlRequest({
+  const send = async (): Promise<LocalWorkControlReply> => await sendLocalConsoleControlRequest({
     socketPath: workControl.socketPath,
     frame: {
       kind,
@@ -583,6 +596,7 @@ async function consoleControl(
     },
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
   })
+  const reply = kind === 'console.status' ? await consoleStatusObservation(send) : await send()
   if (reply.ok !== true) {
     const consoleCodes = new Set(['CONSOLE_DISABLED', 'CONSOLE_CREDENTIAL_MISSING', 'CONSOLE_PORT_OCCUPIED', 'CONSOLE_ASSET_MISSING', 'CONSOLE_RETAINED', 'CONSOLE_START_FAILED', 'CONSOLE_STATUS_UNAVAILABLE', 'CONSOLE_PROCESS_EXITED', 'STALE_GENERATION'])
     const code = consoleCodes.has(reply.error.code) ? reply.error.code as LocalProcessError['code'] : 'CONSOLE_START_FAILED'

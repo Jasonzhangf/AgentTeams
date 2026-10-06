@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { spawn as spawnProcess } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
-import { loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalLauncherOwnership, writeLocalInternalState } from './local-config.ts'
+import { loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalWorkControl, writeLocalLauncherOwnership, writeLocalInternalState } from './local-config.ts'
 import { consoleStatusLocalProcess, runLocalProcess, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
 import type { LocalSupervisor } from './local-supervisor.ts'
 
@@ -761,6 +761,45 @@ it('does not report a dead launcher as running in Console status', async () => {
       launcherGeneration: 1,
     })
   } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('reports an unobservable Console status as CONSOLE_STATUS_UNAVAILABLE', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-status-unavailable-'))
+  const path = join(root, 'config.toml')
+  let owner: ReturnType<typeof spawnProcess> | undefined
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    const startToken = 'console-status-token'
+    // The launcher is genuinely owned by this pid, but no server ever listened on the
+    // control socket it published, so the Console state cannot be observed at all.
+    owner = spawnProcess(process.execPath, [
+      '-e',
+      'setInterval(()=>{},1e3)',
+      new URL('./local-process.ts', import.meta.url).pathname,
+      '--config',
+      config.configPath,
+      '--start-token',
+      startToken,
+    ], { stdio: 'ignore' })
+    await new Promise<void>(resolveSpawn => owner?.once('spawn', resolveSpawn))
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: owner.pid!, generation: 1, startToken, state: 'running' })
+    await writeLocalInternalWorkControl(config.internalPath!, {
+      socketPath: join(dirname(config.internalPath!), '.internal', 'work-control.sock'),
+      launcherGeneration: 1,
+      launcherStartToken: startToken,
+    })
+
+    // An unreadable observation is a typed CONSOLE_STATUS_UNAVAILABLE, never the
+    // unrelated Work control code and never a silent healthy state.
+    await expect(consoleStatusLocalProcess(path, { timeoutMs: 500 })).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+  } finally {
+    if (owner !== undefined && owner.exitCode === null && owner.signalCode === null) {
+      owner.kill('SIGTERM')
+      await new Promise<void>(resolveExit => owner?.once('exit', resolveExit))
+    }
     await rm(root, { recursive: true, force: true })
   }
 }, 15000)
