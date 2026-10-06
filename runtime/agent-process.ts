@@ -18,6 +18,7 @@ import type {
   ConsoleClientV1,
   ConsoleCommandResultV1,
   ConsoleCommandV1,
+  ConsoleProjectionV1,
   ConsoleServiceError,
   ConsoleSessionEventView,
   JsonValue,
@@ -121,9 +122,10 @@ export interface SessionHost {
   readonly cancelSession: (sessionId: string) => Promise<ConsoleCommandResultV1>
   readonly replyPermission: (sessionId: string, permissionId: string, decision: 'once' | 'always' | 'reject') => Promise<ConsoleCommandResultV1>
   readonly sessionEvents: () => readonly ConsoleSessionEventView[]
+  readonly projectionSessions: () => ConsoleProjectionV1['sessions']
   readonly currentSessionId: () => string | undefined
   readonly observation: () => SessionObservationState
-  readonly ensureStream: () => void
+  readonly ensureStream: () => void | Promise<void>
   readonly dispose: () => Promise<void>
 }
 
@@ -202,6 +204,8 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
   let dropped = 0
   let currentSession: { readonly sessionId: string; readonly title?: string } | undefined
   let stream: { readonly fingerprint: string; readonly controller: AbortController; readonly done: Promise<void> } | undefined
+  let replacing: Promise<void> | undefined
+  let disposed = false
 
   const degrade = (detail: string): void => {
     dropped += 1
@@ -219,6 +223,12 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     while (list.length > limit) { list.shift(); degrade('Session projection buffer reached its bound') }
     buffers.set(event.sessionId, list)
   }
+  const settlePendingCancel = (sessionId: string, abortOperationId: string, messageId: string | undefined): void => {
+    const pending = pendingCancels.get(sessionId)
+    if (pending === undefined || pending.abortOperationId !== abortOperationId) return
+    pendingCancels.delete(sessionId)
+    pending.resolve(messageId)
+  }
   const correlate = (event: ConsoleSessionEventView, parentMessageId: string | undefined): void => {
     const record = operations.get(event.sessionId)
     if (record === undefined) return
@@ -229,8 +239,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     if (event.kind === 'final' && event.state === 'failed' && event.error.name === 'MessageAbortedError') {
       const pending = pendingCancels.get(event.sessionId)
       if (pending !== undefined && pending.promptMessageId === event.messageId) {
-        pendingCancels.delete(event.sessionId)
-        pending.resolve(event.messageId)
+        settlePendingCancel(event.sessionId, pending.abortOperationId, event.messageId)
       }
     }
     const bound = operations.get(event.sessionId)
@@ -250,16 +259,37 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       if (!controller.signal.aborted) lose('retry-exhausted', error instanceof Error ? error.message : 'OpenCode event stream failed')
     }
   }
-  const ensureStream = (): void => {
-    const handle = deps.owner.currentHandle()
-    if (handle === undefined) return
-    const fingerprint = `${handle.url}\u0000${handle.effectiveRevision}`
-    if (stream !== undefined && stream.fingerprint === fingerprint) return
-    if (stream !== undefined) { const previous = stream; stream = undefined; previous.controller.abort() }
+  const startStream = (handle: ManagedEffectiveHandle, fingerprint: string): void => {
+    if (disposed) return
     const controller = new AbortController()
     const client = createClient({ url: handle.url, authorization: handle.authorization })
     const done = consume(client, controller)
     stream = { fingerprint, controller, done }
+  }
+  const ensureStream = (): void | Promise<void> => {
+    if (replacing !== undefined) return replacing
+    const handle = deps.owner.currentHandle()
+    if (handle === undefined) return
+    const fingerprint = `${handle.url}\u0000${handle.effectiveRevision}\u0000${handle.pid ?? ''}`
+    if (stream !== undefined && stream.fingerprint === fingerprint) return
+    const previous = stream
+    if (previous === undefined) {
+      startStream(handle, fingerprint)
+      return
+    }
+    stream = undefined
+    previous.controller.abort()
+    replacing = (async () => {
+      try {
+        await previous.done
+        const current = deps.owner.currentHandle()
+        if (disposed || current === undefined) return
+        const currentFingerprint = `${current.url}\u0000${current.effectiveRevision}\u0000${current.pid ?? ''}`
+        if ((stream as { readonly fingerprint: string } | undefined)?.fingerprint === currentFingerprint) return
+        startStream(current, currentFingerprint)
+      } finally { replacing = undefined }
+    })()
+    return replacing
   }
   const useAdapter = async <T>(operation: (client: OpenCodeSessionClient & OpenCodeEventClient) => Promise<T>): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly result: ConsoleCommandResultV1 }> =>
     await deps.owner.use(async handle => {
@@ -271,6 +301,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
         throw error
       }
     })
+  const emitCancelEvent = (event: ConsoleSessionEventView): void => { buffer(event) }
   const cancelUnknown = (record: SessionOperationRecord, abortOperationId: string | undefined, reason: SessionCancelUnknownDetail['reason'], baseAccepted: boolean | undefined): ConsoleCommandResultV1 => ({
     ok: false,
     error: { code: 'RESULT_UNKNOWN', message: 'Session cancel is not confirmed', detail: {
@@ -284,9 +315,38 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
   const awaitAbort = async (sessionId: string, record: SessionOperationRecord, abortOperationId: string): Promise<string | undefined> => {
     if (record.promptMessageId === undefined) return undefined
     return await new Promise<string | undefined>(resolve => {
-      const timer = setTimeout(() => { pendingCancels.delete(sessionId); resolve(undefined) }, ABORT_RECONCILE_TIMEOUT_MS)
+      const timer = setTimeout(() => { settlePendingCancel(sessionId, abortOperationId, undefined) }, ABORT_RECONCILE_TIMEOUT_MS)
       pendingCancels.set(sessionId, { abortOperationId, promptMessageId: record.promptMessageId as string, resolve: messageId => { clearTimeout(timer); resolve(messageId) } })
     })
+  }
+  const bufferedAbortMessageId = (sessionId: string, promptMessageId: string): string | undefined =>
+    (buffers.get(sessionId) ?? []).flatMap(event => event.kind === 'final' && event.state === 'failed' &&
+      event.error.name === 'MessageAbortedError' && event.messageId === promptMessageId ? [event.messageId] : [])[0]
+  const cancelEvent = (record: SessionOperationRecord, abortOperationId: string | undefined, event:
+    | { readonly state: 'accepted'; readonly baseAccepted: true; readonly promptMessageId: string }
+    | { readonly state: 'rejected'; readonly baseAccepted: false; readonly promptMessageId: string }
+    | { readonly state: 'reconciled'; readonly messageId: string; readonly promptMessageId: string }
+    | { readonly state: 'unknown'; readonly reason: SessionCancelUnknownDetail['reason']; readonly baseAccepted?: boolean }): ConsoleSessionEventView => {
+    const base = {
+      eventId: randomUUID(), agentId: deps.agentId, sessionId: record.sessionId,
+      operationId: record.operationId, runtimeGeneration: record.runtimeGeneration, effectiveRevision: record.effectiveRevision,
+      ...(record.promptMessageId === undefined ? {} : { promptMessageId: record.promptMessageId }),
+      ...(abortOperationId === undefined ? {} : { abortOperationId }),
+    }
+    if (event.state === 'accepted' || event.state === 'rejected') {
+      if (abortOperationId === undefined) throw new Error('Accepted or rejected cancel event requires abortOperationId')
+      const cancel = { ...base, kind: 'cancel' as const, state: event.state, promptMessageId: event.promptMessageId, baseAccepted: event.baseAccepted }
+      return event.state === 'accepted'
+        ? { ...cancel, abortOperationId, state: 'accepted' as const, baseAccepted: true as const }
+        : { ...cancel, abortOperationId, state: 'rejected' as const, baseAccepted: false as const }
+    }
+    if (event.state === 'reconciled') {
+      if (abortOperationId === undefined) throw new Error('Reconciled cancel event requires abortOperationId')
+      return { ...base, kind: 'cancel', state: 'reconciled', abortOperationId, promptMessageId: event.promptMessageId, baseAccepted: true,
+        finalState: 'cancelled', messageId: event.messageId, errorName: 'MessageAbortedError', causalEvidence: 'unique-owned-message' }
+    }
+    return { ...base, kind: 'cancel', state: 'unknown', reason: event.reason,
+      ...(event.baseAccepted === undefined ? {} : { baseAccepted: event.baseAccepted }) }
   }
   return {
     openSession: async sessionId => {
@@ -294,7 +354,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       if (!outcome.ok) return outcome.result
       const summary = outcome.value
       currentSession = { sessionId: summary.id, ...(summary.title === undefined ? {} : { title: summary.title }) }
-      ensureStream()
+      await ensureStream()
       return { ok: true }
     },
     createSession: async title => {
@@ -302,7 +362,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       if (!outcome.ok) return outcome.result
       const created = outcome.value
       currentSession = { sessionId: created.sessionId, ...(created.title === undefined ? {} : { title: created.title }) }
-      ensureStream()
+      await ensureStream()
       return { ok: true, result: created as unknown as JsonValue }
     },
     sendSession: async (sessionId, payload) => {
@@ -315,10 +375,11 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
         throw error
       }
       if (operations.has(sessionId)) return sessionFailure('CONFLICT', 'A prompt is already active for this session')
-      ensureStream()
       const record: SessionOperationRecord = { operationId: randomUUID(), sessionId, runtimeGeneration: deps.generation(),
         effectiveRevision: readiness.effectiveRevision, requestMessageId: randomUUID(), acceptedAt: new Date().toISOString() }
       operations.set(sessionId, record)
+      const streamChange = ensureStream()
+      if (streamChange !== undefined) await streamChange
       const outcome = await useAdapter(async client => await promptOpenCodeSession(client, sessionId, decoded.text, readiness.modelTarget, record.requestMessageId))
       const current = operations.get(sessionId)
       const owned = current !== undefined && current.operationId === record.operationId
@@ -344,18 +405,49 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       const record = operations.get(sessionId)
       if (record === undefined) return sessionFailure('CONFLICT', 'No active prompt to cancel for this session')
       if (record.abortOperationId !== undefined) return sessionFailure('CONFLICT', 'A cancel is already in flight for this session')
-      if (record.promptMessageId === undefined) return cancelUnknown(record, undefined, 'ambiguous-owner', undefined)
+      if (record.promptMessageId === undefined) {
+        emitCancelEvent(cancelEvent(record, undefined, { state: 'unknown', reason: 'ambiguous-owner' }))
+        return cancelUnknown(record, undefined, 'ambiguous-owner', undefined)
+      }
       const abortOperationId = randomUUID()
-      const snapshot: SessionOperationRecord = { ...record, abortOperationId }
+      const promptMessageId = record.promptMessageId
+      const snapshot: SessionOperationRecord = { ...record, promptMessageId, abortOperationId }
       operations.set(sessionId, snapshot)
-      ensureStream()
-      const outcome = await useAdapter(async client => await cancelOpenCodeSession(client, sessionId))
-      if (!outcome.ok) return outcome.result
-      if (outcome.value === false) return cancelUnknown(snapshot, abortOperationId, 'abort-rejected', false)
-      const messageId = await awaitAbort(sessionId, snapshot, abortOperationId)
-      if (messageId === undefined) return cancelUnknown(snapshot, abortOperationId, 'no-final', true)
+      const abort = awaitAbort(sessionId, snapshot, abortOperationId)
+      const buffered = bufferedAbortMessageId(sessionId, promptMessageId)
+      if (buffered !== undefined) settlePendingCancel(sessionId, abortOperationId, buffered)
+      const streamChange = ensureStream()
+      if (streamChange !== undefined) await streamChange
+      let outcome
+      try {
+        outcome = await useAdapter(async client => await cancelOpenCodeSession(client, sessionId))
+      } catch (error) {
+        settlePendingCancel(sessionId, abortOperationId, undefined)
+        throw error
+      }
+      if (!outcome.ok) {
+        settlePendingCancel(sessionId, abortOperationId, undefined)
+        return outcome.result
+      }
+      if (outcome.value === false) {
+        settlePendingCancel(sessionId, abortOperationId, undefined)
+        emitCancelEvent(cancelEvent(snapshot, abortOperationId, { state: 'rejected', baseAccepted: false, promptMessageId }))
+        return cancelUnknown(snapshot, abortOperationId, 'abort-rejected', false)
+      }
+      if (outcome.value === undefined) {
+        settlePendingCancel(sessionId, abortOperationId, undefined)
+        emitCancelEvent(cancelEvent(snapshot, abortOperationId, { state: 'unknown', reason: 'link-lost' }))
+        return cancelUnknown(snapshot, abortOperationId, 'link-lost', undefined)
+      }
+      emitCancelEvent(cancelEvent(snapshot, abortOperationId, { state: 'accepted', baseAccepted: true, promptMessageId }))
+      const messageId = await abort
+      if (messageId === undefined) {
+        emitCancelEvent(cancelEvent(snapshot, abortOperationId, { state: 'unknown', reason: 'no-final', baseAccepted: true }))
+        return cancelUnknown(snapshot, abortOperationId, 'no-final', true)
+      }
+      emitCancelEvent(cancelEvent(snapshot, abortOperationId, { state: 'reconciled', messageId, promptMessageId }))
       return { ok: true, result: { kind: 'session.cancel', sessionId, operationId: snapshot.operationId,
-        promptMessageId: snapshot.promptMessageId as string, runtimeGeneration: snapshot.runtimeGeneration,
+        promptMessageId, runtimeGeneration: snapshot.runtimeGeneration,
         effectiveRevision: snapshot.effectiveRevision, baseAccepted: true, reconciliation: 'confirmed', finalState: 'cancelled',
         messageId, errorName: 'MessageAbortedError', abortOperationId, causalEvidence: 'unique-owned-message' } }
     },
@@ -364,11 +456,14 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       return outcome.ok ? { ok: true } : outcome.result
     },
     sessionEvents: () => [...buffers.values()].flat(),
+    projectionSessions: () => currentSession === undefined ? [] : [{ agentId: deps.agentId, ...currentSession }],
     currentSessionId: () => currentSession?.sessionId,
     observation: () => observation,
     ensureStream,
     dispose: async () => {
+      disposed = true
       if (stream !== undefined) { const previous = stream; stream = undefined; previous.controller.abort(); await previous.done }
+      await replacing
       for (const pending of pendingCancels.values()) pending.resolve(undefined)
       pendingCancels.clear()
       operations.clear()
@@ -751,7 +846,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
           use: operation => owner.use(operation),
         },
       })
-      sessionHost.ensureStream()
+      await sessionHost.ensureStream()
       return created
     })()
     const allowed = (consumer: { agentId: string }) => config.allowedConsumers.includes(consumer.agentId)
@@ -788,7 +883,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         return {
           version: 1,
           agents: [await runtimeRow()],
-          sessions: [], notifications: [],
+          sessions: sessionHost?.projectionSessions() ?? [], notifications: [],
           configs: configBinding === undefined ? [] : [await configBinding.binding.readProjection()],
           ...(sessionEvents.length === 0 ? {} : { sessionEvents }),
           ...projectConsoleWorkObservations(config.declaration.identity.agentId, ledger?.snapshot.works ?? []),
@@ -799,7 +894,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
           if (configBinding === undefined) return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Agent has no model configuration owner' } }
           const result = await configBinding.binding.command(command as Extract<ConsoleCommandV1, { kind: `config.${string}` }>)
           // An applied revision replaces the child; re-point the single event stream at it.
-          sessionHost?.ensureStream()
+          await sessionHost?.ensureStream()
           return result
         }
         if (sessionHost === undefined) return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } }

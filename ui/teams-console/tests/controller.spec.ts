@@ -35,6 +35,25 @@ describe('TeamsConsoleController', () => {
     expect(controller.getSnapshot().error).toContain('REVISION_CONFLICT')
   })
 
+  it('surfaces typed cancel unknown detail without coercing absent baseAccepted', async () => {
+    const controller = new TeamsConsoleController({
+      ...createFixtureClient(),
+      async command() {
+        return { ok: false, error: {
+          code: 'RESULT_UNKNOWN',
+          message: 'Session cancel is not confirmed',
+          detail: { kind: 'session.cancel', sessionId: 'planner-current', operationId: 'op-1', abortOperationId: 'abort-1',
+            reconciliation: 'unknown', finalState: 'unknown', reason: 'link-lost' },
+        } }
+      },
+    })
+    await controller.refresh()
+    await expect(controller.cancelSession('planner', 'planner-current')).resolves.toBe(false)
+    expect(controller.getSnapshot().error).toContain('reason=link-lost')
+    expect(controller.getSnapshot().error).toContain('baseAccepted=absent')
+    expect(controller.getSnapshot().error).toContain('abortOperationId=abort-1')
+  })
+
   it('closes the drawer without losing the loaded projection', async () => {
     const controller = new TeamsConsoleController(createFixtureClient())
     await controller.refresh()

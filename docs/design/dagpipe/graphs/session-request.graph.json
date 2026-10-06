@@ -51,11 +51,32 @@
       "iterator": "Whole"
     },
     {
+      "id": "claim-session",
+      "operator": "teams.claim-session-operation",
+      "operator_version": "1",
+      "inputs": [
+        "runtime.resolved"
+      ],
+      "output": {
+        "id": "session.operation-claimed",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
       "id": "dispatch-session",
       "operator": "teams.dispatch-opencode-session",
       "operator_version": "1",
       "inputs": [
-        "runtime.resolved"
+        "session.operation-claimed"
       ],
       "output": {
         "id": "session.dispatched",
@@ -122,8 +143,13 @@
     },
     {
       "from": "resolve-runtime",
-      "to": "dispatch-session",
+      "to": "claim-session",
       "arc_id": "runtime.resolved"
+    },
+    {
+      "from": "claim-session",
+      "to": "dispatch-session",
+      "arc_id": "session.operation-claimed"
     },
     {
       "from": "dispatch-session",

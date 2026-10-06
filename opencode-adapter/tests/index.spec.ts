@@ -440,6 +440,7 @@ describe('OpenCode Teams adapter', () => {
   it('returns raw abort acceptance and reads messages and status through the SDK', async () => {
     await expect(cancelOpenCodeSession({ session: { abort: async () => ({ data: true }) } } as never, 's')).resolves.toBe(true)
     await expect(cancelOpenCodeSession({ session: { abort: async () => ({ data: false }) } } as never, 's')).resolves.toBe(false)
+    await expect(cancelOpenCodeSession({ session: { abort: async () => ({ data: undefined }) } } as never, 's')).resolves.toBeUndefined()
     const entries = [{ info: { id: 'm' }, parts: [{ id: 'p' }] }]
     await expect(readOpenCodeSessionMessages({ session: { messages: async () => ({ data: entries }) } } as never, 's')).resolves.toEqual(entries)
     await expect(readOpenCodeSessionStatus({ session: { status: async () => ({ data: { s: { type: 'idle' } } }) } } as never)).resolves.toEqual({ s: { type: 'idle' } })

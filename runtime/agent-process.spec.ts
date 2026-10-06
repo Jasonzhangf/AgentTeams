@@ -908,7 +908,7 @@ function sessionEventChannel() {
   }
 }
 
-function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; bindPrompt?: boolean } = {}) {
+function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean } = {}) {
   const channel = sessionEventChannel()
   const prompts: { sessionId: string; text: string; messageId?: string }[] = []
   const pendingPrompts: (() => void)[] = []
@@ -928,7 +928,11 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
         if (options.bindPrompt) return { data: { info: { id: 'assistant-sync', sessionID: path.id, parentID: body.messageID }, parts: [] } }
         return { data: {} }
       },
-      abort: async () => { abortCalls += 1; return { data: options.abortAccepted ?? true } },
+      abort: async () => {
+        abortCalls += 1
+        if (options.abortHold) await new Promise<void>(resolve => { pendingPrompts.push(resolve) })
+        return options.abortResponse === 'absent' ? { data: undefined } : { data: options.abortAccepted ?? true }
+      },
       messages: async () => ({ data: [] }),
       status: async () => ({ data: {} }),
     },
@@ -961,6 +965,16 @@ describe('Session host admission, cancel causality and observation', () => {
     expect(current).toMatchObject({ sessionAvailability: 'current', sessionEffectiveRevision: 4, providerId: 'p', modelId: 'm', sessionObservation: { state: 'degraded' } })
     // Observation degradation never rewrites availability.
     expect(current).toMatchObject({ sessionAvailability: 'current' })
+  })
+
+  it('projects the current owner session into Console projection rows', async () => {
+    const h = sessionHarness()
+    expect(h.host.projectionSessions()).toEqual([])
+    expect(await h.host.createSession('New')).toMatchObject({ ok: true })
+    expect(h.host.projectionSessions()).toEqual([{ agentId: 'agent', sessionId: 'created-1', title: 'New' }])
+    expect(await h.host.openSession('existing-1')).toEqual({ ok: true })
+    expect(h.host.projectionSessions()).toEqual([{ agentId: 'agent', sessionId: 'existing-1', title: 'Existing' }])
+    await h.host.dispose()
   })
 
   it('claims the first prompt before dispatch and conflicts the second for one session', async () => {
@@ -1051,6 +1065,70 @@ describe('Session host admission, cancel causality and observation', () => {
     await rejectedPrompt
   })
 
+  it('reconciles a final abort observed before session.abort returns', async () => {
+    const h = sessionHarness({ holdPrompt: true, abortHold: true })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    const requestMessageId = h.prompts[0].messageId!
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: requestMessageId } } })
+    await tick()
+    const cancel = h.host.cancelSession('s1')
+    await tick()
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: requestMessageId, error: { name: 'MessageAbortedError', data: {} } } } })
+    await tick()
+    h.releasePrompt()
+    expect(await cancel).toMatchObject({ ok: true, result: { reconciliation: 'confirmed', finalState: 'cancelled', messageId: 'assistant-1' } })
+    h.releasePrompt()
+    await prompt
+  })
+
+  it('keeps an absent abort response unknown without fabricating baseAccepted=false', async () => {
+    const h = sessionHarness({ holdPrompt: true, abortResponse: 'absent' })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: h.prompts[0].messageId! } } })
+    await tick()
+    const cancelled = await h.host.cancelSession('s1')
+    expect(cancelled).toMatchObject({ ok: false, error: { code: 'RESULT_UNKNOWN', detail: { reason: 'link-lost' } } })
+    expect(cancelled).not.toMatchObject({ error: { detail: { baseAccepted: expect.anything() } } })
+    h.releasePrompt()
+    await prompt
+  })
+
+  it('projects every typed cancel variant into the owning session buffer', async () => {
+    const h = sessionHarness({ holdPrompt: true, abortAccepted: true })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    const requestMessageId = h.prompts[0].messageId!
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: requestMessageId } } })
+    await tick()
+    const cancel = h.host.cancelSession('s1')
+    await tick()
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: requestMessageId, error: { name: 'MessageAbortedError', data: {} } } } })
+    await cancel
+    expect(h.host.sessionEvents().filter(event => event.kind === 'cancel').map(event => event.state)).toEqual(['accepted', 'reconciled'])
+    h.releasePrompt()
+    await prompt
+
+    const rejected = sessionHarness({ holdPrompt: true, abortAccepted: false })
+    const rejectedPrompt = rejected.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    rejected.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-2', role: 'assistant', sessionID: 's1', parentID: rejected.prompts[0].messageId! } } })
+    await tick()
+    await rejected.host.cancelSession('s1')
+    expect(rejected.host.sessionEvents().filter(event => event.kind === 'cancel').map(event => event.state)).toEqual(['rejected'])
+    rejected.releasePrompt()
+    await rejectedPrompt
+
+    const unbound = sessionHarness({ holdPrompt: true })
+    const unboundPrompt = unbound.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    await unbound.host.cancelSession('s1')
+    expect(unbound.host.sessionEvents().filter(event => event.kind === 'cancel').map(event => event.state)).toEqual(['unknown'])
+    unbound.releasePrompt()
+    await unboundPrompt
+  })
+
   it('conflicts a duplicate cancel before a second SDK abort', async () => {
     const h = sessionHarness({ holdPrompt: true, abortAccepted: true })
     const prompt = h.host.sendSession('s1', { text: 'hi' })
@@ -1069,7 +1147,7 @@ describe('Session host admission, cancel causality and observation', () => {
 
   it('separates observation degradation from owner readiness and contains expected errors', async () => {
     const h = sessionHarness()
-    h.host.ensureStream()
+    await h.host.ensureStream()
     await tick()
     h.channel.push({ type: 'message.part.updated', properties: {} })
     await tick()
@@ -1080,5 +1158,78 @@ describe('Session host admission, cancel causality and observation', () => {
     const failing = sessionHarness({ getError: new OpenCodeAdapterError('session.get', 'NOT_FOUND', 'missing', 404) })
     expect(await failing.host.openSession('missing')).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
     expect(failing.isUncertain()).toBe(false)
+  })
+
+  it('restarts the one event stream for a new child pid and awaits the previous consumer', async () => {
+    const order: string[] = []
+    let subscriptions = 0
+    const makeStream = (label: string): AsyncGenerator<OpenCodeSdkEvent> => {
+      let pending: ((result: IteratorResult<OpenCodeSdkEvent>) => void) | undefined
+      return {
+        [Symbol.asyncIterator]() { return this },
+        next: () => new Promise(resolve => { pending = resolve }),
+        return: async () => {
+          order.push(`${label}:return`)
+          pending?.({ value: undefined, done: true })
+          pending = undefined
+          return { value: undefined, done: true }
+        },
+        throw: async () => ({ value: undefined, done: true }),
+      }
+    }
+    const client = {
+      session: {
+        list: async () => ({ data: [] }),
+        get: async () => ({ data: { id: 's' } }),
+        create: async () => ({ data: { id: 's' } }),
+        prompt: async () => ({ data: {} }),
+        abort: async () => ({ data: true }),
+        messages: async () => ({ data: [] }),
+        status: async () => ({ data: {} }),
+      },
+      postSessionIdPermissionsPermissionId: async () => ({ data: {} }),
+      event: {
+        subscribe: async () => {
+          const label = `subscribe-${++subscriptions}`
+          order.push(label)
+          return { data: { stream: makeStream(label) } }
+        },
+      },
+    } as unknown as OpenCodeSessionClient & OpenCodeEventClient
+    let handle: ManagedEffectiveHandle = {
+      url: 'http://127.0.0.1:1',
+      authorization: 'Bearer x',
+      effectiveRevision: 3,
+      pid: 1,
+      modelTarget: { providerID: 'p', modelID: 'm' },
+    }
+    const owner = {
+      readiness: (): ManagedRuntimeReadiness => ({ state: 'current', effectiveRevision: 3, modelTarget: handle.modelTarget, activeOperations: 0 }),
+      currentHandle: () => handle,
+      use: async <T>(operation: (value: ManagedEffectiveHandle) => Promise<T>): Promise<T> => await operation(handle),
+    }
+    const host = createSessionHost({ agentId: 'agent', generation: () => 7, owner, createClient: () => client })
+    await host.ensureStream()
+    expect(order).toEqual(['subscribe-1'])
+    handle = { ...handle, pid: 2 }
+    await host.ensureStream()
+    expect(order).toEqual(['subscribe-1', 'subscribe-1:return', 'subscribe-2'])
+    await host.dispose()
+  })
+})
+
+describe('Session feature graph product', () => {
+  it('binds the delivered claim-before-dispatch Session topology', () => {
+    const graphPath = join(resolve(import.meta.dirname), '..', 'docs', 'design', 'dagpipe', 'graphs', 'session-request.graph.json')
+    const graph = JSON.parse(readFileSync(graphPath, 'utf8')) as {
+      readonly nodes: readonly { readonly id: string; readonly operator: string; readonly output: { readonly id: string } }[]
+      readonly edges: readonly { readonly from: string; readonly to: string; readonly arc_id: string }[]
+    }
+    expect(graph.nodes.find(node => node.id === 'claim-session')).toMatchObject({
+      operator: 'teams.claim-session-operation', output: { id: 'session.operation-claimed' },
+    })
+    const arcs = graph.edges.map(edge => `${edge.from}->${edge.to}:${edge.arc_id}`)
+    expect(arcs).toContain('resolve-runtime->claim-session:runtime.resolved')
+    expect(arcs).toContain('claim-session->dispatch-session:session.operation-claimed')
   })
 })

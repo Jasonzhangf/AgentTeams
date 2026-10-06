@@ -692,9 +692,10 @@ owner/decoder：`control-protocol/console-api.ts` 拥有 result/detail 语义；
 flowchart LR
   A[会话意图接入] --> B[管理授权与代次校验]
   B --> C[解析生效基座与模型目标]
-  C --> D[分发 OpenCode 会话动作]
-  D --> E[观察并关联会话结果]
-  E --> F[返回会话回执]
+  C --> D[授予 prompt operation]
+  D --> E[分发 OpenCode 会话动作]
+  E --> F[观察并关联会话结果]
+  F --> G[返回会话回执]
 ```
 
 唯一 Session object 由以下 identity 组成：真实 `sessionId`、`messageId`、`partId`、`callId`、`permissionId`、本进程 prompt `operationId`、本次 cancel `abortOperationId`、runtime generation、effective revision 与 `providerID/modelID`。业务 payload 的 `JsonValue` 独立于 typed control；控制状态不写入 payload/metadata。
@@ -714,7 +715,7 @@ flowchart LR
 - 图内无回边改变其他独立功能的真源状态；Session 生命周期可以产生下一次 graph execution。
 - `resolve-runtime` 只读 U2 accepted/effective 和 owner readiness；不确定时不进入 dispatch。
 - Console 断线只结束 Console 自己的请求，不取消 Session/OpenCode 工作；取消只由显式 `session.cancel` 触发。
-- 本设计不修改 graph JSON。若 U6 实现需要改变 ARC/owner，由 primary 在 implementation admission 时按真实图变更请求处理。
+- U6 implementation admission 已在唯一 graph 文件中加入 `session.operation-claimed` 节点及其 ARC，使 `session-request.graph.json` 与本节实现的 claim-before-dispatch 顺序一致。
 
 ### 8.2 生命周期状态机
 

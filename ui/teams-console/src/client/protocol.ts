@@ -29,7 +29,19 @@ export function isServiceError(value: unknown): value is ServiceError {
 }
 
 export function formatServiceError(error: ServiceError): string {
-  return `${error.code}: ${error.message}`
+  const base = `${error.code}: ${error.message}`
+  if (error.detail === undefined) return base
+  const detail = error.detail
+  const fields = [
+    `sessionId=${detail.sessionId}`,
+    `reason=${detail.reason}`,
+    `reconciliation=${detail.reconciliation}`,
+    `finalState=${detail.finalState}`,
+    `baseAccepted=${detail.baseAccepted === undefined ? 'absent' : String(detail.baseAccepted)}`,
+    ...(detail.operationId === undefined ? [] : [`operationId=${detail.operationId}`]),
+    ...(detail.abortOperationId === undefined ? [] : [`abortOperationId=${detail.abortOperationId}`]),
+  ]
+  return `${base} (${fields.join(', ')})`
 }
 
 export function isCommandFailure(result: ConsoleCommandResultV1): result is { readonly ok: false; readonly error: ServiceError } {

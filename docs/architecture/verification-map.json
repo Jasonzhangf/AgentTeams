@@ -468,11 +468,14 @@
       "checks": [
         "one runtime|directory Agent row per daemon and the Session capability is gated on the U2-derived [agents.*.model] binding",
         "session.create/session.cancel and the closed Session event union with typed cancel unknown detail are validated at the Console wire boundary, including the confirmed cancel shape",
-        "per-session prompt admission releases the record only on a trusted terminal binding; abort true/false, idle, transport return and cancel-unknown keep it owned",
+        "the project Session graph contains the delivered session.operation-claimed node between runtime.resolved and session.dispatched and passes dagpipe graph validate",
+        "per-session prompt admission releases the record only on a trusted terminal binding; abort true/false/absent, idle, transport return and cancel-unknown keep it owned",
+        "created/opened Session rows reach ConsoleProjectionV1.sessions, and accepted/rejected/reconciled/unknown cancel variants reach the per-session projection",
+        "the single event stream fingerprints child pid plus effective revision and awaits the previous consumer before replacement",
         "subscribeOpenCodeEvents only wraps the real client.event.subscribe, forwards the caller AbortSignal and never retries, buffers or reconnects on its own",
         "the installed package declares and resolves @opencode-ai/sdk, and the UI build ships the canonical console contract the browser client loads"
       ],
-      "note": "Source contract and focused runtime/CLI checks are implemented on the exact candidate. Live Console backend binding, real managed-OpenCode Session replay through the installed Console and browser acceptance remain downstream host gates."
+      "note": "Source contract and focused runtime/CLI checks are implemented on the exact candidate. Live Console backend binding, real managed-OpenCode Session replay through the installed Console and browser acceptance remain downstream host gates; BB10/BB12 stay PENDING."
     }
   ]
 }

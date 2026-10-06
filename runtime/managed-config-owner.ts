@@ -19,6 +19,7 @@ export interface ManagedEffectiveHandle {
   readonly url: string
   readonly authorization: string
   readonly effectiveRevision: number
+  readonly pid?: number
   readonly modelTarget: {
     readonly providerID: string
     readonly modelID: string
@@ -271,7 +272,8 @@ export function createManagedConfigOwner(options: Options, launch = startManaged
       const target = lastTarget
       active++
       try {
-        return await operation({ url: handle.url, authorization: handle.authorization, effectiveRevision: handle.effectiveRevision, modelTarget: effectiveModelTarget(handle) })
+        return await operation({ url: handle.url, authorization: handle.authorization, effectiveRevision: handle.effectiveRevision,
+          ...(handle.pid === undefined ? {} : { pid: handle.pid }), modelTarget: effectiveModelTarget(handle) })
       } catch (error) {
         // A failed exchange is not proof that the substrate's operation ended.
         if (target !== undefined) {
@@ -292,7 +294,8 @@ export function createManagedConfigOwner(options: Options, launch = startManaged
     },
     currentHandle(): ManagedEffectiveHandle | undefined {
       if (!current) return undefined
-      return { url: current.url, authorization: current.authorization, effectiveRevision: current.effectiveRevision, modelTarget: effectiveModelTarget(current) }
+      return { url: current.url, authorization: current.authorization, effectiveRevision: current.effectiveRevision,
+        ...(current.pid === undefined ? {} : { pid: current.pid }), modelTarget: effectiveModelTarget(current) }
     },
     async stop(): Promise<void> {
       if (changing || active || uncertain) throw conflict()

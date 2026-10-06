@@ -412,11 +412,10 @@ export async function createOpenCodeSession(client: OpenCodeSessionClient, agent
   }
 }
 
-/** 1.18.23 `session.abort` base acceptance; never proof the cancel completed. */
-export async function cancelOpenCodeSession(client: OpenCodeSessionClient, sessionId: string): Promise<boolean> {
+/** 1.18.23 `session.abort` base acceptance; absent stays absent and is never proof the cancel completed. */
+export async function cancelOpenCodeSession(client: OpenCodeSessionClient, sessionId: string): Promise<boolean | undefined> {
   const result = await client.session.abort({ path: { id: sessionId } })
-  const accepted = unwrapOpenCodeResponse(result, 'session.abort', true)
-  return accepted === true
+  return unwrapOpenCodeResponse(result, 'session.abort', true)
 }
 
 /** Reads the real message/part list for one session; identity is preserved verbatim. */

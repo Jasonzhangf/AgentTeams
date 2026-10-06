@@ -99,12 +99,13 @@ flowchart LR
 ```mermaid
 flowchart LR
   A[由智能体确认会话操作权限] --> B[取得已生效的执行基座]
-  B --> C[提交本次会话请求]
-  C --> D[观察消息工具和审批结果]
-  D --> E[返回真实会话结果]
+  B --> C[授予 prompt operation]
+  C --> D[提交本次会话请求]
+  D --> E[观察消息工具和审批结果]
+  E --> F[返回真实会话结果]
 ```
 
-此图为待补入口。已有 managed OpenCode 派发不能证明 daemon Console Session 接线完成。
+source 契约已交付：daemon 在 dispatch 前登记唯一 prompt operation，并把 create/open/cancel 变体投影到 Console。live Console backend binding 与真浏览器会话回放仍待验证。
 成功要保留消息、tool call identity/arguments/result、权限请求与回复的语义；approval pending 是进行中，不是完成。
 取消经 Agent adapter 确认并收取最终状态；浏览器断开不等于请求已取消。被动能力 Agent 明确不支持 Session 合法，无需挂模型。
 
@@ -337,9 +338,10 @@ stateDiagram-v2
 | B4 观察身份 | authorize-console-access | console-host：src/auth.ts/server.ts | 已有；可启动用户入口缺 |
 | B4 发现端点；读 Agent | discover-visible-endpoints；read-authorized-agent-state | runtime：console-hub.ts、relay-console-client.ts；server 目录真源 | 已有；Agent managers policy 独立 |
 | B4 视图；返回 | project-console-view；return-console-view | console-host：src/http-api.ts，ui/teams-console/ 消费 | 已有；用户包静态资源缺 |
-| B5 会话授权 | authorize-session-request | agent-host：console-ingress.ts | 接口边界已有，daemon 实际会话待接 |
+| B5 会话授权 | authorize-session-request | agent-host：console-ingress.ts | 接口边界已有；daemon 已挂 managed Session facade，live 接线待验证 |
 | B5 取得生效基座 | resolve-effective-runtime | runtime：managed-config-owner.ts | 已有 use() 契约 |
-| B5 提交；观察；结果 | dispatch-opencode-session；observe-session-outcome；return-session-result | opencode-adapter：src/index.ts；runtime/agent-process.ts 组装 | adapter 已有；daemon sendSession 当前明确拒绝 |
+| B5 授予 prompt operation | claim-session-operation | runtime：agent-process.ts 的 per-session prompt record | 已有；dispatch 前登记唯一 operation，第二个 prompt 冲突 |
+| B5 提交；观察；结果 | dispatch-opencode-session；observe-session-outcome；return-session-result | opencode-adapter：src/index.ts；runtime/agent-process.ts 组装 | source 契约已有；live Console backend binding 待验证 |
 | B6 归属校验 | verify-stop-owner | runtime：local-process.ts | 已有 generation/token 校验 |
 | B6 排空或保留 | drain-or-retain-work | agent-host：work-host.ts，runtime 驱动 | unknown 必须保留责任；外部清理验收待补 |
 | B6 停止；释放；回执 | stop-owned-children；release-owned-runtime；persist-stop-receipt | runtime：local-supervisor.ts/local-process.ts/local-config.ts | 已有；验证全部 own 资源终点 |
