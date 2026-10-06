@@ -161,6 +161,34 @@ function defaultConfigPath(home) {
 
 const WORK_SUBCOMMANDS = ['submit', 'query', 'open', 'request', 'close']
 
+const WORK_FLAG_TEXT = {
+  config: '--config', payload: '--payload', workId: '--work-id', requestId: '--request-id',
+  receiver: '--receiver', provider: '--provider', providerGeneration: '--provider-generation',
+  capabilityId: '--capability-id', capabilityVersion: '--capability-version', operation: '--operation',
+  demands: '--demands', serviceSelection: '--service-selection', linkGeneration: '--link-generation',
+  generation: '--generation',
+}
+const WORK_FLAG_KEY = Object.fromEntries(Object.entries(WORK_FLAG_TEXT).map(([key, text]) => [text, key]))
+const WORK_QUERY_SELECTION_FLAGS = ['provider', 'providerGeneration', 'capabilityId', 'capabilityVersion', 'operation', 'linkGeneration']
+
+/**
+ * The public CLI owns which flags each `work` subcommand may carry. A flag that
+ * the selected subcommand does not consume is refused before any socket is
+ * built, so a caller never believes an ignored argument took effect.
+ *
+ * The identity contract follows the same table: `submit` and `open` generate
+ * both identities, so they take neither identity flag; `request` and `close`
+ * take the original `--work-id` and generate a fresh request id; `query` is the
+ * only subcommand that takes both.
+ */
+const WORK_FLAG_SCOPE = {
+  submit: ['config', 'payload', 'receiver', 'generation'],
+  query: ['config', 'workId', 'requestId', 'receiver', 'generation', 'serviceSelection', ...WORK_QUERY_SELECTION_FLAGS],
+  open: ['config', 'operation', 'demands', 'payload', 'provider', 'providerGeneration', 'capabilityId', 'capabilityVersion', 'receiver', 'generation'],
+  request: ['config', 'workId', 'provider', 'providerGeneration', 'capabilityId', 'capabilityVersion', 'operation', 'demands', 'payload', 'receiver', 'generation'],
+  close: ['config', 'workId', 'provider', 'providerGeneration', 'capabilityId', 'capabilityVersion', 'operation', 'receiver', 'generation'],
+}
+
 function parseWorkArgs(argv, options) {
   const subcommand = argv[0]
   if (subcommand === undefined || subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
@@ -188,11 +216,13 @@ function parseWorkArgs(argv, options) {
   }
   const strings = { '--work-id': 'workId', '--request-id': 'requestId', '--receiver': 'receiver', '--provider': 'provider', '--capability-id': 'capabilityId', '--capability-version': 'capabilityVersion', '--operation': 'operation', '--service-selection': 'serviceSelection' }
   const integers = { '--generation': 'generation', '--provider-generation': 'providerGeneration', '--link-generation': 'linkGeneration' }
+  const supplied = new Set()
   for (let index = 1; index < argv.length; index += 1) {
     const argument = argv[index]
     const equals = argument.indexOf('=')
     const name = equals > 0 ? argument.slice(0, equals) : argument
     const inline = equals > 0 ? argument.slice(equals + 1) : undefined
+    if (Object.hasOwn(WORK_FLAG_KEY, name)) supplied.add(WORK_FLAG_KEY[name])
     const take = flag => {
       if (inline !== undefined) {
         if (inline.length === 0) throw new AgentTeamsCliError(`${flag} requires a value`)
@@ -220,6 +250,15 @@ function parseWorkArgs(argv, options) {
       parsed[integers[name]] = value
     } else {
       throw new AgentTeamsCliError(`unknown argument: ${argument}\n${workUsage()}`)
+    }
+  }
+  const scope = WORK_FLAG_SCOPE[subcommand]
+  for (const key of supplied) {
+    if (!scope.includes(key)) throw new AgentTeamsCliError(`${WORK_FLAG_TEXT[key]} is not a work ${subcommand} argument\n${workUsage()}`)
+  }
+  if (subcommand === 'query' && (parsed.serviceSelection ?? 'endpoint') !== 'capability') {
+    for (const key of WORK_QUERY_SELECTION_FLAGS) {
+      if (supplied.has(key)) throw new AgentTeamsCliError(`${WORK_FLAG_TEXT[key]} requires --service-selection capability\n${workUsage()}`)
     }
   }
   return parsed

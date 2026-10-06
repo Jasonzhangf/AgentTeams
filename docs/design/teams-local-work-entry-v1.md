@@ -158,6 +158,13 @@ agentteams work query  --config <path> --service-selection capability --work-id 
 - `submit` 不读 `internal.toml` 的 `[configuredWork]`，不读任何启动回执；每次调用生成新的
   `workId`/`requestId`（见 §6）。
 - `query` 不携带业务 payload，不生成新 Work/request ID。
+- 每个子命令只接受上列签名中的 flag。与所选子命令无关的 flag 一律在建立 socket 前以
+  `INVALID_INPUT` 拒绝：`submit`/`open` 的 `--work-id`/`--request-id`（这两个子命令自己生成
+  两个 identity，接受 caller 传入会让 caller 伪造或碰撞 identity）、`request`/`close` 的
+  `--request-id`（必须每次生成新的）、`query` 的 `--payload`/`--demands`、`submit` 的
+  provider/capability flag 与 `--demands`、`close` 的 `--payload`/`--demands`，以及
+  `--service-selection endpoint` 下的 provider/capability/`--link-generation`。CLI 不静默忽略，
+  也不让 caller 以为被忽略的参数已生效。
 
 stdout 只输出一行 JSON 结果，stderr 输出显式错误；错误时退出码非 0。
 
@@ -860,7 +867,7 @@ admission 拒绝。此区分不新增 U2 配置字段、resolver、ledger 或 sc
 |---|---|---|---|
 | graph | `docs/design/dagpipe/graphs/work-open.graph.json`、`work-request.graph.json`、`work-close.graph.json`（本修订新增；`agent-work@2` 不变） | `dagpipe graph validate` SESE；pack manifest `graphs[]` 增三张 graph 条目 | U4（本设计作者） |
 | Operator registry | D3/U4 `runtime/dagpipe/host.ts` `OPERATOR_OPERATIONS`、runner Operator registry、项目 `compile()` | 登记 `teams.return-held-work`（仅 dispose）、`teams.continue-provider-work`（既有 `agentWork.request`，无 propose）、`teams.close-provider-work`（close+dispose）及其版本 | D3/U4 runner owner |
-| CLI | `cli/agentteams.mjs`、`cli/agentteams.spec.ts` | `work open/request/close` 解析、**open 在 dispatch 前固定 provider/generation（`--provider`/显式 connect/既有 typed status projection）且缺则失败无副作用**、open/request `--payload` 必填且保留显式 `null`、request/close 原 service 字段、`--provider-generation` 语义、`work query --service-selection capability` 的 provider/capability binding 与 `--link-generation` 语义、stdout JSON 形状、显式错误码 | U4 caller owner |
+| CLI | `cli/agentteams.mjs`、`cli/agentteams.spec.ts` | `work open/request/close` 解析、**open 在 dispatch 前固定 provider/generation（`--provider`/显式 connect/既有 typed status projection）且缺则失败无副作用**、open/request `--payload` 必填且保留显式 `null`、request/close 原 service 字段、`--provider-generation` 语义、`work query --service-selection capability` 的 provider/capability binding 与 `--link-generation` 语义、stdout JSON 形状、显式错误码、**每个子命令只接受自己签名内的 flag 且拒绝其余（含 submit/open 的 identity flag、request/close 的 `--request-id`、query 的 payload/demands 与非 capability selection 的 provider binding）** | U4 caller owner |
 | launcher socket/IPC | `runtime/local-work-control.ts`、`runtime/local-supervisor.ts`、`runtime/local-process.ts` 及其 tests | open/request/close/capability-query 帧校验、correlation、断连不取消、未知 kind 显式错误 | U4 launcher owner |
 | receiver 接线 | `runtime/agent-process.ts`（去 configuredWork）、`runtime/agent-process.spec.ts` | graph 选择（open/request/close）按子命令；**open 只按 CLI 已固定的精确 provider/generation 校验声明，不后选 provider**；`work-request` 不派发 propose；`return-held-work` 不 close；per-request operation/demands 预校验；provider 代次/ledger 归属复核 | U4 receiver owner |
 | AgentWorkClient selection | `runtime/agent-work-client.ts`、`runtime/agent-work-client.spec.ts` | 已交付 typed `serviceSelection`；capability mode 只匹配 provider capability declaration、返回不带 Endpoint 的 `AgentWorkTarget`，endpoint mode 保持既有 Endpoint admission/fixed operation；持久 query 用 capability mode 并固定原 provider，`linkGeneration` 与原 `targetGeneration` 分开；无重复 resolver、无 fallback；原 generation 在 open/request/close 间保持 | runtime client owner |

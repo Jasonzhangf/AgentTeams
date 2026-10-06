@@ -276,6 +276,42 @@ describe('agentteams CLI', () => {
     }
   })
 
+  it('refuses a Work flag the selected subcommand does not consume', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames)
+    const binding = ['--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search']
+    const rejected: string[][] = [
+      // submit and open generate both identities, so neither identity flag is legal there.
+      ['work', 'submit', '--config', context.configPath, '--payload', 'null', '--work-id', 'forced-work'],
+      ['work', 'submit', '--config', context.configPath, '--payload', 'null', '--request-id', 'forced-request'],
+      ['work', 'open', '--config', context.configPath, '--payload', 'null', '--work-id', 'forced-work', ...binding],
+      ['work', 'open', '--config', context.configPath, '--payload', 'null', '--request-id', 'forced-request', ...binding],
+      // request and close take the original work id and generate a fresh request id.
+      ['work', 'request', '--config', context.configPath, '--work-id', 'work-1', '--request-id', 'forced-request', '--payload', 'null', ...binding],
+      ['work', 'close', '--config', context.configPath, '--work-id', 'work-1', '--request-id', 'forced-request', ...binding],
+      // submit carries no provider binding and no demand set.
+      ['work', 'submit', '--config', context.configPath, '--payload', 'null', '--provider', 'provider'],
+      ['work', 'submit', '--config', context.configPath, '--payload', 'null', '--demands', '[]'],
+      // query carries no business payload and no demand set, and its binding flags belong to capability selection.
+      ['work', 'query', '--config', context.configPath, '--work-id', 'work-1', '--request-id', 'request-1', '--payload', 'null'],
+      ['work', 'query', '--config', context.configPath, '--work-id', 'work-1', '--request-id', 'request-1', '--demands', '[]'],
+      ['work', 'query', '--config', context.configPath, '--work-id', 'work-1', '--request-id', 'request-1', '--provider', 'provider'],
+      ['work', 'query', '--config', context.configPath, '--work-id', 'work-1', '--request-id', 'request-1', '--link-generation', '8'],
+      // close has no business payload and no request.
+      ['work', 'close', '--config', context.configPath, '--work-id', 'work-1', '--payload', 'null', ...binding],
+      ['work', 'close', '--config', context.configPath, '--work-id', 'work-1', '--demands', '[]', ...binding],
+    ]
+    try {
+      for (const argv of rejected) {
+        await expect(agentteamsCommand(argv, { runtime })).rejects.toThrow(/is not a work \w+ argument|requires --service-selection capability/)
+      }
+      expect(frames).toHaveLength(0)
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
   it('retains an arbitrary JSON payload without rewriting it', async () => {
     const context = await initializeWorkCommandHome()
     const frames: LocalWorkControlRequest[] = []
@@ -416,7 +452,8 @@ describe('agentteams CLI', () => {
     try {
       for (const subcommand of ['open', 'request', 'close']) {
         const failure = await agentteamsCommand(['work', subcommand, '--config', context.configPath, '--receiver', 'receiver',
-          '--work-id', 'work-1', '--provider', 'provider', '--provider-generation', '7',
+          ...(subcommand === 'open' ? [] : ['--work-id', 'work-1']),
+          '--provider', 'provider', '--provider-generation', '7',
           '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search',
           ...(subcommand === 'close' ? [] : ['--demands', '[{"resourceId":"search-slot","amount":1}]', '--payload', '{}'])], { runtime })
           .catch((error: Error) => error)
@@ -508,14 +545,15 @@ describe('agentteams CLI', () => {
     }
     try {
       const command = agentteamsCommand(['work', 'submit', '--config', context.configPath,
-        '--receiver', 'receiver', '--work-id', 'failed-work', '--request-id', 'failed-request',
-        '--payload', '{}'], { runtime })
+        '--receiver', 'receiver', '--payload', '{}'], { runtime })
       const failure = await command.catch((error: Error) => error)
       expect(failure).toBeInstanceOf(Error)
       expect(failure.message).toBe(JSON.stringify(failedReceipt))
       expect(frames).toHaveLength(1)
+      expect(frames[0].control.workId).toEqual(expect.any(String))
+      expect(frames[0].control.requestId).toEqual(expect.any(String))
       expect(JSON.parse(failure.message)).toMatchObject({ status: 'failed',
-        control: { workId: 'failed-work', requestId: 'failed-request',
+        control: { workId: frames[0].control.workId, requestId: frames[0].control.requestId,
           executionId: frames[0].control.executionId, attemptId: frames[0].control.attemptId } })
     } finally { await rm(context.home, { recursive: true, force: true }) }
   })
