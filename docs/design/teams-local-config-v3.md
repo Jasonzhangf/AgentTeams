@@ -309,7 +309,7 @@ writeLocalInternalWorkControl(
 
 launcher-only runtime owner 负责调用 primitive，并强制启动前 admission 顺序：取 `.launcher.lock`，在同 lock 写 exact `[workControl]`，bind/listen，回读校验 exact refs；全部成功后才可发布 `running`/admission。listener 创建失败必须关闭 socket 并通过 primitive 删除表项，不得接受请求。`stop` 与任何 terminal/error path 先停止 admission、关闭 socket，再在内部锁内删除 `[workControl]`，保留 `[launcher]` ownership 与其他 sections。未执行 socket lifecycle 的 U2 独立交付可以无此表；`status` 必须把它读作 absent，而不是推断 running。
 
-未来 public tests 覆盖：写入后 read-modify-write 保留 `configRuntime/launcher/daemon/consoleRuntime`；restart 后 exact refs 可恢复；`undefined` 删除整表；socket 文件/目录权限；listener failure 删除表项且无 request；stop 删除表项且保留 provider ledger；mismatched generation/startToken 显式拒绝。
+public tests 必须覆盖：写入后 read-modify-write 保留 `configRuntime/launcher/daemon/consoleRuntime`；restart 后 exact refs 可恢复；`undefined` 删除整表；socket 文件/目录权限；listener failure 删除表项且无 request；stop 删除表项且保留 provider ledger；mismatched generation/startToken 显式拒绝。
 
 ## 5. `RuntimeConfigPersistence` 与同一 TOML 真源映射
 

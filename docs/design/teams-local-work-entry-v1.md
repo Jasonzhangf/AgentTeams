@@ -95,20 +95,20 @@ Work、拿到真实业务结果，并在之后用原 Work/request 身份显式�
   失败 `endpoint.connect.payload is required`。
 - 现有 child IPC 只有 ready/status 回传（`local-supervisor.ts` 的 `waitForReady` 只处理
   `daemon.registered`/`daemon.status`），没有 CLI → 运行中 receiver 的新请求入口。
-- D3/U4 候选中的 graph Operator 与 `AgentWorkClient` 公开方法存在，但尚未安装，也没有公开
-  caller 把一次 submit/query 接到它们。
+- （设计阶段缺口，现已闭合）D3/U4 候选中的 graph Operator 与 `AgentWorkClient` 公开方法当时
+  只存在于候选树，尚未安装，也没有公开 caller 把一次 submit/query 接到它们。
 
 本设计选定**唯一**最小实现：launcher 自有的本机 Unix socket 控制入口，转发到 receiver
 child IPC，再由 receiver 现有的 `AgentWorkClient` + D3/U4 `runWorkExecution` 执行。
 Console 不是数据路径。除该 socket 外不引入新的公开 API 或第二个 daemon。
 
-## 1. 输入依赖与准入条件（不是已接受 commit）
+## 1. 输入依赖与准入条件（设计阶段记录；两个候选现已集成）
 
 | 依赖 | 身份 | 状态 | 对本设计的约束 |
 |---|---|---|---|
 | 本候选基线 | branch `codex/u4-public-work-design-20261003`，HEAD `b969e9740704977326c5054fb3afbeab8d523e36`，tree `b6464bbec1804ea0e3e58b0a955a4547586bb267` | 已核实 | graph/CLI/runtime 读取真源 |
-| U2 配置候选 | worktree `/Volumes/Intel/playground/agentteams/u2-config-impl-20261003`，HEAD `b969e9740704977326c5054fb3afbeab8d523e36`，tree `7cf779b6f2f6b729ce9eac60377927b974848a1a`，staged 未提交 | **未合并、未安装** | 当前 tree 已有 v3 service-selection `connect`，但 `internal.toml` 尚无 `[workControl]` parser/serializer；本文 §4 的 U4 控制资源附录是未来 U2 owner 实现契约，不是可用接口 |
-| D3/U4 runner 候选 | worktree `/Volumes/Intel/playground/agentteams/d3-u4-work-20261003`，HEAD `de099b79f153e6fd220b98d5ee89f4777b7cfb53`，tree `c8ec9ba3d97d922f6c13262009aa71295cd0075c`，untracked | **未合并、未安装** | 提供 `runWorkExecution(client, request)` 与 typed runner protocol；10/10 socket harness 属作者证据，不等于产品安装验收 |
+| U2 配置候选（设计阶段身份） | worktree `/Volumes/Intel/playground/agentteams/u2-config-impl-20261003`，HEAD `b969e9740704977326c5054fb3afbeab8d523e36`，tree `7cf779b6f2f6b729ce9eac60377927b974848a1a`，staged 未提交 | 设计阶段：未合并、未安装；现已集成 | 当时 tree 已有 v3 service-selection `connect`，但 `internal.toml` 尚无 `[workControl]` parser/serializer；本文 §4 的 U4 控制资源附录当时是 U2 owner 的待实现契约，现已实现 |
+| D3/U4 runner 候选（设计阶段身份） | worktree `/Volumes/Intel/playground/agentteams/d3-u4-work-20261003`，HEAD `de099b79f153e6fd220b98d5ee89f4777b7cfb53`，tree `c8ec9ba3d97d922f6c13262009aa71295cd0075c`，untracked | 设计阶段：未合并、未安装；现已集成 | 提供 `runWorkExecution(client, request)` 与 typed runner protocol；当时的 10/10 socket harness 属作者证据，不等于产品安装验收；产品安装验收现已由安装包 smoke 覆盖公开入口 |
 
 准入条件（全部满足前不得实现产品代码）。以下四条是设计阶段的记录；现已全部满足，产品实现与
 安装产物证据见 `docs/evidence/4b6c377-local-public-work-20261005/`，上表两个候选也已集成：
@@ -393,14 +393,15 @@ control 帧传递，不经配置、不从启动回执读取。
 本节列出公开 Work 入口所需的最小 caller/owner 与测试文件。公开 CLI 的 submit/query 与持久
 open/request/query/close caller 已实现并有安装产物证据；表中其余项以各自 owner 的当前状态为准。
 
-| 范围 | 未来文件 | 断言 |
+| 范围 | 文件 | 断言 |
 |---|---|---|
 | CLI 语法/JSON/错误 | `cli/agentteams.mjs`、`cli/agentteams.spec.ts` | `work submit`/`work query` 解析、capability query 原 provider/capability binding 与 `--link-generation`、stdout JSON 形状、显式错误码 |
 | launcher socket 与 typed frame | U4：`runtime/local-work-control.ts`、`runtime/local-work-control.spec.ts`、`runtime/local-supervisor.ts`、`runtime/local-process.ts` 及其 tests。U2 顺序实施：`runtime/local-config.ts` 的 `[workControl]` schema/parser/serializer/locked-write primitive 与 `runtime/local-config.spec.ts` | token/generation/receiver 校验、correlation、未知 kind、断连不取消；launcher 实际创建/转发/关闭；U2 测试先证明 preserve/reload/start/stop/unclean-exit/stale-ref |
 | receiver 执行接线 | `runtime/agent-process.ts`（去 configuredWork）、`runtime/agent-process.spec.ts` | 提交新 identity、query 不重放、runner/graph hash 校验 |
 | runner 执行 | D3/U4 `runtime/dagpipe/host.ts`、`runtime/dagpipe-work.spec.ts` | 精确 graph、identity 隔离、host 不重排 |
 
-未来黑盒命令序列（安装后的正式 CLI；本轮**未执行**，不是 PASS）：
+黑盒命令序列（安装后的正式 CLI）。下列命令是 §9 用例的原始定义；公开入口部分已由安装包
+smoke 从公开入口回放，其余仍待 BB 驱动矩阵执行：
 
 ```sh
 # 前置：独立临时 HOME + 独立 npm prefix；config.toml 只含 provider/receiver/connect；
@@ -449,9 +450,10 @@ req_a=$(node -e 'console.log(require(process.argv[1]).control.requestId)' "$ev/s
 
 ## 10. 保留的依赖义务与集成条件
 
-- U2、D3/U4 候选均**未合并、未安装**；本文不宣称 admission 成功，不修改其候选树。
-- 实现前必须把本文接缝与 U2 `connect`、D3/U4 `host.ts`/`protocol.ts`、U1 pack manifest
-  冻结到同一候选树，再运行 §9 的未来测试与项目契约要求的适用验证。
+- U2 与 D3/U4 候选已集成到同一候选树，并通过安装包公开入口回放，证据见
+  `docs/evidence/4b6c377-local-public-work-20261005/`；本文的接缝描述即当前实现接缝。
+- 后续接缝变更必须把本文接缝与 U2 `connect`、D3/U4 `host.ts`/`protocol.ts`、U1 pack manifest
+  冻结到同一候选树，再运行 §9 的测试与项目契约要求的适用验证。
 - 已有 B2 `agent-work.graph.json@2` 与 B8 `work-query.graph.json@1` 保持拓扑真源，本修订
   不改动二者。§11 的持久 Work 修订新增三张独立 SESE graph：`work-open@1`、
   `work-request@1`、`work-close@1`（见 §11.5），并新增三个 Operator 绑定义务。本文只声明
@@ -467,8 +469,22 @@ req_a=$(node -e 'console.log(require(process.argv[1]).control.requestId)' "$ev/s
 `work-request@1`、`work-close@1` 编译通过并绑定这三个 Operator。
 
 §11.1–§11.9 保留 r2/r3/r4 设计阶段的记录。这些小节正文里仍出现的 `PENDING` /
-`unimplemented` 只描述当时的修订状态，不再描述当前候选。当前真正仍未完成的是 BB 驱动矩阵、
-Console offline Work 与最终同包用户验收，这三项在各 map 中单独标注。
+`unimplemented` 只描述当时的修订状态，不再描述当前候选。各小节的当前交付状态如下：
+
+| 小节 | 内容 | 当前状态 |
+|---|---|---|
+| §11.1 | 已证实缺口 | 设计阶段记录；缺口已由本节契约闭合 |
+| §11.2 | 中文语义 DAG | 已实现：`work-open@1`/`work-request@1`/`work-close@1` 三张 SESE graph 已编译 |
+| §11.3 | 角色、事件、契约与 owner | 已实现，owner 不变 |
+| §11.4 | 最小 typed 控制扩展 | 已实现：CLI open/request/close 与 launcher/receiver typed 帧已接线 |
+| §11.5 | graph 变更 | 已实现：三张新 graph 与三个新 Operator 已注册并绑定 |
+| §11.6 | 已知失败 vs 未确认 vs unknown/retained | 已实现：安装包 smoke 覆盖失败与未确认回执 |
+| §11.7 | CLI 断连 / receiver 重启 / generation 失效 | 部分覆盖：丢失 socket 的 failed/unconfirmed 回执已回放，其余待 BB 驱动矩阵 |
+| §11.8 | 受影响文件 / maps / tests | 已交付：文件、maps 与测试见本节表格 |
+| §11.9 | 黑盒命令 / 用例 | 公开入口部分已回放；BB06a–BB06h 与其余 BB 用例待执行 |
+
+当前真正仍未完成的是 BB 驱动矩阵、Console offline Work 与最终同包用户验收，这三项在各 map 中
+单独标注。
 不新增 scheduler、不新增 receiver 账本、不新增隐藏 route 表、不做 fallback、不自动 replay、
 不把日志当控制真源。provider 仍是 admission / policy / 资源账本的唯一 owner。
 
@@ -838,27 +854,30 @@ admission 拒绝。此区分不新增 U2 配置字段、resolver、ledger 或 sc
   capability selection 只按原 provider 声明复核，provider policy 与 ledger 仍是权威。
   request/close 不享受此放宽：仍绑定原 `targetGeneration`，代次不等显式 `STALE_GENERATION`。
 
-### 11.8 受影响未来文件 / maps / tests（待实现，非现有 PASS）
+### 11.8 受影响文件 / maps / tests（公开 Work 入口已交付；本节保留设计与后续项记录）
 
-| 范围 | 未来文件 / 产物 | 断言 | 未来 owner |
+| 范围 | 文件 / 产物 | 断言 | owner |
 |---|---|---|---|
 | graph | `docs/design/dagpipe/graphs/work-open.graph.json`、`work-request.graph.json`、`work-close.graph.json`（本修订新增；`agent-work@2` 不变） | `dagpipe graph validate` SESE；pack manifest `graphs[]` 增三张 graph 条目 | U4（本设计作者） |
 | Operator registry | D3/U4 `runtime/dagpipe/host.ts` `OPERATOR_OPERATIONS`、runner Operator registry、项目 `compile()` | 登记 `teams.return-held-work`（仅 dispose）、`teams.continue-provider-work`（既有 `agentWork.request`，无 propose）、`teams.close-provider-work`（close+dispose）及其版本 | D3/U4 runner owner |
 | CLI | `cli/agentteams.mjs`、`cli/agentteams.spec.ts` | `work open/request/close` 解析、**open 在 dispatch 前固定 provider/generation（`--provider`/显式 connect/既有 typed status projection）且缺则失败无副作用**、open/request `--payload` 必填且保留显式 `null`、request/close 原 service 字段、`--provider-generation` 语义、`work query --service-selection capability` 的 provider/capability binding 与 `--link-generation` 语义、stdout JSON 形状、显式错误码 | U4 caller owner |
 | launcher socket/IPC | `runtime/local-work-control.ts`、`runtime/local-supervisor.ts`、`runtime/local-process.ts` 及其 tests | open/request/close/capability-query 帧校验、correlation、断连不取消、未知 kind 显式错误 | U4 launcher owner |
 | receiver 接线 | `runtime/agent-process.ts`（去 configuredWork）、`runtime/agent-process.spec.ts` | graph 选择（open/request/close）按子命令；**open 只按 CLI 已固定的精确 provider/generation 校验声明，不后选 provider**；`work-request` 不派发 propose；`return-held-work` 不 close；per-request operation/demands 预校验；provider 代次/ledger 归属复核 | U4 receiver owner |
-| AgentWorkClient selection | `runtime/agent-work-client.ts`、`runtime/agent-work-client.spec.ts` | **PENDING** typed `serviceSelection`；capability mode 只匹配 provider capability declaration、返回不带 Endpoint 的 `AgentWorkTarget`，endpoint mode 保持既有 Endpoint admission/fixed operation；持久 query 用 capability mode 并固定原 provider，`linkGeneration` 与原 `targetGeneration` 分开；无重复 resolver、无 fallback；原 generation 在 open/request/close 间保持 | runtime client owner |
+| AgentWorkClient selection | `runtime/agent-work-client.ts`、`runtime/agent-work-client.spec.ts` | 已交付 typed `serviceSelection`；capability mode 只匹配 provider capability declaration、返回不带 Endpoint 的 `AgentWorkTarget`，endpoint mode 保持既有 Endpoint admission/fixed operation；持久 query 用 capability mode 并固定原 provider，`linkGeneration` 与原 `targetGeneration` 分开；无重复 resolver、无 fallback；原 generation 在 open/request/close 间保持 | runtime client owner |
 | query binding | `runtime/agent-process.ts`、`runtime/agent-process.spec.ts`、`docs/design/dagpipe/graphs/work-query.graph.json`（拓扑不变） | 持久 query 携原 provider/generation/capability/version/operation 与 work/request identity；两匹配 provider / connect 改变 / capability-only provider 均到达原 provider ledger；查询无 propose/request/close、不释放资源 | U4 receiver owner |
 | runner / host | D3/U4 `runtime/dagpipe/host.ts`、`runtime/dagpipe/runner/src/bin/runner.rs`、`runtime/dagpipe-work.spec.ts` | 新 Operator 映射；`work-request` 图仅 resolve/open/request/return；`work-close` 图仅 close+dispose | D3/U4 runner owner |
 | provider | `agent-host/work-host.ts`、`agent/work-resource.ts`（仅适用校验/容量接线，无新账本） | `close` 委派 `executor.destroy`；unknown/running 时拒绝 close 并保留；ledger 校验原 Work/consumer 归属 | agent provider owner |
 | maps | `docs/architecture/verification-map.json`（`teams-behavior-dag-topology` 五图静态命令）、`docs/architecture/function-map.json`（`work_graph_execution` design paths）、`docs/architecture/resource-map.json`、`docs/architecture/mainline-call-map.json`（`work-query-user-entry-v1`） | r5 只做 design ownership/静态拓扑 admission：五图均 SESE 且静态 operator binding 存在；query 的 endpoint/capability 双模式与显式 binding 一致；在 r5 时 `teams-work-sdk-installed`、三个新 Operator 注册与 pack/manifest 指纹仍 PENDING。其中三个 Operator 注册现已完成（`work-open@1`/`work-request@1`/`work-close@1` 编译并绑定）；`teams-work-sdk-installed` 与最终 pack/manifest 指纹仍由最终同包验收判定 | 集成 owner（primary） |
 
-### 11.9 未来黑盒命令 / 用例（待实现，未执行；非 PASS）
+### 11.9 黑盒命令 / 用例（公开入口部分已由安装包 smoke 回放；BB06a–BB06h 驱动矩阵仍未执行）
 
 前置同 §9：隔离 HOME + 隔离 npm prefix；`config.toml` 含 provider/receiver/`connect`；
 provider 启用 browser capability（`context.create`/`navigate`/`snapshot`/`context.destroy`）
 且 `browser-context` 容量为 2（`agent-host/cli-executor.ts` 声明）；provider searchRoot 下建
-fixture。以下命令**本轮未运行**，`scripts/blackbox-user-mvp.mjs` 尚待实现。
+fixture。以下命令是最终 BB 驱动矩阵的用例定义：公开入口部分（submit/query、open/request/close、
+省略 `--demands` 的拒绝、无法解析 provider 的 open 拒绝、丢失 socket 的 failed/unconfirmed
+回执）已由安装包 smoke 从公开入口回放；BB06a–BB06h 与其余 BB 用例仍未执行，最终驱动入口是
+U7 的 `scripts/blackbox-user-mvp.mjs`。
 
 业务 payload 形状对齐 `cli-adapter/cli.ts` 的真实契约：`context.create` 的 payload 是 `{}`
 或 `{ "initialUrl": "<url>" }`（**没有** `profile` 字段）；`navigate` 是
@@ -989,9 +1008,12 @@ op_capacity_a=$(node -e 'process.stdout.write(require(process.argv[1]).control.o
 ```
 
 上述期望以 §2 的 JSON 形状、§6 的 identity 事实与 §11.6/§11.7 的失败/代次语义为准。本节
-所有 graph、Operator、pack、CLI、maps 条目均为**未来实现义务**，本轮只写设计，不声明 PASS。
+所有 graph、Operator、pack、CLI、maps 条目当时是**实现义务**；公开 Work 入口与三个新 Operator
+现已交付并由安装包 smoke 从公开入口覆盖，BB06a–BB06h 驱动矩阵仍待执行。
 
 ## Primary 设计消费澄清
+
+本节是设计阶段的作者/primary 记录，不是实现证据。
 
 作者30412 exit0/turn.completed 后已停写。Primary 补齐 submit/query 帧中 CLI 生成身份的完整
 传递，明确原 SDK receipt/错误保真、未投递/未收到终态不冒充 provider unknown/资源保留，
