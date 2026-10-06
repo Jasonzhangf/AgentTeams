@@ -316,7 +316,7 @@ stateDiagram-v2
 
 ## Operator 设计绑定与实现 owner
 
-下表按图内顺序列出，每个 operator_version 均为 `1`。这些名字不是声称已有注册实现。
+下表按图内顺序列出，每个 operator_version 均为 `1`。Work 五图使用的 10 个 Operator 已注册为 DAGpipe SDK Operator 并由五图编译绑定（见本文开头）；其余名字只表示设计绑定，不声称已有注册实现。
 
 | 图/中文行为 | Operator binding | 唯一 owner 与源码锚点 | 当前边界 |
 |---|---|---|---|
@@ -325,11 +325,11 @@ stateDiagram-v2
 | B1 接纳 daemon | admit-local-daemons | server：relay.ts/admission.ts，runtime 驱动 agent-process.ts | 已有真实 socket 历史证据 |
 | B1 发布服务 | publish-enabled-services | agent-host：cli-executor.ts，runtime/capability-publication.ts 投影 | 固定声明须改为 enabled 服务 |
 | B1 回报就绪 | observe-local-ready | runtime：local-supervisor.ts/local-process.ts | 已有 |
-| B2 查询声明；建立通信 | resolve-peer-service；open-work-link | network：relay-client.ts/work-channel.ts，runtime/agent-work-client.ts 消费 | 已有；CLI 新任务入口缺 |
+| B2 查询声明；建立通信 | resolve-peer-service；open-work-link | network：relay-client.ts/work-channel.ts，runtime/agent-work-client.ts 消费 | 已有；公开 CLI Work 入口已交付 |
 | B2 接纳协作 | admit-provider-work | agent：work-resource.ts，agent-host/work-host.ts 的 propose 公开入口 | 已有账本语义，禁止 CLI 复制 |
-| B2 接纳请求并执行及确认结果 | request-provider-work | agent-host：work-host.ts 的 request 公开入口，内部使用唯一 ledger/executor | 已有公开契约；真实 enabled service 和 SDK 宿主接线缺 |
-| B2 确认关闭或保留并返回结果 | settle-provider-work | runtime：agent-work-client.ts 的 close/dispose；资源销毁仍由 provider 决定 | 用户 payload 回执待暴露；unknown 不 close 假释放 |
-| B8 查询原请求；返回观察 | query-provider-request；return-work-observation | agent-work-client.ts 的 get → provider WorkHost.get，runtime projection | SDK 查询图未接；观察不重放、不更改资源状态；finally 释放查询连接 |
+| B2 接纳请求并执行及确认结果 | request-provider-work | agent-host：work-host.ts 的 request 公开入口，内部使用唯一 ledger/executor | 已有公开契约；真实 enabled service 与 SDK 宿主接线已交付 |
+| B2 确认关闭或保留并返回结果 | settle-provider-work | runtime：agent-work-client.ts 的 close/dispose；资源销毁仍由 provider 决定 | 用户 payload 回执已暴露；unknown 不 close 假释放 |
+| B8 查询原请求；返回观察 | query-provider-request；return-work-observation | agent-work-client.ts 的 get → provider WorkHost.get，runtime projection | SDK 查询图已接；观察不重放、不更改资源状态；finally 释放查询连接 |
 | B3 允许修改 | authorize-config-edit | agent-host：console-ingress.ts | 已有 |
 | B3 接受意图 | accept-config-revision | config：runtime-config.ts，runtime/console-config.ts | JSON durable store 已有；TOML 用户源待接 |
 | B3 推导配置 | derive-opencode-config | opencode-adapter：src/index.ts、src/managed-config.ts | 已有，派生输出非 editable |
