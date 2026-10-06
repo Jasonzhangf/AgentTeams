@@ -77,6 +77,12 @@ Work、拿到真实业务结果，并在之后用原 Work/request 身份显式�
 
 当前真源已证实的缺口：
 
+> 状态说明：以下四条是 U4 设计准入时的基线缺口，用于固定本设计的动机与范围。它们已由本
+> 设计的实现关闭，证据见 `docs/evidence/4b6c377-local-public-work-20261005/`。本节保留为
+> 设计时基线，不再描述当前实现状态；当前公开 Work 覆盖以
+> `docs/architecture/verification-map.json` 的 `teams-l1-cli` 和
+> `docs/architecture/mainline-call-map.json` 的 work-open/request/close 链为准。
+
 - `cli/agentteams.mjs` 的 `work` 命令调用 `runLocalConfiguredWork`，只轮询
   `internal.toml [configuredWork]` 启动回执，不发起新执行。
 - `runtime/agent-process.ts` 的 `loadAgentProcessConfig` 仍要求
