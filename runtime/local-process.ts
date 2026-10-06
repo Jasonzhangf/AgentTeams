@@ -192,6 +192,15 @@ async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLoca
     if (id === 'relay' || daemon.pid === undefined || daemon.pid <= 0 || daemon.projectionPath === undefined) continue
     candidates.push({ id, pid: daemon.pid, configPath: daemon.projectionPath, entryPath: daemon.entryPath, startToken: daemon.startToken })
   }
+  // The Console child is the only child type persisted outside `daemons`. Recovery
+  // owns it too: the persisted Console port is always reused, so an orphan left
+  // holding it would make every later start fail with CONSOLE_PORT_OCCUPIED while
+  // no owned path is left to stop it.
+  const consoleRuntime = internal.consoleRuntime
+  const consolePid = consoleRuntime?.pid
+  if (consolePid !== undefined && consolePid > 0 && internal.console?.projectionPath !== undefined) {
+    candidates.push({ id: 'console', pid: consolePid, configPath: internal.console.projectionPath, entryPath: consoleRuntime?.entryPath, startToken: consoleRuntime?.startToken })
+  }
   for (const candidate of candidates) {
     if (!processAlive(candidate.pid)) continue
     const command = await processCommand(candidate.pid)
@@ -204,6 +213,13 @@ async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLoca
 }
 
 async function recoverDeadLauncher(internalPath: string, configPath: string, internal: Awaited<ReturnType<typeof readLocalInternalConfig>>, launcher: LocalInternalLauncherConfig, state: 'stopped' | 'failed' = launcher.state === 'failed' ? 'failed' : 'stopped'): Promise<void> {
+  // Recovery covers the Console child as well: a recorded Console pid is stopped with
+  // the launcher, and when its exit cannot be confirmed it stays explicitly retained
+  // instead of being left recorded as a live child.
+  const consoleRuntime = internal.consoleRuntime
+  const consoleRecovery = consoleRuntime?.pid !== undefined && consoleRuntime.pid > 0
+    ? { enabled: consoleRuntime.enabled ?? true, state: 'stopped' as const }
+    : undefined
   try {
     await stopOwnedLauncher(configPath, launcher)
     await stopOwnedDescendants(internal)
@@ -220,7 +236,7 @@ async function recoverDeadLauncher(internalPath: string, configPath: string, int
       ...(launcher.startToken === undefined ? {} : { startToken: launcher.startToken }),
       state,
       ...(launcher.error === undefined ? {} : { error: launcher.error }),
-    })
+    }, { ...(consoleRecovery === undefined ? {} : { consoleRuntime: consoleRecovery }), clearWorkControl: true })
   } catch (error) {
     const failedDaemons = Object.fromEntries(Object.entries(internal.daemons ?? {}).map(([id, daemon]) => [id, {
       pid: daemon.pid ?? 0,
@@ -235,6 +251,13 @@ async function recoverDeadLauncher(internalPath: string, configPath: string, int
       ...(launcher.startToken === undefined ? {} : { startToken: launcher.startToken }),
       state: 'failed',
       error: error instanceof Error ? error.message : String(error),
+    }, {
+      ...(consoleRecovery === undefined ? {} : { consoleRuntime: {
+        enabled: consoleRecovery.enabled,
+        state: 'retained' as const,
+        error: { code: 'CONSOLE_RETAINED', message: 'dead-launcher recovery could not confirm the Console child stopped' },
+      } }),
+      clearWorkControl: true,
     })
     throw error
   }
@@ -415,37 +438,39 @@ export async function statusLocalProcess(configPath = defaultLocalConfigPath()):
     return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor pid is not alive' })
   }
   if (launcher.state === 'running' && launcher.pid !== undefined && !(await processOwnsStartToken(launcher.pid, launcher.startToken, config.configPath))) {
-    return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor start token does not match persisted ownership' }
+    return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor start token does not match persisted ownership' })
   }
   if (launcher.state === 'running') {
     const expectedChildren = ['relay', ...config.daemons.filter(daemon => daemon.enabled).map(daemon => daemon.id)]
     for (const id of expectedChildren) {
       const child = internal.daemons?.[id]
       if (child === undefined || child.state !== 'online' || child.pid === undefined || child.pid <= 0 || !processAlive(child.pid)) {
-        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} is not alive` }
+        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} is not alive` })
       }
       if (child.generation !== launcher.generation) {
-        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} generation does not match launcher generation` }
+        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} generation does not match launcher generation` })
       }
       const entryPath = child.entryPath
       const childConfigPath = id === 'relay' ? internal.relay?.projectionPath : child.projectionPath
       if (entryPath === undefined || childConfigPath === undefined || child.startToken === undefined) {
-        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} ownership record is incomplete` }
+        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} ownership record is incomplete` })
       }
       if (child.startToken !== launcher.startToken) {
-        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} start token does not match launcher ownership` }
+        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} start token does not match launcher ownership` })
       }
       const command = await processCommand(child.pid)
       if (command === undefined || !processOwnsConfigCommand(command, childConfigPath, entryPath, child.startToken)) {
-        return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} does not match persisted ownership` }
+        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} does not match persisted ownership` })
       }
     }
   }
   // The launcher remains authoritative while a new generation is starting or a
   // failure is being persisted; an older projection must not mask that state.
+  // Every exit carries the classified Console fields: the frozen status keys must
+  // not disappear exactly when Console observability is required.
   if (launcher.state === 'starting' || launcher.state === 'failed') {
-    return { configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
-      ...(launcher.error === undefined ? {} : { error: launcher.error }) }
+    return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
+      ...(launcher.error === undefined ? {} : { error: launcher.error }) })
   }
   const projection = await readLocalDaemonStatusProjection(config.internalPath).catch(error => {
     throw new LocalProcessError('INVALID_STATUS', error instanceof Error ? error.message : String(error))

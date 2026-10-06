@@ -150,6 +150,7 @@ export interface LocalInternalConsoleRuntime {
   readonly pid?: number
   readonly generation?: number
   readonly startToken?: string
+  readonly entryPath?: string
   readonly state?: ConsoleRuntimeState
   readonly url?: string
   readonly origin?: string
@@ -532,6 +533,7 @@ function serializeLocalInternalConfig(internal: LocalInternalConfig): string {
       ...(runtime.pid === undefined ? {} : { pid: runtime.pid }),
       ...(runtime.generation === undefined ? {} : { generation: runtime.generation }),
       ...(runtime.startToken === undefined ? {} : { startToken: runtime.startToken }),
+      ...(runtime.entryPath === undefined ? {} : { entryPath: runtime.entryPath }),
       ...(runtime.state === undefined ? {} : { state: runtime.state }),
       ...(runtime.url === undefined ? {} : { url: runtime.url }),
       ...(runtime.origin === undefined ? {} : { origin: runtime.origin }),
@@ -689,6 +691,7 @@ export interface ConsoleRuntimePatch {
   readonly pid?: number | null
   readonly generation?: number
   readonly startToken?: string | null
+  readonly entryPath?: string | null
   readonly state?: ConsoleRuntimeState
   readonly url?: string | null
   readonly origin?: string | null
@@ -704,6 +707,7 @@ function applyConsoleRuntimePatch(current: LocalInternalConsoleRuntime, patch: C
     pid: value(patch.pid, current.pid),
     generation: patch.generation ?? current.generation,
     startToken: value(patch.startToken, current.startToken),
+    entryPath: value(patch.entryPath, current.entryPath),
     state: patch.state ?? current.state,
     url: value(patch.url, current.url),
     origin: value(patch.origin, current.origin),
@@ -849,6 +853,7 @@ function parseConsoleRuntimeTable(input: Record<string, unknown>): LocalInternal
     ...(input.pid === undefined ? {} : { pid: optionalNumber(input.pid, 'consoleRuntime.pid') }),
     ...(input.generation === undefined ? {} : { generation: optionalNumber(input.generation, 'consoleRuntime.generation') }),
     ...(input.startToken === undefined ? {} : { startToken: requiredString(input.startToken, 'consoleRuntime.startToken') }),
+    ...(input.entryPath === undefined ? {} : { entryPath: requiredString(input.entryPath, 'consoleRuntime.entryPath') }),
     ...(input.state === undefined ? {} : { state: oneOf(input.state, CONSOLE_RUNTIME_STATES, 'consoleRuntime.state') }),
     ...(input.url === undefined ? {} : { url: requiredString(input.url, 'consoleRuntime.url') }),
     ...(input.origin === undefined ? {} : { origin: requiredString(input.origin, 'consoleRuntime.origin') }),
@@ -1956,7 +1961,19 @@ export async function writeLocalInternalState(path: string, daemons: Readonly<Re
   })
 }
 
-export async function writeLocalInternalRecoveryState(path: string, daemons: Readonly<Record<string, LocalInternalDaemonState>>, launcher: LocalInternalLauncherConfig): Promise<string> {
+export interface LocalInternalRecoveryOptions {
+  /** Console classification to persist with the recovered launcher. */
+  readonly consoleRuntime?: Readonly<ConsoleRuntimePatch>
+  /**
+   * Drop the previous launcher's `[workControl]` refs. Dead-launcher recovery
+   * replaces the launcher that published them, so keeping them would contradict
+   * the recovered generation and make every later internal read fail the exact
+   * work-control refs check.
+   */
+  readonly clearWorkControl?: boolean
+}
+
+export async function writeLocalInternalRecoveryState(path: string, daemons: Readonly<Record<string, LocalInternalDaemonState>>, launcher: LocalInternalLauncherConfig, options: Readonly<LocalInternalRecoveryOptions> = {}): Promise<string> {
   const internalPath = localPath(path, process.cwd())
   return withLocalInternalConfigLock(internalPath, async () => {
     let existing: LocalInternalConfig
@@ -1973,7 +1990,12 @@ export async function writeLocalInternalRecoveryState(path: string, daemons: Rea
       mergedDaemons[id] = { ...(previous ?? {}), pid: state.pid, state: state.state, ...(state.generation === undefined ? {} : { generation: state.generation }), ...(state.entryPath === undefined ? {} : { entryPath: state.entryPath }), ...(state.startToken === undefined ? {} : { startToken: state.startToken }) }
     }
     if (existing.launcher?.generation !== undefined && existing.launcher.generation > launcher.generation) return internalPath
-    return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), daemons: mergedDaemons, launcher })
+    // Recovery owns every child the launcher started, including the Console child,
+    // so its classification is written in the same short-lock write that records
+    // the recovered launcher and daemons.
+    const recoveredConsole = options.consoleRuntime === undefined ? existing.consoleRuntime : applyConsoleRuntimePatch(existing.consoleRuntime ?? {}, options.consoleRuntime)
+    const carried = options.clearWorkControl === true ? { ...existing, workControl: undefined } : existing
+    return writeLocalInternalConfig(internalPath, { ...carried, updatedAt: new Date().toISOString(), daemons: mergedDaemons, launcher, ...(recoveredConsole === undefined ? {} : { consoleRuntime: recoveredConsole }) })
   })
 }
 

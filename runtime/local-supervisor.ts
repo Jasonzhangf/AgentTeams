@@ -581,7 +581,7 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       throw new LocalConsoleLifecycleError('CONSOLE_START_FAILED', 'Console child did not return a pid')
     }
     try {
-      await patchConsole({ enabled: true, pid: child.pid, generation, startToken: childStartToken, state: 'starting' })
+      await patchConsole({ enabled: true, pid: child.pid, generation, startToken: childStartToken, entryPath: spec.entry, state: 'starting' })
       const ready = await waitForReady(child, 'console', startupTimeoutMs)
       const url = typeof ready?.url === 'string' ? ready.url : undefined
       if (url === undefined) throw new LocalConsoleLifecycleError('CONSOLE_START_FAILED', 'Console readiness did not publish its bound URL')
