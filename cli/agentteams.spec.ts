@@ -56,13 +56,13 @@ config = ${JSON.stringify(receiverConfig)}
   return { home, configPath, internalPath, generation, startToken, socketPath }
 }
 
-function workCommandRuntime(frames: LocalWorkControlRequest[], statusGeneration = 7) {
+function workCommandRuntime(frames: LocalWorkControlRequest[], statusGeneration = 7, capabilities?: readonly unknown[]) {
   return {
     localConfig: { readLocalInternalConfig, readLocalInternalWorkControl },
     statusLocalProcess: async () => ({
       state: 'running',
       generation: 7,
-      endpoints: [{ agentId: 'provider', role: 'provider', presence: 'online', generation: statusGeneration }],
+      endpoints: [{ agentId: 'provider', role: 'provider', presence: 'online', generation: statusGeneration, ...(capabilities === undefined ? {} : { capabilities }) }],
     }),
     localWorkControl: {
       sendLocalWorkControlRequest: async ({ frame }: { frame: LocalWorkControlRequest }) => {
@@ -287,6 +287,38 @@ describe('agentteams CLI', () => {
     }
   })
 
+  it('requires explicit demands and sends no frame when the selected capability declares a resource', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames, 7, [
+      { capabilityId: 'file-search', version: '1', operations: ['search'], resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }] },
+    ])
+    try {
+      await expect(agentteamsCommand(['work', 'open', '--config', context.configPath, '--receiver', 'receiver', '--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search', '--payload', 'null'], { runtime }))
+        .rejects.toThrow(/requires --demands for search-slot/)
+      await expect(agentteamsCommand(['work', 'request', '--config', context.configPath, '--receiver', 'receiver', '--work-id', 'work-1', '--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search', '--payload', 'null'], { runtime }))
+        .rejects.toThrow(/requires --demands for search-slot/)
+      expect(frames).toHaveLength(0)
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
+  it('sends the exact empty demand set only for a capability that declares no resource', async () => {
+    const context = await initializeWorkCommandHome()
+    const frames: LocalWorkControlRequest[] = []
+    const runtime = workCommandRuntime(frames, 7, [
+      { capabilityId: 'file-search', version: '1', operations: ['search'], resources: [] },
+    ])
+    try {
+      await agentteamsCommand(['work', 'open', '--config', context.configPath, '--receiver', 'receiver', '--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search', '--payload', 'null'], { runtime })
+      expect(frames).toHaveLength(1)
+      expect(frames[0]).toMatchObject({ kind: 'work.open', control: { demands: [] } })
+    } finally {
+      await rm(context.home, { recursive: true, force: true })
+    }
+  })
+
   it('fixes the open target generation from the typed status projection before dispatch', async () => {
     const context = await initializeWorkCommandHome()
     const frames: LocalWorkControlRequest[] = []
@@ -385,7 +417,7 @@ describe('agentteams CLI', () => {
         const failure = await agentteamsCommand(['work', subcommand, '--config', context.configPath, '--receiver', 'receiver',
           '--work-id', 'work-1', '--provider', 'provider', '--provider-generation', '7',
           '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search',
-          ...(subcommand === 'close' ? [] : ['--payload', '{}'])], { runtime })
+          ...(subcommand === 'close' ? [] : ['--demands', '[{"resourceId":"search-slot","amount":1}]', '--payload', '{}'])], { runtime })
           .catch((error: Error) => error)
         expect(failure, `${subcommand} must fail`).toBeInstanceOf(Error)
         const receipt = JSON.parse(failure.message)
@@ -422,7 +454,7 @@ describe('agentteams CLI', () => {
       const confirm = async (expectedDeliveryState: string | undefined) => {
         const failure = await agentteamsCommand(['work', 'open', '--config', context.configPath, '--receiver', 'receiver',
           '--provider', 'provider', '--provider-generation', '7', '--capability-id', 'file-search',
-          '--capability-version', '1', '--operation', 'search', '--payload', '{}'], { runtime })
+          '--capability-version', '1', '--operation', 'search', '--demands', '[{"resourceId":"search-slot","amount":1}]', '--payload', '{}'], { runtime })
           .catch((error: Error) => error)
         const receipt = JSON.parse(failure.message)
         const frame = frames.at(-1)!

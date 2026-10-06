@@ -566,12 +566,16 @@ agentteams work close   --config <path> --work-id <id> --provider <agentId> --pr
   显式 `null` 均可）。CLI 在建立 socket/发送帧/任何副作用前区分 absent 与显式 `null`：
   absent 是 `INVALID_INPUT`，不得注入 `{}`、`null` 或其他默认值；显式 `null` 必须作为
   `business: null` 保留到 runner。close 没有业务 payload，typed 帧不携带 `business`。
-- `--demands <json>`：open/request 可选，但**不做资源默认值**。省略只对当前 selected
-  capability 不声明任何资源时合法；该唯一情形使用空 demand 集 `[]`。只要 capability
-  声明了任一资源，省略就必须由 owning admission（`WorkHost.request`）以显式
-  `INVALID_INPUT`（缺少该资源 demand）拒绝，且在 allocation/execution 前失败。browser
-  capability 同时声明 `browser-context` 与 `browser-slot`，因此每个 browser open/request
-  都必须显式携带两者；close 没有 request，也不携带 demands。
+- `--demands <json>`：open/request 可选，但**不做资源默认值**。省略只在当前 selected
+  capability 不声明任何资源时合法；该唯一情形发送精确的空 demand 集 `[]`。只要 capability
+  声明了任一资源，CLI 就在建立 socket 之前以显式错误拒绝并点名缺少的 resource demand，
+  不注入任何默认值；CLI 从既有 typed local daemon status projection 读取该 capability 的
+  `resources` 声明，该投影中查不到该 capability 时同样显式拒绝。`WorkHost.request` 仍是
+  admission 权威：它按已认证 consumer 与 capability 声明独立复核 demand 完整性，并在
+  allocation/execution 前以 `INVALID_INPUT` 拒绝不完整 demand 集，因此公开入口的输入检查
+  不替代、也不重复 admission 裁决。browser capability 同时声明 `browser-context` 与
+  `browser-slot`，因此每个 browser open/request 都必须显式携带两者；close 没有 request，
+  也不携带 demands。
 - `--generation <n>`（§2 既有语义）：可选，期望的 **launcher generation**，仅用于陈旧
   launcher 调用拒绝；语义不变，新子命令沿用。
 - provider target generation（本修订新增）：open/request/close 的控制帧都**必须**携带。

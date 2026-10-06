@@ -397,6 +397,16 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
     assert(missingProvider.includes('published status projection for provider missing-provider'),
       `installed Work open with an unresolvable provider did not fail explicitly: ${missingProvider}`)
 
+    // The public CLI owns the --demands input contract: an omitted --demands is
+    // legal only for a capability that declares no resource. This installed
+    // provider declares `search-slot`, so the installed CLI must refuse before it
+    // opens the socket instead of substituting an empty demand set.
+    const omittedDemands = await runExpectFailure(cli, workArgs('open', '--provider', 'installed-provider',
+      '--provider-generation', providerGeneration, '--capability-id', 'file-search', '--capability-version', '1',
+      '--operation', 'search', '--payload', '{"query":"needle"}'), { cwd: dirname(configPath), env: cliEnv })
+    assert(omittedDemands.includes('requires --demands for search-slot'),
+      `installed Work open without --demands did not refuse the declared resource demand: ${omittedDemands}`)
+
     // A lost local socket after the CLI already fixed the binding must still
     // return a typed failed receipt carrying the generated identity and the
     // fixed binding, so the caller can query or close with the original identity.
@@ -487,6 +497,7 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
           query: { workId: persistentQuery.control.workId, requestId: persistentQuery.control.requestId, observed: persistentQuery.control.observed },
           close: { workId: closed.control.workId, workClosure: closed.control.workClosure },
           unresolvable_provider_open_failed_before_dispatch: true,
+          omitted_demands_rejected_before_dispatch: true,
           lost_socket_receipt: {
             status: lostReceipt.status,
             deliveryState: lostReceipt.control.deliveryState,

@@ -263,7 +263,27 @@ function resolveWorkReceiver(parsed, internal) {
   throw new AgentTeamsCliError(`expected exactly one Work receiver; pass --receiver (found ${ids.length === 0 ? 'none' : ids})`)
 }
 
-function buildWorkFrame(parsed, workControl, receiver, openTargetGeneration) {
+/**
+ * The public CLI owns the `--demands` input contract and never substitutes a
+ * default demand set. An omitted `--demands` is legal only for the single case
+ * where the selected capability declares no resource: there the exact empty
+ * demand set is sent. When the selected capability declares any resource, the
+ * CLI refuses before it builds a socket, so the caller must state the demands;
+ * the provider's `WorkHost.request` stays the admission authority that
+ * independently rejects an incomplete demand set before allocation.
+ */
+function resolveWorkDemands(parsed, binding, status) {
+  if (parsed.demands !== undefined) return parsed.demands
+  const endpoint = (status?.endpoints ?? []).find(candidate => candidate.agentId === binding.targetAgentId)
+  const capability = (endpoint?.capabilities ?? []).find(candidate => candidate.capabilityId === binding.capabilityId && candidate.version === binding.capabilityVersion)
+  if (capability === undefined || !Array.isArray(capability.resources)) {
+    throw new AgentTeamsCliError(`work ${parsed.subcommand} requires --demands: the declared resources of ${binding.capabilityId}@${binding.capabilityVersion} on ${binding.targetAgentId} are not in the local status projection`)
+  }
+  if (capability.resources.length === 0) return []
+  throw new AgentTeamsCliError(`work ${parsed.subcommand} requires --demands for ${capability.resources.map(resource => resource.resourceId).join(', ')}`)
+}
+
+function buildWorkFrame(parsed, workControl, receiver, openTargetGeneration, status) {
   const connect = receiver.connect
   const base = {
     receiverAgentId: receiver.id,
@@ -319,22 +339,21 @@ function buildWorkFrame(parsed, workControl, receiver, openTargetGeneration) {
     throw new AgentTeamsCliError(`work ${parsed.subcommand} requires an explicit provider/capability binding`)
   }
   if (parsed.subcommand === 'open') {
-    return { kind: 'work.open', requestId: base.requestId, control: { ...base, ...binding, demands: parsed.demands ?? [] }, business: requirePayload(parsed) }
+    return { kind: 'work.open', requestId: base.requestId, control: { ...base, ...binding, demands: resolveWorkDemands(parsed, binding, status) }, business: requirePayload(parsed) }
   }
   if (parsed.subcommand === 'request') {
     if (parsed.workId === undefined) throw new AgentTeamsCliError('work request requires --work-id')
-    return { kind: 'work.request', requestId: base.requestId, control: { ...base, ...binding, demands: parsed.demands ?? [] }, business: requirePayload(parsed) }
+    return { kind: 'work.request', requestId: base.requestId, control: { ...base, ...binding, demands: resolveWorkDemands(parsed, binding, status) }, business: requirePayload(parsed) }
   }
   if (parsed.workId === undefined) throw new AgentTeamsCliError('work close requires --work-id')
   return { kind: 'work.close', requestId: base.requestId, control: { ...base, ...binding } }
 }
 
-async function resolveOpenTargetGeneration(parsed, receiver, statusLocalProcess, configPath) {
+function resolveOpenTargetGeneration(parsed, receiver, status) {
   if (parsed.providerGeneration !== undefined) return parsed.providerGeneration
   const targetAgentId = parsed.provider ?? receiver.connect.targetAgentId
   if (targetAgentId === undefined) throw new AgentTeamsCliError('work open requires an explicit provider binding before dispatch')
-  const status = await statusLocalProcess(configPath)
-  const endpoint = (status.endpoints ?? []).find(candidate => candidate.agentId === targetAgentId)
+  const endpoint = (status?.endpoints ?? []).find(candidate => candidate.agentId === targetAgentId)
   if (endpoint === undefined || !Number.isSafeInteger(endpoint.generation) || endpoint.generation < 0) {
     throw new AgentTeamsCliError(`work open requires --provider-generation or a published status projection for provider ${targetAgentId}`)
   }
@@ -357,8 +376,13 @@ async function workCommand(parsed, options) {
   }
   const internal = await localConfig.readLocalInternalConfig(internalPath)
   const receiver = resolveWorkReceiver(parsed, internal)
-  const openTargetGeneration = parsed.subcommand === 'open' ? await resolveOpenTargetGeneration(parsed, receiver, statusLocalProcess, configPath) : undefined
-  const frame = buildWorkFrame(parsed, workControl, receiver, openTargetGeneration)
+  // One read of the typed local daemon status projection serves both the open
+  // target generation and the declared-resource contract for an omitted --demands.
+  const needsStatus = (parsed.subcommand === 'open' && parsed.providerGeneration === undefined)
+    || ((parsed.subcommand === 'open' || parsed.subcommand === 'request') && parsed.demands === undefined)
+  const status = needsStatus ? await statusLocalProcess(configPath) : undefined
+  const openTargetGeneration = parsed.subcommand === 'open' ? resolveOpenTargetGeneration(parsed, receiver, status) : undefined
+  const frame = buildWorkFrame(parsed, workControl, receiver, openTargetGeneration, status)
   let reply
   try {
     reply = await localWorkControl.sendLocalWorkControlRequest({ socketPath: workControl.socketPath, frame, ...(options.workTimeoutMs === undefined ? {} : { timeoutMs: options.workTimeoutMs }) })
