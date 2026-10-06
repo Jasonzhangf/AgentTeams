@@ -82,7 +82,7 @@ CLI 将新 request control 与独立 business payload 提交 launcher；launcher
 
 本地控制和 child IPC 使用封闭的 typed union（submit/query/open/request/close/result/error），带 correlation、receiverAgentId 和预期 launcher/Agent generation；service admission 仍由 provider 控制。持久 open 在 dispatch 前固定并显式携带 provider/generation/capability/version/initial operation binding；request/close 保留 provider/generation/capability/version；request 另带本次 operation，close 带 open operation。get 是明确查询既有 provider 回执，不以新执行身份读旧 receipt。IPC/send 被接受不等于业务已执行；发出后客户端断开时，Work 不自动取消或重试，明确可通过原 identity 查询结果；open 最终回执丢失时，未确认 control 已含该固定 binding，故查询不需要最终回执或 open.json。
 
-本地 receiver 入口、SDK runner 和现有 configured startup path 最终调用同一 Work execution owner。验证等价后删除旧 startup orchestration 及 CLI 读 configuredWork 冒充新执行的路径；不保留双执行链作为 fallback。internal.toml 不存 Work 业务结果真源；durable 结果仍由 provider ledger 提供。
+本地 receiver 入口与 SDK runner 最终调用同一 Work execution owner。旧 startup orchestration 及 CLI 读 configuredWork 冒充新执行的路径已按此等价验证删除（`runtime/configured-work.spec.ts` 已移除，`runtime/` 与 `cli/` 下不再有 `runConfiguredWork`/`runLocalConfiguredWork`/`configuredWork` 引用）；唯一执行路径是公开本地控制 socket → receiver → runner，不保留双执行链作为 fallback。internal.toml 不存 Work 业务结果真源；durable 结果仍由 provider ledger 提供。
 
 ## SDK 宿主接入候选与生成物
 
@@ -90,7 +90,7 @@ D2 实验验证按次启动的 project-owned Rust runner，使用已安装 SDK�
 
 Node 只派发明确 host operation、持有本 execution 的 channel 与 owner facts、校验返回关联和执行收尾；节点顺序由 SDK Runtime 决定，不在 Node 再跑一份图。未知 host kind、错误关联、EOF、compile/run 错误必须显式终止；不静默退回旧 TS orchestration。stdio 控制使用专用管道，stderr 诊断不参加业务决策。
 
-产品依赖不得提交机器私有 home path。D2 确認 SDK 实际分发方式后，在候选构建时从 dagpipe sdk path 解析并绑定 SDK 内容 hash，保留准确 dependency/lock；生成按平台的 runner binary 与 graph，纳入同一用户安装包，运行只从稳定安装位置派生。若无法从已安装 SDK 构建或目标架构不支持，安装/启动显式失败，不源码路径回退。当前尚无产品二进制、安装或 portable dependency 证据。
+产品依赖不得提交机器私有 home path。D2 确認 SDK 实际分发方式后，在候选构建时从 dagpipe sdk path 解析并绑定 SDK 内容 hash，保留准确 dependency/lock；生成按平台的 runner binary 与 graph，纳入同一用户安装包，运行只从稳定安装位置派生。若无法从已安装 SDK 构建或目标架构不支持，安装/启动显式失败，不源码路径回退。候选构建现已在 final package mode 下把 runner、五张 graph 与 manifest 编入同一用户安装包，并由安装包 smoke 从公开 Work 入口回放；BB 驱动矩阵与最终同包用户验收仍待执行。
 
 ## 其他对象的契约与运行分类
 

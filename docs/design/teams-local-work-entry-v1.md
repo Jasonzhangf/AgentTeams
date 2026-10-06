@@ -1025,7 +1025,8 @@ op_capacity_a=$(node -e 'process.stdout.write(require(process.argv[1]).control.o
 传递，明确原 SDK receipt/错误保真、未投递/未收到终态不冒充 provider unknown/资源保留，
 并列出缺失的既有 launcher/内部配置 caller。以上为编码前契约修订，不是实现证据。
 `runtime/dagpipe/manifest.json` 和包布局引用 U1 已准入的
-`docs/design/teams-package-delivery.md`（设计 main6526667），是最终包要求；U1 当前基础包
-尚未生成该 runner manifest，故不能写成已可运行的安装对象。D3 依赖表中的 tree 是其
+`docs/design/teams-package-delivery.md`（设计 main6526667），是最终包要求；写作当时 U1 基础包
+尚未生成该 runner manifest，故不能写成已可运行的安装对象（该句记录的是设计阶段状态；最终包
+producer 现已生成 `runtime/dagpipe/manifest.json`，并由安装包 smoke 从公开 Work 入口回放）。D3 依赖表中的 tree 是其
 基线 Git tree，不包含未跟踪的 runner 源码；这些源码身份以 dependency-bindings.txt 中
 独立的完整文件哈希绑定，不冒充已提交候选树。
