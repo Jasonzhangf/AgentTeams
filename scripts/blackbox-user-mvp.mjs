@@ -24,6 +24,14 @@ const defaultPackageReceiptPath = join(root, 'generated', 'modules', 'teams-sour
 const defaultReceiptPath = join(root, 'generated', 'u7-driver', 'blackbox-user-mvp.receipt.json')
 export const exitCode = Object.freeze({ passed: 0, failed: 1, unverified: 2 })
 
+// The BB09 installed Console fixture owns one credential reference. The value
+// only exists in this process environment and in the isolated installed HOME.
+const consoleUsername = 'bb-console'
+const consolePasswordEnv = 'AGENTTEAMS_BB_CONSOLE_PASSWORD'
+const consolePassword = 'bb-console-pass'
+const consoleLinkAuthEnv = 'AGENTTEAMS_CONSOLE_AUTH'
+const consoleLinkAuth = 'bb-console-link'
+
 const cases = [
   { id: 'BB01', owner: 'U1+U5+U7', gate: 'installed package lifecycle and Console assets', implemented: true, run: runBB01 },
   { id: 'BB02', owner: 'U2+U7', gate: 'config.toml-only two-daemon bridge discovery', implemented: true, run: runBB02 },
@@ -33,7 +41,7 @@ const cases = [
   { id: 'BB06', owner: 'U3+U4', gate: 'persistent browser Work capacity', implemented: false, missingCapability: 'U4 persistent Work lifecycle and U3 real browser capacity are not delivered in this candidate', publicProbe: 'work' },
   { id: 'BB07', owner: 'D3/U4', gate: 'installed Work unknown and recovery query', implemented: true, run: runBB07 },
   { id: 'BB08', owner: 'U2+U4', gate: 'installed config generation and stale rejection', implemented: true, run: runBB08 },
-  { id: 'BB09', owner: 'U5', gate: 'installed Console lifecycle and offline Work', implemented: false, missingCapability: 'U5 installed Console lifecycle and discovery entry are not delivered in this candidate', publicProbe: 'status' },
+  { id: 'BB09', owner: 'U5', gate: 'installed Console lifecycle and offline Work', implemented: true, run: runBB09 },
   { id: 'BB10', owner: 'U2+U6', gate: 'installed explicit provider/model session', implemented: false, missingCapability: 'U6 installed OpenCode provider/model Session entry is not delivered in this candidate', publicProbe: 'status' },
   { id: 'BB11', owner: 'D3/U4', gate: 'installed SDK Work and compile negatives', implemented: true, run: runBB11 },
   { id: 'BB12', owner: 'U6', gate: 'installed Session message tool permission cancel', implemented: false, missingCapability: 'U6 installed Session message/tool/permission/cancel entry is not delivered in this candidate', publicProbe: 'status' },
@@ -205,7 +213,15 @@ function lifecyclePids(internal) {
   return [internal.launcher.pid, ...internal.processes.map(process => process.pid)]
 }
 
-function configFixtureText(searchExecutable) {
+function configFixtureText(searchExecutable, options = {}) {
+  const consoleSection = options.console === true
+    ? `
+[console]
+enabled = true
+username = ${JSON.stringify(consoleUsername)}
+passwordEnv = ${JSON.stringify(consolePasswordEnv)}
+`
+    : ''
   return `version = 3
 
 [bridge]
@@ -258,7 +274,7 @@ capabilityId = "file-search"
 capabilityVersion = "1"
 operation = "search"
 demands = [{ resourceId = "search-slot", amount = 1 }]
-`
+${consoleSection}`
 }
 
 /**
@@ -285,6 +301,8 @@ function installPackage(packRoot, evidenceDir, label) {
     HOME: home,
     AGENTTEAMS_BB_PROVIDER_AUTH: 'bb-provider-auth',
     AGENTTEAMS_BB_RECEIVER_AUTH: 'bb-receiver-auth',
+    [consoleLinkAuthEnv]: consoleLinkAuth,
+    [consolePasswordEnv]: consolePassword,
   }
   const packed = runChecked('npm', ['pack', packRoot, '--pack-destination', packDestination, '--json'], {
     cwd: temporaryRoot,
@@ -432,7 +450,7 @@ try {
   return JSON.parse(result.stdout.trim())
 }
 
-function ensureUserConfig(fixture, evidenceDir) {
+function ensureUserConfig(fixture, evidenceDir, options = {}) {
   runChecked(fixture.cli, ['init'], {
     cwd: fixture.temporaryRoot,
     env: fixture.env,
@@ -440,7 +458,7 @@ function ensureUserConfig(fixture, evidenceDir) {
   })
   const rg = runChecked('which', ['rg'], { env: fixture.env, logPath: join(evidenceDir, 'which-rg.json') }).stdout.trim()
   assert(rg.startsWith('/'), `rg executable is not absolute: ${rg}`)
-  const configText = configFixtureText(rg)
+  const configText = configFixtureText(rg, options)
   writeFileSync(fixture.configPath, configText, { encoding: 'utf8', mode: 0o600 })
   return { configText, configSha256: sha256(configText) }
 }
@@ -1044,6 +1062,241 @@ async function runBB08(context) {
   return result
 }
 
+function parseCliConsole(stdout) {
+  const fields = {}
+  for (const token of stdout.trim().split(/\s+/u)) {
+    const equals = token.indexOf('=')
+    if (equals > 0) fields[token.slice(0, equals)] = token.slice(equals + 1)
+  }
+  return fields
+}
+
+function runConsole(fixture, evidenceDir, name, args, options = {}) {
+  return run(fixture.cli, ['console', ...args, '--config', fixture.configPath], {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
+    logPath: join(evidenceDir, `${name}.json`),
+    ...options,
+  })
+}
+
+function assertConsoleOnline(status, label) {
+  assert(status.console === 'enabled' && status.consoleState === 'online',
+    `${label} was not an online Console: ${JSON.stringify(status)}`)
+  assert(status.consoleCredential === 'configured', `${label} did not report a configured credential`)
+  assert(typeof status.consoleUrl === 'string' && /^http:\/\/127\.0\.0\.1:\d+$/u.test(status.consoleUrl),
+    `${label} did not publish a loopback url: ${status.consoleUrl}`)
+  const generation = Number(status.consoleGeneration)
+  const pid = Number(status.consolePid)
+  assert(Number.isSafeInteger(generation) && generation > 0, `${label} had an invalid Console generation`)
+  assert(Number.isSafeInteger(pid) && pid > 0, `${label} had an invalid Console pid`)
+  return { generation, pid, url: status.consoleUrl }
+}
+
+/** Read the U5-owned `[consoleRuntime]` row from the derived internal state. */
+function readConsoleRuntime(internalPath) {
+  const internal = parseToml(readFileSync(internalPath, 'utf8'))
+  assert(internal.consoleRuntime !== undefined, 'internal.toml has no published [consoleRuntime] row')
+  return internal.consoleRuntime
+}
+
+/**
+ * A closed loopback listener is the observable proof that the installed Console
+ * endpoint is gone. A short TCP connect attempt must fail.
+ */
+function consoleListenerGone(url) {
+  const parsed = new URL(url)
+  const result = spawnSync(process.execPath, ['--input-type=module', '--eval', `
+import net from 'node:net'
+const socket = net.createConnection({ host: ${JSON.stringify(parsed.hostname)}, port: ${Number(parsed.port)} })
+const finish = alive => { socket.destroy(); console.log(alive ? 'alive' : 'gone'); process.exit(0) }
+socket.setTimeout(750)
+socket.once('connect', () => finish(true))
+socket.once('timeout', () => finish(false))
+socket.once('error', () => finish(false))
+`], { encoding: 'utf8' })
+  return result.stdout.trim() === 'gone'
+}
+
+/**
+ * Drive the installed package's exported Console lifecycle functions and read
+ * back the typed error code. This is the installed public runtime surface the
+ * CLI itself calls, so the typed terminal is observable without repo source.
+ */
+function installedConsoleTypedCall(installedRoot, configPath, env, evidenceDir, name, call) {
+  const script = String.raw`
+import { pathToFileURL } from 'node:url'
+const mod = await import(pathToFileURL(process.env.AGENTTEAMS_INSTALLED_PACKAGE_ROOT + '/generated/runtime-lib/runtime/local-process.js').href)
+const fn = mod[process.env.AGENTTEAMS_CONSOLE_CALL]
+try {
+  await fn(process.env.AGENTTEAMS_CONFIG_PATH, { timeoutMs: 5000 })
+  console.log(JSON.stringify({ ok: true }))
+} catch (error) {
+  console.log(JSON.stringify({ ok: false, code: error?.code ?? null, message: error?.message ?? String(error) }))
+}
+`
+  const result = run(process.execPath, ['--input-type=module', '--eval', script], {
+    env: {
+      ...env,
+      AGENTTEAMS_INSTALLED_PACKAGE_ROOT: installedRoot,
+      AGENTTEAMS_CONFIG_PATH: configPath,
+      AGENTTEAMS_CONSOLE_CALL: call,
+    },
+    expectStatus: 0,
+    logPath: join(evidenceDir, `${name}.json`),
+  })
+  return JSON.parse(result.stdout.trim())
+}
+
+async function runBB09(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB09')
+  mkdirSync(evidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb09')
+  let lifecycle
+  let result
+  try {
+    const config = ensureUserConfig(fixture, evidenceDir, { console: true })
+    writeWorkFixture(fixture)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb09')
+
+    // The installed public `status` line embeds the Console observation, so the
+    // installed Console entrypoint must be online immediately after start.
+    const startStatus = parseCliConsole(lifecycle.status.stdout)
+    const initial = assertConsoleOnline(startStatus, 'installed Console after start')
+    assert(!lifecycle.status.stdout.includes(consolePassword), 'installed status printed the Console credential value')
+    const entry = readConsoleRuntime(lifecycle.internal.internalPath)
+    assert(typeof entry.entryPath === 'string' && entry.entryPath.startsWith(fixture.installedRoot + sep),
+      `installed Console entry escaped the installed package: ${entry.entryPath}`)
+    assert(!entry.entryPath.startsWith(root + sep), `installed Console entry resolved to the source tree: ${entry.entryPath}`)
+    assert(entry.entryPath.includes('console-process'), `installed Console entry is not the Console child: ${entry.entryPath}`)
+    assert(entry.pid === initial.pid, 'status Console pid does not match the persisted Console runtime')
+
+    // The Console listener is a real installed Console child; assert the
+    // authenticated page and the unauthorized refusal on the live URL.
+    const unauthorized = await fetch(initial.url)
+    assert(unauthorized.status === 401, `installed Console served an unauthenticated request: ${unauthorized.status}`)
+    const authorization = `Basic ${Buffer.from(`${consoleUsername}:${consolePassword}`).toString('base64')}`
+    const authorized = await fetch(initial.url, { headers: { authorization } })
+    assert(authorized.status === 200, `installed Console rejected the configured credential: ${authorized.status}`)
+
+    // Stop Console through the installed CLI, then assert the installed Console
+    // endpoint is gone while Work submitted through the installed CLI still
+    // completes against the same surviving daemons.
+    const stop = runConsole(fixture, evidenceDir, 'bb09-console-stop', ['stop'], { expectStatus: 0 })
+    const stopStatus = parseCliConsole(stop.stdout)
+    assert(stopStatus.consoleState === 'stopped', `installed console stop did not report stopped: ${stop.stdout.trim()}`)
+    await waitForProcessesGone([initial.pid])
+    assert(consoleListenerGone(initial.url), `installed Console endpoint still accepts connections after stop: ${initial.url}`)
+
+    const afterStop = parseInternal(join(dirname(fixture.configPath), 'internal.toml'))
+    assert(afterStop.launcher.pid === lifecycle.parsed.pid && afterStop.launcher.generation === lifecycle.parsed.generation,
+      'installed console stop replaced the launcher')
+    assert(afterStop.processes.map(process => process.pid).join(',') === lifecycle.internal.processes.map(process => process.pid).join(','),
+      'installed console stop replaced an Agent daemon')
+
+    const offlineWork = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb09-work-without-console',
+      ['work', 'submit', '--config', fixture.configPath, '--receiver', workReceiverId, '--payload', '{"query":"marker-beta"}'],
+      { expectStatus: 0 }))
+    assertMatchedSearch(offlineWork, './b.txt')
+
+    // Restart Console and assert it comes back on the same persisted port with a
+    // new Console generation and pid.
+    const restart = runConsole(fixture, evidenceDir, 'bb09-console-restart', ['start'], { expectStatus: 0 })
+    const restarted = assertConsoleOnline(parseCliConsole(restart.stdout), 'installed Console after restart')
+    assert(restarted.url === initial.url, `installed Console restart did not reuse the persisted url: ${initial.url} -> ${restarted.url}`)
+    assert(restarted.generation > initial.generation, 'installed Console restart did not advance the Console generation')
+    assert(restarted.pid !== initial.pid, 'installed Console restart reused the Console pid')
+
+    // Typed failure path: an unreadable Console observation must return
+    // CONSOLE_STATUS_UNAVAILABLE, never a fabricated healthy state. Removing the
+    // launcher's published control socket makes the observation unreadable.
+    const controlSocket = parseToml(readFileSync(lifecycle.internal.internalPath, 'utf8')).workControl?.socketPath
+    assert(typeof controlSocket === 'string' && controlSocket !== '', 'installed lifecycle has no published Work control socket')
+    rmSync(controlSocket, { force: true })
+    const unavailableCli = runConsole(fixture, evidenceDir, 'bb09-console-status-unavailable', ['status'], { expectNonZero: true })
+    assert(/Console control socket is unavailable/u.test(`${unavailableCli.stdout}\n${unavailableCli.stderr}`),
+      `console status did not report the typed observation failure: ${unavailableCli.stdout}${unavailableCli.stderr}`)
+    const unavailable = installedConsoleTypedCall(fixture.installedRoot, fixture.configPath, fixture.env, evidenceDir,
+      'bb09-console-status-unavailable-typed', 'consoleStatusLocalProcess')
+    assert(unavailable.ok === false && unavailable.code === 'CONSOLE_STATUS_UNAVAILABLE',
+      `installed Console status did not return CONSOLE_STATUS_UNAVAILABLE: ${JSON.stringify(unavailable)}`)
+
+    const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb09')
+    const allPids = lifecyclePids(lifecycle.internal)
+
+    // Typed failure path: a Console start while `[console]` is disabled must be a
+    // typed refusal with zero child and zero online Console runtime row.
+    const disabledConfigText = config.configText.replace('[console]\nenabled = true', '[console]\nenabled = false')
+    assert(disabledConfigText !== config.configText, 'BB09 fixture did not contain an enabled Console section')
+    writeFileSync(fixture.configPath, disabledConfigText, { encoding: 'utf8', mode: 0o600 })
+    const disabledLifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb09-disabled')
+    const disabledCli = runConsole(fixture, evidenceDir, 'bb09-console-disabled', ['start'], { expectNonZero: true })
+    assert(/Console is disabled/u.test(`${disabledCli.stdout}\n${disabledCli.stderr}`),
+      `console start did not refuse a disabled Console: ${disabledCli.stdout}${disabledCli.stderr}`)
+    const disabled = installedConsoleTypedCall(fixture.installedRoot, fixture.configPath, fixture.env, evidenceDir,
+      'bb09-console-disabled-typed', 'consoleStartLocalProcess')
+    assert(disabled.ok === false && disabled.code === 'CONSOLE_DISABLED',
+      `installed Console start did not return CONSOLE_DISABLED: ${JSON.stringify(disabled)}`)
+    const disabledRuntime = readConsoleRuntime(disabledLifecycle.internal.internalPath)
+    assert(disabledRuntime.state === 'stopped' && disabledRuntime.pid === undefined,
+      `a disabled Console start wrote a live runtime row: ${JSON.stringify(disabledRuntime)}`)
+    const disabledFinal = await stopAndAssertClean(fixture, disabledLifecycle, evidenceDir, 'bb09-disabled-final')
+    const disabledPids = lifecyclePids(disabledLifecycle.internal)
+    fixture.cleanup()
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        config_sha256: config.configSha256,
+        commands: [
+          'agentteams init',
+          'agentteams start --config <isolated-home>/.agentteams/config.toml',
+          'agentteams status --config <isolated-home>/.agentteams/config.toml',
+          'agentteams console stop --config <isolated-home>/.agentteams/config.toml',
+          'agentteams work submit --receiver bb-receiver --payload {"query":"marker-beta"} (Console stopped)',
+          'agentteams console start --config <isolated-home>/.agentteams/config.toml (same persisted url)',
+          'agentteams console status --config <isolated-home>/.agentteams/config.toml (unreadable observation, CONSOLE_STATUS_UNAVAILABLE)',
+          'agentteams stop --generation <generation>',
+          'set [console].enabled=false; agentteams start',
+          'agentteams console start --config <isolated-home>/.agentteams/config.toml (CONSOLE_DISABLED)',
+        ],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        installed_tarball_sha256: fixture.tarballSha256,
+        cli_realpath: fixture.cliRealpath,
+        launcher: lifecycle.parsed,
+        console_entry_path: entry.entryPath,
+        console_status_after_start: initial,
+        console_http: { unauthorized: unauthorized.status, authorized: authorized.status },
+        console_status_after_stop: { state: stopStatus.consoleState, stdout: stop.stdout.trim() },
+        console_listener_gone_after_stop: consoleListenerGone(initial.url),
+        work_without_console: offlineWork.control,
+        console_status_after_restart: restarted,
+        console_status_unavailable: { cli: unavailableCli.stderr.trim(), typed: unavailable },
+        disabled_console_start: { cli: disabledCli.stderr.trim(), typed: disabled, runtime: disabledRuntime },
+        stop_stdout: final.stop.stdout,
+        stopped_stdout: final.status.stdout,
+        disabled_stop_stdout: disabledFinal.stop.stdout,
+        owned_pids_after_stop: allPids,
+        owned_pids_alive_after_stop: allPids.filter(processAlive),
+        disabled_pids_after_stop: disabledPids,
+        disabled_pids_alive_after_stop: disabledPids.filter(processAlive),
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
 const workGraphEffects = ['agent.work.close', 'agent.work.get', 'agent.work.propose', 'agent.work.request', 'directory.read', 'network.close', 'network.connect']
 
 function compileInstalledGraph(runnerPath, graphPath, capabilities, evidenceDir, name) {
@@ -1225,6 +1478,24 @@ function runLifecycleAdapter(fixtureRoot, env, logPath) {
   })
 }
 
+/**
+ * Interrupted-recovery simulation: drop the committed pre-review validation
+ * record while retaining the stage state and stage receipts. The next admission
+ * must re-enter the stage loop and reuse the valid stages instead of re-running
+ * `pnpm verify` or `pnpm smoke:installed`.
+ */
+function removeValidationRecords(fixtureRoot) {
+  const recordsRoot = join(fixtureRoot, '.appsdk', 'records')
+  if (!existsSync(recordsRoot)) return []
+  const removed = []
+  for (const name of readdirSync(recordsRoot)) {
+    if (!name.startsWith('pre-review-validation-record-')) continue
+    rmSync(join(recordsRoot, name))
+    removed.push(name)
+  }
+  return removed
+}
+
 function commitFixtureChange(fixtureRoot, message) {
   runChecked('git', ['add', '.'], { cwd: fixtureRoot })
   runChecked('git', ['-c', 'user.name=u7-bb13-fixture', '-c', 'user.email=u7-bb13-fixture@example.invalid', 'commit', '--quiet', '-m', message], { cwd: fixtureRoot })
@@ -1281,6 +1552,26 @@ async function runBB13(context) {
     const countsAfterRecovery = pnpmInvocationCounts(proofDir)
     observations.push({ phase: 'recovery', state: store.state, counts: countsAfterRecovery })
 
+    // Unchanged-input re-entry with the completed validation record intact must
+    // be idempotent: the adapter returns the existing validation without touching
+    // the stages or re-executing a command.
+    const idempotent = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'idempotent-entry.json'))
+    assert(idempotent.status === 0, 'BB13 idempotent re-entry did not pass')
+    assert(/"idempotent":true/u.test(idempotent.stdout),
+      `BB13 idempotent re-entry did not return the completed validation: ${idempotent.stdout.trim()}`)
+    const countsAfterIdempotent = pnpmInvocationCounts(proofDir)
+    store = readLifecycleState(fixtureRoot)
+    assert(store.state.stages['pnpm-verify']?.status === 'reused' && store.state.stages['pnpm-smoke-installed']?.status === 'passed',
+      'BB13 idempotent re-entry mutated the completed stages')
+    assert(countsAfterIdempotent.verify === countsAfterRecovery.verify && countsAfterIdempotent.smokeInstalled === countsAfterRecovery.smokeInstalled,
+      'BB13 idempotent re-entry re-executed a completed stage')
+    observations.push({ phase: 'idempotent-entry', state: store.state, counts: countsAfterIdempotent })
+
+    // Interrupted-recovery re-entry: the validation record is gone while stage
+    // state and receipts survive, so the adapter re-enters the stage loop and
+    // reuses both unchanged stages instead of re-executing them.
+    const removedValidationRecords = removeValidationRecords(fixtureRoot)
+    assert(removedValidationRecords.length > 0, 'BB13 interrupted-recovery step found no validation record to remove')
     const reentry = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'reentry.json'))
     assert(reentry.status === 0, 'BB13 re-entry did not pass')
     const countsAfterReentry = pnpmInvocationCounts(proofDir)
@@ -1346,7 +1637,16 @@ async function runBB13(context) {
     const afterMissingCounts = pnpmInvocationCounts(proofDir)
     assert(afterMissingCounts.verify === beforeMissingCounts.verify, 'BB13 evidence deletion re-executed the independent verify stage')
     assert(afterMissingCounts.smokeInstalled === beforeMissingCounts.smokeInstalled + 1, 'BB13 evidence deletion did not re-execute the dependent smoke stage')
-    assert(existsSync(evidencePath), 'BB13 deleted evidence file was not regenerated')
+    // A stage re-execution mints a new attempt-scoped receipt and evidence ids, so
+    // the deleted file is superseded rather than rewritten at the same path. The
+    // honest observable is a fresh receipt whose referenced evidence records all exist.
+    const regeneratedSmoke = latestSmokeReceipt(store.state)
+    assert(regeneratedSmoke.receipt.receipt_id !== smoke.receipt.receipt_id,
+      'BB13 evidence deletion reused the stale smoke receipt instead of re-executing')
+    const evidenceRoot = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source')
+    assert(regeneratedSmoke.receipt.evidence_ids.length > 0 &&
+      regeneratedSmoke.receipt.evidence_ids.every(id => existsSync(join(evidenceRoot, `${id}.json`))),
+      'BB13 deleted required evidence was not regenerated as fresh present records')
     observations.push({ phase: 'evidence-delete', state: store.state, counts: afterMissingCounts })
 
     result = {
