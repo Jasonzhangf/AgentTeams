@@ -110,11 +110,12 @@ Console 不是数据路径。除该 socket 外不引入新的公开 API 或第�
 | U2 配置候选 | worktree `/Volumes/Intel/playground/agentteams/u2-config-impl-20261003`，HEAD `b969e9740704977326c5054fb3afbeab8d523e36`，tree `7cf779b6f2f6b729ce9eac60377927b974848a1a`，staged 未提交 | **未合并、未安装** | 当前 tree 已有 v3 service-selection `connect`，但 `internal.toml` 尚无 `[workControl]` parser/serializer；本文 §4 的 U4 控制资源附录是未来 U2 owner 实现契约，不是可用接口 |
 | D3/U4 runner 候选 | worktree `/Volumes/Intel/playground/agentteams/d3-u4-work-20261003`，HEAD `de099b79f153e6fd220b98d5ee89f4777b7cfb53`，tree `c8ec9ba3d97d922f6c13262009aa71295cd0075c`，untracked | **未合并、未安装** | 提供 `runWorkExecution(client, request)` 与 typed runner protocol；10/10 socket harness 属作者证据，不等于产品安装验收 |
 
-准入条件（全部满足前不得实现产品代码）：
+准入条件（全部满足前不得实现产品代码）。以下四条是设计阶段的记录；现已全部满足，产品实现与
+安装产物证据见 `docs/evidence/4b6c377-local-public-work-20261005/`，上表两个候选也已集成：
 
 1. 本设计与 U2 `teams-local-config-v3.md` 的 `connect` 契约一致（无 Work 业务字段），且
    §4 的 `[workControl]` 字段/生命周期已由 U2 config owner 纳入同一 internal schema 与
-   parser/serializer；当前未实现；
+   parser/serializer（现已实现）；
 2. D3/U4 `host.ts`/`protocol.ts` 接口与本文 §5 一致，且 U1 pack manifest 形状与本文一致；
 3. 本文通过独立设计 review；
 4. 上述候选集成到同一候选树后，公开入口才有可执行对象。
@@ -387,9 +388,10 @@ control 帧传递，不经配置、不从启动回执读取。
 - 缺失 runner/架构不符/hash 不符时，除显式错误回执外不产生业务副作用，也不遗留子进程；
   失败清理必须可核验（无残留 runner 进程、无未关闭 channel）。
 
-## 9. 未来 caller 与测试范围（待实现，非现有 PASS）
+## 9. Caller 与测试范围（公开 Work 入口 caller 已交付；本节保留设计与后续项记录）
 
-未来实现的最小 caller/owner 与测试文件（写作用途，最终由 Primary 与对应 unit owner 定稿）：
+本节列出公开 Work 入口所需的最小 caller/owner 与测试文件。公开 CLI 的 submit/query 与持久
+open/request/query/close caller 已实现并有安装产物证据；表中其余项以各自 owner 的当前状态为准。
 
 | 范围 | 未来文件 | 断言 |
 |---|---|---|
@@ -457,11 +459,16 @@ req_a=$(node -e 'console.log(require(process.argv[1]).control.requestId)' "$ev/s
 
 ## 11. 持久 Work 生命周期扩展（同一 Work 多请求 + 显式 close）
 
-状态：设计候选，未实现、未安装、未 review。本节用**独立 graph 结构**表达 open / 继续
-request / close 三种不同用户意图，不把分支或 skip 藏进 Operator 内部。复用既有
-`AgentWorkClient` 公开端口；新增三个 Operator 绑定（`teams.return-held-work`、
-`teams.continue-provider-work`、`teams.close-provider-work`）标注为 **required /
-unimplemented**，不是现有已注册能力。
+状态：本节契约已实现、已安装，并有安装产物证据（见
+`docs/evidence/4b6c377-local-public-work-20261005/`）。本节用**独立 graph 结构**表达 open /
+继续 request / close 三种不同用户意图，不把分支或 skip 藏进 Operator 内部。复用既有
+`AgentWorkClient` 公开端口；新增的三个 Operator 绑定（`teams.return-held-work`、
+`teams.continue-provider-work`、`teams.close-provider-work`）已注册：`work-open@1`、
+`work-request@1`、`work-close@1` 编译通过并绑定这三个 Operator。
+
+§11.1–§11.9 保留 r2/r3/r4 设计阶段的记录。这些小节正文里仍出现的 `PENDING` /
+`unimplemented` 只描述当时的修订状态，不再描述当前候选。当前真正仍未完成的是 BB 驱动矩阵、
+Console offline Work 与最终同包用户验收，这三项在各 map 中单独标注。
 不新增 scheduler、不新增 receiver 账本、不新增隐藏 route 表、不做 fallback、不自动 replay、
 不把日志当控制真源。provider 仍是 admission / policy / 资源账本的唯一 owner。
 
@@ -477,8 +484,8 @@ unimplemented**，不是现有已注册能力。
 - `WorkHost`（`agent-host/work-host.ts`）已有 `propose/request/get/close`，且 `close` 已
   委派 `executor.destroy` 并等待 `confirmWorkDestroyed`；provider 侧**无需新增**
   admission 或账本能力，缺的是公开入口如何表达「继续」与「显式 close」。
-- CLI / launcher socket / receiver IPC 目前只有一次性 `work.submit` 与 `work.query`
-  两类帧（§2、§4），没有 open/continue/close 帧。
+- （r2 设计阶段的缺口，现已由本节契约补齐）CLI / launcher socket / receiver IPC 当时只有
+  一次性 `work.submit` 与 `work.query` 两类帧（§2、§4），没有 open/continue/close 帧。
 - D3 host 现有 Operator registry **没有**「只 dispose 不 close」的收尾 Operator、没有
   独立 continuation Operator（现有 `teams.request-provider-work@1` 的公开契约输入是
   `AdmittedWork`，但 `work-request` 结构上没有 admit 节点），也没有独立的
@@ -559,8 +566,9 @@ agentteams work request --config <path> --work-id <id> --provider <agentId> --pr
 agentteams work close   --config <path> --work-id <id> --provider <agentId> --provider-generation <n> --capability-id <id> --capability-version <version> --operation <op> [--receiver <agentId>] [--generation <n>]
 ```
 
-以下 CLI 签名、typed frame 字段与 receipt 字段是 **PENDING implementation contract**；
-当前 `cli/agentteams.mjs` 只有一次性 submit/query，不能把它们写成已存在能力。
+以下 CLI 签名、typed frame 字段与 receipt 字段是**已实现契约**：`cli/agentteams.mjs` 提供
+`work open` / `work request` / `work close`，与既有一次性 `work submit` / `work query` 并存，
+并由安装包 smoke 从公开入口回放成功、持久与失败/未确认路径。本节的字段说明即当前实现契约。
 
 - `--payload <json>`：**open/request 必填**，是单个原样 `JsonValue`（对象、数组、标量或
   显式 `null` 均可）。CLI 在建立 socket/发送帧/任何副作用前区分 absent 与显式 `null`：
@@ -843,7 +851,7 @@ admission 拒绝。此区分不新增 U2 配置字段、resolver、ledger 或 sc
 | query binding | `runtime/agent-process.ts`、`runtime/agent-process.spec.ts`、`docs/design/dagpipe/graphs/work-query.graph.json`（拓扑不变） | 持久 query 携原 provider/generation/capability/version/operation 与 work/request identity；两匹配 provider / connect 改变 / capability-only provider 均到达原 provider ledger；查询无 propose/request/close、不释放资源 | U4 receiver owner |
 | runner / host | D3/U4 `runtime/dagpipe/host.ts`、`runtime/dagpipe/runner/src/bin/runner.rs`、`runtime/dagpipe-work.spec.ts` | 新 Operator 映射；`work-request` 图仅 resolve/open/request/return；`work-close` 图仅 close+dispose | D3/U4 runner owner |
 | provider | `agent-host/work-host.ts`、`agent/work-resource.ts`（仅适用校验/容量接线，无新账本） | `close` 委派 `executor.destroy`；unknown/running 时拒绝 close 并保留；ledger 校验原 Work/consumer 归属 | agent provider owner |
-| maps | `docs/architecture/verification-map.json`（`teams-behavior-dag-topology` 五图静态命令）、`docs/architecture/function-map.json`（`work_graph_execution` design paths）、`docs/architecture/resource-map.json`、`docs/architecture/mainline-call-map.json`（`work-query-user-entry-v1`） | r5 只做 design ownership/静态拓扑 admission：五图均 SESE 且静态 operator binding 存在；query 的 endpoint/capability 双模式与显式 binding 一致；`teams-work-sdk-installed`、三个新 Operator 注册、pack/manifest 指纹仍 PENDING，不能由本 map 变更宣称 runtime 可用 | 集成 owner（primary） |
+| maps | `docs/architecture/verification-map.json`（`teams-behavior-dag-topology` 五图静态命令）、`docs/architecture/function-map.json`（`work_graph_execution` design paths）、`docs/architecture/resource-map.json`、`docs/architecture/mainline-call-map.json`（`work-query-user-entry-v1`） | r5 只做 design ownership/静态拓扑 admission：五图均 SESE 且静态 operator binding 存在；query 的 endpoint/capability 双模式与显式 binding 一致；在 r5 时 `teams-work-sdk-installed`、三个新 Operator 注册与 pack/manifest 指纹仍 PENDING。其中三个 Operator 注册现已完成（`work-open@1`/`work-request@1`/`work-close@1` 编译并绑定）；`teams-work-sdk-installed` 与最终 pack/manifest 指纹仍由最终同包验收判定 | 集成 owner（primary） |
 
 ### 11.9 未来黑盒命令 / 用例（待实现，未执行；非 PASS）
 

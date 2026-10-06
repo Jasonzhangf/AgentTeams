@@ -2,7 +2,12 @@
 
 本模型定义本地用户 MVP 的目标行为。审计基线与实现偏离见 [现状审计](teams-behavior-audit-20261002.md)。
 graph JSON 是拓扑真源；以下中文图解释业务语义，映射表用于连接现有 owner，不是第二个执行图。
-所有 `teams.*@1` 是项目设计 binding，**尚未注册为 DAGpipe SDK Operator**。目前实现由 TS 模块承担；缺失边明确标为待实现。
+`teams.*@1` 是项目设计 binding。Work 五图使用的 10 个 Operator（`teams.admit-provider-work@1`、
+`teams.open-work-link@1`、`teams.request-provider-work@1`、`teams.return-held-work@1`、
+`teams.continue-provider-work@1`、`teams.close-provider-work@1`、`teams.settle-provider-work@1`、
+`teams.resolve-peer-service@1`、`teams.query-provider-request@1`、
+`teams.return-work-observation@1`）**已注册为 DAGpipe SDK Operator** 并由五图编译绑定；其余
+`teams.*@1` 仍是设计 binding，尚未注册。目前实现由 TS 模块承担；缺失边明确标为待实现。
 事件、具体 ARC、公开边界、宿主接入及执行分类见 [行为契约](teams-behavior-contracts.md)。SDK 的 Object 不证明字段契约已校验。
 
 ## 角色、对象与边界

@@ -280,9 +280,12 @@ launcherStartToken = "uuid"
 - `[launcher]`/`[daemon.*]` 继续保存 lifecycle 字段。任何 config store 写入 internal 必须读改写，保留原 launcher/daemon 字段，不得整体覆盖。
 - `[workControl]` 是 U4 要求的 internal v2 socket-lifecycle 扩展，字段和生命周期由本节附录冻结。它只在 launcher socket 存在时出现；不保存 Work 业务、receipt、provider grant、agent identity 或第二个 socket token。
 
-### 4.1 U4 必需控制资源附录（U2 owner，当前未实现）
+### 4.1 U4 必需控制资源附录（U2 owner，已实现）
 
-当前 U2 tree `7cf779b6f2f6b729ce9eac60377927b974848a1a` 没有 `[workControl]` schema、parser、serializer 或 public primitive；本节是设计契约，不能写成已存在接口。U4 只获本附录的编码前 owner 定义，实际 parser/serializer 文件修改仍是 U2 `runtime/local-config.ts` 的唯一 owner，并在实现 U4 seam 时顺序分配。
+`[workControl]` 的 schema、parser、serializer 与 public primitive 已由 U2 `runtime/local-config.ts`
+实现（`readLocalInternalWorkControl` / `writeLocalInternalWorkControl`），并已被公开
+CLI/launcher/receiver 路径使用；本节是该控制资源的契约真源。历史注记：本节最初写作时 U2 tree
+`7cf779b6f2f6b729ce9eac60377927b974848a1a` 尚无该 schema，当时只是设计契约。
 
 ```ts
 interface LocalInternalWorkControl {
@@ -916,7 +919,7 @@ typed 字段与终点：
 
 ## 13. 剩余明确依赖与门槛
 
-- U2 compiler 与 D3/U4 接缝集成是后续依赖。U2 独立交付时可完成配置真源、async store、per-daemon accepted/effective、迁移与配置层测试；在 D3/U4 接通真实 CLI/receiver 之前只能标基础候选，不能声称用户 P1 完成。
+- U2 compiler 与 D3/U4 接缝集成曾列为后续依赖，现已接通：D3/U4 的公开 CLI/launcher/receiver 路径已实现并有安装产物证据，见 `docs/evidence/4b6c377-local-public-work-20261005/`。U2 独立交付覆盖配置真源、async store、per-daemon accepted/effective、迁移与配置层测试；用户 P1 的最终判定仍取决于 BB 驱动矩阵、Console offline Work 与最终同包用户验收。
 - CLI v3 默认模板、legacy Console 路径参数和真实 blackbox driver 是跨界依赖；driver 待 U7 实装，未实现前不得写入通过证据。
 - 当前 v2 `config.toml` 没有 legacy Console 文件指针；若集成 owner 不提供显式迁移输入，Console 迁移明确为“不适用并保持 disabled”，不得扫描目录猜文件。
 - U4 按需 Work、U6 Session/cancel 不归 U2；U2 只保证 v3 不再配置 `workId/requestId/payload`，startup orchestration 的删除与实际接缝归 D3/U4，并在 U2 配置接缝冻结后再由对应 owner 扩展。
