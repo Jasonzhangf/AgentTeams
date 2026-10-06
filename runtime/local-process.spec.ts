@@ -866,3 +866,44 @@ it('never records a stopped Console when recovery cannot confirm its exit', asyn
     await rm(root, { recursive: true, force: true })
   }
 }, 20000)
+
+it('reports an unreadable Console observation as CONSOLE_STATUS_UNAVAILABLE in launcher status', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-status-console-unavailable-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    // An unreadable observation is the typed terminal, never a fabricated lifecycle state
+    // or credential.
+    await writeFile(config.internalPath!, 'not = = toml')
+    await expect(statusLocalProcess(path)).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('maps a mismatched work control row and a malformed internal state to CONSOLE_STATUS_UNAVAILABLE for Console status', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-work-control-stale-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 1, startToken: 'console-stale-owner-token', state: 'running' })
+    await writeLocalInternalWorkControl(config.internalPath!, {
+      socketPath: join(dirname(config.internalPath!), '.internal', 'work-control.sock'),
+      launcherGeneration: 1,
+      launcherStartToken: 'console-stale-owner-token',
+    })
+    // The published control row keeps an older launcher generation than the persisted
+    // launcher. The status request must return the typed observation terminal instead of
+    // leaking a raw config error out of the control reader.
+    const internalText = await readFile(config.internalPath!, 'utf8')
+    await writeFile(config.internalPath!, internalText.replace('launcherGeneration = 1', 'launcherGeneration = 2'))
+    await expect(consoleStatusLocalProcess(path)).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+    // A malformed internal state is the same typed terminal.
+    await writeFile(config.internalPath!, 'not = = toml')
+    await expect(consoleStatusLocalProcess(path)).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)

@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { classifyLocalConsoleStatus, createLocalSupervisor, readLocalDaemonStatusProjection, type LocalDaemonEndpointProjection, type LocalSupervisor } from './local-supervisor.ts'
-import { defaultLocalConfigPath, loadLocalConfig, readLocalInternalConfig, readLocalInternalWorkControl, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalInternalLauncherConfig } from './local-config.ts'
+import { defaultLocalConfigPath, loadLocalConfig, readLocalInternalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalInternalLauncherConfig } from './local-config.ts'
 import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
 import { sendLocalConsoleControlRequest, type LocalConsoleControlKind, type LocalConsolePublicStatus } from './local-work-control.ts'
 
@@ -406,26 +406,18 @@ export async function startLocalProcess(configPath = defaultLocalConfigPath(), o
 }
 
 export async function statusLocalProcess(configPath = defaultLocalConfigPath()): Promise<LocalLauncherStatus> {
-  const config = await loadLocalConfig(configPath)
+  // The whole launcher observation is one typed status observation: an unreadable config or
+  // internal state must surface as CONSOLE_STATUS_UNAVAILABLE, never as a fabricated
+  // lifecycle state, credential or raw config error.
+  const config = await consoleStatusObservation(async () => await loadLocalConfig(configPath))
   if (config.internalPath === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no runtime internal state')
-  const internal = await readLocalInternalConfig(config.internalPath)
+  const statusInternalPath = config.internalPath
+  const internal = await consoleStatusObservation(async () => await readLocalInternalConfig(statusInternalPath))
   const launcher = internal.launcher
-  const consoleStatus = async (state: LocalLauncherStatus['state'], generation: number): Promise<LocalConsolePublicStatus> => {
-    try {
-      return await classifyLocalConsoleStatus(config, internal, process.env, { state, generation })
-    } catch {
-      const enabled = config.console?.enabled === true
-      return {
-        enabled,
-        state: enabled ? 'failed' : 'disabled',
-        generation: internal.consoleRuntime?.generation ?? 0,
-        launcherState: state,
-        launcherGeneration: generation,
-        credential: 'missing',
-        ...(enabled ? { error: { code: 'CONSOLE_STATUS_UNAVAILABLE', message: 'Console status cannot be observed' } } : {}),
-      }
-    }
-  }
+  // The launcher status shares the typed observation failure with `console status`: an
+  // unreadable Console projection must never be reported as a concrete state or credential.
+  const consoleStatus = async (state: LocalLauncherStatus['state'], generation: number): Promise<LocalConsolePublicStatus> =>
+    await consoleStatusObservation(async () => await classifyLocalConsoleStatus(config, internal, process.env, { state, generation }))
   const launcherState: LocalLauncherStatus['state'] = launcher === undefined
     ? 'stopped'
     : launcher.state === 'running' && launcher.pid !== undefined && !processAlive(launcher.pid)
@@ -557,9 +549,16 @@ async function consoleControl(
   configPath: string,
   options: LocalConsoleLifecycleOptions,
 ): Promise<LocalConsolePublicStatus> {
-  const config = await loadLocalConfig(configPath)
+  // A status request observes; every read it needs is part of that observation.
+  const config = kind === 'console.status'
+    ? await consoleStatusObservation(async () => await loadLocalConfig(configPath))
+    : await loadLocalConfig(configPath)
   if (config.internalPath === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no runtime internal state')
-  const internal = await readLocalInternalConfig(config.internalPath)
+  const internalPath = config.internalPath
+  // An unreadable internal file is the typed observation failure for a status request.
+  const internal = kind === 'console.status'
+    ? await consoleStatusObservation(async () => await readLocalInternalConfig(internalPath))
+    : await readLocalInternalConfig(internalPath)
   const launcher = internal.launcher
   const launcherOwned = launcher !== undefined
     && launcher.state === 'running'
@@ -594,14 +593,14 @@ async function consoleControl(
   if (options.expectedLauncherGeneration !== undefined && options.expectedLauncherGeneration !== launcher.generation) {
     throw new LocalProcessError('STALE_GENERATION', `stale local supervisor generation expected=${options.expectedLauncherGeneration} current=${launcher.generation}`)
   }
-  const workControl = await readLocalInternalWorkControl(config.internalPath)
+  // The refs rule has one owner: reading the internal state already rejects a workControl
+  // row that does not match the launcher, and the status path maps that failure to the
+  // typed observation terminal above. Only presence is left to check here.
+  const workControl = internal.workControl
   if (workControl === undefined) {
     const message = 'local Work control is unavailable: no running launcher published a control socket'
     if (kind === 'console.status') throw new LocalProcessError('CONSOLE_STATUS_UNAVAILABLE', message)
     throw new LocalProcessError('CONSOLE_NOT_RUNNING', message)
-  }
-  if (workControl.launcherGeneration !== launcher.generation || workControl.launcherStartToken !== launcher.startToken) {
-    throw new LocalProcessError('STALE_OWNER', 'local Work control refs do not match the running launcher')
   }
   const send = () => sendLocalConsoleControlRequest({
     socketPath: workControl.socketPath,
