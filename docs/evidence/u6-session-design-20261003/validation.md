@@ -7,14 +7,16 @@ Status: `DESIGN-ONLY / UNVERIFIED`
 ## Baseline and revision binding
 
 Current primary baseline: `b969e9740704977326c5054fb3afbeab8d523e36`, branch
-`codex/u6-session-design-20261003`. The r5 reviewed candidate was HEAD
+`codex/u6-session-design-20261003`. The r5 correction is committed as `f5648aa`,
+tree `18e9b95f2f86badffb2580987d2a45f9813724fc`. Its r6 independent review bound
+that exact commit and returned FAIL (four P1); it is not admission for the
+correction that answers those findings. The r5 reviewed candidate was HEAD
 `63fe1cb68bf8943a9611ad8df73d4bf95f302bbb`, staged tree
-`4361eb51519eb460a9afe1145d805ce5f7097cd6`, three `A ` staged additions.
-Its final controller verdict was FAIL (four P1 and one P2); it is not admission
-for this corrected candidate. Current exact tree/paths/checks are recorded in
-the primary external receipt
-`$HOME/.codex/task-evidence/agentteams/receipts/u6-session-design-20261003/r5-correction/candidate-receipt.json`
-after validation and explicit staging. No current independent PASS is claimed.
+`4361eb51519eb460a9afe1145d805ce5f7097cd6`, whose own controller verdict was FAIL
+(four P1 and one P2). Every mutable identity for the current correction, its tree
+and its checks lives in the primary external receipt directory
+`$HOME/.codex/task-evidence/agentteams/receipts/u6-session-design-20261003/`, so
+this file never quotes its own revision. No current independent PASS is claimed.
 
 Historical r4 author transcript follows. These commands are historical inputs,
 not commands executed on the current candidate:
@@ -38,7 +40,11 @@ limited to those three paths; no product source, graph or map changes.
 r1 originally reviewed base `55c8282cbad3886022790d9ffb4b04a84b776820` with
 staged tree `41b6ae9b224faeed3e6992639cbc70b93be55c4d`. The historical r3
 correction used HEAD `c3aa36fc637e2da4ac821d1b26d587eadbbf1268` before r4/r5.
-The current r5 findings correction remains uncommitted and unadmitted.
+The r5 findings correction was committed as `f5648aa`, tree
+`18e9b95f2f86badffb2580987d2a45f9813724fc`. The r6 review bound that exact commit
+and returned FAIL with four P1 findings; the correction that answers them is the
+current primary candidate, whose commit, tree and checks are recorded in the
+external receipt directory named above.
 
 ## Commands run
 
@@ -253,7 +259,7 @@ graph, map, goal, build, daemon, install, inference, or BB10/BB12 execution was
 performed. The temporary SDK extraction `/tmp/u6-sdk-r4.p6EHJO` is removed
 after validation.
 
-## Primary r5 findings correction (current)
+## Primary r5 findings correction (historical)
 
 The current three-document revision corrects: historical/current input labels;
 passive runtime false/not-applicable with no fabricated owner/effective facts;
@@ -271,6 +277,42 @@ a required real SDK consumer test before product review.
 
 Targeted diff/fence/relative-link and existing B5 topology checks bind the
 candidate in the external receipt named above. No build/install/inference or
-BB10/BB12 product result is claimed. The five existing independent rounds all
-ended in code_failure; this revision has not started an additional reviewer
-or bypassed that review limit. U6 implementation and merge remain pending.
+BB10/BB12 product result is claimed.
+
+## Primary r6 findings correction
+
+The r6 round bound the committed r5 correction `f5648aa` (tree
+`18e9b95f2f86badffb2580987d2a45f9813724fc`) and returned FAIL with four P1
+findings. This revision answers all four:
+
+- Evidence binding: the in-tree evidence no longer claims the correction is
+  uncommitted or unadmitted; every mutable identity now lives in the external
+  receipt directory, and the historical uncommitted statements are kept only
+  under explicit historical headings.
+- Config ownership: `sessionCapable` and owner existence are derived from U2's
+  accepted/effective `[agents.*.model]` binding. The removed user-config
+  `openCode` field is not read, not re-added and not accepted; an Agent with a
+  binding but no applied owner is a true row with real readiness, and only an
+  Agent without a binding is false/not-applicable.
+- Event ingress DAG closure: §6.2 defines the concrete ingress
+  (`client.event.subscribe` → `ServerSentEventsResult.stream`, an SSE
+  `AsyncGenerator`), its adapter owner, its single Session-owner consumer, its
+  open/close lifetime and cleanup edges, its bounded per-session projection
+  buffer, and its explicit no-silent-reconnect rule.
+- State ownership: §6.3 makes event observation an independent
+  `SessionObservationState` on the runtime row. A transient projection loss or
+  stream failure can no longer write `ManagedRuntimeReadiness.uncertain`, cannot
+  block `apply`/`use`/`stop`, and cannot disable Session actions by itself.
+
+Read-only SDK observation for the new ingress used the pinned dependency
+`@opencode-ai/sdk@1.18.23` in the primary repository's pnpm store:
+`dist/gen/sdk.gen.d.ts` declares `Event.subscribe` returning
+`ServerSentEventsResult`, and `dist/gen/core/serverSentEvents.gen.d.ts` declares
+`{ stream: AsyncGenerator<TData> }` with `onSseError`, `sseDefaultRetryDelay`,
+`sseMaxRetryAttempts` and `sseMaxRetryDelay`. This confirms the public type
+contract, not runtime acceptance of the stream; a real SDK consumer test remains
+required before product review.
+
+Six independent rounds have now ended in code_failure; this revision does not
+start an additional reviewer on its own or bypass that review limit. U6
+implementation and merge remain pending.

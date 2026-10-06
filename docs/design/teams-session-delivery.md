@@ -5,7 +5,8 @@
 设计修订输入：
 
 - r1 原始审查绑定：base `55c8282cbad3886022790d9ffb4b04a84b776820`，staged tree `41b6ae9b224faeed3e6992639cbc70b93be55c4d`。
-- r4 作者输入 HEAD：`c3aa36fc637e2da4ac821d1b26d587eadbbf1268`；r5 审查输入为 `63fe1cb68bf8943a9611ad8df73d4bf95f302bbb` / tree `4361eb51519eb460a9afe1145d805ce5f7097cd6`，正式 FAIL。当前 primary 组合基线为 `b969e9740704977326c5054fb3afbeab8d523e36`，branch `codex/u6-session-design-20261003`。本次修 r5 模型缺口；未获得独立准入，不改变产品或历史。
+- r4 作者输入 HEAD：`c3aa36fc637e2da4ac821d1b26d587eadbbf1268`；r5 审查输入为 `63fe1cb68bf8943a9611ad8df73d4bf95f302bbb` / tree `4361eb51519eb460a9afe1145d805ce5f7097cd6`，正式 FAIL。primary 组合基线为 `b969e9740704977326c5054fb3afbeab8d523e36`，branch `codex/u6-session-design-20261003`。
+- r5 修正已提交为 `f5648aa`，tree `18e9b95f2f86badffb2580987d2a45f9813724fc`；r6 独立审查绑定该提交并正式 FAIL，四条 P1：提交后 in-tree 证据仍称“未提交/未准入”、能力门控用了 U2 已删除的用户配置 `openCode`、事件观测缺 ingress/caller/lifetime/cleanup、瞬态事件丢失污染 owner readiness。本轮按这四条重构：门控改用 U2 派生的 `[agents.*.model]` binding，新增 §6.2 事件接入生命周期与 §6.3 独立观察状态，in-tree 证据改为绑定当前提交。以上历史条目只描述当时状态，不再描述当前状态。
 - SDK 真值：锁文件 `@opencode-ai/sdk@1.18.23` / `@opencode-ai/plugin@1.18.23`；本次只读 `npm pack @opencode-ai/sdk@1.18.23` 的 tarball，shasum `97cea835474420320d24b304604f4dcadc126bf6`。本机 `/Users/fanzhang/.opencode/node_modules/@opencode-ai/sdk` 是旧版本，不作为设计依据。
 
 历史 primary 组合输入为 `4fc38a491089693f61b5901aa15c1c966a664338`。当前 U2 设计已独立准入并合入 `63fe1cb`，其 recover/persistence 产品实现仍待交付；U6 只消费该 owner 的接口，不把已准入设计写成现有产品能力。
@@ -58,6 +59,7 @@ type AgentObservation =
       readonly capabilities: readonly string[]
       readonly sessionCapable: true
       readonly sessionAvailability: 'changing' | 'stopped' | 'no-current' | 'uncertain' | 'current'
+      readonly sessionObservation?: SessionObservationState
       readonly sessionEffectiveRevision?: number
       readonly currentSessionId?: string
       readonly providerId?: string
@@ -89,13 +91,13 @@ type ConsoleAgentObservationV1 = AgentObservation
 
 形状和禁止项是封闭的：
 
-- `runtime` 行按 `sessionCapable` 再判别：true 行的 availability 来自真实 owner readiness，effective revision 可选但必须满足既有 revision 域；current 必须有实际 effective revision。false 行没有 ManagedConfigOwner，availability 必须为 `not-applicable`，effective revision、currentSessionId、providerId、modelId 必须 absent，不能把无 owner 写成 no-current 或 stopped。
+- `runtime` 行按 `sessionCapable` 再判别：true 行的 availability 来自真实 owner readiness，effective revision 可选但必须满足既有 revision 域；current 必须有实际 effective revision。`sessionObservation` 是独立的可选观察字段（§6.3），与 availability 无耦合：`degraded`/`lost` 不得改变 availability，availability 为 `uncertain` 时也不得反推观察状态。false 行没有 ManagedConfigOwner，availability 必须为 `not-applicable`，effective revision、currentSessionId、providerId、modelId、`sessionObservation` 必须 absent，不能把无 owner 写成 no-current 或 stopped。
 - `directory` 行只允许目录身份、presence、capabilities 和生成版本；所有 session/model 字段必须 absent。仅有目录观察时不得伪造 passive runtime 行；真实被动 Agent 自己返回的 false/not-applicable 行是独立的合法 runtime 观察。
-- `kind` 缺失、非法 enum、runtime 形状漏必需字段、directory 形状含任一 session/model 字段、非法 presence/revision/capabilities，一律在 wire decoder 显式 `INVALID_INPUT`；不得 default 成 false、directory 或 current。
-- `runtime/agent-process.ts` 只产生该 Agent 自己的 `kind='runtime'` 行：配置存在 openCode 时使用同一 ManagedConfigOwner.readiness；无 openCode 时明确产生 false/not-applicable 且不调用不存在的 owner。not-applicable 不是新增 owner state。不同 session 并发不改变 activeOperations 语义。
+- `kind` 缺失、非法 enum、runtime 形状漏必需字段、directory 形状含任一 session/model 字段、非法 presence/revision/capabilities、未知 `sessionObservation.state`/`reason`、`degraded`/`lost` 缺 `detail`、false 行带 `sessionObservation`，一律在 wire decoder 显式 `INVALID_INPUT`；不得 default 成 false、directory、current 或 `live`。
+- `runtime/agent-process.ts` 只产生该 Agent 自己的 `kind='runtime'` 行：`sessionCapable` 与 owner 的存在性来自 U2 的派生受管 OpenCode 事实，即该 Agent 的 accepted/effective 配置里是否有 `[agents.*.model]` binding（`primary` 必须命中已声明 provider 与 manual/discovered model）。用户配置里没有也不会有 `openCode` 字段，本设计不读取、不新增、不兼容该字段。有 binding 的 Agent 必须已由 runtime 构造同一 `ManagedConfigOwner`，其 availability 来自该 owner 的 readiness；没有 binding 的被动 Agent 明确产生 false/not-applicable，不构造也不调用不存在的 owner。binding 存在但 owner 尚未构造或尚未 apply 时是 true 行加真实 readiness（`changing`/`no-current`），不能降级成 false 或 not-applicable。not-applicable 不是新增 owner state。不同 session 并发不改变 activeOperations 语义。
 - `runtime/console-hub.ts` 是 offline/空投影 fallback 的 hub owner。offline directory peer 生成 `kind='directory'`；在线 client 返回 owner runtime 行则原样透传其 session 字段；在线 client 返回 `agents:[]` 且有 directory peer 时，同样由 hub 生成 `kind='directory'`，不从 declared Work capabilities、presence、`currentSessionId`、provider/model 文本或旧 UI fixture 猜能力/effective revision。在线但 owner 明确返回 passive runtime 行时，保留 `sessionCapable:false` 和真实 availability。
 - `control-protocol/console-wire.ts` 按 union 封闭验证；relay client 不复制另一 Agent 字段，不做能力推断。UI protocol/model/controller/render/fixtures/tests 必须接受并展示两种 kind。UI 只允许在 `kind='runtime' && sessionCapable=true && sessionAvailability='current' && presence==='online'` 时启用 create/send/cancel；directory row 只显示离线/仅目录目录项，不能展示或发送 Session 动作。
-- fixture/caller 同步清单：`ui/teams-console/src/fixture.ts` 的 online owner/passive row 与 directory row；`ui/teams-console/src/client/{api,protocol,model,controller,render}.ts`；`control-protocol/console-wire.spec.ts`、`runtime/console-hub.spec.ts`、`runtime/agent-process.spec.ts`、`console-host/tests/http-api.spec.ts`、UI api/model/controller tests。缺 kind、directory 含 session 字段、runtime 缺 availability、current 缺 revision、false/current、true/not-applicable、passive 含 effective/model 字段均负向拒绝。
+- fixture/caller 同步清单：`ui/teams-console/src/fixture.ts` 的 online owner/passive row 与 directory row；`ui/teams-console/src/client/{api,protocol,model,controller,render}.ts`；`control-protocol/console-wire.spec.ts`、`runtime/console-hub.spec.ts`、`runtime/agent-process.spec.ts`、`console-host/tests/http-api.spec.ts`、UI api/model/controller tests。缺 kind、directory 含 session 字段、runtime 缺 availability、current 缺 revision、false/current、true/not-applicable、passive 含 effective/model 字段、非法或越界 `sessionObservation` 均负向拒绝；并正向覆盖 `degraded`/`lost` 与 availability 解耦（观察降级不改变 availability，availability 不反推观察状态）。
 
 ## 3. 唯一 Session model target：U2 binding 到 OpenCode
 
@@ -173,7 +175,7 @@ interface ManagedEffectiveHandle {
 | 回复 permission | `client.postSessionIdPermissionsPermissionId({path:{id,permissionID}, body:{response:'once'|'always'|'reject'}})` | 200 `boolean`；真实 `Permission` shape 另有 id/type/sessionID/messageID/callID?/title/metadata/time | 复用 reply；投影真实 id/decision |
 | 取消 | `client.session.abort({path:{id}})` | 200 `boolean`；只表示基座是否接受 abort，不表示已确认取消 | 新增 `cancelSession`；保留 `baseAccepted` 并单独对账 |
 | 状态观察 | `client.session.status({query?:{directory?}})` | `{[sessionID]: {type:'idle'|'retry'|'busy'}}` | adapter `readStatus`；辅助判定，不单独确认取消 |
-| 事件观察 | event stream `session.created`、`message.updated`、`message.part.updated`、`permission.updated`、`permission.replied`、`session.status`、`session.idle`、`session.error` | 见下方 exact union | adapter 事件到 Console 投影的单一转换；不建持久 event store |
+| 事件观察 | `client.event.subscribe(options?)` → `ServerSentEventsResult`，即 `{ stream: AsyncGenerator<Event> }`；选项含 `onSseError`、`sseDefaultRetryDelay`（默认 3000ms）、`sseMaxRetryAttempts`、`sseMaxRetryDelay`（默认 30000ms）。事件含 `session.created`、`message.updated`、`message.part.updated`、`permission.updated`、`permission.replied`、`session.status`、`session.idle`、`session.error` | SSE 流是唯一 ingress；pull 模式、单消费者的 async generator，不是推送回调，也不是第二个 daemon 或 socket | adapter `subscribeOpenCodeEvents` + Session owner 的单流消费与有界投影缓冲，见 §6.2；不建持久 event store |
 
 ### 4.1 SDK 实际给出的形状
 
@@ -487,7 +489,7 @@ type ConsoleSessionEventView =
 
 SDK part 的未知 tag、已知类型非法 shape 或 identity 不一致，adapter 显式返回 `UNSUPPORTED_OPERATION`/`INVALID_RESPONSE`，本次 projection 不得标成完整成功；不忽略该 part，不生成假的 text/final。已有其他业务 part 可以保留为局部观察，但必须同时暴露该失败，不能以部分成功掩盖丢失。`sourcePart` 是单向业务观察值，不是持久 event store、控制资源或可编辑配置。
 
-同一条事件由 adapter 从单一 OpenCode event/part 转换；Console 不重建控制状态。`session.open` 读取/选择后，Console 通过 `readProjection()` 获取当前 Session 的 events；不新增 event store。若相关事件缺少必需 identity，adapter 必须返回显式 lossy/unsupported failure，并把对应 Session availability 标为 `uncertain`，不得把该事件放进成功投影。
+同一条事件由 adapter 从单一 OpenCode event/part 转换；Console 不重建控制状态。`session.open` 读取/选择后，Console 通过 `readProjection()` 获取当前 Session 的 events；不新增 event store。若相关事件缺少必需 identity，adapter 必须返回显式 lossy/unsupported failure，不得把该事件放进成功投影，并按 §6.3 记录为一次观察降级；不得把它写成 `sessionAvailability='uncertain'`，也不得改变 owner readiness。
 
 ### 6.1 `session.create` 的精确 typed result
 
@@ -517,6 +519,68 @@ type SessionCreateSuccess = {
 | `runtime/agent-process.ts` | 在 `ManagedConfigOwner.use` callback 内调用 adapter，expected error 结果化后返回 `SessionCreateSuccess` | `runtime/agent-process.spec.ts`、`runtime/agent-process-config.spec.ts` |
 | `control-protocol/console-api.ts` / `console-wire.ts` | `session.create` 成功 result 仅接受 `SessionCreateResult`；错误按 owner 保留 `ConsoleServiceError` | `console-api.spec.ts`、`console-wire.spec.ts` parser/roundtrip |
 | `console-host/src/http-api.ts` 与 `ui/teams-console/src/client/{api,protocol,controller,model,render}.ts` | 消费真实 `sessionId/title`，缺 title 不补默认文本，不使用 model commitment | `console-host/tests/http-api.spec.ts`、UI api/model/controller/fixture tests |
+
+### 6.2 事件接入、生命周期、缓冲与清理
+
+事件投影的唯一 ingress 是已安装 SDK 的 SSE 事件流。1.18.23 的公开形状是
+`client.event.subscribe(options?)` 返回 `ServerSentEventsResult`，即
+`{ stream: AsyncGenerator<Event> }`；选项含 `onSseError`、`sseDefaultRetryDelay`（默认
+3000ms）、`sseMaxRetryAttempts`、`sseMaxRetryDelay`（默认 30000ms）。它是 pull 模式、
+单消费者的 async generator，不是推送回调，也不是第二个 daemon、socket 或 event store。
+
+| 节点 | 唯一 owner | 合同 |
+|---|---|---|
+| 流建立 | `opencode-adapter/src/index.ts` 新增 `subscribeOpenCodeEvents(client, signal)` | 只包装真实 `client.event.subscribe`，把 SDK 的 `StreamEvent`/`Event` 原样交给 caller；不在 adapter 内建第二个连接、不自行重试、不缓冲 |
+| 流消费与投影 | `runtime/agent-process.ts` 的 Session owner | 每个受管 OpenCode child 最多一条流；raw event 经同一纯投影函数转成 §6 的 union；投影失败只影响该事件 |
+| 有界投影缓冲 | 同一 Session owner | 每个 session 一个有界 ring，上限由实现常量固定并被测试；只保留最近事件；溢出必须显式计数并暴露，不静默丢弃 |
+| 读取 | `runtime/console-hub.ts` → `readProjection()` | 唯一读取者；Console 不重建控制状态，不新增 event store |
+
+生命周期：
+
+- 流在 owner 达到 `current`、且该 Agent 的 `ManagedConfigOwner.recover()` 完成后由 Session
+  owner 建立。建立失败不阻塞 owner readiness，只把观察状态标为 `lost` 并暴露原因。
+- 流在以下终点关闭：owner `apply` 替换 child、owner `stop`、进程退出、SDK 重试耗尽或流自然结束。
+  关闭由传入的 `AbortSignal` 触发；Session owner 必须 await 消费者退出后再释放缓冲。
+- 流结束后不自动静默重连。重新建立只能由同一 owner 的显式动作（新一次 `apply`/`recover`，
+  或一条 Session 命令触发的显式重连）发起；任何时刻同一 child 最多一条流，不累积消费者。
+- 缓冲随 session 关闭或 owner 替换释放；不写磁盘、不跨进程共享、不进入
+  `AgentDeclaration`、endpoint/route 或 Work 匹配。
+
+失败与丢失语义：
+
+- `onSseError`、流异常或重试耗尽不是 Session 业务结果，也不改变 `ManagedRuntimeReadiness`。
+- 单条事件缺 identity 或 shape 非法时，adapter/投影显式返回 `UNSUPPORTED_OPERATION`/
+  `INVALID_RESPONSE`；该事件不进入成功投影，并按 §6.3 记录一次显式丢失，不伪造 text/final。
+- 事件丢失与流中断都不清空已投影事实；已观察事件保持可读，丢失只作为计数与原因暴露。
+
+### 6.3 事件观察状态与 owner readiness 分离
+
+事件投影丢失是观察面事实，不是配置或运行时 owner 状态。它是独立状态：
+
+```ts
+type SessionObservationState =
+  | { readonly state: 'live' }
+  | {
+      readonly state: 'degraded'
+      readonly reason: 'projection-loss' | 'stream-retry'
+      readonly detail: string
+      readonly droppedEvents: number
+    }
+  | {
+      readonly state: 'lost'
+      readonly reason: 'stream-ended' | 'retry-exhausted'
+      readonly detail: string
+    }
+```
+
+- `sessionObservation` 是 `AgentObservation` runtime 行的独立可选字段，与
+  `sessionAvailability` 并列；它不进入 `ManagedRuntimeReadiness`，也不新增该 union 分支。
+- 一条不可解析事件最多把 `sessionObservation` 置为 `degraded`；它不能把 owner readiness 置为
+  `uncertain`，不能阻塞 `apply`/`use`/`stop`，也不能让 create/send/cancel 被整体拒绝。
+- `ManagedRuntimeReadiness.uncertain` 仍只由真正的 ambiguous config exchange 或 U2 durable
+  apply fence 产生，并且仍只由同一 owner 的显式 recover/reconcile 解除（§9.2）。
+- UI 在 `degraded`/`lost` 时展示观察降级事实，仍允许 owner readiness 允许的 Session 动作；
+  只有 owner readiness 本身不是 `current` 时才禁用动作。
 
 ## 7. Prompt admission 与 cancel 因果合同
 
@@ -724,7 +788,7 @@ type ManagedRuntimeReadiness =
 | `uncertain` | 真正 ambiguous exchange，或启动读取 U2 durable apply fence | 拒绝，`UNAVAILABLE`/`RESULT_UNKNOWN` | 冲突；由同一 owner 的显式 recover/reconcile 解除，重启本身不解除 |
 | `current` | 当前 handle 且 effective target 完整 | 允许；`activeOperations` 表示并发 use 数 | `activeOperations>0` 时冲突 |
 
-`runtime/agent-process.ts` 有 openCode/owner 时调用同一 readiness；无 owner 的真实被动 Agent 返回 false/not-applicable，无 effective/model 字段。Console 不猜 owner 状态。not-applicable 只属于 Agent 管理投影，不增加 ManagedRuntimeReadiness 分支。
+`runtime/agent-process.ts` 在 Agent 有 U2 派生的 `[agents.*.model]` binding、因而存在同一 ManagedConfigOwner 时调用该 owner 的 readiness；没有 binding 的真实被动 Agent 返回 false/not-applicable，无 effective/model 字段。Console 不猜 owner 状态。not-applicable 只属于 Agent 管理投影，不增加 ManagedRuntimeReadiness 分支。事件观察状态按 §6.2 独立承载，不进入本 union。
 
 配置恢复沿用 U2 的唯一 proposal：`createManagedConfigOwner.recover(options): Promise<'clean' | 'uncertain'>`。同一个 owner 在开放 Session command/消息入口前先 await recover；durable `applyState='uncertain'` 必须在新进程任何 use 前建立 fence。U6 只消费该恢复结果及 owner readiness，不实现第二个恢复器、不写另一份配置状态、不把 Session unknown 直接当作配置已清理。reconcile 缺少真实 readback 或前一基座的 owner/termination 证据时保持 uncertain 与明确责任；只有 U2 owner 确认终止及 exact target 的 apply/readback 后才清除 durable fence。Session 请求本身的 unknown/取消责任仍按 Session identity 返回，不能因配置 reconcile 成功而伪造其最终结果。
 
@@ -765,9 +829,9 @@ Session facade 必须在 `ManagedConfigOwner.use` callback **内部**捕获已�
 |---|---|---|
 | `control-protocol/console-api.ts` + `.spec.ts` | 新增 `session.create` / `session.cancel`；create 无 model 且成功 result 为 `SessionCreateResult`；`ConsoleProjectionV1.agents[*]` 改为 `runtime|directory` union；增加完整 event union、`SessionCancelUnknownDetail` 与 confirmed result | `console-host/src/http-api.ts`、`ui/teams-console/src/client/{api,protocol,model,controller}.ts`、`agent-host/console-ingress.ts`、`runtime/relay-console-client.ts`、`runtime/console-hub.ts` |
 | `control-protocol/console-wire.ts` + `.spec.ts` | 继续以 `console.command` 传 create/cancel；继续以 `console.session` 传任意 `JsonValue`；封闭校验 runtime/directory row、create result、event/detail union，保留 cancel acceptance true/false/absent | `runtime/relay-console-client.ts`、`agent-host/console-ingress.ts`、`console-host/tests/http-api.spec.ts` |
-| `opencode-adapter/src/index.ts` + tests | 新增 typed `createOpenCodeSession`、abort/messages/status/event projection；新增 `decodeOpenCodeSessionMessage`；扩展 `OpenCodeSessionClient`、`OpenCodeHostActions.sendMessage(sessionId, payload)`；提供 effective model target 给 owner | `runtime/managed-config-owner.ts`、`runtime/agent-process.ts`、`opencode-adapter/tests/index.spec.ts` |
+| `opencode-adapter/src/index.ts` + tests | 新增 typed `createOpenCodeSession`、abort/messages/status/event projection；新增 `subscribeOpenCodeEvents(client, signal)`（§6.2，只包装真实 `client.event.subscribe`，不建第二连接/不自行重试/不缓冲）；新增 `decodeOpenCodeSessionMessage`；扩展 `OpenCodeSessionClient`、`OpenCodeHostActions.sendMessage(sessionId, payload)`；提供 effective model target 给 owner | `runtime/managed-config-owner.ts`、`runtime/agent-process.ts`、`opencode-adapter/tests/index.spec.ts` |
 | `runtime/managed-config-owner.ts` + `.spec.ts` | 新增 `readiness()`；在 handle 上暴露 effective `modelTarget`；expected adapter error 在 callback 内结果化；消费 U2 同一 owner 的 recover，保留 active/uncertain 语义但不加 mutex | `runtime/agent-process.ts`、`runtime/managed-config-owner.spec.ts`；recover 实现及 durable 配置写入归 U2 |
-| `runtime/agent-process.ts` + specs | 产生唯一 runtime row + owner readiness；维护每 session prompt operation record/snapshot；接 create/send/cancel/projection；在 `use` callback 内接住 expected error | `runtime/agent-process.spec.ts`、`runtime/agent-process-config.spec.ts`、`runtime/console-config.spec.ts` |
+| `runtime/agent-process.ts` + specs | 产生唯一 runtime row + owner readiness（能力门控来自 U2 派生的 `[agents.*.model]` binding）；为每个受管 child 建立并消费唯一事件流、维护每 session 有界投影缓冲与 `sessionObservation`（§6.2/§6.3）；维护每 session prompt operation record/snapshot；接 create/send/cancel/projection；在 `use` callback 内接住 expected error | `runtime/agent-process.spec.ts`、`runtime/agent-process-config.spec.ts`、`runtime/console-config.spec.ts` |
 | `runtime/console-hub.ts` / `relay-console-client.ts` + specs | offline/空投影生成 directory row；在线 runtime row 原样透传且不跨 Agent 复制；不改 transport payload | `runtime/console-hub.spec.ts`、`network/relay-client.spec.ts` |
 | Console/UI | U5 固定 contract；typed command/projection 冻结后由 UI owner 实现 create/cancel、event variant、directory row 离线展示和 cancel detail 展示 | `console-host/src/http-api.ts`、`ui/teams-console/src/client/{api,protocol,controller,model,render}.ts`、`ui/teams-console/src/fixture.ts`、对应 UI tests |
 | maps | 由 primary 在 ownership/path/call edge 变更时批准更新；U6 design 不修改 map | 五张 `docs/architecture/` maps |
@@ -776,6 +840,7 @@ Session facade 必须在 `ManagedConfigOwner.use` callback **内部**捕获已�
 
 - 不改 `runtime/local-process.ts`（U4/U5 串行边界）。
 - 不新增全局 Session manager、持久 event store、第二个 `ManagedConfigOwner`、第二个 OpenCode child 或 session-level model store；prompt operation record 只做该 runtime 内每 session 准入，不是持久调度器。
+- 不为事件观察新增第二个连接、第二个消费者、自动静默重连或持久 event store；同一 child 最多一条流，流结束或重试耗尽只暴露显式 `sessionObservation`，不改变 owner readiness，也不静默降级成成功投影。
 - 不让 passive CLI daemon 自动获得 Session capability。
 - 不通过统一特殊文本、payload 对象、`metadata` 或日志重建 create/cancel/control。
 - 不把 `session.create` model、默认 model、backup failover 或 config 写入 Session payload。
@@ -823,6 +888,11 @@ pnpm --dir opencode-adapter run build
 - projection 中 message/part/tool/permission/final/cancel 的 identity 与结构化 error 完整且 owner 不交叉。
 - cancel 三态合同：实际abort=true、实际abort=false、未收到response链路失联分别保持true/false/absent；wire roundtrip与UI展示不能将absent变false，accepted/rejected事件仅在观察到相应boolean时生成，confirmed另需唯一 message 因果。
 - 每种1.18.23 SDK Part都有显式路径；九类observed part包括subtask，保留完整原始值/identity。逐类型公开adapter consumer→wire/UI断言嵌套数据等价；retry不是final失败，未知tag/非法shape显式失败。
+- 派生能力门控：`sessionCapable` 来自 U2 accepted/effective 中该 Agent 是否有 `[agents.*.model]` binding 的派生事实，不来自任何 `openCode` 字段；有 binding 但 owner 尚未 apply 时是 true 行加真实 readiness，无 binding 时是 false/not-applicable 且不构造 owner。用户配置里出现 `openCode` 字段按 U2 parser 既有规则拒绝，U6 不做兼容或读取。
+- 事件接入生命周期：`subscribeOpenCodeEvents` 只包装真实 `client.event.subscribe`；同一 child 最多一条流；`apply` 替换 child、`stop`、进程退出、重试耗尽与流自然结束都关闭流，并 await 消费者退出后再释放缓冲；流结束后不自动静默重连，只有显式 owner 动作能重建，重复重建不累积消费者。
+- 有界投影缓冲：每 session ring 达到上限后显式计数并暴露，不静默丢弃；已观察事件在后续丢失后仍可读；缓冲不落盘、不跨进程共享、不进入 `AgentDeclaration` 或 Work 匹配。
+- 观察状态与 readiness 解耦：单条不可解析事件只把 `sessionObservation` 置为 `degraded`，owner readiness 仍为 `current`，后续 use/apply/stop 正常；`onSseError` 或重试耗尽只置 `lost`；两者都不能把 readiness 置为 `uncertain`，也不能让 create/send/cancel 被整体拒绝；真正的 ambiguous config exchange 仍按 §9.3 置 `uncertain` 并只由同一 owner 的 recover/reconcile 解除。
+- wire/UI 的 `sessionObservation` 正反合同：非法 state/reason、`degraded`/`lost` 缺 `detail`、false 行带该字段均显式 `INVALID_INPUT`；`degraded`/`lost` 不改变 availability，availability 不反推观察状态。
 
 ### 12.3 BB10：U2 + U6 产品黑盒（产品实现后必须真实推理）
 
@@ -897,5 +967,5 @@ pnpm --dir opencode-adapter run build
 资源清理：
 
 - 本任务只使用现有 worktree 和允许的文档路径；不启动 daemon、不安装、不产生 product temp。
-- worktree 保留给 primary 审查，不删除、不 commit、不 merge、不 push。
+- worktree 归 primary 所有；本轮只产生文档提交（见「设计修订输入」），不删除、不 merge、不 push。
 - SDK 只读 tarball 临时目录在验证后移除；不保留凭据、进程或产品运行资源。
