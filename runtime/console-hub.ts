@@ -47,12 +47,14 @@ export function createConsoleHub(
       const notifications: ConsoleProjectionV1['notifications'][number][] = []
       const works: NonNullable<ConsoleProjectionV1['works']>[number][] = []
       const relations: NonNullable<ConsoleProjectionV1['relations']>[number][] = []
+      const sessionEvents: NonNullable<ConsoleProjectionV1['sessionEvents']>[number][] = []
       const discoveredState = await discovered()
       const entries = discovery
         ? discoveredState.peers.map(peer => ({ agentId: peer.declaration.identity.agentId, peer, client: peer.presence === 'online' ? discoveredState.client(peer) : undefined }))
         : [...owners].map(([agentId, client]) => ({ agentId, client, peer: undefined }))
       for (const { agentId, client, peer } of entries) {
         const directoryAgent = peer === undefined ? undefined : {
+          kind: 'directory',
           agentId,
           label: peer.declaration.identity.label,
           machineId: peer.declaration.identity.machineId,
@@ -85,8 +87,9 @@ export function createConsoleHub(
         notifications.push(...projection.notifications)
         works.push(...observed.works)
         relations.push(...observed.relations)
+        sessionEvents.push(...(projection.sessionEvents ?? []))
       }
-      return { version: 1, agents, sessions, configs, notifications, works, relations }
+      return { version: 1, agents, sessions, configs, notifications, works, relations, ...(sessionEvents.length === 0 ? {} : { sessionEvents }) }
     },
     command: async command => (await owner(command.agentId)).command(command),
     sendSession: async (target, payload) => (await owner(target.agentId)).sendSession(target, payload),

@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { createServer } from 'node:net'
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { once } from 'node:events'
-import { afterAll, beforeAll, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createRelayServer, type RelayServer } from '../server/relay.ts'
 import { createRelayClient, type RelayClient } from '../network/relay-client.ts'
 import { connectDirectWssTarget } from '../network/direct-route.ts'
@@ -16,7 +16,9 @@ import { createRelayConsoleClient } from './relay-console-client.ts'
 import { createConsoleHub } from './console-hub.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
 import { createConsoleHttpClient } from '../ui/teams-console/src/client/api.ts'
-import { loadAgentProcessConfig, resolveWorkChildReply, startAgentProcess } from './agent-process.ts'
+import { createSessionHost, loadAgentProcessConfig, projectRuntimeAgentRow, resolveWorkChildReply, startAgentProcess } from './agent-process.ts'
+import type { ManagedEffectiveHandle, ManagedRuntimeReadiness } from './managed-config-owner.ts'
+import { OpenCodeAdapterError, type OpenCodeEventClient, type OpenCodeSdkEvent, type OpenCodeSessionClient } from '../opencode-adapter/src/index.ts'
 import type { LocalWorkControlRequest } from './local-work-control.ts'
 import { createFileWorkStore, createWorkLedger, proposeWork, requestWork } from '../agent/work-resource.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
@@ -879,3 +881,164 @@ it('runs real persistent Camo browser Work through current SDK graphs and restor
     await localRelay.close()
   }
 }, 300000)
+
+// Pure Session-owner tests: no socket, no second child. They exercise the same
+// `createSessionHost` the daemon wires, through a fake owner port and fake adapter.
+function sessionEventChannel() {
+  const queue: OpenCodeSdkEvent[] = []
+  let pending: ((result: IteratorResult<OpenCodeSdkEvent>) => void) | undefined
+  let ended = false
+  const stream: AsyncGenerator<OpenCodeSdkEvent> = {
+    [Symbol.asyncIterator]() { return this },
+    next: () => {
+      if (queue.length > 0) return Promise.resolve({ value: queue.shift()!, done: false })
+      if (ended) return Promise.resolve({ value: undefined, done: true })
+      return new Promise(resolve => { pending = resolve })
+    },
+    return: () => { ended = true; pending?.({ value: undefined, done: true }); return Promise.resolve({ value: undefined, done: true }) },
+    throw: () => Promise.resolve({ value: undefined, done: true }),
+  }
+  return {
+    stream,
+    push(event: OpenCodeSdkEvent) {
+      if (pending) { const resolve = pending; pending = undefined; resolve({ value: event, done: false }) }
+      else queue.push(event)
+    },
+    end() { ended = true; pending?.({ value: undefined, done: true }) },
+  }
+}
+
+function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean; getError?: OpenCodeAdapterError } = {}) {
+  const channel = sessionEventChannel()
+  const prompts: { sessionId: string; text: string; messageId?: string }[] = []
+  const pendingPrompts: (() => void)[] = []
+  let abortCalls = 0
+  const client: OpenCodeSessionClient & OpenCodeEventClient = {
+    session: {
+      list: async () => ({ data: [] }),
+      get: async ({ path }) => {
+        if (options.getError) throw options.getError
+        return { data: { id: path.id, title: 'Existing' } }
+      },
+      create: async () => ({ data: { id: 'created-1', title: 'New' } }),
+      prompt: async ({ path, body }) => {
+        prompts.push({ sessionId: path.id, text: body.parts[0].text, messageId: body.messageID })
+        if (options.holdPrompt) await new Promise<void>(resolve => { pendingPrompts.push(resolve) })
+        return { data: {} }
+      },
+      abort: async () => { abortCalls += 1; return { data: options.abortAccepted ?? true } },
+      messages: async () => ({ data: [] }),
+      status: async () => ({ data: {} }),
+    },
+    postSessionIdPermissionsPermissionId: async () => ({ data: {} }),
+    event: { subscribe: async () => ({ data: { stream: channel.stream } }) },
+  }
+  const handle: ManagedEffectiveHandle = { url: 'http://127.0.0.1:1', authorization: 'Bearer x', effectiveRevision: 3, modelTarget: { providerID: 'p', modelID: 'm' } }
+  let uncertain = false
+  const owner = {
+    readiness: (): ManagedRuntimeReadiness => uncertain ? { state: 'uncertain', effectiveRevision: 3 } : { state: 'current', effectiveRevision: 3, modelTarget: handle.modelTarget, activeOperations: 0 },
+    currentHandle: () => handle,
+    use: async <T>(operation: (handle: ManagedEffectiveHandle) => Promise<T>): Promise<T> => {
+      try { return await operation(handle) } catch (error) { uncertain = true; throw error }
+    },
+  }
+  const host = createSessionHost({ agentId: 'agent', generation: () => 7, owner, createClient: () => client })
+  return { host, channel, prompts, abortCalls: () => abortCalls, isUncertain: () => uncertain, releasePrompt: () => { for (const resolve of pendingPrompts.splice(0)) resolve() } }
+}
+const tick = () => new Promise<void>(resolve => setTimeout(resolve, 0))
+
+describe('Session host admission, cancel causality and observation', () => {
+  it('maps capability and readiness without an openCode field', () => {
+    const base = { agentId: 'a', machineId: 'm', label: 'A', presence: 'online' as const, capabilities: ['x'] }
+    expect(projectRuntimeAgentRow({ ...base, sessionCapable: false })).toEqual({ ...base, kind: 'runtime', sessionCapable: false, sessionAvailability: 'not-applicable' })
+    expect(projectRuntimeAgentRow({ ...base, sessionCapable: true, readiness: { state: 'no-current' } }))
+      .toEqual({ ...base, kind: 'runtime', sessionCapable: true, sessionAvailability: 'no-current' })
+    const current = projectRuntimeAgentRow({ ...base, sessionCapable: true,
+      readiness: { state: 'current', effectiveRevision: 4, modelTarget: { providerID: 'p', modelID: 'm' }, activeOperations: 0 },
+      observation: { state: 'degraded', reason: 'projection-loss', detail: 'dropped', droppedEvents: 1 } })
+    expect(current).toMatchObject({ sessionAvailability: 'current', sessionEffectiveRevision: 4, providerId: 'p', modelId: 'm', sessionObservation: { state: 'degraded' } })
+    // Observation degradation never rewrites availability.
+    expect(current).toMatchObject({ sessionAvailability: 'current' })
+  })
+
+  it('claims the first prompt before dispatch and conflicts the second for one session', async () => {
+    const h = sessionHarness({ holdPrompt: true })
+    const first = h.host.sendSession('s1', { text: 'hi' })
+    expect(h.prompts).toHaveLength(1)
+    const second = await h.host.sendSession('s1', { text: 'again' })
+    expect(second).toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
+    expect(h.prompts).toHaveLength(1)
+    const other = h.host.sendSession('s2', { text: 'parallel' })
+    expect(h.prompts.map(prompt => prompt.sessionId)).toEqual(['s1', 's2'])
+    h.releasePrompt()
+    await first
+    await other
+    expect(h.isUncertain()).toBe(false)
+  })
+
+  it('keeps cancel unknown without abort until the owned message id is bound', async () => {
+    const h = sessionHarness({ holdPrompt: true })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    const unbound = await h.host.cancelSession('s1')
+    expect(unbound).toMatchObject({ ok: false, error: { code: 'RESULT_UNKNOWN', detail: { reason: 'ambiguous-owner' } } })
+    expect(unbound).not.toMatchObject({ error: { detail: { baseAccepted: expect.anything() } } })
+    expect(h.abortCalls()).toBe(0)
+    h.releasePrompt()
+    await prompt
+  })
+
+  it('confirms cancel only on the unique owned MessageAbortedError and keeps abort=false unknown', async () => {
+    const h = sessionHarness({ holdPrompt: true, abortAccepted: true })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    const requestMessageId = h.prompts[0].messageId!
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: requestMessageId } } })
+    await tick()
+    const cancel = h.host.cancelSession('s1')
+    await tick()
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: requestMessageId, error: { name: 'MessageAbortedError', data: {} } } } })
+    expect(await cancel).toMatchObject({ ok: true, result: { reconciliation: 'confirmed', finalState: 'cancelled', messageId: 'assistant-1', errorName: 'MessageAbortedError' } })
+    h.releasePrompt()
+    await prompt
+
+    const rejected = sessionHarness({ holdPrompt: true, abortAccepted: false })
+    const rejectedPrompt = rejected.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    rejected.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-2', role: 'assistant', sessionID: 's1', parentID: rejected.prompts[0].messageId! } } })
+    await tick()
+    expect(await rejected.host.cancelSession('s1')).toMatchObject({ ok: false, error: { code: 'RESULT_UNKNOWN', detail: { reason: 'abort-rejected', baseAccepted: false } } })
+    rejected.releasePrompt()
+    await rejectedPrompt
+  })
+
+  it('conflicts a duplicate cancel before a second SDK abort', async () => {
+    const h = sessionHarness({ holdPrompt: true, abortAccepted: true })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: h.prompts[0].messageId! } } })
+    await tick()
+    const cancel = h.host.cancelSession('s1')
+    await tick()
+    expect(await h.host.cancelSession('s1')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
+    expect(h.abortCalls()).toBe(1)
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: h.prompts[0].messageId!, error: { name: 'MessageAbortedError', data: {} } } } })
+    await cancel
+    h.releasePrompt()
+    await prompt
+  })
+
+  it('separates observation degradation from owner readiness and contains expected errors', async () => {
+    const h = sessionHarness()
+    h.host.ensureStream()
+    await tick()
+    h.channel.push({ type: 'message.part.updated', properties: {} })
+    await tick()
+    expect(h.host.observation()).toMatchObject({ state: 'degraded', reason: 'projection-loss' })
+    expect(h.host.sendSession('s1', { text: 'still works' })).resolves.toMatchObject({ ok: true })
+    expect(h.isUncertain()).toBe(false)
+
+    const failing = sessionHarness({ getError: new OpenCodeAdapterError('session.get', 'NOT_FOUND', 'missing', 404) })
+    expect(await failing.host.openSession('missing')).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
+    expect(failing.isUncertain()).toBe(false)
+  })
+})

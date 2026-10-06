@@ -1,5 +1,5 @@
 import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleCommandV1, ConsoleProjectionV1, JsonValue } from './protocol.ts'
-import { isServiceError } from './protocol.ts'
+import { isServiceError, parseConsoleAgentObservation, parseConsoleSessionEvent } from './protocol.ts'
 
 export interface ConsoleHttpClientOptions {
   readonly baseUrl?: string
@@ -26,7 +26,6 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): b
 }
 
 const PROJECTION_KEYS = ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations'] as const
-const AGENT_KEYS = ['agentId', 'label', 'machineId', 'generation', 'presence', 'capabilities', 'currentSessionId', 'providerId', 'modelId'] as const
 const WORK_KEYS = ['agentId', 'workId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'policyRevision', 'state'] as const
 const RELATION_KEYS = ['agentId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'relationPermission', 'workId'] as const
 
@@ -34,17 +33,20 @@ function isKeyClosedArray(value: unknown, keys: readonly string[]): boolean {
   return Array.isArray(value) && value.every(item => isRecord(item) && hasOnlyKeys(item, keys))
 }
 
+function parses(validate: (value: unknown) => unknown, value: unknown): boolean {
+  try { validate(value); return true } catch { return false }
+}
+
 function isProjection(value: unknown): value is ConsoleProjectionV1 {
   return isRecord(value)
     && hasOnlyKeys(value, PROJECTION_KEYS)
     && value.version === 1
     && Array.isArray(value.agents)
-    && value.agents.every(item => isRecord(item) && hasOnlyKeys(item, AGENT_KEYS)
-      && (item.generation === undefined || (typeof item.generation === 'number' && Number.isSafeInteger(item.generation) && item.generation >= 1)))
+    && value.agents.every(item => parses(parseConsoleAgentObservation, item))
     && Array.isArray(value.sessions)
     && Array.isArray(value.notifications)
     && Array.isArray(value.configs)
-    && (value.sessionEvents === undefined || Array.isArray(value.sessionEvents))
+    && (value.sessionEvents === undefined || (Array.isArray(value.sessionEvents) && value.sessionEvents.every(item => parses(parseConsoleSessionEvent, item))))
     && (value.works === undefined || isKeyClosedArray(value.works, WORK_KEYS))
     && (value.relations === undefined || isKeyClosedArray(value.relations, RELATION_KEYS))
 }

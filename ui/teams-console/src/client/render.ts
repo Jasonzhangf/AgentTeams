@@ -1,5 +1,5 @@
 import type { ConsoleEntry, UiStatus } from './model.ts'
-import { modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerById, providerLabel } from './model.ts'
+import { canOperateSession, modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerById, providerLabel } from './model.ts'
 import type { ConsoleState, DrawerState, ProviderDraft, TeamsConsoleController } from './controller.ts'
 import { messages, type Locale, type MessageKey } from './locale.ts'
 import type { ConsoleProviderView, JsonValue } from './protocol.ts'
@@ -72,6 +72,34 @@ function actionDisabled(state: ConsoleState): boolean {
   return state.busy !== null
 }
 
+function sessionEventTitle(event: import('./protocol.ts').ConsoleSessionEventView, t: Record<MessageKey, string>): string {
+  switch (event.kind) {
+    case 'message': return `${event.role} ${event.state}`
+    case 'part': return `${event.partType} ${event.state}`
+    case 'tool': return `${event.tool} ${event.state}`
+    case 'permission': return event.state === 'pending' ? `${t.permission} ${event.title}` : `${t.permission} ${event.decision}`
+    case 'final': return `final ${event.state}`
+    case 'error': return `error ${event.error.name}`
+    case 'cancel': return `cancel ${event.state}`
+    default: return t.details
+  }
+}
+
+function sessionEventDetail(event: import('./protocol.ts').ConsoleSessionEventView): string | undefined {
+  switch (event.kind) {
+    case 'part': return event.state === 'observed' ? JSON.stringify(event.sourcePart, null, 2) : event.text
+    case 'tool':
+      if (event.state === 'pending') return `${JSON.stringify(event.input)}${event.raw.length > 0 ? `\n${event.raw}` : ''}`
+      if (event.state === 'running') return JSON.stringify(event.input)
+      if (event.state === 'completed') return `${JSON.stringify(event.input)} → ${event.output}`
+      return `${JSON.stringify(event.input)} ! ${event.error}`
+    case 'final': return event.state === 'failed' ? JSON.stringify(event.error) : event.finish
+    case 'error': return JSON.stringify(event.error)
+    case 'cancel': return event.state === 'unknown' ? `reason: ${event.reason}` : event.state
+    default: return undefined
+  }
+}
+
 function agentName(projection: ConsoleState['projection'], agentId: string, t: Record<MessageKey, string>): string {
   return projection?.agents.find(agent => agent.agentId === agentId)?.label ?? `${t.unknownAgent} (${agentId})`
 }
@@ -98,29 +126,45 @@ function renderTopology(controller: TeamsConsoleController, state: ConsoleState,
   }
   const grid = element('div', 'teams-grid')
   for (const agent of agents) {
-    const card = element('article', 'teams-agent-card')
-    const header = element('div', 'teams-card-header')
-    const identity = element('div', 'teams-identity')
-    if (agent.capabilities.includes('browser')) {
-      const icon = element('img', 'teams-agent-icon')
-      icon.src = agentBrowserIcon
-      icon.alt = `${agent.label} icon`
-      icon.width = 32
-      icon.height = 32
-      append(identity, icon)
-    }
-    const presence = element('span', `teams-presence teams-presence-${agent.presence}`)
-    presence.setAttribute('aria-label', presenceLabel(agent.presence, t))
-    const copy = element('div', 'teams-identity-copy')
-    const name = element('strong')
-    name.textContent = agent.label
-    const machine = element('span')
-    machine.textContent = `${agent.machineId} · ${presenceLabel(agent.presence, t)}`
-    append(copy, name, machine)
-    append(identity, presence, copy)
-    append(header, identity, statusPill(`${agent.notificationCount} ${t.notifications}`))
+    append(grid, renderAgentCard(controller, state, t, agent))
+  }
+  append(value, grid)
+  return value
+}
 
-    const meta = element('div', 'teams-agent-meta')
+function renderAgentCard(
+  controller: TeamsConsoleController,
+  state: ConsoleState,
+  t: Record<MessageKey, string>,
+  agent: import('./model.ts').AgentRow,
+): HTMLElement {
+  const projection = state.projection
+  const card = element('article', `teams-agent-card teams-agent-card-${agent.kind}`)
+  const header = element('div', 'teams-card-header')
+  const identity = element('div', 'teams-identity')
+  if (agent.kind === 'runtime' && agent.capabilities.includes('browser')) {
+    const icon = element('img', 'teams-agent-icon')
+    icon.src = agentBrowserIcon
+    icon.alt = `${agent.label} icon`
+    icon.width = 32
+    icon.height = 32
+    append(identity, icon)
+  }
+  const presence = element('span', `teams-presence teams-presence-${agent.presence}`)
+  presence.setAttribute('aria-label', presenceLabel(agent.presence, t))
+  const copy = element('div', 'teams-identity-copy')
+  const name = element('strong')
+  name.textContent = agent.label
+  const machine = element('span')
+  machine.textContent = `${agent.machineId} · ${presenceLabel(agent.presence, t)}`
+  append(copy, name, machine)
+  append(identity, presence, copy)
+  append(header, identity, statusPill(`${agent.notificationCount} ${t.notifications}`))
+
+  const meta = element('div', 'teams-agent-meta')
+  if (agent.kind === 'directory') {
+    append(meta, statusPill(t.directoryRow))
+  } else {
     if (agent.providerId !== undefined) {
       const providerMeta = element('span')
       const providerStrong = element('strong')
@@ -140,34 +184,58 @@ function renderTopology(controller: TeamsConsoleController, state: ConsoleState,
       count.textContent = `${agent.sessionCount} ${t.sessions}`
       append(meta, count)
     }
-
-    const capability = element('span', 'teams-field-hint')
-    capability.textContent = agent.capabilities.length === 0 ? `${t.capabilities}: —` : `${t.capabilities}: ${agent.capabilities.join(', ')}`
-
-    const actions = element('div', 'teams-card-actions')
-    const current = agent.currentSessionId
-    const sessionExists = current !== undefined && projection.sessions.some(session => session.sessionId === current && session.agentId === agent.agentId)
-    if (current !== undefined && sessionExists) {
-      append(actions, button(
-        t.currentSession,
-        'teams-button-primary',
-        async () => {
-          controller.openSession(agent.agentId, current)
-          await controller.openSessionCommand(agent.agentId, current)
-        },
-        actionDisabled(state),
-        `agent:${agent.agentId}:current-session`,
-      ))
+    if (agent.sessionCapable === true && agent.sessionAvailability !== 'current') {
+      append(meta, statusPill(sessionAvailabilityLabel(agent.sessionAvailability, t)))
     }
-    append(actions, button(t.details, 'teams-button-secondary', () => { controller.openAgent(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:details`))
-    if (projection.configs.some(config => config.agentId === agent.agentId)) {
-      append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:configure`))
+    if (agent.sessionObservation !== undefined && agent.sessionObservation.state !== 'live') {
+      append(meta, statusPill(agent.sessionObservation.state === 'degraded' ? t.observationDegraded : t.observationLost))
     }
-    append(card, header, meta.childElementCount === 0 ? null : meta, capability, actions)
-    append(grid, card)
   }
-  append(value, grid)
-  return value
+
+  const capability = element('span', 'teams-field-hint')
+  capability.textContent = agent.capabilities.length === 0 ? `${t.capabilities}: —` : `${t.capabilities}: ${agent.capabilities.join(', ')}`
+
+  const actions = element('div', 'teams-card-actions')
+  const current = agent.currentSessionId
+  const sessionExists = current !== undefined && projection?.sessions.some(session => session.sessionId === current && session.agentId === agent.agentId) === true
+  if (canOperateSession(agent)) {
+    append(actions, button(
+      t.createSession,
+      'teams-button-primary',
+      async () => { await controller.createSession(agent.agentId) },
+      actionDisabled(state),
+      `agent:${agent.agentId}:create-session`,
+    ))
+  }
+  if (current !== undefined && sessionExists) {
+    append(actions, button(
+      t.currentSession,
+      'teams-button-primary',
+      async () => {
+        controller.openSession(agent.agentId, current)
+        await controller.openSessionCommand(agent.agentId, current)
+      },
+      actionDisabled(state),
+      `agent:${agent.agentId}:current-session`,
+    ))
+  }
+  append(actions, button(t.details, 'teams-button-secondary', () => { controller.openAgent(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:details`))
+  if (projection?.configs.some(config => config.agentId === agent.agentId)) {
+    append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:configure`))
+  }
+  append(card, header, meta.childElementCount === 0 ? null : meta, capability, actions)
+  return card
+}
+
+function sessionAvailabilityLabel(availability: string | undefined, t: Record<MessageKey, string>): string {
+  switch (availability) {
+    case 'changing': return t.availabilityChanging
+    case 'stopped': return t.availabilityStopped
+    case 'no-current': return t.availabilityNoCurrent
+    case 'uncertain': return t.availabilityUncertain
+    case 'not-applicable': return t.availabilityNotApplicable
+    default: return t.availabilityCurrent
+  }
 }
 
 function renderConversations(controller: TeamsConsoleController, state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
@@ -324,7 +392,7 @@ function renderMemory(t: Record<MessageKey, string>): HTMLElement {
 function renderAgentDetail(controller: TeamsConsoleController, state: ConsoleState, agentId: string, t: Record<MessageKey, string>): HTMLElement {
   const value = element('div', 'teams-composer')
   const projection = state.projection
-  const agent = projection?.agents.find(candidate => candidate.agentId === agentId)
+  const agent = projection === null ? undefined : projectAgents(projection).find(candidate => candidate.agentId === agentId)
   if (agent === undefined) {
     append(value, emptyState(t.unknownAgent))
     return value
@@ -335,6 +403,9 @@ function renderAgentDetail(controller: TeamsConsoleController, state: ConsoleSta
   intro.textContent = `${agent.machineId} · ${presenceLabel(agent.presence, t)} · ${agent.capabilities.length} ${t.capabilities}`
   const actions = element('div', 'teams-button-row')
   const sessionExists = agent.currentSessionId !== undefined && projection?.sessions.some(session => session.agentId === agent.agentId && session.sessionId === agent.currentSessionId) === true
+  if (canOperateSession(agent)) {
+    append(actions, button(t.createSession, 'teams-button-primary', async () => { await controller.createSession(agent.agentId) }, actionDisabled(state), `drawer-agent:${agent.agentId}:create-session`))
+  }
   if (agent.currentSessionId !== undefined && sessionExists) {
     append(actions, button(t.currentSession, 'teams-button-primary', async () => {
       controller.openSession(agent.agentId, agent.currentSessionId as string)
@@ -373,16 +444,16 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
         const kind = element('span', 'teams-notification-kind')
         kind.textContent = event.kind
         const eventTitle = element('strong')
-        eventTitle.textContent = event.title
-        append(eventHeader, kind, eventTitle, event.state === undefined ? null : statusPill(event.state), event.occurredAt === undefined ? null : statusPill(event.occurredAt))
-        const detailText = event.detail
+        eventTitle.textContent = sessionEventTitle(event, t)
+        append(eventHeader, kind, eventTitle, statusPill(event.state), event.occurredAt === undefined ? null : statusPill(event.occurredAt))
+        const detailText = sessionEventDetail(event)
         let detail: HTMLElement | null = null
         if (detailText !== undefined) {
           detail = element('pre', 'teams-session-event-detail')
           detail.textContent = detailText
         }
         const eventActions = element('div', 'teams-button-row')
-        if (event.kind === 'approval' && event.state === 'pending' && event.permissionId !== undefined) {
+        if (event.kind === 'permission' && event.state === 'pending') {
           const permissionId = event.permissionId
           append(eventActions,
             button(t.allowOnce, 'teams-button-primary', async () => { await controller.replyPermission(agentId, sessionId, permissionId, 'once') }, actionDisabled(state)),
@@ -405,6 +476,10 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
   textarea.setAttribute('aria-required', 'true')
   append(label, labelText, textarea)
   const actions = element('div', 'teams-button-row')
+  const agent = state.projection?.agents.find(candidate => candidate.agentId === agentId)
+  if (agent !== undefined && canOperateSession(agent)) {
+    append(actions, button(t.cancelSession, 'teams-button-danger', async () => { await controller.cancelSession(agentId, sessionId) }, actionDisabled(state)))
+  }
   append(actions, button(t.openSession, 'teams-button-secondary', async () => { await controller.openSessionCommand(agentId, sessionId) }, actionDisabled(state)))
   const sendMessage = async (): Promise<void> => {
     if (textarea.value.trim().length === 0) {
@@ -624,7 +699,7 @@ function renderSettings(controller: TeamsConsoleController, state: ConsoleState,
     append(value, emptyState(t.addProvider))
   } else {
     const providers = element('div', 'teams-provider-list')
-    const agent = projection.agents.find(candidate => candidate.agentId === agentId)
+    const agent = projectAgents(projection).find(candidate => candidate.agentId === agentId)
     for (const provider of config.providers) append(providers, renderProviderCard(controller, state, agentId, provider, agent?.providerId === provider.id ? agent.modelId : undefined, t))
     append(value, providers)
   }

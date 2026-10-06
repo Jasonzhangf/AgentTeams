@@ -6,6 +6,8 @@ import { expect, it, vi } from 'vitest'
 import { createManagedConfigOwner, createManagedConfigOwnerPersistence } from './managed-config-owner.ts'
 import { createJsonFileConfigPersistence, createRuntimeConfigStore } from '../config/runtime-config.ts'
 
+const mockCompiled = (acceptedRevision: number) => ({ agentId: 'a', acceptedRevision, primary: { provider: 'p', model: 'm', protocol: 'openai-chat' as const, baseUrl: 'http://127.0.0.1:1/v1' } })
+
 it('records effective config only after launch and refuses apply during an owned operation', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-managed-owner-'))
   try {
@@ -15,7 +17,8 @@ it('records effective config only after launch and refuses apply during an owned
     await store.refreshProviderModels(1, 'p', { listModels: async () => [{ modelId: 'm', metadata: {} }] })
     await store.bindAgentModel(1, 'a', { primary: { providerInstanceId: 'p', modelId: 'm' } })
     const stop = vi.fn(async () => undefined)
-    const launch = vi.fn(async () => ({ url: 'http://127.0.0.1:1', authorization: 'private', pid: 1, effectiveRevision: 2,
+   const launch = vi.fn(async () => ({ url: 'http://127.0.0.1:1', authorization: 'private', pid: 1, effectiveRevision: 2,
+      compiled: mockCompiled(2),
       closed: new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(() => {}), stop }))
     const owner = createManagedConfigOwner({ agentId: 'a', executable: '/test', directory: '/test', port: 1,
       startupTimeoutMs: 1000, stopTimeoutMs: 1000, resolveCredential: async () => '',
@@ -49,15 +52,18 @@ it('recovers uncertain after an ambiguous exchange and refuses use until reconci
       startupTimeoutMs: 1000, stopTimeoutMs: 1000, resolveCredential: async () => '',
       persistence: createManagedConfigOwnerPersistence({ agentId: 'a', internalPath: join(directory, 'internal.toml'), persistence }) },
     async () => ({ url: `http://127.0.0.1:${++launchCount}`, authorization: 'private', pid: 1, effectiveRevision: 2,
+      compiled: mockCompiled(2),
       closed: new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(() => {}), stop: async () => undefined }))
     expect(await owner.recover()).toBe('clean')
     expect(await store.applyAcceptedConfig(owner)).toEqual({ status: 'applied', effectiveRevision: 2 })
     await expect(owner.use(async () => { throw new Error('ambiguous exchange') })).rejects.toThrow('ambiguous exchange')
     expect(owner.uncertainty()).toBe(true)
+    expect(owner.readiness()).toEqual({ state: 'uncertain', effectiveRevision: 2 })
     const restarted = createManagedConfigOwner({ agentId: 'a', executable: '/test', directory: '/test', port: 1,
       startupTimeoutMs: 1000, stopTimeoutMs: 1000, resolveCredential: async () => '',
       persistence: createManagedConfigOwnerPersistence({ agentId: 'a', internalPath: join(directory, 'internal.toml'), persistence }) },
     async () => ({ url: `http://127.0.0.1:${++launchCount}`, authorization: 'private', pid: 1, effectiveRevision: 2,
+      compiled: mockCompiled(2),
       closed: new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(() => {}), stop: async () => undefined }))
     expect(await restarted.recover()).toBe('uncertain')
     await expect(restarted.use(async () => undefined)).rejects.toMatchObject({ code: 'UNAVAILABLE' })
@@ -96,6 +102,7 @@ it('reconciles a dead durable fence on startup and clears the stale apply error 
       startupTimeoutMs: 1000, stopTimeoutMs: 1000, resolveCredential: async () => '',
       persistence: createManagedConfigOwnerPersistence({ agentId: 'a', internalPath: join(directory, 'internal.toml'), persistence }) },
     async () => ({ url: `http://127.0.0.1:${++launches}`, authorization: 'private', pid: process.pid, effectiveRevision: current.acceptedRevision,
+      compiled: mockCompiled(current.acceptedRevision),
       closed: new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(() => {}), stop: async () => undefined }))
     expect(await owner.recover(async () => ({ target, config: await store.read() }))).toBe('clean')
     expect(launches).toBe(1)
@@ -137,6 +144,7 @@ it('does not launch a replacement while a fenced prior substrate is live or unpr
       startupTimeoutMs: 1000, stopTimeoutMs: 1000, resolveCredential: async () => '',
       persistence: createManagedConfigOwnerPersistence({ agentId: 'a', internalPath: join(directory, 'internal.toml'), persistence }) },
     async () => ({ url: `http://127.0.0.1:${++launches}`, authorization: 'private', pid: process.pid, effectiveRevision: current.acceptedRevision,
+      compiled: mockCompiled(current.acceptedRevision),
       closed: new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(() => {}), stop: async () => undefined }))
     expect(await owner.recover(async () => ({ target, config: await store.read() }))).toBe('uncertain')
     expect(launches).toBe(0)
@@ -185,5 +193,61 @@ it('removes only the exact cleared fence and keeps the other uncertainty and err
     await port.clearUncertainty({ expectedFence: second, effectiveRevision: current.acceptedRevision, currentTarget: target })
     expect(await store.readEffective()).toMatchObject({ applyState: 'clean' })
     expect(await store.readEffective()).not.toHaveProperty('lastApplyError')
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('projects readiness for changing, stopped, no-current, uncertain and current', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-managed-readiness-'))
+  try {
+    const persistence = createJsonFileConfigPersistence(join(directory, 'config.json'))
+    const store = createRuntimeConfigStore(persistence, { agentId: 'a' })
+    await store.putProviderInstance(0, { id: 'p', label: 'P', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:1/v1', enabled: true, auth: { kind: 'none' } })
+    await store.refreshProviderModels(1, 'p', { listModels: async () => [{ modelId: 'm', metadata: {} }] })
+    await store.bindAgentModel(1, 'a', { primary: { providerInstanceId: 'p', modelId: 'm' } })
+    let releaseLaunch!: () => void
+    const gate = new Promise<void>(resolve => { releaseLaunch = resolve })
+    const stop = vi.fn(async () => undefined)
+    let launches = 0
+    const owner = createManagedConfigOwner({ agentId: 'a', executable: '/test', directory: '/test', port: 1,
+      startupTimeoutMs: 1000, stopTimeoutMs: 1000, resolveCredential: async () => '',
+      persistence: createManagedConfigOwnerPersistence({ agentId: 'a', internalPath: join(directory, 'internal.toml'), persistence }) },
+    async () => { await gate; launches += 1
+      return { url: `http://127.0.0.1:${launches}`, authorization: 'private', pid: 1, effectiveRevision: 2, compiled: mockCompiled(2),
+        closed: new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(() => {}), stop } })
+    expect(owner.readiness()).toEqual({ state: 'no-current' })
+   const applying = store.applyAcceptedConfig(owner)
+    await new Promise(resolveTick => setTimeout(resolveTick, 0))
+   expect(owner.readiness()).toEqual({ state: 'changing' })
+    releaseLaunch()
+    await applying
+    expect(owner.readiness()).toEqual({ state: 'current', effectiveRevision: 2, modelTarget: { providerID: 'p', modelID: 'm' }, activeOperations: 0 })
+    let release!: () => void
+    const running = owner.use(async () => new Promise<void>(resolve => { release = resolve }))
+    expect(owner.readiness()).toMatchObject({ state: 'current', activeOperations: 1 })
+    release(); await running
+    await owner.stop()
+    expect(owner.readiness()).toEqual({ state: 'stopped' })
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('contains an expected callback result without poisoning readiness', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-managed-contained-'))
+  try {
+    const persistence = createJsonFileConfigPersistence(join(directory, 'config.json'))
+    const store = createRuntimeConfigStore(persistence, { agentId: 'a' })
+    await store.putProviderInstance(0, { id: 'p', label: 'P', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:1/v1', enabled: true, auth: { kind: 'none' } })
+    await store.refreshProviderModels(1, 'p', { listModels: async () => [{ modelId: 'm', metadata: {} }] })
+    await store.bindAgentModel(1, 'a', { primary: { providerInstanceId: 'p', modelId: 'm' } })
+    const owner = createManagedConfigOwner({ agentId: 'a', executable: '/test', directory: '/test', port: 1,
+      startupTimeoutMs: 1000, stopTimeoutMs: 1000, resolveCredential: async () => '',
+      persistence: createManagedConfigOwnerPersistence({ agentId: 'a', internalPath: join(directory, 'internal.toml'), persistence }) },
+    async () => ({ url: 'http://127.0.0.1:9', authorization: 'private', pid: 1, effectiveRevision: 2, compiled: mockCompiled(2),
+      closed: new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(() => {}), stop: async () => undefined }))
+    await store.applyAcceptedConfig(owner)
+    const expected = await owner.use(async () => ({ code: 'NOT_FOUND', ok: false }))
+    expect(expected).toEqual({ code: 'NOT_FOUND', ok: false })
+    expect(owner.uncertainty()).toBe(false)
+    expect(owner.readiness()).toMatchObject({ state: 'current', activeOperations: 0 })
+    await expect(owner.use(async () => 'still usable')).resolves.toBe('still usable')
   } finally { await rm(directory, { recursive: true, force: true }) }
 })

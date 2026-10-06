@@ -12,7 +12,7 @@ function directoryPeer(agentId: string, presence: RelayPeer['presence'], generat
 
 it('merges only owner projections and routes actions to exactly one Agent', async () => {
   const binding = (agentId: string) => ({
-    readProjection: async () => ({ version: 1 as const, agents: [{ agentId, machineId: agentId, label: agentId, presence: 'online' as const, capabilities: [] }], sessions: [], configs: [], notifications: [], works: [], relations: [] }),
+    readProjection: async () => ({ version: 1 as const, agents: [{ kind: 'runtime' as const, agentId, machineId: agentId, label: agentId, presence: 'online' as const, capabilities: [] }], sessions: [], configs: [], notifications: [], works: [], relations: [] }),
     command: vi.fn(async () => ({ ok: true as const })), sendSession: vi.fn(async () => ({ ok: true as const })),
   })
   const a = binding('a'); const b = binding('b')
@@ -42,14 +42,14 @@ it('merges owner Work and relation observations and rejects a missing observatio
     capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1, state: 'closed' as const,
   }
   const client = createConsoleHub([{ agentId: 'a', client: {
-    readProjection: async () => ({ version: 1 as const, agents: [{ agentId: 'a', machineId: 'a', label: 'a', presence: 'online' as const, capabilities: [] }],
+    readProjection: async () => ({ version: 1 as const, agents: [{ kind: 'runtime' as const, agentId: 'a', machineId: 'a', label: 'a', presence: 'online' as const, capabilities: [] }],
       sessions: [], configs: [], notifications: [], works: [work],
       relations: [{ agentId: 'a', consumerAgentId: 'c', providerAgentId: 'a', capabilityId: 'file-search', capabilityVersion: '1', relationPermission: 'granted' as const, workId: 'w' }] }),
     command: async () => ({ ok: true as const }), sendSession: async () => ({ ok: true as const }),
   } }])
   expect(await client.readProjection()).toMatchObject({ works: [work], relations: [{ workId: 'w', relationPermission: 'granted' }] })
   const incomplete = createConsoleHub([{ agentId: 'a', client: {
-    readProjection: async () => ({ version: 1 as const, agents: [{ agentId: 'a', machineId: 'a', label: 'a', presence: 'online' as const, capabilities: [] }],
+    readProjection: async () => ({ version: 1 as const, agents: [{ kind: 'runtime' as const, agentId: 'a', machineId: 'a', label: 'a', presence: 'online' as const, capabilities: [] }],
       sessions: [], configs: [], notifications: [] }),
     command: async () => ({ ok: true as const }), sendSession: async () => ({ ok: true as const }),
   } }])
@@ -61,7 +61,7 @@ it('discovers admitted directory peers on every read and keeps offline rows obse
   const offline = directoryPeer('worker', 'offline', 8, ['file-search'])
   const command = vi.fn(async () => ({ ok: true as const }))
   const browser = {
-    readProjection: async () => ({ version: 1 as const, agents: [{ agentId: 'browser', machineId: 'stale', label: 'stale', presence: 'unknown' as const, capabilities: [] }], sessions: [], configs: [], notifications: [], works: [], relations: [] }),
+    readProjection: async () => ({ version: 1 as const, agents: [{ kind: 'runtime' as const, agentId: 'browser', machineId: 'stale', label: 'stale', presence: 'unknown' as const, capabilities: [] }], sessions: [], configs: [], notifications: [], works: [], relations: [] }),
     command, sendSession: async () => ({ ok: true as const }),
   }
   let peers: readonly RelayPeer[] = [online, offline]
@@ -113,4 +113,20 @@ it('propagates stale generation failures from the relay binding', async () => {
     }) }))
   await expect(client.command({ kind: 'config.apply', agentId: 'browser' })).rejects.toMatchObject({ code: 'STALE_GENERATION' })
   await expect(client.sendSession({ agentId: 'browser', sessionId: 's' }, { text: 'x' })).rejects.toMatchObject({ code: 'STALE_GENERATION' })
+})
+
+it('emits directory rows for offline peers and preserves owner runtime Session fields', async () => {
+  const offline = directoryPeer('worker', 'offline', 8, ['file-search'])
+  const online = directoryPeer('browser', 'online', 3, ['browser'])
+  const runtimeRow = { kind: 'runtime' as const, agentId: 'browser', machineId: 'm', label: 'Browser', presence: 'online' as const, capabilities: ['browser'],
+    sessionCapable: true as const, sessionAvailability: 'current' as const, sessionEffectiveRevision: 4, currentSessionId: 's1' }
+  const client = createConsoleHub([], async () => ({ peers: [online, offline], client: () => ({
+    readProjection: async () => ({ version: 1 as const, agents: [runtimeRow], sessions: [], configs: [], notifications: [], works: [], relations: [] }),
+    command: async () => ({ ok: true as const }), sendSession: async () => ({ ok: true as const }),
+  }) }))
+  const projection = await client.readProjection()
+  expect(projection.agents.find(agent => agent.agentId === 'browser')).toMatchObject({ kind: 'runtime', sessionCapable: true, sessionAvailability: 'current', sessionEffectiveRevision: 4, currentSessionId: 's1' })
+  const worker = projection.agents.find(agent => agent.agentId === 'worker')
+  expect(worker).toMatchObject({ kind: 'directory', presence: 'offline' })
+  expect(worker).not.toHaveProperty('sessionCapable')
 })

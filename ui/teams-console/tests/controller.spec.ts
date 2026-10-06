@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TeamsConsoleController } from '../src/client/controller.ts'
+import { projectAgents } from '../src/client/model.ts'
 import { createFixtureClient } from '../src/fixture.ts'
 
 describe('TeamsConsoleController', () => {
@@ -64,7 +65,8 @@ describe('TeamsConsoleController', () => {
     await controller.refresh()
     await expect(controller.replyPermission('planner', 'planner-current', 'permission-1', 'once')).resolves.toBe(true)
     expect(controller.getSnapshot().projection?.notifications[0]?.state).toBe('resolved')
-    expect(controller.getSnapshot().projection?.sessionEvents?.find(event => event.permissionId === 'permission-1')?.state).toBe('resolved')
+    const resolved = controller.getSnapshot().projection?.sessionEvents?.find(event => event.kind === 'permission' && event.permissionId === 'permission-1')
+    expect(resolved?.kind === 'permission' ? resolved.state : undefined).toBe('resolved')
   })
 
   it('acknowledges a notification through the host command', async () => {
@@ -111,7 +113,8 @@ describe('TeamsConsoleController', () => {
     await expect(controller.refreshModels('planner', 'empty-provider')).resolves.toBe(true)
     const provider = controller.getSnapshot().projection?.configs[0]?.providers.find(candidate => candidate.id === 'empty-provider')
     expect(provider?.models).toEqual([{ id: 'refreshed-model', label: 'Refreshed model' }])
-    expect(controller.getSnapshot().projection?.agents[0]?.modelId).toBe('deepseek-v4')
+    const planner = projectAgents(controller.getSnapshot().projection!).find(agent => agent.agentId === 'planner')
+    expect(planner?.modelId).toBe('deepseek-v4')
   })
 
   it('moves accepted config to effective revision only after apply', async () => {

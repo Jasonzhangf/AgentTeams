@@ -1,5 +1,15 @@
 import type { JsonValue } from './agent-services.ts'
-import { parseConsoleCommand, parseConsoleWorkRelationProjection, type ConsoleCommandV1, type ConsoleCommandResultV1, type ConsoleProjectionV1 } from './console-api.ts'
+import {
+  parseConsoleAgentObservation,
+  parseConsoleCommand,
+  parseConsoleSessionEvent,
+  parseConsoleWorkRelationProjection,
+  parseSessionCancelUnknownDetail,
+  parseSessionCreateResult,
+  type ConsoleCommandV1,
+  type ConsoleCommandResultV1,
+  type ConsoleProjectionV1,
+} from './console-api.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
 import { parseServiceError, RelayProtocolError } from './relay-codec.ts'
 
@@ -70,24 +80,19 @@ function array(value: unknown, validate: (item: unknown) => void): void {
   value.forEach(validate)
 }
 function error(value: unknown): void {
-  const input = record(value, ['code', 'message', 'execution', 'status', 'providerInstanceId'])
+  const input = record(value, ['code', 'message', 'execution', 'status', 'providerInstanceId', 'detail'])
   // Validate shared fields through their owner; the Console-only credential code is retained verbatim.
   const configOnly = input.code === 'CREDENTIAL_UNAVAILABLE' || input.code === 'SOURCE_CHANGED' || input.code === 'MIGRATION_CONFLICT' || input.code === 'APPLY_TARGET_MISMATCH'
   parseServiceError({ code: configOnly ? 'UNAVAILABLE' : input.code, message: input.message,
     ...(input.execution === undefined ? {} : { execution: input.execution }) }, 'Console error')
   optionalString(input.providerInstanceId)
   if (input.status !== undefined && (!Number.isSafeInteger(input.status) || (input.status as number) < 100 || (input.status as number) > 599)) throw new Error('Console response HTTP status invalid')
+  if (input.detail !== undefined) parseSessionCancelUnknownDetail(input.detail)
 }
 function projection(value: unknown): void {
   const input = record(value, ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations'])
   choice(input.version, [1])
-  array(input.agents, item => {
-    const agent = record(item, ['agentId', 'label', 'machineId', 'generation', 'presence', 'capabilities', 'currentSessionId', 'providerId', 'modelId'])
-    string(agent.agentId); string(agent.machineId); string(agent.label)
-    if (agent.generation !== undefined && (!Number.isSafeInteger(agent.generation) || (agent.generation as number) < 1)) throw new Error('Console agent generation invalid')
-    choice(agent.presence, ['online', 'offline', 'unknown']); array(agent.capabilities, string)
-    optionalString(agent.currentSessionId); optionalString(agent.providerId); optionalString(agent.modelId)
-  })
+  array(input.agents, item => { parseConsoleAgentObservation(item) })
   array(input.sessions, item => {
     const session = record(item, ['agentId', 'sessionId', 'title'])
     string(session.agentId); string(session.sessionId); optionalString(session.title)
@@ -113,7 +118,26 @@ function projection(value: unknown): void {
       array(provider.models, item => { const model = record(item, ['id', 'label']); string(model.id); optionalString(model.label) })
     })
   })
+  if (input.sessionEvents !== undefined) array(input.sessionEvents, item => { parseConsoleSessionEvent(item) })
   if (input.works !== undefined || input.relations !== undefined) parseConsoleWorkRelationProjection(input)
+}
+
+function commandResult(value: unknown): void {
+  const result = record(value, ['ok', 'result', 'error'])
+  choice(result.ok, [true, false])
+  if (result.ok === true) {
+    assertEnvelopeKeys(result, ['ok', 'result'], 'Console success')
+    if (result.result !== undefined) {
+      assertJsonValue(result.result, 'Console success result')
+      if (typeof result.result === 'object' && result.result !== null && !Array.isArray(result.result)
+        && (result.result as Record<string, unknown>).kind === 'session.create') {
+        parseSessionCreateResult(result.result)
+      }
+    }
+  } else {
+    assertEnvelopeKeys(result, ['ok', 'error'], 'Console failure')
+    error(result.error)
+  }
 }
 
 export function parseConsoleWireReply(text: string): ConsoleWireReply {
@@ -126,10 +150,7 @@ export function parseConsoleWireReply(text: string): ConsoleWireReply {
     projection(frame.projection)
   } else if (frame.kind === 'console.result') {
     assertEnvelopeKeys(frame, ['kind', 'correlationId', 'result'], 'Console command response')
-    const result = record(frame.result, ['ok', 'result', 'error'])
-    choice(result.ok, [true, false])
-    if (result.ok === true) assertEnvelopeKeys(result, ['ok', 'result'], 'Console success')
-    else { assertEnvelopeKeys(result, ['ok', 'error'], 'Console failure'); error(result.error) }
+    commandResult(frame.result)
   } else throw new Error('Unknown Console response kind')
   return frame as unknown as ConsoleWireReply
 }

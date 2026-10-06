@@ -248,6 +248,14 @@ export class TeamsConsoleController {
     return this.runAction('Open session', () => this.client.command({ kind: 'session.open', agentId, sessionId }))
   }
 
+  async createSession(agentId: string, title?: string): Promise<boolean> {
+    return this.runAction('Create session', () => this.client.command({ kind: 'session.create', agentId, ...(title === undefined ? {} : { title }) }))
+  }
+
+  async cancelSession(agentId: string, sessionId: string): Promise<boolean> {
+    return this.runAction('Cancel session', () => this.client.command({ kind: 'session.cancel', agentId, sessionId }))
+  }
+
   async acknowledge(notificationId: string, agentId: string): Promise<boolean> {
     return this.runAction('Acknowledge notification', () => this.client.command({ kind: 'notification.ack', agentId, notificationId }))
   }

@@ -103,7 +103,7 @@ export async function startManagedOpenCode(options: ManagedOpenCodeOptions) {
         JSON.stringify(Object.keys(received.models ?? {}).sort()) !== JSON.stringify(Object.keys(expected.models).sort())) throw new Error('Managed OpenCode provider readback mismatch')
     }
     if (ended) throw new Error('Managed OpenCode exited during readback')
-    return { url, authorization, pid: child.pid!, effectiveRevision: compiled.acceptedRevision, closed, stop }
+    return { url, authorization, pid: child.pid!, effectiveRevision: compiled.acceptedRevision, compiled, closed, stop }
   } catch (error) {
     await stop()
     throw error

@@ -113,7 +113,7 @@ it('binds the Console client API to directory generation and real Relay connecti
     jobs.push(serveConsole(socket, async request => {
       received.push(request)
       if (request.kind === 'console.projection') return { kind: 'console.projection.result', correlationId: request.correlationId,
-        projection: { version: 1, agents: [{ agentId: 'daemon', machineId: 'm', label: 'D', presence: 'online', capabilities: ['browser'] }], sessions: [], notifications: [], configs: [] } }
+        projection: { version: 1, agents: [{ kind: 'directory', agentId: 'daemon', machineId: 'm', label: 'D', presence: 'online', capabilities: ['browser'] }], sessions: [], notifications: [], configs: [] } }
       return { kind: 'console.result', correlationId: request.correlationId, result: { ok: true } }
     }, 1000))
   })

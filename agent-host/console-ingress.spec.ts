@@ -39,3 +39,12 @@ it('does not convert an unknown owner failure into a successful reply', async ()
     command: { kind: 'config.apply', agentId: 'target' } })).rejects.toThrow('outcome unknown')
   expect(client.command).toHaveBeenCalledTimes(1)
 })
+it('routes the closed create/cancel commands to the owner without a business payload', async () => {
+  const { ingress, client } = setup()
+  expect(await ingress({ kind: 'console.command', correlationId: 'r', targetGeneration: 2,
+    command: { kind: 'session.create', agentId: 'target', title: 'New' } })).toMatchObject({ result: { ok: true } })
+  expect(await ingress({ kind: 'console.command', correlationId: 'r', targetGeneration: 2,
+    command: { kind: 'session.cancel', agentId: 'target', sessionId: 's' } })).toMatchObject({ result: { ok: true } })
+  expect(client.command).toHaveBeenNthCalledWith(1, { kind: 'session.create', agentId: 'target', title: 'New' })
+  expect(client.command).toHaveBeenNthCalledWith(2, { kind: 'session.cancel', agentId: 'target', sessionId: 's' })
+})

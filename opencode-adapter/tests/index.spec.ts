@@ -20,6 +20,14 @@ import {
   projectOpenCodeNotifications,
   compileOpenCodeConfig,
   createOpenCodeConfigApplier,
+  createOpenCodeSession,
+  cancelOpenCodeSession,
+  promptOpenCodeSession,
+  readOpenCodeSessionMessages,
+  readOpenCodeSessionStatus,
+  decodeOpenCodeSessionMessage,
+  projectOpenCodeSessionEvent,
+  subscribeOpenCodeEvents,
 } from '../src/index.ts'
 
 describe('OpenCode Teams adapter', () => {
@@ -222,7 +230,7 @@ describe('OpenCode Teams adapter', () => {
     const facade = createOpenCodeHostFacade(client)
     await expect(facade.refreshSessions()).resolves.toEqual([])
     await facade.actions.openSession('ses_7')
-    await facade.actions.sendMessage('ses_7', 'hello')
+    await facade.actions.sendMessage('ses_7', { text: 'hello' })
     await facade.actions.replyPermission('ses_7', 'per_7', 'reject')
     expect(facade.projection().notifications).toEqual({ pending: [], processed: [] })
     expect(calls).toEqual(['get:ses_7', 'prompt:ses_7', 'reply:ses_7:per_7:reject'])
@@ -419,5 +427,88 @@ describe('OpenCode Teams adapter', () => {
     }
     await expect(sendOpenCodeMessage(client as never, 'ses_upstream', 'hello', { providerID: 'provider', modelID: 'model' })).rejects.toMatchObject({ status: 503 })
     await expect(replyOpenCodePermission(client as never, 'per_missing', 'ses_upstream', 'reject')).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('creates a Session from the real SDK envelope and never invents identity', async () => {
+    const client = { session: { create: async (input?: { body?: { title?: string } }) => ({ data: { id: 'ses_new', title: input?.body?.title, directory: '/tmp/x', time: { created: 5 } } }) } }
+    await expect(createOpenCodeSession(client as never, 'agent-a', 'Title')).resolves.toEqual({ kind: 'session.create', agentId: 'agent-a', sessionId: 'ses_new', title: 'Title', directory: '/tmp/x', time: { created: 5 } })
+    await expect(createOpenCodeSession(client as never, 'agent-a')).resolves.toMatchObject({ sessionId: 'ses_new' })
+    await expect(createOpenCodeSession({ session: { create: async () => ({ data: { title: 'no id' } }) } } as never, 'agent-a')).rejects.toMatchObject({ operation: 'session.create', code: 'INVALID_RESPONSE' })
+    await expect(createOpenCodeSession(client as never, '')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+  })
+
+  it('returns raw abort acceptance and reads messages and status through the SDK', async () => {
+    await expect(cancelOpenCodeSession({ session: { abort: async () => ({ data: true }) } } as never, 's')).resolves.toBe(true)
+    await expect(cancelOpenCodeSession({ session: { abort: async () => ({ data: false }) } } as never, 's')).resolves.toBe(false)
+    const entries = [{ info: { id: 'm' }, parts: [{ id: 'p' }] }]
+    await expect(readOpenCodeSessionMessages({ session: { messages: async () => ({ data: entries }) } } as never, 's')).resolves.toEqual(entries)
+    await expect(readOpenCodeSessionStatus({ session: { status: async () => ({ data: { s: { type: 'idle' } } }) } } as never)).resolves.toEqual({ s: { type: 'idle' } })
+  })
+
+  it('dispatches a prompt with the owner messageID and effective model target', async () => {
+    const bodies: unknown[] = []
+    const client = { session: { prompt: async ({ body }: { body: unknown }) => { bodies.push(body) } } }
+    await promptOpenCodeSession(client as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, 'req-1')
+    expect(bodies).toEqual([{ messageID: 'req-1', parts: [{ type: 'text', text: 'hello' }], model: { providerID: 'p', modelID: 'm' } }])
+    await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: '', modelID: 'm' }, 'req-2')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+    await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, ' ')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+  })
+
+  it('decodes only the closed text payload before any side effect', () => {
+    expect(decodeOpenCodeSessionMessage({ text: 'hi' })).toEqual({ text: 'hi' })
+    for (const invalid of [null, [], 'hi', { text: '' }, { text: 1 }, { text: 'hi', extra: true }, { config: {} }]) {
+      expect(() => decodeOpenCodeSessionMessage(invalid as never)).toThrow()
+    }
+  })
+
+  it('projects every SDK event variant into the closed Session event union', () => {
+    const part = (p: Record<string, unknown>) => projectOpenCodeSessionEvent({ type: 'message.part.updated', properties: { part: { sessionID: 's', messageID: 'm', id: 'p', ...p } } })
+    expect(projectOpenCodeSessionEvent({ type: 'message.updated', properties: { info: { id: 'm', sessionID: 's', role: 'assistant', parentID: 'req', time: { completed: 1 } } } }))
+      .toMatchObject({ kind: 'event', parentMessageId: 'req', event: { kind: 'final', state: 'completed' } })
+    expect(part({ type: 'text', text: 'hi' })).toMatchObject({ kind: 'event', event: { kind: 'part', partType: 'text' } })
+    expect(part({ type: 'reasoning', text: 'why' })).toMatchObject({ kind: 'event', event: { kind: 'part', partType: 'reasoning' } })
+    expect(part({ type: 'file', filename: 'a' })).toMatchObject({ kind: 'event', event: { kind: 'part', state: 'observed', partType: 'file' } })
+    expect(part({ type: 'tool', tool: 'bash', callID: 'c', state: { status: 'running', input: { command: 'ls' } } })).toMatchObject({ kind: 'event', event: { kind: 'tool', state: 'running' } })
+    expect(projectOpenCodeSessionEvent({ type: 'permission.updated', properties: { id: 'p', sessionID: 's', messageID: 'm', title: 'T', metadata: {} } })).toMatchObject({ kind: 'event', event: { kind: 'permission', state: 'pending' } })
+    expect(projectOpenCodeSessionEvent({ type: 'permission.replied', properties: { sessionID: 's', permissionID: 'p', response: 'later' } })).toMatchObject({ kind: 'event', event: { kind: 'permission', state: 'resolved', decision: 'unknown', rawResponse: 'later' } })
+    expect(projectOpenCodeSessionEvent({ type: 'session.error', properties: { sessionID: 's', error: { name: 'UnknownError', data: {} } } })).toMatchObject({ kind: 'event', event: { kind: 'error', correlation: { kind: 'session' } } })
+  })
+
+  it('fails unknown tags and invalid shapes explicitly instead of faking success', () => {
+    expect(projectOpenCodeSessionEvent({ type: 'mystery.event', properties: {} })).toMatchObject({ kind: 'unsupported' })
+    expect(projectOpenCodeSessionEvent({ type: 'message.part.updated', properties: { part: { sessionID: 's', messageID: 'm', id: 'p', type: 'bogus' } } })).toMatchObject({ kind: 'unsupported' })
+    expect(projectOpenCodeSessionEvent({ type: 'message.part.updated', properties: { part: { type: 'text', text: 'x' } } })).toMatchObject({ kind: 'invalid' })
+    expect(projectOpenCodeSessionEvent({ type: 'permission.replied', properties: { sessionID: 's', permissionID: 'p' } })).toMatchObject({ kind: 'invalid' })
+    expect(projectOpenCodeSessionEvent({ type: 'session.error', properties: {} })).toMatchObject({ kind: 'invalid' })
+    expect(projectOpenCodeSessionEvent({ properties: {} })).toMatchObject({ kind: 'invalid' })
+  })
+
+  it('forwards the real SDK event stream and stops on abort', async () => {
+    async function* stream() { yield { type: 'a', properties: {} }; yield { type: 'b', properties: {} } }
+    const controller = new AbortController()
+    const received: string[] = []
+    for await (const event of subscribeOpenCodeEvents({ event: { subscribe: async () => ({ data: { stream: stream() } }) } } as never, controller.signal)) received.push(event.type)
+    expect(received).toEqual(['a', 'b'])
+    let closed = false
+    async function* endless() { try { while (true) yield { type: 'x', properties: {} } } finally { closed = true } }
+    const abortController = new AbortController()
+    const iterator = subscribeOpenCodeEvents({ event: { subscribe: async () => ({ data: { stream: endless() } }) } } as never, abortController.signal)
+    expect((await iterator.next()).value.type).toBe('x')
+    abortController.abort()
+    expect((await iterator.next()).done).toBe(true)
+    expect(closed).toBe(true)
+  })
+
+  it('forwards the abort signal and never waits for an SDK stream that cannot close', async () => {
+    const controller = new AbortController()
+    let forwarded: unknown
+    // The SDK generator is parked on a retry sleep: closing it cannot settle, so only the
+    // forwarded signal can end the stream.
+    async function* parked() { await new Promise(() => {}); yield { type: 'never', properties: {} } }
+    const stream = subscribeOpenCodeEvents({ event: { subscribe: async (options: unknown) => { forwarded = options; return { data: { stream: parked() } } } } } as never, controller.signal)
+    const pending = stream.next()
+    controller.abort()
+    expect(await pending).toMatchObject({ done: true })
+    expect(forwarded).toEqual({ signal: controller.signal })
   })
 })

@@ -36,8 +36,10 @@ describe('independent UI boundary', () => {
 
   it('renders only explicitly projected Agent actions', () => {
     const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
-    expect(render).toContain("projection.configs.some(config => config.agentId === agent.agentId)")
+    expect(render).toContain("projection?.configs.some(config => config.agentId === agent.agentId)")
     expect(render).toContain('if (current !== undefined && sessionExists)')
+    expect(render).toContain('canOperateSession(agent)')
+    expect(render).toContain("if (agent.kind === 'directory')")
   })
 
   it('renders owner-projected Session activity without creating a UI transcript ledger', () => {

@@ -13,14 +13,40 @@ import { createWorkIngress } from '../agent-host/work-ingress.ts'
 import { createFileWorkStore, createTrustedWorkAuthority, createWorkLedger, currentWorkProcessStartToken, readFileWorkStoreLockProof, recover, recoverFileWorkStoreLock, type WorkLedger } from '../agent/work-resource.ts'
 import { createConsoleIngress } from '../agent-host/console-ingress.ts'
 import { acceptAgentData } from './agent-data.ts'
-import type { ConsoleClientV1 } from '../control-protocol/console-api.ts'
+import type {
+  ConsoleAgentObservationV1,
+  ConsoleClientV1,
+  ConsoleCommandResultV1,
+  ConsoleCommandV1,
+  ConsoleServiceError,
+  ConsoleSessionEventView,
+  JsonValue,
+  SessionCancelUnknownDetail,
+  SessionObservationState,
+} from '../control-protocol/console-api.ts'
+type ConsoleServiceErrorCode = ConsoleServiceError['code']
 import { projectConsoleWorkObservations } from './console-work-projection.ts'
 import type { RelayClientOptions } from '../network/relay-client.ts'
 import { startAgentDaemon, type AgentDaemon } from './agent-daemon.ts'
 import { createRuntimeConfigStore, RuntimeConfigError, targetIdentityFor } from '../config/runtime-config.ts'
+import type { RuntimeConfigStore } from '../config/runtime-config.ts'
 import { createOpenAIModelCatalogClient } from '../config/provider-model-client.ts'
 import { createConsoleConfigBinding } from './console-config.ts'
-import { createManagedConfigOwner, createManagedConfigOwnerPersistence } from './managed-config-owner.ts'
+import { createManagedConfigOwner, createManagedConfigOwnerPersistence, type ManagedEffectiveHandle, type ManagedRuntimeReadiness } from './managed-config-owner.ts'
+import {
+  OpenCodeAdapterError,
+  cancelOpenCodeSession,
+  createOpenCodeSession,
+  createOpenCodeSessionClient,
+  decodeOpenCodeSessionMessage,
+  getOpenCodeSession,
+  promptOpenCodeSession,
+  projectOpenCodeSessionEvent,
+  replyOpenCodePermission,
+  subscribeOpenCodeEvents,
+  type OpenCodeSessionClient,
+  type OpenCodeEventClient,
+} from '../opencode-adapter/src/index.ts'
 import { createTomlRuntimeConfigPersistence, defaultLocalConfigPath } from './local-config.ts'
 import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
 import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
@@ -58,6 +84,283 @@ export interface AgentProcessConfig {
   readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs: number; readonly stopTimeoutMs: number }
   readonly directListener?: DirectListenerConfig
   readonly endpoint?: AgentEndpointConfig
+}
+
+/** Per-session active prompt admission; not a global manager or persistent scheduler. */
+interface SessionOperationRecord {
+  readonly operationId: string
+  readonly sessionId: string
+  readonly runtimeGeneration: number
+  readonly effectiveRevision: number
+  readonly requestMessageId: string
+  readonly promptMessageId?: string
+  readonly abortOperationId?: string
+  readonly acceptedAt: string
+}
+
+/** Owner-scoped ports the Session host consumes; never a second config or lifecycle owner. */
+export interface SessionHostOwnerPort {
+  readiness(): ManagedRuntimeReadiness
+  currentHandle(): ManagedEffectiveHandle | undefined
+  use<T>(operation: (handle: ManagedEffectiveHandle) => Promise<T>): Promise<T>
+}
+
+export interface SessionHostDeps {
+  readonly agentId: string
+  readonly generation: () => number
+  readonly owner: SessionHostOwnerPort
+  readonly createClient?: (handle: { readonly url: string; readonly authorization: string }) => OpenCodeSessionClient & OpenCodeEventClient
+  readonly bufferLimit?: number
+}
+
+/** The single per-Agent Session owner: one event stream, per-session buffer, and prompt admission. */
+export interface SessionHost {
+  readonly openSession: (sessionId: string) => Promise<ConsoleCommandResultV1>
+  readonly createSession: (title?: string) => Promise<ConsoleCommandResultV1>
+  readonly sendSession: (sessionId: string, payload: JsonValue) => Promise<ConsoleCommandResultV1>
+  readonly cancelSession: (sessionId: string) => Promise<ConsoleCommandResultV1>
+  readonly replyPermission: (sessionId: string, permissionId: string, decision: 'once' | 'always' | 'reject') => Promise<ConsoleCommandResultV1>
+  readonly sessionEvents: () => readonly ConsoleSessionEventView[]
+  readonly currentSessionId: () => string | undefined
+  readonly observation: () => SessionObservationState
+  readonly ensureStream: () => void
+  readonly dispose: () => Promise<void>
+}
+
+/**
+ * The single runtime management-row projection. `sessionCapable` is the U2
+ * binding fact; the owner supplies only readiness, never a second config truth.
+ */
+export function projectRuntimeAgentRow(input: {
+  readonly agentId: string
+  readonly machineId: string
+  readonly label: string
+  readonly presence: 'online' | 'offline' | 'unknown'
+  readonly capabilities: readonly string[]
+  readonly generation?: number
+  readonly sessionCapable: boolean
+  readonly readiness?: ManagedRuntimeReadiness
+  readonly observation?: SessionObservationState
+  readonly currentSessionId?: string
+}): ConsoleAgentObservationV1 {
+  const base = {
+    kind: 'runtime' as const,
+    agentId: input.agentId, machineId: input.machineId, label: input.label,
+    presence: input.presence, capabilities: [...input.capabilities],
+    ...(input.generation === undefined ? {} : { generation: input.generation }),
+  }
+  const readiness = input.readiness
+  if (!input.sessionCapable || readiness === undefined) {
+    return { ...base, sessionCapable: false, sessionAvailability: 'not-applicable' }
+  }
+  const effectiveRevision = readiness.state === 'current' || readiness.state === 'uncertain' ? readiness.effectiveRevision : undefined
+  const modelTarget = readiness.state === 'current' ? readiness.modelTarget : undefined
+  return {
+    ...base,
+    sessionCapable: true,
+    sessionAvailability: readiness.state,
+    ...(input.observation === undefined ? {} : { sessionObservation: input.observation }),
+    ...(effectiveRevision === undefined ? {} : { sessionEffectiveRevision: effectiveRevision }),
+    ...(input.currentSessionId === undefined ? {} : { currentSessionId: input.currentSessionId }),
+    ...(modelTarget === undefined ? {} : { providerId: modelTarget.providerID, modelId: modelTarget.modelID }),
+  }
+}
+
+const SESSION_EVENT_BUFFER_LIMIT = 200
+const ABORT_RECONCILE_TIMEOUT_MS = 5_000
+const EXPECTED_ADAPTER_CODES: readonly string[] = ['NOT_FOUND', 'INVALID_INPUT', 'FORBIDDEN', 'UNAUTHENTICATED', 'UNSUPPORTED_OPERATION']
+
+function sessionFailure(code: ConsoleServiceErrorCode, message: string, status?: number): ConsoleCommandResultV1 {
+  return { ok: false, error: { code, message, ...(status === undefined ? {} : { status }) } }
+}
+
+/** Expected adapter failures stay resultized so the owner keeps `current`; anything else keeps uncertainty. */
+function containExpectedAdapterError(error: unknown): ConsoleCommandResultV1 | undefined {
+  if (!(error instanceof OpenCodeAdapterError)) return undefined
+  if (!EXPECTED_ADAPTER_CODES.includes(error.code)) return undefined
+  return sessionFailure(error.code as ConsoleServiceErrorCode, error.message, error.status)
+}
+
+function sessionEventIdentity(event: ConsoleSessionEventView): string | undefined {
+  if (event.kind === 'part' || event.kind === 'tool') return `${event.kind}:${event.sessionId}:${event.partId}`
+  if (event.kind === 'permission') return `permission:${event.sessionId}:${event.permissionId}`
+  if (event.kind === 'message' || event.kind === 'final') return `${event.kind}:${event.sessionId}:${event.messageId}`
+  return undefined
+}
+
+/**
+ * Owns the single per-child OpenCode event stream, the bounded per-session projection buffer, the
+ * observation state, and the per-session prompt operation record. It is not a persistent store.
+ */
+export function createSessionHost(deps: SessionHostDeps): SessionHost {
+  const limit = deps.bufferLimit ?? SESSION_EVENT_BUFFER_LIMIT
+  const createClient = deps.createClient ?? createOpenCodeSessionClient
+  const buffers = new Map<string, ConsoleSessionEventView[]>()
+  const operations = new Map<string, SessionOperationRecord>()
+  const pendingCancels = new Map<string, { readonly abortOperationId: string; readonly promptMessageId: string; readonly resolve: (messageId: string | undefined) => void }>()
+  let observation: SessionObservationState = { state: 'live' }
+  let dropped = 0
+  let currentSession: { readonly sessionId: string; readonly title?: string } | undefined
+  let stream: { readonly fingerprint: string; readonly controller: AbortController; readonly done: Promise<void> } | undefined
+
+  const degrade = (detail: string): void => {
+    dropped += 1
+    observation = { state: 'degraded', reason: 'projection-loss', detail, droppedEvents: dropped }
+  }
+  const lose = (reason: 'stream-ended' | 'retry-exhausted', detail: string): void => {
+    observation = { state: 'lost', reason, detail }
+  }
+  const buffer = (event: ConsoleSessionEventView): void => {
+    const list = buffers.get(event.sessionId) ?? []
+    const identity = sessionEventIdentity(event)
+    const index = identity === undefined ? -1 : list.findIndex(existing => sessionEventIdentity(existing) === identity)
+    if (index >= 0) list[index] = event
+    else list.push(event)
+    while (list.length > limit) { list.shift(); degrade('Session projection buffer reached its bound') }
+    buffers.set(event.sessionId, list)
+  }
+  const correlate = (event: ConsoleSessionEventView, parentMessageId: string | undefined): void => {
+    const record = operations.get(event.sessionId)
+    if (record === undefined) return
+    if ((event.kind === 'message' || event.kind === 'final') && record.promptMessageId === undefined
+      && parentMessageId !== undefined && parentMessageId === record.requestMessageId) {
+      operations.set(event.sessionId, { ...record, promptMessageId: event.messageId })
+    }
+    if (event.kind === 'final' && event.state === 'failed' && event.error.name === 'MessageAbortedError') {
+      const pending = pendingCancels.get(event.sessionId)
+      if (pending !== undefined && pending.promptMessageId === event.messageId) {
+        pendingCancels.delete(event.sessionId)
+        pending.resolve(event.messageId)
+      }
+    }
+    const bound = operations.get(event.sessionId)
+    if (event.kind === 'final' && bound !== undefined && bound.promptMessageId === event.messageId) operations.delete(event.sessionId)
+  }
+  const consume = async (client: OpenCodeSessionClient & OpenCodeEventClient, controller: AbortController): Promise<void> => {
+    try {
+      for await (const raw of subscribeOpenCodeEvents(client, controller.signal)) {
+        const projected = projectOpenCodeSessionEvent(raw)
+        if (projected.kind !== 'event') { degrade(projected.reason); continue }
+        const event: ConsoleSessionEventView = { ...projected.event, agentId: deps.agentId }
+        buffer(event)
+        correlate(event, projected.parentMessageId)
+      }
+      if (!controller.signal.aborted) lose('stream-ended', 'OpenCode event stream ended')
+    } catch (error) {
+      if (!controller.signal.aborted) lose('retry-exhausted', error instanceof Error ? error.message : 'OpenCode event stream failed')
+    }
+  }
+  const ensureStream = (): void => {
+    const handle = deps.owner.currentHandle()
+    if (handle === undefined) return
+    const fingerprint = `${handle.url}\u0000${handle.effectiveRevision}`
+    if (stream !== undefined && stream.fingerprint === fingerprint) return
+    if (stream !== undefined) { const previous = stream; stream = undefined; previous.controller.abort() }
+    const controller = new AbortController()
+    const client = createClient({ url: handle.url, authorization: handle.authorization })
+    const done = consume(client, controller)
+    stream = { fingerprint, controller, done }
+  }
+  const useAdapter = async <T>(operation: (client: OpenCodeSessionClient & OpenCodeEventClient) => Promise<T>): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly result: ConsoleCommandResultV1 }> =>
+    await deps.owner.use(async handle => {
+      const client = createClient({ url: handle.url, authorization: handle.authorization })
+      try { return { ok: true as const, value: await operation(client) } }
+      catch (error) {
+        const contained = containExpectedAdapterError(error)
+        if (contained !== undefined) return { ok: false as const, result: contained }
+        throw error
+      }
+    })
+  const cancelUnknown = (record: SessionOperationRecord, abortOperationId: string | undefined, reason: SessionCancelUnknownDetail['reason'], baseAccepted: boolean | undefined): ConsoleCommandResultV1 => ({
+    ok: false,
+    error: { code: 'RESULT_UNKNOWN', message: 'Session cancel is not confirmed', detail: {
+      kind: 'session.cancel', sessionId: record.sessionId, operationId: record.operationId,
+      ...(record.promptMessageId === undefined ? {} : { promptMessageId: record.promptMessageId }),
+      runtimeGeneration: record.runtimeGeneration, effectiveRevision: record.effectiveRevision,
+      ...(baseAccepted === undefined ? {} : { baseAccepted }), reconciliation: 'unknown', finalState: 'unknown', reason,
+      ...(abortOperationId === undefined ? {} : { abortOperationId }),
+    } },
+  })
+  const awaitAbort = async (sessionId: string, record: SessionOperationRecord, abortOperationId: string): Promise<string | undefined> => {
+    if (record.promptMessageId === undefined) return undefined
+    return await new Promise<string | undefined>(resolve => {
+      const timer = setTimeout(() => { pendingCancels.delete(sessionId); resolve(undefined) }, ABORT_RECONCILE_TIMEOUT_MS)
+      pendingCancels.set(sessionId, { abortOperationId, promptMessageId: record.promptMessageId as string, resolve: messageId => { clearTimeout(timer); resolve(messageId) } })
+    })
+  }
+  return {
+    openSession: async sessionId => {
+      const outcome = await useAdapter(async client => await getOpenCodeSession(client, sessionId))
+      if (!outcome.ok) return outcome.result
+      const summary = outcome.value
+      currentSession = { sessionId: summary.id, ...(summary.title === undefined ? {} : { title: summary.title }) }
+      ensureStream()
+      return { ok: true }
+    },
+    createSession: async title => {
+      const outcome = await useAdapter(async client => await createOpenCodeSession(client, deps.agentId, title))
+      if (!outcome.ok) return outcome.result
+      const created = outcome.value
+      currentSession = { sessionId: created.sessionId, ...(created.title === undefined ? {} : { title: created.title }) }
+      ensureStream()
+      return { ok: true, result: created as unknown as JsonValue }
+    },
+    sendSession: async (sessionId, payload) => {
+      const readiness = deps.owner.readiness()
+      if (readiness.state !== 'current') return sessionFailure(readiness.state === 'changing' ? 'CONFLICT' : 'UNAVAILABLE', `Session runtime is ${readiness.state}`)
+      let decoded
+      try { decoded = decodeOpenCodeSessionMessage(payload) } catch (error) {
+        const contained = containExpectedAdapterError(error)
+        if (contained !== undefined) return contained
+        throw error
+      }
+      if (operations.has(sessionId)) return sessionFailure('CONFLICT', 'A prompt is already active for this session')
+      ensureStream()
+      const record: SessionOperationRecord = { operationId: randomUUID(), sessionId, runtimeGeneration: deps.generation(),
+        effectiveRevision: readiness.effectiveRevision, requestMessageId: randomUUID(), acceptedAt: new Date().toISOString() }
+      operations.set(sessionId, record)
+      const outcome = await useAdapter(async client => await promptOpenCodeSession(client, sessionId, decoded.text, readiness.modelTarget, record.requestMessageId))
+      const current = operations.get(sessionId)
+      if (current !== undefined && current.operationId === record.operationId && current.promptMessageId === undefined) operations.delete(sessionId)
+      return outcome.ok ? { ok: true } : outcome.result
+    },
+    cancelSession: async sessionId => {
+      const readiness = deps.owner.readiness()
+      if (readiness.state !== 'current') return sessionFailure(readiness.state === 'changing' ? 'CONFLICT' : 'UNAVAILABLE', `Session runtime is ${readiness.state}`)
+      const record = operations.get(sessionId)
+      if (record === undefined) return sessionFailure('CONFLICT', 'No active prompt to cancel for this session')
+      if (record.abortOperationId !== undefined) return sessionFailure('CONFLICT', 'A cancel is already in flight for this session')
+      if (record.promptMessageId === undefined) return cancelUnknown(record, undefined, 'ambiguous-owner', undefined)
+      const abortOperationId = randomUUID()
+      const snapshot: SessionOperationRecord = { ...record, abortOperationId }
+      operations.set(sessionId, snapshot)
+      ensureStream()
+      const outcome = await useAdapter(async client => await cancelOpenCodeSession(client, sessionId))
+      if (!outcome.ok) return outcome.result
+      if (outcome.value === false) return cancelUnknown(snapshot, abortOperationId, 'abort-rejected', false)
+      const messageId = await awaitAbort(sessionId, snapshot, abortOperationId)
+      if (messageId === undefined) return cancelUnknown(snapshot, abortOperationId, 'no-final', true)
+      return { ok: true, result: { kind: 'session.cancel', sessionId, operationId: snapshot.operationId,
+        promptMessageId: snapshot.promptMessageId as string, runtimeGeneration: snapshot.runtimeGeneration,
+        effectiveRevision: snapshot.effectiveRevision, baseAccepted: true, reconciliation: 'confirmed', finalState: 'cancelled',
+        messageId, errorName: 'MessageAbortedError', abortOperationId, causalEvidence: 'unique-owned-message' } }
+    },
+    replyPermission: async (sessionId, permissionId, decision) => {
+      const outcome = await useAdapter(async client => await replyOpenCodePermission(client, permissionId, sessionId, decision))
+      return outcome.ok ? { ok: true } : outcome.result
+    },
+    sessionEvents: () => [...buffers.values()].flat(),
+    currentSessionId: () => currentSession?.sessionId,
+    observation: () => observation,
+    ensureStream,
+    dispose: async () => {
+      if (stream !== undefined) { const previous = stream; stream = undefined; previous.controller.abort(); await previous.done }
+      for (const pending of pendingCancels.values()) pending.resolve(undefined)
+      pendingCancels.clear()
+      operations.clear()
+      buffers.clear()
+    },
+  }
 }
 
 interface RuntimeOwnerRecord {
@@ -388,7 +691,8 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   let daemon: AgentDaemon | undefined
   let directListener: DirectWssListener | undefined
   let consumerWork: AgentWorkClient | undefined
-  let configBinding: { binding: ReturnType<typeof createConsoleConfigBinding>; owner: ReturnType<typeof createManagedConfigOwner> } | undefined
+  let configBinding: { binding: ReturnType<typeof createConsoleConfigBinding>; owner: ReturnType<typeof createManagedConfigOwner>; store: RuntimeConfigStore } | undefined
+  let sessionHost: SessionHost | undefined
   let readyResolve!: () => void
   let readyReject!: (error: unknown) => void
   const ready = new Promise<void>((resolve, reject) => { readyResolve = resolve; readyReject = reject })
@@ -414,7 +718,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         persistence: createManagedConfigOwnerPersistence({ agentId, internalPath, persistence }) })
       const binding = createConsoleConfigBinding({ agentId, store,
         models: createOpenAIModelCatalogClient(), credentials: { resolve: async reference => ({ kind: 'bearer', value: await resolveCredentialValue(reference) }) }, applier: owner })
-      const created = { binding, owner }
+      const created = { binding, owner, store }
       configBinding = created
       // Reconcile the exact current target before Session/command ingress opens.
       await owner.recover(async () => {
@@ -423,24 +727,79 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         const provider = modelBinding === undefined ? undefined : current.providers[modelBinding.primary.providerInstanceId]
         return provider === undefined ? undefined : { target: targetIdentityFor(current, provider), config: current }
       })
+      // One Session owner per managed child: the same owner port, no second config or child.
+      sessionHost = createSessionHost({
+        agentId,
+        generation: () => daemon?.network.generation ?? 0,
+        owner: {
+          readiness: () => owner.readiness(),
+          currentHandle: () => owner.currentHandle(),
+          use: operation => owner.use(operation),
+        },
+      })
+      sessionHost.ensureStream()
       return created
     })()
     const allowed = (consumer: { agentId: string }) => config.allowedConsumers.includes(consumer.agentId)
     const policy = { revision: config.policyRevision, authorizeWork: allowed, authorizeRequest: allowed }
+    // One runtime management row per Agent. A passive Agent never calls an owner.
+    const runtimeRow = async (): Promise<ConsoleAgentObservationV1> => {
+      const generation = daemon?.network.generation
+      const base = {
+        agentId: config.declaration.identity.agentId,
+        machineId: config.declaration.identity.machineId,
+        label: config.declaration.identity.label,
+        presence: daemon?.status().state === 'online' ? 'online' as const : 'offline' as const,
+        capabilities: advertisedCapabilities.map(item => item.capabilityId),
+        ...(generation === undefined ? {} : { generation }),
+      }
+      if (configBinding === undefined || sessionHost === undefined) {
+        return projectRuntimeAgentRow({ ...base, sessionCapable: false })
+      }
+      const current = await configBinding.store.read()
+      if (current.agents[config.declaration.identity.agentId] === undefined) {
+        return projectRuntimeAgentRow({ ...base, sessionCapable: false })
+      }
+      return projectRuntimeAgentRow({
+        ...base,
+        sessionCapable: true,
+        readiness: configBinding.owner.readiness(),
+        observation: sessionHost.observation(),
+        currentSessionId: sessionHost.currentSessionId(),
+      })
+    }
     const consoleClient: ConsoleClientV1 = {
-      readProjection: async () => ({
-        version: 1,
-        agents: [{ agentId: config.declaration.identity.agentId,
-          machineId: config.declaration.identity.machineId, label: config.declaration.identity.label,
-          presence: daemon?.status().state === 'online' ? 'online' : 'offline', capabilities: advertisedCapabilities.map(item => item.capabilityId) }],
-        sessions: [], notifications: [],
-        configs: configBinding === undefined ? [] : [await configBinding.binding.readProjection()],
-        ...projectConsoleWorkObservations(config.declaration.identity.agentId, ledger?.snapshot.works ?? []),
-      }),
-      command: async command => command.kind.startsWith('config.') && configBinding !== undefined
-        ? configBinding.binding.command(command as Extract<typeof command, { kind: `config.${string}` }>)
-        : ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: configBinding === undefined ? 'Agent has no Session or model configuration owner' : 'Agent has no Session execution capability' } }),
-      sendSession: async () => ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } }),
+      readProjection: async () => {
+        const sessionEvents = sessionHost?.sessionEvents() ?? []
+        return {
+          version: 1,
+          agents: [await runtimeRow()],
+          sessions: [], notifications: [],
+          configs: configBinding === undefined ? [] : [await configBinding.binding.readProjection()],
+          ...(sessionEvents.length === 0 ? {} : { sessionEvents }),
+          ...projectConsoleWorkObservations(config.declaration.identity.agentId, ledger?.snapshot.works ?? []),
+        }
+      },
+      command: async command => {
+        if (command.kind.startsWith('config.')) {
+          if (configBinding === undefined) return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Agent has no model configuration owner' } }
+          const result = await configBinding.binding.command(command as Extract<ConsoleCommandV1, { kind: `config.${string}` }>)
+          // An applied revision replaces the child; re-point the single event stream at it.
+          sessionHost?.ensureStream()
+          return result
+        }
+        if (sessionHost === undefined) return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } }
+        switch (command.kind) {
+          case 'session.create': return await sessionHost.createSession(command.title)
+          case 'session.open': return await sessionHost.openSession(command.sessionId)
+          case 'session.cancel': return await sessionHost.cancelSession(command.sessionId)
+          case 'permission.reply': return await sessionHost.replyPermission(command.sessionId, command.permissionId, command.decision)
+          default: return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Command is not supported by this Agent' } }
+        }
+      },
+      sendSession: async (target, payload) => sessionHost === undefined
+        ? ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } })
+        : await sessionHost.sendSession(target.sessionId, payload),
     }
     daemon = await startAgentDaemon({ presenceIntervalMs: config.presenceIntervalMs, relay: { ...config.relay,
       declaration: config.declaration,
@@ -545,6 +904,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
           await consumerWork?.dispose()
           await directListener?.close()
           await live.stop()
+          await sessionHost?.dispose()
           await configBinding?.owner.stop()
           const results = await Promise.allSettled(ledger.snapshot.works.filter(work => work.state !== 'closed' && work.state !== 'rejected').map(work =>
             host.close({ accountId: ledger.provider.accountId, scopeId: ledger.provider.scopeId, agentId: work.consumerAgentId }, work.workId)))
@@ -578,7 +938,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     return { daemon: live, consumerWork: consumerWork!, executeWork, statusProjection, stop, closed }
   } catch (error) {
     readyReject(error)
-    try { await directListener?.close(); await daemon?.stop(); await configBinding?.owner.stop() } finally { await closeLease(lease) }
+    try { await directListener?.close(); await daemon?.stop(); await sessionHost?.dispose(); await configBinding?.owner.stop() } finally { await closeLease(lease) }
     throw error
   }
 }

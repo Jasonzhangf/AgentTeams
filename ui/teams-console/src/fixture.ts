@@ -3,10 +3,10 @@ import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleProjectionV1, Json
 export const fixtureProjection: ConsoleProjectionV1 = {
   version: 1,
   agents: [
-    { agentId: 'planner', label: 'Planner', machineId: 'Mac Studio', presence: 'online', capabilities: ['session', 'config'], currentSessionId: 'planner-current', providerId: 'rcc', modelId: 'deepseek-v4' },
-    { agentId: 'reviewer', label: 'Reviewer', machineId: 'Mac Studio', presence: 'unknown', capabilities: ['session'], currentSessionId: 'reviewer-current', providerId: 'openai', modelId: 'gpt-5.6-sol' },
-    { agentId: 'offline-agent', label: 'Offline Agent', machineId: 'Build Mac', presence: 'offline', capabilities: ['session'] },
-    { agentId: 'browser-agent', label: 'AgentBrowser', machineId: 'MacBook Pro', presence: 'online', capabilities: ['browser'] },
+    { kind: 'runtime', agentId: 'planner', label: 'Planner', machineId: 'Mac Studio', presence: 'online', capabilities: ['session', 'config'], sessionCapable: true, sessionAvailability: 'current', sessionEffectiveRevision: 6, currentSessionId: 'planner-current', providerId: 'rcc', modelId: 'deepseek-v4' },
+    { kind: 'runtime', agentId: 'reviewer', label: 'Reviewer', machineId: 'Mac Studio', presence: 'unknown', capabilities: ['session'], sessionCapable: true, sessionAvailability: 'uncertain', sessionEffectiveRevision: 2, currentSessionId: 'reviewer-current', providerId: 'openai', modelId: 'gpt-5.6-sol', sessionObservation: { state: 'degraded', reason: 'projection-loss', detail: 'one part event lacked identity', droppedEvents: 1 } },
+    { kind: 'directory', agentId: 'offline-agent', label: 'Offline Agent', machineId: 'Build Mac', presence: 'offline', capabilities: ['session'] },
+    { kind: 'runtime', agentId: 'browser-agent', label: 'AgentBrowser', machineId: 'MacBook Pro', presence: 'online', capabilities: ['browser'], sessionCapable: false, sessionAvailability: 'not-applicable' },
   ],
   sessions: [
     { agentId: 'planner', sessionId: 'planner-current', title: 'Plan Teams runtime' },
@@ -18,10 +18,10 @@ export const fixtureProjection: ConsoleProjectionV1 = {
     { agentId: 'reviewer', notificationId: 'notice-1', sessionId: 'reviewer-current', kind: 'notice', state: 'resolved', title: 'Adapter review complete', priority: 'normal', occurredAt: '2026-09-07T01:50:00Z' },
   ],
   sessionEvents: [
-    { eventId: 'event-message-1', agentId: 'planner', sessionId: 'planner-current', kind: 'message', title: 'User message', occurredAt: '2026-09-07T02:00:00Z', state: 'succeeded', detail: 'Complete the Console projection.' },
-    { eventId: 'event-tool-1', agentId: 'planner', sessionId: 'planner-current', kind: 'tool', title: 'Read architecture maps', occurredAt: '2026-09-07T02:00:03Z', state: 'succeeded', detail: 'resource-map.json' },
-    { eventId: 'event-approval-1', agentId: 'planner', sessionId: 'planner-current', kind: 'approval', title: 'Apply runtime boundary', occurredAt: '2026-09-07T02:00:05Z', state: 'pending', detail: 'Agent requests permission to continue.', permissionId: 'permission-1' },
-    { eventId: 'event-notification-1', agentId: 'planner', sessionId: 'planner-current', kind: 'notification', title: 'Approval required', occurredAt: '2026-09-07T02:00:05Z', state: 'pending', permissionId: 'permission-1' },
+    { eventId: 'event-message-1', agentId: 'planner', sessionId: 'planner-current', kind: 'message', occurredAt: '2026-09-07T02:00:00Z', state: 'completed', messageId: 'message-user-1', role: 'user' },
+    { eventId: 'event-tool-1', agentId: 'planner', sessionId: 'planner-current', kind: 'tool', occurredAt: '2026-09-07T02:00:03Z', state: 'completed', messageId: 'message-assistant-1', partId: 'part-tool-1', callId: 'call-1', tool: 'read', input: { path: 'resource-map.json' }, output: 'read resource-map.json', title: 'Read architecture maps', metadata: {} },
+    { eventId: 'event-approval-1', agentId: 'planner', sessionId: 'planner-current', kind: 'permission', occurredAt: '2026-09-07T02:00:05Z', state: 'pending', permissionId: 'permission-1', messageId: 'message-assistant-1', title: 'Apply runtime boundary', metadata: {} },
+    { eventId: 'event-final-1', agentId: 'planner', sessionId: 'planner-current', kind: 'final', occurredAt: '2026-09-07T02:00:06Z', state: 'completed', messageId: 'message-assistant-1' },
   ],
   configs: [
     {
@@ -67,7 +67,9 @@ export function createFixtureClient(): ConsoleClientV1 & { readonly sentPayloads
         projection = {
           ...projection,
           notifications: projection.notifications.map(notification => notification.permissionId === command.permissionId ? { ...notification, state: 'resolved' } : notification),
-          sessionEvents: projection.sessionEvents?.map(event => event.permissionId === command.permissionId ? { ...event, state: 'resolved' } : event),
+          sessionEvents: projection.sessionEvents?.map(event => event.kind === 'permission' && event.permissionId === command.permissionId
+            ? { ...event, state: 'resolved' as const, decision: 'once' as const }
+            : event),
         }
         return success()
       }
@@ -104,7 +106,9 @@ export function createFixtureClient(): ConsoleClientV1 & { readonly sentPayloads
         if (provider === undefined || !provider.models.some(model => model.id === command.modelId)) return failure('INVALID_INPUT', `Model ${command.modelId} is not in the provider catalog`)
         projection = {
           ...projection,
-          agents: projection.agents.map(agent => agent.agentId === command.agentId ? { ...agent, providerId: command.providerId, modelId: command.modelId } : agent),
+          agents: projection.agents.map(agent => agent.kind === 'runtime' && agent.sessionCapable === true && agent.agentId === command.agentId
+            ? { ...agent, providerId: command.providerId, modelId: command.modelId }
+            : agent),
           configs: projection.configs.map(candidate => candidate.agentId === command.agentId ? { ...candidate, acceptedRevision: candidate.acceptedRevision + 1 } : candidate),
         }
         return success()
@@ -148,9 +152,9 @@ export function createFixtureClient(): ConsoleClientV1 & { readonly sentPayloads
           agentId: target.agentId,
           sessionId: target.sessionId,
           kind: 'message',
-          title: 'Message accepted',
-          state: 'succeeded',
-          detail: JSON.stringify(payload),
+          state: 'pending',
+          messageId: `fixture-message-${sentPayloads.length}`,
+          role: 'user',
         }],
       }
       return success({ accepted: true })

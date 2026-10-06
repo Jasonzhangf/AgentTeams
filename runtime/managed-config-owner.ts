@@ -13,6 +13,30 @@ import { compileOpenCodeConfig } from '../opencode-adapter/src/index.ts'
 import { startManagedOpenCode, type ManagedOpenCodeOptions } from './managed-opencode.ts'
 
 type Handle = Awaited<ReturnType<typeof startManagedOpenCode>>
+
+/** Owner-scoped effective handle exposing the compiled primary model target. */
+export interface ManagedEffectiveHandle {
+  readonly url: string
+  readonly authorization: string
+  readonly effectiveRevision: number
+  readonly modelTarget: {
+    readonly providerID: string
+    readonly modelID: string
+  }
+}
+
+/** Owner-scoped readiness; never a Work capability and never a second config truth. */
+export type ManagedRuntimeReadiness =
+  | { readonly state: 'changing' }
+  | { readonly state: 'stopped' }
+  | { readonly state: 'no-current' }
+  | { readonly state: 'uncertain'; readonly effectiveRevision?: number }
+  | {
+      readonly state: 'current'
+      readonly effectiveRevision: number
+      readonly modelTarget: { readonly providerID: string; readonly modelID: string }
+      readonly activeOperations: number
+    }
 type Options = Omit<ManagedOpenCodeOptions, 'compiled'> & {
   readonly agentId: string
   readonly persistence: ManagedConfigOwnerPersistence
@@ -100,6 +124,10 @@ function handleFingerprint(handle: Pick<Handle, 'url' | 'effectiveRevision'>, pi
   return `${handle.url}\u0000${handle.effectiveRevision}\u0000${pid ?? ''}`
 }
 
+function effectiveModelTarget(handle: Handle): ManagedEffectiveHandle['modelTarget'] {
+  return { providerID: handle.compiled.primary.provider, modelID: handle.compiled.primary.model }
+}
+
 function uncertaintyError(error: unknown): { readonly code: 'RESULT_UNKNOWN'; readonly message: string } {
   return { code: 'RESULT_UNKNOWN', message: error instanceof Error ? error.message : 'managed runtime outcome is unknown' }
 }
@@ -160,7 +188,9 @@ export function createManagedConfigOwner(options: Options, launch = startManaged
   const owner: RuntimeConfigApplier & {
     recover(readRequest?: () => Promise<RuntimeConfigApplyRequest | undefined>): Promise<'clean' | 'uncertain'>
     reconcile(request: RuntimeConfigApplyRequest): Promise<'clean' | 'uncertain'>
-    use<T>(operation: (handle: Pick<Handle, 'url' | 'authorization' | 'effectiveRevision'>) => Promise<T>): Promise<T>
+    use<T>(operation: (handle: ManagedEffectiveHandle) => Promise<T>): Promise<T>
+    readiness(): ManagedRuntimeReadiness
+    currentHandle(): ManagedEffectiveHandle | undefined
     stop(): Promise<void>
     uncertainty(): boolean
   } = {
@@ -235,13 +265,13 @@ export function createManagedConfigOwner(options: Options, launch = startManaged
         throw error instanceof RuntimeConfigError ? error : new RuntimeConfigError({ code: 'RESULT_UNKNOWN', message: error instanceof Error ? error.message : 'managed runtime reconcile is unknown' })
       } finally { changing = false }
     },
-    async use<T>(operation: (handle: Pick<Handle, 'url' | 'authorization' | 'effectiveRevision'>) => Promise<T>): Promise<T> {
+    async use<T>(operation: (handle: ManagedEffectiveHandle) => Promise<T>): Promise<T> {
       if (changing || stopped || !current || uncertain) throw new RuntimeConfigError({ code: 'UNAVAILABLE', message: 'Managed runtime is not available' })
       const handle = current
       const target = lastTarget
       active++
       try {
-        return await operation({ url: handle.url, authorization: handle.authorization, effectiveRevision: handle.effectiveRevision })
+        return await operation({ url: handle.url, authorization: handle.authorization, effectiveRevision: handle.effectiveRevision, modelTarget: effectiveModelTarget(handle) })
       } catch (error) {
         // A failed exchange is not proof that the substrate's operation ended.
         if (target !== undefined) {
@@ -252,6 +282,17 @@ export function createManagedConfigOwner(options: Options, launch = startManaged
         }
         throw error
       } finally { active-- }
+    },
+    readiness(): ManagedRuntimeReadiness {
+      if (changing) return { state: 'changing' }
+      if (stopped) return { state: 'stopped' }
+      if (uncertain) return { state: 'uncertain', ...(current === undefined ? {} : { effectiveRevision: current.effectiveRevision }) }
+      if (!current) return { state: 'no-current' }
+      return { state: 'current', effectiveRevision: current.effectiveRevision, modelTarget: effectiveModelTarget(current), activeOperations: active }
+    },
+    currentHandle(): ManagedEffectiveHandle | undefined {
+      if (!current) return undefined
+      return { url: current.url, authorization: current.authorization, effectiveRevision: current.effectiveRevision, modelTarget: effectiveModelTarget(current) }
     },
     async stop(): Promise<void> {
       if (changing || active || uncertain) throw conflict()

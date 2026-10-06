@@ -15,7 +15,9 @@ type MessageKey =
   | 'provider' | 'model' | 'unknownModel' | 'credentialHint' | 'messageRequired' | 'noAgentConfig'
   | 'noResults' | 'sessionUntitled' | 'online' | 'offline' | 'unknown' | 'capabilities'
   | 'expand' | 'collapse' | 'activity' | 'activityUnavailable' | 'activityEmpty'
-  | 'invalidNotificationTarget'
+  | 'invalidNotificationTarget' | 'createSession' | 'cancelSession' | 'directoryRow'
+  | 'availabilityChanging' | 'availabilityStopped' | 'availabilityNoCurrent' | 'availabilityUncertain'
+  | 'availabilityNotApplicable' | 'availabilityCurrent' | 'observationDegraded' | 'observationLost'
 
 const en: Record<MessageKey, string> = {
   brand: 'Teams Console', topology: 'Agents', conversations: 'Sessions', notifications: 'Notifications', search: 'Search', memory: 'Memory', settings: 'Provider configuration',
@@ -30,6 +32,9 @@ const en: Record<MessageKey, string> = {
   noResults: 'No matching results.', sessionUntitled: 'Untitled session', online: 'Online', offline: 'Offline', unknown: 'Unknown', capabilities: 'Capabilities',
   expand: 'Expand', collapse: 'Collapse', activity: 'Session activity', activityUnavailable: 'Session activity is not projected by this host.', activityEmpty: 'No activity has been projected for this session.',
   invalidNotificationTarget: 'This interactive notification has no existing Session target.',
+  createSession: 'Create session', cancelSession: 'Cancel session', directoryRow: 'Directory only',
+  availabilityChanging: 'Session runtime changing', availabilityStopped: 'Session runtime stopped', availabilityNoCurrent: 'Session runtime not applied', availabilityUncertain: 'Session runtime uncertain',
+  availabilityNotApplicable: 'No Session owner', availabilityCurrent: 'Session ready', observationDegraded: 'Session observation degraded', observationLost: 'Session observation lost',
 }
 
 const zh: Record<MessageKey, string> = {
@@ -45,6 +50,9 @@ const zh: Record<MessageKey, string> = {
   noResults: '没有匹配结果。', sessionUntitled: '未命名会话', online: '在线', offline: '离线', unknown: '未知', capabilities: '能力',
   expand: '展开', collapse: '收起', activity: '会话动态', activityUnavailable: '当前主机未提供会话动态。', activityEmpty: '该会话暂无动态。',
   invalidNotificationTarget: '该交互通知没有可用的会话目标。',
+  createSession: '新建会话', cancelSession: '取消会话', directoryRow: '仅目录',
+  availabilityChanging: '会话运行环境切换中', availabilityStopped: '会话运行环境已停止', availabilityNoCurrent: '会话运行环境未生效', availabilityUncertain: '会话运行环境不确定',
+  availabilityNotApplicable: '无会话所有者', availabilityCurrent: '会话就绪', observationDegraded: '会话观察降级', observationLost: '会话观察丢失',
 }
 
 export function messages(locale: Locale): Record<MessageKey, string> {

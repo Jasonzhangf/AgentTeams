@@ -23,6 +23,27 @@ it('loads an optional managed OpenCode owner without putting credentials in the 
   } finally { await rm(directory, { recursive: true }) }
 })
 
+it('treats openCode as launch parameters only, never a Session capability or model binding', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-agent-config-capability-'))
+  const configPath = join(directory, 'agent.json')
+  const base = {
+    version: 1,
+    identity: { hostId: 'host', machineId: 'machine', agentId: 'agent', accountId: 'account', agentKind: 'custom', label: 'Agent' },
+    scopeId: 'scope', dataDirectory: './data', leasePort: 48001, presenceIntervalMs: 1000,
+    policy: { revision: 1, allowedConsumers: [], allowedManagers: ['manager'] },
+    cli: { camoExecutable: '/bin/camo', searchExecutable: '/usr/bin/rg', searchRoot: './files', profilePrefix: 'teams' },
+    relay: { endpoint: 'wss://relay.example.test', credentialEnv: 'TEAMS_RELAY', connectTimeoutMs: 1000, admissionTimeoutMs: 1000,
+      requestTimeoutMs: 1000, maxMessageBytes: 1000, maxBufferedBytes: 1000, maxPendingFrames: 4, maxPendingRequests: 4, maxDataConnections: 2 },
+  }
+  const launch = { executable: '/opt/opencode', directory: './opencode', configFile: './config.json', port: 48002, startupTimeoutMs: 5000, stopTimeoutMs: 2000 }
+  try {
+    for (const smuggled of [{ sessionCapable: true }, { model: { providerInstanceId: 'p', modelId: 'm' } }]) {
+      await writeFile(configPath, JSON.stringify({ ...base, openCode: { ...launch, ...smuggled } }))
+      await expect(loadAgentProcessConfig(configPath, { TEAMS_RELAY: 'relay-secret' })).rejects.toThrow(/openCode has unsupported field/)
+    }
+  } finally { await rm(directory, { recursive: true }) }
+})
+
 it('loads an explicit Agent-owned direct listener without mixing relay configuration', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-agent-direct-config-'))
   const configPath = join(directory, 'agent.json')

@@ -1,5 +1,6 @@
 import type { ConsoleCommandResultV1, ConsoleServiceError, JsonValue } from '../../../../control-protocol/console-api.ts'
 export type {
+  ConsoleAgentObservationV1,
   ConsoleClientV1,
   ConsoleCommandResultV1,
   ConsoleCommandV1,
@@ -7,6 +8,16 @@ export type {
   ConsoleProviderView,
   ConsoleSessionEventView,
   JsonValue,
+  SessionCancelUnknownDetail,
+  SessionCreateResult,
+  SessionObservationState,
+} from '../../../../control-protocol/console-api.ts'
+
+export {
+  parseConsoleAgentObservation,
+  parseConsoleSessionEvent,
+  parseSessionCancelUnknownDetail,
+  parseSessionCreateResult,
 } from '../../../../control-protocol/console-api.ts'
 
 export type ServiceError = ConsoleServiceError

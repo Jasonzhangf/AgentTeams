@@ -10,11 +10,30 @@ export interface AgentRow {
   readonly generation?: number
   readonly presence: UiStatus
   readonly capabilities: readonly string[]
+  readonly kind: 'runtime' | 'directory'
+  readonly sessionCapable?: boolean
+  readonly sessionAvailability?: 'changing' | 'stopped' | 'no-current' | 'uncertain' | 'current' | 'not-applicable'
+  readonly sessionObservation?: import('./protocol.ts').SessionObservationState
+  readonly sessionEffectiveRevision?: number
   readonly currentSessionId?: string
   readonly providerId?: string
   readonly modelId?: string
   readonly sessionCount: number
   readonly notificationCount: number
+}
+
+/** Structural subset shared by the owner observation union and the UI AgentRow. */
+export interface SessionOperableAgent {
+  readonly kind: 'runtime' | 'directory'
+  readonly sessionCapable?: boolean
+  readonly sessionAvailability?: string
+  readonly presence: UiStatus
+}
+
+/** UI enablement: owner runtime row, real managed Session capability, current readiness, online presence. */
+export function canOperateSession(agent: SessionOperableAgent): boolean {
+  return agent.kind === 'runtime' && agent.sessionCapable === true
+    && agent.sessionAvailability === 'current' && agent.presence === 'online'
 }
 
 export interface SessionRow {
@@ -36,9 +55,7 @@ export interface NotificationRow {
   readonly detail?: string
 }
 
-export interface SessionFlowRow extends ConsoleSessionEventView {
-  readonly notificationId?: string
-}
+export type SessionFlowRow = ConsoleSessionEventView & { readonly notificationId?: string }
 
 export interface AgentConfigView {
   readonly agentId: string
@@ -82,7 +99,7 @@ export function projectSessionFlow(projection: ConsoleProjectionV1, agentId: str
     .filter(event => event.agentId === agentId && event.sessionId === sessionId)
     .map(event => ({
       ...event,
-      ...(event.permissionId === undefined ? {} : { notificationId: notificationByPermission.get(event.permissionId) }),
+      ...(event.kind !== 'permission' ? {} : { notificationId: notificationByPermission.get(event.permissionId) }),
     }))
 }
 
