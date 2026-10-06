@@ -549,7 +549,11 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     expect(fake.pid).toBeGreaterThan(0)
     await writeLocalLauncherOwnership(internalPath, { version: 1, pid: fake.pid!, startToken: token! })
     await writeLocalInternalLauncherState(internalPath, { pid: fake.pid!, generation: first.generation, startToken: token!, state: 'running' })
-    await expect(statusLocalProcess(path)).resolves.toMatchObject({ state: 'failed', generation: first.generation })
+    const reused = await statusLocalProcess(path)
+    expect(reused).toMatchObject({ state: 'failed', generation: first.generation })
+    // The embedded Console view is classified from the final launcher state, so it can
+    // never contradict the top-level ownership verdict.
+    expect(reused.console.launcherState).toBe('failed')
   } finally {
     if (fake !== undefined && fake.exitCode === null && fake.signalCode === null) {
       const fakeProcess = fake
@@ -867,16 +871,37 @@ it('never records a stopped Console when recovery cannot confirm its exit', asyn
   }
 }, 20000)
 
-it('reports an unreadable Console observation as CONSOLE_STATUS_UNAVAILABLE in launcher status', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'at-status-console-unavailable-'))
+it('keeps a general launcher state read failure out of the Console terminal', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-status-console-general-'))
   const path = join(root, 'config.toml')
   try {
     await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
     const config = await loadLocalConfig(path)
-    // An unreadable observation is the typed terminal, never a fabricated lifecycle state
-    // or credential.
     await writeFile(config.internalPath!, 'not = = toml')
-    await expect(statusLocalProcess(path)).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+    // The typed Console terminal belongs to the Console status command. A general launcher
+    // state read failure must stay a launcher error instead of masquerading as it.
+    await expect(statusLocalProcess(path)).rejects.not.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('surfaces a retained Console child while [console] is disabled', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-retained-disabled-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG.replace('[console]\nenabled = true', '[console]\nenabled = false'))
+    const config = await loadLocalConfig(path)
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 1, startToken: 'dead-launcher-token', state: 'running' })
+    // The user disabled Console while its child was still live, so a recorded child still
+    // holds the port. `disabled` would claim there is no child responsibility left.
+    await writeLocalInternalConsoleRuntime(config.internalPath!, {
+      state: 'retained',
+      pid: process.pid,
+      generation: 1,
+      error: { code: 'CONSOLE_RETAINED', message: 'Console child exit is unconfirmed' },
+    })
+    await expect(consoleStatusLocalProcess(path)).resolves.toMatchObject({ enabled: false, state: 'retained' })
   } finally {
     await rm(root, { recursive: true, force: true })
   }

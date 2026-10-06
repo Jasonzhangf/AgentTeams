@@ -406,55 +406,50 @@ export async function startLocalProcess(configPath = defaultLocalConfigPath(), o
 }
 
 export async function statusLocalProcess(configPath = defaultLocalConfigPath()): Promise<LocalLauncherStatus> {
-  // The whole launcher observation is one typed status observation: an unreadable config or
-  // internal state must surface as CONSOLE_STATUS_UNAVAILABLE, never as a fabricated
-  // lifecycle state, credential or raw config error.
-  const config = await consoleStatusObservation(async () => await loadLocalConfig(configPath))
+  // A launcher config or internal read failure is a general launcher error, not a Console
+  // observation failure: CONSOLE_STATUS_UNAVAILABLE belongs to the Console status command.
+  const config = await loadLocalConfig(configPath)
   if (config.internalPath === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no runtime internal state')
-  const statusInternalPath = config.internalPath
-  const internal = await consoleStatusObservation(async () => await readLocalInternalConfig(statusInternalPath))
+  const internal = await readLocalInternalConfig(config.internalPath)
   const launcher = internal.launcher
-  // The launcher status shares the typed observation failure with `console status`: an
-  // unreadable Console projection must never be reported as a concrete state or credential.
-  const consoleStatus = async (state: LocalLauncherStatus['state'], generation: number): Promise<LocalConsolePublicStatus> =>
-    await consoleStatusObservation(async () => await classifyLocalConsoleStatus(config, internal, process.env, { state, generation }))
-  const launcherState: LocalLauncherStatus['state'] = launcher === undefined
-    ? 'stopped'
-    : launcher.state === 'running' && launcher.pid !== undefined && !processAlive(launcher.pid)
-      ? 'failed'
-      : launcher.state
-  const console = await consoleStatus(launcherState, launcher?.generation ?? 0)
-  const withConsole = (status: LocalLauncherStatus): LocalLauncherStatus => ({ ...status, console })
+  // The Console classification is derived from the final launcher status, so the embedded
+  // launcherState can never contradict the top-level state. An unreadable Console
+  // projection is the typed observation failure, never a fabricated state or credential.
+  const withConsole = async (status: LocalLauncherStatus): Promise<LocalLauncherStatus> => ({
+    ...status,
+    console: await consoleStatusObservation(async () =>
+      await classifyLocalConsoleStatus(config, internal, process.env, { state: status.state, generation: status.generation })),
+  })
   if (launcher === undefined) {
-    return withConsole({ configPath: config.configPath, internalPath: config.internalPath, generation: 0, state: 'stopped' })
+    return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, generation: 0, state: 'stopped' })
   }
   if (launcher.state === 'running' && launcher.pid !== undefined && !processAlive(launcher.pid)) {
-    return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor pid is not alive' })
+    return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor pid is not alive' })
   }
   if (launcher.state === 'running' && launcher.pid !== undefined && !(await processOwnsStartToken(launcher.pid, launcher.startToken, config.configPath))) {
-    return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor start token does not match persisted ownership' })
+    return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: 'local supervisor start token does not match persisted ownership' })
   }
   if (launcher.state === 'running') {
     const expectedChildren = ['relay', ...config.daemons.filter(daemon => daemon.enabled).map(daemon => daemon.id)]
     for (const id of expectedChildren) {
       const child = internal.daemons?.[id]
       if (child === undefined || child.state !== 'online' || child.pid === undefined || child.pid <= 0 || !processAlive(child.pid)) {
-        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} is not alive` })
+        return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} is not alive` })
       }
       if (child.generation !== launcher.generation) {
-        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} generation does not match launcher generation` })
+        return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} generation does not match launcher generation` })
       }
       const entryPath = child.entryPath
       const childConfigPath = id === 'relay' ? internal.relay?.projectionPath : child.projectionPath
       if (entryPath === undefined || childConfigPath === undefined || child.startToken === undefined) {
-        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} ownership record is incomplete` })
+        return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} ownership record is incomplete` })
       }
       if (child.startToken !== launcher.startToken) {
-        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} start token does not match launcher ownership` })
+        return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} start token does not match launcher ownership` })
       }
       const command = await processCommand(child.pid)
       if (command === undefined || !processOwnsConfigCommand(command, childConfigPath, entryPath, child.startToken)) {
-        return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} does not match persisted ownership` })
+        return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: 'failed', error: `local child ${id} does not match persisted ownership` })
       }
     }
   }
@@ -463,7 +458,7 @@ export async function statusLocalProcess(configPath = defaultLocalConfigPath()):
   // Every exit carries the classified Console fields: the frozen status keys must
   // not disappear exactly when Console observability is required.
   if (launcher.state === 'starting' || launcher.state === 'failed') {
-    return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
+    return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
       ...(launcher.error === undefined ? {} : { error: launcher.error }) })
   }
   const projection = await readLocalDaemonStatusProjection(config.internalPath).catch(error => {
@@ -493,7 +488,7 @@ export async function statusLocalProcess(configPath = defaultLocalConfigPath()):
   if (launcher.state === 'running' && endpoints?.some(endpoint => endpoint.state !== 'online' || endpoint.presence !== 'online')) {
     throw new LocalProcessError('INVALID_STATUS', 'runtime daemon status projection is not online')
   }
-  return withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
+  return await withConsole({ configPath: config.configPath, internalPath: config.internalPath, pid: launcher.pid, generation: launcher.generation, state: launcher.state,
     ...(launcher.error === undefined ? {} : { error: launcher.error }),
     ...(endpoints === undefined ? {} : { endpoints }) })
 }

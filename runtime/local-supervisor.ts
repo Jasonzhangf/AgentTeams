@@ -333,7 +333,10 @@ export async function classifyLocalConsoleStatus(
   const runtime = internal.consoleRuntime
   const enabled = config.console?.enabled === true && projection?.enabled === true
   const credential = consoleCredentialFromProjection(projection, env)
-  if (!enabled) {
+  // `disabled` means no child responsibility at all. A recorded non-terminal runtime still
+  // holds the Console port, so it must be surfaced as its own state instead of disabled.
+  const pendingChild = runtime !== undefined && runtime.state !== 'stopped' && runtime.state !== 'disabled'
+  if (!enabled && !pendingChild) {
     return {
       enabled: false,
       state: 'disabled',
@@ -353,7 +356,7 @@ export async function classifyLocalConsoleStatus(
     error = { code: 'CONSOLE_PROCESS_EXITED', message: `Console listener is not accepting connections at ${runtime?.url ?? 'the persisted URL'}` }
   }
   return {
-    enabled: true,
+    enabled,
     state,
     generation: runtime?.generation ?? 0,
     launcherState: fallback.state,
@@ -701,7 +704,9 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
 
   async function stopConsoleChild(expectedConsoleGeneration?: number): Promise<LocalConsolePublicStatus> {
     const status = await consoleStatusRead()
-    if (!status.enabled) return status
+    // A recorded child outlives the `[console]` flag, so only a truly disabled status
+    // returns here; any other state still has responsibility to reclaim.
+    if (!status.enabled && status.state === 'disabled') return status
     if (expectedConsoleGeneration !== undefined && expectedConsoleGeneration !== status.generation) {
       throw new LocalConsoleLifecycleError('STALE_GENERATION', `stale Console generation expected=${expectedConsoleGeneration} current=${status.generation}`)
     }
