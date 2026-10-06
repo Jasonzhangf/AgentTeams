@@ -41,8 +41,11 @@ import {
   createOpenCodeSessionClient,
   decodeOpenCodeSessionMessage,
   getOpenCodeSession,
+  listOpenCodeSessions,
   promptOpenCodeSession,
+  projectOpenCodeSessionMessages,
   projectOpenCodeSessionEvent,
+  readOpenCodeSessionMessages,
   replyOpenCodePermission,
   subscribeOpenCodeEvents,
   type OpenCodeSessionClient,
@@ -122,7 +125,8 @@ export interface SessionHost {
   readonly cancelSession: (sessionId: string) => Promise<ConsoleCommandResultV1>
   readonly replyPermission: (sessionId: string, permissionId: string, decision: 'once' | 'always' | 'reject') => Promise<ConsoleCommandResultV1>
   readonly sessionEvents: () => readonly ConsoleSessionEventView[]
-  readonly projectionSessions: () => ConsoleProjectionV1['sessions']
+  /** Owner-backed Session list; the single read path that feeds ConsoleProjectionV1.sessions. */
+  readonly projectionSessions: () => Promise<ConsoleProjectionV1['sessions']>
   readonly currentSessionId: () => string | undefined
   readonly observation: () => SessionObservationState
   readonly ensureStream: () => void | Promise<void>
@@ -393,10 +397,21 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
   }
   return {
     openSession: async sessionId => {
-      const outcome = await useAdapter(async client => await getOpenCodeSession(client, sessionId))
+      const outcome = await useAdapter(async client => {
+        const summary = await getOpenCodeSession(client, sessionId)
+        const messages = await readOpenCodeSessionMessages(client, sessionId)
+        return { summary, messages }
+      })
       if (!outcome.ok) return outcome.result
-      const summary = outcome.value
+      const { summary, messages } = outcome.value
       currentSession = { sessionId: summary.id, ...(summary.title === undefined ? {} : { title: summary.title }) }
+      // The pull transcript is the same closed event projection as SSE: one
+      // classifier, one buffer, no second transcript store.
+      for (const projection of projectOpenCodeSessionMessages(messages)) {
+        if (projection.kind === 'ignored') continue
+        if (projection.kind !== 'event') { degrade(projection.reason); continue }
+        buffer({ ...projection.event, agentId: deps.agentId })
+      }
       await ensureStream()
       return { ok: true }
     },
@@ -509,7 +524,27 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       return outcome.ok ? { ok: true } : outcome.result
     },
     sessionEvents: () => [...buffers.values()].flat(),
-    projectionSessions: () => currentSession === undefined ? [] : [{ agentId: deps.agentId, ...currentSession }],
+    projectionSessions: async () => {
+      // A projection read is observation, not a Session exchange. It uses the current
+      // owner handle directly, so a failed list cannot enter the owner `use` fence and
+      // move readiness to `uncertain`. The runtime row carries owner readiness itself.
+      const handle = deps.owner.readiness().state === 'current' ? deps.owner.currentHandle() : undefined
+      let listedSessions: { readonly sessionId: string; readonly title?: string }[] = []
+      if (handle !== undefined) {
+        try {
+          const client = createClient({ url: handle.url, authorization: handle.authorization })
+          listedSessions = (await listOpenCodeSessions(client)).map(session =>
+            ({ sessionId: session.id, ...(session.title === undefined ? {} : { title: session.title }) }))
+        } catch (error) {
+          // A read has no side effect, so only genuinely unknown failures stay explicit.
+          if (containExpectedAdapterError(error) === undefined) throw error
+        }
+      }
+      const sessions = currentSession === undefined || listedSessions.some(session => session.sessionId === currentSession!.sessionId)
+        ? listedSessions
+        : [...listedSessions, currentSession]
+      return sessions.map(session => ({ agentId: deps.agentId, ...session }))
+    },
     currentSessionId: () => currentSession?.sessionId,
     observation: () => observation,
     ensureStream,
@@ -869,8 +904,9 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     }
     const agentId = config.declaration.identity.agentId
     const openCode = config.openCode
-    // Session capability follows the accepted/effective [agents.*.model] binding, so the store is
-    // read whenever the launcher supplied the local config; openCode only carries launch parameters.
+    // The store is read whenever the launcher supplied the local config. The
+    // owner additionally requires launch parameters; a binding without a
+    // launchable child must stay passive rather than advertising dead capability.
     const localConfigPath = env.TEAMS_LOCAL_CONFIG_PATH ?? (openCode === undefined ? undefined : defaultLocalConfigPath(env.HOME))
     const localStore = localConfigPath === undefined ? undefined : (() => {
       const internalPath = env.TEAMS_LOCAL_INTERNAL_PATH ?? resolve(localConfigPath, '..', 'internal.toml')
@@ -918,8 +954,13 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         capabilities: advertisedCapabilities.map(item => item.capabilityId),
         ...(generation === undefined ? {} : { generation }),
       }
-      const current = configStore === undefined ? undefined : await configStore.read()
-      if (current === undefined || current.agents[config.declaration.identity.agentId] === undefined) {
+      // The advertised capability and the dispatch path are the same fact:
+      // without the owner the Agent is passive, regardless of a stored binding.
+      if (configBinding === undefined || sessionHost === undefined || configStore === undefined) {
+        return projectRuntimeAgentRow({ ...base, sessionCapable: false })
+      }
+      const current = await configStore.read()
+      if (current.agents[config.declaration.identity.agentId] === undefined) {
         return projectRuntimeAgentRow({ ...base, sessionCapable: false })
       }
       return projectRuntimeAgentRow({
@@ -933,10 +974,11 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     const consoleClient: ConsoleClientV1 = {
       readProjection: async () => {
         const sessionEvents = sessionHost?.sessionEvents() ?? []
+        const sessions = sessionHost === undefined ? [] : await sessionHost.projectionSessions()
         return {
           version: 1,
           agents: [await runtimeRow()],
-          sessions: sessionHost?.projectionSessions() ?? [], notifications: [],
+          sessions, notifications: [],
           configs: configBinding === undefined ? [] : [await configBinding.binding.readProjection()],
           ...(sessionEvents.length === 0 ? {} : { sessionEvents }),
           ...projectConsoleWorkObservations(config.declaration.identity.agentId, ledger?.snapshot.works ?? []),

@@ -51,6 +51,27 @@
       "iterator": "Whole"
     },
     {
+      "id": "read-session",
+      "operator": "teams.read-opencode-session",
+      "operator_version": "1",
+      "inputs": [
+        "runtime.resolved"
+      ],
+      "output": {
+        "id": "session.read",
+        "schema": "Object"
+      },
+      "input_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "output_selector": {
+        "include": [],
+        "exclude": []
+      },
+      "iterator": "Whole"
+    },
+    {
       "id": "claim-session",
       "operator": "teams.claim-session-operation",
       "operator_version": "1",
@@ -118,7 +139,8 @@
       "operator": "teams.return-session-result",
       "operator_version": "1",
       "inputs": [
-        "session.outcome"
+        "session.outcome",
+        "session.read"
       ],
       "output": {
         "id": "session.receipt",
@@ -140,6 +162,16 @@
       "from": "authorize-session",
       "to": "resolve-runtime",
       "arc_id": "session.authorized"
+    },
+    {
+      "from": "resolve-runtime",
+      "to": "read-session",
+      "arc_id": "runtime.resolved"
+    },
+    {
+      "from": "read-session",
+      "to": "return-session",
+      "arc_id": "session.read"
     },
     {
       "from": "resolve-runtime",

@@ -325,6 +325,8 @@ process.once('SIGINT', () => server.close(() => process.exit(0)))
     TEAMS_LOCAL_LAUNCHER_GENERATION: '1', TEAMS_LOCAL_START_TOKEN: 'managed-test' })
   expect(await managedChild.ready).toMatchObject({ agentId: 'managed' })
   const managedConsole = createRelayConsoleClient(consumer, 'managed', 8000)
+  // The owner-bearing path still advertises Session capability: capability and dispatch stay one fact.
+  expect((await managedConsole.readProjection()).agents[0]).toMatchObject({ sessionCapable: true })
   expect(await managedConsole.command({ kind: 'config.refreshModels', agentId: 'managed', expectedRevision: 3, providerId: 'catalog' })).toEqual({ ok: true })
   expect((await managedConsole.readProjection()).configs[0]).toMatchObject({ acceptedRevision: 3,
     providers: expect.arrayContaining([expect.objectContaining({ id: 'catalog', catalogState: 'ready', models: [{ id: 'catalog-model' }] })]) })
@@ -350,7 +352,7 @@ process.once('SIGINT', () => server.close(() => process.exit(0)))
   expect(first.output()).not.toContain('Bearer provider')
 }, 15000)
 
-it('projects an Agent with an accepted model binding but no openCode launch block as session capable', async () => {
+it('keeps an Agent with an accepted model binding but no openCode launch block passive and unavailable', async () => {
   const localRelay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
     maxPayload: 65536, maxConnections: 8, maxGrants: 4, maxBufferedAmount: 65536, maxPendingMessages: 8, maxPendingBytes: 131072, grantTtlMs: 5000,
     authenticate: credential => (credential === 'Bearer binding-consumer' || credential === 'Bearer binding-only')
@@ -395,8 +397,14 @@ it('projects an Agent with an accepted model binding but no openCode launch bloc
   try {
     const bindingChild = child(bindingAgentConfig, 'Bearer binding-only', { TEAMS_LOCAL_CONFIG_PATH: bindingConfigPath, TEAMS_LOCAL_INTERNAL_PATH: bindingInternalPath })
     expect(await bindingChild.ready).toMatchObject({ agentId: 'binding-only' })
-    const projection = await createRelayConsoleClient(bindingConsumer, 'binding-only', 8000).readProjection()
-    expect(projection.agents[0]).toMatchObject({ sessionCapable: true, sessionAvailability: 'no-current' })
+    const bindingConsole = createRelayConsoleClient(bindingConsumer, 'binding-only', 8000)
+    const projection = await bindingConsole.readProjection()
+    // The row must agree with the real dispatch path: a binding without a constructed
+    // owner is passive, and a Session command must not report anything else.
+    expect(projection.agents[0]).toMatchObject({ sessionCapable: false, sessionAvailability: 'not-applicable' })
+    expect(await bindingConsole.command({ kind: 'session.create', agentId: 'binding-only' })).toMatchObject({
+      ok: false, error: { code: 'UNSUPPORTED_OPERATION' },
+    })
     bindingChild.process.kill('SIGTERM')
     expect((await bindingChild.exited).code).toBe(0)
   } finally {
@@ -964,7 +972,7 @@ function sessionEventChannel() {
   }
 }
 
-function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean; readiness?: ManagedRuntimeReadiness; useError?: RuntimeConfigError } = {}) {
+function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; listError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean; readiness?: ManagedRuntimeReadiness; useError?: RuntimeConfigError; listedSessions?: readonly { id: string; title?: string }[]; messages?: Readonly<Record<string, readonly unknown[]>> } = {}) {
   let channel = sessionEventChannel()
   let subscriptions = 0
   const prompts: { sessionId: string; text: string; messageId?: string }[] = []
@@ -972,12 +980,19 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
   let abortCalls = 0
   const client: OpenCodeSessionClient & OpenCodeEventClient = {
     session: {
-      list: async () => ({ data: [] }),
+      list: async () => {
+        if (options.listError) throw options.listError
+        return { data: [...(options.listedSessions ?? [])] }
+      },
       get: async ({ path }) => {
         if (options.getError) throw options.getError
         return { data: { id: path.id, title: 'Existing' } }
       },
       create: async () => ({ data: { id: 'created-1', title: 'New' } }),
+      messages: async ({ path }) => {
+        const entries = options.messages?.[path.id]
+        return entries === undefined ? { data: [] } : { data: [...entries] }
+      },
       prompt: async ({ path, body }) => {
         prompts.push({ sessionId: path.id, text: body.parts[0].text, messageId: body.messageID })
         if (options.promptError) throw options.promptError
@@ -1026,6 +1041,47 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
 const tick = () => new Promise<void>(resolve => setTimeout(resolve, 0))
 
 describe('Session host admission, cancel causality and observation', () => {
+  it('lists every owner session and hydrates a real transcript from session.messages', async () => {
+    const h = sessionHarness({
+      listedSessions: [{ id: 'existing-1', title: 'Existing' }, { id: 'existing-2', title: 'Second' }],
+      messages: {
+        'existing-1': [
+          { info: { id: 'm-user', role: 'user', sessionID: 'existing-1' }, parts: [{ id: 'p-user', type: 'text', messageID: 'm-user', sessionID: 'existing-1', text: 'hello' }] },
+          { info: { id: 'm-assistant', role: 'assistant', sessionID: 'existing-1', parentID: 'm-user', time: { completed: 1 } },
+            parts: [{ id: 'p-tool', type: 'tool', messageID: 'm-assistant', sessionID: 'existing-1', callID: 'call-1', tool: 'bash',
+              state: { status: 'completed', input: { command: 'echo hi' }, output: 'hi', title: 'bash', metadata: {} } }] },
+        ],
+      },
+    })
+    // The projection read is the single owner-backed list path: no separate command.
+    expect(await h.host.projectionSessions()).toEqual([
+      { agentId: 'agent', sessionId: 'existing-1', title: 'Existing' },
+      { agentId: 'agent', sessionId: 'existing-2', title: 'Second' },
+    ])
+    expect(await h.host.openSession('existing-1')).toEqual({ ok: true })
+    expect(h.host.sessionEvents()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'message', messageId: 'm-user', role: 'user' }),
+      expect.objectContaining({ kind: 'part', partId: 'p-user', text: 'hello' }),
+      expect.objectContaining({ kind: 'final', messageId: 'm-assistant', state: 'completed' }),
+      expect.objectContaining({ kind: 'tool', partId: 'p-tool', state: 'completed', output: 'hi' }),
+    ]))
+    await h.host.dispose()
+  })
+
+  it('reads the owner Session list without fencing owner readiness on failure', async () => {
+    // A read has no side effect: an expected failure is contained, and an unknown
+    // failure stays explicit but never moves the owner to `uncertain`.
+    const expected = sessionHarness({ listError: new OpenCodeAdapterError('session.list', 'NOT_FOUND', 'missing', 404) })
+    await expect(expected.host.projectionSessions()).resolves.toEqual([])
+    expect(expected.isUncertain()).toBe(false)
+    await expected.host.dispose()
+
+    const unknown = sessionHarness({ listError: new OpenCodeAdapterError('session.list', 'UPSTREAM_ERROR', 'list unavailable', 503) })
+    await expect(unknown.host.projectionSessions()).rejects.toThrow('list unavailable')
+    expect(unknown.isUncertain()).toBe(false)
+    await unknown.host.dispose()
+  })
+
   it('maps capability and readiness without an openCode field', () => {
     const base = { agentId: 'a', machineId: 'm', label: 'A', presence: 'online' as const, capabilities: ['x'] }
     expect(projectRuntimeAgentRow({ ...base, sessionCapable: false })).toEqual({ ...base, kind: 'runtime', sessionCapable: false, sessionAvailability: 'not-applicable' })
@@ -1041,11 +1097,11 @@ describe('Session host admission, cancel causality and observation', () => {
 
   it('projects the current owner session into Console projection rows', async () => {
     const h = sessionHarness()
-    expect(h.host.projectionSessions()).toEqual([])
+    expect(await h.host.projectionSessions()).toEqual([])
     expect(await h.host.createSession('New')).toMatchObject({ ok: true })
-    expect(h.host.projectionSessions()).toEqual([{ agentId: 'agent', sessionId: 'created-1', title: 'New' }])
+    expect(await h.host.projectionSessions()).toEqual([{ agentId: 'agent', sessionId: 'created-1', title: 'New' }])
     expect(await h.host.openSession('existing-1')).toEqual({ ok: true })
-    expect(h.host.projectionSessions()).toEqual([{ agentId: 'agent', sessionId: 'existing-1', title: 'Existing' }])
+    expect(await h.host.projectionSessions()).toEqual([{ agentId: 'agent', sessionId: 'existing-1', title: 'Existing' }])
     await h.host.dispose()
   })
 
@@ -1411,5 +1467,7 @@ describe('Session feature graph product', () => {
     const arcs = graph.edges.map(edge => `${edge.from}->${edge.to}:${edge.arc_id}`)
     expect(arcs).toContain('resolve-runtime->claim-session:runtime.resolved')
     expect(arcs).toContain('claim-session->dispatch-session:session.operation-claimed')
+    expect(arcs).toContain('resolve-runtime->read-session:runtime.resolved')
+    expect(arcs).toContain('read-session->return-session:session.read')
   })
 })

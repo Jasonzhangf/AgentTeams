@@ -25,6 +25,8 @@ import {
   promptOpenCodeSession,
   decodeOpenCodeSessionMessage,
   projectOpenCodeSessionEvent,
+  projectOpenCodeSessionMessages,
+  readOpenCodeSessionMessages,
   subscribeOpenCodeEvents,
 } from '../src/index.ts'
 
@@ -480,6 +482,37 @@ describe('OpenCode Teams adapter', () => {
     expect(projectOpenCodeSessionEvent({ type: 'permission.updated', properties: { id: 'p', sessionID: 's', messageID: 'm', title: 'T', metadata: {} } })).toMatchObject({ kind: 'event', event: { kind: 'permission', state: 'pending' } })
     expect(projectOpenCodeSessionEvent({ type: 'permission.replied', properties: { sessionID: 's', permissionID: 'p', response: 'later' } })).toMatchObject({ kind: 'event', event: { kind: 'permission', state: 'resolved', decision: 'unknown', rawResponse: 'later' } })
     expect(projectOpenCodeSessionEvent({ type: 'session.error', properties: { sessionID: 's', error: { name: 'UnknownError', data: {} } } })).toMatchObject({ kind: 'event', event: { kind: 'error', correlation: { kind: 'session' } } })
+  })
+
+  it('reads a real transcript through session.messages and reuses the closed event classifier', async () => {
+    const calls: { id: string; query: unknown }[] = []
+    const client = { session: {
+      messages: async ({ path, query }: { path: { id: string }; query?: unknown }) => {
+        calls.push({ id: path.id, query })
+        return { data: [
+          { info: { id: 'm-user', sessionID: 's', role: 'user' }, parts: [{ id: 'p-user', sessionID: 's', messageID: 'm-user', type: 'text', text: 'hello' }] },
+          { info: { id: 'm-assistant', sessionID: 's', role: 'assistant', parentID: 'm-user', time: { completed: 1 } },
+            parts: [{ id: 'p-tool', sessionID: 's', messageID: 'm-assistant', type: 'tool', tool: 'bash', callID: 'c', state: { status: 'completed', input: { command: 'ls' }, output: 'ok' } }] },
+        ] }
+      },
+    } }
+    const messages = await readOpenCodeSessionMessages(client as never, 's')
+    expect(calls).toEqual([{ id: 's', query: undefined }])
+    expect(projectOpenCodeSessionMessages(messages)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'event', event: expect.objectContaining({ kind: 'message', messageId: 'm-user', role: 'user' }) }),
+      expect.objectContaining({ kind: 'event', event: expect.objectContaining({ kind: 'part', partId: 'p-user', text: 'hello' }) }),
+      expect.objectContaining({ kind: 'event', parentMessageId: 'm-user', event: expect.objectContaining({ kind: 'final', messageId: 'm-assistant', state: 'completed' }) }),
+      expect.objectContaining({ kind: 'event', event: expect.objectContaining({ kind: 'tool', partId: 'p-tool', state: 'completed', output: 'ok' }) }),
+    ]))
+  })
+
+  it('reports malformed session.messages entries as invalid instead of dropping them', () => {
+    expect(projectOpenCodeSessionMessages('nope')).toEqual([{ kind: 'invalid', reason: 'session.messages response is not an array', raw: 'nope' }])
+    expect(projectOpenCodeSessionMessages([null])).toEqual([expect.objectContaining({ kind: 'invalid' })])
+    expect(projectOpenCodeSessionMessages([{ info: { id: 'm', sessionID: 's', role: 'user' } }])).toEqual([
+      expect.objectContaining({ kind: 'event' }),
+      expect.objectContaining({ kind: 'invalid', reason: 'session.messages entry is missing parts' }),
+    ])
   })
 
   it('fails unknown tags and invalid shapes explicitly instead of faking success', () => {

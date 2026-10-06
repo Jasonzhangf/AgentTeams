@@ -176,6 +176,7 @@ export interface OpenCodeSessionClient {
     create(options?: { body?: { readonly parentID?: string; readonly title?: string }; query?: { readonly directory?: string } }): Promise<OpenCodeSdkResult<Session>>
     prompt(options: { path: { id: string }; body: OpenCodeSessionPromptBody }): Promise<OpenCodeSdkResult<unknown>>
     abort(options: { path: { id: string } }): Promise<OpenCodeSdkResult<boolean>>
+    messages(options: { path: { id: string }; query?: { readonly directory?: string; readonly limit?: number } }): Promise<OpenCodeSdkResult<readonly { readonly info: unknown; readonly parts: readonly unknown[] }[]>>
   }
   readonly postSessionIdPermissionsPermissionId: (options: { path: { id: string; permissionID: string }; body: { response: 'once' | 'always' | 'reject' } }) => Promise<OpenCodeSdkResult<unknown>>
 }
@@ -283,6 +284,22 @@ export async function getOpenCodeSession(client: OpenCodeSessionClient, sessionI
   const session = unwrapOpenCodeResponse(result, 'session.get')
   if (session === undefined) throw new OpenCodeAdapterError('session.get', 'NOT_FOUND', `OpenCode session not found: ${sessionId}`, 404)
   return { id: session.id, title: session.title, directory: session.directory, time: session.time }
+}
+
+/**
+ * Reads one Session's real message/tool history through the SDK pull path. The
+ * adapter preserves the raw `{info, parts}` entries; the owner-side projector
+ * applies the same closed event classification used for SSE events.
+ */
+export async function readOpenCodeSessionMessages(
+  client: OpenCodeSessionClient,
+  sessionId: string,
+  query?: { readonly directory?: string; readonly limit?: number },
+): Promise<readonly { readonly info: unknown; readonly parts: readonly unknown[] }[]> {
+  const result = await client.session.messages({ path: { id: sessionId }, ...(query === undefined ? {} : { query }) })
+  const messages = unwrapOpenCodeResponse(result, 'session.messages')
+  if (messages === undefined) throw new OpenCodeAdapterError('session.messages', 'INVALID_RESPONSE', 'OpenCode session.messages returned no data')
+  return messages
 }
 
 function invalidOpenCodeModelTarget(message: string): never {
@@ -640,6 +657,34 @@ function classifyPart(type: string, properties: Readonly<Record<string, unknown>
   const observed = OBSERVED_PART_TAGS[partType]
   if (observed === undefined) return { kind: 'unsupported', reason: `unsupported part type ${partType}`, raw }
   return { kind: 'event', event: { ...base, agentId: '', kind: 'part', state: 'observed', messageId, partId, partType: observed, sourcePart: rawPart } }
+}
+
+/**
+ * Converts the real `session.messages` response into the same closed event
+ * projection used by the SSE ingress. The SDK shape classification stays in
+ * this adapter, and a malformed entry is reported as `invalid` rather than
+ * being silently dropped.
+ */
+export function projectOpenCodeSessionMessages(raw: unknown): readonly OpenCodeSessionEventProjection[] {
+  if (!Array.isArray(raw)) return [{ kind: 'invalid', reason: 'session.messages response is not an array', raw: raw as JsonValue }]
+  return raw.flatMap(entry => {
+    const record = asRecord(entry)
+    if (record === undefined) return [{ kind: 'invalid' as const, reason: 'session.messages entry is not an object', raw: entry as JsonValue }]
+    const projections: OpenCodeSessionEventProjection[] = []
+    const info = record.info
+    if (asRecord(info) === undefined) projections.push({ kind: 'invalid', reason: 'session.messages entry is missing message info', raw: entry as JsonValue })
+    else projections.push(classifyMessage('message.updated', { info }, info as JsonValue))
+    const parts = record.parts
+    if (!Array.isArray(parts)) {
+      projections.push({ kind: 'invalid', reason: 'session.messages entry is missing parts', raw: entry as JsonValue })
+      return projections
+    }
+    for (const part of parts) {
+      if (asRecord(part) === undefined) projections.push({ kind: 'invalid', reason: 'session.messages part is not an object', raw: part as JsonValue })
+      else projections.push(classifyPart('message.part.updated', { part }, part as JsonValue))
+    }
+    return projections
+  })
 }
 
 export async function replyOpenCodePermission(client: OpenCodeSessionClient, permissionId: string, sessionId: string, response: 'once' | 'always' | 'reject'): Promise<void> {
