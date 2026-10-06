@@ -774,6 +774,9 @@ export async function runPackageUserSmoke(options = {}) {
       HOME: testHome,
       AGENTTEAMS_INSTALLED_PROVIDER_AUTH: 'fixture-provider',
       AGENTTEAMS_INSTALLED_RECEIVER_AUTH: 'fixture-receiver',
+      // The Console registers its own relay identity, so its link credential is
+      // admitted by the relay exactly like an Agent credential.
+      AGENTTEAMS_CONSOLE_AUTH: 'fixture-console-link',
       [CONSOLE_PASSWORD_ENV]: CONSOLE_PASSWORD,
     }
     const init = await run(cli, ['init'], { cwd: temporaryRoot, env: cliEnv })
