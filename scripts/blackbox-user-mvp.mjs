@@ -28,14 +28,14 @@ const cases = [
   { id: 'BB01', owner: 'U1+U5+U7', gate: 'installed package lifecycle and Console assets', implemented: true, run: runBB01 },
   { id: 'BB02', owner: 'U2+U7', gate: 'config.toml-only two-daemon bridge discovery', implemented: true, run: runBB02 },
   { id: 'BB03', owner: 'U3', gate: 'real browser service lifecycle and capacity', implemented: false, missingCapability: 'U3 installed browser service and real Camo lifecycle are not delivered in this candidate', publicProbe: 'work' },
-  { id: 'BB04', owner: 'D3/U4', gate: 'installed public Work submit and query', implemented: false, missingCapability: 'U4 installed public Work submit/query entry is not delivered in this candidate', publicProbe: 'work' },
+  { id: 'BB04', owner: 'D3/U4', gate: 'installed public Work submit and query', implemented: true, run: runBB04 },
   { id: 'BB05', owner: 'U3+U4', gate: 'installed Work rejection matrix', implemented: false, missingCapability: 'U4 installed Work rejection entry and U3 service admission are not delivered in this candidate', publicProbe: 'work' },
   { id: 'BB06', owner: 'U3+U4', gate: 'persistent browser Work capacity', implemented: false, missingCapability: 'U4 persistent Work lifecycle and U3 real browser capacity are not delivered in this candidate', publicProbe: 'work' },
-  { id: 'BB07', owner: 'D3/U4', gate: 'installed Work unknown and recovery query', implemented: false, missingCapability: 'U4 installed Work recovery/query entry is not delivered in this candidate', publicProbe: 'work' },
-  { id: 'BB08', owner: 'U2+U4', gate: 'installed config generation and stale rejection', implemented: false, missingCapability: 'U4 installed Work generation rejection is not delivered in this candidate', publicProbe: 'work' },
+  { id: 'BB07', owner: 'D3/U4', gate: 'installed Work unknown and recovery query', implemented: true, run: runBB07 },
+  { id: 'BB08', owner: 'U2+U4', gate: 'installed config generation and stale rejection', implemented: true, run: runBB08 },
   { id: 'BB09', owner: 'U5', gate: 'installed Console lifecycle and offline Work', implemented: false, missingCapability: 'U5 installed Console lifecycle and discovery entry are not delivered in this candidate', publicProbe: 'status' },
   { id: 'BB10', owner: 'U2+U6', gate: 'installed explicit provider/model session', implemented: false, missingCapability: 'U6 installed OpenCode provider/model Session entry is not delivered in this candidate', publicProbe: 'status' },
-  { id: 'BB11', owner: 'D3/U4', gate: 'installed SDK Work and compile negatives', implemented: false, missingCapability: 'U4 installed public Work SDK entry is not delivered in this candidate', publicProbe: 'work' },
+  { id: 'BB11', owner: 'D3/U4', gate: 'installed SDK Work and compile negatives', implemented: true, run: runBB11 },
   { id: 'BB12', owner: 'U6', gate: 'installed Session message tool permission cancel', implemented: false, missingCapability: 'U6 installed Session message/tool/permission/cancel entry is not delivered in this candidate', publicProbe: 'status' },
   { id: 'BB13', owner: 'D4/U7', gate: 'existing lifecycle store failure recovery invalidation matrix', implemented: true, run: runBB13 },
   { id: 'BB14', owner: 'U1+U7', gate: 'failed start stop and owned resource cleanup', implemented: true, run: runBB14 },
@@ -261,8 +261,17 @@ demands = [{ resourceId = "search-slot", amount = 1 }]
 `
 }
 
+/**
+ * The installed launcher publishes `<config dir>/.internal/work-control.sock`.
+ * A unix socket path is limited to about 104 bytes, so the fixture root must stay
+ * short. Prefer `/tmp` over a long per-user TMPDIR so the control socket is created.
+ */
+function temporaryRootBase() {
+  return existsSync('/tmp') ? '/tmp' : tmpdir()
+}
+
 function installPackage(packRoot, evidenceDir, label) {
-  const temporaryRoot = mkdtempSync(join(tmpdir(), `agentteams-u7-${label}-`))
+  const temporaryRoot = mkdtempSync(join(temporaryRootBase(), `agentteams-u7-${label}-`))
   const prefix = join(temporaryRoot, 'prefix')
   const home = join(temporaryRoot, 'home')
   const npmCache = join(temporaryRoot, 'npm-cache')
@@ -347,7 +356,9 @@ function listFiles(directory) {
       const child = join(path, entry.name)
       if (entry.isDirectory()) visit(child)
       else if (entry.isFile()) files.push(relative(directory, child).split(sep).join('/'))
-      else fail(`unsupported directory entry: ${child}`)
+      // The running launcher publishes a unix control socket below `.internal/`.
+      // It is not a user-facing file, so it stays outside this file surface.
+      else if (!entry.isSocket()) fail(`unsupported directory entry: ${child}`)
     }
   }
   visit(directory)
@@ -615,6 +626,548 @@ async function runBB02(context) {
         stop_stdout: final.stop.stdout,
         stopped_stdout: final.status.stdout,
         owned_listeners_after_stop: listenerState,
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
+const workReceiverId = 'bb-receiver'
+const workProviderId = 'bb-provider'
+const workDemands = '[{"resourceId":"search-slot","amount":1}]'
+
+function writeWorkFixture(fixture) {
+  const directory = join(dirname(fixture.configPath), 'files')
+  mkdirSync(directory, { recursive: true })
+  writeFileSync(join(directory, 'a.txt'), 'marker-alpha\n')
+  writeFileSync(join(directory, 'b.txt'), 'marker-beta\n')
+  return directory
+}
+
+function providerLedger(fixture) {
+  const path = join(dirname(fixture.configPath), 'data', workProviderId, 'work.json')
+  return { path, snapshot: existsSync(path) ? readJson(path) : undefined }
+}
+
+function runWork(fixture, evidenceDir, name, args, options = {}) {
+  return run(fixture.cli, args, {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
+    logPath: join(evidenceDir, `${name}.json`),
+    ...options,
+  })
+}
+
+function completedWorkReceipt(output) {
+  const text = output.stdout.trim()
+  assert(text.length > 0, `work command produced no stdout: ${output.stderr.trim()}`)
+  const receipt = JSON.parse(text)
+  assert(receipt.status === 'completed', `work command did not complete: ${text}`)
+  return receipt
+}
+
+function failedWorkReceipt(output) {
+  const text = output.stderr.trim()
+  assert(text.length > 0, 'work command failure produced no typed receipt on stderr')
+  const receipt = JSON.parse(text)
+  assert(receipt.status === 'failed', `work command failure was not a typed failed receipt: ${text}`)
+  assert(typeof receipt.control?.error?.code === 'string' && receipt.control.error.code.length > 0,
+    `work command failure did not carry a typed error code: ${text}`)
+  return receipt
+}
+
+function assertMatchedSearch(receipt, expectedPath) {
+  assert(receipt.business?.status === 'matched', `business was not a matched search: ${JSON.stringify(receipt.business)}`)
+  const matches = receipt.business.matches
+  assert(Array.isArray(matches) && matches.length > 0 && matches.every(match => match.path === expectedPath),
+    `business did not match only ${expectedPath}: ${JSON.stringify(matches)}`)
+}
+
+async function runBB04(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB04')
+  mkdirSync(evidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb04')
+  let lifecycle
+  let result
+  try {
+    const config = ensureUserConfig(fixture, evidenceDir)
+    writeWorkFixture(fixture)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb04')
+    const provider = lifecycle.parsed.endpoints.find(endpoint => endpoint.agentId === workProviderId)
+    assert(provider !== undefined && provider.presence === 'online', 'status did not publish the online Work provider')
+
+    const submitA = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb04-submit-a',
+      ['work', 'submit', '--config', fixture.configPath, '--receiver', workReceiverId, '--payload', '{"query":"marker-alpha"}'],
+      { expectStatus: 0 }))
+    assert(submitA.control.graphId === 'agentteams.agent-work' && submitA.control.graphVersion === '2',
+      `submit bound the wrong graph: ${submitA.control.graphId}@${submitA.control.graphVersion}`)
+    assert(submitA.control.providerAgentId === workProviderId && submitA.control.capabilityId === 'file-search' &&
+      submitA.control.capabilityVersion === '1' && submitA.control.operation === 'search',
+    `submit bound the wrong provider/capability: ${JSON.stringify(submitA.control)}`)
+    assert(submitA.control.requestState === 'succeeded' && submitA.control.workClosure === 'closed',
+      `submit did not close a succeeded request: ${JSON.stringify(submitA.control)}`)
+    assert(submitA.evidence?.nodeSchedule?.join(',') === 'resolve-service,open-link,admit-work,request-work,settle-work',
+      `submit ran the wrong node schedule: ${JSON.stringify(submitA.evidence?.nodeSchedule)}`)
+    assert(submitA.cleanup?.channelsOpened === 1 && submitA.cleanup?.channelsDisposed === 1,
+      `submit leaked a Work channel: ${JSON.stringify(submitA.cleanup)}`)
+    assertMatchedSearch(submitA, './a.txt')
+
+    const submitB = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb04-submit-b',
+      ['work', 'submit', '--config', fixture.configPath, '--receiver', workReceiverId, '--payload', '{"query":"marker-beta"}'],
+      { expectStatus: 0 }))
+    assertMatchedSearch(submitB, './b.txt')
+    assert(submitA.control.workId !== submitB.control.workId && submitA.control.requestId !== submitB.control.requestId,
+      'two submits reused a Work or request identity')
+
+    const queryA = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb04-query-a',
+      ['work', 'query', '--config', fixture.configPath, '--receiver', workReceiverId,
+        '--work-id', submitA.control.workId, '--request-id', submitA.control.requestId],
+      { expectStatus: 0 }))
+    assert(queryA.control.graphId === 'agentteams.work-query' && queryA.control.graphVersion === '1',
+      `query bound the wrong graph: ${queryA.control.graphId}@${queryA.control.graphVersion}`)
+    assert(queryA.control.observed === true, 'query did not observe the original request')
+    assert(queryA.control.workId === submitA.control.workId && queryA.control.requestId === submitA.control.requestId,
+      'query did not preserve the original Work/request identity')
+    assert(queryA.control.executionId !== submitA.control.executionId && queryA.control.attemptId !== submitA.control.attemptId,
+      'query reused the original execution identity')
+    assert(JSON.stringify(queryA.business) === JSON.stringify(submitA.business), 'query did not return the original business result')
+    assert(queryA.evidence.hostOperations.includes('agentWork.get'), 'query did not read the provider ledger')
+    assert(!queryA.evidence.hostOperations.includes('agentWork.propose') && !queryA.evidence.hostOperations.includes('agentWork.request'),
+      `query re-executed business work: ${JSON.stringify(queryA.evidence.hostOperations)}`)
+
+    const unknown = failedWorkReceipt(runWork(fixture, evidenceDir, 'bb04-query-unknown',
+      ['work', 'query', '--config', fixture.configPath, '--receiver', workReceiverId,
+        '--work-id', 'bb04-unknown-work', '--request-id', 'bb04-unknown-request'],
+      { expectNonZero: true }))
+    assert(unknown.control.workId === 'bb04-unknown-work' && unknown.control.requestId === 'bb04-unknown-request',
+      'the typed failure did not preserve the queried identity')
+    assert(!unknown.evidence.hostOperations.includes('agentWork.request') && !unknown.evidence.hostOperations.includes('agentWork.propose'),
+      'the unknown query re-executed business work')
+
+    const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb04')
+    const allPids = lifecyclePids(lifecycle.internal)
+    fixture.cleanup()
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        config_path: fixture.configPath,
+        config_sha256: config.configSha256,
+        receiver: workReceiverId,
+        commands: [
+          'agentteams start --config <isolated-home>/.agentteams/config.toml',
+          'agentteams work submit --receiver bb-receiver --payload {"query":"marker-alpha"}',
+          'agentteams work submit --receiver bb-receiver --payload {"query":"marker-beta"}',
+          'agentteams work query --receiver bb-receiver --work-id <A> --request-id <A>',
+          'agentteams work query --receiver bb-receiver --work-id bb04-unknown-work --request-id bb04-unknown-request (typed failure)',
+          'agentteams stop --generation <generation>',
+        ],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        installed_tarball_sha256: fixture.tarballSha256,
+        cli_realpath: fixture.cliRealpath,
+        start: lifecycle.parsed,
+        submit_a: submitA,
+        submit_b: submitB,
+        query_a: queryA,
+        unknown_query: unknown,
+        stop_stdout: final.stop.stdout,
+        stopped_stdout: final.status.stdout,
+        owned_pids_after_stop: allPids,
+        owned_pids_alive_after_stop: allPids.filter(processAlive),
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
+async function runBB07(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB07')
+  mkdirSync(evidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb07')
+  let lifecycle
+  let result
+  try {
+    ensureUserConfig(fixture, evidenceDir)
+    const files = writeWorkFixture(fixture)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb07')
+    const opened = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb07-open',
+      ['work', 'open', '--config', fixture.configPath, '--receiver', workReceiverId,
+        '--operation', 'search', '--demands', workDemands, '--payload', '{"query":"marker-alpha"}'],
+      { expectStatus: 0 }))
+    assert(opened.control.graphId === 'agentteams.work-open', `persistent Work bound the wrong graph: ${opened.control.graphId}`)
+    assert(opened.control.workClosure === 'retained', `persistent Work was not retained: ${opened.control.workClosure}`)
+    assertMatchedSearch(opened, './a.txt')
+    const binding = ['--provider', workProviderId, '--provider-generation', String(opened.control.targetGeneration),
+      '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search']
+    const capabilityQuery = ['work', 'query', '--config', fixture.configPath, '--receiver', workReceiverId,
+      '--service-selection', 'capability', '--work-id', opened.control.workId, '--request-id', opened.control.requestId, ...binding]
+    const ledgerBefore = providerLedger(fixture)
+    assert(ledgerBefore.snapshot !== undefined, 'the provider ledger was not published after a retained Work')
+    const worksBefore = ledgerBefore.snapshot.works.length
+    const requestsBefore = ledgerBefore.snapshot.requests.filter(request => request.control.workId === opened.control.workId).length
+
+    const generationOne = lifecycle.parsed.generation
+    const stopped = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb07')
+    const stoppedStatus = parseCliStatus(stopped.status.stdout)
+    assert(stoppedStatus.state === 'stopped' && stoppedStatus.endpoints.every(endpoint => endpoint.presence === 'offline'),
+      `stopped lifecycle still published online endpoints: ${stopped.status.stdout.trim()}`)
+
+    const whileStopped = runWork(fixture, evidenceDir, 'bb07-query-stopped', capabilityQuery, { expectNonZero: true })
+    assert(/local Work control is unavailable/u.test(`${whileStopped.stdout}\n${whileStopped.stderr}`),
+      `query without a launcher did not report the local control contract: ${whileStopped.stdout}${whileStopped.stderr}`)
+
+    // Delete the original marker so a replay would return a different result.
+    rmSync(join(files, 'a.txt'), { force: true })
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb07-restart')
+    assert(lifecycle.parsed.generation > generationOne,
+      `restart did not advance the launcher generation: ${generationOne} -> ${lifecycle.parsed.generation}`)
+
+    const recovered = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb07-query-recovered', capabilityQuery, { expectStatus: 0 }))
+    assert(recovered.control.observed === true, 'the recovery query did not observe the original request')
+    assert(recovered.control.workId === opened.control.workId && recovered.control.requestId === opened.control.requestId,
+      'the recovery query did not preserve the original Work/request identity')
+    assert(recovered.control.targetGeneration === opened.control.targetGeneration,
+      `the recovery query did not keep the original provider generation: ${recovered.control.targetGeneration}`)
+    assert(Number.isSafeInteger(recovered.control.linkGeneration), 'the recovery query did not separate the link generation')
+    assert(JSON.stringify(recovered.business) === JSON.stringify(opened.business),
+      'the recovery query replayed the request instead of reading the original result')
+    assert(recovered.evidence.hostOperations.includes('agentWork.get') && !recovered.evidence.hostOperations.includes('agentWork.request'),
+      `the recovery query re-executed business work: ${JSON.stringify(recovered.evidence.hostOperations)}`)
+
+    const unknownRequest = failedWorkReceipt(runWork(fixture, evidenceDir, 'bb07-query-unknown-request',
+      ['work', 'query', '--config', fixture.configPath, '--receiver', workReceiverId, '--service-selection', 'capability',
+        '--work-id', opened.control.workId, '--request-id', 'bb07-unknown-request', ...binding],
+      { expectNonZero: true }))
+    assert(unknownRequest.control.workId === opened.control.workId && unknownRequest.control.requestId === 'bb07-unknown-request',
+      'the unknown request failure did not preserve the queried identity')
+    assert(!unknownRequest.evidence.hostOperations.includes('agentWork.request'),
+      'the unknown request query re-executed business work')
+
+    const ledgerAfter = providerLedger(fixture)
+    assert(ledgerAfter.snapshot.works.length === worksBefore, 'a recovery or unknown query created a new Work')
+    assert(ledgerAfter.snapshot.requests.filter(request => request.control.workId === opened.control.workId).length === requestsBefore,
+      'a recovery or unknown query created a new request')
+
+    const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb07-final')
+    const allPids = lifecyclePids(lifecycle.internal)
+    fixture.cleanup()
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        receiver: workReceiverId,
+        commands: [
+          'agentteams work open --receiver bb-receiver --operation search --demands [...] --payload {"query":"marker-alpha"}',
+          'agentteams stop --generation <g1>',
+          'agentteams work query --service-selection capability --work-id <W> --request-id <R> --provider bb-provider --provider-generation <g> ... (while stopped, typed failure)',
+          'agentteams start',
+          'agentteams work query --service-selection capability --work-id <W> --request-id <R> ... (recovery)',
+          'agentteams work query ... --request-id bb07-unknown-request (typed failure)',
+        ],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        opened,
+        stopped_stdout: stopped.status.stdout,
+        query_while_stopped: { status: whileStopped.status, stderr: whileStopped.stderr.trim() },
+        restart_generation: { from: generationOne, to: lifecycle.parsed.generation },
+        recovered,
+        unknown_request: unknownRequest,
+        provider_ledger: { path: ledgerAfter.path, works: worksBefore, requests_for_work: requestsBefore },
+        stop_stdout: final.stop.stdout,
+        stopped_stdout: final.status.stdout,
+        owned_pids_after_stop: allPids,
+        owned_pids_alive_after_stop: allPids.filter(processAlive),
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
+async function runBB08(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB08')
+  mkdirSync(evidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb08')
+  let lifecycle
+  let result
+  try {
+    const config = ensureUserConfig(fixture, evidenceDir)
+    writeWorkFixture(fixture)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb08')
+    const generationOne = lifecycle.parsed.generation
+    const internalOne = parseToml(readFileSync(lifecycle.internal.internalPath, 'utf8'))
+    assert(typeof internalOne.sourceRevision === 'number' && typeof internalOne.sourceHash === 'string',
+      'internal.toml did not record the accepted config revision')
+    assert(internalOne.sourceHash === `sha256:${sha256(config.configText)}`, 'internal.toml source hash does not match config.toml')
+    assert(internalOne.configRuntime !== undefined && internalOne.configRuntime.accepted !== undefined &&
+      internalOne.configRuntime.effective !== undefined,
+    'internal.toml did not separate accepted and effective config runtime slices')
+
+    const first = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb08-submit-current',
+      ['work', 'submit', '--config', fixture.configPath, '--receiver', workReceiverId,
+        '--generation', String(generationOne), '--payload', '{"query":"marker-alpha"}'],
+      { expectStatus: 0 }))
+    assertMatchedSearch(first, './a.txt')
+
+    await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb08')
+    const edited = `${config.configText}\n[providers.bb-local]\nprotocol = "openai-chat"\napiBaseUrl = "https://example.invalid/v1"\nlabel = "BB-Local"\nenabled = true\n\n[[models]]\nprovider = "bb-local"\nid = "bb-local-model"\n\n[agents.bb-provider.model]\nprimary = { provider = "bb-local", model = "bb-local-model" }\n`
+    writeFileSync(fixture.configPath, edited, { encoding: 'utf8', mode: 0o600 })
+
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb08-restart')
+    const generationTwo = lifecycle.parsed.generation
+    assert(generationTwo > generationOne, `restart did not advance the launcher generation: ${generationOne} -> ${generationTwo}`)
+    const internalTwo = parseToml(readFileSync(lifecycle.internal.internalPath, 'utf8'))
+    assert(internalTwo.sourceRevision > internalOne.sourceRevision, 'restart did not advance the accepted config source revision')
+    assert(internalTwo.sourceHash !== internalOne.sourceHash, 'restart did not record the edited config hash')
+    assert(internalTwo.sourceHash === `sha256:${sha256(edited)}`, 'internal.toml did not persist the edited user intent')
+    assert(sha256File(fixture.configPath) === sha256(edited), 'config.toml is not the persisted user intent')
+
+    const ledgerBeforeStale = providerLedger(fixture)
+    const stale = runWork(fixture, evidenceDir, 'bb08-stale-generation',
+      ['work', 'submit', '--config', fixture.configPath, '--receiver', workReceiverId,
+        '--generation', String(generationOne), '--payload', '{"query":"marker-beta"}'],
+      { expectNonZero: true })
+    assert(/stale launcher generation/u.test(`${stale.stdout}\n${stale.stderr}`),
+      `the stale launcher generation was not refused: ${stale.stdout}${stale.stderr}`)
+    const ledgerAfterStale = providerLedger(fixture)
+    assert(ledgerAfterStale.snapshot.works.length === ledgerBeforeStale.snapshot.works.length,
+      'the stale launcher generation refusal created a Work side effect')
+
+    const second = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb08-submit-new',
+      ['work', 'submit', '--config', fixture.configPath, '--receiver', workReceiverId,
+        '--generation', String(generationTwo), '--payload', '{"query":"marker-beta"}'],
+      { expectStatus: 0 }))
+    assertMatchedSearch(second, './b.txt')
+
+    const recovered = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb08-query-retained',
+      ['work', 'query', '--config', fixture.configPath, '--receiver', workReceiverId,
+        '--work-id', first.control.workId, '--request-id', first.control.requestId],
+      { expectStatus: 0 }))
+    assert(recovered.control.observed === true, 'the pre-restart Work responsibility did not survive the restart')
+    assert(recovered.control.targetGeneration === first.control.targetGeneration,
+      'the retained Work did not keep its original provider generation')
+    assert(JSON.stringify(recovered.business) === JSON.stringify(first.business), 'the retained Work returned a different result')
+
+    const staleProvider = failedWorkReceipt(runWork(fixture, evidenceDir, 'bb08-stale-provider-generation',
+      ['work', 'open', '--config', fixture.configPath, '--receiver', workReceiverId, '--operation', 'search',
+        '--demands', workDemands, '--provider-generation', '99', '--payload', '{"query":"marker-alpha"}'],
+      { expectNonZero: true }))
+    assert(staleProvider.control.error.code.length > 0, 'the stale provider generation did not carry a typed error')
+
+    const agentteamsFiles = listFiles(join(fixture.home, '.agentteams'))
+    const userFacingFiles = agentteamsFiles.filter(file => !file.includes('/')).sort()
+    assert(userFacingFiles.join(',') === 'config.toml,internal.toml',
+      `the user-facing surface is not exactly config.toml plus derived internal.toml: ${userFacingFiles.join(', ')}`)
+    const editableJson = agentteamsFiles.filter(file => file.endsWith('.json') && !file.startsWith('.internal/') && !file.startsWith('data/'))
+    assert(editableJson.length === 0, `editable JSON configuration appeared: ${editableJson.join(', ')}`)
+
+    const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb08-final')
+    const allPids = lifecyclePids(lifecycle.internal)
+    fixture.cleanup()
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        receiver: workReceiverId,
+        commands: [
+          'agentteams init',
+          'edit config.toml only (add providers/models/binding and change the provider label)',
+          'agentteams start',
+          'agentteams work submit --generation <g1>',
+          'agentteams stop --generation <g1>',
+          'agentteams start',
+          'agentteams work submit --generation <g1> (stale, typed failure)',
+          'agentteams work submit --generation <g2>',
+          'agentteams work query --work-id <first> --request-id <first>',
+          'agentteams work open --provider-generation 99 (stale provider, typed failure)',
+        ],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        config_sha256_before_edit: config.configSha256,
+        config_sha256_after_edit: sha256(edited),
+        source_revision: { before: internalOne.sourceRevision, after: internalTwo.sourceRevision },
+        source_hash: { before: internalOne.sourceHash, after: internalTwo.sourceHash },
+        generation: { before: generationOne, after: generationTwo },
+        first_submit: first,
+        stale_submit: { status: stale.status, stderr: stale.stderr.trim() },
+        ledger_after_stale: { works: ledgerAfterStale.snapshot.works.length },
+        second_submit: second,
+        retained_query: recovered,
+        stale_provider_generation: staleProvider,
+        agentteams_files: agentteamsFiles,
+        stop_stdout: final.stop.stdout,
+        stopped_stdout: final.status.stdout,
+        owned_pids_after_stop: allPids,
+        owned_pids_alive_after_stop: allPids.filter(processAlive),
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
+const workGraphEffects = ['agent.work.close', 'agent.work.get', 'agent.work.propose', 'agent.work.request', 'directory.read', 'network.close', 'network.connect']
+
+function compileInstalledGraph(runnerPath, graphPath, capabilities, evidenceDir, name) {
+  const args = ['compile', '--graph', graphPath]
+  if (capabilities !== undefined) args.push('--capabilities', JSON.stringify(capabilities))
+  const output = run(runnerPath, args, { logPath: join(evidenceDir, `${name}.json`) })
+  assert(output.status === 0, `installed runner compile crashed: ${output.stderr.trim()}`)
+  const lines = output.stdout.trim().split('\n').filter(Boolean)
+  assert(lines.length > 0, `installed runner compile produced no output for ${name}`)
+  return JSON.parse(lines[lines.length - 1])
+}
+
+function assertCompileFailure(frame, expectedMessage, name) {
+  assert(frame.type === 'compile.failure' && frame.stage === 'compile',
+    `${name} did not produce a typed compile failure: ${JSON.stringify(frame)}`)
+  assert(typeof frame.message === 'string' && frame.message.includes(expectedMessage),
+    `${name} compile failure did not describe the contract break: ${JSON.stringify(frame)}`)
+}
+
+async function runBB11(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB11')
+  mkdirSync(evidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb11')
+  let lifecycle
+  let result
+  try {
+    ensureUserConfig(fixture, evidenceDir)
+    writeWorkFixture(fixture)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb11')
+    const packageReceipt = readJson(defaultPackageReceiptPath)
+    const sdk = packageReceipt.sdk
+    assert(sdk?.included === true && Array.isArray(sdk.graphs) && sdk.graphs.length === 5,
+      'the staged package receipt did not stage the five Work graphs')
+    const runtimeRoot = join(fixture.installedRoot, 'runtime', 'dagpipe')
+    const runnerPath = join(runtimeRoot, 'bin', 'darwin-arm64', 'agentteams-dagpipe-runner')
+    const manifest = readJson(join(runtimeRoot, 'manifest.json'))
+    assert(manifest.runner.sha256 === sdk.runner_sha256 && sha256File(runnerPath) === sdk.runner_sha256,
+      'the installed runner hash does not match the staged SDK manifest')
+    const installedGraphs = Object.fromEntries(manifest.graphs.map(graph => [graph.id, join(runtimeRoot, graph.path)]))
+    for (const graph of sdk.graphs) {
+      assert(installedGraphs[graph.id] !== undefined && sha256File(installedGraphs[graph.id]) === graph.sha256,
+        `the installed graph ${graph.id} does not match the staged SDK graph`)
+    }
+
+    const submitted = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb11-submit',
+      ['work', 'submit', '--config', fixture.configPath, '--receiver', workReceiverId, '--payload', '{"query":"marker-alpha"}'],
+      { expectStatus: 0 }))
+    assert(submitted.control.graphId === 'agentteams.agent-work' && submitted.control.graphVersion === '2' &&
+      submitted.evidence.graphId === 'agentteams.agent-work',
+    `submit did not bind the agent-work graph: ${JSON.stringify(submitted.control)}`)
+    assertMatchedSearch(submitted, './a.txt')
+    const queried = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb11-query',
+      ['work', 'query', '--config', fixture.configPath, '--receiver', workReceiverId,
+        '--work-id', submitted.control.workId, '--request-id', submitted.control.requestId],
+      { expectStatus: 0 }))
+    assert(queried.control.graphId === 'agentteams.work-query' && queried.control.observed === true,
+      `query did not bind the work-query graph: ${JSON.stringify(queried.control)}`)
+    assert(JSON.stringify(queried.business) === JSON.stringify(submitted.business), 'query returned a different business result')
+    assert(queried.evidence.hostOperations.includes('agentWork.get') && !queried.evidence.hostOperations.includes('agentWork.request'),
+      `query re-executed business work: ${JSON.stringify(queried.evidence.hostOperations)}`)
+    const ledgerBefore = providerLedger(fixture)
+    assert(ledgerBefore.snapshot.works.length === 1, `the provider ledger recorded ${ledgerBefore.snapshot.works.length} Works after one submit`)
+
+    const baseline = compileInstalledGraph(runnerPath, installedGraphs['agent-work'], workGraphEffects, evidenceDir, 'bb11-compile-baseline')
+    assert(baseline.type === 'compile.result' && baseline.graph_id === 'agentteams.agent-work' && baseline.graph_version === '2',
+      `the installed baseline compile did not resolve the agent-work graph: ${JSON.stringify(baseline)}`)
+    assert(JSON.stringify(baseline.node_ids) === JSON.stringify(['resolve-service', 'open-link', 'admit-work', 'request-work', 'settle-work']),
+      `the installed baseline compile resolved the wrong nodes: ${JSON.stringify(baseline.node_ids)}`)
+
+    const compileDir = join(fixture.temporaryRoot, 'bb11-compile')
+    mkdirSync(compileDir, { recursive: true })
+    const graphSource = readJson(installedGraphs['agent-work'])
+    const missingOperator = structuredClone(graphSource)
+    missingOperator.nodes[0].operator = 'teams.missing-operator'
+    writeJson(join(compileDir, 'missing-operator.graph.json'), missingOperator)
+    const missingOperatorFrame = compileInstalledGraph(runnerPath, join(compileDir, 'missing-operator.graph.json'), workGraphEffects, evidenceDir, 'bb11-compile-missing-operator')
+    assertCompileFailure(missingOperatorFrame, 'missing operator', 'an unregistered operator')
+    const arcError = structuredClone(graphSource)
+    arcError.edges[1].arc_id = 'bb11.not.a.declared.arc'
+    writeJson(join(compileDir, 'arc-error.graph.json'), arcError)
+    const arcErrorFrame = compileInstalledGraph(runnerPath, join(compileDir, 'arc-error.graph.json'), workGraphEffects, evidenceDir, 'bb11-compile-arc-error')
+    assertCompileFailure(arcErrorFrame, 'is not output of', 'an ARC contract error')
+    const missingEffectsFrame = compileInstalledGraph(runnerPath, installedGraphs['agent-work'], [], evidenceDir, 'bb11-compile-missing-effects')
+    assertCompileFailure(missingEffectsFrame, 'undeclared capability', 'a missing effects set')
+    const ledgerAfterCompile = providerLedger(fixture)
+    assert(ledgerAfterCompile.snapshot.works.length === ledgerBefore.snapshot.works.length,
+      'a compile negative produced a business side effect')
+
+    const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb11')
+    const allPids = lifecyclePids(lifecycle.internal)
+    fixture.cleanup()
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        receiver: workReceiverId,
+        commands: [
+          'agentteams work submit --receiver bb-receiver --payload {"query":"marker-alpha"}',
+          'agentteams work query --receiver bb-receiver --work-id <W> --request-id <R>',
+          'installed runner compile --graph runtime/dagpipe/graphs/agent-work.graph.json --capabilities [...]',
+          'installed runner compile --graph <isolated candidate> (missing operator / ARC error / missing effects)',
+        ],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        runtime: {
+          runner_path: runnerPath,
+          runner_sha256: sdk.runner_sha256,
+          manifest_path: join(runtimeRoot, 'manifest.json'),
+          graph_sha256: Object.fromEntries(sdk.graphs.map(graph => [graph.id, graph.sha256])),
+        },
+        submit: submitted,
+        query: queried,
+        compile: {
+          baseline,
+          missing_operator: missingOperatorFrame,
+          arc_error: arcErrorFrame,
+          missing_effects: missingEffectsFrame,
+        },
+        provider_ledger_works_after_compile: ledgerAfterCompile.snapshot.works.length,
+        stop_stdout: final.stop.stdout,
+        stopped_stdout: final.status.stdout,
+        owned_pids_after_stop: allPids,
+        owned_pids_alive_after_stop: allPids.filter(processAlive),
         temporary_root_removed: !existsSync(fixture.temporaryRoot),
       },
       evidence_path: evidenceDir,
