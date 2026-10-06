@@ -42,6 +42,7 @@
     "vitest": "^4.1.8"
   },
   "dependencies": {
+    "@opencode-ai/sdk": "1.18.23",
     "toml": "4.3.0",
     "ws": "8.21.3"
   }
