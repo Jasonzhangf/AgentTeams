@@ -786,6 +786,8 @@ it('reports an unobservable Console status as CONSOLE_STATUS_UNAVAILABLE', async
     ], { stdio: 'ignore' })
     await new Promise<void>(resolveSpawn => owner?.once('spawn', resolveSpawn))
     await writeLocalInternalLauncherState(config.internalPath!, { pid: owner.pid!, generation: 1, startToken, state: 'running' })
+    // A missing control row is an unreadable observation too, not a stopped launcher.
+    await expect(consoleStatusLocalProcess(path, { timeoutMs: 500 })).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
     await writeLocalInternalWorkControl(config.internalPath!, {
       socketPath: join(dirname(config.internalPath!), '.internal', 'work-control.sock'),
       launcherGeneration: 1,
@@ -803,3 +805,64 @@ it('reports an unobservable Console status as CONSOLE_STATUS_UNAVAILABLE', async
     await rm(root, { recursive: true, force: true })
   }
 }, 15000)
+
+it('rejects a stale Console generation while the launcher is stopped', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-status-stale-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 4, startToken: 'stopped-launcher', state: 'stopped' })
+
+    // The generation check belongs to the status request in every launcher state, so a
+    // stopped launcher still rejects a stale --generation instead of answering.
+    await expect(consoleStatusLocalProcess(path, { expectedLauncherGeneration: 9 })).rejects.toMatchObject({ code: 'STALE_GENERATION' })
+    await expect(consoleStatusLocalProcess(path, { expectedLauncherGeneration: 4 })).resolves.toMatchObject({ launcherGeneration: 4 })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('never records a stopped Console when recovery cannot confirm its exit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-recovery-unconfirmed-'))
+  const path = join(root, 'config.toml')
+  let child: ReturnType<typeof spawnProcess> | undefined
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const enabled = await loadLocalConfig(path)
+    const startToken = 'recovery-console-token'
+    const entryPath = join(root, 'console-entry.mjs')
+    await writeFile(entryPath, 'setInterval(()=>{},1e3)\nprocess.once("SIGTERM", () => process.exit(0))\n')
+    child = spawnProcess(process.execPath, [entryPath, '--config', enabled.console!.configPath, '--launcher-start-token', startToken], { stdio: 'ignore' })
+    await new Promise<void>(resolveSpawn => child?.once('spawn', resolveSpawn))
+    await writeLocalInternalConsoleRuntime(enabled.internalPath!, {
+      enabled: true,
+      pid: child.pid,
+      generation: 1,
+      startToken,
+      entryPath,
+      state: 'online',
+      url: 'http://127.0.0.1:1',
+      origin: 'http://127.0.0.1:1',
+      identityRef: 'console:local',
+    })
+    // The user disables Console while the child is still live. Reloading drops the
+    // internal projection and carries the runtime row forward, so recovery sees a
+    // recorded child with no projection path and cannot confirm its exit.
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG.replace('[console]\nenabled = true', '[console]\nenabled = false'))
+    const disabled = await loadLocalConfig(path)
+    await writeLocalInternalLauncherState(disabled.internalPath!, { pid: 0, generation: 1, startToken: 'dead-launcher-token', state: 'running' })
+
+    // The unconfirmed child is reported and kept, never silently recorded as stopped.
+    await expect(stopLocalProcess(path)).rejects.toMatchObject({ code: 'STALE_OWNER' })
+    const recovered = await readLocalInternalConfig(disabled.internalPath!)
+    expect(recovered.consoleRuntime).toMatchObject({ state: 'retained', error: { code: 'CONSOLE_RETAINED' } })
+    expect(() => process.kill(child!.pid!, 0)).not.toThrow()
+  } finally {
+    if (child !== undefined && child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM')
+      await new Promise<void>(resolveExit => child?.once('exit', resolveExit))
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 20000)

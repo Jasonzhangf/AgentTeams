@@ -137,7 +137,7 @@ async function stopOwnedLauncher(configPath: string, launcher: LocalInternalLaun
   await waitForProcessExit(pid, 2_000)
 }
 
-async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLocalInternalConfig>>): Promise<void> {
+async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLocalInternalConfig>>, consoleConfigPath?: string): Promise<void> {
   const candidates: Array<{ readonly id: string; readonly pid: number; readonly configPath: string; readonly entryPath?: string; readonly startToken?: string }> = []
   const relay = internal.daemons?.relay
   const relayPid = relay?.pid
@@ -154,8 +154,13 @@ async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLoca
   // no owned path is left to stop it.
   const consoleRuntime = internal.consoleRuntime
   const consolePid = consoleRuntime?.pid
-  if (consolePid !== undefined && consolePid > 0 && internal.console?.projectionPath !== undefined) {
-    candidates.push({ id: 'console', pid: consolePid, configPath: internal.console.projectionPath, entryPath: consoleRuntime?.entryPath, startToken: consoleRuntime?.startToken })
+  if (consolePid !== undefined && consolePid > 0) {
+    // The recorded child is owned even when its projection is gone, for example after
+    // the user disables Console while the child is still live. The candidate is built
+    // from the runtime row and falls back to the configured projection path; when the
+    // path or the ownership facts are missing the check below reports STALE_OWNER and
+    // recovery keeps the child explicitly retained.
+    candidates.push({ id: 'console', pid: consolePid, configPath: internal.console?.projectionPath ?? consoleConfigPath ?? '', entryPath: consoleRuntime?.entryPath, startToken: consoleRuntime?.startToken })
   }
   for (const candidate of candidates) {
     if (!processAlive(candidate.pid)) continue
@@ -209,7 +214,7 @@ async function stopRetainedConsoleRuntime(
   })
 }
 
-async function recoverDeadLauncher(internalPath: string, configPath: string, internal: Awaited<ReturnType<typeof readLocalInternalConfig>>, launcher: LocalInternalLauncherConfig, state: 'stopped' | 'failed' = launcher.state === 'failed' ? 'failed' : 'stopped'): Promise<void> {
+async function recoverDeadLauncher(internalPath: string, configPath: string, internal: Awaited<ReturnType<typeof readLocalInternalConfig>>, launcher: LocalInternalLauncherConfig, state: 'stopped' | 'failed' = launcher.state === 'failed' ? 'failed' : 'stopped', consoleConfigPath?: string): Promise<void> {
   // Recovery covers the Console child as well: a recorded Console pid is stopped with
   // the launcher, and when its exit cannot be confirmed it stays explicitly retained
   // instead of being left recorded as a live child.
@@ -219,7 +224,7 @@ async function recoverDeadLauncher(internalPath: string, configPath: string, int
     : undefined
   try {
     await stopOwnedLauncher(configPath, launcher)
-    await stopOwnedDescendants(internal)
+    await stopOwnedDescendants(internal, consoleConfigPath)
     const recoveredDaemons = Object.fromEntries(Object.entries(internal.daemons ?? {}).map(([id, daemon]) => [id, {
       pid: daemon.pid ?? 0,
       ...(daemon.generation === undefined ? {} : { generation: daemon.generation }),
@@ -341,7 +346,7 @@ export async function startLocalProcess(configPath = defaultLocalConfigPath(), o
       throw new LocalProcessError('ALREADY_RUNNING', `local supervisor is already running pid=${current.launcher.pid} generation=${current.launcher.generation}`)
     }
     if (current.launcher !== undefined && current.launcher.state !== 'stopped') {
-      await recoverDeadLauncher(config.internalPath!, config.configPath, current, current.launcher, 'stopped')
+      await recoverDeadLauncher(config.internalPath!, config.configPath, current, current.launcher, 'stopped', config.console?.configPath)
     }
     const latest = await readLocalInternalConfig(config.internalPath!)
     const nextGeneration = (latest.launcher?.generation ?? 0) + 1
@@ -523,7 +528,7 @@ export async function stopLocalProcess(configPath = defaultLocalConfigPath(), ex
       throw new LocalProcessError('STALE_GENERATION', `stale local supervisor generation expected=${expectedGeneration} current=${launcher.generation}`)
     }
     if (launcher.pid === undefined || launcher.pid <= 0 || !processAlive(launcher.pid)) {
-      await recoverDeadLauncher(config.internalPath!, config.configPath, internal, launcher)
+      await recoverDeadLauncher(config.internalPath!, config.configPath, internal, launcher, undefined, config.console?.configPath)
       return { configPath: config.configPath, internalPath: config.internalPath!, generation: launcher.generation, state: launcher.state === 'failed' ? 'failed' : 'stopped' as const, ...(launcher.error === undefined ? {} : { error: launcher.error }) }
     }
     if (!(await processOwnsStartToken(launcher.pid, launcher.startToken, config.configPath))) {
@@ -570,8 +575,15 @@ async function consoleControl(
   const running = effectiveLauncherState === 'running'
   if (!running) {
     if (kind === 'console.status') {
+      // The generation check belongs to the status request too, so a stopped or failed
+      // launcher still rejects a stale --generation instead of answering with the
+      // persisted generation.
+      const persistedGeneration = launcher?.generation ?? 0
+      if (options.expectedLauncherGeneration !== undefined && options.expectedLauncherGeneration !== persistedGeneration) {
+        throw new LocalProcessError('STALE_GENERATION', `stale local supervisor generation expected=${options.expectedLauncherGeneration} current=${persistedGeneration}`)
+      }
       return await consoleStatusObservation(async () =>
-        await classifyLocalConsoleStatus(config, internal, process.env, { state: effectiveLauncherState, generation: launcher?.generation ?? 0 }))
+        await classifyLocalConsoleStatus(config, internal, process.env, { state: effectiveLauncherState, generation: persistedGeneration }))
     }
     const reason = effectiveLauncherState === 'failed'
       ? 'launcher ownership cannot be verified'
@@ -583,7 +595,11 @@ async function consoleControl(
     throw new LocalProcessError('STALE_GENERATION', `stale local supervisor generation expected=${options.expectedLauncherGeneration} current=${launcher.generation}`)
   }
   const workControl = await readLocalInternalWorkControl(config.internalPath)
-  if (workControl === undefined) throw new LocalProcessError('CONSOLE_NOT_RUNNING', 'local Work control is unavailable: no running launcher published a control socket')
+  if (workControl === undefined) {
+    const message = 'local Work control is unavailable: no running launcher published a control socket'
+    if (kind === 'console.status') throw new LocalProcessError('CONSOLE_STATUS_UNAVAILABLE', message)
+    throw new LocalProcessError('CONSOLE_NOT_RUNNING', message)
+  }
   if (workControl.launcherGeneration !== launcher.generation || workControl.launcherStartToken !== launcher.startToken) {
     throw new LocalProcessError('STALE_OWNER', 'local Work control refs do not match the running launcher')
   }
