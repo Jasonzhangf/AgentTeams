@@ -525,7 +525,7 @@ describe('OpenCode Teams adapter', () => {
         return { data: [
           { info: { id: 'm-user', sessionID: 's', role: 'user' }, parts: [{ id: 'p-user', sessionID: 's', messageID: 'm-user', type: 'text', text: 'hello' }] },
           { info: { id: 'm-assistant', sessionID: 's', role: 'assistant', parentID: 'm-user', time: { completed: 1 } },
-            parts: [{ id: 'p-tool', sessionID: 's', messageID: 'm-assistant', type: 'tool', tool: 'bash', callID: 'c', state: { status: 'completed', input: { command: 'ls' }, output: 'ok', title: 'ls' } }] },
+            parts: [{ id: 'p-tool', sessionID: 's', messageID: 'm-assistant', type: 'tool', tool: 'bash', callID: 'c', state: { status: 'completed', input: { command: 'ls' }, output: 'ok', title: 'ls', metadata: {} } }] },
         ] }
       },
     } }
@@ -610,13 +610,16 @@ describe('OpenCode Teams adapter', () => {
     const runningWithoutTitle = projection({ status: 'running', input: { command: 'ls' } })
     expect(runningWithoutTitle.event).not.toHaveProperty('title')
     expect(wire({ status: 'running', input: { command: 'ls' } })).toMatchObject({ kind: 'tool', state: 'running' })
-    // An empty or absent title cannot satisfy the wire's non-empty rule, so it must be rejected
-    // here, at the adapter boundary, instead of failing the whole Console projection reply.
+    // A field the installed SDK types as required for its state is not optional in practice, so a
+    // malformed part must be rejected here instead of being normalized into a wire-valid event.
     for (const state of [
+      { status: 'pending', input: { command: 'ls' } },
       { status: 'running', input: { command: 'ls' }, title: '' },
       { status: 'completed', input: { command: 'ls' }, output: 'ok', title: '' },
-      { status: 'completed', input: { command: 'ls' }, output: 'ok' },
-      { status: 'completed', input: { command: 'ls' }, output: 7, title: 'ls' },
+      { status: 'completed', input: { command: 'ls' }, output: 'ok', title: 'ls' },
+      { status: 'completed', input: { command: 'ls' }, output: 7, title: 'ls', metadata: {} },
+      { status: 'error', input: { command: 'ls' } },
+      { status: 'error', input: { command: 'ls' }, error: 7 },
     ]) {
       expect(projectOpenCodeSessionEvent(toolPart(state))).toMatchObject({ kind: 'invalid' })
     }

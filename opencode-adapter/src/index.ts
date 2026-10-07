@@ -720,8 +720,14 @@ function classifyPart(type: string, properties: Readonly<Record<string, unknown>
     // and a completed tool always carries one (`text(event.title)`). Coercing an absent or empty
     // substrate title to `''` here would emit a shape the closed Console parser rejects, and one
     // rejected event fails the whole projection reply instead of degrading this single event.
+    // The installed SDK types the remaining per-state fields as required too (`raw` for pending,
+    // `metadata` for completed, `error` for error), so a missing one is a malformed shape that must
+    // be classified invalid here rather than normalized into a wire-valid event with an empty value.
     switch (state.status) {
-      case 'pending': return { kind: 'event', event: { ...common, state: 'pending', input, raw: typeof state.raw === 'string' ? state.raw : '' } }
+      case 'pending': {
+        if (typeof state.raw !== 'string') return { kind: 'invalid', reason: 'pending tool part is missing a string raw', raw }
+        return { kind: 'event', event: { ...common, state: 'pending', input, raw: state.raw } }
+      }
       case 'running': {
         if (state.title !== undefined && (typeof state.title !== 'string' || state.title === '')) {
           return { kind: 'invalid', reason: 'running tool part carries an empty or non-string title', raw }
@@ -731,9 +737,13 @@ function classifyPart(type: string, properties: Readonly<Record<string, unknown>
       case 'completed': {
         if (typeof state.title !== 'string' || state.title === '') return { kind: 'invalid', reason: 'completed tool part is missing a non-empty title', raw }
         if (typeof state.output !== 'string') return { kind: 'invalid', reason: 'completed tool part is missing a string output', raw }
-        return { kind: 'event', event: { ...common, state: 'completed', input, output: state.output, title: state.title, metadata: metadata ?? {}, ...(attachments === undefined ? {} : { attachments }) } }
+        if (metadata === undefined) return { kind: 'invalid', reason: 'completed tool part is missing metadata', raw }
+        return { kind: 'event', event: { ...common, state: 'completed', input, output: state.output, title: state.title, metadata, ...(attachments === undefined ? {} : { attachments }) } }
       }
-      case 'error': return { kind: 'event', event: { ...common, state: 'error', input, error: String(state.error ?? ''), ...(metadata === undefined ? {} : { metadata }) } }
+      case 'error': {
+        if (typeof state.error !== 'string') return { kind: 'invalid', reason: 'error tool part is missing a string error', raw }
+        return { kind: 'event', event: { ...common, state: 'error', input, error: state.error, ...(metadata === undefined ? {} : { metadata }) } }
+      }
       default: return { kind: 'invalid', reason: `tool part has an unknown state ${String(state.status)}`, raw }
     }
   }
