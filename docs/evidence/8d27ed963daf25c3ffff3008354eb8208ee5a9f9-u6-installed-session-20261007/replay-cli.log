@@ -1,0 +1,9 @@
+=== installed session replay ===
+u6-installed-session-replay passed
+{"status":"passed","cases":["initialization","lifecycle","console","discovery","config.apply","session.create","session.open","session.send","permission","session.cancel","passive-refusal","binding-without-owner","unsupported-payload","console-offline","stale-generation","clean-stop"]}
+REPLAY_EXIT=0
+=== dagpipe graph validate ===
+valid DAG: agentteams.session-request@1 (7 nodes, 7 edges, 6 waves)
+operator bindings are syntactically present; project compile() remains the authoritative registry/schema/effect gate
+DAGPIPE_EXIT=0
+R16_REPLAY_DONE

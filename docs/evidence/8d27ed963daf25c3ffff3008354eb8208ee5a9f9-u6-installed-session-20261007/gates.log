@@ -1,0 +1,46 @@
+=== mapped gate ===
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006
+
+(node:5523) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/dagpipe/.build/build-gj6RWS)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.45s
+stderr | runtime/agent-process.spec.ts > Session host admission, cancel causality and observation > separates observation degradation from owner readiness and contains expected errors
+Promise returned by `expect(actual).resolves.toMatchObject(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in the next Vitest major. Please remember to await the assertion.
+    at /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/agent-process.spec.ts:1350:62
+
+ ✓ runtime/agent-process.spec.ts (39 tests) 40120ms
+   ✓ executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state  5575ms
+   ✓ keeps an Agent with an accepted model binding but an unresolved managed executable passive and unavailable  363ms
+   ✓ persists unknown state before refusing a restart with active Work  405ms
+   ✓ recovers a stale work lock only after the previous daemon lease is reacquired  341ms
+   ✓ runs real persistent Camo browser Work through current SDK graphs and restores capacity  27790ms
+     ✓ keeps a multi-match assistant identity ambiguous and never confirms its cancel  5009ms
+ ✓ runtime/managed-config-owner.spec.ts (7 tests) 167ms
+ ✓ network/console-channel.spec.ts (2 tests) 50ms
+ ✓ opencode-adapter/tests/index.spec.ts (41 tests) 21ms
+ ✓ runtime/console-hub.spec.ts (9 tests) 10ms
+ ✓ ui/teams-console/tests/controller.spec.ts (14 tests) 7ms
+ ✓ control-protocol/console-api.spec.ts (6 tests) 8ms
+ ✓ control-protocol/console-wire.spec.ts (4 tests) 7ms
+ ✓ agent-host/console-ingress.spec.ts (4 tests) 6ms
+
+ Test Files  9 passed (9)
+      Tests  126 passed (126)
+   Start at  10:59:04
+   Duration  42.71s (transform 630ms, setup 0ms, import 1.02s, tests 40.40s, environment 0ms)
+
+GATE_EXIT=0

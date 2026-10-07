@@ -2,7 +2,13 @@
 
 Task: `docs/design/teams-session-delivery.md` delivered path
 Date: 2026-10-07 (America/Los_Angeles)
-Status: `INSTALLED PUBLIC-ENTRY EVIDENCE / TREE-BOUND`
+Status: `SUPERSEDED / HISTORICAL`
+
+> **Superseded.** This directory documents the tree `0aca95ef682eca42947d6df48f7452f5505515e8`
+> only. The branch has since moved to tree `8d27ed963daf25c3ffff3008354eb8208ee5a9f9`
+> (commit `d3e25daebb4f0853db199bf931865033e1358c30`), which changes product paths, so every
+> claim below holds **at the publishing commit `de1b9c42` and nowhere later**. The current
+> receipt is `docs/evidence/8d27ed963daf25c3ffff3008354eb8208ee5a9f9-u6-installed-session-20261007/`.
 
 ## Which commit this directory is about
 
@@ -19,14 +25,16 @@ not the commit that publishes the receipt.
 A receipt cannot live inside the commit it binds: it is written after the commit, and
 adding it changes the tree hash. The receipt is produced under `generated/`, which
 `.gitignore:5` excludes, so this directory holds its tracked copy. The publishing commit
-changes no product path. Verify that one fact:
+changes no product path. Verify that one fact at the publishing commit `de1b9c42`:
 
 ```text
-$ git diff --name-only 0aca95ef682eca42947d6df48f7452f5505515e8 HEAD | grep -v '^docs/'
+$ git diff --name-only 0aca95ef682eca42947d6df48f7452f5505515e8 de1b9c42 | grep -v '^docs/'
 ```
 
-Nothing is printed when the claim holds. Code admission rests on the tree the receipt
-names. The receipt is never evidence for the commit that carries it.
+Nothing is printed when the claim holds. At any later commit the branch has moved on and this
+receipt no longer covers it; use the receipt named in the superseded banner above. Code
+admission rests on the tree the receipt names. The receipt is never evidence for the commit
+that carries it.
 
 ## Candidate identity, recorded at `8ffb130`
 
