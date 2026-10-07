@@ -747,9 +747,11 @@ export async function runInstalledSessionReplay(options = {}) {
     const boundRoot = mkdtempSync('/tmp/u6rb-')
     const boundHome = join(boundRoot, 'home')
     mkdirSync(boundHome, { recursive: true, mode: 0o700 })
-    const boundConfigPath = join(boundRoot, 'config.toml')
-    writeFileSync(boundConfigPath, boundWithoutOwnerConfigText(providerBaseUrl), { encoding: 'utf8', mode: 0o600 })
+    const boundConfigPath = join(boundHome, '.agentteams', 'config.toml')
     const boundEnv = { ...cliEnv, HOME: boundHome, AGENTTEAMS_OPENCODE_EXECUTABLE: '/missing/u6-opencode' }
+    // init provisions this HOME's own TLS material and default config location.
+    await run(cli, ['init'], { cwd: boundRoot, env: boundEnv })
+    writeFileSync(boundConfigPath, boundWithoutOwnerConfigText(providerBaseUrl), { encoding: 'utf8', mode: 0o600 })
     let boundStarted = false
     try {
       await run(cli, ['start', '--config', boundConfigPath], { cwd: boundRoot, env: boundEnv })
