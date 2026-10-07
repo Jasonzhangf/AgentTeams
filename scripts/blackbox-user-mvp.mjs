@@ -14,6 +14,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { createServer } from 'node:http'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { parse as parseToml } from 'toml'
 import { currentCandidateIdentity, validateCandidateIdentity } from './receipt-identity.mjs'
@@ -42,9 +43,9 @@ const cases = [
   { id: 'BB07', owner: 'D3/U4', gate: 'installed Work unknown and recovery query', implemented: true, run: runBB07 },
   { id: 'BB08', owner: 'U2+U4', gate: 'installed config generation and stale rejection', implemented: true, run: runBB08 },
   { id: 'BB09', owner: 'U5', gate: 'installed Console lifecycle and offline Work', implemented: true, run: runBB09 },
-  { id: 'BB10', owner: 'U2+U6', gate: 'installed explicit provider/model session', implemented: false, missingCapability: 'U6 installed OpenCode provider/model Session entry is not delivered in this candidate', publicProbe: 'status' },
+  { id: 'BB10', owner: 'U2+U6', gate: 'installed explicit provider/model session', implemented: true, run: runBB10 },
   { id: 'BB11', owner: 'D3/U4', gate: 'installed SDK Work and compile negatives', implemented: true, run: runBB11 },
-  { id: 'BB12', owner: 'U6', gate: 'installed Session message tool permission cancel', implemented: false, missingCapability: 'U6 installed Session message/tool/permission/cancel entry is not delivered in this candidate', publicProbe: 'status' },
+  { id: 'BB12', owner: 'U6', gate: 'installed Session message tool permission cancel', implemented: true, run: runBB12 },
   { id: 'BB13', owner: 'D4/U7', gate: 'existing lifecycle store failure recovery invalidation matrix', implemented: true, run: runBB13 },
   { id: 'BB14', owner: 'U1+U7', gate: 'failed start stop and owned resource cleanup', implemented: true, run: runBB14 },
 ]
@@ -286,7 +287,7 @@ function temporaryRootBase() {
   return existsSync('/tmp') ? '/tmp' : tmpdir()
 }
 
-function installPackage(packRoot, evidenceDir, label) {
+function installPackage(packRoot, evidenceDir, label, extraEnv = {}) {
   const temporaryRoot = mkdtempSync(join(temporaryRootBase(), `agentteams-u7-${label}-`))
   const prefix = join(temporaryRoot, 'prefix')
   const home = join(temporaryRoot, 'home')
@@ -303,6 +304,7 @@ function installPackage(packRoot, evidenceDir, label) {
     AGENTTEAMS_BB_RECEIVER_AUTH: 'bb-receiver-auth',
     [consoleLinkAuthEnv]: consoleLinkAuth,
     [consolePasswordEnv]: consolePassword,
+    ...extraEnv,
   }
   const packed = runChecked('npm', ['pack', packRoot, '--pack-destination', packDestination, '--json'], {
     cwd: temporaryRoot,
@@ -458,7 +460,7 @@ function ensureUserConfig(fixture, evidenceDir, options = {}) {
   })
   const rg = runChecked('which', ['rg'], { env: fixture.env, logPath: join(evidenceDir, 'which-rg.json') }).stdout.trim()
   assert(rg.startsWith('/'), `rg executable is not absolute: ${rg}`)
-  const configText = configFixtureText(rg, options)
+  const configText = options.buildConfigText === undefined ? configFixtureText(rg, options) : options.buildConfigText(rg)
   writeFileSync(fixture.configPath, configText, { encoding: 'utf8', mode: 0o600 })
   return { configText, configSha256: sha256(configText) }
 }
@@ -1288,6 +1290,843 @@ async function runBB09(context) {
     }
   } finally {
     stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
+// ---------------------------------------------------------------------------
+// BB10 / BB12: the installed Session entry. Both cases install the staged
+// package outside the source tree, start the installed launcher plus the
+// installed Console child, and drive real Session actions through the Console
+// HTTP ingress to the managed OpenCode child. The LLM is a local
+// OpenAI-compatible stub, so no external credential or network is required.
+// ---------------------------------------------------------------------------
+
+// The session fixture reuses the two daemon ids the shared lifecycle helpers
+// already own, so the installed launcher, the derived internal.toml and the
+// Console credentials keep one shape across every case.
+const sessionAgentId = 'bb-provider'
+const passiveAgentId = 'bb-receiver'
+const sessionPrimaryProviderId = 'bb-primary'
+const sessionBackupProviderId = 'bb-backup'
+const sessionManualProviderId = 'bb-manual'
+const sessionPrimaryModel = 'bb-primary-model'
+const sessionBackupModel = 'bb-backup-model'
+const sessionManualModel = 'bb-manual-model'
+const sessionSentinel = 'bb-session-provider-ok'
+const sessionToolMarker = 'bb12-tool-probe'
+const sessionToolCallId = 'call_bb12_tool'
+const sessionPermissionMarker = 'bb12-permission-probe'
+const sessionPermissionCallId = 'call_bb12_permission'
+const sessionHoldMarker = 'bb12-hold-open'
+const sessionEnvSentinel = 'bb12-env-sentinel'
+
+/** Resolve the real OpenCode binary from the environment instead of a written path. */
+function openCodeExecutablePath(evidenceDir) {
+  const resolved = runChecked('which', ['opencode'], { logPath: join(evidenceDir, 'which-opencode.json') }).stdout.trim()
+  assert(resolved.startsWith('/'), `opencode executable is not absolute: ${resolved}`)
+  return resolved
+}
+
+async function waitForAsync(probe, timeoutMs, label) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const value = await probe()
+    if (value !== undefined) return value
+    if (Date.now() >= deadline) {
+      const absent = new Error(`blackbox-user-mvp: timed out waiting for ${label}`)
+      absent.absentObservation = true
+      throw absent
+    }
+    await new Promise(resolveDelay => setTimeout(resolveDelay, 250))
+  }
+}
+
+/** A timeout is an observable absence; a failing probe stays a real error. */
+async function optionalWait(probe, timeoutMs) {
+  try {
+    return await waitForAsync(probe, timeoutMs, 'an optional observation')
+  } catch (error) {
+    if (error?.absentObservation === true) return undefined
+    throw error
+  }
+}
+
+function publicJson(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+/**
+ * The session fixture: `bb-provider` owns one explicit primary binding, one
+ * explicit backup binding and the Console manager policy; `bb-receiver` is a
+ * real runtime daemon without any model binding, so it must stay passive.
+ */
+function sessionConfigFixtureText(providerBaseUrls, searchExecutable) {
+  const provider = (id, label, baseUrl) => `
+[providers.${id}]
+protocol = "openai-chat"
+apiBaseUrl = ${JSON.stringify(`${baseUrl}/v1`)}
+label = ${JSON.stringify(label)}
+enabled = true`
+  return `version = 3
+
+[bridge]
+enabled = true
+
+[agents.${sessionAgentId}]
+enabled = true
+role = "provider"
+label = "BB-Session"
+
+[agents.${sessionAgentId}.identity]
+hostId = "bb-local"
+machineId = "bb-machine"
+accountId = "local"
+agentKind = "custom"
+label = "BB-Session"
+
+[agents.${sessionAgentId}.runtime]
+scopeId = "local"
+dataDirectory = "data/${sessionAgentId}"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = ["__console"] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${sessionAgentId}" }
+
+[agents.${sessionAgentId}.model]
+primary = { provider = "${sessionPrimaryProviderId}", model = "${sessionPrimaryModel}" }
+backup = { provider = "${sessionBackupProviderId}", model = "${sessionBackupModel}" }
+
+[agents.${passiveAgentId}]
+enabled = true
+role = "provider"
+label = "BB-Passive"
+
+[agents.${passiveAgentId}.identity]
+hostId = "bb-local"
+machineId = "bb-machine"
+accountId = "local"
+agentKind = "custom"
+label = "BB-Passive"
+
+[agents.${passiveAgentId}.runtime]
+scopeId = "local"
+dataDirectory = "data/${passiveAgentId}"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = ["__console"] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${passiveAgentId}" }
+
+[console]
+enabled = true
+username = ${JSON.stringify(consoleUsername)}
+passwordEnv = ${JSON.stringify(consolePasswordEnv)}
+agentIds = ["${sessionAgentId}", "${passiveAgentId}"]
+${provider(sessionPrimaryProviderId, 'BB Primary', providerBaseUrls.primary)}
+${provider(sessionBackupProviderId, 'BB Backup', providerBaseUrls.backup)}
+${provider(sessionManualProviderId, 'BB Manual', providerBaseUrls.manual)}
+
+[[models]]
+provider = "${sessionPrimaryProviderId}"
+id = "${sessionPrimaryModel}"
+label = "BB Primary Model"
+
+[[models]]
+provider = "${sessionBackupProviderId}"
+id = "${sessionBackupModel}"
+label = "BB Backup Model"
+`
+}
+
+/**
+ * One local OpenAI-compatible provider stub. `/v1/models` answers the catalog
+ * refresh; `/v1/chat/completions` answers the newest turn only, so a tool call
+ * ends after its own result comes back. The recorded request bodies are the
+ * external evidence of which explicit provider/model a Session really used.
+ */
+function createSessionProviderStub(options = {}) {
+  const requests = []
+  const held = []
+  const state = { fail: false }
+  const models = options.models ?? []
+  const server = createServer((request, response) => {
+    if (request.method === 'GET' && request.url === '/v1/models') {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ object: 'list', data: models.map(id => ({ id, object: 'model' })) }))
+      return
+    }
+    if (request.url !== '/v1/chat/completions' || request.method !== 'POST') {
+      response.writeHead(404, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ error: { message: 'unsupported provider stub route' } }))
+      return
+    }
+    let body = ''
+    request.on('data', chunk => { body += chunk })
+    request.on('end', () => {
+      requests.push(body)
+      if (state.fail) {
+        response.writeHead(500, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ error: { message: 'bb session provider stub failure', type: 'api_error' } }))
+        return
+      }
+      let input
+      try { input = JSON.parse(body) } catch { input = {} }
+      const messages = Array.isArray(input.messages) ? input.messages : []
+      const newest = messages[messages.length - 1]
+      const promptText = typeof newest?.content === 'string' ? newest.content : JSON.stringify(newest?.content ?? '')
+      if (options.holdMarker !== undefined && promptText.includes(options.holdMarker)) {
+        held.push(response)
+        return
+      }
+      const toolCall = options.toolCommand === undefined ? undefined : { index: 0, id: options.toolCallId, type: 'function',
+        function: { name: 'bash', arguments: JSON.stringify({ command: options.toolCommand }) } }
+      // The substrate default allows every tool except a `*.env` read, which it asks
+      // about; that read is the only probe here that surfaces a real permission.
+      const permissionCall = options.envProbePath === undefined ? undefined : { index: 0, id: options.permissionCallId, type: 'function',
+        function: { name: 'read', arguments: JSON.stringify({ filePath: options.envProbePath }) } }
+      const call = options.permissionMarker !== undefined && promptText.includes(options.permissionMarker) ? permissionCall
+        : options.toolMarker !== undefined && promptText.includes(options.toolMarker) ? toolCall
+          : undefined
+      writeSessionChatResponse(response, body, input, call)
+    })
+  })
+  return { server, requests, held, state }
+}
+
+function writeSessionChatResponse(response, body, input, call) {
+  const chunk = payload => `data: ${JSON.stringify(payload)}\n\n`
+  if (body.includes('"stream":true')) {
+    response.writeHead(200, { 'content-type': 'text/event-stream' })
+    if (call !== undefined) {
+      response.write(chunk({ id: 'chatcmpl-bb', object: 'chat.completion.chunk', created: 1, model: input.model,
+        choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [call] }, finish_reason: null }] }))
+      response.write(chunk({ id: 'chatcmpl-bb', object: 'chat.completion.chunk', created: 1, model: input.model,
+        choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }))
+    } else {
+      response.write(chunk({ id: 'chatcmpl-bb', object: 'chat.completion.chunk', created: 1, model: input.model,
+        choices: [{ index: 0, delta: { role: 'assistant', content: sessionSentinel }, finish_reason: null }] }))
+      response.write(chunk({ id: 'chatcmpl-bb', object: 'chat.completion.chunk', created: 1, model: input.model,
+        choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }))
+    }
+    response.end('data: [DONE]\n\n')
+    return
+  }
+  response.writeHead(200, { 'content-type': 'application/json' })
+  if (call !== undefined) {
+    response.end(JSON.stringify({ id: 'chatcmpl-bb', object: 'chat.completion', created: 1, model: input.model,
+      choices: [{ index: 0, message: { role: 'assistant', content: null, tool_calls: [call] }, finish_reason: 'tool_calls' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }))
+    return
+  }
+  response.end(JSON.stringify({ id: 'chatcmpl-bb', object: 'chat.completion', created: 1, model: input.model,
+    choices: [{ index: 0, message: { role: 'assistant', content: sessionSentinel }, finish_reason: 'stop' }],
+    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }))
+}
+
+async function listenProviderStub(stub) {
+  await new Promise((resolveListen, rejectListen) => stub.server.listen(0, '127.0.0.1', error => error ? rejectListen(error) : resolveListen()))
+  const address = stub.server.address()
+  assert(address !== null && typeof address === 'object', 'the provider stub did not bind a loopback port')
+  return `http://127.0.0.1:${address.port}`
+}
+
+async function closeProviderStub(stub) {
+  if (stub === undefined) return
+  for (const response of stub.held.splice(0)) {
+    try { response.destroy() } catch { /* the response is already closed */ }
+  }
+  try { await new Promise(resolveClose => stub.server.close(() => resolveClose())) } catch { /* the stub is already closed */ }
+}
+
+async function consoleHttp(consoleUrl, authorization, path, options = {}) {
+  const response = await fetch(`${consoleUrl}${path}`, {
+    method: options.method ?? 'POST',
+    headers: { authorization, 'content-type': 'application/json' },
+    ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+    signal: AbortSignal.timeout(options.timeoutMs ?? 30_000),
+  })
+  const text = await response.text()
+  let body
+  try { body = JSON.parse(text) } catch { body = { raw: text } }
+  return { status: response.status, body, text }
+}
+
+function sessionConsoleClient(consoleUrl, authorization) {
+  return {
+    projection: () => consoleHttp(consoleUrl, authorization, '/api/v1/projection', { method: 'GET' }),
+    command: command => consoleHttp(consoleUrl, authorization, '/api/v1/command', { body: command }),
+    sessionMessage: (agentId, sessionId, payload, timeoutMs = 30_000) => consoleHttp(consoleUrl, authorization,
+      `/api/v1/session-message?agentId=${encodeURIComponent(agentId)}&sessionId=${encodeURIComponent(sessionId)}`,
+      { body: payload, timeoutMs }),
+  }
+}
+
+function readSessionEvents(projection, agentId, sessionId) {
+  return projection.sessionEvents?.filter(event => event.agentId === agentId && event.sessionId === sessionId) ?? []
+}
+
+function sessionCancelConfirmed(result) {
+  return result?.ok === true && result.result?.kind === 'session.cancel' && result.result.finalState === 'cancelled'
+}
+
+function sessionCancelUnknown(result) {
+  return result?.ok === false && result.error?.code === 'RESULT_UNKNOWN'
+    && result.error.detail?.kind === 'session.cancel' && result.error.detail.finalState === 'unknown'
+}
+
+/**
+ * The Console hub opens its relay link to each managed daemon lazily, so the
+ * first projection read can race the link. Retry until the projection is a real
+ * `version 1` document and record the exact response that was accepted.
+ */
+async function readInstalledProjection(client, evidenceDir, name, timeoutMs = 90_000) {
+  let last
+  const body = await optionalWait(async () => {
+    const response = await client.projection()
+    last = response
+    return response.status === 200 && response.body?.version === 1 && Array.isArray(response.body.agents)
+      ? response.body
+      : undefined
+  }, timeoutMs)
+  assert(body !== undefined,
+    `the installed Console projection was not readable: status=${last?.status} body=${(last?.text ?? '').slice(0, 400)}`)
+  if (evidenceDir !== undefined) writeJson(join(evidenceDir, `${name}-projection.json`), body)
+  return body
+}
+
+function startInstalledSessionConsole(fixture, evidenceDir, prefix) {
+  const start = runConsole(fixture, evidenceDir, `${prefix}-console-start`, ['start'], { expectStatus: 0 })
+  const online = assertConsoleOnline(parseCliConsole(start.stdout), `${prefix} installed Console`)
+  return {
+    start,
+    ...online,
+    authorization: `Basic ${Buffer.from(`${consoleUsername}:${consolePassword}`).toString('base64')}`,
+  }
+}
+
+async function applySessionConfigAndWait(client, agentId, evidenceDir, prefix) {
+  const applied = await client.command({ kind: 'config.apply', agentId })
+  assert(applied.body.ok === true, `config.apply failed for ${agentId}: ${JSON.stringify(applied.body)}`)
+  const agent = await waitForAsync(async () => {
+    const row = (await readInstalledProjection(client, undefined, 'apply')).agents.find(candidate => candidate.agentId === agentId)
+    return row?.sessionCapable === true && row.sessionAvailability === 'current' ? row : undefined
+  }, 180_000, `the installed ${agentId} Session runtime to become current`)
+  writeJson(join(evidenceDir, `${prefix}-config-apply.json`), publicJson(applied.body))
+  return { applied: publicJson(applied.body), agent: publicJson(agent) }
+}
+
+/**
+ * A failed `config.apply` records its uncertainty fence in the Agent's own
+ * internal state. Read that fence back so a case reports the substrate error
+ * that produced it, not only the persistence wrapper error.
+ */
+function readUncertaintyFences(configPath) {
+  const internalPath = join(dirname(configPath), 'internal.toml')
+  if (!existsSync(internalPath)) return { internalPath, fences: [], internal_text: null }
+  const text = readFileSync(internalPath, 'utf8')
+  const effective = parseToml(text).configRuntime?.effective ?? {}
+  const fences = []
+  for (const [agentId, slice] of Object.entries(effective)) {
+    const raw = slice?.uncertain
+    if (typeof raw !== 'string' || raw === '') continue
+    try { fences.push({ agentId, operations: JSON.parse(raw) }) } catch { fences.push({ agentId, raw }) }
+  }
+  return { internalPath, fences, internal_text: text }
+}
+
+function waitForSessionTurn(sessionEvents, previousFinals, label) {
+  return waitForAsync(async () => {
+    const finals = (await sessionEvents()).filter(event => event.kind === 'final')
+    return finals.length > previousFinals ? finals.at(-1) : undefined
+  }, 180_000, label)
+}
+
+async function createAndOpenSession(client, title, evidenceDir, prefix) {
+  const created = await client.command({ kind: 'session.create', agentId: sessionAgentId, title })
+  assert(created.body.ok === true && created.body.result?.kind === 'session.create'
+    && typeof created.body.result.sessionId === 'string',
+  `session.create did not return a typed Session result: ${JSON.stringify(created.body)}`)
+  // The create result carries only real OpenCode Session identity and never a
+  // provider/model commitment, so no default can be mistaken for an explicit binding.
+  for (const forbidden of ['providerId', 'modelId', 'provider', 'model', 'config']) {
+    assert(created.body.result[forbidden] === undefined,
+      `session.create fabricated a ${forbidden} commitment: ${JSON.stringify(created.body.result)}`)
+  }
+  const sessionId = created.body.result.sessionId
+  const opened = await client.command({ kind: 'session.open', agentId: sessionAgentId, sessionId })
+  assert(opened.body.ok === true, `session.open failed: ${JSON.stringify(opened.body)}`)
+  const hydrated = await readInstalledProjection(client, undefined, 'session-open')
+  assert(hydrated.sessions.some(session => session.agentId === sessionAgentId && session.sessionId === sessionId),
+    'session.open did not hydrate the bounded projection')
+  writeJson(join(evidenceDir, `${prefix}-session.json`), { created: publicJson(created.body), opened: publicJson(opened.body) })
+  return { sessionId, created: publicJson(created.body), opened: publicJson(opened.body) }
+}
+
+async function runBB10(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB10')
+  mkdirSync(evidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb10',
+    { AGENTTEAMS_OPENCODE_EXECUTABLE: openCodeExecutablePath(evidenceDir) })
+  const primary = createSessionProviderStub({ models: [sessionPrimaryModel] })
+  const backup = createSessionProviderStub({ models: [sessionBackupModel] })
+  const manual = createSessionProviderStub({ models: [] })
+  let lifecycle
+  let result
+  try {
+    const primaryUrl = await listenProviderStub(primary)
+    const backupUrl = await listenProviderStub(backup)
+    const manualUrl = await listenProviderStub(manual)
+    const config = ensureUserConfig(fixture, evidenceDir, {
+      buildConfigText: searchExecutable => sessionConfigFixtureText({ primary: primaryUrl, backup: backupUrl, manual: manualUrl }, searchExecutable),
+    })
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb10')
+    const console = startInstalledSessionConsole(fixture, evidenceDir, 'bb10')
+    const client = sessionConsoleClient(console.url, console.authorization)
+    const sessionEvents = async () => readSessionEvents(await readInstalledProjection(client, undefined, 'events'), sessionAgentId, sessionId)
+
+    const discovery = await readInstalledProjection(client, evidenceDir, 'bb10')
+    const sessionRow = discovery.agents.find(agent => agent.agentId === sessionAgentId)
+    const passiveRow = discovery.agents.find(agent => agent.agentId === passiveAgentId)
+    assert(sessionRow?.sessionCapable === true, `the installed ${sessionAgentId} row is not Session capable: ${JSON.stringify(sessionRow)}`)
+    assert(passiveRow?.sessionCapable === false && passiveRow.sessionAvailability === 'not-applicable',
+      `the installed ${passiveAgentId} row is not a passive runtime row: ${JSON.stringify(passiveRow)}`)
+    const manualCatalog = discovery.configs.find(row => row.agentId === sessionAgentId)
+      ?.providers.find(provider => provider.id === sessionManualProviderId)
+    assert(manualCatalog?.catalogState === 'empty' && manualCatalog.models.length === 0,
+      `the unbound provider catalog was not empty before the explicit selection: ${JSON.stringify(manualCatalog)}`)
+
+    const firstApply = await applySessionConfigAndWait(client, sessionAgentId, evidenceDir, 'bb10')
+    assert(firstApply.agent.providerId === sessionPrimaryProviderId && firstApply.agent.modelId === sessionPrimaryModel,
+      `the installed projection did not report the explicit primary binding: ${JSON.stringify(firstApply.agent)}`)
+
+    const session = await createAndOpenSession(client, 'BB10 installed explicit model', evidenceDir, 'bb10')
+    const sessionId = session.sessionId
+
+    // (1) The explicit primary binding is what the real provider call used.
+    const primaryPrompt = 'bb10 explicit primary probe'
+    const primaryFinals = (await sessionEvents()).filter(event => event.kind === 'final').length
+    const primarySent = await client.sessionMessage(sessionAgentId, sessionId, { text: primaryPrompt })
+    assert(primarySent.body.ok === true, `the explicit primary prompt failed: ${JSON.stringify(primarySent.body)}`)
+    await waitForSessionTurn(sessionEvents, primaryFinals, 'the explicit primary turn to finish')
+    const primaryRequest = await waitForAsync(async () => primary.requests.map(text => JSON.parse(text))
+      .find(request => JSON.stringify(request.messages ?? '').includes(primaryPrompt)), 120_000,
+    'the explicit primary provider stub to receive the Session prompt')
+    assert(primaryRequest.model === sessionPrimaryModel,
+      `the Session prompt used model ${primaryRequest.model}, not the explicit binding ${sessionPrimaryModel}`)
+    assert(backup.requests.length === 0 && manual.requests.length === 0,
+      'a provider outside the explicit binding received the Session prompt')
+
+    // (2) An explicit switch through the installed Console moves the next real
+    // call to the newly selected provider/model, including the empty-catalog path
+    // where the manual model entry is the only catalog entry.
+    const configRow = (await readInstalledProjection(client, undefined, 'config')).configs.find(row => row.agentId === sessionAgentId)
+    assert(typeof configRow?.acceptedRevision === 'number', `the installed projection has no config row for ${sessionAgentId}`)
+    const revisionBeforeSelection = configRow.acceptedRevision
+    const manualEntry = { ref: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
+      origin: 'manual', base: { label: 'BB Manual Model' }, overrides: {} }
+    const putModel = await client.command({ kind: 'config.model.put', agentId: sessionAgentId,
+      expectedRevision: revisionBeforeSelection, entry: manualEntry })
+    assert(putModel.body.ok === true, `config.model.put on an empty catalog failed: ${JSON.stringify(putModel.body)}`)
+    const bindModel = await client.command({ kind: 'config.bindModel', agentId: sessionAgentId,
+      expectedRevision: revisionBeforeSelection + 1, providerId: sessionManualProviderId, modelId: sessionManualModel })
+    assert(bindModel.body.ok === true, `the explicit Console model selection failed: ${JSON.stringify(bindModel.body)}`)
+    let secondApply
+    try {
+      secondApply = await applySessionConfigAndWait(client, sessionAgentId, evidenceDir, 'bb10-switch')
+    } catch (error) {
+      writeJson(join(evidenceDir, 'bb10-switch-apply-failure.json'), {
+        error: error instanceof Error ? error.message : String(error),
+        ...readUncertaintyFences(fixture.configPath),
+        agent_data_directory: fixture.home,
+        config_row: publicJson((await readInstalledProjection(client, undefined, 'config-after-failure')).configs
+          .find(row => row.agentId === sessionAgentId)),
+      })
+      throw error
+    }
+    assert(secondApply.agent.providerId === sessionManualProviderId && secondApply.agent.modelId === sessionManualModel,
+      `the explicit Console selection did not become the Session binding: ${JSON.stringify(secondApply.agent)}`)
+
+    const switchedPrompt = 'bb10 explicit switched probe'
+    const switchedFinals = (await sessionEvents()).filter(event => event.kind === 'final').length
+    const switchedSent = await client.sessionMessage(sessionAgentId, sessionId, { text: switchedPrompt })
+    assert(switchedSent.body.ok === true, `the explicitly switched prompt failed: ${JSON.stringify(switchedSent.body)}`)
+    await waitForSessionTurn(sessionEvents, switchedFinals, 'the explicitly switched turn to finish')
+    const manualRequest = await waitForAsync(async () => manual.requests.map(text => JSON.parse(text))
+      .find(request => JSON.stringify(request.messages ?? '').includes(switchedPrompt)), 120_000,
+    'the explicitly selected provider stub to receive the Session prompt')
+    assert(manualRequest.model === sessionManualModel,
+      `the switched Session prompt used model ${manualRequest.model}, not the explicit selection ${sessionManualModel}`)
+    assert(backup.requests.length === 0, 'the explicit switch silently failed over to the backup provider')
+
+    // (3) A stale Console revision must be a typed refusal that changes nothing.
+    const bindingBeforeStale = (await readInstalledProjection(client, undefined, 'config-stale-before')).configs.find(row => row.agentId === sessionAgentId)
+    const stale = await client.command({ kind: 'config.bindModel', agentId: sessionAgentId,
+      expectedRevision: revisionBeforeSelection, providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel })
+    assert(stale.body.ok === false && stale.body.error?.code === 'REVISION_CONFLICT',
+      `a stale Console revision was not refused as REVISION_CONFLICT: ${JSON.stringify(stale.body)}`)
+    const bindingAfterStale = (await readInstalledProjection(client, undefined, 'config-stale-after')).configs.find(row => row.agentId === sessionAgentId)
+    assert(bindingAfterStale.acceptedRevision === bindingBeforeStale.acceptedRevision
+      && bindingAfterStale.effectiveRevision === bindingBeforeStale.effectiveRevision,
+      'the stale Console revision mutated the accepted or effective config')
+
+    // (4) No implicit failover: when the bound provider fails, the backup slot
+    // must stay untouched and the failure must stay observable.
+    const backupRequestsBefore = backup.requests.length
+    const primaryRequestsBeforeFailure = manual.requests.length
+    const failedFinals = (await sessionEvents()).filter(event => event.kind === 'final' && event.state === 'failed').length
+    manual.state.fail = true
+    const failedDispatch = await client.sessionMessage(sessionAgentId, sessionId, { text: 'bb10 no failover probe' }, 180_000)
+      .then(response => ({ ok: true, response }), error => ({ ok: false, error }))
+    await waitForAsync(async () => manual.requests.length > primaryRequestsBeforeFailure ? true : undefined,
+      120_000, 'the failing bound provider to receive the prompt')
+    const failedFinal = await optionalWait(async () => {
+      const failures = (await sessionEvents()).filter(event => event.kind === 'final' && event.state === 'failed')
+      return failures.length > failedFinals ? failures.at(-1) : undefined
+    }, 120_000)
+    assert(failedDispatch.ok === false || failedFinal !== undefined,
+      `the failing bound provider produced neither a typed dispatch failure nor a failed final: ${JSON.stringify(failedDispatch.ok ? failedDispatch.response.body : String(failedDispatch.error))}`)
+    assert(backup.requests.length === backupRequestsBefore, 'the Session silently failed over to the backup provider')
+
+    const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb10')
+    const allPids = lifecyclePids(lifecycle.internal)
+    const consoleGone = consoleListenerGone(console.url)
+    assert(consoleGone, `the installed Console endpoint survived the launcher stop: ${console.url}`)
+    fixture.cleanup()
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        config_sha256: config.configSha256,
+        session_agent: sessionAgentId,
+        passive_agent: passiveAgentId,
+        commands: [
+          'agentteams init',
+          'agentteams start --config <isolated-home>/.agentteams/config.toml',
+          'agentteams console start --config <isolated-home>/.agentteams/config.toml',
+          'POST /api/v1/command {"kind":"config.apply","agentId":"bb-provider"}',
+          'POST /api/v1/command {"kind":"session.create","agentId":"bb-provider"}',
+          'POST /api/v1/command {"kind":"session.open","agentId":"bb-provider","sessionId":"<S>"}',
+          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S> {"text":"<prompt>"}',
+          'POST /api/v1/command {"kind":"config.model.put","expectedRevision":<R>,"entry":{"origin":"manual",...}}',
+          'POST /api/v1/command {"kind":"config.bindModel","expectedRevision":<R+1>,"providerId":"bb-manual","modelId":"bb-manual-model"}',
+          'POST /api/v1/command {"kind":"config.apply","agentId":"bb-provider"}',
+          'POST /api/v1/command {"kind":"config.bindModel","expectedRevision":<R>} (stale, typed refusal)',
+          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S> {"text":"bb10 no failover probe"} (bound provider fails)',
+          'agentteams stop --generation <generation>',
+        ],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        installed_tarball_sha256: fixture.tarballSha256,
+        cli_realpath: fixture.cliRealpath,
+        launcher: lifecycle.parsed,
+        console: { url: console.url, pid: console.pid, generation: console.generation },
+        discovery: { session_agent: publicJson(sessionRow), passive_agent: publicJson(passiveRow), manual_catalog: publicJson(manualCatalog) },
+        first_apply: firstApply,
+        session: session.created,
+        primary_prompt: { prompt: primaryPrompt, result: publicJson(primarySent.body), provider_request_model: primaryRequest.model },
+        explicit_selection: { accepted_revision_before: revisionBeforeSelection, put_model: publicJson(putModel.body),
+          bind_model: publicJson(bindModel.body), second_apply: secondApply },
+        switched_prompt: { prompt: switchedPrompt, result: publicJson(switchedSent.body), provider_request_model: manualRequest.model },
+        stale_revision: { result: publicJson(stale.body), accepted_revision_before: bindingBeforeStale.acceptedRevision,
+          accepted_revision_after: bindingAfterStale.acceptedRevision, effective_revision_after: bindingAfterStale.effectiveRevision },
+        no_failover: { dispatch: failedDispatch.ok ? publicJson(failedDispatch.response.body) : String(failedDispatch.error),
+          failed_final: failedFinal === undefined ? null : publicJson(failedFinal),
+          bound_provider_requests: manual.requests.length, backup_provider_requests: backup.requests.length },
+        provider_request_counts: { primary: primary.requests.length, backup: backup.requests.length, manual: manual.requests.length },
+        console_listener_gone_after_stop: consoleGone,
+        stop_stdout: final.stop.stdout,
+        stopped_stdout: final.status.stdout,
+        owned_pids_after_stop: allPids,
+        owned_pids_alive_after_stop: allPids.filter(processAlive),
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    await closeProviderStub(primary)
+    await closeProviderStub(backup)
+    await closeProviderStub(manual)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
+async function runBB12(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB12')
+  mkdirSync(evidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb12',
+    { AGENTTEAMS_OPENCODE_EXECUTABLE: openCodeExecutablePath(evidenceDir) })
+  const toolMarkerPath = join(fixture.temporaryRoot, 'bb12-tool-marker')
+  // The managed child reports a fast command's captured stdout only when the
+  // stream wins its exit race, so the probe writes its own result to a file too.
+  const toolResultPath = join(fixture.temporaryRoot, 'bb12-tool-result')
+  // The gated file name must not contain the permission marker: the stub sees the
+  // tool result on the next provider call, so a shared substring would re-issue
+  // the read call forever instead of ending the turn.
+  const envProbePath = join(fixture.temporaryRoot, 'gated-read.env')
+  writeFileSync(envProbePath, `${sessionEnvSentinel}\n`)
+  const toolCommand = `printf bb12-tool-ran > '${toolMarkerPath}' && printf bb12-tool-output-ok > '${toolResultPath}'`
+  const provider = createSessionProviderStub({
+    models: [sessionPrimaryModel],
+    toolMarker: sessionToolMarker,
+    toolCallId: sessionToolCallId,
+    toolCommand,
+    permissionMarker: sessionPermissionMarker,
+    permissionCallId: sessionPermissionCallId,
+    envProbePath,
+    holdMarker: sessionHoldMarker,
+  })
+  let lifecycle
+  let result
+  let captureFailure
+  try {
+    const providerUrl = await listenProviderStub(provider)
+    const config = ensureUserConfig(fixture, evidenceDir, {
+      buildConfigText: searchExecutable => sessionConfigFixtureText({ primary: providerUrl, backup: providerUrl, manual: providerUrl }, searchExecutable),
+    })
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb12')
+    const console = startInstalledSessionConsole(fixture, evidenceDir, 'bb12')
+    const client = sessionConsoleClient(console.url, console.authorization)
+    const sessionEvents = async () => readSessionEvents(await readInstalledProjection(client, undefined, 'events'), sessionAgentId, sessionId)
+
+    const discovery = await readInstalledProjection(client, evidenceDir, 'bb12')
+    const sessionRow = discovery.agents.find(agent => agent.agentId === sessionAgentId)
+    const passiveRow = discovery.agents.find(agent => agent.agentId === passiveAgentId)
+    assert(sessionRow?.sessionCapable === true, `the installed ${sessionAgentId} row is not Session capable: ${JSON.stringify(sessionRow)}`)
+    assert(passiveRow?.sessionCapable === false && passiveRow.sessionAvailability === 'not-applicable',
+      `the installed ${passiveAgentId} row is not a passive runtime row: ${JSON.stringify(passiveRow)}`)
+
+    const applied = await applySessionConfigAndWait(client, sessionAgentId, evidenceDir, 'bb12')
+    const session = await createAndOpenSession(client, 'BB12 installed Session entry', evidenceDir, 'bb12')
+    const sessionId = session.sessionId
+    captureFailure = async error => ({
+      error: error instanceof Error ? error.message : String(error),
+      session_events: publicJson(await sessionEvents()),
+      provider_requests: provider.requests.map(text => { try { return JSON.parse(text) } catch { return text } }),
+      held_responses: provider.held.length,
+    })
+
+    // (1) A Session message preserves its meaning: the exact text reaches the
+    // real provider call and the managed child's own projection keeps it.
+    const meaningPrompt = 'bb12 message meaning probe'
+    const meaningFinals = (await sessionEvents()).filter(event => event.kind === 'final').length
+    const meaningSent = await client.sessionMessage(sessionAgentId, sessionId, { text: meaningPrompt })
+    assert(meaningSent.body.ok === true, `the meaning probe failed: ${JSON.stringify(meaningSent.body)}`)
+    const meaningFinal = await waitForSessionTurn(sessionEvents, meaningFinals, 'the meaning probe turn to finish')
+    const providerPrompt = await waitForAsync(async () => provider.requests.map(text => JSON.parse(text))
+      .find(request => JSON.stringify(request.messages ?? '').includes(meaningPrompt)), 120_000,
+    'the provider stub to receive the exact Session message')
+    const userPart = await waitForAsync(async () => (await sessionEvents())
+      .find(event => event.kind === 'part' && event.partType === 'text' && event.text === meaningPrompt), 60_000,
+    'the projected user text part to preserve the exact message')
+    const assistantPart = await waitForAsync(async () => (await sessionEvents())
+      .find(event => event.kind === 'part' && event.partType === 'text' && event.text === sessionSentinel), 60_000,
+    'the projected assistant text part')
+
+    // (2) A real tool call preserves tool identity, complete arguments and the
+    // matching result; a syntactically valid response is not that evidence.
+    const toolFinals = (await sessionEvents()).filter(event => event.kind === 'final').length
+    const toolSent = await client.sessionMessage(sessionAgentId, sessionId, { text: `bb12 tool request ${sessionToolMarker}` })
+    assert(toolSent.body.ok === true, `the tool probe turn failed: ${JSON.stringify(toolSent.body)}`)
+    await waitForSessionTurn(sessionEvents, toolFinals, 'the tool probe turn to finish')
+    const toolEvent = await waitForAsync(async () => (await sessionEvents())
+      .filter(event => event.kind === 'tool' && event.callId === sessionToolCallId)
+      .find(event => event.state === 'completed'), 60_000, 'the completed tool event')
+    assert(toolEvent.tool === 'bash', `the tool event did not preserve the tool name: ${JSON.stringify(toolEvent)}`)
+    assert(toolEvent.input !== null && typeof toolEvent.input === 'object' && !Array.isArray(toolEvent.input)
+      && Object.keys(toolEvent.input).length === 1 && toolEvent.input.command === toolCommand,
+    `the tool event did not preserve the complete arguments: ${JSON.stringify(toolEvent.input)}`)
+    assert(toolEvent.messageId !== undefined && toolEvent.partId !== undefined,
+      `the tool event did not carry its message/part identity: ${JSON.stringify(toolEvent)}`)
+    // The matching result is the effect the arguments declare, read from the
+    // host filesystem, plus the exit status the substrate reported for it.
+    const toolObservation = await waitForAsync(async () => {
+      if (!existsSync(toolMarkerPath) || !existsSync(toolResultPath)) return undefined
+      return { marker: readFileSync(toolMarkerPath, 'utf8'), result: readFileSync(toolResultPath, 'utf8') }
+    }, 30_000, 'the real bash tool to produce its declared side effect')
+    assert(toolObservation.marker === 'bb12-tool-ran' && toolObservation.result === 'bb12-tool-output-ok',
+      `the tool side effect did not match the arguments: ${JSON.stringify(toolObservation)}`)
+    assert(toolEvent.metadata?.exit === 0,
+      `the tool result did not report the successful exit status of the matching call: ${JSON.stringify(toolEvent.metadata)}`)
+
+    // (3) / (4) Approving a real permission request produces the expected side
+    // effect; rejecting it does not. A `*.env` read is the one gated probe.
+    const resolvedPermissions = new Set()
+    const nextPermission = (timeoutMs = 60_000) => optionalWait(async () => (await sessionEvents())
+      .find(event => event.kind === 'permission' && event.state === 'pending' && !resolvedPermissions.has(event.permissionId)), timeoutMs)
+    const newestTool = async callId => (await sessionEvents())
+      .filter(event => event.kind === 'tool' && event.callId === callId).at(-1)
+    const replyPermission = async (pending, decision) => {
+      const replied = await client.command({ kind: 'permission.reply', agentId: sessionAgentId, sessionId,
+        permissionId: pending.permissionId, decision })
+      assert(replied.body.ok === true, `the permission ${decision} reply failed: ${JSON.stringify(replied.body)}`)
+      const resolved = await waitForAsync(async () => (await sessionEvents())
+        .find(event => event.kind === 'permission' && event.state === 'resolved' && event.permissionId === pending.permissionId),
+      60_000, 'the resolved permission event')
+      resolvedPermissions.add(pending.permissionId)
+      return resolved
+    }
+    // The substrate asks once per matching rule, so one tool call can surface more
+    // than one request. A round ends only when every request it raised is answered.
+    const answerRound = async decision => {
+      const replies = []
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const pending = await nextPermission(attempt === 0 ? 60_000 : 15_000)
+        if (pending === undefined) break
+        replies.push({ pending: publicJson(pending), resolved: publicJson(await replyPermission(pending, decision)) })
+      }
+      return replies
+    }
+    const permission = { status: 'unverified', rounds: [],
+      reason: 'the managed OpenCode child surfaced no pending permission for the gated read' }
+
+    const approvedDispatch = client.sessionMessage(sessionAgentId, sessionId, { text: `bb12 permission probe ${sessionPermissionMarker}` }, 180_000)
+      .then(response => ({ ok: true, response }), error => ({ ok: false, error }))
+    const approvedReplies = await answerRound('once')
+    if (approvedReplies.length === 0) {
+      const settled = await approvedDispatch
+      permission.dispatch = settled.ok ? publicJson(settled.response.body) : String(settled.error)
+      assert(false, `the managed OpenCode child surfaced no pending permission for the gated read: ${JSON.stringify(permission)}`)
+    }
+    const approvedSettled = await approvedDispatch
+    assert(approvedSettled.ok && approvedSettled.response.body.ok === true,
+      `the approved turn did not complete: ${approvedSettled.error ?? JSON.stringify(approvedSettled.response?.body)}`)
+    const readEvent = await waitForAsync(async () => {
+      const event = await newestTool(sessionPermissionCallId)
+      return event !== undefined && event.state === 'completed' ? event : undefined
+    }, 60_000, 'the approved read tool event')
+    assert(String(readEvent.output).includes(sessionEnvSentinel),
+      `approving the read permission did not let the tool read the file: ${JSON.stringify(readEvent)}`)
+    permission.rounds.push({ decision: 'once', replies: approvedReplies,
+      tool_event: publicJson(readEvent), side_effect: 'env-content-read' })
+
+    const priorPartIds = new Set((await sessionEvents()).filter(event => event.kind === 'tool').map(event => event.partId))
+    const rejectedDispatch = client.sessionMessage(sessionAgentId, sessionId, { text: `bb12 permission probe ${sessionPermissionMarker}` }, 180_000)
+      .then(response => ({ ok: true, response }), error => ({ ok: false, error }))
+    const rejectedReplies = await answerRound('reject')
+    assert(rejectedReplies.length > 0, 'the managed OpenCode child surfaced no second pending permission for the reject round')
+    const rejectedOutcome = await rejectedDispatch
+    const rejectedEvent = await optionalWait(async () => (await sessionEvents())
+      .filter(event => event.kind === 'tool' && !priorPartIds.has(event.partId)).at(-1), 30_000)
+    assert(rejectedEvent === undefined || rejectedEvent.state !== 'completed' || !String(rejectedEvent.output).includes(sessionEnvSentinel),
+      `rejecting the read permission still returned the file content: ${JSON.stringify(rejectedEvent)}`)
+    permission.rounds.push({ decision: 'reject', replies: rejectedReplies,
+      dispatch: rejectedOutcome.ok ? publicJson(rejectedOutcome.response.body) : String(rejectedOutcome.error),
+      tool_event: rejectedEvent === undefined ? null : publicJson(rejectedEvent), side_effect: 'env-content-absent' })
+    permission.status = 'passed'
+    delete permission.reason
+
+    // (5) Cancel keeps the base acceptance plus a correlated confirmed-or-unknown
+    // outcome, and never records the raw abort acceptance as the final cancel.
+    const heldFinals = (await sessionEvents()).filter(event => event.kind === 'final').length
+    const heldDispatch = client.sessionMessage(sessionAgentId, sessionId, { text: `bb12 held prompt ${sessionHoldMarker}` }, 120_000)
+      .then(response => ({ ok: true, response }), error => ({ ok: false, error }))
+    await waitForAsync(async () => provider.requests.some(body => body.includes(sessionHoldMarker)) ? true : undefined,
+      60_000, 'the held prompt to reach the provider stub')
+    const cancelled = await client.command({ kind: 'session.cancel', agentId: sessionAgentId, sessionId })
+    assert(sessionCancelConfirmed(cancelled.body) || sessionCancelUnknown(cancelled.body),
+      `session.cancel was neither a confirmed cancel nor a typed unknown: ${JSON.stringify(cancelled.body)}`)
+    const cancelResult = cancelled.body
+    const baseAccepted = sessionCancelConfirmed(cancelResult)
+      ? cancelResult.result.baseAccepted
+      : cancelResult.error.detail.baseAccepted
+    assert(baseAccepted === true, `session.cancel did not preserve the base acceptance: ${JSON.stringify(cancelResult)}`)
+    for (const response of provider.held.splice(0)) {
+      try { response.destroy() } catch { /* the child is already gone */ }
+    }
+    const heldOutcome = await heldDispatch
+    const cancelEvents = (await sessionEvents()).filter(event => event.kind === 'cancel')
+    const terminalCancel = cancelEvents.at(-1)
+    assert(terminalCancel !== undefined && (terminalCancel.state === 'reconciled' || terminalCancel.state === 'unknown'),
+      `the terminal cancel record is not a correlated confirmed-or-unknown outcome: ${JSON.stringify(terminalCancel)}`)
+    assert(terminalCancel.state !== 'accepted' && terminalCancel.state !== 'rejected',
+      `the base abort acceptance was recorded as the final cancel: ${JSON.stringify(terminalCancel)}`)
+    const settledFinal = await optionalWait(async () => {
+      const finals = (await sessionEvents()).filter(event => event.kind === 'final')
+      return finals.length > heldFinals ? finals.at(-1) : undefined
+    }, 60_000)
+
+    // (6) A passive Agent must refuse Session explicitly instead of degrading.
+    const passiveCreate = await client.command({ kind: 'session.create', agentId: passiveAgentId })
+    assert(passiveCreate.body.ok === false && passiveCreate.body.error?.code === 'UNSUPPORTED_OPERATION',
+      `the passive Agent session.create was not a typed refusal: ${JSON.stringify(passiveCreate.body)}`)
+    const passiveSend = await client.sessionMessage(passiveAgentId, sessionId, { text: 'bb12 passive probe' })
+    assert(passiveSend.body.ok === false && passiveSend.body.error?.code === 'UNSUPPORTED_OPERATION',
+      `the passive Agent session.send was not a typed refusal: ${JSON.stringify(passiveSend.body)}`)
+    const passiveRefusal = { create: publicJson(passiveCreate.body), send: publicJson(passiveSend.body) }
+
+    const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb12')
+    const allPids = lifecyclePids(lifecycle.internal)
+    const consoleGone = consoleListenerGone(console.url)
+    assert(consoleGone, `the installed Console endpoint survived the launcher stop: ${console.url}`)
+    fixture.cleanup()
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        config_sha256: config.configSha256,
+        session_agent: sessionAgentId,
+        passive_agent: passiveAgentId,
+        commands: [
+          'agentteams init',
+          'agentteams start --config <isolated-home>/.agentteams/config.toml',
+          'agentteams console start --config <isolated-home>/.agentteams/config.toml',
+          'POST /api/v1/command {"kind":"config.apply","agentId":"bb-provider"}',
+          'POST /api/v1/command {"kind":"session.create","agentId":"bb-provider"}',
+          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S> {"text":"bb12 message meaning probe"}',
+          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S> {"text":"bb12 tool request <marker>"}',
+          'POST /api/v1/command {"kind":"permission.reply","decision":"once"}',
+          'POST /api/v1/command {"kind":"permission.reply","decision":"reject"}',
+          'POST /api/v1/command {"kind":"session.cancel","agentId":"bb-provider","sessionId":"<S>"}',
+          'POST /api/v1/command {"kind":"session.create","agentId":"bb-receiver"} (typed refusal)',
+          'POST /api/v1/session-message?agentId=bb-receiver&sessionId=<S> (typed refusal)',
+          'agentteams stop --generation <generation>',
+        ],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        installed_tarball_sha256: fixture.tarballSha256,
+        cli_realpath: fixture.cliRealpath,
+        launcher: lifecycle.parsed,
+        console: { url: console.url, pid: console.pid, generation: console.generation },
+        discovery: { session_agent: publicJson(sessionRow), passive_agent: publicJson(passiveRow) },
+        config_apply: applied,
+        session: session.created,
+        message_meaning: { prompt: meaningPrompt, result: publicJson(meaningSent.body), final: publicJson(meaningFinal),
+          provider_model: providerPrompt.model, user_part: publicJson(userPart), assistant_part: publicJson(assistantPart) },
+        tool: { prompt: `bb12 tool request ${sessionToolMarker}`, result: publicJson(toolSent.body), command: toolCommand,
+          side_effect: publicJson(toolObservation), exit: toolEvent.metadata?.exit ?? null, event: publicJson(toolEvent) },
+        permission: publicJson(permission),
+        cancel: { result: publicJson(cancelResult), terminal_event: publicJson(terminalCancel), settled_final: settledFinal === undefined ? null : publicJson(settledFinal), events: publicJson(cancelEvents),
+          dispatch: heldOutcome.ok ? publicJson(heldOutcome.response.body) : String(heldOutcome.error) },
+        passive_refusal: passiveRefusal,
+        stop_stdout: final.stop.stdout,
+        stopped_stdout: final.status.stdout,
+        owned_pids_after_stop: allPids,
+        owned_pids_alive_after_stop: allPids.filter(processAlive),
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } catch (error) {
+    if (captureFailure !== undefined) {
+      try {
+        writeJson(join(evidenceDir, 'bb12-failure.json'), await captureFailure(error))
+      } catch {
+        // The case result records the primary failure.
+      }
+    }
+    throw error
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    await closeProviderStub(provider)
     try {
       fixture.cleanup()
     } catch {
