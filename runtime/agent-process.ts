@@ -101,6 +101,12 @@ interface SessionOperationRecord {
   readonly childPid?: number
   readonly requestMessageId: string
   readonly promptMessageId?: string
+  /**
+   * Every distinct assistant identity observed for this owned request. A second
+   * distinct identity is a multi-match, so the binding stays unresolved and a
+   * cancel may never be confirmed from it.
+   */
+  readonly promptMatchIds?: readonly string[]
   readonly abortOperationId?: string
   readonly acceptedAt: string
 }
@@ -263,18 +269,29 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     }
     buffers.clear()
   }
+  // A second distinct assistant identity for one owned request is a multi-match:
+  // the design keeps that binding unresolved and forbids confirming a cancel from it.
+  const bindPromptMatch = (record: SessionOperationRecord, messageId: string): SessionOperationRecord => {
+    const matches = record.promptMatchIds ?? (record.promptMessageId === undefined ? [] : [record.promptMessageId])
+    if (matches.includes(messageId)) return record
+    const next = [...matches, messageId]
+    return { ...record, promptMatchIds: next, promptMessageId: next.length === 1 ? next[0] : undefined }
+  }
   const correlate = (event: ConsoleSessionEventView, parentMessageId: string | undefined): void => {
     const record = operations.get(event.sessionId)
     if (record === undefined) return
-    if ((event.kind === 'message' || event.kind === 'final') && record.promptMessageId === undefined
+    if ((event.kind === 'message' || event.kind === 'final')
       && parentMessageId !== undefined && parentMessageId === record.requestMessageId) {
-      operations.set(event.sessionId, { ...record, promptMessageId: event.messageId })
+      const bound = bindPromptMatch(record, event.messageId)
+      if (bound !== record) operations.set(event.sessionId, bound)
     }
     if (event.kind === 'final' && event.state === 'failed' && event.error.name === 'MessageAbortedError') {
       const pending = pendingCancels.get(event.sessionId)
       const current = operations.get(event.sessionId)
       if (pending !== undefined && current !== undefined
-        && pending.abortOperationId === current.abortOperationId && pending.promptMessageId === event.messageId) {
+        && pending.abortOperationId === current.abortOperationId
+        && current.promptMessageId === event.messageId
+        && pending.promptMessageId === event.messageId) {
         settlePendingCancel(event.sessionId, pending.abortOperationId, event.messageId)
       }
     }
@@ -472,8 +489,9 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       }
       // The synchronous response binds the assistant identity only when it names this
       // request; an unbound return keeps the record so admission stays closed.
-      if (owned && current.promptMessageId === undefined && outcome.value !== undefined) {
-        operations.set(sessionId, { ...current, promptMessageId: outcome.value.messageId })
+      if (owned && outcome.value !== undefined) {
+        const bound = bindPromptMatch(current, outcome.value.messageId)
+        if (bound !== current) operations.set(sessionId, bound)
       }
       return { ok: true }
     },

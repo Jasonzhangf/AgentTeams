@@ -995,6 +995,7 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
         const entries = options.messages?.[path.id]
         return entries === undefined ? { data: [] } : { data: [...entries] }
       },
+      status: async () => ({ data: {} }),
       prompt: async ({ path, body }) => {
         prompts.push({ sessionId: path.id, text: body.parts[0].text, messageId: body.messageID })
         if (options.promptError) throw options.promptError
@@ -1219,6 +1220,45 @@ describe('Session host admission, cancel causality and observation', () => {
     rejected.releasePrompt()
     await rejectedPrompt
   })
+
+  it('keeps a multi-match assistant identity ambiguous and never confirms its cancel', async () => {
+    // Two distinct assistant identities for one owned request are a multi-match:
+    // the design forbids confirming a cancel from an ambiguous binding, so the
+    // record stays owned and abort is never dispatched.
+    const h = sessionHarness({ holdPrompt: true, abortAccepted: true })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    const requestMessageId = h.prompts[0].messageId!
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: requestMessageId } } })
+    await tick()
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-2', role: 'assistant', sessionID: 's1', parentID: requestMessageId } } })
+    await tick()
+    expect(await h.host.cancelSession('s1')).toMatchObject({ ok: false, error: { code: 'RESULT_UNKNOWN', detail: { reason: 'ambiguous-owner' } } })
+    expect(h.abortCalls()).toBe(0)
+    // The first identity's own abort error must not retroactively confirm either.
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: requestMessageId, error: { name: 'MessageAbortedError', data: {} } } } })
+    await tick()
+    expect(h.host.sessionEvents().some(event => event.kind === 'cancel' && event.state === 'reconciled')).toBe(false)
+    h.releasePrompt()
+    await prompt
+
+    // A second distinct match that arrives after abort was accepted must not let
+    // the first identity's abort error confirm the in-flight cancel.
+    const racing = sessionHarness({ holdPrompt: true, abortAccepted: true })
+    const racingPrompt = racing.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    const racingRequest = racing.prompts[0].messageId!
+    racing.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: racingRequest } } })
+    await tick()
+    const cancel = racing.host.cancelSession('s1')
+    await tick()
+    racing.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-2', role: 'assistant', sessionID: 's1', parentID: racingRequest } } })
+    racing.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: racingRequest, error: { name: 'MessageAbortedError', data: {} } } } })
+    await tick()
+    expect(await cancel).toMatchObject({ ok: false, error: { code: 'RESULT_UNKNOWN', detail: { reason: 'no-final' } } })
+    racing.releasePrompt()
+    await racingPrompt
+  }, 15000)
 
   it('reconciles a final abort observed before session.abort returns', async () => {
     const h = sessionHarness({ holdPrompt: true, abortHold: true })

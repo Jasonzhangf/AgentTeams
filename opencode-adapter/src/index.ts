@@ -170,6 +170,12 @@ export interface OpenCodeSessionPromptBody {
   readonly messageID?: string
 }
 
+/** Real 1.18.23 session-level status; auxiliary observation, never cancel proof. */
+export type OpenCodeSessionStatus =
+  | { readonly type: 'idle' }
+  | { readonly type: 'retry'; readonly attempt: number; readonly message: string; readonly next: number }
+  | { readonly type: 'busy' }
+
 export interface OpenCodeSessionClient {
   readonly session: {
     list(options?: Readonly<Record<string, unknown>>): Promise<OpenCodeSdkResult<readonly Session[]>>
@@ -178,6 +184,7 @@ export interface OpenCodeSessionClient {
     prompt(options: { path: { id: string }; body: OpenCodeSessionPromptBody }): Promise<OpenCodeSdkResult<unknown>>
     abort(options: { path: { id: string } }): Promise<OpenCodeSdkResult<boolean>>
     messages(options: { path: { id: string }; query?: { readonly directory?: string; readonly limit?: number } }): Promise<OpenCodeSdkResult<readonly { readonly info: unknown; readonly parts: readonly unknown[] }[]>>
+    status(options?: { query?: { readonly directory?: string } }): Promise<OpenCodeSdkResult<Readonly<Record<string, OpenCodeSessionStatus>>>>
   }
   readonly postSessionIdPermissionsPermissionId: (options: { path: { id: string; permissionID: string }; body: { response: 'once' | 'always' | 'reject' } }) => Promise<OpenCodeSdkResult<unknown>>
 }
@@ -301,6 +308,21 @@ export async function readOpenCodeSessionMessages(
   const messages = unwrapOpenCodeResponse(result, 'session.messages')
   if (messages === undefined) throw new OpenCodeAdapterError('session.messages', 'INVALID_RESPONSE', 'OpenCode session.messages returned no data')
   return messages
+}
+
+/**
+ * Reads the substrate's real session-level status map. Status is auxiliary
+ * observation only: `idle` never confirms a cancel, and the runtime must not
+ * derive cancel causality from it.
+ */
+export async function readOpenCodeSessionStatus(
+  client: OpenCodeSessionClient,
+  query?: { readonly directory?: string },
+): Promise<Readonly<Record<string, OpenCodeSessionStatus>>> {
+  const result = await client.session.status(query === undefined ? {} : { query })
+  const statuses = unwrapOpenCodeResponse(result, 'session.status')
+  if (statuses === undefined) throw new OpenCodeAdapterError('session.status', 'INVALID_RESPONSE', 'OpenCode session.status returned no data')
+  return statuses
 }
 
 function invalidOpenCodeModelTarget(message: string): never {

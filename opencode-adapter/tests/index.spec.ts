@@ -28,6 +28,7 @@ import {
   projectOpenCodeSessionEvent,
   projectOpenCodeSessionMessages,
   readOpenCodeSessionMessages,
+  readOpenCodeSessionStatus,
   subscribeOpenCodeEvents,
 } from '../src/index.ts'
 
@@ -533,6 +534,26 @@ describe('OpenCode Teams adapter', () => {
       expect.objectContaining({ kind: 'event', parentMessageId: 'm-user', event: expect.objectContaining({ kind: 'final', messageId: 'm-assistant', state: 'completed' }) }),
       expect.objectContaining({ kind: 'event', event: expect.objectContaining({ kind: 'tool', partId: 'p-tool', state: 'completed', output: 'ok' }) }),
     ]))
+  })
+
+  it('reads the real session-level status map as auxiliary observation only', async () => {
+    const calls: { query: unknown }[] = []
+    const client = { session: {
+      status: async ({ query }: { query?: unknown } = {}) => {
+        calls.push({ query })
+        return { data: { s1: { type: 'busy' }, s2: { type: 'idle' }, s3: { type: 'retry', attempt: 2, message: 'rate limited', next: 30 } } }
+      },
+    } }
+    await expect(readOpenCodeSessionStatus(client as never)).resolves.toEqual({
+      s1: { type: 'busy' }, s2: { type: 'idle' }, s3: { type: 'retry', attempt: 2, message: 'rate limited', next: 30 },
+    })
+    await expect(readOpenCodeSessionStatus(client as never, { directory: '/w' })).resolves.toMatchObject({ s2: { type: 'idle' } })
+    expect(calls).toEqual([{ query: undefined }, { query: { directory: '/w' } }])
+  })
+
+  it('reports a failing session.status as a typed adapter error instead of idle', async () => {
+    const client = { session: { status: async () => ({ error: { message: 'nope' }, response: { status: 503 } }) } }
+    await expect(readOpenCodeSessionStatus(client as never)).rejects.toMatchObject({ operation: 'session.status', status: 503 })
   })
 
   it('reports malformed session.messages entries as invalid instead of dropping them', () => {
