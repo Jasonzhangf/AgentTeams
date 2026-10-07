@@ -716,10 +716,23 @@ function classifyPart(type: string, properties: Readonly<Record<string, unknown>
       return { kind: 'invalid', reason: cause instanceof Error ? cause.message : 'tool part carries a non-JSON value', raw }
     }
     const common = { ...base, agentId: '', kind: 'tool' as const, messageId, partId, callId, tool }
+    // The Console wire contract requires a non-empty `title` whenever a tool event carries one,
+    // and a completed tool always carries one (`text(event.title)`). Coercing an absent or empty
+    // substrate title to `''` here would emit a shape the closed Console parser rejects, and one
+    // rejected event fails the whole projection reply instead of degrading this single event.
     switch (state.status) {
       case 'pending': return { kind: 'event', event: { ...common, state: 'pending', input, raw: typeof state.raw === 'string' ? state.raw : '' } }
-      case 'running': return { kind: 'event', event: { ...common, state: 'running', input, ...(state.title === undefined ? {} : { title: String(state.title) }), ...(metadata === undefined ? {} : { metadata }) } }
-      case 'completed': return { kind: 'event', event: { ...common, state: 'completed', input, output: String(state.output ?? ''), title: String(state.title ?? ''), metadata: metadata ?? {}, ...(attachments === undefined ? {} : { attachments }) } }
+      case 'running': {
+        if (state.title !== undefined && (typeof state.title !== 'string' || state.title === '')) {
+          return { kind: 'invalid', reason: 'running tool part carries an empty or non-string title', raw }
+        }
+        return { kind: 'event', event: { ...common, state: 'running', input, ...(state.title === undefined ? {} : { title: state.title }), ...(metadata === undefined ? {} : { metadata }) } }
+      }
+      case 'completed': {
+        if (typeof state.title !== 'string' || state.title === '') return { kind: 'invalid', reason: 'completed tool part is missing a non-empty title', raw }
+        if (typeof state.output !== 'string') return { kind: 'invalid', reason: 'completed tool part is missing a string output', raw }
+        return { kind: 'event', event: { ...common, state: 'completed', input, output: state.output, title: state.title, metadata: metadata ?? {}, ...(attachments === undefined ? {} : { attachments }) } }
+      }
       case 'error': return { kind: 'event', event: { ...common, state: 'error', input, error: String(state.error ?? ''), ...(metadata === undefined ? {} : { metadata }) } }
       default: return { kind: 'invalid', reason: `tool part has an unknown state ${String(state.status)}`, raw }
     }

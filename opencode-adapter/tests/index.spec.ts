@@ -31,6 +31,9 @@ import {
   readOpenCodeSessionStatus,
   subscribeOpenCodeEvents,
 } from '../src/index.ts'
+// Test-only cross-layer equivalence check: the adapter must never emit a tool shape the closed
+// Console wire parser rejects, because one rejected event fails the whole projection reply.
+import { parseConsoleSessionEvent } from '../../control-protocol/console-api.ts'
 
 describe('OpenCode Teams adapter', () => {
   it('projects OpenCode session events from the SDK info shape', () => {
@@ -522,7 +525,7 @@ describe('OpenCode Teams adapter', () => {
         return { data: [
           { info: { id: 'm-user', sessionID: 's', role: 'user' }, parts: [{ id: 'p-user', sessionID: 's', messageID: 'm-user', type: 'text', text: 'hello' }] },
           { info: { id: 'm-assistant', sessionID: 's', role: 'assistant', parentID: 'm-user', time: { completed: 1 } },
-            parts: [{ id: 'p-tool', sessionID: 's', messageID: 'm-assistant', type: 'tool', tool: 'bash', callID: 'c', state: { status: 'completed', input: { command: 'ls' }, output: 'ok' } }] },
+            parts: [{ id: 'p-tool', sessionID: 's', messageID: 'm-assistant', type: 'tool', tool: 'bash', callID: 'c', state: { status: 'completed', input: { command: 'ls' }, output: 'ok', title: 'ls' } }] },
         ] }
       },
     } }
@@ -582,9 +585,41 @@ describe('OpenCode Teams adapter', () => {
     expect(projectOpenCodeSessionEvent(toolPart({ status: 'completed', input: () => undefined }))).toMatchObject({ kind: 'invalid' })
     expect(projectOpenCodeSessionEvent(toolPart({ status: 'running', input: {}, metadata: new Map() }))).toMatchObject({ kind: 'invalid' })
     expect(projectOpenCodeSessionEvent(toolPart({ status: 'completed', input: {}, attachments: 'not-an-array' }))).toMatchObject({ kind: 'invalid' })
-    // A well-formed tool part still projects with its validated JSON payload.
-    expect(projectOpenCodeSessionEvent(toolPart({ status: 'completed', input: { command: 'ls' }, metadata: { ok: true }, attachments: [{ kind: 'file' }] })))
-      .toMatchObject({ kind: 'event', event: { kind: 'tool', state: 'completed', input: { command: 'ls' }, attachments: [{ kind: 'file' }] } })
+    // A well-formed tool part still projects with its validated JSON payload. The installed SDK
+    // types `title` and `output` as required on a completed state, so a conforming part carries both.
+    expect(projectOpenCodeSessionEvent(toolPart({ status: 'completed', input: { command: 'ls' }, output: 'ok', title: 'ls', metadata: { ok: true }, attachments: [{ kind: 'file' }] })))
+      .toMatchObject({ kind: 'event', event: { kind: 'tool', state: 'completed', input: { command: 'ls' }, output: 'ok', title: 'ls', attachments: [{ kind: 'file' }] } })
+  })
+
+  it('projects every tool state into a shape the closed Console wire parser accepts', () => {
+    const toolPart = (state: Record<string, unknown>) => ({ type: 'message.part.updated',
+      properties: { part: { sessionID: 's', messageID: 'm', id: 'p', type: 'tool', tool: 'bash', callID: 'c', state } } })
+    const projection = (state: Record<string, unknown>) => {
+      const result = projectOpenCodeSessionEvent(toolPart(state))
+      if (result.kind !== 'event') throw new Error(`tool state did not project: ${JSON.stringify(result)}`)
+      return result
+    }
+    // The adapter leaves `agentId` empty; the SessionHost binds the owning Agent before the
+    // event reaches the Console wire, so the equivalence check binds it the same way.
+    const wire = (state: Record<string, unknown>) => parseConsoleSessionEvent({ ...projection(state).event, agentId: 'agent-1' })
+    expect(wire({ status: 'pending', input: { command: 'ls' }, raw: 'ls' })).toMatchObject({ kind: 'tool', state: 'pending' })
+    expect(wire({ status: 'running', input: { command: 'ls' }, title: 'Running ls', metadata: {} })).toMatchObject({ kind: 'tool', state: 'running' })
+    expect(wire({ status: 'completed', input: { command: 'ls' }, output: 'ok', title: 'ls', metadata: {} })).toMatchObject({ kind: 'tool', state: 'completed' })
+    expect(wire({ status: 'error', input: { command: 'ls' }, error: 'boom' })).toMatchObject({ kind: 'tool', state: 'error' })
+    // The wire accepts a running tool with no title, so an absent title must stay absent.
+    const runningWithoutTitle = projection({ status: 'running', input: { command: 'ls' } })
+    expect(runningWithoutTitle.event).not.toHaveProperty('title')
+    expect(wire({ status: 'running', input: { command: 'ls' } })).toMatchObject({ kind: 'tool', state: 'running' })
+    // An empty or absent title cannot satisfy the wire's non-empty rule, so it must be rejected
+    // here, at the adapter boundary, instead of failing the whole Console projection reply.
+    for (const state of [
+      { status: 'running', input: { command: 'ls' }, title: '' },
+      { status: 'completed', input: { command: 'ls' }, output: 'ok', title: '' },
+      { status: 'completed', input: { command: 'ls' }, output: 'ok' },
+      { status: 'completed', input: { command: 'ls' }, output: 7, title: 'ls' },
+    ]) {
+      expect(projectOpenCodeSessionEvent(toolPart(state))).toMatchObject({ kind: 'invalid' })
+    }
   })
 
   it('classifies recognized non-outcome SDK events as intentionally ignored, never as projection loss', () => {
