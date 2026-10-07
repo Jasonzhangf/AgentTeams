@@ -1,0 +1,194 @@
+=== full regression ===
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006
+
+(node:76934) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/dagpipe/.build/build-kc8TEY)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.92s
+stderr | runtime/agent-process.spec.ts > Session host admission, cancel causality and observation > separates observation degradation from owner readiness and contains expected errors
+Promise returned by `expect(actual).resolves.toMatchObject(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in the next Vitest major. Please remember to await the assertion.
+    at /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/agent-process.spec.ts:1350:62
+
+ ✓ runtime/agent-process.spec.ts (39 tests) 38095ms
+   ✓ executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state  6215ms
+   ✓ keeps an Agent with an accepted model binding but an unresolved managed executable passive and unavailable  431ms
+   ✓ persists unknown state before refusing a restart with active Work  447ms
+   ✓ recovers a stale work lock only after the previous daemon lease is reacquired  407ms
+   ✓ runs real persistent Camo browser Work through current SDK graphs and restores capacity  24970ms
+     ✓ keeps a multi-match assistant identity ambiguous and never confirms its cancel  5011ms
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/dagpipe/.build/build-rBS6UE)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.69s
+ ✓ runtime/dagpipe-work.spec.ts (22 tests) 10964ms
+     ✓ runs two real submits with distinct identities and real search results, then observes the original request without replay  567ms
+     ✓ returns an explicit unknown result with retained provider responsibility when the request link drops  2082ms
+stdout | runtime/local-process.spec.ts > turns a post-ready supervisor failure into cleanup and a nonzero launcher result
+local supervisor ready config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/teams-local-process-LsUL8W/config.toml daemons=browser
+
+ ✓ cli/package-install.spec.ts (24 tests) 51477ms
+     ✓ allows declared SDK evidence and lifecycle record paths  451ms
+     ✓ rejects unclassified or nested SDK record paths  751ms
+     ✓ still rejects untracked product source  308ms
+     ✓ builds one base pack root with the root version and installable layout  818ms
+     ✓ packs and installs the base tarball for public CLI and Console consumers  6463ms
+     ✓ records base asset success without claiming installed lifecycle evidence  6218ms
+     ✓ produces the final SDK package by default  13567ms
+     ✓ requires real installed start/restart lifecycle evidence  13730ms
+     ✓ rejects an emitted package receipt with missing or tampered candidate identity  528ms
+ ✓ runtime/local-process.spec.ts (22 tests) 9546ms
+   ✓ starts detached, reports persisted status, rejects stale stop, and survives caller return  1149ms
+   ✓ keeps daemon state on the launcher generation and rejects stale writers  1258ms
+   ✓ persists the detached supervisor PID during the startup window  1083ms
+   ✓ fails status explicitly when a persisted endpoint projection is missing or malformed  609ms
+   ✓ recovers a dead launcher before restarting and stops only exact owned descendants  1341ms
+   ✓ recovers the orphaned Console child when the launcher dies abnormally  1644ms
+   ✓ rejects a live PID reuse even when the persisted launcher owner record matches  569ms
+   ✓ rejects a live child persisted under a different launcher generation  628ms
+   ✓ rejects dead-launcher recovery when a persisted child start token does not match  757ms
+ ✓ runtime/dagpipe-build.spec.ts (1 test) 8347ms
+     ✓ keeps two concurrent native build consumers immutable and usable  8215ms
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+ ✓ ui/teams-console/tests/focus-dom.spec.ts (1 test) 4606ms
+     ✓ moves outside focus into the drawer and wraps forward and backward Tab  4601ms
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/dagpipe/.build/build-bgDBQV)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.31s
+ ✓ runtime/local-work-real-entry.spec.ts (1 test) 6854ms
+   ✓ keeps public Work submit identity through the real runner and queries without replay  6853ms
+ ✓ runtime/managed-opencode-session.spec.ts (1 test) 3796ms
+   ✓ sends one real OpenCode Session request through the selected managed provider  3795ms
+ ✓ cli/agentteams.spec.ts (24 tests) 3816ms
+     ✓ init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it  309ms
+     ✓ direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts  441ms
+ ✓ runtime/local-two-agent.spec.ts (1 test) 3216ms
+   ✓ starts two independent daemons from v3 config.toml, publishes enabled services and restarts cleanly  3215ms
+ ✓ runtime/console-process.spec.ts (8 tests) 3002ms
+   ✓ starts an enabled Console child, persists real lifecycle facts, and stops only Console  421ms
+   ✓ reports a typed failure and preserves the persisted port when the Console port is occupied  844ms
+   ✓ rejects a stale Console generation without rewriting durable facts  387ms
+   ✓ serializes Console start and stop so a queued stop cannot be overtaken by a late start  389ms
+   ✓ never spawns a second Console child while it still owns a live one  385ms
+ ✓ runtime/managed-config-live.spec.ts (1 test) 3112ms
+   ✓ applies accepted Teams config to a real isolated OpenCode child and reads effective revision  3111ms
+ ✓ runtime/local-relay-bridge.spec.ts (1 test) 2618ms
+   ✓ replays a config-driven local Relay bridge across independent daemon processes  2617ms
+ ✓ runtime/local-supervisor.spec.ts (9 tests) 2128ms
+   ✓ starts relay before enabled daemons and stops the owned children reentrantly  757ms
+   ✓ does not report running when a child exits immediately after readiness  303ms
+   ✓ stops without waiting for a receiver that never answers an in-flight Work request  318ms
+ ✓ cli-adapter/fixed-process.spec.ts (6 tests) 1372ms
+     ✓ reports a real child stdin close as an explicit process error  577ms
+ ✓ agent/work-resource.spec.ts (24 tests) 973ms
+ ✓ runtime/local-config.spec.ts (36 tests) 1459ms
+   ✓ serializes concurrent internal state and Work control updates without dropping either field  596ms
+ ✓ server/relay.spec.ts (20 tests) 907ms
+ ✓ agent-host/cli-executor.spec.ts (10 tests) 691ms
+   ✓ keeps a successful local browser destruction fact for a repeated close  377ms
+ ✓ network/relay-client.spec.ts (21 tests) 709ms
+ ✓ agent-host/work-host.spec.ts (7 tests) 536ms
+ ✓ server/relay-process.spec.ts (6 tests) 582ms
+   ✓ starts, admits, lists, exits, and restarts through the real Node entrypoint  478ms
+ ✓ runtime/console-runtime.spec.ts (1 test) 432ms
+   ✓ owns an authenticated HTTPS listener and releases its relay registration on stop  431ms
+ ✓ runtime/managed-opencode.spec.ts (3 tests) 203ms
+ ✓ network/wss-connection.spec.ts (25 tests) 388ms
+ ✓ network/direct-listener.spec.ts (8 tests) 125ms
+ ✓ runtime/managed-config-owner.spec.ts (7 tests) 117ms
+ ✓ runtime/agent-daemon.spec.ts (10 tests) 169ms
+ ✓ config/provider-model-client.spec.ts (18 tests) 78ms
+stdout | runtime/local-work-control.spec.ts
+u4-socket-receipt /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/generated/u4-receipts/local-work-control-agdEKw/socket-evidence.json
+
+ ✓ runtime/local-work-control.spec.ts (16 tests) 82ms
+ ✓ network/console-channel.spec.ts (2 tests) 47ms
+ ✓ runtime/console-config.spec.ts (5 tests) 54ms
+ ✓ console-host/tests/server.spec.ts (1 test) 40ms
+ ✓ console-host/tests/http-api.spec.ts (4 tests) 65ms
+ ✓ ui/teams-console/tests/api.spec.ts (10 tests) 43ms
+ ✓ agent/relation-graph.spec.ts (6 tests) 28ms
+ ✓ opencode-adapter/tests/index.spec.ts (42 tests) 22ms
+ ✓ config/runtime-config.spec.ts (14 tests) 14ms
+ ✓ runtime/agent-process-config.spec.ts (5 tests) 20ms
+ ✓ runtime/console-hub.spec.ts (9 tests) 11ms
+ ✓ cli-adapter/search-cli.spec.ts (5 tests) 44ms
+ ✓ runtime/agent-work-client.spec.ts (13 tests) 12ms
+ ✓ ui/teams-console/tests/controller.spec.ts (14 tests) 8ms
+ ✓ control-protocol/console-api.spec.ts (6 tests) 8ms
+ ✓ control-protocol/console-wire.spec.ts (4 tests) 8ms
+ ✓ agent-host/console-ingress.spec.ts (4 tests) 8ms
+ ✓ server/deployment-contract.spec.ts (4 tests) 9ms
+ ✓ ui/teams-console/tests/boundary.spec.ts (7 tests) 8ms
+ ✓ server/directory.spec.ts (5 tests) 6ms
+ ✓ cli-adapter/browser-cli.spec.ts (6 tests) 7ms
+ ✓ control-protocol/relay-codec.spec.ts (5 tests) 7ms
+ ✓ control-protocol/agent-message.spec.ts (14 tests) 6ms
+ ✓ endpoint/registry.spec.ts (7 tests) 7ms
+ ✓ server/endpoint-discovery.spec.ts (4 tests) 6ms
+ ✓ network/account-directory.spec.ts (6 tests) 7ms
+ ✓ control-protocol/frames.spec.ts (13 tests) 6ms
+ ✓ control-protocol/work-wire.spec.ts (5 tests) 6ms
+ ✓ control-protocol/endpoint-ref.spec.ts (5 tests) 6ms
+ ✓ network/peer-route.spec.ts (7 tests) 5ms
+ ✓ network/host-registration.spec.ts (4 tests) 4ms
+ ✓ ui/teams-console/tests/model.spec.ts (7 tests) 4ms
+ ✓ agent-host/agent-host.spec.ts (2 tests) 5ms
+ ✓ network/route-plan.spec.ts (6 tests) 6ms
+ ✓ runtime/daemon-runtime.spec.ts (7 tests) 5ms
+ ✓ memory-plugin/memory-record.spec.ts (2 tests) 4ms
+ ✓ opencode-adapter/tests/managed-config.spec.ts (3 tests) 4ms
+ ✓ control-protocol/channel-state.spec.ts (8 tests) 5ms
+ ✓ control-protocol/relation-report.spec.ts (2 tests) 3ms
+ ✓ network/session-channel-registry.spec.ts (4 tests) 4ms
+ ✓ cli-adapter/cli.spec.ts (2 tests) 3ms
+ ✓ agent/notification-projection.spec.ts (3 tests) 4ms
+ ✓ network/target-transport.spec.ts (3 tests) 3ms
+ ✓ server/admission.spec.ts (2 tests) 3ms
+ ✓ console-host/tests/auth.spec.ts (1 test) 4ms
+ ✓ agent/agent-boundary.spec.ts (1 test) 3ms
+ ✓ search-plugin/search-index.spec.ts (2 tests) 3ms
+ ✓ ui/teams-console/tests/contract-compat.spec.ts (2 tests) 3ms
+ ✓ config/config-boundary.spec.ts (3 tests) 3ms
+ ✓ network/link.spec.ts (2 tests) 3ms
+ ✓ runtime/console-work-projection.spec.ts (1 test) 3ms
+ ✓ ui/teams-console/tests/locale.spec.ts (1 test) 2ms
+
+ Test Files  81 passed (81)
+      Tests  673 passed (673)
+   Start at  12:22:27
+   Duration  88.75s (transform 1.60s, setup 0ms, import 4.15s, tests 161.00s, environment 5ms)
+
+REGRESSION_EXIT=0

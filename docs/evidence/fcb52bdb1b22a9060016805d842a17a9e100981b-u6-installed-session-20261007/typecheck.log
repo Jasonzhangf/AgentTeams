@@ -1,0 +1,5 @@
+=== typecheck ===
+> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/ui/teams-console
+> tsc -p tsconfig.json --noEmit
+
+TYPECHECK_EXIT=0

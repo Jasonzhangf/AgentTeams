@@ -1,0 +1,64 @@
+candidate head=0edb591edd1f942464880b80346c2d9354dc0bb0 tree=fcb52bdb1b22a9060016805d842a17a9e100981b dirty=0
+=== pnpm build:governance ===
+
+> agentteams@0.1.0 build:governance /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006
+> pnpm build && node scripts/package-artifact.mjs --mode final
+
+
+> agentteams@0.1.0 build /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006
+> pnpm --dir opencode-adapter build && pnpm --dir console-host build && pnpm --dir ui/teams-console build && pnpm build:runtime
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/opencode-adapter/tsdown.config.ts
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    39.88 kB │ gzip: 9.71 kB
+ℹ lib/index.d.mts  26.99 kB │ gzip: 6.09 kB
+ℹ 2 files, total: 66.87 kB
+✔ Build complete in 1007ms
+
+> @deepseek-ai/teams-console-host@0.1.0 build /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/console-host
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/console-host/package.json
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    14.40 kB │ gzip: 4.29 kB
+ℹ lib/index.d.mts  16.47 kB │ gzip: 3.60 kB
+ℹ 2 files, total: 30.86 kB
+✔ Build complete in 699ms
+
+> @deepseek-ai/teams-console@0.1.0 build /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/ui/teams-console
+> tsc -p tsconfig.build.json && node scripts/finalize-build.mjs
+
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/dagpipe/.build/build-W88IxW)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.99s
+package artifact final agentteams@0.1.0 eb7530799c9d30fb8b1978b744d70d07c0a9d9c552a6cc16374b92d07c34bf54 generated/modules/teams-source/lib
+BUILD_EXIT=0
