@@ -1,5 +1,6 @@
 import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleCommandV1, ConsoleProjectionV1, JsonValue } from './protocol.ts'
-import { isServiceError, parseConsoleAgentObservation, parseConsoleSessionEvent } from './protocol.ts'
+import { assertJsonValue } from '../../../../control-protocol/json-value.ts'
+import { isServiceError, parseConsoleAgentObservation, parseConsoleSessionEvent, parseSessionCancelConfirmed, parseSessionCancelUnknownDetail, parseSessionCreateResult } from './protocol.ts'
 
 export interface ConsoleHttpClientOptions {
   readonly baseUrl?: string
@@ -51,9 +52,19 @@ function isProjection(value: unknown): value is ConsoleProjectionV1 {
     && (value.relations === undefined || isKeyClosedArray(value.relations, RELATION_KEYS))
 }
 
-function isCommandResult(value: unknown): value is ConsoleCommandResultV1 {
+function isValidCommandSuccess(kind: ConsoleCommandV1['kind'], result: unknown): boolean {
+  // Every accepted Session command has a closed, kind-specific result shape. Any other
+  // accepted command carries no structured result at the HTTP boundary.
+  if (kind === 'session.create') return parses(parseSessionCreateResult, result)
+  if (kind === 'session.cancel') return parses(parseSessionCancelConfirmed, result) || parses(parseSessionCancelUnknownDetail, result)
+  if (result === undefined) return true
+  try { assertJsonValue(result, 'console command result'); return true } catch { return false }
+}
+
+function isCommandResult(command: ConsoleCommandV1, value: unknown): value is ConsoleCommandResultV1 {
   if (!isRecord(value) || typeof value.ok !== 'boolean') return false
-  return value.ok || isServiceError(value.error)
+  if (value.ok === false) return isServiceError(value.error)
+  return isValidCommandSuccess(command.kind, value.result)
 }
 
 function resolveUrl(path: string, baseUrl: string | undefined): string {
@@ -115,7 +126,7 @@ export function createConsoleHttpClient(options: ConsoleHttpClientOptions = {}):
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify(command),
       })
-      if (!isCommandResult(value)) throw new ConsoleTransportError('Host returned an invalid v1 command result')
+      if (!isCommandResult(command, value)) throw new ConsoleTransportError('Host returned an invalid v1 command result')
       return value
     },
     async sendSession(target, payload: JsonValue): Promise<ConsoleCommandResultV1> {
@@ -124,7 +135,7 @@ export function createConsoleHttpClient(options: ConsoleHttpClientOptions = {}):
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (!isCommandResult(value)) throw new ConsoleTransportError('Host returned an invalid v1 Session result')
+      if (!isCommandResult({ kind: 'session.send', agentId: target.agentId }, value)) throw new ConsoleTransportError('Host returned an invalid v1 Session result')
       return value
     },
   }

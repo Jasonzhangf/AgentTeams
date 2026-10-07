@@ -16,6 +16,7 @@ export type {
 export {
   parseConsoleAgentObservation,
   parseConsoleSessionEvent,
+  parseSessionCancelConfirmed,
   parseSessionCancelUnknownDetail,
   parseSessionCreateResult,
 } from '../../../../control-protocol/console-api.ts'

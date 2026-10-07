@@ -79,6 +79,38 @@ describe('Console HTTP v1 adapter', () => {
     await expect(forkedClient.readProjection()).rejects.toThrow(/invalid v1 projection/)
   })
 
+  it('rejects a malformed Session success at the browser client boundary', async () => {
+    const respond = (body: unknown) => async () => new Response(JSON.stringify(body), { status: 200 })
+
+    // `session.create` must return the closed SessionCreateResult shape, not a bare success.
+    const createAbsent = createConsoleHttpClient({ fetchImpl: respond({ ok: true }) })
+    await expect(createAbsent.command({ kind: 'session.create', agentId: 'planner' }))
+      .rejects.toThrow(/invalid v1 command result/)
+
+    const createMalformed = createConsoleHttpClient({ fetchImpl: respond({ ok: true, result: { kind: 'session.create', sessionId: 's' } }) })
+    await expect(createMalformed.command({ kind: 'session.create', agentId: 'planner' }))
+      .rejects.toThrow(/invalid v1 command result/)
+
+    // `session.cancel` must return either a confirmed cancel or a typed unknown detail.
+    const cancelBare = createConsoleHttpClient({ fetchImpl: respond({ ok: true, result: { kind: 'session.cancel', sessionId: 's' } }) })
+    await expect(cancelBare.command({ kind: 'session.cancel', agentId: 'planner', sessionId: 's' }))
+      .rejects.toThrow(/invalid v1 command result/)
+
+    // A well-formed SessionCreateResult stays accepted on the same ingress.
+    const createValid = createConsoleHttpClient({ fetchImpl: respond({ ok: true,
+      result: { kind: 'session.create', agentId: 'planner', sessionId: 's' } }) })
+    expect(await createValid.command({ kind: 'session.create', agentId: 'planner' })).toMatchObject({ ok: true })
+
+    const cancelValid = createConsoleHttpClient({ fetchImpl: respond({ ok: true, result: { kind: 'session.cancel', sessionId: 's',
+      operationId: 'op', promptMessageId: 'm', runtimeGeneration: 1, effectiveRevision: 4, baseAccepted: true,
+      reconciliation: 'confirmed', finalState: 'cancelled', messageId: 'm', errorName: 'MessageAbortedError',
+      abortOperationId: 'op2', causalEvidence: 'unique-owned-message' } }) })
+    expect(await cancelValid.command({ kind: 'session.cancel', agentId: 'planner', sessionId: 's' })).toMatchObject({ ok: true })
+
+    const sendValid = createConsoleHttpClient({ fetchImpl: respond({ ok: true }) })
+    expect(await sendValid.sendSession({ agentId: 'planner', sessionId: 's' }, { text: 'probe' })).toMatchObject({ ok: true })
+  })
+
   it('admits observe-only work and relation rows and still rejects unknown projection keys', async () => {
     const work = {
       agentId: 'provider', workId: 'offline-work', consumerAgentId: 'consumer', providerAgentId: 'provider',
