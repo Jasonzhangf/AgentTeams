@@ -122,9 +122,10 @@ async function httpResponse(url, options = {}, timeoutMs = 30_000) {
 }
 
 async function httpJson(url, options = {}, expectedStatus = 200, timeoutMs = 30_000) {
+  const startedAt = Date.now()
   const response = await httpResponse(url, options, timeoutMs)
   assert(response.status === expectedStatus,
-    `${options.method ?? 'GET'} ${url} returned ${response.status}, expected ${expectedStatus}: ${response.text.slice(0, 400)}`)
+    `${options.method ?? 'GET'} ${url} returned ${response.status} after ${Date.now() - startedAt} ms, expected ${expectedStatus}: ${response.text.slice(0, 400)}`)
   return response
 }
 

@@ -1297,9 +1297,11 @@ const CONSOLE_CREDENTIAL_ENV = 'AGENTTEAMS_CONSOLE_AUTH'
 
 /**
  * A Console Session message is answered only when the model turn completes, so that
- * exchange needs a turn-sized deadline. Control exchanges keep the short relay
- * deadline, because a hung Agent must fail fast for projection and commands.
+ * exchange needs a turn-sized deadline. Control exchanges stay far shorter, but must
+ * still cover `config.apply`, which reconciles the managed runtime and can launch or
+ * restart the managed OpenCode child before it answers.
  */
+const CONSOLE_CONTROL_REQUEST_TIMEOUT_MS = 30_000
 const CONSOLE_SESSION_REQUEST_TIMEOUT_MS = 600_000
 
 /**
@@ -1524,7 +1526,7 @@ async function compileV3Config(
           caFile: tlsPaths.certFile,
           connectTimeoutMs: 1000,
           admissionTimeoutMs: 1000,
-          requestTimeoutMs: 1000,
+          requestTimeoutMs: CONSOLE_CONTROL_REQUEST_TIMEOUT_MS,
           maxMessageBytes: 65536,
           maxBufferedBytes: 65536,
           maxPendingFrames: 8,
