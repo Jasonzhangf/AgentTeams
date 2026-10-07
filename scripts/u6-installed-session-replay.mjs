@@ -17,6 +17,14 @@ const consoleUsername = 'u6-console'
 const consolePasswordEnv = 'AGENTTEAMS_U6_CONSOLE_PASSWORD'
 const consolePassword = 'u6-console-pass'
 const openCodeExecutable = '/Users/fanzhang/.opencode/bin/opencode'
+// Local relay admission credentials. The v3 projection derives these env names from
+// the agent id (`runtime/local-config.ts:1267`) and the Console uses its own fixed
+// name; the values only exist in this process environment and the isolated HOME.
+const relayCredentials = {
+  AGENTTEAMS_SESSION_AGENT_AUTH: 'u6-session-agent-credential',
+  AGENTTEAMS_PASSIVE_AGENT_AUTH: 'u6-passive-agent-credential',
+  AGENTTEAMS_CONSOLE_AUTH: 'u6-console-credential',
+}
 
 function fail(message) {
   throw new Error(`installed Session replay: ${message}`)
@@ -426,6 +434,7 @@ export async function runInstalledSessionReplay(options = {}) {
       HOME: paths.testHome,
       AGENTTEAMS_OPENCODE_EXECUTABLE: openCodeExecutable,
       [consolePasswordEnv]: consolePassword,
+      ...relayCredentials,
     }
     configPath = join(paths.testHome, '.agentteams', 'config.toml')
     const initialized = await run(cli, ['init'], { cwd: paths.temporaryRoot, env: cliEnv })
