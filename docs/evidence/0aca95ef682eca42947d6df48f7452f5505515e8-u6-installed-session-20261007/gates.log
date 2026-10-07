@@ -1,0 +1,94 @@
+# mapped gate: pnpm exec vitest run --no-file-parallelism control-protocol/console-api.spec.ts control-protocol/console-wire.spec.ts opencode-adapter/tests/index.spec.ts runtime/managed-config-owner.spec.ts runtime/agent-process.spec.ts runtime/console-hub.spec.ts network/console-channel.spec.ts agent-host/console-ingress.spec.ts ui/teams-console/tests/controller.spec.ts
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006
+
+(node:29837) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/dagpipe/.build/build-Olswby)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.26s
+stderr | runtime/agent-process.spec.ts > Session host admission, cancel causality and observation > separates observation degradation from owner readiness and contains expected errors
+Promise returned by `expect(actual).resolves.toMatchObject(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in the next Vitest major. Please remember to await the assertion.
+    at /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/agent-process.spec.ts:1310:62
+
+ ✓ runtime/agent-process.spec.ts (38 tests) 31663ms
+   ✓ executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state  5510ms
+   ✓ keeps an Agent with an accepted model binding but an unresolved managed executable passive and unavailable  337ms
+   ✓ persists unknown state before refusing a restart with active Work  375ms
+   ✓ recovers a stale work lock only after the previous daemon lease is reacquired  330ms
+   ✓ runs real persistent Camo browser Work through current SDK graphs and restores capacity  24559ms
+ ✓ runtime/managed-config-owner.spec.ts (7 tests) 98ms
+ ✓ network/console-channel.spec.ts (2 tests) 45ms
+ ✓ opencode-adapter/tests/index.spec.ts (39 tests) 17ms
+ ✓ runtime/console-hub.spec.ts (9 tests) 8ms
+ ✓ ui/teams-console/tests/controller.spec.ts (14 tests) 6ms
+ ✓ control-protocol/console-api.spec.ts (6 tests) 6ms
+ ✓ control-protocol/console-wire.spec.ts (4 tests) 7ms
+ ✓ agent-host/console-ingress.spec.ts (4 tests) 6ms
+
+ Test Files  9 passed (9)
+      Tests  123 passed (123)
+   Start at  09:29:36
+   Duration  34.06s (transform 623ms, setup 0ms, import 1.06s, tests 31.86s, environment 0ms)
+
+EXIT=0
+
+# pnpm typecheck
+
+> agentteams@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006
+> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    38.41 kB │ gzip: 9.48 kB
+ℹ lib/index.d.mts  26.11 kB │ gzip: 5.90 kB
+ℹ 2 files, total: 64.52 kB
+✔ Build complete in 710ms
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/opencode-adapter
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/console-host
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/ui/teams-console
+> tsc -p tsconfig.json --noEmit
+
+EXIT=0
+
+# pnpm exec dagpipe graph validate docs/design/dagpipe/graphs/session-request.graph.json
+valid DAG: agentteams.session-request@1 (7 nodes, 7 edges, 6 waves)
+operator bindings are syntactically present; project compile() remains the authoritative registry/schema/effect gate
+EXIT=0
+
+# pnpm appsdk verify
+warning: legacy SDK migration history retained for ordinary development (./.appsdk/migrations/0.1.5-to-0.1.6)
+PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0010:required_binary=appsdk-0.1.0010
+EXIT=1
+
+# node scripts/installed-runtime-smoke.mjs
+u1-installed-receipt /Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/generated/u1-receipts/1791390617615-45776/installed-runtime-smoke.receipt.json sha256:0a63a3e4d42c7841bc33e1bc7bd69be0aba094442f81ff56e6393a85d447b767
+Installed runtime smoke passed: the staged final package was installed outside the source tree and consumed through installed CLI/Relay/Agent lifecycle plus Console entrypoints.
+EXIT=0

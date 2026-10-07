@@ -1,0 +1,4 @@
+# node scripts/u6-installed-session-replay.mjs --evidence-dir /tmp/u6-r15-evidence
+u6-installed-session-replay passed
+{"status":"passed","cases":["initialization","lifecycle","console","discovery","config.apply","session.create","session.open","session.send","permission","session.cancel","passive-refusal","binding-without-owner","unsupported-payload","console-offline","stale-generation","clean-stop"]}
+EXIT=0

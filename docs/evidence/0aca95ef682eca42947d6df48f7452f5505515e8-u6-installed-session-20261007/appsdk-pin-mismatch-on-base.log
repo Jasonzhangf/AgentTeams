@@ -1,0 +1,2 @@
+warning: legacy SDK migration history retained for ordinary development (./.appsdk/migrations/0.1.5-to-0.1.6)
+PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0010:required_binary=appsdk-0.1.0010

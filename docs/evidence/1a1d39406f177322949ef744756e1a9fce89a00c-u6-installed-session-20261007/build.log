@@ -1,5 +1,0 @@
-=== build:governance ===
-   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u6-session-implementation-20261006/runtime/dagpipe/.build/build-jf1mRp)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.47s
-package artifact final agentteams@0.1.0 a237a3bcb96ed14b01db76c9cc1b715968852b23df08a28f778181d28889f946 generated/modules/teams-source/lib
-BUILD_EXIT=0
