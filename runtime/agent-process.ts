@@ -498,7 +498,12 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       if (streamChange !== undefined) await streamChange
       let outcome
       try {
-        outcome = await useAdapter(async client => await cancelOpenCodeSession(client, sessionId))
+        outcome = await useAdapter(
+          async client => await cancelOpenCodeSession(client, sessionId),
+          handle => effectiveHandleIdentity(handle) === snapshot.handleFingerprint
+            ? undefined
+            : cancelUnknown(snapshot, abortOperationId, 'stale-generation', undefined),
+        )
       } catch (error) {
         settlePendingCancel(sessionId, abortOperationId, undefined)
         throw error

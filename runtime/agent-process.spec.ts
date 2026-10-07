@@ -1420,6 +1420,30 @@ describe('Session host admission, cancel causality and observation', () => {
     expect(h.prompts).toEqual([])
   })
 
+  it('fails typed with zero abort calls when the owner handle changes during the cancel await', async () => {
+    const h = sessionHarness({ holdPrompt: true })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: h.prompts[0].messageId! } } })
+    await tick()
+    h.channel.end()
+    await tick()
+    const repointing = h.host.ensureStream()
+    const cancel = h.host.cancelSession('s1')
+    // The child replacement lands after cancel's snapshot check while cancel is still waiting
+    // on the event-stream re-point, before it enters owner.use. The delivered handle must be
+    // checked again, or the abort reaches the replacement child.
+    queueMicrotask(() => { h.replaceHandle({ url: 'http://127.0.0.1:2', authorization: 'Bearer replacement', effectiveRevision: 4, pid: 2, modelTarget: { providerID: 'p4', modelID: 'm4' } }) })
+    await tick()
+    expect(h.abortCalls()).toBe(0)
+    const rejected = await cancel
+    expect(rejected).toMatchObject({ ok: false, error: { code: 'RESULT_UNKNOWN', detail: { reason: 'stale-generation', runtimeGeneration: 7, effectiveRevision: 3 } } })
+    expect(h.abortCalls()).toBe(0)
+    await repointing
+    h.releasePrompt()
+    await prompt
+  })
+
   it('restarts the one event stream for a new child pid and awaits the previous consumer', async () => {
     const order: string[] = []
     let subscriptions = 0
