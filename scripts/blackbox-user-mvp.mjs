@@ -13,7 +13,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { createServer } from 'node:http'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { parse as parseToml } from 'toml'
@@ -36,10 +36,10 @@ const consoleLinkAuth = 'bb-console-link'
 const cases = [
   { id: 'BB01', owner: 'U1+U5+U7', gate: 'installed package lifecycle and Console assets', implemented: true, run: runBB01 },
   { id: 'BB02', owner: 'U2+U7', gate: 'config.toml-only two-daemon bridge discovery', implemented: true, run: runBB02 },
-  { id: 'BB03', owner: 'U3', gate: 'real browser service lifecycle and capacity', implemented: false, missingCapability: 'U3 installed browser service and real Camo lifecycle are not delivered in this candidate', publicProbe: 'work' },
+  { id: 'BB03', owner: 'U3', gate: 'real browser service lifecycle and capacity', implemented: true, run: runBB03 },
   { id: 'BB04', owner: 'D3/U4', gate: 'installed public Work submit and query', implemented: true, run: runBB04 },
-  { id: 'BB05', owner: 'U3+U4', gate: 'installed Work rejection matrix', implemented: false, missingCapability: 'U4 installed Work rejection entry and U3 service admission are not delivered in this candidate', publicProbe: 'work' },
-  { id: 'BB06', owner: 'U3+U4', gate: 'persistent browser Work capacity', implemented: false, missingCapability: 'U4 persistent Work lifecycle and U3 real browser capacity are not delivered in this candidate', publicProbe: 'work' },
+  { id: 'BB05', owner: 'U3+U4', gate: 'installed Work rejection matrix', implemented: true, run: runBB05 },
+  { id: 'BB06', owner: 'U3+U4', gate: 'persistent browser Work capacity', implemented: true, run: runBB06 },
   { id: 'BB07', owner: 'D3/U4', gate: 'installed Work unknown and recovery query', implemented: true, run: runBB07 },
   { id: 'BB08', owner: 'U2+U4', gate: 'installed config generation and stale rejection', implemented: true, run: runBB08 },
   { id: 'BB09', owner: 'U5', gate: 'installed Console lifecycle and offline Work', implemented: true, run: runBB09 },
@@ -174,11 +174,13 @@ function assertPortsClosed(ports) {
   assert(open.length === 0, `owned listeners remain: ${JSON.stringify(open)}`)
 }
 
-function parseInternal(path) {
+const defaultAgentIds = Object.freeze(['bb-provider', 'bb-receiver'])
+
+function parseInternal(path, agentIds = defaultAgentIds) {
   const internal = parseToml(readFileSync(path, 'utf8'))
   const launcher = internal.launcher
   assert(launcher?.state === 'running', 'internal launcher is not running')
-  const ids = ['relay', 'bb-provider', 'bb-receiver']
+  const ids = ['relay', ...agentIds]
   const processes = ids.map(id => {
     const record = internal.daemon?.[id]
     assert(record?.pid > 0 && Number.isSafeInteger(record.pid), `internal ${id} pid is missing`)
@@ -187,15 +189,14 @@ function parseInternal(path) {
     return { id, pid: record.pid, entryPath: record.entryPath, generation: record.generation, startToken: record.startToken }
   })
   const relayProjection = JSON.parse(internal.relay?.config ?? '')
-  const daemonConfigs = Object.fromEntries(['bb-provider', 'bb-receiver'].map(id => {
+  const daemonConfigs = Object.fromEntries(agentIds.map(id => {
     const record = internal.daemon?.[id]
     assert(record?.config !== undefined, `internal ${id} projection is missing`)
     return [id, JSON.parse(record.config)]
   }))
   const ports = {
     relay: relayProjection.listen?.port,
-    'bb-provider': daemonConfigs['bb-provider'].leasePort,
-    'bb-receiver': daemonConfigs['bb-receiver'].leasePort,
+    ...Object.fromEntries(agentIds.map(id => [id, daemonConfigs[id].leasePort])),
   }
   for (const [id, port] of Object.entries(ports)) {
     assert(Number.isSafeInteger(port) && port > 0 && port <= 65535, `internal ${id} port is invalid`)
@@ -206,7 +207,7 @@ function parseInternal(path) {
     launcher: { pid: launcher.pid, generation: launcher.generation, startToken: launcher.startToken },
     processes,
     ports,
-    services: Object.fromEntries(['bb-provider', 'bb-receiver'].map(id => [id, daemonConfigs[id].endpoint?.services ?? []])),
+    services: Object.fromEntries(agentIds.map(id => [id, daemonConfigs[id].endpoint?.services ?? []])),
   }
 }
 
@@ -474,7 +475,7 @@ function assertInstalledEntries(fixture, internal) {
   }
 }
 
-function startAndReadLifecycle(fixture, evidenceDir, prefix) {
+function startAndReadLifecycle(fixture, evidenceDir, prefix, agentIds = defaultAgentIds) {
   const start = runChecked(fixture.cli, ['start', '--config', fixture.configPath], {
     cwd: fixture.temporaryRoot,
     env: fixture.env,
@@ -488,9 +489,9 @@ function startAndReadLifecycle(fixture, evidenceDir, prefix) {
   const parsed = parseCliStatus(status.stdout)
   assert(parsed.state === 'running' && parsed.pid !== undefined && parsed.generation !== undefined,
     `installed lifecycle did not reach running: ${status.stdout.trim()}`)
-  assert(parsed.endpoints.length === 2 && parsed.endpoints.every(endpoint => endpoint.presence === 'online'),
+  assert(parsed.endpoints.length === agentIds.length && parsed.endpoints.every(endpoint => endpoint.presence === 'online'),
     `installed lifecycle directory is not online: ${status.stdout.trim()}`)
-  const internal = parseInternal(join(dirname(fixture.configPath), 'internal.toml'))
+  const internal = parseInternal(join(dirname(fixture.configPath), 'internal.toml'), agentIds)
   assert(internal.launcher.generation === parsed.generation, 'status generation does not match internal launcher generation')
   assert(internal.launcher.pid === parsed.pid, 'status pid does not match internal launcher pid')
   assertInstalledEntries(fixture, internal)
@@ -709,6 +710,16 @@ function writeWorkFixture(fixture) {
 function providerLedger(fixture) {
   const path = join(dirname(fixture.configPath), 'data', workProviderId, 'work.json')
   return { path, snapshot: existsSync(path) ? readJson(path) : undefined }
+}
+
+const emptyProviderLedger = Object.freeze({ works: [], requests: [], allocations: [] })
+
+/** A refusal must leave no accepted Work, request or allocation behind. */
+function assertNoProviderWork(fixture, label) {
+  const snapshot = providerLedger(fixture).snapshot
+  if (snapshot === undefined) return
+  assert(snapshot.works.length === 0 && snapshot.requests.length === 0 && snapshot.allocations.length === 0,
+    `${label} wrote provider work state: ${JSON.stringify(snapshot)}`)
 }
 
 function runWork(fixture, evidenceDir, name, args, options = {}) {
@@ -2712,6 +2723,726 @@ async function runBB14(context) {
   } finally {
     stopSentinel(sentinel)
     stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
+// ---------------------------------------------------------------------------
+// BB03 / BB05 / BB06: the installed browser Work lifecycle, the installed Work
+// rejection matrix and the persistent browser capacity contract. Every case
+// installs the staged package outside the source tree and drives the public
+// `agentteams work` entry plus the public `agentteams status` projection. The
+// real browser side effect is observed from the running Camoufox process for
+// the profile the provider returned, never from a mock ledger.
+// ---------------------------------------------------------------------------
+
+const browserOperations = Object.freeze(['context.create', 'navigate', 'snapshot', 'context.destroy'])
+const browserCapabilityId = 'browser'
+const browserContextDemands = '[{"resourceId":"browser-context","amount":1},{"resourceId":"browser-slot","amount":1}]'
+const browserSearchDemands = '[{"resourceId":"search-slot","amount":1}]'
+const browserPageMarker = 'bb-camo-needle'
+const browserCaseReceiver = 'bb-receiver'
+const browserReceiverOne = 'bb-receiver-1'
+const browserReceiverTwo = 'bb-receiver-2'
+const browserIntruder = 'bb-intruder'
+const missingCamoExecutable = '/missing/camo'
+
+/** Resolve a real executable from PATH instead of writing a machine path. */
+function resolveExecutable(name, evidenceDir) {
+  const resolved = runChecked('which', [name], { logPath: join(evidenceDir, `which-${name}.json`) }).stdout.trim()
+  assert(resolved.startsWith('/'), `${name} executable is not absolute: ${resolved}`)
+  return resolved
+}
+
+function resolveCamo(evidenceDir) {
+  const executable = resolveExecutable('camo', evidenceDir)
+  const version = runChecked(executable, ['--version'], { logPath: join(evidenceDir, 'camo-version.json') }).stdout.trim()
+  assert(version.length > 0, 'camo --version produced no version')
+  return { executable, version }
+}
+
+/**
+ * Camoufox resolves its admitted browser runtime from
+ * `$HOME/Library/Caches/camoufox`. The installed fixture owns an isolated HOME,
+ * so the driver links the machine's already admitted runtime into that HOME.
+ * This is fixture provisioning: it writes no product file and no source path.
+ */
+function provisionBrowserRuntime(fixture, evidenceDir) {
+  const source = join(homedir(), 'Library', 'Caches', 'camoufox')
+  assert(existsSync(join(source, 'version.json')), `the machine Camoufox runtime is missing: ${source}`)
+  const target = join(fixture.home, 'Library', 'Caches', 'camoufox')
+  mkdirSync(dirname(target), { recursive: true })
+  if (!existsSync(target)) symlinkSync(source, target)
+  assert(realpathSync(target) === realpathSync(source), `the fixture Camoufox runtime does not resolve to the machine runtime: ${target}`)
+  const record = { source, target, resolved: realpathSync(target) }
+  writeJson(join(evidenceDir, 'camoufox-runtime.json'), record)
+  return record
+}
+
+function agentAuthEnv(agentIds) {
+  return Object.fromEntries(agentIds.map(id => [`AGENTTEAMS_${id.toUpperCase().replace(/[^A-Z0-9]/gu, '_')}_AUTH`, `${id}-auth`]))
+}
+
+/**
+ * Compose the user `config.toml` for the browser cases. The receiver set, the
+ * declared services and the provider admission policy are explicit inputs so
+ * each case states the exact public intent it drives.
+ */
+function browserCaseConfigText(searchExecutable, spec) {
+  const lines = [
+    'version = 3', '', '[bridge]', 'enabled = true', '',
+    '[agents.bb-provider]', 'enabled = true', 'role = "provider"', 'label = "BB-Provider"', '',
+    '[agents.bb-provider.identity]', 'hostId = "bb-local"', 'machineId = "bb-machine"', 'accountId = "bb-account"',
+    'agentKind = "custom"', 'label = "BB-Provider"', '',
+    '[agents.bb-provider.runtime]', 'scopeId = "bb-scope"', 'dataDirectory = "data/bb-provider"',
+    `policy = { revision = 1, allowedConsumers = ${JSON.stringify(spec.allowedConsumers)}, allowedManagers = [] }`,
+    `cli = { camoExecutable = ${JSON.stringify(spec.camoExecutable)}, searchExecutable = ${JSON.stringify(searchExecutable)}, searchRoot = "files", profilePrefix = "teams-bb-provider" }`, '',
+  ]
+  if (spec.fileSearch !== false) {
+    lines.push('[agents.bb-provider.services.file-search]', 'version = "1"', 'operations = ["search"]',
+      'resources = [{ resourceId = "search-slot", capacity = 2, unit = "slot" }]', '')
+  }
+  if (spec.browser !== null && spec.browser !== undefined) {
+    lines.push('[agents.bb-provider.services.browser]', 'version = "1"',
+      `operations = ${JSON.stringify(browserOperations)}`, 'resources = [',
+      `  { resourceId = "browser-context", capacity = ${spec.browser.context}, unit = "context" },`,
+      `  { resourceId = "browser-slot", capacity = ${spec.browser.slot}, unit = "slot" },`, ']', '')
+  }
+  for (const receiver of spec.receivers) {
+    const label = receiver.label ?? receiver.id
+    lines.push(`[agents.${receiver.id}]`, 'enabled = true', 'role = "receiver"', `label = ${JSON.stringify(label)}`, '',
+      `[agents.${receiver.id}.identity]`, 'hostId = "bb-local"', 'machineId = "bb-machine"', 'accountId = "bb-account"',
+      'agentKind = "custom"', `label = ${JSON.stringify(label)}`, '',
+      `[agents.${receiver.id}.runtime]`, 'scopeId = "bb-scope"', `dataDirectory = "data/${receiver.id}"`,
+      'policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }',
+      `cli = { camoExecutable = ${JSON.stringify(missingCamoExecutable)}, searchExecutable = ${JSON.stringify(searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${receiver.id}" }`, '')
+    const connect = receiver.capability === 'browser'
+      ? { capabilityId: browserCapabilityId, operation: 'context.create',
+        demands: '[{ resourceId = "browser-context", amount = 1 }, { resourceId = "browser-slot", amount = 1 }]' }
+      : { capabilityId: 'file-search', operation: 'search', demands: '[{ resourceId = "search-slot", amount = 1 }]' }
+    lines.push(`[agents.${receiver.id}.connect]`, 'targetAgentId = "bb-provider"',
+      `capabilityId = ${JSON.stringify(connect.capabilityId)}`, 'capabilityVersion = "1"',
+      `operation = ${JSON.stringify(connect.operation)}`, `demands = ${connect.demands}`, '')
+  }
+  return `${lines.join('\n')}\n`
+}
+
+function initializeInstalledConfig(fixture, evidenceDir, name) {
+  runChecked(fixture.cli, ['init'], { cwd: fixture.temporaryRoot, env: fixture.env, logPath: join(evidenceDir, `${name}-init.json`) })
+}
+
+function writeCaseConfig(fixture, evidenceDir, name, text) {
+  writeFileSync(fixture.configPath, text, { encoding: 'utf8', mode: 0o600 })
+  const record = { sha256: sha256(text), text }
+  writeJson(join(evidenceDir, `${name}-config.json`), record)
+  return record
+}
+
+/** The public `work` entry reports a completed receipt on stdout and a failed receipt on stderr. */
+function workReceipt(output) {
+  const stdout = output.stdout.trim()
+  const stderr = output.stderr.trim()
+  const text = stdout.length > 0 ? stdout : stderr
+  assert(text.length > 0, `work command produced no receipt (exit ${output.status})`)
+  let receipt
+  try {
+    receipt = JSON.parse(text)
+  } catch {
+    fail(`work command produced a non-JSON result: ${text}`)
+  }
+  assert(receipt?.status === 'completed' || receipt?.status === 'failed',
+    `work command produced an unknown receipt status: ${text}`)
+  return receipt
+}
+
+function runWorkReceipt(fixture, evidenceDir, name, args) {
+  const output = runWork(fixture, evidenceDir, name, args)
+  return { output, receipt: workReceipt(output) }
+}
+
+function browserBinding(providerGeneration, capabilityId, operation) {
+  return ['--provider', workProviderId, '--provider-generation', String(providerGeneration),
+    '--capability-id', capabilityId, '--capability-version', '1', '--operation', operation]
+}
+
+function openBrowserContext(fixture, evidenceDir, name, receiver, generation, url) {
+  return runWorkReceipt(fixture, evidenceDir, name, ['work', 'open', '--config', fixture.configPath,
+    '--receiver', receiver, ...browserBinding(generation, browserCapabilityId, 'context.create'),
+    '--demands', browserContextDemands, '--payload', JSON.stringify({ initialUrl: url })])
+}
+
+function queryBrowserRequest(fixture, evidenceDir, name, receiver, receipt) {
+  const control = receipt.control
+  return runWorkReceipt(fixture, evidenceDir, name, ['work', 'query', '--config', fixture.configPath,
+    '--receiver', receiver, '--service-selection', 'capability', '--work-id', control.workId,
+    '--request-id', control.requestId, ...browserBinding(control.targetGeneration, control.capabilityId, control.operation)])
+}
+
+function closeBrowserWork(fixture, evidenceDir, name, receiver, receipt) {
+  const control = receipt.control
+  return runWorkReceipt(fixture, evidenceDir, name, ['work', 'close', '--config', fixture.configPath,
+    '--receiver', receiver, '--work-id', control.workId, ...browserBinding(control.targetGeneration, control.capabilityId, control.operation)])
+}
+
+/**
+ * Read the recorded browser request back through the public get-only query. A
+ * running request is polled; the observation must never re-execute the Work.
+ */
+async function observeBrowserContext(fixture, evidenceDir, name, receiver, receipt, timeoutMs = 120_000) {
+  const observed = await waitForAsync(async () => {
+    const query = queryBrowserRequest(fixture, evidenceDir, name, receiver, receipt)
+    if (query.receipt.status !== 'completed') return undefined
+    if (query.receipt.control.requestState === 'running') return undefined
+    return query.receipt
+  }, timeoutMs, `${name} to observe a terminal browser request`)
+  assert(observed.control.observed === true, `${name} did not observe the original request: ${JSON.stringify(observed.control)}`)
+  assert(observed.control.requestState === 'succeeded',
+    `${name} did not complete the real browser request: ${JSON.stringify(observed.control)}`)
+  assert(typeof observed.business?.contextId === 'string' && observed.business.contextId.startsWith('browser-context-'),
+    `${name} did not return a real browser context id: ${JSON.stringify(observed.business)}`)
+  assert(typeof observed.business?.profile === 'string' && observed.business.profile.startsWith('teams-'),
+    `${name} did not return a real browser profile: ${JSON.stringify(observed.business)}`)
+  assert(observed.evidence.hostOperations.includes('agentWork.get') && !observed.evidence.hostOperations.includes('agentWork.request'),
+    `${name} re-executed instead of reading the recorded request: ${JSON.stringify(observed.evidence.hostOperations)}`)
+  return observed
+}
+
+/** The real Camoufox browser processes owned by this fixture's isolated HOME. */
+function browserProfilesUnder(fixture) {
+  const result = spawnSync('ps', ['-Ao', 'pid,command'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+  const roots = [join(fixture.home, '.camo', 'profiles'), join('/private', fixture.home, '.camo', 'profiles')]
+  const profiles = new Map()
+  for (const line of result.stdout.split('\n')) {
+    if (!line.includes('/MacOS/camoufox -no-remote')) continue
+    const match = /-profile\s+(\S+)/u.exec(line)
+    if (match === null) continue
+    const root = roots.find(candidate => match[1].startsWith(`${candidate}/`))
+    if (root === undefined) continue
+    const pid = Number(/^\s*(\d+)/u.exec(line)?.[1])
+    if (!Number.isSafeInteger(pid)) continue
+    const profile = match[1].slice(root.length + 1)
+    profiles.set(profile, [...(profiles.get(profile) ?? []), pid])
+  }
+  return profiles
+}
+
+/** Every process whose command line still names this fixture's isolated HOME. */
+function fixtureProcesses(fixture) {
+  const result = spawnSync('ps', ['-Ao', 'pid,command'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+  const needles = [fixture.home, join('/private', fixture.home)]
+  return result.stdout.split('\n')
+    .filter(line => needles.some(needle => line.includes(needle)))
+    .map(line => ({ pid: Number(/^\s*(\d+)/u.exec(line)?.[1]), command: line.replace(/^\s*\d+\s+/u, '') }))
+    .filter(entry => Number.isSafeInteger(entry.pid))
+}
+
+function cleanupBrowserProfiles(fixture, camoExecutable, profiles, evidenceDir) {
+  for (const profile of profiles) {
+    const name = profile.slice(-24)
+    run(camoExecutable, ['stop', '--profile', profile], { cwd: fixture.temporaryRoot, env: fixture.env,
+      logPath: join(evidenceDir, `camo-stop-${name}.json`) })
+    run(camoExecutable, ['daemon', 'stop', '--profile', profile], { cwd: fixture.temporaryRoot, env: fixture.env,
+      logPath: join(evidenceDir, `camo-daemon-stop-${name}.json`) })
+  }
+}
+
+async function startBrowserPage() {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'text/html' })
+    response.end(`<html><body><h1>${browserPageMarker}</h1></body></html>`)
+  })
+  await new Promise((resolveListen, reject) => server.once('error', reject).listen(0, '127.0.0.1', resolveListen))
+  const address = server.address()
+  assert(address !== null && typeof address === 'object', 'the browser page server did not bind a port')
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: async () => {
+      server.closeAllConnections?.()
+      await new Promise(resolveClose => server.close(() => resolveClose()))
+    },
+  }
+}
+
+async function runBB03(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB03')
+  mkdirSync(evidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb03')
+  const camo = resolveCamo(evidenceDir)
+  const searchExecutable = resolveExecutable('rg', evidenceDir)
+  const runtime = provisionBrowserRuntime(fixture, evidenceDir)
+  const page = await startBrowserPage()
+  const profiles = new Set()
+  let lifecycle
+  let result
+  try {
+    writeWorkFixture(fixture)
+    initializeInstalledConfig(fixture, evidenceDir, 'bb03')
+
+    // (A) Browser disabled: the provider declares file-search only.
+    const disabledConfig = browserCaseConfigText(searchExecutable, {
+      camoExecutable: missingCamoExecutable,
+      browser: null,
+      allowedConsumers: [browserCaseReceiver],
+      receivers: [{ id: browserCaseReceiver, capability: 'file-search' }],
+    })
+    writeCaseConfig(fixture, evidenceDir, 'bb03-disabled', disabledConfig)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb03-disabled')
+    const disabledProvider = lifecycle.parsed.endpoints.find(endpoint => endpoint.agentId === workProviderId)
+    assert(disabledProvider?.presence === 'online', `the disabled provider is not online: ${JSON.stringify(lifecycle.parsed.endpoints)}`)
+    assert(disabledProvider.capabilities.some(capability => capability.startsWith('file-search@1:')),
+      `the enabled file-search capability is not advertised: ${JSON.stringify(disabledProvider.capabilities)}`)
+    assert(!disabledProvider.capabilities.some(capability => capability.startsWith(`${browserCapabilityId}@`)),
+      `a disabled browser capability was advertised: ${JSON.stringify(disabledProvider.capabilities)}`)
+    const disabledOpen = openBrowserContext(fixture, evidenceDir, 'bb03-disabled-open', browserCaseReceiver, disabledProvider.generation, page.url)
+    assert(disabledOpen.receipt.status === 'failed', `a disabled capability was matchable: ${JSON.stringify(disabledOpen.receipt)}`)
+    assert(disabledOpen.receipt.control.error?.code === 'NOT_FOUND',
+      `the disabled capability refusal was not NOT_FOUND: ${JSON.stringify(disabledOpen.receipt.control.error)}`)
+    assert(disabledOpen.receipt.business === undefined, 'a disabled capability returned a business result')
+    assertNoProviderWork(fixture, 'a disabled capability')
+    assert(browserProfilesUnder(fixture).size === 0, 'a disabled capability created a real browser context')
+    const disabledObservation = {
+      advertised_capabilities: disabledProvider.capabilities,
+      refusal: publicJson(disabledOpen.receipt.control),
+      provider_ledger_present: existsSync(providerLedger(fixture).path),
+      browser_processes: browserProfilesUnder(fixture).size,
+    }
+    await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb03-disabled')
+    lifecycle = undefined
+
+    // (B) Browser declared but pointing at a nonexistent CLI.
+    const missingConfig = browserCaseConfigText(searchExecutable, {
+      camoExecutable: missingCamoExecutable,
+      browser: { context: 1, slot: 1 },
+      allowedConsumers: [browserCaseReceiver],
+      receivers: [{ id: browserCaseReceiver, capability: 'browser' }],
+    })
+    writeCaseConfig(fixture, evidenceDir, 'bb03-missing', missingConfig)
+    const missingStart = run(fixture.cli, ['start', '--config', fixture.configPath], { cwd: fixture.temporaryRoot, env: fixture.env,
+      logPath: join(evidenceDir, 'bb03-missing-start.json') })
+    assert(missingStart.status !== 0, 'start succeeded with a nonexistent browser CLI')
+    assert(/camoExecutable cannot be inspected/u.test(`${missingStart.stdout}\n${missingStart.stderr}`),
+      `the missing browser CLI was not refused explicitly: ${missingStart.stdout}${missingStart.stderr}`)
+    const missingStatus = parseCliStatus(runChecked(fixture.cli, ['status', '--config', fixture.configPath], { cwd: fixture.temporaryRoot,
+      env: fixture.env, logPath: join(evidenceDir, 'bb03-missing-status.json') }).stdout)
+    assert(missingStatus.state === 'failed', `the missing browser CLI did not fail the lifecycle: ${JSON.stringify(missingStatus)}`)
+    assert(missingStatus.endpoints.length === 0, 'the missing browser CLI still advertised endpoints')
+    assertNoProviderWork(fixture, 'the missing browser CLI')
+    assert(browserProfilesUnder(fixture).size === 0, 'the missing browser CLI created a real browser context')
+    assert(fixtureProcesses(fixture).length === 0, `the failed lifecycle left owned processes: ${JSON.stringify(fixtureProcesses(fixture))}`)
+    const missingObservation = {
+      start_status: missingStart.status,
+      start_stderr: missingStart.stderr.trim(),
+      lifecycle: publicJson(missingStatus),
+      provider_ledger_present: existsSync(providerLedger(fixture).path),
+      browser_processes: browserProfilesUnder(fixture).size,
+      owned_processes: fixtureProcesses(fixture).length,
+    }
+
+    // (C) The real browser executable is enabled and owns its context lifecycle.
+    const enabledConfig = browserCaseConfigText(searchExecutable, {
+      camoExecutable: camo.executable,
+      browser: { context: 1, slot: 1 },
+      allowedConsumers: [browserCaseReceiver],
+      receivers: [{ id: browserCaseReceiver, capability: 'browser' }],
+    })
+    writeCaseConfig(fixture, evidenceDir, 'bb03-enabled', enabledConfig)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb03-enabled')
+    const enabledProvider = lifecycle.parsed.endpoints.find(endpoint => endpoint.agentId === workProviderId)
+    const advertised = `${browserCapabilityId}@1:${browserOperations.join(',')}[browser-context:1:context,browser-slot:1:slot]`
+    assert(lifecycle.status.stdout.includes(advertised),
+      `the real browser capability was not advertised with its resources: ${lifecycle.status.stdout.trim()}`)
+
+    const search = runWorkReceipt(fixture, evidenceDir, 'bb03-file-search-open', ['work', 'open', '--config', fixture.configPath,
+      '--receiver', browserCaseReceiver, ...browserBinding(enabledProvider.generation, 'file-search', 'search'),
+      '--demands', browserSearchDemands, '--payload', '{"query":"marker-alpha"}'])
+    assert(search.receipt.status === 'completed', `the real file-search Work did not complete: ${JSON.stringify(search.receipt)}`)
+    assertMatchedSearch(search.receipt, './a.txt')
+
+    const opened = openBrowserContext(fixture, evidenceDir, 'bb03-browser-open', browserCaseReceiver, enabledProvider.generation, page.url)
+    assert(opened.receipt.status === 'failed' && opened.receipt.control.error?.code === 'RESULT_UNKNOWN'
+      && opened.receipt.control.deliveryState === 'unconfirmed',
+    `the installed browser create did not report an unconfirmed delivery: ${JSON.stringify(opened.receipt)}`)
+    const observed = await observeBrowserContext(fixture, evidenceDir, 'bb03-browser-query', browserCaseReceiver, opened.receipt)
+    profiles.add(observed.business.profile)
+    const created = browserProfilesUnder(fixture)
+    assert(created.has(observed.business.profile),
+      `the real Camoufox process for ${observed.business.profile} is missing: ${JSON.stringify([...created.keys()])}`)
+
+    const closed = closeBrowserWork(fixture, evidenceDir, 'bb03-browser-close', browserCaseReceiver, opened.receipt)
+    assert(closed.receipt.status === 'completed'
+      || (closed.receipt.control.error?.code === 'RESULT_UNKNOWN' && closed.receipt.control.deliveryState === 'unconfirmed'),
+    `the browser close was neither completed nor an unconfirmed delivery: ${JSON.stringify(closed.receipt)}`)
+    await waitForAsync(async () => browserProfilesUnder(fixture).has(observed.business.profile) ? undefined : true,
+      60_000, 'the real browser context destruction')
+    const ledger = providerLedger(fixture).snapshot
+    const closedWork = ledger.works.find(work => work.workId === opened.receipt.control.workId)
+    assert(closedWork?.state === 'closed', `the provider ledger did not close the browser Work: ${JSON.stringify(closedWork)}`)
+    const workAllocations = ledger.allocations.filter(allocation => allocation.workId === opened.receipt.control.workId)
+    assert(workAllocations.length === 2 && workAllocations.every(allocation => allocation.state === 'released'),
+      `the provider ledger did not release the browser allocations: ${JSON.stringify(workAllocations)}`)
+
+    await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb03-enabled')
+    lifecycle = undefined
+    cleanupBrowserProfiles(fixture, camo.executable, profiles, evidenceDir)
+    assert(browserProfilesUnder(fixture).size === 0,
+      `real browser processes remain after confirmed destruction: ${JSON.stringify([...browserProfilesUnder(fixture).keys()])}`)
+    await page.close()
+    fixture.cleanup()
+
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        commands: ['agentteams init', 'agentteams start', 'agentteams status',
+          'agentteams work open --capability-id browser --operation context.create',
+          'agentteams work query --service-selection capability',
+          'agentteams work close', 'agentteams stop --generation <generation>'],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        installed_tarball_sha256: fixture.tarballSha256,
+        cli_realpath: fixture.cliRealpath,
+        camo,
+        camoufox_runtime: runtime,
+        disabled: disabledObservation,
+        missing_executable: missingObservation,
+        enabled: {
+          advertised_capabilities: enabledProvider.capabilities,
+          file_search: { control: publicJson(search.receipt.control), business: publicJson(search.receipt.business) },
+          browser_open: publicJson(opened.receipt.control),
+          browser_observation: { control: publicJson(observed.control), business: publicJson(observed.business) },
+          browser_close: publicJson(closed.receipt.control),
+          real_context_pids: created.get(observed.business.profile),
+          provider_work_state: closedWork?.state,
+          provider_allocation_states: workAllocations.map(allocation => allocation.state),
+        },
+        browser_processes_after_cleanup: browserProfilesUnder(fixture).size,
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    cleanupBrowserProfiles(fixture, camo.executable, profiles, evidenceDir)
+    await page.close()
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
+async function runBB05(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB05')
+  mkdirSync(evidenceDir, { recursive: true })
+  const agents = [workProviderId, browserCaseReceiver, browserIntruder]
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb05', agentAuthEnv([browserIntruder]))
+  const camo = resolveCamo(evidenceDir)
+  const searchExecutable = resolveExecutable('rg', evidenceDir)
+  provisionBrowserRuntime(fixture, evidenceDir)
+  let lifecycle
+  let result
+  try {
+    writeWorkFixture(fixture)
+    initializeInstalledConfig(fixture, evidenceDir, 'bb05')
+    const config = browserCaseConfigText(searchExecutable, {
+      camoExecutable: camo.executable,
+      browser: { context: 1, slot: 1 },
+      allowedConsumers: [browserCaseReceiver],
+      receivers: [
+        { id: browserCaseReceiver, capability: 'file-search' },
+        { id: browserIntruder, capability: 'file-search', label: 'BB-Intruder' },
+      ],
+    })
+    writeCaseConfig(fixture, evidenceDir, 'bb05', config)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb05', agents)
+    const provider = lifecycle.parsed.endpoints.find(endpoint => endpoint.agentId === workProviderId)
+    assert(provider?.presence === 'online', `the provider is not online: ${JSON.stringify(lifecycle.parsed.endpoints)}`)
+    const generation = provider.generation
+    const ledgerBefore = providerLedger(fixture).snapshot ?? emptyProviderLedger
+    const requestsBefore = ledgerBefore.requests.length
+    const activeAllocationsBefore = ledgerBefore.allocations.filter(allocation => allocation.state !== 'released').length
+    assert(activeAllocationsBefore === 0, `the rejection fixture started with active allocations: ${JSON.stringify(ledgerBefore.allocations)}`)
+
+    const openArgs = (receiver, overrides = {}) => ['work', 'open', '--config', fixture.configPath, '--receiver', receiver,
+      ...browserBinding(overrides.generation ?? generation, 'file-search', overrides.operation ?? 'search'),
+      ...(overrides.provider === undefined ? [] : ['--provider', overrides.provider]),
+      '--demands', browserSearchDemands, '--payload', '{"query":"marker-alpha"}']
+
+    // (1) An agent that is neither an allowed consumer nor an allowed manager.
+    const unauthorized = runWorkReceipt(fixture, evidenceDir, 'bb05-unauthorized',
+      openArgs(browserIntruder))
+    assert(unauthorized.receipt.status === 'failed', `an unauthorized consumer was admitted: ${JSON.stringify(unauthorized.receipt)}`)
+    assert(unauthorized.receipt.control.error?.code === 'FORBIDDEN',
+      `the unauthorized consumer refusal was not FORBIDDEN: ${JSON.stringify(unauthorized.receipt.control.error)}`)
+
+    // (2) An operation the provider does not declare.
+    const undeclared = runWorkReceipt(fixture, evidenceDir, 'bb05-undeclared-operation',
+      openArgs(browserCaseReceiver, { operation: 'not-a-real-operation' }))
+    assert(undeclared.receipt.status === 'failed', `an undeclared operation was admitted: ${JSON.stringify(undeclared.receipt)}`)
+    assert(undeclared.receipt.control.error?.code === 'UNSUPPORTED_OPERATION',
+      `the undeclared operation refusal was not UNSUPPORTED_OPERATION: ${JSON.stringify(undeclared.receipt.control.error)}`)
+
+    // (3) A stale provider generation.
+    const stale = runWorkReceipt(fixture, evidenceDir, 'bb05-stale-generation',
+      openArgs(browserCaseReceiver, { generation: generation + 1000 }))
+    assert(stale.receipt.status === 'failed', `a stale generation was admitted: ${JSON.stringify(stale.receipt)}`)
+    assert(stale.receipt.control.error?.code === 'STALE_GENERATION',
+      `the stale generation refusal was not STALE_GENERATION: ${JSON.stringify(stale.receipt.control.error)}`)
+
+    // (4) A provider target that does not exist.
+    const wrongTarget = runWorkReceipt(fixture, evidenceDir, 'bb05-wrong-target',
+      openArgs(browserCaseReceiver, { provider: 'bb-ghost' }))
+    assert(wrongTarget.receipt.status === 'failed', `a wrong target was admitted: ${JSON.stringify(wrongTarget.receipt)}`)
+    assert(wrongTarget.receipt.control.error?.code === 'NOT_FOUND',
+      `the wrong target refusal was not NOT_FOUND: ${JSON.stringify(wrongTarget.receipt.control.error)}`)
+
+    const rejections = [unauthorized, undeclared, stale, wrongTarget]
+    for (const rejection of rejections) {
+      assert(rejection.receipt.business === undefined, `a rejected request returned a business result: ${JSON.stringify(rejection.receipt)}`)
+      assert(typeof rejection.receipt.control.error?.message === 'string' && rejection.receipt.control.error.message.length > 0,
+        `a rejected request carried no explicit message: ${JSON.stringify(rejection.receipt.control)}`)
+      assert(rejection.output.status !== 0, `a rejected request exited 0: ${JSON.stringify(rejection.receipt.control)}`)
+    }
+
+    // The real provider shows no new execution or resource side effect.
+    const ledgerAfter = providerLedger(fixture).snapshot ?? emptyProviderLedger
+    assert(ledgerAfter.requests.length === requestsBefore,
+      `a rejected request created provider execution: ${JSON.stringify(ledgerAfter.requests)}`)
+    assert(ledgerAfter.allocations.filter(allocation => allocation.state !== 'released').length === activeAllocationsBefore,
+      `a rejected request created a resource allocation: ${JSON.stringify(ledgerAfter.allocations)}`)
+    const intruderWork = ledgerAfter.works.find(work => work.consumerAgentId === browserIntruder)
+    assert(intruderWork?.state === 'rejected', `the unauthorized proposal was not recorded as rejected: ${JSON.stringify(intruderWork)}`)
+    assert(browserProfilesUnder(fixture).size === 0, 'a rejected request created a real browser context')
+    const sideEffects = {
+      requests_before: requestsBefore,
+      requests_after: ledgerAfter.requests.length,
+      active_allocations_before: activeAllocationsBefore,
+      active_allocations_after: ledgerAfter.allocations.filter(allocation => allocation.state !== 'released').length,
+      unauthorized_work_state: intruderWork?.state,
+      browser_processes: browserProfilesUnder(fixture).size,
+    }
+
+    // A legal request still succeeds afterwards.
+    const legal = completedWorkReceipt(runWork(fixture, evidenceDir, 'bb05-legal-submit',
+      ['work', 'submit', '--config', fixture.configPath, '--receiver', browserCaseReceiver, '--payload', '{"query":"marker-alpha"}'],
+      { expectStatus: 0 }))
+    assert(legal.control.requestState === 'succeeded' && legal.control.workClosure === 'closed',
+      `the legal request did not close a succeeded request: ${JSON.stringify(legal.control)}`)
+    assertMatchedSearch(legal, './a.txt')
+
+    await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb05')
+    lifecycle = undefined
+    fixture.cleanup()
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        commands: ['agentteams init', 'agentteams start', 'agentteams status',
+          'agentteams work open (unauthorized consumer)', 'agentteams work open (undeclared operation)',
+          'agentteams work open (stale generation)', 'agentteams work open (wrong target)',
+          'agentteams work submit (legal)', 'agentteams stop --generation <generation>'],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        installed_tarball_sha256: fixture.tarballSha256,
+        cli_realpath: fixture.cliRealpath,
+        camo,
+        advertised_capabilities: provider.capabilities,
+        rejections: rejections.map(rejection => ({
+          exit_status: rejection.output.status,
+          status: rejection.receipt.status,
+          control: publicJson(rejection.receipt.control),
+        })),
+        side_effects: sideEffects,
+        legal: { control: publicJson(legal.control), business: publicJson(legal.business) },
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
+  return result
+}
+
+async function runBB06(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB06')
+  mkdirSync(evidenceDir, { recursive: true })
+  const receivers = [browserReceiverOne, browserReceiverTwo]
+  const agents = [workProviderId, ...receivers]
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb06', agentAuthEnv(receivers))
+  const camo = resolveCamo(evidenceDir)
+  const searchExecutable = resolveExecutable('rg', evidenceDir)
+  const runtime = provisionBrowserRuntime(fixture, evidenceDir)
+  const page = await startBrowserPage()
+  const profiles = new Set()
+  let lifecycle
+  let result
+  try {
+    writeWorkFixture(fixture)
+    initializeInstalledConfig(fixture, evidenceDir, 'bb06')
+    const config = browserCaseConfigText(searchExecutable, {
+      camoExecutable: camo.executable,
+      browser: { context: 2, slot: 2 },
+      allowedConsumers: receivers,
+      receivers: receivers.map(id => ({ id, capability: 'browser' })),
+    })
+    writeCaseConfig(fixture, evidenceDir, 'bb06', config)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb06', agents)
+    const provider = lifecycle.parsed.endpoints.find(endpoint => endpoint.agentId === workProviderId)
+    assert(provider?.presence === 'online', `the provider is not online: ${JSON.stringify(lifecycle.parsed.endpoints)}`)
+    const capacity = `${browserCapabilityId}@1:${browserOperations.join(',')}[browser-context:2:context,browser-slot:2:slot]`
+    assert(lifecycle.status.stdout.includes(capacity),
+      `the provider did not advertise the configured capacity: ${lifecycle.status.stdout.trim()}`)
+
+    const openedOne = openBrowserContext(fixture, evidenceDir, 'bb06-open-1', browserReceiverOne, provider.generation, page.url)
+    const openedTwo = openBrowserContext(fixture, evidenceDir, 'bb06-open-2', browserReceiverTwo, provider.generation, page.url)
+    for (const opened of [openedOne, openedTwo]) {
+      assert(opened.receipt.status === 'failed' && opened.receipt.control.error?.code === 'RESULT_UNKNOWN'
+        && opened.receipt.control.deliveryState === 'unconfirmed',
+      `a persistent browser create did not report an unconfirmed delivery: ${JSON.stringify(opened.receipt)}`)
+    }
+    const observedOne = await observeBrowserContext(fixture, evidenceDir, 'bb06-query-1', browserReceiverOne, openedOne.receipt)
+    const observedTwo = await observeBrowserContext(fixture, evidenceDir, 'bb06-query-2', browserReceiverTwo, openedTwo.receipt)
+    profiles.add(observedOne.business.profile)
+    profiles.add(observedTwo.business.profile)
+    assert(observedOne.business.contextId !== observedTwo.business.contextId,
+      'two consumers shared one browser context')
+    assert(observedOne.business.profile !== observedTwo.business.profile,
+      'two consumers shared one browser profile')
+    assert(observedOne.control.providerAgentId === workProviderId && observedTwo.control.providerAgentId === workProviderId,
+      'the one-to-many work did not stay on one provider')
+    const holding = browserProfilesUnder(fixture)
+    assert(holding.has(observedOne.business.profile) && holding.has(observedTwo.business.profile),
+      `the two real Camoufox contexts are not both alive: ${JSON.stringify([...holding.keys()])}`)
+    assert(holding.size === 2, `the provider created more contexts than the configured capacity: ${JSON.stringify([...holding.keys()])}`)
+
+    // (1) Over capacity: a third persistent Work is refused without a third context.
+    const overCapacity = openBrowserContext(fixture, evidenceDir, 'bb06-open-3', browserReceiverOne, provider.generation, page.url)
+    const overControl = overCapacity.receipt.control
+    assert(overCapacity.receipt.business === undefined,
+      `an over-capacity Work returned a business result: ${JSON.stringify(overCapacity.receipt.business)}`)
+    assert(overControl.requestState === 'failed' && overControl.workClosure === 'retained',
+      `an over-capacity Work was admitted: ${JSON.stringify(overControl)}`)
+    const afterRefusal = browserProfilesUnder(fixture)
+    assert(afterRefusal.size === 2, `the over-capacity refusal created an extra context: ${JSON.stringify([...afterRefusal.keys()])}`)
+    // The retained Work refuses the request again. The public entry reports the
+    // refusal as a failed request; the installed provider records the typed
+    // capacity refusal in its durable ledger.
+    const refused = runWorkReceipt(fixture, evidenceDir, 'bb06-request-over-capacity', ['work', 'request', '--config', fixture.configPath,
+      '--receiver', browserReceiverOne, '--work-id', overControl.workId,
+      ...browserBinding(provider.generation, browserCapabilityId, 'context.create'),
+      '--demands', browserContextDemands, '--payload', JSON.stringify({ initialUrl: page.url })])
+    const refusedControl = refused.receipt.control
+    assert(refused.receipt.status === 'completed' && refusedControl.requestState === 'failed' && refusedControl.workClosure === 'retained',
+      `the retained over-capacity Work did not refuse the request: ${JSON.stringify(refused.receipt)}`)
+    assert(refused.receipt.business === undefined, 'an over-capacity request returned a business result')
+    const refusedRecord = (providerLedger(fixture).snapshot ?? emptyProviderLedger).requests
+      .find(request => request.control?.requestId === refusedControl.requestId)
+    assert(refusedRecord?.state === 'failed' && refusedRecord.error?.code === 'RESOURCE_EXHAUSTED',
+      `the installed provider did not record the typed capacity refusal: ${JSON.stringify(refusedRecord)}`)
+    assert(/capacity exhausted|is occupied/u.test(refusedRecord.error.message),
+      `the typed capacity refusal carried no resource reason: ${JSON.stringify(refusedRecord.error)}`)
+    assert(browserProfilesUnder(fixture).size === 2,
+      `the over-capacity request created an extra context: ${JSON.stringify([...browserProfilesUnder(fixture).keys()])}`)
+
+    // (2) Confirmed release re-admits capacity.
+    const closedOne = closeBrowserWork(fixture, evidenceDir, 'bb06-close-1', browserReceiverOne, openedOne.receipt)
+    assert(closedOne.receipt.status === 'completed'
+      || (closedOne.receipt.control.error?.code === 'RESULT_UNKNOWN' && closedOne.receipt.control.deliveryState === 'unconfirmed'),
+    `the browser close was neither completed nor an unconfirmed delivery: ${JSON.stringify(closedOne.receipt)}`)
+    await waitForAsync(async () => browserProfilesUnder(fixture).has(observedOne.business.profile) ? undefined : true,
+      60_000, 'the first real browser context destruction')
+    profiles.delete(observedOne.business.profile)
+
+    const reopened = openBrowserContext(fixture, evidenceDir, 'bb06-open-4', browserReceiverOne, provider.generation, page.url)
+    assert(reopened.receipt.status === 'failed' && reopened.receipt.control.error?.code === 'RESULT_UNKNOWN'
+      && reopened.receipt.control.deliveryState === 'unconfirmed',
+    `the re-admitted browser create did not report an unconfirmed delivery: ${JSON.stringify(reopened.receipt)}`)
+    const observedReopened = await observeBrowserContext(fixture, evidenceDir, 'bb06-query-4', browserReceiverOne, reopened.receipt)
+    profiles.add(observedReopened.business.profile)
+    assert(observedReopened.business.contextId !== observedOne.business.contextId
+      && observedReopened.business.contextId !== observedTwo.business.contextId,
+    'the re-admitted Work reused a released context identity')
+    const readmitted = browserProfilesUnder(fixture)
+    assert(readmitted.has(observedReopened.business.profile),
+      `the re-admitted context has no real Camoufox process: ${JSON.stringify([...readmitted.keys()])}`)
+
+    // (3) Release the remaining contexts and confirm real destruction.
+    const closedTwo = closeBrowserWork(fixture, evidenceDir, 'bb06-close-2', browserReceiverTwo, openedTwo.receipt)
+    const closedReopened = closeBrowserWork(fixture, evidenceDir, 'bb06-close-4', browserReceiverOne, reopened.receipt)
+    for (const closed of [closedTwo, closedReopened]) {
+      assert(closed.receipt.status === 'completed'
+        || (closed.receipt.control.error?.code === 'RESULT_UNKNOWN' && closed.receipt.control.deliveryState === 'unconfirmed'),
+      `a browser close was neither completed nor an unconfirmed delivery: ${JSON.stringify(closed.receipt)}`)
+    }
+    await waitForAsync(async () => browserProfilesUnder(fixture).size === 0 ? true : undefined,
+      90_000, 'every released browser context to be destroyed')
+    profiles.clear()
+
+    await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb06')
+    lifecycle = undefined
+    cleanupBrowserProfiles(fixture, camo.executable, new Set([observedOne.business.profile, observedTwo.business.profile, observedReopened.business.profile]), evidenceDir)
+    assert(browserProfilesUnder(fixture).size === 0,
+      `real browser processes remain after confirmed release: ${JSON.stringify([...browserProfilesUnder(fixture).keys()])}`)
+    await page.close()
+    fixture.cleanup()
+
+    result = {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        commands: ['agentteams init', 'agentteams start', 'agentteams status',
+          'agentteams work open --receiver bb-receiver-1 --operation context.create',
+          'agentteams work open --receiver bb-receiver-2 --operation context.create',
+          'agentteams work open (over capacity)', 'agentteams work close',
+          'agentteams work open (after confirmed release)', 'agentteams stop --generation <generation>'],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        installed_tarball_sha256: fixture.tarballSha256,
+        cli_realpath: fixture.cliRealpath,
+        camo,
+        camoufox_runtime: runtime,
+        advertised_capability: capacity,
+        holding: {
+          first: { receiver: browserReceiverOne, control: publicJson(observedOne.control), business: publicJson(observedOne.business),
+            process_pids: holding.get(observedOne.business.profile) },
+          second: { receiver: browserReceiverTwo, control: publicJson(observedTwo.control), business: publicJson(observedTwo.business),
+            process_pids: holding.get(observedTwo.business.profile) },
+          real_contexts: holding.size,
+        },
+        over_capacity: {
+          open: { exit_status: overCapacity.output.status, control: publicJson(overControl) },
+          request: { exit_status: refused.output.status, control: publicJson(refusedControl) },
+          provider_request_record: publicJson(refusedRecord),
+          real_contexts_after: afterRefusal.size,
+        },
+        release: { close: publicJson(closedOne.receipt.control), released_context: observedOne.business.contextId },
+        readmitted: { control: publicJson(observedReopened.control), business: publicJson(observedReopened.business),
+          process_pids: readmitted.get(observedReopened.business.profile) },
+        browser_processes_after_cleanup: browserProfilesUnder(fixture).size,
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    cleanupBrowserProfiles(fixture, camo.executable, profiles, evidenceDir)
+    await page.close()
     try {
       fixture.cleanup()
     } catch {
