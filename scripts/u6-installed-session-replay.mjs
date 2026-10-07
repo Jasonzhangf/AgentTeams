@@ -517,8 +517,13 @@ export async function runInstalledSessionReplay(options = {}) {
 
     // (d) One real message round trip through the installed Console HTTP ingress,
     // the Agent relay, the real ManagedConfigOwner and the managed OpenCode child.
-    const sent = await client.sessionMessage('session-agent', sessionId, { text: 'u6 probe request' })
-    assert(sent.body.ok === true, `session.send failed: ${JSON.stringify(sent.body)}`)
+    const sendStartedAt = Date.now()
+    let sent
+    try { sent = await client.sessionMessage('session-agent', sessionId, { text: 'u6 probe request' }) }
+    catch (error) {
+      fail(`session.send transport failed after ${Date.now() - sendStartedAt} ms: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    assert(sent.body.ok === true, `session.send failed after ${Date.now() - sendStartedAt} ms: ${JSON.stringify(sent.body)}`)
     const assistantPart = await waitForAsync(async () => readEvents((await client.projection()).body, 'session-agent', sessionId)
       .find(event => event.kind === 'part' && event.partType === 'text' && typeof event.text === 'string' && event.text.includes(providerSentinel)),
     120_000, 'the managed OpenCode assistant text part')
