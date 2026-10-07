@@ -1165,33 +1165,20 @@ socket.once('error', () => finish(false))
 }
 
 /**
- * Drive the installed package's exported Console lifecycle functions and read
- * back the typed error code. This is the installed public runtime surface the
- * CLI itself calls, so the typed terminal is observable without repo source.
+ * Read the installed CLI's public typed Console terminal. `agentteams status`
+ * prints `consoleError=<code>:<message>` when the launcher can read the Console
+ * projection but the observation, or the Console itself, is refused. Only that
+ * public output is read here; the driver imports no installed internals.
  */
-function installedConsoleTypedCall(installedRoot, configPath, env, evidenceDir, name, call) {
-  const script = String.raw`
-import { pathToFileURL } from 'node:url'
-const mod = await import(pathToFileURL(process.env.AGENTTEAMS_INSTALLED_PACKAGE_ROOT + '/generated/runtime-lib/runtime/local-process.js').href)
-const fn = mod[process.env.AGENTTEAMS_CONSOLE_CALL]
-try {
-  await fn(process.env.AGENTTEAMS_CONFIG_PATH, { timeoutMs: 5000 })
-  console.log(JSON.stringify({ ok: true }))
-} catch (error) {
-  console.log(JSON.stringify({ ok: false, code: error?.code ?? null, message: error?.message ?? String(error) }))
-}
-`
-  const result = run(process.execPath, ['--input-type=module', '--eval', script], {
-    env: {
-      ...env,
-      AGENTTEAMS_INSTALLED_PACKAGE_ROOT: installedRoot,
-      AGENTTEAMS_CONFIG_PATH: configPath,
-      AGENTTEAMS_CONSOLE_CALL: call,
-    },
-    expectStatus: 0,
+function installedConsoleTypedStatus(fixture, evidenceDir, name) {
+  const result = run(fixture.cli, ['status', '--config', fixture.configPath], {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
     logPath: join(evidenceDir, `${name}.json`),
   })
-  return JSON.parse(result.stdout.trim())
+  const text = `${result.stdout}\n${result.stderr}`
+  const match = /consoleError=([A-Z_]+):/u.exec(text)
+  return { code: match === null ? null : match[1], text }
 }
 
 async function runBB09(context) {
@@ -1262,10 +1249,9 @@ async function runBB09(context) {
     const unavailableCli = runConsole(fixture, evidenceDir, 'bb09-console-status-unavailable', ['status'], { expectNonZero: true })
     assert(/Console control socket is unavailable/u.test(`${unavailableCli.stdout}\n${unavailableCli.stderr}`),
       `console status did not report the typed observation failure: ${unavailableCli.stdout}${unavailableCli.stderr}`)
-    const unavailable = installedConsoleTypedCall(fixture.installedRoot, fixture.configPath, fixture.env, evidenceDir,
-      'bb09-console-status-unavailable-typed', 'consoleStatusLocalProcess')
-    assert(unavailable.ok === false && unavailable.code === 'CONSOLE_STATUS_UNAVAILABLE',
-      `installed Console status did not return CONSOLE_STATUS_UNAVAILABLE: ${JSON.stringify(unavailable)}`)
+    const unavailable = installedConsoleTypedStatus(fixture, evidenceDir, 'bb09-console-status-unavailable-typed')
+    assert(unavailable.code === 'CONSOLE_STATUS_UNAVAILABLE',
+      `installed CLI status did not report CONSOLE_STATUS_UNAVAILABLE: ${unavailable.text}`)
 
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb09')
     const allPids = lifecyclePids(lifecycle.internal)
@@ -1279,10 +1265,9 @@ async function runBB09(context) {
     const disabledCli = runConsole(fixture, evidenceDir, 'bb09-console-disabled', ['start'], { expectNonZero: true })
     assert(/Console is disabled/u.test(`${disabledCli.stdout}\n${disabledCli.stderr}`),
       `console start did not refuse a disabled Console: ${disabledCli.stdout}${disabledCli.stderr}`)
-    const disabled = installedConsoleTypedCall(fixture.installedRoot, fixture.configPath, fixture.env, evidenceDir,
-      'bb09-console-disabled-typed', 'consoleStartLocalProcess')
-    assert(disabled.ok === false && disabled.code === 'CONSOLE_DISABLED',
-      `installed Console start did not return CONSOLE_DISABLED: ${JSON.stringify(disabled)}`)
+    const disabled = installedConsoleTypedStatus(fixture, evidenceDir, 'bb09-console-disabled-typed')
+    assert(disabled.code === 'CONSOLE_DISABLED',
+      `installed CLI status did not report CONSOLE_DISABLED: ${disabled.text}`)
     const disabledRuntime = readConsoleRuntime(disabledLifecycle.internal.internalPath)
     assert(disabledRuntime.state === 'stopped' && disabledRuntime.pid === undefined,
       `a disabled Console start wrote a live runtime row: ${JSON.stringify(disabledRuntime)}`)
