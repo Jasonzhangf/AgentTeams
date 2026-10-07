@@ -85,7 +85,7 @@ export interface AgentProcessConfig {
   readonly allowedConsumers: readonly string[]
   readonly allowedManagers: readonly string[]
   readonly cli: { readonly camoExecutable: string; readonly searchExecutable: string; readonly searchRoot: string; readonly profilePrefix: string }
-  readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs?: number; readonly stopTimeoutMs?: number }
+  readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs: number; readonly stopTimeoutMs: number }
   readonly directListener?: DirectListenerConfig
   readonly endpoint?: AgentEndpointConfig
 }
