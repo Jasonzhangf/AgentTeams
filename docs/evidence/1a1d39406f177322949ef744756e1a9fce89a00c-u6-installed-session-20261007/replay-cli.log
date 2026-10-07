@@ -1,0 +1,3 @@
+u6-installed-session-replay passed
+{"status":"passed","cases":["initialization","lifecycle","console","discovery","config.apply","session.create","session.open","session.send","permission","session.cancel","passive-refusal","unsupported-payload","console-offline","stale-generation","clean-stop"]}
+REPLAY_EXIT=0

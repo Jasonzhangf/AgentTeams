@@ -1,6 +1,6 @@
 # Teams U6 Session 窄设计：Console 到真实 OpenCode Session
 
-状态：`HISTORICAL PRE-IMPLEMENTATION DESIGN / UNVERIFIED DELIVERY`。本文正文冻结为 U6 编码前设计，记录当时的缺口。正文中“拟新增”“当前不存在”等表述只描述设计时刻，不代表当前实现状态。当前实现状态和验证证据以 `docs/architecture/*.json` 与本任务候选提交为准；`Console -> Agent -> managed OpenCode` 的安装后真实 Session 验收仍为 UNVERIFIED。
+状态：`HISTORICAL PRE-IMPLEMENTATION DESIGN / DELIVERED`。本文正文冻结为 U6 编码前设计，记录当时的缺口。正文中“拟新增”“当前不存在”等表述只描述设计时刻，不代表当前实现状态。当前实现状态和验证证据以 `docs/architecture/*.json` 与本任务候选提交为准；`Console -> Agent -> managed OpenCode` 的安装后真实 Session 验收已由树 `1a1d39406f177322949ef744756e1a9fce89a00c`（提交 `475a5eb200461e5664d40d1f97f995ba3df17c50`）的安装公开入口回放 receipt 覆盖，见 `docs/evidence/1a1d39406f177322949ef744756e1a9fce89a00c-u6-installed-session-20261007/validation.md`。浏览器验收与 U7 用户驱动用例（BB10/BB12）仍为下游 host gate。
 
 设计修订输入：
 

@@ -1,0 +1,468 @@
+{
+  "kind": "u6-installed-session-replay",
+  "version": 1,
+  "status": "passed",
+  "candidate": {
+    "head_commit": "475a5eb200461e5664d40d1f97f995ba3df17c50",
+    "base_commit": "e3ad473a4df609decef807401df756088c911b75",
+    "tree_hash": "1a1d39406f177322949ef744756e1a9fce89a00c",
+    "indexed_tree_hash": "1a1d39406f177322949ef744756e1a9fce89a00c",
+    "source_state": "committed"
+  },
+  "package": {
+    "pack_root": "generated/modules/teams-source/lib",
+    "content_sha256": "8dfdbe3d7227b86e74549f102b3b7534f8fd164bb00cee93ac780d6876568eba",
+    "tarball_sha256": "319083106b5c6c3ebb5a1ed706c172b87792940ac903eafa81c2625927cf6e03",
+    "tarball": "pack/agentteams-0.1.0.tgz"
+  },
+  "install": {
+    "prefix": "/tmp/u6rs-BWkWfS/prefix",
+    "home": "/tmp/u6rs-BWkWfS/home",
+    "cli": "/tmp/u6rs-BWkWfS/prefix/node_modules/.bin/agentteams",
+    "installed_root": "/tmp/u6rs-BWkWfS/prefix/node_modules/agentteams",
+    "installed_root_real": "/private/tmp/u6rs-BWkWfS/prefix/node_modules/agentteams",
+    "installed_content_sha256": "8dfdbe3d7227b86e74549f102b3b7534f8fd164bb00cee93ac780d6876568eba"
+  },
+  "provider": {
+    "base_url": "http://127.0.0.1:59674",
+    "sentinel": "managed-provider-ok"
+  },
+  "cases": {
+    "initialization": {
+      "status": "passed",
+      "stdout": "initialized /tmp/u6rs-BWkWfS/home/.agentteams/config.toml\nEdit config.toml, then run agentteams start, agentteams status, or agentteams stop.",
+      "config_path": "/tmp/u6rs-BWkWfS/home/.agentteams/config.toml",
+      "config_sha256_before_start": "61f65aa809a97af690f9a3329adcd055f8a2b9c387553d3d78873246a53f881f"
+    },
+    "lifecycle": {
+      "status": "passed",
+      "generation": 1,
+      "stdout": "started state=running generation=1 config=/tmp/u6rs-BWkWfS/home/.agentteams/config.toml internal=/tmp/u6rs-BWkWfS/home/.agentteams/internal.toml pid=48668",
+      "daemonPids": [
+        {
+          "id": "passive-agent",
+          "pid": 49513
+        },
+        {
+          "id": "relay",
+          "pid": 48748
+        },
+        {
+          "id": "session-agent",
+          "pid": 48845
+        }
+      ]
+    },
+    "console": {
+      "status": "passed",
+      "url": "http://127.0.0.1:59684",
+      "pid": 49640,
+      "unauthenticated": 401,
+      "crossSite": 401
+    },
+    "discovery": {
+      "status": "passed",
+      "sessionAgent": {
+        "kind": "runtime",
+        "agentId": "session-agent",
+        "machineId": "u6-machine",
+        "label": "U6 Session Agent",
+        "presence": "online",
+        "capabilities": [],
+        "generation": 1,
+        "sessionCapable": true,
+        "sessionAvailability": "no-current",
+        "sessionObservation": {
+          "state": "live"
+        }
+      },
+      "passiveAgent": {
+        "kind": "runtime",
+        "agentId": "passive-agent",
+        "machineId": "u6-machine",
+        "label": "U6 Passive Agent",
+        "presence": "online",
+        "capabilities": [],
+        "generation": 1,
+        "sessionCapable": false,
+        "sessionAvailability": "not-applicable"
+      }
+    },
+    "config.apply": {
+      "status": "passed",
+      "before": {
+        "agentId": "session-agent",
+        "acceptedRevision": 0,
+        "applyState": "clean",
+        "providers": [
+          {
+            "id": "u6-local",
+            "label": "U6 Local Provider",
+            "protocol": "openai-chat",
+            "apiBaseUrl": "http://127.0.0.1:59674/v1",
+            "enabled": true,
+            "authKind": "none",
+            "catalogState": "ready",
+            "models": [
+              {
+                "id": "u6-model",
+                "label": "U6 Model"
+              }
+            ]
+          }
+        ]
+      },
+      "result": {
+        "ok": true
+      },
+      "agent": {
+        "kind": "runtime",
+        "agentId": "session-agent",
+        "machineId": "u6-machine",
+        "label": "U6 Session Agent",
+        "presence": "online",
+        "capabilities": [],
+        "generation": 1,
+        "sessionCapable": true,
+        "sessionAvailability": "current",
+        "sessionObservation": {
+          "state": "live"
+        },
+        "sessionEffectiveRevision": 0,
+        "providerId": "u6-local",
+        "modelId": "u6-model"
+      }
+    },
+    "session.create": {
+      "status": "passed",
+      "result": {
+        "ok": true,
+        "result": {
+          "kind": "session.create",
+          "agentId": "session-agent",
+          "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+          "title": "U6 installed replay",
+          "directory": "/private/tmp/u6rs-BWkWfS/home/.agentteams/data/session-agent",
+          "time": {
+            "created": 1791379696074,
+            "updated": 1791379696074
+          }
+        }
+      }
+    },
+    "session.open": {
+      "status": "passed",
+      "result": {
+        "ok": true
+      },
+      "sessions": [
+        {
+          "agentId": "session-agent",
+          "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+          "title": "U6 installed replay"
+        }
+      ]
+    },
+    "session.send": {
+      "status": "passed",
+      "result": {
+        "ok": true
+      },
+      "provider_requests": 1,
+      "assistant_part": {
+        "eventId": "message.part.updated:ses_ee9731635ffe5IMZXKGBq9V4XL:msg_1168ceb550010BuHrAdwaTQiWe",
+        "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+        "agentId": "session-agent",
+        "kind": "part",
+        "state": "completed",
+        "messageId": "msg_1168ceb550010BuHrAdwaTQiWe",
+        "partId": "prt_1168cee10001p1RSPFuToXmgim",
+        "partType": "text",
+        "text": "managed-provider-ok"
+      }
+    },
+    "permission": {
+      "status": "passed",
+      "rounds": [
+        {
+          "decision": "once",
+          "replies": [
+            {
+              "pending": {
+                "eventId": "permission.asked:ses_ee9731635ffe5IMZXKGBq9V4XL:",
+                "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+                "agentId": "session-agent",
+                "kind": "permission",
+                "state": "pending",
+                "permissionId": "per_1168ceff5001zUYhWJTI5bzAki",
+                "messageId": "msg_1168cefd9001dzfWhS1setkjqg",
+                "callId": "call_u6_permission",
+                "title": "external_directory",
+                "metadata": {
+                  "filepath": "/tmp/u6rs-BWkWfS/permission-probe.env",
+                  "parentDir": "/tmp/u6rs-BWkWfS"
+                }
+              },
+              "resolved": {
+                "eventId": "permission.replied:ses_ee9731635ffe5IMZXKGBq9V4XL:",
+                "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+                "agentId": "session-agent",
+                "kind": "permission",
+                "state": "resolved",
+                "permissionId": "per_1168ceff5001zUYhWJTI5bzAki",
+                "decision": "once"
+              }
+            },
+            {
+              "pending": {
+                "eventId": "permission.asked:ses_ee9731635ffe5IMZXKGBq9V4XL:",
+                "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+                "agentId": "session-agent",
+                "kind": "permission",
+                "state": "pending",
+                "permissionId": "per_1168cf0ff00279GdAhk3QTdRKO",
+                "messageId": "msg_1168cefd9001dzfWhS1setkjqg",
+                "callId": "call_u6_permission",
+                "title": "read",
+                "metadata": {}
+              },
+              "resolved": {
+                "eventId": "permission.replied:ses_ee9731635ffe5IMZXKGBq9V4XL:",
+                "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+                "agentId": "session-agent",
+                "kind": "permission",
+                "state": "resolved",
+                "permissionId": "per_1168cf0ff00279GdAhk3QTdRKO",
+                "decision": "once"
+              }
+            }
+          ],
+          "tool_event": {
+            "eventId": "message.part.updated:ses_ee9731635ffe5IMZXKGBq9V4XL:msg_1168cefd9001dzfWhS1setkjqg",
+            "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+            "agentId": "session-agent",
+            "kind": "tool",
+            "messageId": "msg_1168cefd9001dzfWhS1setkjqg",
+            "partId": "prt_1168cefef0012jPNOoNbhHbCUE",
+            "callId": "call_u6_permission",
+            "tool": "read",
+            "state": "completed",
+            "input": {
+              "filePath": "/tmp/u6rs-BWkWfS/permission-probe.env"
+            },
+            "output": "<path>/tmp/u6rs-BWkWfS/permission-probe.env</path>\n<type>file</type>\n<content>\n1: u6-env-sentinel\n\n(End of file - total 1 lines)\n</content>",
+            "title": "tmp/u6rs-BWkWfS/permission-probe.env",
+            "metadata": {
+              "preview": "u6-env-sentinel",
+              "truncated": false,
+              "loaded": [],
+              "display": {
+                "type": "file",
+                "path": "/tmp/u6rs-BWkWfS/permission-probe.env",
+                "text": "u6-env-sentinel",
+                "lineStart": 1,
+                "lineEnd": 1,
+                "totalLines": 1,
+                "truncated": false
+              }
+            }
+          },
+          "side_effect": "env-content-read"
+        },
+        {
+          "decision": "reject",
+          "replies": [
+            {
+              "pending": {
+                "eventId": "permission.asked:ses_ee9731635ffe5IMZXKGBq9V4XL:",
+                "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+                "agentId": "session-agent",
+                "kind": "permission",
+                "state": "pending",
+                "permissionId": "per_1168d2cbc001mxPIYPlFWUSSAx",
+                "messageId": "msg_1168d2c9f001oKUN3cQVku3THc",
+                "callId": "call_u6_permission",
+                "title": "external_directory",
+                "metadata": {
+                  "filepath": "/tmp/u6rs-BWkWfS/permission-probe.env",
+                  "parentDir": "/tmp/u6rs-BWkWfS"
+                }
+              },
+              "resolved": {
+                "eventId": "permission.replied:ses_ee9731635ffe5IMZXKGBq9V4XL:",
+                "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+                "agentId": "session-agent",
+                "kind": "permission",
+                "state": "resolved",
+                "permissionId": "per_1168d2cbc001mxPIYPlFWUSSAx",
+                "decision": "reject"
+              }
+            }
+          ],
+          "tool_event": {
+            "eventId": "message.part.updated:ses_ee9731635ffe5IMZXKGBq9V4XL:msg_1168d2c9f001oKUN3cQVku3THc",
+            "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+            "agentId": "session-agent",
+            "kind": "tool",
+            "messageId": "msg_1168d2c9f001oKUN3cQVku3THc",
+            "partId": "prt_1168d2cb9001ITXwQctugLSA5j",
+            "callId": "call_u6_permission",
+            "tool": "read",
+            "state": "error",
+            "input": {
+              "filePath": "/tmp/u6rs-BWkWfS/permission-probe.env"
+            },
+            "error": "The user rejected permission to use this specific tool call."
+          },
+          "side_effect": "env-content-absent",
+          "dispatch": {
+            "ok": true
+          }
+        }
+      ],
+      "tool_event": {
+        "eventId": "message.part.updated:ses_ee9731635ffe5IMZXKGBq9V4XL:msg_1168ceea2001vjewSxRcfoi9kC",
+        "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+        "agentId": "session-agent",
+        "kind": "tool",
+        "messageId": "msg_1168ceea2001vjewSxRcfoi9kC",
+        "partId": "prt_1168ceece0015p1nluzkt0FGSZ",
+        "callId": "call_u6_probe",
+        "tool": "bash",
+        "state": "completed",
+        "input": {
+          "command": "printf u6-tool-probe-ran > '/tmp/u6rs-BWkWfS/tool-probe-marker' && printf u6-tool-ran-ok"
+        },
+        "output": "u6-tool-ran-ok",
+        "title": "printf u6-tool-probe-ran > '/tmp/u6rs-BWkWfS/tool-probe-marker' && printf u6-tool-ran-ok",
+        "metadata": {
+          "output": "u6-tool-ran-ok",
+          "exit": 0,
+          "truncated": false
+        }
+      },
+      "tool_side_effect": "marker-present",
+      "unknown_permission_refusal": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_INPUT",
+          "message": "OpenCode permissionID must be a per_-prefixed PermissionID"
+        }
+      }
+    },
+    "session.cancel": {
+      "status": "passed",
+      "variant": "confirmed",
+      "result": {
+        "ok": true,
+        "result": {
+          "kind": "session.cancel",
+          "sessionId": "ses_ee9731635ffe5IMZXKGBq9V4XL",
+          "operationId": "df6e1073-3e4d-4395-9854-30a2880c0fdd",
+          "promptMessageId": "msg_1168d69ee0012maqrBEYqcgepp",
+          "runtimeGeneration": 1,
+          "effectiveRevision": 0,
+          "baseAccepted": true,
+          "reconciliation": "confirmed",
+          "finalState": "cancelled",
+          "messageId": "msg_1168d69ee0012maqrBEYqcgepp",
+          "errorName": "MessageAbortedError",
+          "abortOperationId": "3842c7bb-df9d-4de5-b044-38331148693f",
+          "causalEvidence": "unique-owned-message"
+        }
+      },
+      "dispatch": {
+        "ok": true
+      }
+    },
+    "passive-refusal": {
+      "status": "passed",
+      "create": {
+        "ok": false,
+        "error": {
+          "code": "UNSUPPORTED_OPERATION",
+          "message": "Passive CLI Agent has no Session execution capability"
+        }
+      },
+      "send": {
+        "ok": false,
+        "error": {
+          "code": "UNSUPPORTED_OPERATION",
+          "message": "Passive CLI Agent has no Session execution capability"
+        }
+      }
+    },
+    "unsupported-payload": {
+      "status": "passed",
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "UNSUPPORTED_OPERATION",
+          "message": "OpenCode session message payload has unsupported field bogus"
+        }
+      }
+    },
+    "console-offline": {
+      "status": "passed",
+      "console_reachable": false,
+      "launcher_state": "running",
+      "daemon_pids": [
+        {
+          "id": "passive-agent",
+          "pid": 49513
+        },
+        {
+          "id": "relay",
+          "pid": 48748
+        },
+        {
+          "id": "session-agent",
+          "pid": 48845
+        }
+      ]
+    },
+    "stale-generation": {
+      "status": "passed",
+      "previous_generation": 1,
+      "generation": 2,
+      "stale_refusal": "stale local supervisor generation expected=1 current=2",
+      "config_sha256_after_restart": "61f65aa809a97af690f9a3329adcd055f8a2b9c387553d3d78873246a53f881f"
+    },
+    "clean-stop": {
+      "status": "passed",
+      "stopped": [
+        48668,
+        49513,
+        48748,
+        48845
+      ],
+      "console_pid": 49640,
+      "config_sha256_before_start": "61f65aa809a97af690f9a3329adcd055f8a2b9c387553d3d78873246a53f881f",
+      "config_sha256_after_stop": "61f65aa809a97af690f9a3329adcd055f8a2b9c387553d3d78873246a53f881f"
+    }
+  },
+  "pids": {
+    "launcher": 48668,
+    "daemons": [
+      {
+        "id": "passive-agent",
+        "pid": 49513
+      },
+      {
+        "id": "relay",
+        "pid": 48748
+      },
+      {
+        "id": "session-agent",
+        "pid": 48845
+      }
+    ],
+    "console": 49640
+  },
+  "cleanup": {
+    "temporary_root": "/tmp/u6rs-BWkWfS",
+    "leaked_pids": [],
+    "config_sha256": "61f65aa809a97af690f9a3329adcd055f8a2b9c387553d3d78873246a53f881f",
+    "temporary_root_removed": true
+  }
+}
