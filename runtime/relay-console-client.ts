@@ -11,10 +11,16 @@ export class ConsoleProjectionError extends Error {
   constructor(readonly error: ConsoleServiceError) { super(error.message) }
 }
 
-/** One Agent binding over the existing authenticated relay; directory state never grants management rights. */
-export function createRelayConsoleClient(relay: RelayClient, agentId: string, timeoutMs: number): ConsoleClientV1 {
-  if (!agentId || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647) throw new RelayProtocolError('INVALID_INPUT', 'Invalid Console relay binding')
-  const exchange = async (input: Request) => {
+/**
+ * One Agent binding over the existing authenticated relay; directory state never grants management rights.
+ * A Session message carries a whole model turn, so its exchange gets its own deadline: the
+ * control deadline must stay tight, because a hung Agent must fail fast for projection and commands.
+ */
+export function createRelayConsoleClient(relay: RelayClient, agentId: string, timeoutMs: number,
+  sessionTimeoutMs: number = timeoutMs): ConsoleClientV1 {
+  const validDeadline = (value: number) => Number.isSafeInteger(value) && value >= 1 && value <= 2_147_483_647
+  if (!agentId || !validDeadline(timeoutMs) || !validDeadline(sessionTimeoutMs)) throw new RelayProtocolError('INVALID_INPUT', 'Invalid Console relay binding')
+  const exchange = async (input: Request, deadlineMs: number = timeoutMs) => {
     assertJsonValue(input, 'Console client request')
     const snapshot = parseConsoleWireRequest(JSON.stringify({ ...input, correlationId: randomUUID(), targetGeneration: 1 }))
     const targetId = snapshot.kind === 'console.command' ? snapshot.command.agentId : snapshot.agentId
@@ -24,7 +30,7 @@ export function createRelayConsoleClient(relay: RelayClient, agentId: string, ti
     if (peer.presence !== 'online') throw new RelayProtocolError('UNAVAILABLE', 'Agent is offline')
     const grant = await relay.connect(agentId, peer.generation)
     const socket = await relay.openData(grant)
-    return requestConsole(socket, { ...snapshot, targetGeneration: peer.generation }, timeoutMs)
+    return requestConsole(socket, { ...snapshot, targetGeneration: peer.generation }, deadlineMs)
   }
   return {
     readProjection: async () => {
@@ -39,7 +45,7 @@ export function createRelayConsoleClient(relay: RelayClient, agentId: string, ti
       return reply.result
     },
     sendSession: async (target, payload) => {
-      const reply = await exchange({ kind: 'console.session', ...target, payload })
+      const reply = await exchange({ kind: 'console.session', ...target, payload }, sessionTimeoutMs)
       if (reply.kind !== 'console.result') throw new RelayProtocolError('INVALID_INPUT', 'Unexpected Console Session response')
       return reply.result
     },

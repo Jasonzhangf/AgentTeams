@@ -97,7 +97,7 @@ it('replays a config-driven local Relay bridge across independent daemon process
 
   const startConsole = () => startConsoleRuntime({
     host: '127.0.0.1', port: 0, origin: 'http://127.0.0.1', username: 'operator', password: 'test-secret',
-    agentIds: [], staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
+    agentIds: [], sessionRequestTimeoutMs: 600_000, staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
     daemon: { presenceIntervalMs: 500, relay: { declaration: { identity: { hostId: 'console-host', machineId: 'local-machine', agentId: 'console', accountId: 'local-account', agentKind: 'custom', label: 'Console' }, scopeId: 'local-scope', revision: 1, capabilities: [], routes: [] },
       transport: { endpoint: relayEndpoint, credential: 'Bearer console', ca: readFileSync(certFile), connectTimeoutMs: 1000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 },
       admissionTimeoutMs: 1000, requestTimeoutMs: 3000, maxPendingRequests: 8, maxDataConnections: 8 } },

@@ -20,7 +20,7 @@ it('owns an authenticated HTTPS listener and releases its relay registration on 
   let consoleRuntime: Awaited<ReturnType<typeof startConsoleRuntime>> | undefined
   try {
     const options = { host: '127.0.0.1', port: 0, origin: 'https://127.0.0.1', username: 'operator', password: 'test-secret', tls,
-      agentIds: [], staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
+      agentIds: [], sessionRequestTimeoutMs: 600_000, staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
       daemon: { presenceIntervalMs: 1000, relay: { declaration: { identity: { hostId: 'console', machineId: 'test', agentId: 'console', accountId: 'account', agentKind: 'custom' as const, label: 'Console' }, scopeId: 'scope', revision: 1, capabilities: [], routes: [] },
         transport: { endpoint: relay.url, credential: 'Bearer console', ca: tls.cert, connectTimeoutMs: 1000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 8 },
         admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxPendingRequests: 4, maxDataConnections: 4 } } }
@@ -46,7 +46,7 @@ it('owns an authenticated HTTPS listener and releases its relay registration on 
     consoleRuntime = await startConsoleRuntime(options)
     await consoleRuntime.stop()
     const configuration = { version: 1, identity: options.daemon.relay.declaration.identity, scopeId: 'scope', presenceIntervalMs: 1000,
-      agentIds: [], listen: { host: options.host, port: 0, origin: options.origin, certFile: './cert', keyFile: './key' },
+      sessionRequestTimeoutMs: options.sessionRequestTimeoutMs, agentIds: [], listen: { host: options.host, port: 0, origin: options.origin, certFile: './cert', keyFile: './key' },
       auth: { username: 'operator', passwordEnv: 'TEAMS_CONSOLE_TEST_PASSWORD' }, staticRoot: options.staticRoot, uiRoot: options.uiRoot,
       relay: { endpoint: relay.url, credentialEnv: 'TEAMS_CONSOLE_TEST_RELAY', caFile: './cert', connectTimeoutMs: 1000,
         admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 8, maxPendingRequests: 4, maxDataConnections: 4 } }

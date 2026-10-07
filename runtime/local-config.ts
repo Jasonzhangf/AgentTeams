@@ -1296,6 +1296,13 @@ const CONSOLE_IDENTITY = {
 const CONSOLE_CREDENTIAL_ENV = 'AGENTTEAMS_CONSOLE_AUTH'
 
 /**
+ * A Console Session message is answered only when the model turn completes, so that
+ * exchange needs a turn-sized deadline. Control exchanges keep the short relay
+ * deadline, because a hung Agent must fail fast for projection and commands.
+ */
+const CONSOLE_SESSION_REQUEST_TIMEOUT_MS = 600_000
+
+/**
  * Asset roots are derived from the installed package, never from user intent.
  * Source runs resolve to the repository root; compiled runtime-lib runs resolve
  * to the package root three directories above the emitted runtime directory.
@@ -1500,6 +1507,7 @@ async function compileV3Config(
         identity: { ...CONSOLE_IDENTITY },
         scopeId: 'local',
         presenceIntervalMs: 500,
+        sessionRequestTimeoutMs: CONSOLE_SESSION_REQUEST_TIMEOUT_MS,
         agentIds,
         listen: {
           ...(isTomlRecord(existingConsole?.listen) ? existingConsole.listen : {}),

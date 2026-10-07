@@ -7,6 +7,7 @@ import { createRelayConsoleClient } from './relay-console-client.ts'
 export interface ConsoleRuntimeOptions {
   readonly daemon: AgentDaemonOptions
   readonly agentIds: readonly string[]
+  readonly sessionRequestTimeoutMs: number
   readonly host: string
   readonly port: number
   readonly origin: string
@@ -23,17 +24,19 @@ export async function startConsoleRuntime(options: ConsoleRuntimeOptions) {
   const agentIds = [...options.agentIds]
   if (!host || !Number.isSafeInteger(port) || port < 0 || port > 65535) throw new Error('Invalid Console listen address')
   if (agentIds.some(id => typeof id !== 'string' || !id) || new Set(agentIds).size !== agentIds.length) throw new Error('Console Agent IDs must be unique')
+  const sessionTimeoutMs = options.sessionRequestTimeoutMs
+  if (!Number.isSafeInteger(sessionTimeoutMs) || sessionTimeoutMs < 1 || sessionTimeoutMs > 2_147_483_647) throw new Error('Console Session request timeout is invalid')
   if (!options.tls && !['127.0.0.1', '::1'].includes(host)) throw new Error('Non-loopback Console requires TLS')
   if (new URL(origin).protocol !== (options.tls ? 'https:' : 'http:')) throw new Error('Console origin must match its TLS mode')
   const daemon = await startAgentDaemon(options.daemon)
   let server: ReturnType<typeof createConsoleServer> | undefined
   try {
     const client = createConsoleHub(
-      agentIds.map(agentId => ({ agentId, client: createRelayConsoleClient(daemon.network, agentId, options.daemon.relay.requestTimeoutMs) })),
+      agentIds.map(agentId => ({ agentId, client: createRelayConsoleClient(daemon.network, agentId, options.daemon.relay.requestTimeoutMs, sessionTimeoutMs) })),
       agentIds.length === 0 ? async () => ({
         peers: (await daemon.network.directory(false)).filter(peer =>
           peer.declaration.identity.agentId !== options.daemon.relay.declaration.identity.agentId),
-        client: peer => createRelayConsoleClient(daemon.network, peer.declaration.identity.agentId, options.daemon.relay.requestTimeoutMs),
+        client: peer => createRelayConsoleClient(daemon.network, peer.declaration.identity.agentId, options.daemon.relay.requestTimeoutMs, sessionTimeoutMs),
       }) : undefined,
     )
     server = createConsoleServer({ staticRoot, uiRoot, tls: options.tls,
