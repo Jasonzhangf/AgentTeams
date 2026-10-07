@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:net'
-import { readFile, mkdir, open, link, unlink, rename } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { mkdir, open, link, readFile, rename, unlink } from 'node:fs/promises'
+import { accessSync, existsSync, statSync } from 'node:fs'
+import { delimiter, dirname, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { object, text, number, loadDirectListenerConfig, loadRelayConfig, type DirectListenerConfig } from './process-config.ts'
@@ -85,7 +85,6 @@ export interface AgentProcessConfig {
   readonly allowedConsumers: readonly string[]
   readonly allowedManagers: readonly string[]
   readonly cli: { readonly camoExecutable: string; readonly searchExecutable: string; readonly searchRoot: string; readonly profilePrefix: string }
-  readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs: number; readonly stopTimeoutMs: number }
   readonly directListener?: DirectListenerConfig
   readonly endpoint?: AgentEndpointConfig
 }
@@ -176,6 +175,8 @@ export function projectRuntimeAgentRow(input: {
 
 const SESSION_EVENT_BUFFER_LIMIT = 200
 const ABORT_RECONCILE_TIMEOUT_MS = 5_000
+const MANAGED_OPENCODE_STARTUP_TIMEOUT_MS = 10_000
+const MANAGED_OPENCODE_STOP_TIMEOUT_MS = 3_000
 const EXPECTED_ADAPTER_CODES: readonly string[] = ['NOT_FOUND', 'INVALID_INPUT', 'FORBIDDEN', 'UNAUTHENTICATED', 'UNSUPPORTED_OPERATION']
 
 const effectiveHandleIdentity = (handle: Pick<ManagedEffectiveHandle, 'url' | 'effectiveRevision' | 'pid'>): string =>
@@ -269,7 +270,9 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     }
     if (event.kind === 'final' && event.state === 'failed' && event.error.name === 'MessageAbortedError') {
       const pending = pendingCancels.get(event.sessionId)
-      if (pending !== undefined && pending.promptMessageId === event.messageId) {
+      const current = operations.get(event.sessionId)
+      if (pending !== undefined && current !== undefined
+        && pending.abortOperationId === current.abortOperationId && pending.promptMessageId === event.messageId) {
         settlePendingCancel(event.sessionId, pending.abortOperationId, event.messageId)
       }
     }
@@ -374,7 +377,8 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
   }
   const bufferedAbortMessageId = (sessionId: string, promptMessageId: string): string | undefined =>
     (buffers.get(sessionId) ?? []).flatMap(event => event.kind === 'final' && event.state === 'failed' &&
-      event.error.name === 'MessageAbortedError' && event.messageId === promptMessageId ? [event.messageId] : [])[0]
+      event.error.name === 'MessageAbortedError' && event.messageId === promptMessageId ? [event.messageId] : []
+    )[0]
   const cancelEvent = (record: SessionOperationRecord, abortOperationId: string | undefined, event:
     | { readonly state: 'accepted'; readonly baseAccepted: true; readonly promptMessageId: string }
     | { readonly state: 'rejected'; readonly baseAccepted: false; readonly promptMessageId: string }
@@ -492,14 +496,13 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       const snapshot: SessionOperationRecord = { ...record, promptMessageId, abortOperationId }
       operations.set(sessionId, snapshot)
       const abort = awaitAbort(sessionId, snapshot, abortOperationId)
-      const buffered = bufferedAbortMessageId(sessionId, promptMessageId)
-      if (buffered !== undefined) settlePendingCancel(sessionId, abortOperationId, buffered)
+      const staleBuffered = bufferedAbortMessageId(sessionId, promptMessageId)
       const streamChange = ensureStream()
       if (streamChange !== undefined) await streamChange
       let outcome
       try {
         outcome = await useAdapter(
-          async client => await cancelOpenCodeSession(client, sessionId),
+          client => cancelOpenCodeSession(client, sessionId),
           handle => effectiveHandleIdentity(handle) === snapshot.handleFingerprint
             ? undefined
             : cancelUnknown(snapshot, abortOperationId, 'stale-generation', undefined),
@@ -523,6 +526,11 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
         return cancelUnknown(snapshot, abortOperationId, 'link-lost', undefined)
       }
       emitCancelEvent(cancelEvent(snapshot, abortOperationId, { state: 'accepted', baseAccepted: true, promptMessageId }))
+      if (staleBuffered !== undefined && pendingCancels.has(sessionId)) {
+        settlePendingCancel(sessionId, abortOperationId, undefined)
+        emitCancelEvent(cancelEvent(snapshot, abortOperationId, { state: 'unknown', reason: 'no-final', baseAccepted: true }))
+        return cancelUnknown(snapshot, abortOperationId, 'no-final', true)
+      }
       const messageId = await abort
       if (messageId === undefined) {
         emitCancelEvent(cancelEvent(snapshot, abortOperationId, { state: 'unknown', reason: 'no-final', baseAccepted: true }))
@@ -604,7 +612,7 @@ async function readRuntimeOwner(path: string): Promise<RuntimeOwnerRecord | unde
 export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcessConfig> {
   const configPath = resolve(path)
   const input = object(JSON.parse(await readFile(configPath, 'utf8')),
-    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli', 'openCode', 'directListener', 'endpoint'], 'Agent config')
+    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli', 'directListener', 'endpoint'], 'Agent config')
   if (input.version !== 1) throw new RelayProtocolError('UNSUPPORTED_VERSION', 'Agent config version must be 1')
   const location = (value: unknown, label: string) => resolve(dirname(configPath), text(value, label))
   const cli = object(input.cli, ['camoExecutable', 'searchExecutable', 'searchRoot', 'profilePrefix'], 'cli')
@@ -616,13 +624,6 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
     throw new RelayProtocolError('INVALID_INPUT', 'allowedManagers must be unique Agent IDs')
   }
   const declaration = parseAgentDeclaration({ identity: input.identity, scopeId: input.scopeId, revision: 1, capabilities: [], routes: [] })
-  let openCode: AgentProcessConfig['openCode']
-  if (input.openCode !== undefined) {
-    const value = object(input.openCode, ['executable', 'directory', 'configFile', 'port', 'startupTimeoutMs', 'stopTimeoutMs'], 'openCode')
-    openCode = { executable: location(value.executable, 'openCode.executable'), directory: location(value.directory, 'openCode.directory'),
-      configFile: location(value.configFile, 'openCode.configFile'), port: number(value.port, 'openCode.port', 65535),
-      startupTimeoutMs: number(value.startupTimeoutMs, 'openCode.startupTimeoutMs'), stopTimeoutMs: number(value.stopTimeoutMs, 'openCode.stopTimeoutMs') }
-  }
   const directListener = input.directListener === undefined ? undefined : loadDirectListenerConfig(input.directListener, declaration, configPath, env)
   let endpoint: AgentEndpointConfig | undefined
   if (input.endpoint !== undefined) {
@@ -682,7 +683,6 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
     allowedManagers: [...allowedManagers] as string[],
     cli: { camoExecutable: location(cli.camoExecutable, 'camoExecutable'), searchExecutable: location(cli.searchExecutable, 'searchExecutable'),
       searchRoot: location(cli.searchRoot, 'searchRoot'), profilePrefix: text(cli.profilePrefix, 'profilePrefix') },
-    ...(openCode === undefined ? {} : { openCode }),
     ...(directListener === undefined ? {} : { directListener }),
     ...(endpoint === undefined ? {} : { endpoint }),
     relay: await loadRelayConfig(input.relay, declaration, configPath, env),
@@ -692,6 +692,45 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
 async function closeLease(server: Server): Promise<void> {
   if (server.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
 }
+
+async function availableLoopbackPort(): Promise<number> {
+  const listener = createServer()
+  listener.listen(0, '127.0.0.1')
+  await new Promise<void>((resolveListening, reject) => {
+    const failed = (error: Error) => { listener.off('listening', resolveListening); reject(error) }
+    const ready = () => { listener.off('error', failed); resolveListening() }
+    listener.once('error', failed); listener.once('listening', ready)
+  })
+  const address = listener.address()
+  await new Promise<void>(resolveClosing => listener.close(() => resolveClosing()))
+  if (address === null || typeof address === 'string') throw new Error('managed OpenCode port unavailable')
+  return address.port
+}
+
+function executableLaunchPath(candidate: string, searchPath: string | undefined): string | undefined {
+  if (candidate.length === 0) return undefined
+  if (candidate.includes(delimiter) || existsSync(candidate)) {
+    try {
+      accessSync(candidate, 0o1); return resolve(candidate)
+    } catch { return undefined }
+  }
+  for (const directory of (searchPath ?? '').split(delimiter)) {
+    if (directory.length === 0) continue
+    const candidatePath = resolve(directory, candidate)
+    try {
+      accessSync(candidatePath, 0o1)
+      if (statSync(candidatePath).isFile()) return candidatePath
+    } catch { /* continue searching */ }
+  }
+  return undefined
+}
+
+function resolveOpenCodeExecutable(env: NodeJS.ProcessEnv): string | undefined {
+  const override = env.AGENTTEAMS_OPENCODE_EXECUTABLE
+  if (override !== undefined) return executableLaunchPath(override, env.PATH)
+  return executableLaunchPath('opencode', env.PATH)
+}
+
 async function ownDataDirectory(config: AgentProcessConfig): Promise<{ readonly server: Server; readonly previousOwner?: RuntimeOwnerRecord }> {
   const lease = createServer(socket => socket.destroy())
   await new Promise<void>((resolve, reject) => {
@@ -905,6 +944,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
   let consumerWork: AgentWorkClient | undefined
   let configBinding: { binding: ReturnType<typeof createConsoleConfigBinding>; owner: ReturnType<typeof createManagedConfigOwner>; store: RuntimeConfigStore } | undefined
   let sessionHost: SessionHost | undefined
+  let sessionFailureReason: { readonly code: ConsoleServiceErrorCode; readonly message: string } | undefined
   let readyResolve!: () => void
   let readyReject!: (error: unknown) => void
   const ready = new Promise<void>((resolve, reject) => { readyResolve = resolve; readyReject = reject })
@@ -918,43 +958,55 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       return value
     }
     const agentId = config.declaration.identity.agentId
-    const openCode = config.openCode
-    // The store is read whenever the launcher supplied the local config. The
-    // owner additionally requires launch parameters; a binding without a
-    // launchable child must stay passive rather than advertising dead capability.
-    const localConfigPath = env.TEAMS_LOCAL_CONFIG_PATH ?? (openCode === undefined ? undefined : defaultLocalConfigPath(env.HOME))
+    // U2 owns accepted/effective binding truth; U6 owns managed launch derivation.
+    // The user config never supplies an openCode launch block.
+    const localConfigPath = env.TEAMS_LOCAL_CONFIG_PATH ?? (config.endpoint?.role === undefined ? undefined : defaultLocalConfigPath(env.HOME))
     const localStore = localConfigPath === undefined ? undefined : (() => {
       const internalPath = env.TEAMS_LOCAL_INTERNAL_PATH ?? resolve(localConfigPath, '..', 'internal.toml')
       const persistence = createTomlRuntimeConfigPersistence({ configPath: localConfigPath, internalPath, agentId })
       return { internalPath, persistence, store: createRuntimeConfigStore(persistence, { agentId }) }
     })()
     const configStore = localStore?.store
-    if (openCode !== undefined && localStore !== undefined) {
-      const owner = createManagedConfigOwner({ agentId, executable: openCode.executable,
-        directory: openCode.directory, port: openCode.port, startupTimeoutMs: openCode.startupTimeoutMs,
-        stopTimeoutMs: openCode.stopTimeoutMs, resolveCredential: resolveCredentialValue,
-        persistence: createManagedConfigOwnerPersistence({ agentId, internalPath: localStore.internalPath, persistence: localStore.persistence }) })
-      const binding = createConsoleConfigBinding({ agentId, store: localStore.store,
-        models: createOpenAIModelCatalogClient(), credentials: { resolve: async reference => ({ kind: 'bearer', value: await resolveCredentialValue(reference) }) }, applier: owner })
-      configBinding = { binding, owner, store: localStore.store }
-      // Reconcile the exact current target before Session/command ingress opens.
-      await owner.recover(async () => {
-        const current = await localStore.store.read()
-        const modelBinding = current.agents[agentId]
-        const provider = modelBinding === undefined ? undefined : current.providers[modelBinding.primary.providerInstanceId]
-        return provider === undefined ? undefined : { target: targetIdentityFor(current, provider), config: current }
-      })
-      // One Session owner per managed child: the same owner port, no second config or child.
-      sessionHost = createSessionHost({
-        agentId,
-        generation: () => daemon?.network.generation ?? 0,
-        owner: {
-          readiness: () => owner.readiness(),
-          currentHandle: () => owner.currentHandle(),
-          use: operation => owner.use(operation),
-        },
-      })
-      await sessionHost.ensureStream()
+    if (localStore !== undefined) {
+      const effective = await localStore.store.read()
+      const binding = effective.agents[agentId]
+      const provider = binding === undefined ? undefined : effective.providers[binding.primary.providerInstanceId]
+      const modelEntry = binding === undefined ? undefined : provider === undefined ? undefined
+        : effective.catalogs[binding.primary.providerInstanceId]?.entries.find(entry =>
+          entry.ref.providerInstanceId === binding.primary.providerInstanceId && entry.ref.modelId === binding.primary.modelId)
+      if (binding !== undefined && provider !== undefined && modelEntry !== undefined) {
+        const executable = resolveOpenCodeExecutable(env)
+        if (executable === undefined) {
+          sessionFailureReason = { code: 'CREDENTIAL_UNAVAILABLE', message: 'managed OpenCode executable is unavailable' }
+        } else {
+          const owner = createManagedConfigOwner({ agentId, executable,
+            directory: config.dataDirectory, port: await availableLoopbackPort(),
+            startupTimeoutMs: MANAGED_OPENCODE_STARTUP_TIMEOUT_MS,
+            stopTimeoutMs: MANAGED_OPENCODE_STOP_TIMEOUT_MS, resolveCredential: resolveCredentialValue,
+            persistence: createManagedConfigOwnerPersistence({ agentId, internalPath: localStore.internalPath, persistence: localStore.persistence }) })
+          const configBindingPort = createConsoleConfigBinding({ agentId, store: localStore.store,
+            models: createOpenAIModelCatalogClient(), credentials: { resolve: async reference => ({ kind: 'bearer', value: await resolveCredentialValue(reference) }) }, applier: owner })
+          configBinding = { binding: configBindingPort, owner, store: localStore.store }
+          // Reconcile the exact current target before Session/command ingress opens.
+          await owner.recover(async () => {
+            const current = await localStore.store.read()
+            const modelBinding = current.agents[agentId]
+            const currentProvider = modelBinding === undefined ? undefined : current.providers[modelBinding.primary.providerInstanceId]
+            return currentProvider === undefined ? undefined : { target: targetIdentityFor(current, currentProvider), config: current }
+          })
+          // One Session owner per managed child: the same owner port, no second config or child.
+          sessionHost = createSessionHost({
+            agentId,
+            generation: () => daemon?.network.generation ?? 0,
+            owner: {
+              readiness: () => owner.readiness(),
+              currentHandle: () => owner.currentHandle(),
+              use: operation => owner.use(operation),
+            },
+          })
+          await sessionHost.ensureStream()
+        }
+      }
     }
     const allowed = (consumer: { agentId: string }) => config.allowedConsumers.includes(consumer.agentId)
     const policy = { revision: config.policyRevision, authorizeWork: allowed, authorizeRequest: allowed }
@@ -1007,7 +1059,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
           await sessionHost?.ensureStream()
           return result
         }
-        if (sessionHost === undefined) return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } }
+        if (sessionHost === undefined) return { ok: false, error: sessionFailureReason ?? { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } }
         switch (command.kind) {
           case 'session.create': return await sessionHost.createSession(command.title)
           case 'session.open': return await sessionHost.openSession(command.sessionId)
@@ -1017,7 +1069,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         }
       },
       sendSession: async (target, payload) => sessionHost === undefined
-        ? ({ ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } })
+        ? ({ ok: false, error: sessionFailureReason ?? { code: 'UNSUPPORTED_OPERATION', message: 'Passive CLI Agent has no Session execution capability' } })
         : await sessionHost.sendSession(target.sessionId, payload),
     }
     daemon = await startAgentDaemon({ presenceIntervalMs: config.presenceIntervalMs, relay: { ...config.relay,

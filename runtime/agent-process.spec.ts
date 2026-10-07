@@ -318,11 +318,10 @@ process.once('SIGINT', () => server.close(() => process.exit(0)))
   ].join('\n'))
   const managedAgentConfig = join(directory, 'managed-agent.json')
   writeFileSync(managedAgentConfig, JSON.stringify({ ...config, identity: { ...config.identity, hostId: 'managed-host', agentId: 'managed', label: 'Managed Agent' },
-    dataDirectory: managedData, leasePort: await availablePort(), policy: { revision: 1, allowedConsumers: ['consumer'], allowedManagers: ['consumer'] },
-    openCode: { executable: managedExecutable, directory: join(directory, 'managed-opencode-data'), configFile: managedConfigPath, port: await availablePort(), startupTimeoutMs: 5000, stopTimeoutMs: 2000 } }))
+    dataDirectory: managedData, leasePort: await availablePort(), policy: { revision: 1, allowedConsumers: ['consumer'], allowedManagers: ['consumer'] } }))
   const managedChild = child(managedAgentConfig, 'Bearer managed', { TEAMS_PROVIDER_TEST_CREDENTIAL: 'provider-catalog',
     TEAMS_LOCAL_CONFIG_PATH: managedConfigPath, TEAMS_LOCAL_INTERNAL_PATH: managedInternalPath,
-    TEAMS_LOCAL_LAUNCHER_GENERATION: '1', TEAMS_LOCAL_START_TOKEN: 'managed-test' })
+    TEAMS_LOCAL_LAUNCHER_GENERATION: '1', TEAMS_LOCAL_START_TOKEN: 'managed-test', AGENTTEAMS_OPENCODE_EXECUTABLE: managedExecutable })
   expect(await managedChild.ready).toMatchObject({ agentId: 'managed' })
   const managedConsole = createRelayConsoleClient(consumer, 'managed', 8000)
   // The owner-bearing path still advertises Session capability: capability and dispatch stay one fact.
@@ -352,7 +351,7 @@ process.once('SIGINT', () => server.close(() => process.exit(0)))
   expect(first.output()).not.toContain('Bearer provider')
 }, 15000)
 
-it('keeps an Agent with an accepted model binding but no openCode launch block passive and unavailable', async () => {
+it('keeps an Agent with an accepted model binding but an unresolved managed executable passive and unavailable', async () => {
   const localRelay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
     maxPayload: 65536, maxConnections: 8, maxGrants: 4, maxBufferedAmount: 65536, maxPendingMessages: 8, maxPendingBytes: 131072, grantTtlMs: 5000,
     authenticate: credential => (credential === 'Bearer binding-consumer' || credential === 'Bearer binding-only')
@@ -395,15 +394,18 @@ it('keeps an Agent with an accepted model binding but no openCode launch block p
       admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16, maxPendingRequests: 8, maxDataConnections: 8 },
   }))
   try {
-    const bindingChild = child(bindingAgentConfig, 'Bearer binding-only', { TEAMS_LOCAL_CONFIG_PATH: bindingConfigPath, TEAMS_LOCAL_INTERNAL_PATH: bindingInternalPath })
+    // An explicit missing executable is authoritative: resolution never falls
+    // back to PATH, so the Agent stays passive with a typed refusal.
+    const bindingChild = child(bindingAgentConfig, 'Bearer binding-only', { TEAMS_LOCAL_CONFIG_PATH: bindingConfigPath, TEAMS_LOCAL_INTERNAL_PATH: bindingInternalPath, AGENTTEAMS_OPENCODE_EXECUTABLE: '/missing/opencode' })
     expect(await bindingChild.ready).toMatchObject({ agentId: 'binding-only' })
     const bindingConsole = createRelayConsoleClient(bindingConsumer, 'binding-only', 8000)
     const projection = await bindingConsole.readProjection()
-    // The row must agree with the real dispatch path: a binding without a constructed
-    // owner is passive, and a Session command must not report anything else.
+    // The row must agree with the real dispatch path: a binding whose managed
+    // executable cannot be resolved constructs no owner and stays passive, with a
+    // typed credential/availability refusal instead of a dead capability.
     expect(projection.agents[0]).toMatchObject({ sessionCapable: false, sessionAvailability: 'not-applicable' })
     expect(await bindingConsole.command({ kind: 'session.create', agentId: 'binding-only' })).toMatchObject({
-      ok: false, error: { code: 'UNSUPPORTED_OPERATION' },
+      ok: false, error: { code: 'CREDENTIAL_UNAVAILABLE' },
     })
     bindingChild.process.kill('SIGTERM')
     expect((await bindingChild.exited).code).toBe(0)
