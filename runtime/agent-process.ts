@@ -85,6 +85,7 @@ export interface AgentProcessConfig {
   readonly allowedConsumers: readonly string[]
   readonly allowedManagers: readonly string[]
   readonly cli: { readonly camoExecutable: string; readonly searchExecutable: string; readonly searchRoot: string; readonly profilePrefix: string }
+  readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs?: number; readonly stopTimeoutMs?: number }
   readonly directListener?: DirectListenerConfig
   readonly endpoint?: AgentEndpointConfig
 }
@@ -612,7 +613,7 @@ async function readRuntimeOwner(path: string): Promise<RuntimeOwnerRecord | unde
 export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEnv = process.env): Promise<AgentProcessConfig> {
   const configPath = resolve(path)
   const input = object(JSON.parse(await readFile(configPath, 'utf8')),
-    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli', 'directListener', 'endpoint'], 'Agent config')
+    ['version', 'identity', 'scopeId', 'dataDirectory', 'leasePort', 'relay', 'presenceIntervalMs', 'policy', 'cli', 'openCode', 'directListener', 'endpoint'], 'Agent config')
   if (input.version !== 1) throw new RelayProtocolError('UNSUPPORTED_VERSION', 'Agent config version must be 1')
   const location = (value: unknown, label: string) => resolve(dirname(configPath), text(value, label))
   const cli = object(input.cli, ['camoExecutable', 'searchExecutable', 'searchRoot', 'profilePrefix'], 'cli')
@@ -624,6 +625,15 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
     throw new RelayProtocolError('INVALID_INPUT', 'allowedManagers must be unique Agent IDs')
   }
   const declaration = parseAgentDeclaration({ identity: input.identity, scopeId: input.scopeId, revision: 1, capabilities: [], routes: [] })
+  // Launcher launch parameters (machine-generated projection), never user config authority.
+  // The U2 contract removes openCode from user config; legacy v2 projections still carry it.
+  let openCode: AgentProcessConfig['openCode']
+  if (input.openCode !== undefined) {
+    const value = object(input.openCode, ['executable', 'directory', 'configFile', 'port', 'startupTimeoutMs', 'stopTimeoutMs'], 'openCode')
+    openCode = { executable: location(value.executable, 'openCode.executable'), directory: location(value.directory, 'openCode.directory'),
+      configFile: location(value.configFile, 'openCode.configFile'), port: number(value.port, 'openCode.port', 65535),
+      startupTimeoutMs: number(value.startupTimeoutMs, 'openCode.startupTimeoutMs'), stopTimeoutMs: number(value.stopTimeoutMs, 'openCode.stopTimeoutMs') }
+  }
   const directListener = input.directListener === undefined ? undefined : loadDirectListenerConfig(input.directListener, declaration, configPath, env)
   let endpoint: AgentEndpointConfig | undefined
   if (input.endpoint !== undefined) {
@@ -683,6 +693,7 @@ export async function loadAgentProcessConfig(path: string, env: NodeJS.ProcessEn
     allowedManagers: [...allowedManagers] as string[],
     cli: { camoExecutable: location(cli.camoExecutable, 'camoExecutable'), searchExecutable: location(cli.searchExecutable, 'searchExecutable'),
       searchRoot: location(cli.searchRoot, 'searchRoot'), profilePrefix: text(cli.profilePrefix, 'profilePrefix') },
+    ...(openCode === undefined ? {} : { openCode }),
     ...(directListener === undefined ? {} : { directListener }),
     ...(endpoint === undefined ? {} : { endpoint }),
     relay: await loadRelayConfig(input.relay, declaration, configPath, env),
@@ -959,7 +970,8 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
     }
     const agentId = config.declaration.identity.agentId
     // U2 owns accepted/effective binding truth; U6 owns managed launch derivation.
-    // The user config never supplies an openCode launch block.
+    // No user config supplies openCode: the launch block is a launcher-generated
+    // projection parameter, and v3 user config retired it entirely.
     const localConfigPath = env.TEAMS_LOCAL_CONFIG_PATH ?? (config.endpoint?.role === undefined ? undefined : defaultLocalConfigPath(env.HOME))
     const localStore = localConfigPath === undefined ? undefined : (() => {
       const internalPath = env.TEAMS_LOCAL_INTERNAL_PATH ?? resolve(localConfigPath, '..', 'internal.toml')

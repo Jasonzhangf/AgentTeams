@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { loadAgentProcessConfig } from './agent-process.ts'
 
-it('rejects an openCode launch block from the Agent process config', async () => {
+it('loads an optional managed OpenCode launch block without granting Session authority', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-agent-config-'))
   const configPath = join(directory, 'agent.json')
   await writeFile(configPath, JSON.stringify({
@@ -18,7 +18,9 @@ it('rejects an openCode launch block from the Agent process config', async () =>
       requestTimeoutMs: 1000, maxMessageBytes: 1000, maxBufferedBytes: 1000, maxPendingFrames: 4, maxPendingRequests: 4, maxDataConnections: 2 },
   }))
   try {
-    await expect(loadAgentProcessConfig(configPath, { TEAMS_RELAY: 'relay-secret' })).rejects.toThrow(/unsupported field openCode/)
+    const loaded = await loadAgentProcessConfig(configPath, { TEAMS_RELAY: 'relay-secret' })
+    expect(loaded.openCode).toEqual({ executable: '/opt/opencode', directory: join(directory, 'opencode'),
+      configFile: join(directory, 'config.json'), port: 48002, startupTimeoutMs: 5000, stopTimeoutMs: 2000 })
   } finally { await rm(directory, { recursive: true }) }
 })
 
@@ -38,7 +40,8 @@ it('treats openCode as launch parameters only, never a Session capability or mod
   try {
     for (const smuggled of [{ ...launch, sessionCapable: true }, { ...launch, model: { providerInstanceId: 'p', modelId: 'm' } }]) {
       await writeFile(configPath, JSON.stringify({ ...base, openCode: smuggled }))
-      await expect(loadAgentProcessConfig(configPath, { TEAMS_RELAY: 'relay-secret' })).rejects.toThrow(/unsupported field openCode/)
+      await expect(loadAgentProcessConfig(configPath, { TEAMS_RELAY: 'relay-secret' }))
+        .rejects.toThrow(/unsupported field sessionCapable|unsupported field model/)
     }
   } finally { await rm(directory, { recursive: true }) }
 })

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { configSourceHash, createTomlRuntimeConfigPersistence, defaultLocalConfigPath, initializeLocalConfig, loadLocalConfig, parseConfigUserSections, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, resumePendingMigration, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalInternalWorkControl } from './local-config.ts'
 import { parse as parseToml } from 'toml'
+import { loadAgentProcessConfig } from './agent-process.ts'
 import { loadConsoleProcessConfig } from './console-process.ts'
 import { providerIntentFingerprint } from '../config/runtime-config.ts'
 
@@ -141,6 +142,55 @@ demands = [{ resourceId = "search-slot", amount = 1 }]
     expect(JSON.parse(internal.daemon.provider!.config)).toMatchObject({ version: 1, endpoint: { role: 'provider' } })
     expect(internal.daemon.provider!.config).toContain('provider-host')
     expect(internal.relay.config).not.toContain('internal')
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('parses a v2 generated endpoint projection with an openCode launch block', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-endpoint-opencode-'))
+  const path = join(directory, 'config.toml')
+  try {
+    await writeLocalConfig(path, `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.provider]
+enabled = true
+role = "provider"
+identity = { hostId = "provider-host", machineId = "machine", agentId = "provider", accountId = "account", agentKind = "custom", label = "Provider" }
+scopeId = "scope"
+dataDirectory = "data/provider"
+leasePort = 48013
+presenceIntervalMs = 500
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-provider" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "PROVIDER_AUTH", connectTimeoutMs = 1000, admissionTimeoutMs = 1000, requestTimeoutMs = 1000, maxMessageBytes = 65536, maxBufferedBytes = 65536, maxPendingFrames = 8, maxPendingRequests = 4, maxDataConnections = 4 }
+
+[endpoints.provider.openCode]
+executable = "opencode-bin/opencode"
+directory = "opencode"
+configFile = "opencode-config.json"
+port = 48002
+startupTimeoutMs = 5000
+stopTimeoutMs = 2000
+`)
+    await writeFile(join(directory, 'relay.json'), JSON.stringify({
+      version: 1,
+      listen: { host: '127.0.0.1', port: 48010 },
+      limits: { maxPayload: 65536, maxConnections: 8, maxGrants: 8, maxBufferedAmount: 65536, maxPendingMessages: 8, maxPendingBytes: 131072, grantTtlMs: 5000 },
+      credentials: [{ credentialEnv: 'PROVIDER_AUTH', identity: { accountId: 'account', scopeId: 'scope', agentId: 'provider' } }],
+    }))
+    const loaded = await loadLocalConfig(path)
+    await projectLocalChildConfigs(loaded.internalPath)
+    const projection = loaded.daemons[0]!.configPath
+    expect(existsSync(projection)).toBe(true)
+    const generated = JSON.parse(await readFile(projection, 'utf8')) as { openCode?: unknown }
+    expect(generated.openCode).toBeDefined()
+    // Startup compatibility: the generated child JSON is the Agent launch input.
+    const parsed = await loadAgentProcessConfig(projection, { PROVIDER_AUTH: 'secret', HOME: directory })
+    expect(parsed.openCode).toEqual({ executable: join(directory, 'opencode-bin', 'opencode'), directory: join(directory, 'opencode'),
+      configFile: join(directory, 'opencode-config.json'), port: 48002, startupTimeoutMs: 5000, stopTimeoutMs: 2000 })
+    expect(parsed.openCode).not.toContain('secret')
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
