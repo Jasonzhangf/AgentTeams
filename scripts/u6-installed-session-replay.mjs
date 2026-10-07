@@ -480,6 +480,23 @@ export async function runInstalledSessionReplay(options = {}) {
       `passive-agent is not passive: ${JSON.stringify(passiveAgent)}`)
     receipt.cases.discovery = { status: 'passed', sessionAgent: publicReceiptJson(sessionAgent), passiveAgent: publicReceiptJson(passiveAgent) }
 
+    // (c) The Session runtime becomes usable only after the Console applies the
+    // accepted config: that apply is what starts the managed OpenCode child.
+    const configRow = projection.configs?.find(config => config.agentId === 'session-agent')
+    assert(configRow !== undefined, 'the installed projection carries no config row for session-agent')
+    const applied = await client.command({ kind: 'config.apply', agentId: 'session-agent' })
+    assert(applied.body.ok === true, `config.apply failed: ${JSON.stringify(applied.body)}`)
+    const currentAgent = await waitForAsync(async () => {
+      const agent = (await client.projection()).body.agents.find(candidate => candidate.agentId === 'session-agent')
+      return agent?.sessionCapable === true && agent.sessionAvailability === 'current' ? agent : undefined
+    }, 180_000, 'the managed OpenCode Session runtime to become current')
+    receipt.cases['config.apply'] = {
+      status: 'passed',
+      before: publicReceiptJson(configRow),
+      result: publicReceiptJson(applied.body),
+      agent: publicReceiptJson(currentAgent),
+    }
+
     const created = await client.command({ kind: 'session.create', agentId: 'session-agent', title: 'U6 installed replay' })
     assert(created.body.ok === true && created.body.result?.kind === 'session.create'
       && typeof created.body.result.sessionId === 'string',
