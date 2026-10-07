@@ -262,6 +262,54 @@ const toolPromptMarker = 'u6-tool-probe'
 const permissionPromptMarker = 'u6-permission-probe'
 const envProbeSentinel = 'u6-env-sentinel'
 
+// The managed executable is a per-launcher launch parameter, so the Agent whose binding
+// resolves but whose executable does not needs its own launcher with its own HOME.
+function boundWithoutOwnerConfigText(providerBaseUrl) {
+  return `version = 3
+
+[bridge]
+enabled = true
+
+[agents.bound-agent]
+enabled = true
+role = "provider"
+label = "U6 Bound Without Owner"
+
+[agents.bound-agent.identity]
+hostId = "u6-host"
+machineId = "u6-machine"
+accountId = "local"
+agentKind = "custom"
+label = "U6 Bound Without Owner"
+
+[agents.bound-agent.runtime]
+scopeId = "local"
+dataDirectory = "data/bound-agent"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = ["__console"] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-u6-bound-agent" }
+
+[console]
+enabled = true
+username = ${JSON.stringify(consoleUsername)}
+passwordEnv = ${JSON.stringify(consolePasswordEnv)}
+agentIds = ["bound-agent"]
+
+[providers.u6-local]
+protocol = "openai-chat"
+apiBaseUrl = ${JSON.stringify(`${providerBaseUrl}/v1`)}
+label = "U6 Local Provider"
+enabled = true
+
+[[models]]
+provider = "u6-local"
+id = "u6-model"
+label = "U6 Model"
+
+[agents.bound-agent.model]
+primary = { provider = "u6-local", model = "u6-model" }
+`
+}
+
 function createProviderStub(toolCommand, readFilePath) {
   const requests = []
   const held = []
@@ -690,6 +738,41 @@ export async function runInstalledSessionReplay(options = {}) {
     assert(passiveSend.body.ok === false && passiveSend.body.error?.code === 'UNSUPPORTED_OPERATION',
       `passive Agent session.send was not a typed refusal: ${JSON.stringify(passiveSend.body)}`)
     receipt.cases['passive-refusal'] = { status: 'passed', create: publicReceiptJson(passiveCreate.body), send: publicReceiptJson(passiveSend.body) }
+
+    // (g2) A binding whose launch-owned executable cannot be resolved constructs no owner,
+    // so that Agent is passive too and Session must refuse with the same typed capability
+    // refusal rather than a Config-owner credential error. This needs its own launcher,
+    // because the managed executable is a per-launcher launch parameter.
+    const boundRoot = mkdtempSync('/tmp/u6rb-')
+    const boundHome = join(boundRoot, 'home')
+    mkdirSync(boundHome, { recursive: true, mode: 0o700 })
+    const boundConfigPath = join(boundRoot, 'config.toml')
+    writeFileSync(boundConfigPath, boundWithoutOwnerConfigText(providerBaseUrl), { encoding: 'utf8', mode: 0o600 })
+    const boundEnv = { ...cliEnv, HOME: boundHome, AGENTTEAMS_OPENCODE_EXECUTABLE: '/missing/u6-opencode' }
+    let boundStarted = false
+    try {
+      await run(cli, ['start', '--config', boundConfigPath], { cwd: boundRoot, env: boundEnv })
+      boundStarted = true
+      const boundConsoleRaw = (await run(cli, ['console', 'start', '--config', boundConfigPath], { cwd: boundRoot, env: boundEnv })).stdout
+      const boundConsoleStatus = parseCliConsole(boundConsoleRaw)
+      assert(boundConsoleStatus.consoleState === 'online' && typeof boundConsoleStatus.consoleUrl === 'string',
+        `bound-without-owner Console did not start online: ${boundConsoleRaw.trim()}`)
+      const boundClient = createConsoleClient(boundConsoleStatus.consoleUrl, authorization)
+      const boundAgent = (await boundClient.projection()).body.agents.find(agent => agent.agentId === 'bound-agent')
+      assert(boundAgent?.kind === 'runtime' && boundAgent.sessionCapable === false,
+        `bound-without-owner Agent is not a passive runtime row: ${JSON.stringify(boundAgent)}`)
+      const boundCreate = await boundClient.command({ kind: 'session.create', agentId: 'bound-agent' })
+      assert(boundCreate.body.ok === false && boundCreate.body.error?.code === 'UNSUPPORTED_OPERATION',
+        `bound-without-owner session.create was not the typed capability refusal: ${JSON.stringify(boundCreate.body)}`)
+      const boundSend = await boundClient.sessionMessage('bound-agent', sessionId, { text: 'u6 bound probe' })
+      assert(boundSend.body.ok === false && boundSend.body.error?.code === 'UNSUPPORTED_OPERATION',
+        `bound-without-owner session.send was not the typed capability refusal: ${JSON.stringify(boundSend.body)}`)
+      receipt.cases['binding-without-owner'] = { status: 'passed', agent: publicReceiptJson(boundAgent),
+        create: publicReceiptJson(boundCreate.body), send: publicReceiptJson(boundSend.body) }
+    } finally {
+      if (boundStarted) await run(cli, ['stop', '--config', boundConfigPath], { cwd: boundRoot, env: boundEnv }, true)
+      rmSync(boundRoot, { recursive: true, force: true })
+    }
 
     // (h) A payload outside the closed Session envelope fails at the boundary. The design
     // admits either typed refusal for a shape the adapter cannot map equivalently.

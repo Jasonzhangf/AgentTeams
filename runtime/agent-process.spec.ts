@@ -401,11 +401,11 @@ it('keeps an Agent with an accepted model binding but an unresolved managed exec
     const bindingConsole = createRelayConsoleClient(bindingConsumer, 'binding-only', 8000)
     const projection = await bindingConsole.readProjection()
     // The row must agree with the real dispatch path: a binding whose managed
-    // executable cannot be resolved constructs no owner and stays passive, with a
-    // typed credential/availability refusal instead of a dead capability.
+    // executable cannot be resolved constructs no owner and stays passive, so the
+    // Session path refuses with the contract's typed capability refusal.
     expect(projection.agents[0]).toMatchObject({ sessionCapable: false, sessionAvailability: 'not-applicable' })
     expect(await bindingConsole.command({ kind: 'session.create', agentId: 'binding-only' })).toMatchObject({
-      ok: false, error: { code: 'CREDENTIAL_UNAVAILABLE' },
+      ok: false, error: { code: 'UNSUPPORTED_OPERATION' },
     })
     bindingChild.process.kill('SIGTERM')
     expect((await bindingChild.exited).code).toBe(0)

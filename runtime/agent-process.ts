@@ -990,7 +990,10 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
       if (binding !== undefined && provider !== undefined && modelEntry !== undefined) {
         const executable = resolveOpenCodeExecutable(env)
         if (executable === undefined) {
-          sessionFailureReason = { code: 'CREDENTIAL_UNAVAILABLE', message: 'managed OpenCode executable is unavailable' }
+          // A binding whose launch-owned executable is unresolvable constructs no owner,
+          // so this Agent is passive: it has no Session execution path. The refusal is the
+          // contract's typed capability refusal, not a Config-owner credential error.
+          sessionFailureReason = { code: 'UNSUPPORTED_OPERATION', message: 'managed OpenCode executable is unavailable' }
         } else {
           const owner = createManagedConfigOwner({ agentId, executable,
             directory: config.dataDirectory, port: await availableLoopbackPort(),
