@@ -481,7 +481,7 @@
         "subscribeOpenCodeEvents only wraps the real client.event.subscribe, forwards the caller AbortSignal and never retries, buffers or reconnects on its own",
         "the installed package declares and resolves @opencode-ai/sdk, and the UI build ships the canonical console contract the browser client loads"
       ],
-      "note": "Source contract and focused runtime/CLI checks are implemented on the exact candidate. Live Console backend binding, real managed-OpenCode Session replay through the installed Console and browser acceptance remain downstream host gates; BB10/BB12 stay PENDING."
+      "note": "Source-only milestone: the source contract and focused runtime/CLI checks are implemented on the exact candidate, but the Console -> Agent -> managed OpenCode Session path has no black-box evidence bound to this candidate, so the Session contract is NOT validated. Live Console backend binding, real managed-OpenCode Session replay through the installed Console and browser acceptance remain downstream host gates; BB10/BB12 stay PENDING."
     }
   ]
 }

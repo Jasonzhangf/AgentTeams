@@ -522,6 +522,19 @@ describe('OpenCode Teams adapter', () => {
     expect(projectOpenCodeSessionEvent({ type: 'permission.replied', properties: { sessionID: 's', permissionID: 'p' } })).toMatchObject({ kind: 'invalid' })
     expect(projectOpenCodeSessionEvent({ type: 'session.error', properties: {} })).toMatchObject({ kind: 'invalid' })
     expect(projectOpenCodeSessionEvent({ properties: {} })).toMatchObject({ kind: 'invalid' })
+    // The installed SDK declares a closed event tag set: a suffixed foreign tag is not a part event.
+    expect(projectOpenCodeSessionEvent({ type: 'message.part.updated.foo',
+      properties: { part: { sessionID: 's', messageID: 'm', id: 'p', type: 'text', text: 'x' } } })).toMatchObject({ kind: 'unsupported' })
+    const toolPart = (state: Record<string, unknown>) => ({ type: 'message.part.updated',
+      properties: { part: { sessionID: 's', messageID: 'm', id: 'p', type: 'tool', tool: 'bash', callID: 'c', state } } })
+    // A tool part carrying a non-JSON value fails at this adapter boundary, not in the Console wire parser.
+    expect(projectOpenCodeSessionEvent(toolPart({ status: 'completed', input: undefined }))).toMatchObject({ kind: 'invalid' })
+    expect(projectOpenCodeSessionEvent(toolPart({ status: 'completed', input: () => undefined }))).toMatchObject({ kind: 'invalid' })
+    expect(projectOpenCodeSessionEvent(toolPart({ status: 'running', input: {}, metadata: new Map() }))).toMatchObject({ kind: 'invalid' })
+    expect(projectOpenCodeSessionEvent(toolPart({ status: 'completed', input: {}, attachments: 'not-an-array' }))).toMatchObject({ kind: 'invalid' })
+    // A well-formed tool part still projects with its validated JSON payload.
+    expect(projectOpenCodeSessionEvent(toolPart({ status: 'completed', input: { command: 'ls' }, metadata: { ok: true }, attachments: [{ kind: 'file' }] })))
+      .toMatchObject({ kind: 'event', event: { kind: 'tool', state: 'completed', input: { command: 'ls' }, attachments: [{ kind: 'file' }] } })
   })
 
   it('classifies recognized non-outcome SDK events as intentionally ignored, never as projection loss', () => {

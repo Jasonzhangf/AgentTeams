@@ -477,11 +477,14 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
   append(label, labelText, textarea)
   const actions = element('div', 'teams-button-row')
   const agent = state.projection?.agents.find(candidate => candidate.agentId === agentId)
-  if (agent !== undefined && canOperateSession(agent)) {
+  // The frozen contract enables create/send/cancel only while the owner is current and online.
+  const operable = agent !== undefined && canOperateSession(agent)
+  if (operable) {
     append(actions, button(t.cancelSession, 'teams-button-danger', async () => { await controller.cancelSession(agentId, sessionId) }, actionDisabled(state)))
   }
   append(actions, button(t.openSession, 'teams-button-secondary', async () => { await controller.openSessionCommand(agentId, sessionId) }, actionDisabled(state)))
   const sendMessage = async (): Promise<void> => {
+    if (!operable) return
     if (textarea.value.trim().length === 0) {
       textarea.setCustomValidity(t.messageRequired)
       textarea.reportValidity()
@@ -492,8 +495,10 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
     await controller.sendSession(agentId, sessionId, payload)
     if (controller.getSnapshot().error === null) textarea.value = ''
   }
-  const send = button(t.send, 'teams-button-primary', () => undefined, actionDisabled(state))
+  // Send is a Session action: the browser must never submit one the owner will refuse.
+  const send = button(t.send, 'teams-button-primary', () => undefined, actionDisabled(state) || !operable)
   send.type = 'submit'
+  textarea.disabled = !operable
   append(actions, send)
   value.addEventListener('submit', async event => {
     event.preventDefault()

@@ -550,7 +550,7 @@ export function projectOpenCodeSessionEvent(raw: unknown): OpenCodeSessionEventP
   if (event === undefined || typeof event.type !== 'string') return { kind: 'invalid', reason: 'event is not a typed OpenCode event', raw: rawJson }
   const properties = asRecord(event.properties)
   const type = event.type
-  if (type.startsWith('message.part.updated')) {
+  if (type === 'message.part.updated') {
     if (properties === undefined) return { kind: 'invalid', reason: 'part event is missing properties', raw: rawJson }
     return classifyPart(type, properties, rawJson)
   }
@@ -644,13 +644,31 @@ function classifyPart(type: string, properties: Readonly<Record<string, unknown>
     const tool = stringField(part.tool)
     const callId = stringField(part.callID)
     if (state === undefined || tool === undefined || callId === undefined) return { kind: 'invalid', reason: 'tool part is missing state, tool, or callID', raw }
+    // A malformed tool part must fail here, at the adapter boundary, not later in the Console wire parser.
+    let input: JsonValue
+    let metadata: JsonValue | undefined
+    let attachments: readonly JsonValue[] | undefined
+    try {
+      input = state.input as JsonValue
+      assertJsonValue(input, 'tool part input')
+      if (state.metadata !== undefined) {
+        metadata = state.metadata as JsonValue
+        assertJsonValue(metadata, 'tool part metadata')
+      }
+      if (state.attachments !== undefined) {
+        if (!Array.isArray(state.attachments)) throw new Error('tool part attachments must be a JSON array')
+        attachments = state.attachments as readonly JsonValue[]
+        assertJsonValue(attachments, 'tool part attachments')
+      }
+    } catch (cause) {
+      return { kind: 'invalid', reason: cause instanceof Error ? cause.message : 'tool part carries a non-JSON value', raw }
+    }
     const common = { ...base, agentId: '', kind: 'tool' as const, messageId, partId, callId, tool }
-    const input = state.input as JsonValue
     switch (state.status) {
       case 'pending': return { kind: 'event', event: { ...common, state: 'pending', input, raw: typeof state.raw === 'string' ? state.raw : '' } }
-      case 'running': return { kind: 'event', event: { ...common, state: 'running', input, ...(state.title === undefined ? {} : { title: String(state.title) }), ...(state.metadata === undefined ? {} : { metadata: state.metadata as JsonValue }) } }
-      case 'completed': return { kind: 'event', event: { ...common, state: 'completed', input, output: String(state.output ?? ''), title: String(state.title ?? ''), metadata: (state.metadata ?? {}) as JsonValue, ...(Array.isArray(state.attachments) ? { attachments: state.attachments as readonly JsonValue[] } : {}) } }
-      case 'error': return { kind: 'event', event: { ...common, state: 'error', input, error: String(state.error ?? ''), ...(state.metadata === undefined ? {} : { metadata: state.metadata as JsonValue }) } }
+      case 'running': return { kind: 'event', event: { ...common, state: 'running', input, ...(state.title === undefined ? {} : { title: String(state.title) }), ...(metadata === undefined ? {} : { metadata }) } }
+      case 'completed': return { kind: 'event', event: { ...common, state: 'completed', input, output: String(state.output ?? ''), title: String(state.title ?? ''), metadata: metadata ?? {}, ...(attachments === undefined ? {} : { attachments }) } }
+      case 'error': return { kind: 'event', event: { ...common, state: 'error', input, error: String(state.error ?? ''), ...(metadata === undefined ? {} : { metadata }) } }
       default: return { kind: 'invalid', reason: `tool part has an unknown state ${String(state.status)}`, raw }
     }
   }

@@ -40,6 +40,11 @@ describe('independent UI boundary', () => {
     expect(render).toContain('if (current !== undefined && sessionExists)')
     expect(render).toContain('canOperateSession(agent)')
     expect(render).toContain("if (agent.kind === 'directory')")
+    // The frozen enablement contract covers send as well as create/cancel: a Session action
+    // the owner would refuse must never be enabled in the browser.
+    expect(render).toContain('const operable = agent !== undefined && canOperateSession(agent)')
+    expect(render).toContain('actionDisabled(state) || !operable')
+    expect(render).toContain('textarea.disabled = !operable')
   })
 
   it('renders owner-projected Session activity without creating a UI transcript ledger', () => {
