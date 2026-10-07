@@ -64,7 +64,17 @@ export async function serveConsole(socket: WssConnection, handler: (request: Con
   assertTimeoutMs(timeoutMs)
   try {
     const request = await raceTransport(socket, timeoutMs, async () => parseConsoleWireRequest(await readText(socket)))
-    const reply = await handler(request)
+    let reply: ConsoleWireReply
+    try {
+      reply = await handler(request)
+    } catch (error) {
+      // An unexpected handler failure is still an explicit outcome for the Console.
+      // Closing the socket without a reply would report it as an opaque transport loss,
+      // so the owner's failure is returned as an unknown outcome that must not be replayed.
+      reply = { correlationId: request.correlationId, kind: 'console.result',
+        result: { ok: false, error: { code: 'RESULT_UNKNOWN',
+          message: error instanceof Error ? error.message : 'Console handler failed before an outcome was established' } } }
+    }
     if (reply.correlationId !== request.correlationId) throw new RelayProtocolError('INVALID_INPUT', 'Console handler correlation mismatch')
     assertJsonValue(reply, 'Console outbound reply')
     const text = JSON.stringify(reply)
