@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
@@ -300,7 +299,9 @@ function createProviderStub() {
 }
 
 function createInstalledReplay() {
-  const temporaryRoot = mkdtempSync(join(tmpdir(), 'u6rs-'))
+  // The local bridge binds AF_UNIX sockets below the isolated HOME, and macOS
+  // caps sun_path at 104 bytes, so the replay root must stay short.
+  const temporaryRoot = mkdtempSync('/tmp/u6rs-')
   const testHome = join(temporaryRoot, 'home')
   const npmCache = join(temporaryRoot, 'npm-cache')
   const packDestination = join(temporaryRoot, 'pack')
