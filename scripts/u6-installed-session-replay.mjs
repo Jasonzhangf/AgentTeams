@@ -274,7 +274,13 @@ function createProviderStub(toolCommand) {
     request.on('end', () => {
       requests.push(body)
       const input = JSON.parse(body)
-      if (body.includes(holdPromptMarker)) {
+      // Only the newest message decides the reply. The whole body still carries earlier
+      // turns, so matching the body would repeat a tool call forever instead of ending
+      // the turn after the tool result comes back.
+      const messages = Array.isArray(input.messages) ? input.messages : []
+      const newest = messages[messages.length - 1]
+      const promptText = typeof newest?.content === 'string' ? newest.content : JSON.stringify(newest?.content ?? '')
+      if (promptText.includes(holdPromptMarker)) {
         held.push(response)
         return
       }
@@ -282,7 +288,7 @@ function createProviderStub(toolCommand) {
         function: { name: 'bash', arguments: JSON.stringify({ command: toolCommand }) } }
       if (body.includes('"stream":true')) {
         response.writeHead(200, { 'content-type': 'text/event-stream' })
-        if (body.includes(toolPromptMarker)) {
+        if (promptText.includes(toolPromptMarker)) {
           response.write(`data: ${JSON.stringify({ id: 'chatcmpl-teams', object: 'chat.completion.chunk', created: 1, model: input.model,
             choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [toolCall] }, finish_reason: null }] })}\n\n`)
           response.write(`data: ${JSON.stringify({ id: 'chatcmpl-teams', object: 'chat.completion.chunk', created: 1, model: input.model,
@@ -294,7 +300,7 @@ function createProviderStub(toolCommand) {
             choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } })}\n\n`)
         }
         response.end('data: [DONE]\n\n')
-      } else if (body.includes(toolPromptMarker)) {
+      } else if (promptText.includes(toolPromptMarker)) {
         response.writeHead(200, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ id: 'chatcmpl-teams', object: 'chat.completion', created: 1, model: input.model,
           choices: [{ index: 0, message: { role: 'assistant', content: null, tool_calls: [toolCall] }, finish_reason: 'tool_calls' }],
@@ -613,8 +619,10 @@ export async function runInstalledSessionReplay(options = {}) {
 
     // (f) Cancel a genuinely active request; the base acceptance plus the correlated
     // final/unknown must be preserved and abort=true must never be written as final.
-    const heldSend = await client.sessionMessage('session-agent', sessionId, { text: `u6 held prompt ${holdPromptMarker}` })
-    assert(heldSend.body.ok === true, `held send failed: ${JSON.stringify(heldSend.body)}`)
+    // The held turn never finishes on its own, so its dispatch is not awaited before the
+    // cancel: a blocking dispatch could not be cancelled from the same client.
+    const heldDispatch = client.sessionMessage('session-agent', sessionId, { text: `u6 held prompt ${holdPromptMarker}` }, 120_000)
+      .then(response => ({ ok: true, response }), error => ({ ok: false, error }))
     await waitForAsync(async () => provider.requests.some(body => body.includes(holdPromptMarker)) ? true : undefined,
       60_000, 'the held prompt to reach the local provider stub')
     const cancelled = await client.command({ kind: 'session.cancel', agentId: 'session-agent', sessionId })
@@ -626,6 +634,8 @@ export async function runInstalledSessionReplay(options = {}) {
       result: publicReceiptJson(cancelled.body),
     }
     for (const response of provider.held.splice(0)) { try { response.destroy() } catch { /* the child is already gone */ } }
+    const heldOutcome = await heldDispatch
+    receipt.cases['session.cancel'].dispatch = heldOutcome.ok ? publicReceiptJson(heldOutcome.response.body) : String(heldOutcome.error)
 
     // (g) A passive Agent must refuse Session explicitly instead of degrading.
     const passiveCreate = await client.command({ kind: 'session.create', agentId: 'passive-agent' })
