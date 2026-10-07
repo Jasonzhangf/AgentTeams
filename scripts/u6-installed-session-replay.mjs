@@ -419,7 +419,7 @@ export async function runInstalledSessionReplay(options = {}) {
   // what turns the Console permission reply into a real approve/reject decision.
   const envProbePath = join(paths.temporaryRoot, 'permission-probe.env')
   writeFileSync(envProbePath, `${envProbeSentinel}\n`)
-  const provider = createProviderStub(`printf u6-tool-probe-ran > '${toolMarkerPath}' && printf u6-tool-probe-ran`, envProbePath)
+  const provider = createProviderStub(`printf u6-tool-probe-ran > '${toolMarkerPath}' && printf u6-tool-ran-ok`, envProbePath)
   const receipt = {
     kind: 'u6-installed-session-replay',
     version: 1,
@@ -602,7 +602,7 @@ export async function runInstalledSessionReplay(options = {}) {
     assert(existsSync(toolMarkerPath), 'the probe tool did not produce its side effect')
     const toolEvent = await newestTool('call_u6_probe')
     assert(toolEvent !== undefined && toolEvent.state === 'completed'
-      && String(toolEvent.output).includes('u6-tool-probe-ran') && JSON.stringify(toolEvent.input).includes('u6-tool-probe-ran'),
+      && String(toolEvent.output).includes('u6-tool-ran-ok') && JSON.stringify(toolEvent.input).includes(toolMarkerPath),
       `the tool event did not preserve the real tool identity, arguments and result: ${JSON.stringify(toolEvent)}`)
     permissionReceipt.tool_event = publicReceiptJson(toolEvent)
     permissionReceipt.tool_side_effect = 'marker-present'
