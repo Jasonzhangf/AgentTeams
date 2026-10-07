@@ -1,0 +1,14 @@
+{
+  "command": "git",
+  "args": [
+    "clone",
+    "--quiet",
+    "--no-local",
+    "/Volumes/Intel/playground/agentteams/u7-user-driver-20261006",
+    "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-u7-bb13-hN4gon"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "",
+  "stderr": ""
+}

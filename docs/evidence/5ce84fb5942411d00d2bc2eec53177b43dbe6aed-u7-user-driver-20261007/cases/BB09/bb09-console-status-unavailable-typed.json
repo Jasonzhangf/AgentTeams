@@ -1,0 +1,12 @@
+{
+  "command": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node",
+  "args": [
+    "--input-type=module",
+    "--eval",
+    "\nimport { pathToFileURL } from 'node:url'\nconst mod = await import(pathToFileURL(process.env.AGENTTEAMS_INSTALLED_PACKAGE_ROOT + '/generated/runtime-lib/runtime/local-process.js').href)\nconst fn = mod[process.env.AGENTTEAMS_CONSOLE_CALL]\ntry {\n  await fn(process.env.AGENTTEAMS_CONFIG_PATH, { timeoutMs: 5000 })\n  console.log(JSON.stringify({ ok: true }))\n} catch (error) {\n  console.log(JSON.stringify({ ok: false, code: error?.code ?? null, message: error?.message ?? String(error) }))\n}\n"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\"ok\":false,\"code\":\"CONSOLE_STATUS_UNAVAILABLE\",\"message\":\"local Console control socket is unavailable: connect ENOENT /tmp/agentteams-u7-bb09-Z2o5is/home/.agentteams/.internal/work-control.sock\"}\n",
+  "stderr": ""
+}

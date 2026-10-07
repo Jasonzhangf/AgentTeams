@@ -1,0 +1,10 @@
+candidate head=1ac7b920c62cd6c27637165b1dbac38d47818385 tree=5ce84fb5942411d00d2bc2eec53177b43dbe6aed dirty=0
+=== build:governance ===
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/dagpipe/.build/build-RbjxnM)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.03s
+package artifact final agentteams@0.1.0 5bb801eb29b6100867b589105df578d260f9966e65390e8ccd4f2022a0d4576a generated/modules/teams-source/lib
+BUILD_EXIT=0
+=== all BB01-BB14 on one package ===
+{"receipt":"/tmp/u7-final-evidence/bb01-14.receipt.json","cases":[{"case_id":"BB01","status":"passed"},{"case_id":"BB02","status":"passed"},{"case_id":"BB03","status":"passed"},{"case_id":"BB04","status":"passed"},{"case_id":"BB05","status":"passed"},{"case_id":"BB06","status":"passed"},{"case_id":"BB07","status":"passed"},{"case_id":"BB08","status":"passed"},{"case_id":"BB09","status":"passed"},{"case_id":"BB10","status":"passed"},{"case_id":"BB11","status":"passed"},{"case_id":"BB12","status":"passed"},{"case_id":"BB13","status":"failed"},{"case_id":"BB14","status":"passed"}],"exit_code":1}
+ALL_EXIT=1
+U7_FINAL_DONE

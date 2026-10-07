@@ -1,0 +1,19 @@
+{
+  "command": "/tmp/agentteams-u7-bb11-mCpwB4/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "query",
+    "--config",
+    "/tmp/agentteams-u7-bb11-mCpwB4/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--work-id",
+    "ddb031db-d9b5-4d8a-bbcd-eb46006d0edc",
+    "--request-id",
+    "5f2d2086-cde4-47eb-83f5-2a1294bc0ee9"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\"status\":\"completed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"executionId\":\"de3e8d7d-24ec-4e2f-a16f-bc6682c82ad8\",\"attemptId\":\"6b27fe83-de1f-4d3d-b5e6-aadb9b473389\",\"workId\":\"ddb031db-d9b5-4d8a-bbcd-eb46006d0edc\",\"requestId\":\"5f2d2086-cde4-47eb-83f5-2a1294bc0ee9\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"endpoint\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"requestState\":\"succeeded\",\"observed\":true},\"business\":{\"exitCode\":0,\"matches\":[{\"line\":1,\"path\":\"./a.txt\",\"raw\":{\"data\":{\"absolute_offset\":0,\"line_number\":1,\"lines\":{\"text\":\"marker-alpha\\n\"},\"path\":{\"text\":\"./a.txt\"},\"submatches\":[{\"end\":12,\"match\":{\"text\":\"marker-alpha\"},\"start\":0}]},\"type\":\"match\"},\"text\":\"marker-alpha\\n\"}],\"query\":\"marker-alpha\",\"status\":\"matched\",\"stderr\":\"\",\"stdout\":\"{\\\"type\\\":\\\"begin\\\",\\\"data\\\":{\\\"path\\\":{\\\"text\\\":\\\"./a.txt\\\"}}}\\n{\\\"type\\\":\\\"match\\\",\\\"data\\\":{\\\"path\\\":{\\\"text\\\":\\\"./a.txt\\\"},\\\"lines\\\":{\\\"text\\\":\\\"marker-alpha\\\\n\\\"},\\\"line_number\\\":1,\\\"absolute_offset\\\":0,\\\"submatches\\\":[{\\\"match\\\":{\\\"text\\\":\\\"marker-alpha\\\"},\\\"start\\\":0,\\\"end\\\":12}]}}\\n{\\\"type\\\":\\\"end\\\",\\\"data\\\":{\\\"path\\\":{\\\"text\\\":\\\"./a.txt\\\"},\\\"binary_offset\\\":null,\\\"stats\\\":{\\\"elapsed\\\":{\\\"secs\\\":0,\\\"nanos\\\":55208,\\\"human\\\":\\\"0.000055s\\\"},\\\"searches\\\":1,\\\"searches_with_match\\\":1,\\\"bytes_searched\\\":13,\\\"bytes_printed\\\":242,\\\"matched_lines\\\":1,\\\"matches\\\":1}}}\\n{\\\"data\\\":{\\\"elapsed_total\\\":{\\\"human\\\":\\\"0.002312s\\\",\\\"nanos\\\":2311958,\\\"secs\\\":0},\\\"stats\\\":{\\\"bytes_printed\\\":242,\\\"bytes_searched\\\":13,\\\"elapsed\\\":{\\\"human\\\":\\\"0.000055s\\\",\\\"nanos\\\":55208,\\\"secs\\\":0},\\\"matched_lines\\\":1,\\\"matches\\\":1,\\\"searches\\\":1,\\\"searches_with_match\\\":1}},\\\"type\\\":\\\"summary\\\"}\\n\",\"truncated\":false},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"completed\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"]}}\n",
+  "stderr": ""
+}

@@ -1,0 +1,29 @@
+{
+  "command": "/tmp/agentteams-u7-bb05-QaOrE3/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "open",
+    "--config",
+    "/tmp/agentteams-u7-bb05-QaOrE3/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-intruder",
+    "--provider",
+    "bb-provider",
+    "--provider-generation",
+    "1",
+    "--capability-id",
+    "file-search",
+    "--capability-version",
+    "1",
+    "--operation",
+    "search",
+    "--demands",
+    "[{\"resourceId\":\"search-slot\",\"amount\":1}]",
+    "--payload",
+    "{\"query\":\"marker-alpha\"}"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"e42ec10b-be9e-4fea-b7c9-8d513b3d8a83\",\"attemptId\":\"362eace0-7ac2-4d05-b08a-3d98cf0d8acc\",\"workId\":\"f8109eec-db29-4cf4-a9d9-a13dc3b2513b\",\"requestId\":\"1d0a8bab-238d-44f9-a968-81b5e6bba606\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"Work proposal was rejected\",\"operation\":\"agentWork.propose\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"admit-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.propose\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
+}

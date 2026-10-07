@@ -1,0 +1,29 @@
+{
+  "command": "/tmp/agentteams-u7-bb05-QaOrE3/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "open",
+    "--config",
+    "/tmp/agentteams-u7-bb05-QaOrE3/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--provider",
+    "bb-provider",
+    "--provider-generation",
+    "1",
+    "--capability-id",
+    "file-search",
+    "--capability-version",
+    "1",
+    "--operation",
+    "not-a-real-operation",
+    "--demands",
+    "[{\"resourceId\":\"search-slot\",\"amount\":1}]",
+    "--payload",
+    "{\"query\":\"marker-alpha\"}"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"76fb08c4-4372-4b80-a7be-de2811e58820\",\"attemptId\":\"ed9c5044-5677-42e7-b43f-701c7419e573\",\"workId\":\"e6c98602-bfbb-4545-9830-62362415ddf2\",\"requestId\":\"69f7cb2a-7e8c-469c-bfa9-ca29e1d27aa8\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"not-a-real-operation\",\"error\":{\"code\":\"UNSUPPORTED_OPERATION\",\"message\":\"Capability file-search does not support not-a-real-operation\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
+}
