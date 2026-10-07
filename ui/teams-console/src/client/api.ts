@@ -52,7 +52,7 @@ function isProjection(value: unknown): value is ConsoleProjectionV1 {
     && (value.relations === undefined || isKeyClosedArray(value.relations, RELATION_KEYS))
 }
 
-function isValidCommandSuccess(kind: ConsoleCommandV1['kind'], result: unknown): boolean {
+function isValidCommandSuccess(kind: string, result: unknown): boolean {
   // Every accepted Session command has a closed, kind-specific result shape. Any other
   // accepted command carries no structured result at the HTTP boundary.
   if (kind === 'session.create') return parses(parseSessionCreateResult, result)
@@ -61,10 +61,10 @@ function isValidCommandSuccess(kind: ConsoleCommandV1['kind'], result: unknown):
   try { assertJsonValue(result, 'console command result'); return true } catch { return false }
 }
 
-function isCommandResult(command: ConsoleCommandV1, value: unknown): value is ConsoleCommandResultV1 {
+function isCommandResult(kind: string, value: unknown): value is ConsoleCommandResultV1 {
   if (!isRecord(value) || typeof value.ok !== 'boolean') return false
   if (value.ok === false) return isServiceError(value.error)
-  return isValidCommandSuccess(command.kind, value.result)
+  return isValidCommandSuccess(kind, value.result)
 }
 
 function resolveUrl(path: string, baseUrl: string | undefined): string {
@@ -126,7 +126,7 @@ export function createConsoleHttpClient(options: ConsoleHttpClientOptions = {}):
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify(command),
       })
-      if (!isCommandResult(command, value)) throw new ConsoleTransportError('Host returned an invalid v1 command result')
+      if (!isCommandResult(command.kind, value)) throw new ConsoleTransportError('Host returned an invalid v1 command result')
       return value
     },
     async sendSession(target, payload: JsonValue): Promise<ConsoleCommandResultV1> {
@@ -135,7 +135,7 @@ export function createConsoleHttpClient(options: ConsoleHttpClientOptions = {}):
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (!isCommandResult({ kind: 'session.send', agentId: target.agentId }, value)) throw new ConsoleTransportError('Host returned an invalid v1 Session result')
+      if (!isCommandResult('session.send', value)) throw new ConsoleTransportError('Host returned an invalid v1 Session result')
       return value
     },
   }
