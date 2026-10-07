@@ -607,7 +607,7 @@ interface SessionOperationRecord {
 }
 ```
 
-claim 在第一次异步 SDK dispatch 前同步完成：读取 exact runtimeGeneration/effective revision，分配本进程 operationId，以及 SDK session.prompt 已支持的独立 user messageID，记录为 requestMessageId。后者作为 SDK body.messageID 发送，不是 SDK operation ID，也不写进 Teams 的业务 parts 或 metadata。同 session 第二 prompt 在 SDK 前 CONFLICT；不同 session 并发。
+claim 在第一次异步 SDK dispatch 前同步完成：读取 exact runtimeGeneration/effective handle identity，分配本进程 operationId，以及 SDK session.prompt 已支持的独立 user messageID，记录为 requestMessageId。effective handle identity 是 `url + effectiveRevision + pid`，与事件流 fingerprint 同构。requestMessageId 作为 SDK body.messageID 发送，不是 SDK operation ID，也不写进 Teams 的业务 parts 或 metadata。同 session 第二 prompt 在 SDK 前 CONFLICT；不同 session 并发。
 
 claim 时 promptMessageId absent，不得声称已取得 assistant id。从同一已验证 handle 的 message.updated（role=assistant）或 messages/同步 response 读取真实 id/sessionID/parentID：sessionID 等于 record.sessionId 且 parentID 等于 requestMessageId 时，才可绑定该 assistant id。旧 parent、旧 handle/generation、未知或多匹配不猜关联；多匹配不能覆盖原 id取得取消确认。SDK 拒绝 caller messageID 时按真实错误返回，不换成无 id 的第二请求。产品测试必须证明当前真实 SDK 接受该 messageID 及真实 parentID 关联，typings 不是运行成功证据。
 
@@ -617,9 +617,9 @@ cancel 只读取当前 session 的唯一 active record。assistant id 尚未绑�
 
 1.18.23 `session.abort({path:{id}})` 只返回 boolean，`session.idle` 只含 `sessionID`；不能虚构 SDK operation ID。确认只能沿公开 prompt/events/messages 查找同一 owned prompt：
 
-- abort 前 snapshot 必须绑定 operationId/sessionId/runtimeGeneration/effectiveRevision/requestMessageId 和已唯一关联的真实 promptMessageId，并分配 abortOperationId。同步 prompt 尚未返回但真实 message.updated 已完成上述绑定时，取消仍可执行；未绑定不能进入 abort。
+- abort 前 snapshot 必须绑定 operationId/sessionId/runtimeGeneration/effective handle identity/effectiveRevision/requestMessageId 和已唯一关联的真实 promptMessageId，并分配 abortOperationId。同步 prompt 尚未返回但真实 message.updated 已完成上述绑定时，取消仍可执行；未绑定不能进入 abort。
 - 只有真实 `MessageAbortedError` 所属 assistant message 的 `sessionID === snapshot.sessionId` 且 `id === snapshot.promptMessageId`，并唯一对应当前 owned prompt，才可 reconciled/confirmed。
-- session idle/status、同 session 的其他 message error、未知/缺失 message id、多匹配、旧 runtime generation/effective revision、record 已被新 prompt 取代，一律 unknown。即使单 prompt admission 有效，message identity 不能证明唯一因果时仍不得 confirmed。
+- session idle/status、同 session 的其他 message error、未知/缺失 message id、多匹配、旧 runtime generation 或 effective handle identity、record 已被新 prompt 取代，一律 unknown。即使单 prompt admission 有效，message identity 不能证明唯一因果时仍不得 confirmed。
 
 ### 7.3 Cancel result/detail
 
@@ -669,7 +669,7 @@ interface SessionCancelConfirmed {
 | `abort=false` | `ok:false`，`code='RESULT_UNKNOWN'`，detail `baseAccepted:false`、`reason:'abort-rejected'` | 保留未知责任，不显示“已取消” |
 | `abort=true` + 唯一 `MessageAbortedError` 匹配当前 snapshot | `ok:true`，上方 confirmed shape | 才可显示取消已确认 |
 | `abort=true`，无 abort error，仅 idle/status idle | `ok:false`，`baseAccepted:true`、`reason:'no-final'`/`'uncorrelated-idle'` | 不能把任意 idle 当确认 |
-| id 缺失、多匹配、其他 message、旧 runtime generation/effective revision、新 prompt 取代 | `ok:false`，`reason='ambiguous-owner'`/`stale-generation`/`superseded` | 保持 unknown；不得因 single prompt 猜 confirmed |
+| id 缺失、多匹配、其他 message、旧 runtime generation 或 effective handle identity、新 prompt 取代 | `ok:false`，`reason='ambiguous-owner'`/`stale-generation`/`superseded` | 保持 unknown；不得因 single prompt 猜 confirmed |
 | 链路断开或异常交换 | `ok:false`，保留实际观察到的 `baseAccepted` 与 `reason:'link-lost'`；未观察到 response 时省略 | absent 是未知，false 只表示确实收到 abort=false |
 
 `baseAccepted` 保持 true/false/absent 三态；wire decoder 和 UI 不得把 absent default 成 false。`accepted/rejected` 只表示 base accept boolean，不等同 confirmed。UI 只把 `reconciliation='confirmed' && finalState='cancelled'` 显示为已取消。
@@ -751,7 +751,7 @@ stateDiagram-v2
 - `运行中 -> 运行中`：新 prompt 只有在同一 session 的 active record 为空时同步 claim；第二个 prompt 在 SDK 前 `CONFLICT`，不覆盖已有 operation。
 - `运行中 -> 取消请求中`：typed `session.cancel` 到达，snapshot 当前唯一 owned prompt 的 operationId/session/generation/effectiveRevision/promptMessageId 并生成 `abortOperationId`；此边不代表取消成功。
 - `取消请求中 -> 取消已确认`：必须有 `MessageAbortedError` 且 message 的 session/message identity 唯一匹配 snapshot；`abort=true`、`session.idle`、同 session 其他 message error 单独不成立。
-- `取消请求中 -> 取消未知`：`abort=false`、无唯一 causal message、链路失联、旧 runtime generation/effective revision 或已被取代；保留责任，不自动重放、不伪造成功，重启不恢复 current。
+- `取消请求中 -> 取消未知`：`abort=false`、无唯一 causal message、链路失联、旧 runtime generation 或 effective handle identity、或已被取代；保留责任，不自动重放、不伪造成功，重启不恢复 current。
 - cleanup：Session 的 Console 请求结束只释放本次 request/connection；OpenCode child、config runtime 和 Agent Work 资源仍由原 owner 管理，不因 unknown/cancel 误释放。
 
 ## 9. `ManagedConfigOwner` 生命周期、readiness 与错误 containment
@@ -838,7 +838,7 @@ Session facade 必须在 `ManagedConfigOwner.use` callback **内部**捕获已�
 | `control-protocol/console-wire.ts` + `.spec.ts` | 继续以 `console.command` 传 create/cancel；继续以 `console.session` 传任意 `JsonValue`；封闭校验 runtime/directory row、create result、event/detail union，保留 cancel acceptance true/false/absent | `runtime/relay-console-client.ts`、`agent-host/console-ingress.ts`、`console-host/tests/http-api.spec.ts` |
 | `opencode-adapter/src/index.ts` + tests | 新增 typed `createOpenCodeSession`、abort/messages/status；新增 `subscribeOpenCodeEvents(client, signal)`（§6.2，只包装真实 `client.event.subscribe`，不建第二连接/不自行重试/不缓冲）与纯分类函数 `projectOpenCodeSessionEvent(raw)`（§6.2，唯一做 SDK 形状分类与 `unsupported`/`invalid` 判定，不持有状态、不做生命周期或观察状态决定）；新增 `decodeOpenCodeSessionMessage`；扩展 `OpenCodeSessionClient`、`OpenCodeHostActions.sendMessage(sessionId, payload)`；提供 effective model target 给 owner | `runtime/managed-config-owner.ts`、`runtime/agent-process.ts`、`opencode-adapter/tests/index.spec.ts` |
 | `runtime/managed-config-owner.ts` + `.spec.ts` | 新增 `readiness()`；在 handle 上暴露 effective `modelTarget`；expected adapter error 在 callback 内结果化；消费 U2 同一 owner 的 recover，保留 active/uncertain 语义但不加 mutex | `runtime/agent-process.ts`、`runtime/managed-config-owner.spec.ts`；recover 实现及 durable 配置写入归 U2 |
-| `runtime/agent-process.ts` + specs | 产生唯一 runtime row + owner readiness（能力门控来自 U2 派生的 `[agents.*.model]` binding）；为每个受管 child 建立并消费唯一事件流、维护每 session 有界投影缓冲与 `sessionObservation`（§6.2/§6.3）；维护每 session prompt operation record/snapshot；接 create/send/cancel/projection；在 `use` callback 内接住 expected error | `runtime/agent-process.spec.ts`、`runtime/agent-process-config.spec.ts`、`runtime/console-config.spec.ts` |
+| `runtime/agent-process.ts` + specs | 产生唯一 runtime row + owner readiness（能力门控来自 U2 派生的 `[agents.*.model]` binding）；为每个受管 child 建立并消费唯一事件流、维护每 session 有界投影缓冲与 `sessionObservation`（§6.2/§6.3）；维护每 session prompt operation record/snapshot，并绑定 `url + effectiveRevision + pid` 的 effective handle identity；接 create/send/cancel/projection；在 `use` callback 内接住 expected error | `runtime/agent-process.spec.ts`、`runtime/agent-process-config.spec.ts`、`runtime/console-config.spec.ts` |
 | `runtime/console-hub.ts` / `relay-console-client.ts` + specs | offline/空投影生成 directory row；在线 runtime row 原样透传且不跨 Agent 复制；不改 transport payload | `runtime/console-hub.spec.ts`、`network/relay-client.spec.ts` |
 | Console/UI | U5 固定 contract；typed command/projection 冻结后由 UI owner 实现 create/cancel、event variant、directory row 离线展示和 cancel detail 展示 | `console-host/src/http-api.ts`、`ui/teams-console/src/client/{api,protocol,controller,model,render}.ts`、`ui/teams-console/src/fixture.ts`、对应 UI tests |
 | maps | 由 primary 在 ownership/path/call edge 变更时批准更新；U6 design 不修改 map | 五张 `docs/architecture/` maps |
@@ -891,7 +891,7 @@ pnpm --dir opencode-adapter run build
 - expected 404/400/permission error 后 owner 仍为 current；ambiguous exchange 后为 uncertain，且没有假恢复。
 - 每 session 单 active prompt admission：第一 prompt 在任何 SDK dispatch 前同步 claim；同 session 第二 prompt 与重复 cancel 在 SDK 前 `CONFLICT`；不同 session 可并发且不影响 `ManagedConfigOwner.activeOperations`。
 - 在同步 prompt 仍 pending 时，以真实 SDK user messageID/assistant parentID 关联 message.updated；id 未绑定时 cancel 不调用 abort且保留 record。abort true/no-final、false及unknown后第二 prompt仍 CONFLICT；只有真实 owned prompt终态/已确认runtime终止才释放。旧 parent、其他 message、多匹配及错误 generation 不可确认。
-- cancel 的 abort=false 和 abort=true/no-final 都保留 baseAccepted 与 unknown detail。`abort=true` 只有唯一 owned `MessageAbortedError` session/message identity 匹配 snapshot 才可 confirmed；idle、同 session 其他 message error、多匹配、缺 id、旧 runtime generation/effective revision、supersede、owner restart 均 unknown。
+- cancel 的 abort=false 和 abort=true/no-final 都保留 baseAccepted 与 unknown detail。`abort=true` 只有唯一 owned `MessageAbortedError` session/message identity 匹配 snapshot 才可 confirmed；idle、同 session 其他 message error、多匹配、缺 id、旧 runtime generation 或 effective handle identity、supersede、owner restart 均 unknown。
 - projection 中 message/part/tool/permission/final/cancel 的 identity 与结构化 error 完整且 owner 不交叉。
 - cancel 三态合同：实际abort=true、实际abort=false、未收到response链路失联分别保持true/false/absent；wire roundtrip与UI展示不能将absent变false，accepted/rejected事件仅在观察到相应boolean时生成，confirmed另需唯一 message 因果。
 - 每种1.18.23 SDK Part都有显式路径；九类observed part包括subtask，保留完整原始值/identity。逐类型公开adapter consumer→wire/UI断言嵌套数据等价；retry不是final失败，未知tag/非法shape显式失败。

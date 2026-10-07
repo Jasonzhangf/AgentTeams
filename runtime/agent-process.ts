@@ -95,7 +95,9 @@ interface SessionOperationRecord {
   readonly operationId: string
   readonly sessionId: string
   readonly runtimeGeneration: number
+  readonly handleFingerprint: string
   readonly effectiveRevision: number
+  readonly childPid?: number
   readonly requestMessageId: string
   readonly promptMessageId?: string
   readonly abortOperationId?: string
@@ -176,6 +178,9 @@ const SESSION_EVENT_BUFFER_LIMIT = 200
 const ABORT_RECONCILE_TIMEOUT_MS = 5_000
 const EXPECTED_ADAPTER_CODES: readonly string[] = ['NOT_FOUND', 'INVALID_INPUT', 'FORBIDDEN', 'UNAUTHENTICATED', 'UNSUPPORTED_OPERATION']
 
+const effectiveHandleIdentity = (handle: Pick<ManagedEffectiveHandle, 'url' | 'effectiveRevision' | 'pid'>): string =>
+  `${handle.url}\u0000${handle.effectiveRevision}\u0000${handle.pid ?? ''}`
+
 function sessionFailure(code: ConsoleServiceErrorCode, message: string, status?: number): Extract<ConsoleCommandResultV1, { readonly ok: false }> {
   return { ok: false, error: { code, message, ...(status === undefined ? {} : { status }) } }
 }
@@ -246,8 +251,9 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
   // A replaced child cannot speak for the records or buffers its predecessor owned.
   const fenceReplacedRuntime = (handle: ManagedEffectiveHandle): void => {
     const generation = deps.generation()
+    const handleFingerprint = effectiveHandleIdentity(handle)
     for (const [sessionId, record] of operations) {
-      if (record.runtimeGeneration === generation && record.effectiveRevision === handle.effectiveRevision) continue
+      if (record.runtimeGeneration === generation && record.handleFingerprint === handleFingerprint) continue
       operations.delete(sessionId)
       const pending = pendingCancels.get(sessionId)
       if (pending !== undefined) { pendingCancels.delete(sessionId); pending.resolve(undefined) }
@@ -300,7 +306,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     if (replacing !== undefined) return replacing
     const handle = deps.owner.currentHandle()
     if (handle === undefined) return
-    const fingerprint = `${handle.url}\u0000${handle.effectiveRevision}\u0000${handle.pid ?? ''}`
+    const fingerprint = effectiveHandleIdentity(handle)
     if (stream !== undefined && !stream.ended && stream.fingerprint === fingerprint) return
     const previous = stream
     if (previous === undefined) {
@@ -314,7 +320,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
         await previous.done
         const current = deps.owner.currentHandle()
         if (disposed || current === undefined) return
-        const currentFingerprint = `${current.url}\u0000${current.effectiveRevision}\u0000${current.pid ?? ''}`
+        const currentFingerprint = effectiveHandleIdentity(current)
         if (currentFingerprint !== previous.fingerprint) fenceReplacedRuntime(current)
         if ((stream as { readonly fingerprint: string } | undefined)?.fingerprint === currentFingerprint) return
         startStream(current, currentFingerprint)
@@ -427,6 +433,8 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       const ready = sessionReadiness(deps.owner.readiness())
       if (!ready.ok) return ready.result
       const readiness = ready.readiness
+      const handle = deps.owner.currentHandle()
+      if (handle === undefined) return sessionFailure('UNAVAILABLE', 'Session runtime has no current handle')
       let decoded
       try { decoded = decodeOpenCodeSessionMessage(payload) } catch (error) {
         const contained = containExpectedAdapterError(error)
@@ -435,13 +443,15 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       }
       if (operations.has(sessionId)) return sessionFailure('CONFLICT', 'A prompt is already active for this session')
       const record: SessionOperationRecord = { operationId: randomUUID(), sessionId, runtimeGeneration: deps.generation(),
-        effectiveRevision: readiness.effectiveRevision, requestMessageId: randomUUID(), acceptedAt: new Date().toISOString() }
+        handleFingerprint: effectiveHandleIdentity(handle), effectiveRevision: readiness.effectiveRevision,
+        ...(handle.pid === undefined ? {} : { childPid: handle.pid }),
+        requestMessageId: randomUUID(), acceptedAt: new Date().toISOString() }
       operations.set(sessionId, record)
       const streamChange = ensureStream()
       if (streamChange !== undefined) await streamChange
       const outcome = await useAdapter(
         async (client, handle, markDispatched) => await promptOpenCodeSession(client, sessionId, decoded.text, handle.modelTarget, record.requestMessageId, markDispatched),
-        handle => handle.effectiveRevision === record.effectiveRevision
+        handle => effectiveHandleIdentity(handle) === record.handleFingerprint
           ? undefined
           : sessionFailure('CONFLICT', `Session runtime changed from revision ${record.effectiveRevision} to ${handle.effectiveRevision}`),
       )
@@ -469,7 +479,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       // The record snapshot must still match the live handle before abort may reach it:
       // a replaced child cannot prove the owned prompt's causality.
       const handle = deps.owner.currentHandle()
-      if (handle === undefined || record.runtimeGeneration !== deps.generation() || record.effectiveRevision !== handle.effectiveRevision) {
+      if (handle === undefined || record.runtimeGeneration !== deps.generation() || record.handleFingerprint !== effectiveHandleIdentity(handle)) {
         return cancelUnknown(record, undefined, 'stale-generation', undefined)
       }
       if (record.abortOperationId !== undefined) return sessionFailure('CONFLICT', 'A cancel is already in flight for this session')

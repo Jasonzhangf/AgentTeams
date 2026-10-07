@@ -1329,6 +1329,28 @@ describe('Session host admission, cancel causality and observation', () => {
     expect(h.host.observation()).toMatchObject({ state: 'degraded', reason: 'projection-loss', droppedEvents: 1 })
   })
 
+  it('fences a stale operation record when only child pid changes and rejects cancel typed before abort', async () => {
+    const h = sessionHarness({ holdPrompt: true })
+    h.replaceHandle({ url: 'http://127.0.0.1:1', authorization: 'Bearer x', effectiveRevision: 3, pid: 1, modelTarget: { providerID: 'p', modelID: 'm' } })
+    const prompt = h.host.sendSession('s1', { text: 'hi' })
+    await tick()
+    h.channel.push({ type: 'message.updated', properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: h.prompts[0].messageId! } } })
+    await tick()
+    // Same effective revision, different child pid. PID is part of handle identity.
+    h.replaceHandle({ url: 'http://127.0.0.1:1', authorization: 'Bearer replacement', effectiveRevision: 3, pid: 2, modelTarget: { providerID: 'p2', modelID: 'm2' } })
+    // Cancel must reject before any abort through the replacement child.
+    const rejected = await h.host.cancelSession('s1')
+    expect(rejected).toMatchObject({ ok: false, error: { code: 'RESULT_UNKNOWN', detail: { reason: 'stale-generation', runtimeGeneration: 7, effectiveRevision: 3 } } })
+    expect(h.abortCalls()).toBe(0)
+    await h.host.ensureStream()
+    const fresh = h.host.sendSession('s1', { text: 'fresh' })
+    await tick()
+    expect(h.prompts.map(item => item.sessionId)).toEqual(['s1', 's1'])
+    h.releasePrompt()
+    expect(await fresh).toMatchObject({ ok: true })
+    await prompt
+  })
+
   it('fences a stale operation record on child replacement and rejects cancel typed before abort', async () => {
     const h = sessionHarness({ holdPrompt: true })
     const prompt = h.host.sendSession('s1', { text: 'hi' })
