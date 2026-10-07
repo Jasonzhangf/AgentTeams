@@ -120,6 +120,11 @@ describe('OpenCode Teams adapter', () => {
     await expect(getOpenCodeSession(client, 'ses_1')).resolves.toEqual({ id: 'ses_1', title: 'Current' })
     await sendOpenCodeMessage(client, 'ses_1', 'hello')
     await replyOpenCodePermission(client, 'per_1', 'ses_1', 'once')
+    // The substrate brands the route parameter as a `per_`-prefixed PermissionID and
+    // rejects any other shape as a schema violation, so it is refused at this boundary.
+    for (const invalid of ['per_', '', 'u6-missing-permission', 'ses_00000000000000000000000001']) {
+      await expect(replyOpenCodePermission(client, invalid, 'ses_1', 'once')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+    }
     expect(calls).toEqual(['list', 'get', 'prompt:ses_1:hello', 'permission:ses_1:per_1:once'])
     expect(bodies).toEqual([{ parts: [{ type: 'text', text: 'hello' }] }])
   })

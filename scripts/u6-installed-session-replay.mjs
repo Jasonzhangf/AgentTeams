@@ -148,14 +148,25 @@ async function waitForAsync(probe, timeoutMs, label) {
   for (;;) {
     const value = await probe()
     if (value !== undefined) return value
-    if (Date.now() >= deadline) fail(`timed out waiting for ${label}`)
+    if (Date.now() >= deadline) {
+      const absent = new Error(`timed out waiting for ${label}`)
+      absent.absentObservation = true
+      throw absent
+    }
     await new Promise(resolveWait => setTimeout(resolveWait, 250))
   }
 }
 
-/** Like waitForAsync, but a timeout is an observable absence rather than a failure. */
+/**
+ * Like waitForAsync, but a timeout is an observable absence rather than a failure.
+ * Only a genuine timeout is absence: a failing probe is a real error and must not
+ * be reported as "the substrate did not surface this".
+ */
 async function optionalWait(probe, timeoutMs) {
-  try { return await waitForAsync(probe, timeoutMs, 'an optional observation') } catch { return undefined }
+  try { return await waitForAsync(probe, timeoutMs, 'an optional observation') } catch (error) {
+    if (error?.absentObservation === true) return undefined
+    throw error
+  }
 }
 
 function processAlive(pid) {

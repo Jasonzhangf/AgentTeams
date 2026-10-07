@@ -722,8 +722,21 @@ export function projectOpenCodeSessionMessages(raw: unknown): readonly OpenCodeS
   })
 }
 
+/**
+ * OpenCode brands its permission route parameter as a `per_`-prefixed
+ * `PermissionID` and rejects any other shape as a schema violation before it
+ * reaches a permission. The Console supplies this value, so the substrate format
+ * is enforced here instead of leaking out as an opaque transport failure.
+ */
+function validatePermissionId(permissionId: string): string {
+  if (typeof permissionId !== 'string' || !permissionId.startsWith('per_') || permissionId.length === 4) {
+    throw new OpenCodeAdapterError('permission.reply', 'INVALID_INPUT', 'OpenCode permissionID must be a per_-prefixed PermissionID')
+  }
+  return permissionId
+}
+
 export async function replyOpenCodePermission(client: OpenCodeSessionClient, permissionId: string, sessionId: string, response: 'once' | 'always' | 'reject'): Promise<void> {
-  const result = await client.postSessionIdPermissionsPermissionId({ path: { id: sessionId, permissionID: permissionId }, body: { response } })
+  const result = await client.postSessionIdPermissionsPermissionId({ path: { id: sessionId, permissionID: validatePermissionId(permissionId) }, body: { response } })
   unwrapOpenCodeResponse(result, 'permission.reply', true)
 }
 
