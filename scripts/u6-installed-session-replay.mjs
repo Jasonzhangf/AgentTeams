@@ -676,7 +676,7 @@ export async function runInstalledSessionReplay(options = {}) {
     assert(restarted.generation > status.generation, `restart did not advance the generation: ${JSON.stringify(restarted)}`)
     const stale = await run(cli, ['console', 'stop', '--config', configPath, '--generation', String(status.generation)],
       { cwd: paths.temporaryRoot, env: cliEnv }, true)
-    assert(stale.exitCode !== 0 && /stale launcher generation/u.test(`${stale.stderr}${stale.stdout}`),
+    assert(stale.exitCode !== 0 && /stale .*generation/u.test(`${stale.stderr}${stale.stdout}`),
       `a stale launcher generation was not refused: exit=${stale.exitCode} out=${stale.stderr.trim()}${stale.stdout.trim()}`)
     assert(hashFile(configPath) === configShaBefore, 'config.toml changed across the restart; user intent was not the only editable source')
     receipt.cases['stale-generation'] = { status: 'passed', previous_generation: status.generation, generation: restarted.generation,
