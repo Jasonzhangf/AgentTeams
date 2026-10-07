@@ -462,7 +462,7 @@
     },
     {
       "gate_id": "teams-managed-session-contract",
-      "status": "partial",
+      "status": "implemented",
       "required": true,
       "command": "pnpm exec vitest run --no-file-parallelism control-protocol/console-api.spec.ts control-protocol/console-wire.spec.ts opencode-adapter/tests/index.spec.ts runtime/managed-config-owner.spec.ts runtime/agent-process.spec.ts runtime/console-hub.spec.ts network/console-channel.spec.ts agent-host/console-ingress.spec.ts ui/teams-console/tests/controller.spec.ts",
       "checks": [
@@ -479,9 +479,12 @@
         "prompt dispatch resolves modelTarget and effectiveRevision from the delivered owner handle and returns a typed CONFLICT before SDK dispatch when the claimed revision changed",
         "Console hub and projection reply validation reject sessionEvents whose agentId is outside the bound Agent while accepting owned events",
         "subscribeOpenCodeEvents only wraps the real client.event.subscribe, forwards the caller AbortSignal and never retries, buffers or reconnects on its own",
-        "the installed package declares and resolves @opencode-ai/sdk, and the UI build ships the canonical console contract the browser client loads"
+        "the installed package declares and resolves @opencode-ai/sdk, and the UI build ships the canonical console contract the browser client loads",
+        "the Session projection reads the substrate's real permission.asked shape (id, sessionID, permission, patterns, always, metadata, tool.messageID/callID) and permission.replied shape (sessionID, requestID, reply), so a raised permission reaches the Console as a pending event with its real identity and a reply resolves it",
+        "scripts/u6-installed-session-replay.mjs replays initialization, lifecycle, Console authentication, discovery, config.apply, session.create/open/send, permission approve and reject, session.cancel, passive refusal, unsupported payload, Console offline, stale generation and clean stop through the installed CLI and installed Console HTTP ingress against a real managed OpenCode child and a local provider stub",
+        "the replay asserts a real tool call preserves tool identity, arguments and result; that approving the substrate's own permission request produces the read side effect while rejecting it does not; that cancel preserves base acceptance with a correlated confirmed/unknown outcome and never records abort=true as the final cancel; and that a passive Agent refuses Session with typed UNSUPPORTED_OPERATION"
       ],
-      "note": "Source-only milestone: the source contract and focused runtime/CLI checks are implemented on the exact candidate, but the Console -> Agent -> managed OpenCode Session path has no black-box evidence bound to this candidate, so the Session contract is NOT validated. Live Console backend binding, real managed-OpenCode Session replay through the installed Console and browser acceptance remain downstream host gates; BB10/BB12 stay PENDING."
+      "note": "Installed public-entry evidence on the exact candidate: scripts/u6-installed-session-replay.mjs writes generated/u6-session-replay/<run>/u6-installed-session-replay.receipt.json, whose candidate.head_commit and candidate.tree_hash equal the reviewed candidate and whose pack hash binds the staged package; a receipt that binds another candidate is stale and does not cover this gate. The Console -> Agent -> managed OpenCode Session path passes end to end through the installed CLI and the installed Console HTTP ingress: send, a real tool call, approve and reject of a substrate-raised permission, cancel with a correlated outcome, passive refusal, typed unsupported-payload refusal and clean stop. The permission rounds run on the substrate's own *.env read rule, because the managed launch config sets no permission policy and the substrate's built-in default auto-allows bash; a tool the substrate never asks about is therefore never gated and the Console stays an optional client. Browser acceptance and the U7 user-driver package remain downstream host gates; BB10/BB12 stay PENDING."
     }
   ]
 }
