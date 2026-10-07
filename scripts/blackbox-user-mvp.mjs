@@ -1583,11 +1583,18 @@ function sessionCancelUnknown(result) {
 async function readInstalledProjection(client, evidenceDir, name, timeoutMs = 90_000) {
   let last
   const body = await optionalWait(async () => {
-    const response = await client.projection()
-    last = response
-    return response.status === 200 && response.body?.version === 1 && Array.isArray(response.body.agents)
-      ? response.body
-      : undefined
+    // The Console listener can be briefly unreachable right after an installed
+    // restart, so a connection failure is a retry, not the observation.
+    try {
+      const response = await client.projection()
+      last = response
+      return response.status === 200 && response.body?.version === 1 && Array.isArray(response.body.agents)
+        ? response.body
+        : undefined
+    } catch (error) {
+      last = { status: 0, text: error instanceof Error ? error.message : String(error) }
+      return undefined
+    }
   }, timeoutMs)
   assert(body !== undefined,
     `the installed Console projection was not readable: status=${last?.status} body=${(last?.text ?? '').slice(0, 400)}`)
@@ -1717,9 +1724,11 @@ async function runBB10(context) {
     assert(backup.requests.length === 0 && manual.requests.length === 0,
       'a provider outside the explicit binding received the Session prompt')
 
-    // (2) An explicit switch through the installed Console moves the next real
-    // call to the newly selected provider/model, including the empty-catalog path
-    // where the manual model entry is the only catalog entry.
+    // (2) An explicit Console selection moves the next real call to the newly
+    // selected provider/model, including the empty-catalog path where the manual
+    // model entry is the only catalog entry for that provider. Accepted and
+    // effective are read back separately: the Console change is accepted at once
+    // and becomes effective on the next installed lifecycle generation.
     const configRow = (await readInstalledProjection(client, undefined, 'config')).configs.find(row => row.agentId === sessionAgentId)
     assert(typeof configRow?.acceptedRevision === 'number', `the installed projection has no config row for ${sessionAgentId}`)
     const revisionBeforeSelection = configRow.acceptedRevision
@@ -1731,41 +1740,67 @@ async function runBB10(context) {
     const bindModel = await client.command({ kind: 'config.bindModel', agentId: sessionAgentId,
       expectedRevision: revisionBeforeSelection + 1, providerId: sessionManualProviderId, modelId: sessionManualModel })
     assert(bindModel.body.ok === true, `the explicit Console model selection failed: ${JSON.stringify(bindModel.body)}`)
-    let secondApply
+    const acceptedProjection = await readInstalledProjection(client, evidenceDir, 'bb10-switch-accepted')
+    const acceptedRow = acceptedProjection.configs.find(row => row.agentId === sessionAgentId)
+    assert(acceptedRow.acceptedRevision === revisionBeforeSelection + 2,
+      `the accepted revision did not advance with the Console selection: ${JSON.stringify(acceptedRow)}`)
+    const effectiveBeforeSwitch = acceptedProjection.agents.find(agent => agent.agentId === sessionAgentId)
+    assert(effectiveBeforeSwitch.providerId === sessionPrimaryProviderId && effectiveBeforeSwitch.modelId === sessionPrimaryModel,
+      `the accepted Console selection replaced the running binding before it was effective: ${JSON.stringify(effectiveBeforeSwitch)}`)
+
+    // The installed public lifecycle applies the accepted binding to the next
+    // generation. No private state and no direct substrate call is involved.
+    const generationBeforeSwitch = lifecycle.parsed.generation
+    const primaryRequestsBeforeSwitch = primary.requests.length
+    let switchedConsole
+    let switchedClient
+    let switchedAgent
+    let restartedRow
     try {
-      secondApply = await applySessionConfigAndWait(client, sessionAgentId, evidenceDir, 'bb10-switch')
+      await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb10-switch')
+      lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb10-switch')
+      assert(lifecycle.parsed.generation > generationBeforeSwitch,
+        `the installed restart did not advance the launcher generation: ${generationBeforeSwitch} -> ${lifecycle.parsed.generation}`)
+      switchedConsole = startInstalledSessionConsole(fixture, evidenceDir, 'bb10-switch')
+      switchedClient = sessionConsoleClient(switchedConsole.url, switchedConsole.authorization)
+      const restartedProjection = await readInstalledProjection(switchedClient, evidenceDir, 'bb10-switch-restarted')
+      restartedRow = restartedProjection.configs.find(row => row.agentId === sessionAgentId)
+      assert(restartedRow.acceptedRevision === revisionBeforeSelection + 2,
+        `the accepted Console selection did not survive the installed restart: ${JSON.stringify(restartedRow)}`)
+      switchedAgent = (await applySessionConfigAndWait(switchedClient, sessionAgentId, evidenceDir, 'bb10-switch')).agent
     } catch (error) {
-      writeJson(join(evidenceDir, 'bb10-switch-apply-failure.json'), {
+      writeJson(join(evidenceDir, 'bb10-switch-failure.json'), {
         error: error instanceof Error ? error.message : String(error),
         ...readUncertaintyFences(fixture.configPath),
-        agent_data_directory: fixture.home,
-        config_row: publicJson((await readInstalledProjection(client, undefined, 'config-after-failure')).configs
-          .find(row => row.agentId === sessionAgentId)),
       })
       throw error
     }
-    assert(secondApply.agent.providerId === sessionManualProviderId && secondApply.agent.modelId === sessionManualModel,
-      `the explicit Console selection did not become the Session binding: ${JSON.stringify(secondApply.agent)}`)
+    assert(switchedAgent.providerId === sessionManualProviderId && switchedAgent.modelId === sessionManualModel,
+      `the explicit Console selection did not become the Session binding: ${JSON.stringify(switchedAgent)}`)
+    const switchedSession = await createAndOpenSession(switchedClient, 'BB10 installed explicit model (switched)', evidenceDir, 'bb10-switch')
+    const switchedEvents = async () => readSessionEvents(
+      await readInstalledProjection(switchedClient, undefined, 'switch-events'), sessionAgentId, switchedSession.sessionId)
 
     const switchedPrompt = 'bb10 explicit switched probe'
-    const switchedFinals = (await sessionEvents()).filter(event => event.kind === 'final').length
-    const switchedSent = await client.sessionMessage(sessionAgentId, sessionId, { text: switchedPrompt })
+    const switchedFinals = (await switchedEvents()).filter(event => event.kind === 'final').length
+    const switchedSent = await switchedClient.sessionMessage(sessionAgentId, switchedSession.sessionId, { text: switchedPrompt })
     assert(switchedSent.body.ok === true, `the explicitly switched prompt failed: ${JSON.stringify(switchedSent.body)}`)
-    await waitForSessionTurn(sessionEvents, switchedFinals, 'the explicitly switched turn to finish')
+    await waitForSessionTurn(switchedEvents, switchedFinals, 'the explicitly switched turn to finish')
     const manualRequest = await waitForAsync(async () => manual.requests.map(text => JSON.parse(text))
       .find(request => JSON.stringify(request.messages ?? '').includes(switchedPrompt)), 120_000,
     'the explicitly selected provider stub to receive the Session prompt')
     assert(manualRequest.model === sessionManualModel,
       `the switched Session prompt used model ${manualRequest.model}, not the explicit selection ${sessionManualModel}`)
-    assert(backup.requests.length === 0, 'the explicit switch silently failed over to the backup provider')
+    assert(backup.requests.length === 0 && primary.requests.length === primaryRequestsBeforeSwitch,
+      `the explicit switch did not move the real call to the selected provider: ${JSON.stringify({ primary: primary.requests.length, backup: backup.requests.length })}`)
 
     // (3) A stale Console revision must be a typed refusal that changes nothing.
-    const bindingBeforeStale = (await readInstalledProjection(client, undefined, 'config-stale-before')).configs.find(row => row.agentId === sessionAgentId)
-    const stale = await client.command({ kind: 'config.bindModel', agentId: sessionAgentId,
+    const bindingBeforeStale = (await readInstalledProjection(switchedClient, undefined, 'config-stale-before')).configs.find(row => row.agentId === sessionAgentId)
+    const stale = await switchedClient.command({ kind: 'config.bindModel', agentId: sessionAgentId,
       expectedRevision: revisionBeforeSelection, providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel })
     assert(stale.body.ok === false && stale.body.error?.code === 'REVISION_CONFLICT',
       `a stale Console revision was not refused as REVISION_CONFLICT: ${JSON.stringify(stale.body)}`)
-    const bindingAfterStale = (await readInstalledProjection(client, undefined, 'config-stale-after')).configs.find(row => row.agentId === sessionAgentId)
+    const bindingAfterStale = (await readInstalledProjection(switchedClient, undefined, 'config-stale-after')).configs.find(row => row.agentId === sessionAgentId)
     assert(bindingAfterStale.acceptedRevision === bindingBeforeStale.acceptedRevision
       && bindingAfterStale.effectiveRevision === bindingBeforeStale.effectiveRevision,
       'the stale Console revision mutated the accepted or effective config')
@@ -1773,15 +1808,15 @@ async function runBB10(context) {
     // (4) No implicit failover: when the bound provider fails, the backup slot
     // must stay untouched and the failure must stay observable.
     const backupRequestsBefore = backup.requests.length
-    const primaryRequestsBeforeFailure = manual.requests.length
-    const failedFinals = (await sessionEvents()).filter(event => event.kind === 'final' && event.state === 'failed').length
+    const manualRequestsBeforeFailure = manual.requests.length
+    const failedFinals = (await switchedEvents()).filter(event => event.kind === 'final' && event.state === 'failed').length
     manual.state.fail = true
-    const failedDispatch = await client.sessionMessage(sessionAgentId, sessionId, { text: 'bb10 no failover probe' }, 180_000)
+    const failedDispatch = await switchedClient.sessionMessage(sessionAgentId, switchedSession.sessionId, { text: 'bb10 no failover probe' }, 180_000)
       .then(response => ({ ok: true, response }), error => ({ ok: false, error }))
-    await waitForAsync(async () => manual.requests.length > primaryRequestsBeforeFailure ? true : undefined,
+    await waitForAsync(async () => manual.requests.length > manualRequestsBeforeFailure ? true : undefined,
       120_000, 'the failing bound provider to receive the prompt')
     const failedFinal = await optionalWait(async () => {
-      const failures = (await sessionEvents()).filter(event => event.kind === 'final' && event.state === 'failed')
+      const failures = (await switchedEvents()).filter(event => event.kind === 'final' && event.state === 'failed')
       return failures.length > failedFinals ? failures.at(-1) : undefined
     }, 120_000)
     assert(failedDispatch.ok === false || failedFinal !== undefined,
@@ -1790,8 +1825,8 @@ async function runBB10(context) {
 
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb10')
     const allPids = lifecyclePids(lifecycle.internal)
-    const consoleGone = consoleListenerGone(console.url)
-    assert(consoleGone, `the installed Console endpoint survived the launcher stop: ${console.url}`)
+    const consoleGone = consoleListenerGone(switchedConsole.url)
+    assert(consoleGone, `the installed Console endpoint survived the launcher stop: ${switchedConsole.url}`)
     fixture.cleanup()
     result = {
       status: 'passed',
@@ -1810,9 +1845,13 @@ async function runBB10(context) {
           'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S> {"text":"<prompt>"}',
           'POST /api/v1/command {"kind":"config.model.put","expectedRevision":<R>,"entry":{"origin":"manual",...}}',
           'POST /api/v1/command {"kind":"config.bindModel","expectedRevision":<R+1>,"providerId":"bb-manual","modelId":"bb-manual-model"}',
-          'POST /api/v1/command {"kind":"config.apply","agentId":"bb-provider"}',
+          'agentteams stop --config <isolated-home>/.agentteams/config.toml --generation <G>',
+          'agentteams start --config <isolated-home>/.agentteams/config.toml',
+          'agentteams console start --config <isolated-home>/.agentteams/config.toml',
+          'POST /api/v1/command {"kind":"session.create","agentId":"bb-provider"} (switched binding)',
+          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S2> {"text":"<switched prompt>"}',
           'POST /api/v1/command {"kind":"config.bindModel","expectedRevision":<R>} (stale, typed refusal)',
-          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S> {"text":"bb10 no failover probe"} (bound provider fails)',
+          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S2> {"text":"bb10 no failover probe"} (bound provider fails)',
           'agentteams stop --generation <generation>',
         ],
       },
@@ -1822,12 +1861,16 @@ async function runBB10(context) {
         cli_realpath: fixture.cliRealpath,
         launcher: lifecycle.parsed,
         console: { url: console.url, pid: console.pid, generation: console.generation },
+        console_after_switch: { url: switchedConsole.url, pid: switchedConsole.pid, generation: switchedConsole.generation },
         discovery: { session_agent: publicJson(sessionRow), passive_agent: publicJson(passiveRow), manual_catalog: publicJson(manualCatalog) },
         first_apply: firstApply,
         session: session.created,
         primary_prompt: { prompt: primaryPrompt, result: publicJson(primarySent.body), provider_request_model: primaryRequest.model },
         explicit_selection: { accepted_revision_before: revisionBeforeSelection, put_model: publicJson(putModel.body),
-          bind_model: publicJson(bindModel.body), second_apply: secondApply },
+          bind_model: publicJson(bindModel.body), accepted_revision_after: acceptedRow.acceptedRevision,
+          accepted_row: publicJson(acceptedRow), effective_before_switch: publicJson(effectiveBeforeSwitch) },
+        switch_apply: { launcher_generation_before: generationBeforeSwitch, launcher_generation_after: lifecycle.parsed.generation,
+          accepted_after_restart: publicJson(restartedRow), effective_after_switch: publicJson(switchedAgent), session: switchedSession.created },
         switched_prompt: { prompt: switchedPrompt, result: publicJson(switchedSent.body), provider_request_model: manualRequest.model },
         stale_revision: { result: publicJson(stale.body), accepted_revision_before: bindingBeforeStale.acceptedRevision,
           accepted_revision_after: bindingAfterStale.acceptedRevision, effective_revision_after: bindingAfterStale.effectiveRevision },
