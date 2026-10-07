@@ -506,8 +506,10 @@ describe('OpenCode Teams adapter', () => {
     expect(part({ type: 'reasoning', text: 'why', time: { start: 1, end: 2 } })).toMatchObject({ kind: 'event', event: { kind: 'part', state: 'completed' } })
     expect(part({ type: 'file', filename: 'a' })).toMatchObject({ kind: 'event', event: { kind: 'part', state: 'observed', partType: 'file' } })
     expect(part({ type: 'tool', tool: 'bash', callID: 'c', state: { status: 'running', input: { command: 'ls' } } })).toMatchObject({ kind: 'event', event: { kind: 'tool', state: 'running' } })
-    expect(projectOpenCodeSessionEvent({ type: 'permission.updated', properties: { id: 'p', sessionID: 's', messageID: 'm', title: 'T', metadata: {} } })).toMatchObject({ kind: 'event', event: { kind: 'permission', state: 'pending' } })
-    expect(projectOpenCodeSessionEvent({ type: 'permission.replied', properties: { sessionID: 's', permissionID: 'p', response: 'later' } })).toMatchObject({ kind: 'event', event: { kind: 'permission', state: 'resolved', decision: 'unknown', rawResponse: 'later' } })
+    expect(projectOpenCodeSessionEvent({ type: 'permission.asked', properties: { id: 'per_1', sessionID: 's', permission: 'external_directory',
+      patterns: ['/tmp/*'], always: ['*'], metadata: { patterns: ['/tmp/*'] }, tool: { messageID: 'm', callID: 'c' } } }))
+      .toMatchObject({ kind: 'event', event: { kind: 'permission', state: 'pending', permissionId: 'per_1', messageId: 'm', callId: 'c', title: 'external_directory' } })
+    expect(projectOpenCodeSessionEvent({ type: 'permission.replied', properties: { sessionID: 's', requestID: 'per_1', reply: 'later' } })).toMatchObject({ kind: 'event', event: { kind: 'permission', state: 'resolved', permissionId: 'per_1', decision: 'unknown', rawResponse: 'later' } })
     expect(projectOpenCodeSessionEvent({ type: 'session.error', properties: { sessionID: 's', error: { name: 'UnknownError', data: {} } } })).toMatchObject({ kind: 'event', event: { kind: 'error', correlation: { kind: 'session' } } })
   })
 

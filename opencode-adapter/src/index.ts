@@ -590,27 +590,33 @@ export function projectOpenCodeSessionEvent(raw: unknown): OpenCodeSessionEventP
     return { kind: 'event', event: { eventId: `${type}:${sessionId}`, agentId: '', sessionId, kind: 'error', state: 'failed', error,
       correlation: messageId === undefined ? { kind: 'session', sessionId } : { kind: 'message', messageId } } }
   }
-  if (type === 'permission.updated') {
+  if (type === 'permission.asked') {
+    // Substrate shape: { id, sessionID, permission, patterns, always, metadata, tool?: { messageID, callID } }.
+    // The message identity lives under `tool` and the permission name is the only title the substrate owns.
     const sessionId = stringField(properties?.sessionID)
-    const permissionId = stringField(properties?.id) ?? stringField(properties?.permissionID)
-    const messageId = stringField(properties?.messageID)
-    const title = stringField(properties?.title)
+    const permissionId = stringField(properties?.id)
+    const tool = asRecord(properties?.tool)
+    const messageId = stringField(tool?.messageID)
+    const title = stringField(properties?.permission)
     const metadata = properties?.metadata
     if (sessionId === undefined || permissionId === undefined || messageId === undefined || title === undefined || metadata === undefined) {
-      return { kind: 'invalid', reason: 'permission.updated is missing id, messageID, title, or metadata', raw: rawJson }
+      return { kind: 'invalid', reason: 'permission.asked is missing id, sessionID, tool.messageID, permission, or metadata', raw: rawJson }
     }
     try { assertJsonValue(metadata, 'permission metadata') } catch { return { kind: 'invalid', reason: 'permission metadata is not JSON', raw: rawJson } }
-    const callId = stringField(properties?.callID)
+    const callId = stringField(tool?.callID)
     return { kind: 'event', event: { ...eventBase(type, sessionId), agentId: '', kind: 'permission', state: 'pending', permissionId, messageId,
       ...(callId === undefined ? {} : { callId }), title, metadata: metadata as JsonValue } }
   }
   if (type === 'permission.replied') {
+    // Substrate shape: { sessionID, requestID, reply }.
     const sessionId = stringField(properties?.sessionID)
-    const permissionId = stringField(properties?.permissionID) ?? stringField(properties?.id)
-    const response = properties?.response
-    if (sessionId === undefined || permissionId === undefined || typeof response !== 'string') return { kind: 'invalid', reason: 'permission.replied is missing session, permissionID, or string response', raw: rawJson }
-    const decision = response === 'once' || response === 'always' || response === 'reject' ? response : 'unknown'
-    return { kind: 'event', event: { ...eventBase(type, sessionId), agentId: '', kind: 'permission', state: 'resolved', permissionId, decision, ...(decision === 'unknown' ? { rawResponse: response } : {}) } }
+    const permissionId = stringField(properties?.requestID)
+    const reply = properties?.reply
+    if (sessionId === undefined || permissionId === undefined || typeof reply !== 'string') {
+      return { kind: 'invalid', reason: 'permission.replied is missing sessionID, requestID, or string reply', raw: rawJson }
+    }
+    const decision = reply === 'once' || reply === 'always' || reply === 'reject' ? reply : 'unknown'
+    return { kind: 'event', event: { ...eventBase(type, sessionId), agentId: '', kind: 'permission', state: 'resolved', permissionId, decision, ...(decision === 'unknown' ? { rawResponse: reply } : {}) } }
   }
   // A recognized SDK event with no Session projection outcome is intentionally ignored,
   // never counted as projection loss. Only genuinely unknown tags fail below.
