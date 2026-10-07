@@ -1,10 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { spawn as spawnProcess } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
-import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig, writeLocalInternalLauncherState, writeLocalLauncherOwnership, writeLocalInternalState } from './local-config.ts'
-import { runLocalProcess, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
+import { loadLocalConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalWorkControl, writeLocalLauncherOwnership, writeLocalInternalState } from './local-config.ts'
+import { consoleStatusLocalProcess, runLocalProcess, startLocalProcess, statusLocalProcess, stopLocalProcess } from './local-process.ts'
 import type { LocalSupervisor } from './local-supervisor.ts'
 
 const persistedAgentReadySource = `
@@ -14,6 +15,79 @@ process.send?.({ kind: 'daemon.status', agentId: 'browser', generation,
   endpoint: { agentId: 'browser', identity: { hostId: 'browser-host', machineId: 'machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
     role: 'provider', presence: 'online', state: 'online', generation, capabilities: [] } })
 `
+
+it('reports launcher=stopped for console status without inventing online state', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-console-status-stopped-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, `version = 3
+
+[bridge]
+enabled = true
+
+[agents.provider]
+enabled = true
+role = "provider"
+label = "Local provider"
+
+[agents.provider.identity]
+hostId = "local"
+machineId = "local"
+accountId = "local"
+agentKind = "custom"
+label = "Local provider"
+
+[agents.provider.runtime]
+scopeId = "local"
+dataDirectory = "data/provider"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-provider" }
+
+[console]
+enabled = true
+username = "admin"
+passwordEnv = "AGENTTEAMS_CONSOLE_PASSWORD"
+`)
+    const status = await consoleStatusLocalProcess(path)
+    expect(status).toMatchObject({
+      enabled: true,
+      state: 'stopped',
+      launcherState: 'stopped',
+      launcherGeneration: 0,
+    })
+    expect(status).not.toHaveProperty('url')
+    expect(status).not.toHaveProperty('pid')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('classifies the Console fields in every launcher status state', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-console-status-fields-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const internalPath = (await loadLocalConfig(path)).internalPath!
+    await projectLocalChildConfigs(internalPath)
+    // A reservation that has not published a pid: the frozen console keys must not
+    // disappear exactly when Console observability is required.
+    await writeLocalInternalLauncherState(internalPath, { pid: 0, generation: 1, startToken: 'reserved-token', state: 'starting' })
+    const starting = await statusLocalProcess(path)
+    expect(starting).toMatchObject({ state: 'starting' })
+    expect(starting.console).toMatchObject({ enabled: true, launcherState: 'starting', launcherGeneration: 1 })
+    await writeLocalInternalLauncherState(internalPath, { pid: 0, generation: 2, startToken: 'failed-token', state: 'failed', error: 'supervisor start failed' })
+    const failed = await statusLocalProcess(path)
+    expect(failed).toMatchObject({ state: 'failed', error: 'supervisor start failed' })
+    expect(failed.console).toMatchObject({ enabled: true, launcherState: 'failed', launcherGeneration: 2 })
+    // A live supervisor whose ownership token no longer matches keeps them too.
+    await writeLocalInternalLauncherState(internalPath, { pid: process.pid, generation: 3, startToken: 'stale-token', state: 'running' })
+    const stale = await statusLocalProcess(path)
+    expect(stale).toMatchObject({ state: 'failed' })
+    expect(stale.console).toMatchObject({ enabled: true, launcherGeneration: 3 })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 20000)
 
 it('turns a post-ready supervisor failure into cleanup and a nonzero launcher result', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-local-process-'))
@@ -348,6 +422,95 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
   }
 }, 20000)
 
+const V3_CONSOLE_RECOVERY_CONFIG = `version = 3
+
+[bridge]
+enabled = true
+
+[agents.provider]
+enabled = true
+role = "provider"
+label = "Local provider"
+
+[agents.provider.identity]
+hostId = "local"
+machineId = "local"
+accountId = "local"
+agentKind = "custom"
+label = "Local provider"
+
+[agents.provider.runtime]
+scopeId = "local"
+dataDirectory = "data/provider"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-provider" }
+
+[console]
+enabled = true
+username = "admin"
+passwordEnv = "AGENTTEAMS_CONSOLE_PASSWORD"
+`
+
+it('recovers the orphaned Console child when the launcher dies abnormally', async () => {
+  const root = await mkdtemp(join('/tmp', 'at-recovery-console-'))
+  const path = join(root, 'config.toml')
+  let internalPath: string | undefined
+  let generation: number | undefined
+  try {
+    const relay = join(root, 'relay.mjs')
+    const agent = join(root, 'agent.mjs')
+    const consoleChild = join(root, 'console.mjs')
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `
+process.send?.({ kind: 'daemon.registered', agentId: 'provider', generation: 1 })
+process.send?.({ kind: 'daemon.status', agentId: 'provider', generation: 1,
+  endpoint: { agentId: 'provider', identity: { hostId: 'local', machineId: 'local', agentId: 'provider', accountId: 'local', agentKind: 'custom', label: 'Local provider' },
+    role: 'provider', presence: 'online', state: 'online', generation: 1, capabilities: [] } })
+setInterval(() => {}, 1000)
+process.once('SIGTERM', () => process.exit(0))
+`)
+    await writeFile(consoleChild, "process.send?.({ kind: 'console.listening', url: 'http://127.0.0.1:51234' }); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const options = {
+      relayEntry: relay,
+      agentEntry: agent,
+      consoleEntry: consoleChild,
+      nodeArguments: ['--experimental-transform-types'],
+      startupTimeoutMs: 5000,
+      env: { AGENTTEAMS_CONSOLE_PASSWORD: 'correct horse battery staple', AGENTTEAMS_PROVIDER_AUTH: 'provider-auth' },
+    }
+    const first = await startLocalProcess(path, options)
+    internalPath = first.internalPath
+    generation = first.generation
+    const internal = await readLocalInternalConfig(internalPath)
+    const launcherPid = internal.launcher?.pid
+    const consolePid = internal.consoleRuntime?.pid
+    expect(launcherPid).toBeGreaterThan(0)
+    expect(internal.consoleRuntime).toMatchObject({ enabled: true, state: 'online', entryPath: consoleChild })
+    expect(consolePid).toBeGreaterThan(0)
+
+    process.kill(launcherPid!, 'SIGKILL')
+    await new Promise(resolveDelay => setTimeout(resolveDelay, 100))
+    const restarted = await startLocalProcess(path, options)
+    expect(restarted.generation).toBe(generation! + 1)
+    // Recovery owns the Console child too: the persisted Console port is always
+    // reused, so an orphan left holding it would fail every later start with
+    // CONSOLE_PORT_OCCUPIED while no owned path remains to stop it.
+    expect(() => process.kill(consolePid!, 0)).toThrow()
+    await expect(stopLocalProcess(path, restarted.generation)).resolves.toMatchObject({ state: 'stopped', generation: restarted.generation })
+    const recovered = await readLocalInternalConfig(internalPath)
+    expect(recovered.consoleRuntime).toMatchObject({ state: 'stopped', entryPath: consoleChild })
+    expect(recovered.consoleRuntime?.pid).toBeUndefined()
+    expect(recovered.launcher?.state).toBe('stopped')
+    for (const state of Object.values(recovered.daemons ?? {})) expect(state.state).toBe('stopped')
+  } finally {
+    if (internalPath !== undefined) {
+      try { await stopLocalProcess(path, generation) } catch { /* cleanup is best effort for test-only paths */ }
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 30000)
+
 it('rejects a live PID reuse even when the persisted launcher owner record matches', async () => {
   const root = await mkdtemp(join(tmpdir(), 'at-reuse-'))
   const path = join(root, 'config.toml')
@@ -386,7 +549,11 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     expect(fake.pid).toBeGreaterThan(0)
     await writeLocalLauncherOwnership(internalPath, { version: 1, pid: fake.pid!, startToken: token! })
     await writeLocalInternalLauncherState(internalPath, { pid: fake.pid!, generation: first.generation, startToken: token!, state: 'running' })
-    await expect(statusLocalProcess(path)).resolves.toMatchObject({ state: 'failed', generation: first.generation })
+    const reused = await statusLocalProcess(path)
+    expect(reused).toMatchObject({ state: 'failed', generation: first.generation })
+    // The embedded Console view is classified from the final launcher state, so it can
+    // never contradict the top-level ownership verdict.
+    expect(reused.console.launcherState).toBe('failed')
   } finally {
     if (fake !== undefined && fake.exitCode === null && fake.signalCode === null) {
       const fakeProcess = fake
@@ -513,3 +680,255 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     await rm(root, { recursive: true, force: true })
   }
 }, 20000)
+
+it('stops a retained Console child when the launcher is already stopped', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-retained-console-'))
+  const path = join(root, 'config.toml')
+  const childPath = join(root, 'retained-console.mjs')
+  let child: ReturnType<typeof spawnProcess> | undefined
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    const startToken = 'retained-console-token'
+    await writeFile(childPath, 'setInterval(() => {}, 1000)\nprocess.once("SIGTERM", () => process.exit(0))\n')
+    child = spawnProcess(process.execPath, [
+      childPath,
+      '--config',
+      config.console!.configPath,
+      '--launcher-start-token',
+      startToken,
+    ], { stdio: 'ignore' })
+    await new Promise<void>(resolveSpawn => child?.once('spawn', resolveSpawn))
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 1, startToken: 'stopped-launcher', state: 'stopped' })
+    await writeLocalInternalConsoleRuntime(config.internalPath!, {
+      enabled: true,
+      pid: child.pid,
+      generation: 1,
+      startToken,
+      entryPath: childPath,
+      state: 'retained',
+      error: { code: 'CONSOLE_RETAINED', message: 'Console exit was unconfirmed' },
+    })
+
+    await expect(stopLocalProcess(path)).resolves.toMatchObject({ state: 'stopped' })
+    expect(() => process.kill(child!.pid!, 0)).toThrow()
+    const recovered = await readLocalInternalConfig(config.internalPath!)
+    expect(recovered.consoleRuntime).toMatchObject({ enabled: true, state: 'stopped' })
+    expect(recovered.consoleRuntime?.pid).toBeUndefined()
+  } finally {
+    if (child !== undefined && child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM')
+      await new Promise<void>(resolveExit => child?.once('exit', resolveExit))
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('keeps Console status read-only and independent from daemon projections', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-independent-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    const consoleProjection = config.console!.configPath
+    const daemonProjection = config.daemons[0]!.configPath
+    await mkdir(daemonProjection, { recursive: true })
+
+    await expect(consoleStatusLocalProcess(path)).resolves.toMatchObject({
+      enabled: true,
+      state: 'stopped',
+      launcherState: 'stopped',
+    })
+    expect(existsSync(consoleProjection)).toBe(false)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it('does not report a dead launcher as running in Console status', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-dead-launcher-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    const dead = spawnProcess(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' })
+    await new Promise<void>(resolveExit => dead.once('exit', resolveExit))
+    await writeLocalInternalLauncherState(config.internalPath!, {
+      pid: dead.pid!,
+      generation: 1,
+      startToken: 'dead-launcher-token',
+      state: 'running',
+    })
+
+    await expect(consoleStatusLocalProcess(path)).resolves.toMatchObject({
+      launcherState: 'failed',
+      launcherGeneration: 1,
+    })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('reports an unobservable Console status as CONSOLE_STATUS_UNAVAILABLE', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-status-unavailable-'))
+  const path = join(root, 'config.toml')
+  let owner: ReturnType<typeof spawnProcess> | undefined
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    const startToken = 'console-status-token'
+    // The launcher is genuinely owned by this pid, but no server ever listened on the
+    // control socket it published, so the Console state cannot be observed at all.
+    owner = spawnProcess(process.execPath, [
+      '-e',
+      'setInterval(()=>{},1e3)',
+      new URL('./local-process.ts', import.meta.url).pathname,
+      '--config',
+      config.configPath,
+      '--start-token',
+      startToken,
+    ], { stdio: 'ignore' })
+    await new Promise<void>(resolveSpawn => owner?.once('spawn', resolveSpawn))
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: owner.pid!, generation: 1, startToken, state: 'running' })
+    // A missing control row is an unreadable observation too, not a stopped launcher.
+    await expect(consoleStatusLocalProcess(path, { timeoutMs: 500 })).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+    await writeLocalInternalWorkControl(config.internalPath!, {
+      socketPath: join(dirname(config.internalPath!), '.internal', 'work-control.sock'),
+      launcherGeneration: 1,
+      launcherStartToken: startToken,
+    })
+
+    // An unreadable observation is a typed CONSOLE_STATUS_UNAVAILABLE, never the
+    // unrelated Work control code and never a silent healthy state.
+    await expect(consoleStatusLocalProcess(path, { timeoutMs: 500 })).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+  } finally {
+    if (owner !== undefined && owner.exitCode === null && owner.signalCode === null) {
+      owner.kill('SIGTERM')
+      await new Promise<void>(resolveExit => owner?.once('exit', resolveExit))
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('rejects a stale Console generation while the launcher is stopped', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-status-stale-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 4, startToken: 'stopped-launcher', state: 'stopped' })
+
+    // The generation check belongs to the status request in every launcher state, so a
+    // stopped launcher still rejects a stale --generation instead of answering.
+    await expect(consoleStatusLocalProcess(path, { expectedLauncherGeneration: 9 })).rejects.toMatchObject({ code: 'STALE_GENERATION' })
+    await expect(consoleStatusLocalProcess(path, { expectedLauncherGeneration: 4 })).resolves.toMatchObject({ launcherGeneration: 4 })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('never records a stopped Console when recovery cannot confirm its exit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-recovery-unconfirmed-'))
+  const path = join(root, 'config.toml')
+  let child: ReturnType<typeof spawnProcess> | undefined
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const enabled = await loadLocalConfig(path)
+    const startToken = 'recovery-console-token'
+    const entryPath = join(root, 'console-entry.mjs')
+    await writeFile(entryPath, 'setInterval(()=>{},1e3)\nprocess.once("SIGTERM", () => process.exit(0))\n')
+    child = spawnProcess(process.execPath, [entryPath, '--config', enabled.console!.configPath, '--launcher-start-token', startToken], { stdio: 'ignore' })
+    await new Promise<void>(resolveSpawn => child?.once('spawn', resolveSpawn))
+    await writeLocalInternalConsoleRuntime(enabled.internalPath!, {
+      enabled: true,
+      pid: child.pid,
+      generation: 1,
+      startToken,
+      entryPath,
+      state: 'online',
+      url: 'http://127.0.0.1:1',
+      origin: 'http://127.0.0.1:1',
+      identityRef: 'console:local',
+    })
+    // The user disables Console while the child is still live. Reloading drops the
+    // internal projection and carries the runtime row forward, so recovery sees a
+    // recorded child with no projection path and cannot confirm its exit.
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG.replace('[console]\nenabled = true', '[console]\nenabled = false'))
+    const disabled = await loadLocalConfig(path)
+    await writeLocalInternalLauncherState(disabled.internalPath!, { pid: 0, generation: 1, startToken: 'dead-launcher-token', state: 'running' })
+
+    // The unconfirmed child is reported and kept, never silently recorded as stopped.
+    await expect(stopLocalProcess(path)).rejects.toMatchObject({ code: 'STALE_OWNER' })
+    const recovered = await readLocalInternalConfig(disabled.internalPath!)
+    expect(recovered.consoleRuntime).toMatchObject({ state: 'retained', error: { code: 'CONSOLE_RETAINED' } })
+    expect(() => process.kill(child!.pid!, 0)).not.toThrow()
+  } finally {
+    if (child !== undefined && child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM')
+      await new Promise<void>(resolveExit => child?.once('exit', resolveExit))
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 20000)
+
+it('keeps a general launcher state read failure out of the Console terminal', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-status-console-general-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    await writeFile(config.internalPath!, 'not = = toml')
+    // The typed Console terminal belongs to the Console status command. A general launcher
+    // state read failure must stay a launcher error instead of masquerading as it.
+    await expect(statusLocalProcess(path)).rejects.not.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('surfaces a retained Console child while [console] is disabled', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-retained-disabled-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG.replace('[console]\nenabled = true', '[console]\nenabled = false'))
+    const config = await loadLocalConfig(path)
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 1, startToken: 'dead-launcher-token', state: 'running' })
+    // The user disabled Console while its child was still live, so a recorded child still
+    // holds the port. `disabled` would claim there is no child responsibility left.
+    await writeLocalInternalConsoleRuntime(config.internalPath!, {
+      state: 'retained',
+      pid: process.pid,
+      generation: 1,
+      error: { code: 'CONSOLE_RETAINED', message: 'Console child exit is unconfirmed' },
+    })
+    await expect(consoleStatusLocalProcess(path)).resolves.toMatchObject({ enabled: false, state: 'retained' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
+it('maps a mismatched work control row and a malformed internal state to CONSOLE_STATUS_UNAVAILABLE for Console status', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'at-console-work-control-stale-'))
+  const path = join(root, 'config.toml')
+  try {
+    await writeLocalConfig(path, V3_CONSOLE_RECOVERY_CONFIG)
+    const config = await loadLocalConfig(path)
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 1, startToken: 'console-stale-owner-token', state: 'running' })
+    await writeLocalInternalWorkControl(config.internalPath!, {
+      socketPath: join(dirname(config.internalPath!), '.internal', 'work-control.sock'),
+      launcherGeneration: 1,
+      launcherStartToken: 'console-stale-owner-token',
+    })
+    // The published control row keeps an older launcher generation than the persisted
+    // launcher. The status request must return the typed observation terminal instead of
+    // leaking a raw config error out of the control reader.
+    const internalText = await readFile(config.internalPath!, 'utf8')
+    await writeFile(config.internalPath!, internalText.replace('launcherGeneration = 1', 'launcherGeneration = 2'))
+    await expect(consoleStatusLocalProcess(path)).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+    // A malformed internal state is the same typed terminal.
+    await writeFile(config.internalPath!, 'not = = toml')
+    await expect(consoleStatusLocalProcess(path)).rejects.toMatchObject({ code: 'CONSOLE_STATUS_UNAVAILABLE' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)

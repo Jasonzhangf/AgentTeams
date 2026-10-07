@@ -447,7 +447,7 @@
     },
     {
       "gate_id": "teams-u5-console-lifecycle-design",
-      "status": "design",
+      "status": "partial",
       "required": true,
       "checks": [
         "U5 owns [consoleRuntime] PID/generation/startToken/state/url/origin/identity/error while [console] remains U2 projection/config",
@@ -458,7 +458,7 @@
         "Console offline does not affect bridge daemon Agent Work or Work drain",
         "status never invents online availability and never exposes credential values"
       ],
-      "note": "Design acceptance only. Planned black-box commands and evidence remain pending until U2 and U5 implementation."
+      "note": "Source contract and focused runtime/CLI checks are implemented. Installed lifecycle, real Console start/stop/status replay and browser acceptance remain downstream host gates."
     },
     {
       "gate_id": "teams-managed-session-contract",

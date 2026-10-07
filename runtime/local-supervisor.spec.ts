@@ -1,10 +1,12 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { expect, it } from 'vitest'
-import { createLocalSupervisor, localDaemonStatusProjectionPath, localWorkControlSocketPath } from './local-supervisor.ts'
+import { classifyLocalConsoleStatus, createLocalSupervisor, localDaemonStatusProjectionPath, localWorkControlSocketPath } from './local-supervisor.ts'
 import { planLocalProcesses } from './local-supervisor.ts'
-import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig, writeLocalInternalLauncherState } from './local-config.ts'
+import { loadLocalConfig, readLocalInternalConfig, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState } from './local-config.ts'
 import { sendLocalWorkControlRequest } from './local-work-control.ts'
 import type { LocalConfig } from './local-config.ts'
 
@@ -248,3 +250,60 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     await expect(inFlight).resolves.toMatchObject({ kind: 'work.error', error: { code: 'LOCAL_CONTROL_UNAVAILABLE' } })
   } finally { await rm(root, { recursive: true, force: true }) }
 })
+
+it('does not report online for a non-owned process or a closed Console listener', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'teams-console-ownership-'))
+  const childPath = join(root, 'console.mjs')
+  let child: ReturnType<typeof spawn> | undefined
+  try {
+    await writeFile(childPath, 'setInterval(() => {}, 1000)\nprocess.once("SIGTERM", () => process.exit(0))\n')
+    const startToken = 'console-owned-token'
+    const projectionPath = join(root, 'console.json')
+    await writeFile(projectionPath, JSON.stringify({ enabled: true }))
+    child = spawn(process.execPath, [childPath, '--config', projectionPath, '--launcher-start-token', startToken], { stdio: 'ignore' })
+    await once(child, 'spawn')
+    const baseConfig = {
+      version: 3 as const,
+      configPath: join(root, 'config.toml'),
+      internalPath: join(root, 'internal.toml'),
+      relay: { enabled: true, configPath: join(root, 'relay.json') },
+      daemons: [],
+      console: { enabled: true as const, configPath: projectionPath },
+      bridge: { enabled: true },
+    }
+    const internal = {
+      version: 2 as const,
+      daemons: {},
+      console: { projectionPath, config: JSON.stringify({ enabled: true }) },
+      consoleRuntime: {
+        enabled: true,
+        pid: child.pid,
+        generation: 1,
+        startToken,
+        entryPath: childPath,
+        state: 'online' as const,
+        url: 'http://127.0.0.1:1',
+        origin: 'http://127.0.0.1:1',
+        identityRef: 'console:local',
+      },
+    }
+    await expect(classifyLocalConsoleStatus(baseConfig, internal)).resolves.toMatchObject({ state: 'failed' })
+    expect((await classifyLocalConsoleStatus(baseConfig, internal)).pid).toBeUndefined()
+    const reusedPid = {
+      ...internal,
+      consoleRuntime: {
+        ...internal.consoleRuntime,
+        pid: process.pid,
+        entryPath: childPath,
+        startToken,
+      },
+    }
+    await expect(classifyLocalConsoleStatus(baseConfig, reusedPid)).resolves.toMatchObject({ state: 'failed' })
+  } finally {
+    if (child?.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM')
+      await once(child, 'exit')
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)

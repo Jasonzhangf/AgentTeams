@@ -12,6 +12,11 @@ const execFileAsync = promisify(execFile)
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const defaultPackRoot = resolve(root, 'generated', 'modules', 'teams-source', 'lib')
 const defaultEvidenceDir = resolve(root, 'generated', 'u1-receipts', `${Date.now()}-${process.pid}`)
+// The installed Console lifecycle gate owns one credential reference; the value
+// only ever exists in the smoke process environment and in this constant.
+const CONSOLE_USERNAME = 'installed-console'
+const CONSOLE_PASSWORD_ENV = 'AGENTTEAMS_INSTALLED_CONSOLE_PASSWORD'
+const CONSOLE_PASSWORD = 'installed-console-pass'
 
 function fail(message) {
   throw new Error(`package user smoke: ${message}`)
@@ -185,6 +190,16 @@ function parseCliStatus(stdout) {
   }
 }
 
+/** Parse the flat `key=value` Console status line printed by the public CLI. */
+function parseCliConsole(stdout) {
+  const fields = {}
+  for (const token of stdout.trim().split(/\s+/u)) {
+    const equals = token.indexOf('=')
+    if (equals > 0) fields[token.slice(0, equals)] = token.slice(equals + 1)
+  }
+  return fields
+}
+
 function fixtureConfigText(searchExecutable) {
   return `version = 3
 
@@ -238,6 +253,12 @@ capabilityId = "file-search"
 capabilityVersion = "1"
 operation = "search"
 demands = [{ resourceId = "search-slot", amount = 1 }]
+
+[console]
+enabled = true
+username = ${JSON.stringify(CONSOLE_USERNAME)}
+passwordEnv = ${JSON.stringify(CONSOLE_PASSWORD_ENV)}
+agentIds = ["installed-provider", "installed-receiver"]
 `
 }
 
@@ -407,9 +428,75 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
     assert(omittedDemands.includes('requires --demands for search-slot'),
       `installed Work open without --demands did not refuse the declared resource demand: ${omittedDemands}`)
 
+    // Installed Console lifecycle on the launcher's existing local control
+    // channel. The Console is an optional observation client: its own real
+    // listener must authenticate, stopping it must leave the launcher and both
+    // Agent daemons running, and new public Work must still execute without it.
+    const consoleStatusRaw = (await run(cli, ['console', 'status', '--config', configPath], { cwd: dirname(configPath), env: cliEnv })).stdout
+    const consoleStatus = parseCliConsole(consoleStatusRaw)
+    assert(consoleStatus.console === 'enabled' && consoleStatus.consoleState === 'online',
+      `installed console status is not online: ${consoleStatusRaw.trim()}`)
+    assert(consoleStatus.consoleCredential === 'configured',
+      `installed console status did not report the configured credential: ${consoleStatusRaw.trim()}`)
+    assert(!consoleStatusRaw.includes(CONSOLE_PASSWORD), 'installed console status printed the credential value')
+    assert(typeof consoleStatus.consoleUrl === 'string' && consoleStatus.consoleUrl.startsWith('http://127.0.0.1:'),
+      `installed console status did not publish a loopback url: ${consoleStatusRaw.trim()}`)
+    const consoleGeneration = Number(consoleStatus.consoleGeneration)
+    assert(Number.isSafeInteger(consoleGeneration) && consoleGeneration > 0,
+      `installed console generation is invalid: ${consoleStatusRaw.trim()}`)
+    const consolePid = Number(consoleStatus.consolePid)
+    assert(Number.isSafeInteger(consolePid) && consolePid > 0, `installed console pid is invalid: ${consoleStatusRaw.trim()}`)
+    const consoleUrl = consoleStatus.consoleUrl
+
+    const unauthenticatedConsole = await fetch(consoleUrl)
+    assert(unauthenticatedConsole.status === 401, `installed Console served an unauthenticated request: ${unauthenticatedConsole.status}`)
+    const consoleAuthorization = 'Basic ' + Buffer.from(`${CONSOLE_USERNAME}:${CONSOLE_PASSWORD}`).toString('base64')
+    const authenticatedConsole = await fetch(consoleUrl, { headers: { authorization: consoleAuthorization } })
+    assert(authenticatedConsole.status === 200, `installed Console rejected the configured credential: ${authenticatedConsole.status}`)
+    assert((await authenticatedConsole.text()).includes('<html'), 'installed Console did not serve the console page')
+    const crossSiteConsole = await fetch(consoleUrl, { headers: { authorization: consoleAuthorization, 'sec-fetch-site': 'cross-site' } })
+    assert(crossSiteConsole.status === 401, `installed Console accepted a cross-site request: ${crossSiteConsole.status}`)
+
+    const beforeConsoleStop = lifecycleState(configPath, installedRootReal)
+    const consoleStopRaw = (await run(cli, ['console', 'stop', '--config', configPath, '--generation', String(activeGeneration)],
+      { cwd: dirname(configPath), env: cliEnv })).stdout
+    const consoleStop = parseCliConsole(consoleStopRaw)
+    assert(consoleStop.consoleState === 'stopped', `installed console stop did not report a stopped console: ${consoleStopRaw.trim()}`)
+    await waitForProcessesGone([consolePid])
+    const afterConsoleStop = lifecycleState(configPath, installedRootReal)
+    assert(afterConsoleStop.launcher.pid === beforeConsoleStop.launcher.pid
+      && afterConsoleStop.launcher.generation === beforeConsoleStop.launcher.generation,
+      'installed console stop replaced the launcher')
+    assert(afterConsoleStop.processes.map(process => `${process.id}:${process.pid}`).join(',')
+      === beforeConsoleStop.processes.map(process => `${process.id}:${process.pid}`).join(','),
+      'installed console stop replaced an Agent daemon')
+
+    const workWithoutConsole = JSON.parse((await run(cli, ['work', 'submit', '--config', configPath, '--receiver', 'installed-receiver', '--payload', '{"query":"beta"}'],
+      { cwd: dirname(configPath), env: cliEnv })).stdout)
+    assert(workWithoutConsole.status === 'completed' && workWithoutConsole.business?.status === 'matched'
+      && Array.isArray(workWithoutConsole.business?.matches) && workWithoutConsole.business.matches.length > 0,
+      `installed Work submit after console stop did not return a real provider result: ${JSON.stringify(workWithoutConsole).slice(0, 300)}`)
+
+    const consoleRestartRaw = (await run(cli, ['console', 'start', '--config', configPath, '--generation', String(activeGeneration)],
+      { cwd: dirname(configPath), env: cliEnv })).stdout
+    const consoleRestart = parseCliConsole(consoleRestartRaw)
+    assert(consoleRestart.consoleState === 'online', `installed console restart did not reach online: ${consoleRestartRaw.trim()}`)
+    const restartedConsoleGeneration = Number(consoleRestart.consoleGeneration)
+    assert(Number.isSafeInteger(restartedConsoleGeneration) && restartedConsoleGeneration > consoleGeneration,
+      `installed console restart did not advance the console generation: ${consoleRestartRaw.trim()}`)
+    const restartedConsolePid = Number(consoleRestart.consolePid)
+    assert(Number.isSafeInteger(restartedConsolePid) && restartedConsolePid > 0 && restartedConsolePid !== consolePid,
+      `installed console restart reused the console pid: ${consoleRestartRaw.trim()}`)
+
+    const forbiddenConsoleFlag = await runExpectFailure(cli, ['console', 'start', '--config', configPath, '--port', '1234'],
+      { cwd: dirname(configPath), env: cliEnv })
+    assert(forbiddenConsoleFlag.includes('unknown argument: --port'),
+      `installed console start accepted a forbidden flag: ${forbiddenConsoleFlag}`)
     // A lost local socket after the CLI already fixed the binding must still
     // return a typed failed receipt carrying the generated identity and the
     // fixed binding, so the caller can query or close with the original identity.
+    // It runs after the Console cases because it removes the live Work control
+    // socket path for the rest of this generation.
     const workControlSocket = parseToml(readFileSync(join(dirname(configPath), 'internal.toml'), 'utf8')).workControl?.socketPath
     assert(typeof workControlSocket === 'string' && workControlSocket !== '', 'installed lifecycle has no recorded Work control socket')
     rmSync(workControlSocket, { force: true })
@@ -509,6 +596,23 @@ async function runInstalledLifecycle({ cli, cliEnv, configPath, installedRootRea
             identityPreserved: true,
           },
         },
+      },
+      console_lifecycle: {
+        status: consoleStatus.consoleState,
+        credential: consoleStatus.consoleCredential,
+        generation: consoleGeneration,
+        pid: consolePid,
+        url: consoleUrl,
+        unauthenticated: unauthenticatedConsole.status,
+        authenticated: authenticatedConsole.status,
+        crossSite: crossSiteConsole.status,
+        stopState: consoleStop.consoleState,
+        launcherAndDaemonsUnchanged: true,
+        workAfterStop: workWithoutConsole.status,
+        restartState: consoleRestart.consoleState,
+        restartedGeneration: restartedConsoleGeneration,
+        consolePidChanged: restartedConsolePid !== consolePid,
+        forbiddenFlagRejected: true,
       },
       final_stop: { generation: restartParsed.generation, stdout: secondStop.stdout, stderr: secondStop.stderr },
     }
@@ -670,6 +774,10 @@ export async function runPackageUserSmoke(options = {}) {
       HOME: testHome,
       AGENTTEAMS_INSTALLED_PROVIDER_AUTH: 'fixture-provider',
       AGENTTEAMS_INSTALLED_RECEIVER_AUTH: 'fixture-receiver',
+      // The Console registers its own relay identity, so its link credential is
+      // admitted by the relay exactly like an Agent credential.
+      AGENTTEAMS_CONSOLE_AUTH: 'fixture-console-link',
+      [CONSOLE_PASSWORD_ENV]: CONSOLE_PASSWORD,
     }
     const init = await run(cli, ['init'], { cwd: temporaryRoot, env: cliEnv })
     const status = await run(cli, ['status'], { cwd: temporaryRoot, env: cliEnv })

@@ -3,8 +3,9 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { configSourceHash, createTomlRuntimeConfigPersistence, defaultLocalConfigPath, initializeLocalConfig, loadLocalConfig, parseConfigUserSections, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, resumePendingMigration, writeLocalConfig, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalInternalWorkControl } from './local-config.ts'
+import { configSourceHash, createTomlRuntimeConfigPersistence, defaultLocalConfigPath, initializeLocalConfig, loadLocalConfig, parseConfigUserSections, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, resumePendingMigration, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalInternalWorkControl } from './local-config.ts'
 import { parse as parseToml } from 'toml'
+import { loadConsoleProcessConfig } from './console-process.ts'
 import { providerIntentFingerprint } from '../config/runtime-config.ts'
 
 it('loads a persisted TOML launcher config and resolves paths relative to the file', async () => {
@@ -687,6 +688,155 @@ it('projects enabled v3 service intent into daemon child config without treating
       }],
     })
     expect(provider.endpoint).not.toHaveProperty('capabilities')
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('compiles an enabled [console] intent into a system-owned projection and removes it when disabled', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-v3-console-projection-'))
+  const agentteams = join(directory, '.agentteams')
+  const configPath = join(agentteams, 'config.toml')
+  try {
+    const enabledText = `${V3_PRIMARY_CONFIG}
+[console]
+enabled = true
+username = "admin"
+passwordEnv = "AGENTTEAMS_CONSOLE_PASSWORD"
+agentIds = ["provider", "receiver"]
+`
+    await writeLocalConfig(configPath, enabledText)
+    const loaded = await loadLocalConfig(configPath)
+    expect(loaded.console).toEqual({ enabled: true, configPath: join(agentteams, '.internal', 'projections', 'console.json') })
+    const internal = await readLocalInternalConfig(loaded.internalPath!)
+    expect(internal.console?.projectionPath).toBe(loaded.console!.configPath)
+    const projection = JSON.parse(internal.console!.config!) as {
+      version: number; enabled: boolean; identity: { agentId: string }; listen: { host: string; port: number; origin: string }
+      auth: { username: string; passwordEnv: string }; staticRoot: string; uiRoot: string; relay: { endpoint: string }
+    }
+    expect(projection.version).toBe(1)
+    expect(projection.enabled).toBe(true)
+    expect(projection.identity.agentId).toBe('__console')
+    expect(projection.listen.host).toBe('127.0.0.1')
+    expect(projection.listen.port).toBeGreaterThan(0)
+    expect(projection.listen.origin).toBe(`http://127.0.0.1:${projection.listen.port}`)
+    expect(projection.auth).toEqual({ username: 'admin', passwordEnv: 'AGENTTEAMS_CONSOLE_PASSWORD' })
+    expect(projection.staticRoot).toMatch(/console-host\/static$/)
+    expect(projection.uiRoot).toMatch(/ui\/teams-console$/)
+    expect(projection.relay.endpoint).toMatch(/^wss:\/\/127\.0\.0\.1:\d+$/)
+    // The materialized projection is the Console child's only config source and
+    // the launcher status owner's enablement evidence, so it must satisfy the
+    // child loader contract. An empty environment fails on the missing
+    // credential, never on an unsupported projection field.
+    await projectLocalChildConfigs(loaded.internalPath!)
+    await expect(loadConsoleProcessConfig(loaded.console!.configPath, {})).rejects.toThrow(/credential/)
+    const persistedPort = projection.listen.port
+
+    const reloaded = await loadLocalConfig(configPath)
+    const reused = JSON.parse((await readLocalInternalConfig(reloaded.internalPath!)).console!.config!) as { listen: { port: number } }
+    expect(reused.listen.port).toBe(persistedPort)
+
+    const disabledText = `${V3_PRIMARY_CONFIG}
+[console]
+enabled = false
+`
+    await writeLocalConfig(configPath, disabledText)
+    const disabled = await loadLocalConfig(configPath)
+    expect(disabled.console).toBeUndefined()
+    expect((await readLocalInternalConfig(disabled.internalPath!)).console).toBeUndefined()
+    expect(await readFile(disabled.internalPath!, 'utf8')).not.toContain('[console]')
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('round-trips [consoleRuntime] through the typed patch port without touching U2 or launcher fields', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-console-runtime-'))
+  const internalPath = join(directory, '.agentteams', 'internal.toml')
+  try {
+    await mkdir(join(directory, '.agentteams'), { recursive: true })
+    await writeFile(internalPath, `version = 2
+sourceRevision = 4
+sourceHash = "sha256:source"
+sourcePath = ${JSON.stringify(join(directory, '.agentteams', 'config.toml'))}
+
+[launcher]
+pid = 101
+generation = 9
+startToken = "launcher-9"
+state = "running"
+
+[console]
+projectionPath = ${JSON.stringify(join(directory, '.agentteams', '.internal', 'projections', 'console.json'))}
+config = "{\\"version\\":1}"
+`)
+    await writeLocalInternalConsoleRuntime(internalPath, {
+      enabled: true,
+      pid: 202,
+      generation: 1,
+      startToken: 'console-1',
+      state: 'starting',
+    })
+    await writeLocalInternalConsoleRuntime(internalPath, {
+      enabled: true,
+      pid: 202,
+      generation: 1,
+      startToken: 'console-1',
+      state: 'online',
+      url: 'http://127.0.0.1:51123',
+      origin: 'http://127.0.0.1:51123',
+      identityRef: 'console:local',
+      error: null,
+    })
+    const online = await readLocalInternalConfig(internalPath)
+    expect(online.consoleRuntime).toEqual({
+      enabled: true,
+      pid: 202,
+      generation: 1,
+      startToken: 'console-1',
+      state: 'online',
+      url: 'http://127.0.0.1:51123',
+      origin: 'http://127.0.0.1:51123',
+      identityRef: 'console:local',
+    })
+    expect(online.console).toMatchObject({ projectionPath: join(directory, '.agentteams', '.internal', 'projections', 'console.json') })
+    expect(online.launcher).toMatchObject({ pid: 101, generation: 9, startToken: 'launcher-9', state: 'running' })
+
+    await writeLocalInternalConsoleRuntime(internalPath, { enabled: true, state: 'stopped', pid: null, startToken: null, url: null, origin: null, error: null })
+    const stopped = await readLocalInternalConfig(internalPath)
+    expect(stopped.consoleRuntime).toMatchObject({ enabled: true, generation: 1, state: 'stopped', identityRef: 'console:local' })
+    expect(stopped.console).toBeDefined()
+    expect(stopped.launcher).toMatchObject({ pid: 101, generation: 9, state: 'running' })
+
+    await expect(writeLocalInternalConsoleRuntime(internalPath, { generation: 1, state: 'online' } as never)).rejects.toThrow(/requires/)
+    await expect(writeLocalInternalConsoleRuntime(internalPath, { generation: 0 })).rejects.toThrow(/generation must not move backwards/)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('rejects unknown or malformed [consoleRuntime] before any rewrite', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-console-runtime-schema-'))
+  const internalPath = join(directory, '.agentteams', 'internal.toml')
+  const base = `version = 2
+sourceRevision = 4
+sourceHash = "sha256:source"
+sourcePath = ${JSON.stringify(join(directory, '.agentteams', 'config.toml'))}
+
+[consoleRuntime]
+enabled = true
+pid = 202
+generation = 1
+startToken = "console-1"
+state = "online"
+url = "http://127.0.0.1:51123"
+origin = "http://127.0.0.1:51123"
+identityRef = "console:local"
+`
+  try {
+    await mkdir(join(directory, '.agentteams'), { recursive: true })
+    await writeFile(internalPath, `${base}unknown = "drop-me"\n`)
+    await expect(readLocalInternalConfig(internalPath)).rejects.toThrow(/unsupported fields/)
+
+    await writeFile(internalPath, base.replace('pid = 202\n', 'pid = -1\n'))
+    await expect(readLocalInternalConfig(internalPath)).rejects.toThrow(/pid must be a positive safe integer/)
+
+    await writeFile(internalPath, base.replace('startToken = "console-1"\n', '').replace('generation = 1\n', ''))
+    await expect(readLocalInternalConfig(internalPath)).rejects.toThrow(/state=online requires/)
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 

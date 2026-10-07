@@ -21,6 +21,7 @@ const RUNTIME_ARTIFACTS = {
   localConfig: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-config.js'),
   localProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-process.js'),
   localWorkControl: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-work-control.js'),
+  consoleProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'console-process.js'),
   relay: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'server', 'relay-process.js'),
   agent: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'agent-process.js'),
 }
@@ -28,6 +29,7 @@ const RUNTIME_ARTIFACTS = {
 const RUNTIME_CHILD_ENTRIES = {
   relayEntry: RUNTIME_ARTIFACTS.relay,
   agentEntry: RUNTIME_ARTIFACTS.agent,
+  consoleEntry: RUNTIME_ARTIFACTS.consoleProcess,
 }
 
 export const DEFAULT_CONFIG_TEXT = `# AgentTeams user config. This is the only file you normally edit.
@@ -97,11 +99,15 @@ export class AgentTeamsCliError extends Error {
 }
 
 function usage() {
-  return `usage: ${CLI_NAME} init|start|status|work|stop [--config <path>] [--generation <n>]`
+  return `usage: ${CLI_NAME} init|start|status|work|stop|console status|start|stop [--config <path>] [--generation <n>]`
 }
 
 function workUsage() {
   return `usage: ${CLI_NAME} work submit|query|open|request|close --config <path> [flags]`
+}
+
+function consoleUsage() {
+  return `usage: ${CLI_NAME} console status|start|stop [--config <path>] [--generation <n>]`
 }
 
 function valueAfter(argv, index, flag) {
@@ -116,6 +122,7 @@ function parseArgs(argv, options) {
     throw new AgentTeamsCliError(usage())
   }
   if (command === 'work') return parseWorkArgs(argv.slice(1), options)
+  if (command === 'console') return parseConsoleArgs(argv.slice(1), options)
   if (!['init', 'start', 'status', 'stop'].includes(command)) {
     throw new AgentTeamsCliError(`unknown command: ${command}\n${usage()}`)
   }
@@ -157,6 +164,47 @@ function parseArgs(argv, options) {
 
 function defaultConfigPath(home) {
   return resolve(home ?? homedir(), '.agentteams', 'config.toml')
+}
+
+const CONSOLE_SUBCOMMANDS = ['status', 'start', 'stop']
+
+function parseConsoleArgs(argv, options) {
+  const subcommand = argv[0]
+  if (subcommand === undefined || subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    throw new AgentTeamsCliError(consoleUsage())
+  }
+  if (!CONSOLE_SUBCOMMANDS.includes(subcommand)) throw new AgentTeamsCliError(`unknown console subcommand: ${subcommand}\n${consoleUsage()}`)
+  const parsed = {
+    command: 'console',
+    subcommand,
+    configPath: options.config === undefined ? undefined : resolve(options.config),
+    generation: undefined,
+  }
+  for (let index = 1; index < argv.length; index += 1) {
+    const argument = argv[index]
+    const equals = argument.indexOf('=')
+    const name = equals > 0 ? argument.slice(0, equals) : argument
+    const inline = equals > 0 ? argument.slice(equals + 1) : undefined
+    const take = flag => {
+      if (inline !== undefined) {
+        if (inline.length === 0) throw new AgentTeamsCliError(`${flag} requires a value`)
+        return inline
+      }
+      const value = valueAfter(argv, index, flag)
+      index += 1
+      return value
+    }
+    if (name === '--config') {
+      parsed.configPath = resolve(take(argument))
+    } else if (name === '--generation') {
+      const generation = Number(take(argument))
+      if (!Number.isSafeInteger(generation) || generation < 0) throw new AgentTeamsCliError('--generation must be a non-negative integer')
+      parsed.generation = generation
+    } else {
+      throw new AgentTeamsCliError(`unknown argument: ${argument}\n${consoleUsage()}`)
+    }
+  }
+  return parsed
 }
 
 const WORK_SUBCOMMANDS = ['submit', 'query', 'open', 'request', 'close']
@@ -535,7 +583,25 @@ function formatStatus(prefix, status, includeEndpoints = false) {
     else if (!Array.isArray(status.endpoints)) pieces.push('endpoints=malformed')
     else pieces.push(...status.endpoints.map(formatEndpoint))
   }
+  if (includeEndpoints && status.console !== undefined && status.console !== null) pieces.push(...formatConsole(status.console))
   return pieces.join(' ')
+}
+
+function formatConsole(consoleStatus) {
+  const pieces = [
+    `console=${consoleStatus.enabled === true ? 'enabled' : 'disabled'}`,
+    `consoleState=${consoleStatus.state}`,
+    `consoleGeneration=${consoleStatus.generation}`,
+    `consoleCredential=${consoleStatus.credential === 'configured' ? 'configured' : 'missing'}`,
+  ]
+  if (consoleStatus.url !== undefined) pieces.push(`consoleUrl=${consoleStatus.url}`)
+  if (consoleStatus.pid !== undefined) pieces.push(`consolePid=${consoleStatus.pid}`)
+  if (consoleStatus.error !== undefined) pieces.push(`consoleError=${consoleStatus.error.code}:${consoleStatus.error.message}`)
+  return pieces
+}
+
+function formatConsoleStatus(prefix, consoleStatus) {
+  return [prefix, `launcher=${consoleStatus.launcherState}`, ...formatConsole(consoleStatus)].join(' ')
 }
 
 async function pathExists(path) {
@@ -613,6 +679,15 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
   }
   if (parsed.command === 'work') {
     return await workCommand(parsed, options)
+  }
+  if (parsed.command === 'console') {
+    const runtime = options.runtime ?? await defaultRuntime()
+    const generation = parsed.generation
+    const lifecycleOptions = generation === undefined ? {} : { expectedLauncherGeneration: generation }
+    if (parsed.subcommand === 'status') return formatConsoleStatus('console', await runtime.consoleStatusLocalProcess(configPath, lifecycleOptions))
+    if (parsed.subcommand === 'start') return formatConsoleStatus('console', await runtime.consoleStartLocalProcess(configPath, lifecycleOptions))
+    if (parsed.subcommand === 'stop') return formatConsoleStatus('console', await runtime.consoleStopLocalProcess(configPath, lifecycleOptions))
+    throw new AgentTeamsCliError(`unsupported console subcommand: ${parsed.subcommand}`)
   }
   if (parsed.command === 'stop') {
     const runtime = options.runtime ?? await defaultRuntime()

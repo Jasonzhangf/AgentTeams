@@ -235,6 +235,77 @@ describe('agentteams CLI', () => {
     expect(calls[0].options.agentEntry).toMatch(/agent-process\.js$/)
   })
 
+  it('exposes only the Console lifecycle verbs and adds Console fields to status without printing credentials', async () => {
+    const configPath = '/tmp/agentteams-cli-console.toml'
+    const consoleStatus = {
+      enabled: true,
+      state: 'online',
+      generation: 4,
+      launcherState: 'running',
+      launcherGeneration: 7,
+      credential: 'configured',
+      url: 'http://127.0.0.1:51234',
+      origin: 'http://127.0.0.1:51234',
+      pid: 4242,
+      identityRef: 'console:local',
+    } as const
+    const calls: Array<{ readonly kind: string; readonly path: string; readonly options: Record<string, unknown> }> = []
+    const runtime = {
+      statusLocalProcess: async (path: string) => ({
+        configPath: path,
+        internalPath: '/tmp/internal.toml',
+        pid: 12,
+        generation: 7,
+        state: 'running',
+        endpoints: [],
+        console: consoleStatus,
+      }),
+      consoleStatusLocalProcess: async (path: string, options: Record<string, unknown>) => {
+        calls.push({ kind: 'status', path, options })
+        return consoleStatus
+      },
+      consoleStartLocalProcess: async (path: string, options: Record<string, unknown>) => {
+        calls.push({ kind: 'start', path, options })
+        return consoleStatus
+      },
+      consoleStopLocalProcess: async (path: string, options: Record<string, unknown>) => {
+        calls.push({ kind: 'stop', path, options })
+        return consoleStatus
+      },
+    }
+
+    const status = await agentteamsCommand(['status', '--config', configPath], { runtime })
+    expect(status).toContain('status state=running generation=7')
+    expect(status).toContain(`config=${configPath}`)
+    expect(status).toContain('internal=/tmp/internal.toml')
+    expect(status).toContain('pid=12')
+    expect(status).toContain('console=enabled')
+    expect(status).toContain('consoleState=online')
+    expect(status).toContain('consoleGeneration=4')
+    expect(status).toContain('consoleCredential=configured')
+    expect(status).toContain('consoleUrl=http://127.0.0.1:51234')
+    expect(status).toContain('consolePid=4242')
+    expect(status).not.toContain('password')
+
+    const statusOutput = await agentteamsCommand(['console', 'status', '--config', configPath], { runtime })
+    const startOutput = await agentteamsCommand(['console', 'start', '--config', configPath, '--generation', '7'], { runtime })
+    const stopOutput = await agentteamsCommand(['console', 'stop', '--config', configPath, '--generation=7'], { runtime })
+    expect(statusOutput).toContain('console launcher=running console=enabled')
+    expect(startOutput).toContain('console launcher=running console=enabled')
+    expect(stopOutput).toContain('console launcher=running console=enabled')
+    expect(calls).toEqual([
+      { kind: 'status', path: configPath, options: {} },
+      { kind: 'start', path: configPath, options: { expectedLauncherGeneration: 7 } },
+      { kind: 'stop', path: configPath, options: { expectedLauncherGeneration: 7 } },
+    ])
+
+    for (const flag of ['--port', '--url', '--assets', '--username', '--password']) {
+      await expect(agentteamsCommand(['console', 'start', '--config', configPath, flag, 'value'], { runtime }))
+        .rejects.toThrow(new RegExp(`unknown argument: ${flag}`))
+    }
+    expect(calls).toHaveLength(3)
+  })
+
   it('builds service-only public Work frames with explicit receiver and fresh identities', async () => {
     const context = await initializeWorkCommandHome()
     const frames: LocalWorkControlRequest[] = []

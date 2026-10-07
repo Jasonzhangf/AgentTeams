@@ -1,12 +1,14 @@
 import { chmod, lstat, mkdir, open, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { createHash, createPrivateKey, createPublicKey, randomUUID, X509Certificate } from 'node:crypto'
 import { parse as parseToml } from 'toml'
 import { createServer as createNetServer } from 'node:net'
 import { promisify } from 'node:util'
 import { providerIntentFingerprint, RuntimeConfigError } from '../config/runtime-config.ts'
+import { processAlive } from './local-ownership.ts'
 import type {
   AgentModelBinding,
   ConfigApplyError,
@@ -64,9 +66,16 @@ export interface LocalConfig {
   readonly configPath: string
   readonly relay: LocalRelaySpec
   readonly daemons: readonly LocalDaemonSpec[]
+  /** U2 projection ref for the optional Console child; absent when console is disabled. */
+  readonly console?: LocalConsoleSpec
   readonly internalPath?: string
   readonly bridge?: { readonly enabled: boolean }
   readonly v3Input?: { readonly agents: Readonly<Record<string, unknown>>; readonly console?: Readonly<Record<string, unknown>> }
+}
+
+export interface LocalConsoleSpec {
+  readonly enabled: true
+  readonly configPath: string
 }
 
 export interface LocalInternalConfig {
@@ -142,6 +151,7 @@ export interface LocalInternalConsoleRuntime {
   readonly pid?: number
   readonly generation?: number
   readonly startToken?: string
+  readonly entryPath?: string
   readonly state?: ConsoleRuntimeState
   readonly url?: string
   readonly origin?: string
@@ -524,6 +534,7 @@ function serializeLocalInternalConfig(internal: LocalInternalConfig): string {
       ...(runtime.pid === undefined ? {} : { pid: runtime.pid }),
       ...(runtime.generation === undefined ? {} : { generation: runtime.generation }),
       ...(runtime.startToken === undefined ? {} : { startToken: runtime.startToken }),
+      ...(runtime.entryPath === undefined ? {} : { entryPath: runtime.entryPath }),
       ...(runtime.state === undefined ? {} : { state: runtime.state }),
       ...(runtime.url === undefined ? {} : { url: runtime.url }),
       ...(runtime.origin === undefined ? {} : { origin: runtime.origin }),
@@ -681,11 +692,54 @@ export interface ConsoleRuntimePatch {
   readonly pid?: number | null
   readonly generation?: number
   readonly startToken?: string | null
+  readonly entryPath?: string | null
   readonly state?: ConsoleRuntimeState
   readonly url?: string | null
   readonly origin?: string | null
   readonly identityRef?: string | null
   readonly error?: ConsoleRuntimeError | null
+}
+
+function validateConsoleRuntime(value: LocalInternalConsoleRuntime, label = 'consoleRuntime'): void {
+  if (value.generation !== undefined && (!Number.isSafeInteger(value.generation) || value.generation < 0)) throw new LocalConfigError(`${label}.generation must be a non-negative safe integer`)
+  if (value.pid !== undefined && (!Number.isSafeInteger(value.pid) || value.pid <= 0)) throw new LocalConfigError(`${label}.pid must be a positive safe integer`)
+  if (value.error !== undefined && (typeof value.error.code !== 'string' || value.error.code.length === 0 || typeof value.error.message !== 'string' || value.error.message.length === 0)) {
+    throw new LocalConfigError(`${label}.error requires a typed code and non-empty message`)
+  }
+  for (const key of ['url', 'origin'] as const) {
+    const candidate = value[key]
+    if (candidate === undefined) continue
+    let parsed: URL
+    try { parsed = new URL(candidate) } catch { throw new LocalConfigError(`${label}.${key} must be an absolute URL`) }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new LocalConfigError(`${label}.${key} must be http(s)`)
+  }
+  switch (value.state) {
+    case 'starting':
+      if (value.pid === undefined || value.startToken === undefined) throw new LocalConfigError(`${label} state=starting requires pid and startToken`)
+      break
+    case 'online':
+      for (const key of ['pid', 'startToken', 'generation', 'url', 'origin', 'identityRef'] as const) {
+        if (value[key] === undefined) throw new LocalConfigError(`${label} state=online requires ${key}`)
+      }
+      if (value.error !== undefined) throw new LocalConfigError(`${label} state=online must clear error`)
+      break
+    case 'stopped':
+    case 'disabled':
+      for (const key of ['pid', 'startToken', 'url', 'origin', 'error'] as const) {
+        if (value[key] !== undefined) throw new LocalConfigError(`${label} state=${value.state} must clear ${key}`)
+      }
+      break
+    case 'failed':
+      if (value.error === undefined) throw new LocalConfigError(`${label} state=failed requires a typed error`)
+      if (value.url !== undefined || value.origin !== undefined) throw new LocalConfigError(`${label} state=failed must clear url and origin`)
+      break
+    case 'stopping':
+    case 'retained':
+    case undefined:
+      break
+    default:
+      throw new LocalConfigError(`${label}.state is invalid`)
+  }
 }
 
 function applyConsoleRuntimePatch(current: LocalInternalConsoleRuntime, patch: ConsoleRuntimePatch): LocalInternalConsoleRuntime {
@@ -696,47 +750,24 @@ function applyConsoleRuntimePatch(current: LocalInternalConsoleRuntime, patch: C
     pid: value(patch.pid, current.pid),
     generation: patch.generation ?? current.generation,
     startToken: value(patch.startToken, current.startToken),
+    entryPath: value(patch.entryPath, current.entryPath),
     state: patch.state ?? current.state,
     url: value(patch.url, current.url),
     origin: value(patch.origin, current.origin),
     identityRef: value(patch.identityRef, current.identityRef),
     error: value(patch.error, current.error),
   }
-  if (next.generation !== undefined && (!Number.isSafeInteger(next.generation) || next.generation < 0)) throw new LocalConfigError('consoleRuntime.generation must be a non-negative safe integer')
-  if (next.pid !== undefined && (!Number.isSafeInteger(next.pid) || next.pid <= 0)) throw new LocalConfigError('consoleRuntime.pid must be a positive safe integer')
-  if (next.error !== undefined && (typeof next.error.code !== 'string' || next.error.code.length === 0 || typeof next.error.message !== 'string' || next.error.message.length === 0)) {
-    throw new LocalConfigError('consoleRuntime.error requires a typed code and non-empty message')
+  if (next.state === 'stopped' || next.state === 'disabled') {
+    const terminal = { ...next, pid: undefined, startToken: undefined, url: undefined, origin: undefined, error: undefined }
+    validateConsoleRuntime(terminal)
+    return terminal
   }
-  for (const key of ['url', 'origin'] as const) {
-    const candidate = next[key]
-    if (candidate === undefined) continue
-    let parsed: URL
-    try { parsed = new URL(candidate) } catch { throw new LocalConfigError(`consoleRuntime.${key} must be an absolute URL`) }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new LocalConfigError(`consoleRuntime.${key} must be http(s)`)
+  if (next.state === 'failed') {
+    const failed = { ...next, url: undefined, origin: undefined }
+    validateConsoleRuntime(failed)
+    return failed
   }
-  switch (next.state) {
-    case 'starting':
-      if (next.pid === undefined || next.startToken === undefined) throw new LocalConfigError('consoleRuntime state=starting requires pid and startToken')
-      break
-    case 'online':
-      for (const key of ['pid', 'startToken', 'generation', 'url', 'origin', 'identityRef'] as const) {
-        if (next[key] === undefined) throw new LocalConfigError(`consoleRuntime state=online requires ${key}`)
-      }
-      if (next.error !== undefined) throw new LocalConfigError('consoleRuntime state=online must clear error')
-      break
-    case 'stopped':
-    case 'disabled':
-      return { ...next, pid: undefined, startToken: undefined, url: undefined, origin: undefined, error: undefined }
-    case 'failed':
-      if (next.error === undefined) throw new LocalConfigError('consoleRuntime state=failed requires a typed error')
-      return { ...next, url: undefined, origin: undefined }
-    case 'stopping':
-    case 'retained':
-    case undefined:
-      break
-    default:
-      throw new LocalConfigError('consoleRuntime.state is invalid')
-  }
+  validateConsoleRuntime(next)
   return next
 }
 
@@ -755,11 +786,6 @@ export async function writeLocalInternalConsoleRuntime(path: string, patch: Read
     const next = applyConsoleRuntimePatch(current, patch)
     return writeLocalInternalConfig(internalPath, { ...existing, version: existing.version, consoleRuntime: next, updatedAt: new Date().toISOString() })
   })
-}
-
-function processAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true }
-  catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' }
 }
 
 function launcherOwnershipPath(path: string): string {
@@ -836,20 +862,25 @@ export async function withLocalInternalConfigLock<T>(path: string, task: () => P
 const CONSOLE_RUNTIME_STATES = ['disabled', 'stopped', 'starting', 'online', 'stopping', 'failed', 'retained'] as const
 
 function parseConsoleRuntimeTable(input: Record<string, unknown>): LocalInternalConsoleRuntime {
-  return {
+  fields(input, ['enabled', 'pid', 'generation', 'startToken', 'entryPath', 'state', 'url', 'origin', 'identityRef', 'error'], 'consoleRuntime')
+  const parsed: LocalInternalConsoleRuntime = {
     ...(input.enabled === undefined ? {} : { enabled: boolean(input.enabled, true, 'consoleRuntime.enabled') }),
     ...(input.pid === undefined ? {} : { pid: optionalNumber(input.pid, 'consoleRuntime.pid') }),
     ...(input.generation === undefined ? {} : { generation: optionalNumber(input.generation, 'consoleRuntime.generation') }),
     ...(input.startToken === undefined ? {} : { startToken: requiredString(input.startToken, 'consoleRuntime.startToken') }),
+    ...(input.entryPath === undefined ? {} : { entryPath: requiredString(input.entryPath, 'consoleRuntime.entryPath') }),
     ...(input.state === undefined ? {} : { state: oneOf(input.state, CONSOLE_RUNTIME_STATES, 'consoleRuntime.state') }),
     ...(input.url === undefined ? {} : { url: requiredString(input.url, 'consoleRuntime.url') }),
     ...(input.origin === undefined ? {} : { origin: requiredString(input.origin, 'consoleRuntime.origin') }),
     ...(input.identityRef === undefined ? {} : { identityRef: requiredString(input.identityRef, 'consoleRuntime.identityRef') }),
     ...(input.error === undefined ? {} : (() => {
       const errorInput = object(input.error, 'consoleRuntime.error')
+      fields(errorInput, ['code', 'message'], 'consoleRuntime.error')
       return { error: { code: requiredString(errorInput.code, 'consoleRuntime.error.code'), message: requiredString(errorInput.message, 'consoleRuntime.error.message') } }
     })()),
   }
+  validateConsoleRuntime(parsed)
+  return parsed
 }
 
 function parseConfigRuntimeTable(input: Record<string, unknown>): LocalInternalConfigRuntime {
@@ -1081,6 +1112,11 @@ function parseProjectionConfig(config: string, projectionPath: string): Record<s
   }
 }
 
+export function parseLocalConsoleProjectionConfig(config: string | undefined): Record<string, unknown> | undefined {
+  if (config === undefined) return undefined
+  return parseProjectionConfig(config, 'internal console')
+}
+
 function readExistingProjection(config: string | undefined): TomlRecord | undefined {
   if (config === undefined) return undefined
   return parseProjectionConfig(config, 'internal projection')
@@ -1232,7 +1268,11 @@ function relayCredentialEnv(agentId: string): string {
 }
 
 async function pickOrReusePort(internal: LocalInternalConfig | undefined, key: 'relay' | string, fallback: () => Promise<number>): Promise<number> {
-  const persisted = key === 'relay' ? internal?.relay?.config : internal?.daemons?.[key]?.config
+  const persisted = key === 'relay'
+    ? internal?.relay?.config
+    : key === 'console'
+      ? internal?.console?.config
+      : internal?.daemons?.[key]?.config
   if (persisted !== undefined) {
     const value = parseProjectionConfig(persisted, `internal ${key} projection`) as { listen?: { port?: unknown }; leasePort?: unknown }
     const port = value.listen?.port ?? value.leasePort
@@ -1242,6 +1282,32 @@ async function pickOrReusePort(internal: LocalInternalConfig | undefined, key: '
     return port as number
   }
   return fallback()
+}
+
+const CONSOLE_IDENTITY = {
+  hostId: 'local',
+  machineId: 'local',
+  agentId: '__console',
+  accountId: 'local',
+  agentKind: 'custom' as const,
+  label: 'AgentTeams Console',
+}
+
+const CONSOLE_CREDENTIAL_ENV = 'AGENTTEAMS_CONSOLE_AUTH'
+
+/**
+ * Asset roots are derived from the installed package, never from user intent.
+ * Source runs resolve to the repository root; compiled runtime-lib runs resolve
+ * to the package root three directories above the emitted runtime directory.
+ */
+function consoleAssetRoots(): { readonly staticRoot: string; readonly uiRoot: string } {
+  const runtimeDirectory = dirname(fileURLToPath(import.meta.url))
+  const tail = runtimeDirectory.split(/[\\/]/).slice(-3).join('/')
+  const packageRoot = tail === 'generated/runtime-lib/runtime' ? resolve(runtimeDirectory, '..', '..', '..') : resolve(runtimeDirectory, '..')
+  return {
+    staticRoot: resolve(packageRoot, 'console-host', 'static'),
+    uiRoot: resolve(packageRoot, 'ui', 'teams-console'),
+  }
 }
 
 interface CompiledV3Agent {
@@ -1419,16 +1485,50 @@ async function compileV3Config(
       const consolePath = resolve(projectionDirectory, 'console.json')
       const consolePort = await pickOrReusePort(existing, 'console', availableTcpPort)
       const existingConsole = readExistingProjection(existing?.console?.config)
+      const assets = consoleAssetRoots()
+      const agentIds = consoleInput.agentIds === undefined ? [] : (() => {
+        if (!Array.isArray(consoleInput.agentIds) || consoleInput.agentIds.some(id => typeof id !== 'string' || id.length === 0)
+          || new Set(consoleInput.agentIds).size !== consoleInput.agentIds.length) {
+          throw new LocalConfigError('console.agentIds must be an array of unique non-empty strings')
+        }
+        return [...consoleInput.agentIds] as string[]
+      })()
       const consoleConfig: TomlRecord = {
         ...existingConsole,
         version: 1,
         enabled: true,
-        username: requiredString(consoleInput.username, 'console.username'),
-        passwordEnv: requiredString(consoleInput.passwordEnv, 'console.passwordEnv'),
-        listen: { ...(isTomlRecord(existingConsole?.listen) ? existingConsole.listen : {}), host: '127.0.0.1', port: consolePort },
-        ...(consoleInput.agentIds === undefined ? {} : { agentIds: consoleInput.agentIds }),
+        identity: { ...CONSOLE_IDENTITY },
+        scopeId: 'local',
+        presenceIntervalMs: 500,
+        agentIds,
+        listen: {
+          ...(isTomlRecord(existingConsole?.listen) ? existingConsole.listen : {}),
+          host: '127.0.0.1',
+          port: consolePort,
+          origin: `http://127.0.0.1:${consolePort}`,
+        },
+        auth: { username: requiredString(consoleInput.username, 'console.username'), passwordEnv: requiredString(consoleInput.passwordEnv, 'console.passwordEnv') },
+        staticRoot: assets.staticRoot,
+        uiRoot: assets.uiRoot,
+        relay: {
+          endpoint: `wss://127.0.0.1:${relayPort}`,
+          credentialEnv: CONSOLE_CREDENTIAL_ENV,
+          caFile: tlsPaths.certFile,
+          connectTimeoutMs: 1000,
+          admissionTimeoutMs: 1000,
+          requestTimeoutMs: 1000,
+          maxMessageBytes: 65536,
+          maxBufferedBytes: 65536,
+          maxPendingFrames: 8,
+          maxPendingRequests: 4,
+          maxDataConnections: 4,
+        },
       }
       consoleProjection = { projectionPath: consolePath, config: JSON.stringify(consoleConfig) }
+      ;(relayConfig.credentials as TomlRecord[]).push({
+        credentialEnv: CONSOLE_CREDENTIAL_ENV,
+        identity: { accountId: CONSOLE_IDENTITY.accountId, scopeId: 'local', agentId: CONSOLE_IDENTITY.agentId },
+      })
     }
   }
 
@@ -1642,7 +1742,7 @@ async function persistLocalV3ConfigLocked(
     generatedAt: latest?.generatedAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     relay: { projectionPath: result.relayProjectionPath, config: JSON.stringify(result.relayConfig) },
-    ...(result.consoleProjection === undefined ? {} : { console: result.consoleProjection }),
+    console: result.consoleProjection,
     daemons,
     configRuntime: latest?.configRuntime ?? { accepted: {}, effective: {}, catalogs: {} },
   })
@@ -1651,6 +1751,7 @@ async function persistLocalV3ConfigLocked(
     configPath,
     relay: result.relay,
     daemons: result.daemons,
+    ...(result.consoleProjection === undefined ? {} : { console: { enabled: true as const, configPath: result.consoleProjection.projectionPath } }),
     internalPath,
     bridge: parsed.bridge ?? { enabled: true },
     ...(parsed.v3Input === undefined ? {} : { v3Input: parsed.v3Input }),
@@ -1883,7 +1984,19 @@ export async function writeLocalInternalState(path: string, daemons: Readonly<Re
   })
 }
 
-export async function writeLocalInternalRecoveryState(path: string, daemons: Readonly<Record<string, LocalInternalDaemonState>>, launcher: LocalInternalLauncherConfig): Promise<string> {
+export interface LocalInternalRecoveryOptions {
+  /** Console classification to persist with the recovered launcher. */
+  readonly consoleRuntime?: Readonly<ConsoleRuntimePatch>
+  /**
+   * Drop the previous launcher's `[workControl]` refs. Dead-launcher recovery
+   * replaces the launcher that published them, so keeping them would contradict
+   * the recovered generation and make every later internal read fail the exact
+   * work-control refs check.
+   */
+  readonly clearWorkControl?: boolean
+}
+
+export async function writeLocalInternalRecoveryState(path: string, daemons: Readonly<Record<string, LocalInternalDaemonState>>, launcher: LocalInternalLauncherConfig, options: Readonly<LocalInternalRecoveryOptions> = {}): Promise<string> {
   const internalPath = localPath(path, process.cwd())
   return withLocalInternalConfigLock(internalPath, async () => {
     let existing: LocalInternalConfig
@@ -1900,7 +2013,12 @@ export async function writeLocalInternalRecoveryState(path: string, daemons: Rea
       mergedDaemons[id] = { ...(previous ?? {}), pid: state.pid, state: state.state, ...(state.generation === undefined ? {} : { generation: state.generation }), ...(state.entryPath === undefined ? {} : { entryPath: state.entryPath }), ...(state.startToken === undefined ? {} : { startToken: state.startToken }) }
     }
     if (existing.launcher?.generation !== undefined && existing.launcher.generation > launcher.generation) return internalPath
-    return writeLocalInternalConfig(internalPath, { ...existing, updatedAt: new Date().toISOString(), daemons: mergedDaemons, launcher })
+    // Recovery owns every child the launcher started, including the Console child,
+    // so its classification is written in the same short-lock write that records
+    // the recovered launcher and daemons.
+    const recoveredConsole = options.consoleRuntime === undefined ? existing.consoleRuntime : applyConsoleRuntimePatch(existing.consoleRuntime ?? {}, options.consoleRuntime)
+    const carried = options.clearWorkControl === true ? { ...existing, workControl: undefined } : existing
+    return writeLocalInternalConfig(internalPath, { ...carried, updatedAt: new Date().toISOString(), daemons: mergedDaemons, launcher, ...(recoveredConsole === undefined ? {} : { consoleRuntime: recoveredConsole }) })
   })
 }
 
