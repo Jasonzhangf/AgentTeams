@@ -37,6 +37,7 @@ import { createManagedConfigOwner, createManagedConfigOwnerPersistence, type Man
 import {
   OpenCodeAdapterError,
   cancelOpenCodeSession,
+  createOpenCodePromptMessageId,
   createOpenCodeSession,
   createOpenCodeSessionClient,
   decodeOpenCodeSessionMessage,
@@ -450,7 +451,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       const record: SessionOperationRecord = { operationId: randomUUID(), sessionId, runtimeGeneration: deps.generation(),
         handleFingerprint: effectiveHandleIdentity(handle), effectiveRevision: readiness.effectiveRevision,
         ...(handle.pid === undefined ? {} : { childPid: handle.pid }),
-        requestMessageId: randomUUID(), acceptedAt: new Date().toISOString() }
+        requestMessageId: createOpenCodePromptMessageId(), acceptedAt: new Date().toISOString() }
       operations.set(sessionId, record)
       const streamChange = ensureStream()
       if (streamChange !== undefined) await streamChange

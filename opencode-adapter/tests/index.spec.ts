@@ -22,6 +22,7 @@ import {
   createOpenCodeConfigApplier,
   createOpenCodeSession,
   cancelOpenCodeSession,
+  createOpenCodePromptMessageId,
   promptOpenCodeSession,
   decodeOpenCodeSessionMessage,
   projectOpenCodeSessionEvent,
@@ -446,17 +447,33 @@ describe('OpenCode Teams adapter', () => {
   it('dispatches a prompt with the owner messageID and binds only a matching assistant response', async () => {
     const bodies: unknown[] = []
     const client = { session: { prompt: async ({ body }: { body: unknown }) => { bodies.push(body) } } }
-    await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, 'req-1')).resolves.toBeUndefined()
-    expect(bodies).toEqual([{ messageID: 'req-1', parts: [{ type: 'text', text: 'hello' }], model: { providerID: 'p', modelID: 'm' } }])
-    await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: '', modelID: 'm' }, 'req-2')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
-    await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, ' ')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
-    const responding = (info: unknown) => ({ session: { prompt: async () => ({ data: { info, parts: [] } }) } })
-    await expect(promptOpenCodeSession(responding({ id: 'a1', sessionID: 's', parentID: 'req-1' }) as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, 'req-1'))
-      .resolves.toEqual({ messageId: 'a1', sessionId: 's', parentId: 'req-1' })
-    // A response for another session, another request, or without identity never binds.
-    for (const info of [{ id: 'a1', sessionID: 'other', parentID: 'req-1' }, { id: 'a1', sessionID: 's', parentID: 'other' }, { sessionID: 's', parentID: 'req-1' }, { id: 'a1', sessionID: 's' }, undefined]) {
-      await expect(promptOpenCodeSession(responding(info) as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, 'req-1')).resolves.toBeUndefined()
+    const requestId = 'msg_00000000000000000000000001'
+    await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, requestId)).resolves.toBeUndefined()
+    expect(bodies).toEqual([{ messageID: requestId, parts: [{ type: 'text', text: 'hello' }], model: { providerID: 'p', modelID: 'm' } }])
+    await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: '', modelID: 'm' }, 'msg_00000000000000000000000002')).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+    // The substrate rejects any prompt id that is not a `msg_`-prefixed Session.Message.ID,
+    // so that shape is refused at this boundary instead of by the managed child.
+    for (const invalid of [' ', '', 'req-1', '2a2dbca7-27e8-4947-a1ca-2ee86712b346', 'ses_00000000000000000000000001']) {
+      await expect(promptOpenCodeSession(client as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, invalid)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
     }
+    const responding = (info: unknown) => ({ session: { prompt: async () => ({ data: { info, parts: [] } }) } })
+    await expect(promptOpenCodeSession(responding({ id: 'a1', sessionID: 's', parentID: requestId }) as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, requestId))
+      .resolves.toEqual({ messageId: 'a1', sessionId: 's', parentId: requestId })
+    // A response for another session, another request, or without identity never binds.
+    for (const info of [{ id: 'a1', sessionID: 'other', parentID: requestId }, { id: 'a1', sessionID: 's', parentID: 'other' }, { sessionID: 's', parentID: requestId }, { id: 'a1', sessionID: 's' }, undefined]) {
+      await expect(promptOpenCodeSession(responding(info) as never, 's', 'hello', { providerID: 'p', modelID: 'm' }, requestId)).resolves.toBeUndefined()
+    }
+  })
+
+  it('allocates prompt message ids in the substrate Session.Message.ID shape', () => {
+    const allocated = new Set<string>()
+    for (let index = 0; index < 64; index += 1) {
+      const messageId = createOpenCodePromptMessageId()
+      expect(messageId.startsWith('msg_')).toBe(true)
+      expect(messageId.length).toBeGreaterThan(4)
+      allocated.add(messageId)
+    }
+    expect(allocated.size).toBe(64)
   })
 
   it('decodes only the closed text payload before any side effect', () => {

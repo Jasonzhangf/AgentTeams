@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import type { PluginInput, Hooks } from '@opencode-ai/plugin'
 import type { Session } from '@opencode-ai/sdk'
 import { createOpencodeClient } from '@opencode-ai/sdk'
@@ -339,9 +340,25 @@ export async function sendOpenCodeMessage(client: OpenCodeSessionClient, session
   unwrapOpenCodeResponse(result, 'session.prompt', true)
 }
 
+/**
+ * OpenCode's `Session.Message.ID` is a `msg_`-prefixed identifier, and its prompt
+ * route rejects any other shape before the message exists. The Session dispatch
+ * path must allocate the prompt id before dispatch, because an event that arrives
+ * before the synchronous response is correlated by that id. The substrate's
+ * identifier format therefore stays owned here and is never re-derived by callers.
+ */
+export function createOpenCodePromptMessageId(): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let body = ''
+  for (const byte of randomBytes(26)) body += alphabet[byte % alphabet.length]
+  return `msg_${body}`
+}
+
 function validatePromptMessageId(messageId: string | undefined): string | undefined {
   if (messageId === undefined) return undefined
-  if (typeof messageId !== 'string' || messageId.trim() === '') throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', 'OpenCode prompt messageID must be a non-empty string')
+  if (typeof messageId !== 'string' || !messageId.startsWith('msg_') || messageId.length === 4) {
+    throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', 'OpenCode prompt messageID must be a msg_-prefixed Session.Message.ID')
+  }
   return messageId
 }
 
