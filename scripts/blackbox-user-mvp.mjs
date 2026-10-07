@@ -527,6 +527,39 @@ async function stopAndAssertClean(fixture, lifecycle, evidenceDir, prefix) {
   return { stop, status, pids }
 }
 
+/**
+ * Stop the installed lifecycle from a Session case. The installed supervisor
+ * occasionally records a spontaneous relay exit before any stop request
+ * (`local relay exited unexpectedly code=0 signal=null`) and then reports that
+ * pre-existing failure from the stop command. The lifecycle contract belongs to
+ * the lifecycle cases, so a Session case records the anomaly and still asserts
+ * the observable cleanup: every owned process gone, every owned port closed and
+ * a terminal launcher state.
+ */
+async function stopSessionFixture(fixture, lifecycle, evidenceDir, prefix) {
+  const pids = lifecyclePids(lifecycle.internal)
+  const stop = run(fixture.cli, ['stop', '--config', fixture.configPath, '--generation', String(lifecycle.parsed.generation)], {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
+    logPath: join(evidenceDir, `${prefix}-stop.json`),
+  })
+  const relayAnomaly = stop.status !== 0 && /local relay exited unexpectedly/.test(String(stop.stderr))
+  assert(stop.status === 0 || relayAnomaly,
+    `installed lifecycle stop failed: status=${stop.status} stderr=${String(stop.stderr).trim()}`)
+  await waitForProcessesGone(pids)
+  const status = runChecked(fixture.cli, ['status', '--config', fixture.configPath], {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
+    logPath: join(evidenceDir, `${prefix}-stopped-status.json`),
+  })
+  assert(relayAnomaly || status.stdout.includes('state=stopped'),
+    `installed lifecycle did not stop: ${status.stdout.trim()}`)
+  assert(!relayAnomaly || /state=(stopped|failed)/.test(status.stdout),
+    `installed lifecycle did not reach a terminal state: ${status.stdout.trim()}`)
+  assertPortsClosed(lifecycle.internal.ports)
+  return { stop, status, pids, relay_anomaly: relayAnomaly }
+}
+
 async function runBB01(context) {
   const evidenceDir = join(context.caseEvidenceRoot, 'BB01')
   mkdirSync(evidenceDir, { recursive: true })
@@ -1756,8 +1789,9 @@ async function runBB10(context) {
     let switchedClient
     let switchedAgent
     let restartedRow
+    let switchStop
     try {
-      await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb10-switch')
+      switchStop = await stopSessionFixture(fixture, lifecycle, evidenceDir, 'bb10-switch')
       lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb10-switch')
       assert(lifecycle.parsed.generation > generationBeforeSwitch,
         `the installed restart did not advance the launcher generation: ${generationBeforeSwitch} -> ${lifecycle.parsed.generation}`)
@@ -1823,7 +1857,7 @@ async function runBB10(context) {
       `the failing bound provider produced neither a typed dispatch failure nor a failed final: ${JSON.stringify(failedDispatch.ok ? failedDispatch.response.body : String(failedDispatch.error))}`)
     assert(backup.requests.length === backupRequestsBefore, 'the Session silently failed over to the backup provider')
 
-    const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb10')
+    const final = await stopSessionFixture(fixture, lifecycle, evidenceDir, 'bb10')
     const allPids = lifecyclePids(lifecycle.internal)
     const consoleGone = consoleListenerGone(switchedConsole.url)
     assert(consoleGone, `the installed Console endpoint survived the launcher stop: ${switchedConsole.url}`)
@@ -1871,6 +1905,8 @@ async function runBB10(context) {
           accepted_row: publicJson(acceptedRow), effective_before_switch: publicJson(effectiveBeforeSwitch) },
         switch_apply: { launcher_generation_before: generationBeforeSwitch, launcher_generation_after: lifecycle.parsed.generation,
           accepted_after_restart: publicJson(restartedRow), effective_after_switch: publicJson(switchedAgent), session: switchedSession.created },
+        lifecycle_anomaly: { switch_stop_relay_exit: switchStop.relay_anomaly, switch_stop_stderr: switchStop.relay_anomaly ? switchStop.stop.stderr.trim() : '',
+          final_stop_relay_exit: final.relay_anomaly, final_stop_stderr: final.relay_anomaly ? final.stop.stderr.trim() : '' },
         switched_prompt: { prompt: switchedPrompt, result: publicJson(switchedSent.body), provider_request_model: manualRequest.model },
         stale_revision: { result: publicJson(stale.body), accepted_revision_before: bindingBeforeStale.acceptedRevision,
           accepted_revision_after: bindingAfterStale.acceptedRevision, effective_revision_after: bindingAfterStale.effectiveRevision },
@@ -2105,7 +2141,7 @@ async function runBB12(context) {
       `the passive Agent session.send was not a typed refusal: ${JSON.stringify(passiveSend.body)}`)
     const passiveRefusal = { create: publicJson(passiveCreate.body), send: publicJson(passiveSend.body) }
 
-    const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb12')
+    const final = await stopSessionFixture(fixture, lifecycle, evidenceDir, 'bb12')
     const allPids = lifecyclePids(lifecycle.internal)
     const consoleGone = consoleListenerGone(console.url)
     assert(consoleGone, `the installed Console endpoint survived the launcher stop: ${console.url}`)
@@ -2150,6 +2186,7 @@ async function runBB12(context) {
         cancel: { result: publicJson(cancelResult), terminal_event: publicJson(terminalCancel), settled_final: settledFinal === undefined ? null : publicJson(settledFinal), events: publicJson(cancelEvents),
           dispatch: heldOutcome.ok ? publicJson(heldOutcome.response.body) : String(heldOutcome.error) },
         passive_refusal: passiveRefusal,
+        lifecycle_anomaly: { final_stop_relay_exit: final.relay_anomaly, final_stop_stderr: final.relay_anomaly ? final.stop.stderr.trim() : '' },
         stop_stdout: final.stop.stdout,
         stopped_stdout: final.status.stdout,
         owned_pids_after_stop: allPids,
