@@ -259,8 +259,10 @@ primary = { provider = "u6-local", model = "u6-model" }
 // marker is answered by an intentionally open response the replay ends by itself.
 const holdPromptMarker = 'u6-hold-open'
 const toolPromptMarker = 'u6-tool-probe'
+const permissionPromptMarker = 'u6-permission-probe'
+const envProbeSentinel = 'u6-env-sentinel'
 
-function createProviderStub(toolCommand) {
+function createProviderStub(toolCommand, readFilePath) {
   const requests = []
   const held = []
   const server = createServer((request, response) => {
@@ -286,11 +288,17 @@ function createProviderStub(toolCommand) {
       }
       const toolCall = { index: 0, id: 'call_u6_probe', type: 'function',
         function: { name: 'bash', arguments: JSON.stringify({ command: toolCommand }) } }
+      // The substrate's default policy allows every tool except a `*.env` read, which it
+      // asks about. That read is the only probe here that surfaces a real permission.
+      const readCall = { index: 0, id: 'call_u6_permission', type: 'function',
+        function: { name: 'read', arguments: JSON.stringify({ filePath: readFilePath }) } }
+      const call = promptText.includes(permissionPromptMarker) ? readCall
+        : promptText.includes(toolPromptMarker) ? toolCall : undefined
       if (body.includes('"stream":true')) {
         response.writeHead(200, { 'content-type': 'text/event-stream' })
-        if (promptText.includes(toolPromptMarker)) {
+        if (call !== undefined) {
           response.write(`data: ${JSON.stringify({ id: 'chatcmpl-teams', object: 'chat.completion.chunk', created: 1, model: input.model,
-            choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [toolCall] }, finish_reason: null }] })}\n\n`)
+            choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [call] }, finish_reason: null }] })}\n\n`)
           response.write(`data: ${JSON.stringify({ id: 'chatcmpl-teams', object: 'chat.completion.chunk', created: 1, model: input.model,
             choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } })}\n\n`)
         } else {
@@ -300,10 +308,10 @@ function createProviderStub(toolCommand) {
             choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } })}\n\n`)
         }
         response.end('data: [DONE]\n\n')
-      } else if (promptText.includes(toolPromptMarker)) {
+      } else if (call !== undefined) {
         response.writeHead(200, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ id: 'chatcmpl-teams', object: 'chat.completion', created: 1, model: input.model,
-          choices: [{ index: 0, message: { role: 'assistant', content: null, tool_calls: [toolCall] }, finish_reason: 'tool_calls' }],
+          choices: [{ index: 0, message: { role: 'assistant', content: null, tool_calls: [call] }, finish_reason: 'tool_calls' }],
           usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }))
       } else {
         response.writeHead(200, { 'content-type': 'application/json' })
@@ -407,7 +415,11 @@ export async function runInstalledSessionReplay(options = {}) {
   // The probe tool writes a marker, so approving it has an observable side effect
   // and rejecting it observably does not.
   const toolMarkerPath = join(paths.temporaryRoot, 'tool-probe-marker')
-  const provider = createProviderStub(`printf u6-tool-probe-ran > '${toolMarkerPath}'`)
+  // A `*.env` read is the one tool the managed default policy asks about, so this file is
+  // what turns the Console permission reply into a real approve/reject decision.
+  const envProbePath = join(paths.temporaryRoot, 'permission-probe.env')
+  writeFileSync(envProbePath, `${envProbeSentinel}\n`)
+  const provider = createProviderStub(`printf u6-tool-probe-ran > '${toolMarkerPath}' && printf u6-tool-probe-ran`, envProbePath)
   const receipt = {
     kind: 'u6-installed-session-replay',
     version: 1,
@@ -557,50 +569,69 @@ export async function runInstalledSessionReplay(options = {}) {
       assistant_part: publicReceiptJson(assistantPart),
     }
 
-    // (e) A real tool request, then approve and reject on real permissions. The
-    // prompt response arrives only when the turn ends, so the dispatch must not be
-    // awaited before the permission reply, or a gated turn could never be resolved.
+    // (e) Real tool meaning, then a real approve/reject decision. The managed default
+    // policy allows the bash probe, so tool identity, arguments and result come from that
+    // call; it asks before a `*.env` read, so the decision rounds run on that call. A
+    // prompt response arrives only when the turn ends, so no dispatch is awaited before
+    // its own permission reply, or a gated turn could never be resolved.
     const resolvedPermissions = new Set()
-    const dispatchTool = () => client.sessionMessage('session-agent', sessionId,
-      { text: `u6 tool request ${toolPromptMarker}` }, 180_000)
-    const nextPermission = () => optionalWait(async () => readEvents((await client.projection()).body, 'session-agent', sessionId)
+    const dispatchPrompt = text => client.sessionMessage('session-agent', sessionId, { text }, 180_000)
+      .then(response => ({ ok: true, response }), error => ({ ok: false, error }))
+    const sessionEvents = async () => readEvents((await client.projection()).body, 'session-agent', sessionId)
+    const nextPermission = () => optionalWait(async () => (await sessionEvents())
       .find(event => event.kind === 'permission' && event.state === 'pending'
         && !resolvedPermissions.has(event.permissionId)), 60_000)
+    const newestTool = async callId => (await sessionEvents())
+      .filter(event => event.kind === 'tool' && event.callId === callId).at(-1)
     const replyPermission = async (pending, decision) => {
       const replied = await client.command({ kind: 'permission.reply', agentId: 'session-agent', sessionId,
         permissionId: pending.permissionId, decision })
       assert(replied.body.ok === true, `permission ${decision} reply failed: ${JSON.stringify(replied.body)}`)
-      const resolved = await waitForAsync(async () => readEvents((await client.projection()).body, 'session-agent', sessionId)
+      const resolved = await waitForAsync(async () => (await sessionEvents())
         .find(event => event.kind === 'permission' && event.state === 'resolved'
           && event.permissionId === pending.permissionId), 60_000, 'the resolved permission event')
       resolvedPermissions.add(pending.permissionId)
       return resolved
     }
     const permissionReceipt = { status: 'unverified', rounds: [],
-      reason: 'the managed OpenCode child surfaced no pending permission for the probe tool call' }
-    const approvedDispatch = dispatchTool().then(response => response, error => ({ thrown: error }))
+      reason: 'the managed OpenCode child surfaced no pending permission for the probe call' }
+
+    const toolSettled = await dispatchPrompt(`u6 tool request ${toolPromptMarker}`)
+    assert(toolSettled.ok && toolSettled.response.body.ok === true,
+      `the tool probe turn did not complete: ${toolSettled.error ?? JSON.stringify(toolSettled.response?.body)}`)
+    assert(existsSync(toolMarkerPath), 'the probe tool did not produce its side effect')
+    const toolEvent = await newestTool('call_u6_probe')
+    assert(toolEvent !== undefined && toolEvent.state === 'completed'
+      && String(toolEvent.output).includes('u6-tool-probe-ran') && JSON.stringify(toolEvent.input).includes('u6-tool-probe-ran'),
+      `the tool event did not preserve the real tool identity, arguments and result: ${JSON.stringify(toolEvent)}`)
+    permissionReceipt.tool_event = publicReceiptJson(toolEvent)
+    permissionReceipt.tool_side_effect = 'marker-present'
+
+    // The typed refusal boundary is observable on this entry whatever the decision turns out to be.
+    const fabricated = await client.command({ kind: 'permission.reply', agentId: 'session-agent', sessionId,
+      permissionId: 'u6-missing-permission', decision: 'once' })
+    assert(fabricated.body.ok === false && typeof fabricated.body.error?.code === 'string',
+      `permission.reply on an unknown permission was not a typed refusal: ${JSON.stringify(fabricated.body)}`)
+    permissionReceipt.unknown_permission_refusal = publicReceiptJson(fabricated.body)
+
+    const approvedDispatch = dispatchPrompt(`u6 permission probe ${permissionPromptMarker}`)
     const approvedPending = await nextPermission()
     if (approvedPending === undefined) {
       const settled = await approvedDispatch
-      permissionReceipt.dispatch = settled.thrown === undefined ? publicReceiptJson(settled.body) : String(settled.thrown)
-      // The typed refusal boundary still has to be observable on the same entry.
-      const fabricated = await client.command({ kind: 'permission.reply', agentId: 'session-agent', sessionId,
-        permissionId: 'u6-missing-permission', decision: 'once' })
-      assert(fabricated.body.ok === false && typeof fabricated.body.error?.code === 'string',
-        `permission.reply on an unknown permission was not a typed refusal: ${JSON.stringify(fabricated.body)}`)
-      permissionReceipt.unknown_permission_refusal = publicReceiptJson(fabricated.body)
+      permissionReceipt.dispatch = settled.ok ? publicReceiptJson(settled.response.body) : String(settled.error)
     } else {
       const approved = await replyPermission(approvedPending, 'once')
       const settled = await approvedDispatch
-      assert(settled.thrown === undefined && settled.body?.ok === true,
-        `the approved tool turn did not complete: ${settled.thrown ?? JSON.stringify(settled.body)}`)
-      const toolEvent = readEvents((await client.projection()).body, 'session-agent', sessionId).find(event => event.kind === 'tool')
-      assert(existsSync(toolMarkerPath), 'approving the probe tool did not produce its side effect')
-      permissionReceipt.rounds.push({ decision: 'once', resolved: publicReceiptJson(approved),
-        tool_event: toolEvent === undefined ? null : publicReceiptJson(toolEvent), side_effect: 'marker-present' })
-      // The same tool must not run when the permission is rejected.
-      rmSync(toolMarkerPath, { force: true })
-      const rejectedDispatch = dispatchTool().then(response => response, error => ({ thrown: error }))
+      assert(settled.ok && settled.response.body.ok === true,
+        `the approved turn did not complete: ${settled.error ?? JSON.stringify(settled.response?.body)}`)
+      const readEvent = await newestTool('call_u6_permission')
+      assert(readEvent !== undefined && readEvent.state === 'completed' && String(readEvent.output).includes(envProbeSentinel),
+        `approving the read permission did not let the tool read the file: ${JSON.stringify(readEvent)}`)
+      permissionReceipt.rounds.push({ decision: 'once', pending: publicReceiptJson(approvedPending),
+        resolved: publicReceiptJson(approved), tool_event: publicReceiptJson(readEvent), side_effect: 'env-content-read' })
+
+      const priorPartIds = new Set((await sessionEvents()).filter(event => event.kind === 'tool').map(event => event.partId))
+      const rejectedDispatch = dispatchPrompt(`u6 permission probe ${permissionPromptMarker}`)
       const rejectedPending = await nextPermission()
       if (rejectedPending === undefined) {
         await rejectedDispatch
@@ -608,9 +639,14 @@ export async function runInstalledSessionReplay(options = {}) {
       } else {
         const rejected = await replyPermission(rejectedPending, 'reject')
         const rejectedSettled = await rejectedDispatch
-        assert(!existsSync(toolMarkerPath), 'rejecting the probe tool still produced its side effect')
-        permissionReceipt.rounds.push({ decision: 'reject', resolved: publicReceiptJson(rejected), side_effect: 'marker-absent',
-          dispatch: rejectedSettled.thrown === undefined ? publicReceiptJson(rejectedSettled.body) : String(rejectedSettled.thrown) })
+        const rejectedEvent = (await sessionEvents())
+          .filter(event => event.kind === 'tool' && !priorPartIds.has(event.partId)).at(-1)
+        assert(rejectedEvent === undefined || rejectedEvent.state !== 'completed' || !String(rejectedEvent.output).includes(envProbeSentinel),
+          `rejecting the read permission still returned the file content: ${JSON.stringify(rejectedEvent)}`)
+        permissionReceipt.rounds.push({ decision: 'reject', pending: publicReceiptJson(rejectedPending),
+          resolved: publicReceiptJson(rejected), tool_event: rejectedEvent === undefined ? null : publicReceiptJson(rejectedEvent),
+          side_effect: 'env-content-absent',
+          dispatch: rejectedSettled.ok ? publicReceiptJson(rejectedSettled.response.body) : String(rejectedSettled.error) })
         permissionReceipt.status = 'passed'
         delete permissionReceipt.reason
       }
