@@ -186,32 +186,32 @@ label = "U6 Session Agent"
 [agents.session-agent.identity]
 hostId = "u6-host"
 machineId = "u6-machine"
-accountId = "u6-account"
+accountId = "local"
 agentKind = "custom"
 label = "U6 Session Agent"
 
 [agents.session-agent.runtime]
-scopeId = "u6-scope"
+scopeId = "local"
 dataDirectory = "data/session-agent"
-policy = { revision = 1, allowedConsumers = [], allowedManagers = ["console"] }
+policy = { revision = 1, allowedConsumers = [], allowedManagers = ["__console"] }
 cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-u6-session-agent" }
 
 [agents.passive-agent]
 enabled = true
-role = "receiver"
+role = "provider"
 label = "U6 Passive Agent"
 
 [agents.passive-agent.identity]
 hostId = "u6-host"
 machineId = "u6-machine"
-accountId = "u6-account"
+accountId = "local"
 agentKind = "custom"
 label = "U6 Passive Agent"
 
 [agents.passive-agent.runtime]
-scopeId = "u6-scope"
+scopeId = "local"
 dataDirectory = "data/passive-agent"
-policy = { revision = 1, allowedConsumers = [], allowedManagers = ["console"] }
+policy = { revision = 1, allowedConsumers = [], allowedManagers = ["__console"] }
 cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-u6-passive-agent" }
 
 [console]
