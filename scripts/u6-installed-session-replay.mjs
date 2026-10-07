@@ -578,9 +578,9 @@ export async function runInstalledSessionReplay(options = {}) {
     const dispatchPrompt = text => client.sessionMessage('session-agent', sessionId, { text }, 180_000)
       .then(response => ({ ok: true, response }), error => ({ ok: false, error }))
     const sessionEvents = async () => readEvents((await client.projection()).body, 'session-agent', sessionId)
-    const nextPermission = () => optionalWait(async () => (await sessionEvents())
+    const nextPermission = (timeoutMs = 60_000) => optionalWait(async () => (await sessionEvents())
       .find(event => event.kind === 'permission' && event.state === 'pending'
-        && !resolvedPermissions.has(event.permissionId)), 60_000)
+        && !resolvedPermissions.has(event.permissionId)), timeoutMs)
     const newestTool = async callId => (await sessionEvents())
       .filter(event => event.kind === 'tool' && event.callId === callId).at(-1)
     const replyPermission = async (pending, decision) => {
@@ -592,6 +592,17 @@ export async function runInstalledSessionReplay(options = {}) {
           && event.permissionId === pending.permissionId), 60_000, 'the resolved permission event')
       resolvedPermissions.add(pending.permissionId)
       return resolved
+    }
+    // The substrate asks once per matching rule, so one tool call can surface more than one
+    // request. A round ends only when every request it raised carries an answer.
+    const answerRound = async decision => {
+      const replies = []
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const pending = await nextPermission(attempt === 0 ? 60_000 : 15_000)
+        if (pending === undefined) break
+        replies.push({ pending: publicReceiptJson(pending), resolved: publicReceiptJson(await replyPermission(pending, decision)) })
+      }
+      return replies
     }
     const permissionReceipt = { status: 'unverified', rounds: [],
       reason: 'the managed OpenCode child surfaced no pending permission for the probe call' }
@@ -615,36 +626,34 @@ export async function runInstalledSessionReplay(options = {}) {
     permissionReceipt.unknown_permission_refusal = publicReceiptJson(fabricated.body)
 
     const approvedDispatch = dispatchPrompt(`u6 permission probe ${permissionPromptMarker}`)
-    const approvedPending = await nextPermission()
-    if (approvedPending === undefined) {
+    const approvedReplies = await answerRound('once')
+    if (approvedReplies.length === 0) {
       const settled = await approvedDispatch
       permissionReceipt.dispatch = settled.ok ? publicReceiptJson(settled.response.body) : String(settled.error)
     } else {
-      const approved = await replyPermission(approvedPending, 'once')
       const settled = await approvedDispatch
       assert(settled.ok && settled.response.body.ok === true,
         `the approved turn did not complete: ${settled.error ?? JSON.stringify(settled.response?.body)}`)
       const readEvent = await newestTool('call_u6_permission')
       assert(readEvent !== undefined && readEvent.state === 'completed' && String(readEvent.output).includes(envProbeSentinel),
         `approving the read permission did not let the tool read the file: ${JSON.stringify(readEvent)}`)
-      permissionReceipt.rounds.push({ decision: 'once', pending: publicReceiptJson(approvedPending),
-        resolved: publicReceiptJson(approved), tool_event: publicReceiptJson(readEvent), side_effect: 'env-content-read' })
+      permissionReceipt.rounds.push({ decision: 'once', replies: approvedReplies,
+        tool_event: publicReceiptJson(readEvent), side_effect: 'env-content-read' })
 
       const priorPartIds = new Set((await sessionEvents()).filter(event => event.kind === 'tool').map(event => event.partId))
       const rejectedDispatch = dispatchPrompt(`u6 permission probe ${permissionPromptMarker}`)
-      const rejectedPending = await nextPermission()
-      if (rejectedPending === undefined) {
+      const rejectedReplies = await answerRound('reject')
+      if (rejectedReplies.length === 0) {
         await rejectedDispatch
         permissionReceipt.reason = 'the managed OpenCode child surfaced no second pending permission for the reject round'
       } else {
-        const rejected = await replyPermission(rejectedPending, 'reject')
         const rejectedSettled = await rejectedDispatch
         const rejectedEvent = (await sessionEvents())
           .filter(event => event.kind === 'tool' && !priorPartIds.has(event.partId)).at(-1)
         assert(rejectedEvent === undefined || rejectedEvent.state !== 'completed' || !String(rejectedEvent.output).includes(envProbeSentinel),
           `rejecting the read permission still returned the file content: ${JSON.stringify(rejectedEvent)}`)
-        permissionReceipt.rounds.push({ decision: 'reject', pending: publicReceiptJson(rejectedPending),
-          resolved: publicReceiptJson(rejected), tool_event: rejectedEvent === undefined ? null : publicReceiptJson(rejectedEvent),
+        permissionReceipt.rounds.push({ decision: 'reject', replies: rejectedReplies,
+          tool_event: rejectedEvent === undefined ? null : publicReceiptJson(rejectedEvent),
           side_effect: 'env-content-absent',
           dispatch: rejectedSettled.ok ? publicReceiptJson(rejectedSettled.response.body) : String(rejectedSettled.error) })
         permissionReceipt.status = 'passed'
