@@ -483,8 +483,13 @@ describe('OpenCode Teams adapter', () => {
 
   it('decodes only the closed text payload before any side effect', () => {
     expect(decodeOpenCodeSessionMessage({ text: 'hi' })).toEqual({ text: 'hi' })
-    for (const invalid of [null, [], 'hi', { text: '' }, { text: 1 }, { text: 'hi', extra: true }, { config: {} }]) {
-      expect(() => decodeOpenCodeSessionMessage(invalid as never)).toThrow()
+    for (const invalid of [null, [], 'hi', { text: '' }, { text: 1 }]) {
+      expect(() => decodeOpenCodeSessionMessage(invalid as never)).toThrow(expect.objectContaining({ code: 'INVALID_INPUT' }))
+    }
+    // An unmappable shape is the adapter's typed refusal, not a bare envelope error that
+    // would escape the adapter error contract as an untyped failure.
+    for (const unsupported of [{ text: 'hi', extra: true }, { config: {} }]) {
+      expect(() => decodeOpenCodeSessionMessage(unsupported as never)).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_OPERATION' }))
     }
   })
 

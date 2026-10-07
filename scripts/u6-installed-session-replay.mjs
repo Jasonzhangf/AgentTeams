@@ -646,9 +646,10 @@ export async function runInstalledSessionReplay(options = {}) {
       `passive Agent session.send was not a typed refusal: ${JSON.stringify(passiveSend.body)}`)
     receipt.cases['passive-refusal'] = { status: 'passed', create: publicReceiptJson(passiveCreate.body), send: publicReceiptJson(passiveSend.body) }
 
-    // (h) A payload outside the closed Session envelope fails at the boundary.
+    // (h) A payload outside the closed Session envelope fails at the boundary. The design
+    // admits either typed refusal for a shape the adapter cannot map equivalently.
     const unsupported = await client.sessionMessage('session-agent', sessionId, { bogus: 'field' })
-    assert(unsupported.body.ok === false && unsupported.body.error?.code === 'INVALID_INPUT',
+    assert(unsupported.body.ok === false && ['INVALID_INPUT', 'UNSUPPORTED_OPERATION'].includes(unsupported.body.error?.code),
       `unsupported Session payload was not a typed refusal: ${JSON.stringify(unsupported.body)}`)
     receipt.cases['unsupported-payload'] = { status: 'passed', result: publicReceiptJson(unsupported.body) }
 

@@ -465,7 +465,14 @@ export function decodeOpenCodeSessionMessage(payload: JsonValue): OpenCodeSessio
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
     throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', 'OpenCode session message payload must be a { text } object')
   }
-  assertEnvelopeKeys(payload as unknown as Record<string, unknown>, ['text'], 'OpenCode session message payload')
+  // A shape this adapter cannot map fails here as the typed refusal the Session contract
+  // promises. A bare envelope error would escape the adapter error contract instead.
+  try {
+    assertEnvelopeKeys(payload as unknown as Record<string, unknown>, ['text'], 'OpenCode session message payload')
+  } catch (error) {
+    throw new OpenCodeAdapterError('session.prompt', 'UNSUPPORTED_OPERATION',
+      error instanceof Error ? error.message : 'OpenCode session message payload has an unsupported shape')
+  }
   const text = (payload as { readonly text?: unknown }).text
   if (typeof text !== 'string' || text.length === 0) {
     throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', 'OpenCode session message requires a non-empty text string')
