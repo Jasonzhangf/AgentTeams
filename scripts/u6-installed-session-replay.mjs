@@ -22,6 +22,7 @@ const openCodeExecutable = '/Users/fanzhang/.opencode/bin/opencode'
 const relayCredentials = {
   AGENTTEAMS_SESSION_AGENT_AUTH: 'u6-session-agent-credential',
   AGENTTEAMS_PASSIVE_AGENT_AUTH: 'u6-passive-agent-credential',
+  AGENTTEAMS_BOUND_AGENT_AUTH: 'u6-bound-agent-credential',
   AGENTTEAMS_CONSOLE_AUTH: 'u6-console-credential',
 }
 
