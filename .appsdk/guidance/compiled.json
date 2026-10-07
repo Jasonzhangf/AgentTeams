@@ -1,8 +1,8 @@
 {
   "enforcement": "advisory",
   "harness": "appsdk-development-process-control",
-  "manifest_hash": "sha256:037a8314608539ecf1b39b82d23ee75fb9c8e5de1589e661a43d150ae1d795c1",
-  "project_contract_digest": "sha256:a80feb2d97e1e541ee6fe081e323b3d4b0c6f73434ecff66db00e24991080b58",
+  "manifest_hash": "sha256:782b7431fcc516c52ccf789fa8661a5e65769102e59a0be61139091ec8bc0584",
+  "project_contract_digest": "sha256:db154e82439c814cf87c6fe40ef906acbbe68b3741405a4f370ef40b8112c95e",
   "rules": [
     {
       "description": "Read only rule sources declared by the project contract.",
@@ -97,9 +97,9 @@
       "source_id": "project-agents"
     },
     {
-      "contract_digest": "sha256:054f4719f3e3f73dcfed64d2974913cea33745bbc30ecfedccc3160e9b9757f2",
+      "contract_digest": "sha256:565eb018676581216e97017506401734c10e60244fe3def4d7dc3fe64c9252c3",
       "contract_path": ".appsdk/skills/appsdk-project-governance/appsdk-guidance.json",
-      "digest": "sha256:937fc302ae0046ef965b37c2b6f17f58b17c98b76789dd4951cef7bb13c32f6f",
+      "digest": "sha256:68161533e754163e2a97dfaeaa13a29964915b258bb517f023d89ebc582e6141",
       "kind": "skill",
       "path": ".appsdk/skills/appsdk-project-governance/SKILL.md",
       "precedence": 200,
@@ -733,7 +733,7 @@
           "evidence": [
             "communication-state"
           ],
-          "instruction": "Run `collab context` and inspect the named identity, route, daemon, task, and inbox state; use `collab master status` separately when master state is needed.",
+          "instruction": "Run `collab context` once and read the returned identity, route, daemon, task, inbox, and authority state. If the daemon is explicitly down or context returns a runtime error, preserve the exact error and stop; daemon maintenance is human-authorized.",
           "node_id": "inspect_state",
           "owner": "project"
         },
@@ -741,7 +741,7 @@
           "evidence": [
             "recovery-receipt"
           ],
-          "instruction": "After a daemon restart, identity mismatch, or missing route, run `collab worker recover` only from the canonical project main tree; never edit routes, journal, mailbox, tokens, or start a second daemon.",
+          "instruction": "If context returns `required_fields`, supply only those real facts once with `collab context --provide '<JSON>'`. The supplement may contain only requested `session_id`, `thread_id`, `endpoint`, or `namespace` facts; it never supplies a worker, approval, token, route, or binding. The daemon owns identity creation, selection, recovery, registration, route publication, and lease restoration. Do not choose or hunt a worker and do not run a separate recovery command.",
           "node_id": "recover_route",
           "owner": "project"
         },
@@ -749,7 +749,7 @@
           "evidence": [
             "recovered-route"
           ],
-          "instruction": "Run `collab context` again and send one bounded recovery report request; preserve failure and stop if the route is still unknown, ambiguous, foreign, or not live.",
+          "instruction": "Use the snapshot returned by context or its one factual supplement. Continue only when it is registered and the target route is live; otherwise preserve the exact failure and stop.",
           "node_id": "verify_route",
           "owner": "project"
         },

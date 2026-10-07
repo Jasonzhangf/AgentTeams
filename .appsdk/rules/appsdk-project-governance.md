@@ -63,13 +63,15 @@ The current client is Codex only. A peer is bound to the Codex sessionID
 through the live App Server thread; the global Collab store is the identity,
 route, mailbox, task, and liveness truth. Tracked `.appsdk/` files are present
 in a Git worktree because they are committed, but ignored `.agent-collab/` and
-`.appsdk-control/` state is not inherited. Ordinary project initialization and
-Collab registration run from the canonical project main checkout. An
-authorized AppSDK `--fresh --discard-legacy` reset is a separate operation and
-may run from its clean non-main owner worktree as specified below. Inside a
-worktree the same Codex sessionID/thread remains the same peer; return to the
-canonical project main checkout for route recovery or master promotion. Never
-register the worktree as a second peer or promote yourself from a worktree.
+`.appsdk-control/` state is not inherited. Ordinary AppSDK project
+initialization runs from the canonical project main checkout. Agent-facing
+Collab identity bootstrap is `collab context`; it may run from the project or
+worktree, and the daemon resolves the canonical route. An authorized AppSDK
+`--fresh --discard-legacy` reset is a separate operation and may run from its
+clean non-main owner worktree as specified below. Inside a worktree the same
+Codex sessionID/thread remains the same peer; return to the canonical project
+main checkout for human-approved role changes. Never register the worktree as
+a second peer or promote yourself from a worktree.
 
 ## SDK source repository and managed project boundary
 
@@ -139,8 +141,8 @@ binary. Never start v2 or create a second global AppSDK entry as a workaround.
 
 ## Legacy governance inventory and reset boundary
 
-The canonical inspect, snapshot, freeze, reset or migrate, identity rebind,
-restart, and verify state machine belongs to the
+The canonical inspect, snapshot, freeze, reset or migrate, identity context
+reconciliation, restart, and verify state machine belongs to the
 [AppSDK migration Skill](../appsdk-migration/SKILL.md). This project Skill only
 defines what a managed project may classify, preserve, and hand to that Skill;
 do not copy the migration state machine into this file or into a project.
@@ -167,7 +169,7 @@ appsdk reset-governance <project> --discard-legacy
 collab down
 collab reset --discard-legacy --approval "<explicit user authorization>"
 collab up
-collab init
+collab context
 ```
 
 `collab reset` archives the exact `.agent-collab/` and `.agent-collab-v2/`
@@ -230,34 +232,31 @@ live communication.
 
 1. Read project AGENTS and affected code/contracts. Resolve owner, scope,
    acceptance and relevant gates. Read historical notes only when they help.
-2. Use a clean owner worktree from latest origin/main. Preserve others' work.
-   For multi-worker work, automatically register the peer, communications and
-   task/file scope through official Collab; enforce overlap/resource ownership.
-3. Implement the smallest adequate change. Use existing design for local work;
-   clarify only material unknowns. Do not require a new plan or approval when
-   scope is already authorized and clear.
-4. Run applicable tests, necessary build and actual entrypoint checks. Install
-   and restart only when required by the delivery object. Fix failures at their
-   owner, never forge evidence or hide errors.
-5. Review exact validated changes under the shared review standard. Block
-   concrete correctness, safety, contract or material structural regressions;
-   optional simplifications are advisory.
-6. Treat each stage as a re-entrant gate. Persist candidate/tree, scope,
-   dependency, artifact, producer and environment identity with its PASS
-   evidence. Reuse only when that identity is unchanged and fresh; otherwise
-   rerun from the first invalidated stage and its downstream dependants. A
-   stage-name or session change alone never forces a full rerun. Report reused
-   and rerun stages separately.
-7. Deliver within authorization. Report test, review, merge, install, publish
-   and resource cleanup as separate achieved states.
+2. Implement the smallest adequate change. Use existing design for local work;
+   clarify only material unknowns.
+3. Run only the applicable checks. Fix failures at their owner; never forge
+   evidence or hide errors.
+4. Stay within authorization. Report each achieved state separately: test,
+   review, merge, install, publish and resource cleanup are distinct, and a
+   result in one is not evidence for another.
+5. Single-file documentation and Skill edits are out of this loop: make the
+   change, run one targeted check, and do not acquire a plan, task, worktree
+   switch, extra review or lifecycle ceremony.
+
+The heavier parts of delivery are conditional, not a default. Take a clean owner
+worktree from latest `origin/main`, register peer and task/file scope through
+Collab, review under the shared standard, and reuse stage evidence under
+[Stage gates: re-entry and reuse](#stage-gates-re-entry-and-reuse) only when the
+changed module or the requested delivery actually needs them.
 
 ## Quick start: new governed project with Collab
 
 For a new business project that also needs agent-to-agent Collab, do not invent
 project-local transport or old `.appsdk/` state. Run the AppSDK flow from the
-project root, then let `appsdk init` invoke official Collab once when a live
-Codex App Server sessionID binding exists. App Server is the only supported
-Collab transport.
+project root. `appsdk init` may internally call the daemon context when a live
+Codex App Server sessionID binding exists; the agent-facing Collab bootstrap is
+one `collab context` after AppSDK initialization. App Server is the only
+supported Collab transport.
 
 ```bash
 cd /abs/path/project
@@ -276,23 +275,28 @@ user's behalf and do not bypass prepare by editing `.appsdk/project.json`.
 Detailed fields and an example are in
 [bootstrap-migration.md](references/bootstrap-migration.md).
 
-In a live Codex App Server runtime, `appsdk init` calls `collab init` once:
-Collab starts/reuses its daemon, selects the App Server transport by server
-capability, registers the current peer, and arms the default
-`direct-message` lease. `collab init` resolves the project scope from the exact
-process `cwd`. If no registered App Server route exists, AppSDK initialization
+In a live Codex App Server runtime, `appsdk init` remains the AppSDK project
+initialization owner and may invoke the daemon context internally. It does not
+authorize this Skill to invent a separate Collab identity bootstrap. The
+agent-facing Collab bootstrap is one `collab context`; `registered: true` ends
+bootstrap. If the snapshot returns `required_fields`, supply only those real
+facts once with `collab context --provide '<JSON>'`. The supplement may contain
+only `session_id`, `thread_id`, `endpoint`, or `namespace` when requested; it
+never supplies a worker, approval, token, route, or binding. The daemon owns
+identity creation, selection, recovery, registration, route publication, and
+lease restoration. If no registered App Server route exists, AppSDK initialization
 still succeeds for independent development, reports Collab pending, and never
-fabricates a peer or notification channel. Then use `collab context`,
-`collab sendmessage`, `collab inbox`, and `collab recv` only through the
-server-selected transport.
+fabricates a peer or notification channel. Do not rerun initialization to
+repair pending Collab. Then use `collab sendmessage`, `collab inbox`, and
+`collab recv` only through the server-selected transport.
 
 For an already governed project, the initialization contract is only:
 
 ```text
 collab context
 -> registered: stop
--> unregistered or context fails before registration: appsdk init .
--> collab context
+-> required_fields: collab context --provide '<JSON>' once
+-> explicit daemon DOWN or runtime error: preserve and stop
 -> role=master requires user approval and no live master; otherwise remain peer
 ```
 
@@ -369,6 +373,14 @@ deployment, merge or publication action merely because a later phase started.
 If a required input changes, invalidate only that phase and its downstream
 dependants. A candidate, review PASS, merge, push, install, restart or cleanup
 receipt never implies any other state.
+
+For design or architecture review that consumes project requirements, use
+[authoritative-review-template.md](references/authoritative-review-template.md)
+to assemble the packet from the project's authoritative source. The executing
+agent supplies observed scope and evidence; the independent reviewer reads the
+source and verifies every applicable requirement item. The template does not
+grant requirement authority, replace the SDK bundle owner's distribution work,
+or claim authentication or tamper protection.
 
 ### Optional black-box test governance
 
@@ -497,15 +509,15 @@ records before doing work.
   guessed cache. `verify` may reread the full graph for integrity without
   rerunning external commands.
 
-This staged reuse is part of AppSDK quality governance and has no dependency on
-Collab, Codex TUI, Desktop, or a particular agent runtime.
-
 ## Long-Horizon Goal Subscription & Master Saturation
+
+Selected for a long-running, master-scheduled task only. Ordinary development
+never registers a goal or saturation loop and never gates on them.
 
 `collab context` returns identity, liveness, tasks, inbox, `next_actions`,
 master/authority state, `role_brief`, and truth. Registration returns the brief
-effective at registration; `collab context` and `collab who` project the
-current brief, and promotion or delegation returns the replacement brief.
+effective at registration; `collab context` projects the current brief, and
+promotion or delegation returns the replacement brief.
 Treat that brief as the contract. Master dispatches rather than codes: split
 and assign work, allocate resources, keep workers loaded, own blockers, and
 drive verify/merge/cleanup/close.
@@ -520,8 +532,7 @@ then resume current work; with no task, run `appsdk longhorizon show`. Never end
 on ACK, read, or summary.
 
 For a live peer, `collab context` is the authority and task-state query and
-returns the canonical `role_brief`; do not use `whoami` as a second
-initialization path. When no work is owned, run
+returns the canonical `role_brief`. When no work is owned, run
 `appsdk longhorizon show --json`. Long waits must use the supported timer/wake
 path and then stop; do not poll in a loop.
 
@@ -592,11 +603,6 @@ evidence location.
   Normal memory writes use one `project-memory entry` invocation, which writes
   the raw event and regenerates detail/index/projection together; do not hand
   write one of those derived files as a separate step.
-  `memory/index.md` contains fixed-size Skill description candidates. Their L2/L3
-  lines already include the kind, tags, and relative `L2/` or `L3/` detail path.
-  During initialization or an intentional refresh, manually carry deduplicated
-  L1 lines into the project Skill description, then fill unused slots with L2
-  and L3 lines. Memory writes never rewrite Skill descriptions automatically.
   `project-memory reentry [project] --run <run-id>` to resume the same run after
   interruption. A missing or rebuilding memory index is not a governance
   failure, and memory state must not be reconstructed from Guide, debug,
@@ -607,6 +613,7 @@ evidence location.
 - Initialization or migration: [bootstrap-migration.md](references/bootstrap-migration.md).
 - Development/debug: [development-debug.md](references/development-debug.md).
 - Runtime review/delivery/freeze: [review-delivery.md](references/review-delivery.md).
+- Authoritative requirement review: [authoritative-review-template.md](references/authoritative-review-template.md).
 - Selected persistent planning: [process-control-harness.md](references/process-control-harness.md).
 - Contract errors/compatibility: [contracts-and-failures.md](references/contracts-and-failures.md).
 - Explicit goal-prompt request: [goal-prompt.md](references/goal-prompt.md).

@@ -34,6 +34,27 @@
     "pre_review_validation_id": {
       "type": "string"
     },
+    "project_bindings": {
+      "properties": {
+        "requirements_review": {
+          "properties": {
+            "checked": {
+              "type": "boolean"
+            },
+            "context_id": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "context_id",
+            "checked"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
     "promotion_id": {
       "type": "string"
     },
