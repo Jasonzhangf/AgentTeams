@@ -101,3 +101,60 @@ describe('declared capability rendering in a real DOM', () => {
     expect(output).toContain('data-card-no-unavailable="true"')
   })
 })
+
+describe('BB09 refresh completion in a real DOM', () => {
+  it('keeps the busy window distinct from completion and enables bind after reselection', { timeout: 30_000 }, () => {
+    const script = [classicModule('locale.ts'), classicModule('model.ts'), classicModule('render.ts')].join('\n')
+    if (/(^|\n)\s*(import|export)\b/.test(script)) throw new Error('classic module bundling left module syntax behind')
+    const directory = mkdtempSync(join(tmpdir(), 'teams-console-busy-window-'))
+    onTestFinished(() => {
+      rmSync(directory, { recursive: true, force: true })
+    })
+    const page = join(directory, 'busy-window.html')
+    const busyWindowScript = `<!doctype html>
+<html><body>
+  <div id="root"></div>
+  <script>
+${script}
+    const projection = { version: 1, agents: [{ kind: 'runtime', agentId: 'provider', label: 'Provider',
+      machineId: 'M1', presence: 'online', capabilities: [], sessionCapable: false, sessionAvailability: 'no-current' }],
+      sessions: [], notifications: [], configs: [{ agentId: 'provider', acceptedRevision: 1, providers: [{
+        id: 'p', label: 'Provider', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:1/v1', enabled: true,
+        authKind: 'none', catalogState: 'ready', models: [{ id: 'bb-console-model', label: 'BB Console Model' }],
+      }] }] }
+    let state = { open: true, entry: 'topology', drawer: { kind: 'settings', agentId: 'provider' },
+      drawerStack: [{ kind: 'settings', agentId: 'provider' }], drawerExpanded: false, projection,
+      status: 'ready', error: null, notice: null, busy: 'Refresh models', query: '', locale: 'en',
+      selectedAgentId: 'provider', providerFormOpen: false, editingProviderId: undefined,
+      providerDraft: { id: '', label: '', protocol: 'openai-chat', apiBaseUrl: '', enabled: true, authKind: 'none', credentialRef: '' } }
+    const root = document.getElementById('root')
+    const controller = { getSnapshot: () => state }
+    renderConsole(root, controller)
+    const modelSelect = () => document.querySelector('article.teams-provider-card select.teams-select')
+    const bindButton = () => document.querySelector('article.teams-provider-card .teams-model-row .teams-button-primary')
+    document.body.dataset.modelVisibleBusy = String([...modelSelect().options].some(option => option.value === 'bb-console-model'))
+    document.body.dataset.bindDisabledBusy = String(bindButton().disabled)
+    state = { ...state, busy: null, notice: 'Refresh models: accepted by Agent' }
+    renderConsole(root, controller)
+    document.body.dataset.selectResetAfterComplete = String(modelSelect().value === '')
+    document.body.dataset.bindDisabledAfterComplete = String(bindButton().disabled)
+    modelSelect().value = 'bb-console-model'
+    modelSelect().dispatchEvent(new Event('change', { bubbles: true }))
+    document.body.dataset.bindEnabledAfterReselect = String(bindButton().disabled === false)
+  </script>
+</body></html>`
+    writeFileSync(page, busyWindowScript)
+    const output = execFileSync(chromeExecutable(), [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-sandbox',
+      '--dump-dom',
+      pathToFileURL(page).toString(),
+    ], { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'ignore'] })
+    expect(output).toContain('data-model-visible-busy="true"')
+    expect(output).toContain('data-bind-disabled-busy="true"')
+    expect(output).toContain('data-select-reset-after-complete="true"')
+    expect(output).toContain('data-bind-disabled-after-complete="true"')
+    expect(output).toContain('data-bind-enabled-after-reselect="true"')
+  })
+})

@@ -15,6 +15,7 @@ import {
   Bb10SourceError,
   bb10LaunchEnv,
   bb09ConfigText,
+  bb09RefreshCompletion,
   canonicalSessionConfigText,
   cases,
   exitCode,
@@ -534,6 +535,21 @@ describe('BB09 HTTP projection admission', () => {
 })
 
 describe('BB09 config operation semantics', () => {
+  it('does not treat a visible model as refresh completion while the action is still busy', () => {
+    const busy = {
+      selectedAgent: 'bb-provider',
+      models: ['', 'bb-console-model'],
+      liveRegion: 'Refresh models…',
+      liveRegionIsError: false,
+      refreshDisabled: true,
+    }
+    expect(bb09RefreshCompletion(busy)).toBe(false)
+    expect(bb09RefreshCompletion({ ...busy, liveRegion: 'Refresh models: accepted by Agent', refreshDisabled: false })).toBe(true)
+    expect(bb09RefreshCompletion({ ...busy, liveRegion: 'Refresh models: accepted by Agent' })).toBe(false)
+    expect(bb09RefreshCompletion({ ...busy, liveRegion: 'Refresh models: host unavailable', refreshDisabled: false, liveRegionIsError: true })).toBe(false)
+    expect(bb09RefreshCompletion({ ...busy, selectedAgent: 'bb-receiver', liveRegion: 'Refresh models: accepted by Agent', refreshDisabled: false })).toBe(false)
+  })
+
   it('uses a real accepting bindModel operation after refresh stays observation-only', async () => {
     const root = temporaryRoot()
     const agentId = 'bb-provider'
@@ -568,5 +584,53 @@ describe('BB09 config operation semantics', () => {
     const acceptedAfterBind = await store.read()
     expect(acceptedAfterBind.acceptedRevision).toBe(acceptedBeforeRefresh + 1)
     expect(acceptedAfterBind.agents[agentId].primary).toEqual({ providerInstanceId: providerId, modelId })
+  })
+})
+
+describe('BB10 config operation semantics', () => {
+  it('switches canonical primary first and keeps the original RCC primary as a distinct backup', async () => {
+    const root = temporaryRoot()
+    const agentId = 'bb-provider'
+    const canonical = { providerInstanceId: 'goaichat-openai', modelId: 'qwen3.8-max' }
+    const rcc = { providerInstanceId: 'rcc-4444', modelId: 'goaichat_openai.qwen3.8-max' }
+    const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(root, 'config.json')))
+    const binding = createConsoleConfigBinding({
+      agentId,
+      store,
+      models: { listModels: async ({ provider }) => provider.id === canonical.providerInstanceId
+        ? [{ modelId: canonical.modelId, metadata: {} }]
+        : [{ modelId: rcc.modelId, metadata: {} }] },
+      applier: { apply: async request => ({ status: 'applied', effectiveRevision: request.config.acceptedRevision }) },
+    })
+
+    await binding.command({ kind: 'config.putProvider', agentId, expectedRevision: 0, provider: {
+      id: rcc.providerInstanceId, label: 'RCC 4444', protocol: 'openai-chat',
+      apiBaseUrl: 'http://127.0.0.1:4444/v1', enabled: true, auth: { kind: 'none' },
+    } })
+    await binding.command({ kind: 'config.putProvider', agentId, expectedRevision: 1, provider: {
+      id: canonical.providerInstanceId, label: 'GoAIChat OpenAI', protocol: 'openai-chat',
+      apiBaseUrl: 'https://example.test/v1', enabled: true, auth: { kind: 'none' },
+    } })
+    await binding.command({ kind: 'config.refreshModels', agentId, expectedRevision: 2, providerId: rcc.providerInstanceId })
+    await binding.command({ kind: 'config.refreshModels', agentId, expectedRevision: 2, providerId: canonical.providerInstanceId })
+    await binding.command({ kind: 'config.bindModel', agentId, expectedRevision: 2,
+      providerId: rcc.providerInstanceId, modelId: rcc.modelId })
+
+    const before = await store.read()
+    expect(before.acceptedRevision).toBe(3)
+    expect(before.agents[agentId]).toEqual({ primary: rcc })
+
+    await expect(binding.command({ kind: 'config.bindModel', agentId, expectedRevision: before.acceptedRevision,
+      providerId: canonical.providerInstanceId, modelId: canonical.modelId })).resolves.toEqual({ ok: true })
+    const primarySwitched = await store.read()
+    expect(primarySwitched.acceptedRevision).toBe(before.acceptedRevision + 1)
+    expect(primarySwitched.agents[agentId]).toEqual({ primary: canonical })
+
+    await expect(binding.command({ kind: 'config.agent.select-backup', agentId,
+      expectedRevision: before.acceptedRevision + 1, backup: rcc })).resolves.toEqual({ ok: true })
+    const final = await store.read()
+    expect(final.acceptedRevision).toBe(before.acceptedRevision + 2)
+    expect(final.agents[agentId]).toEqual({ primary: canonical, backup: rcc })
+    expect(final.agents[agentId].backup).not.toEqual(final.agents[agentId].primary)
   })
 })

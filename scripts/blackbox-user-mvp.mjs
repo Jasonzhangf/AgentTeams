@@ -1179,6 +1179,16 @@ socket.once('error', () => finish(false))
 
 const bb09StubProviderId = 'bb-console-stub'
 const bb09StubModelId = 'bb-console-model'
+const bb09RefreshSuccessNotice = 'Refresh models: accepted by Agent'
+
+function bb09RefreshCompletion(state) {
+  return state.selectedAgent === workProviderId
+    && Array.isArray(state.models)
+    && state.models.includes(bb09StubModelId)
+    && state.liveRegion === bb09RefreshSuccessNotice
+    && state.refreshDisabled === false
+    && state.liveRegionIsError === false
+}
 
 /**
  * The BB09 user `config.toml`. Both daemons are real and both explicitly
@@ -1272,6 +1282,34 @@ function readAcceptedConfigRevision(internalPath, agentId) {
   const internal = parseToml(readFileSync(internalPath, 'utf8'))
   const slice = internal.configRuntime?.accepted?.[agentId]
   return slice === undefined ? undefined : slice.acceptedRevision
+}
+
+/** Read the accepted primary/backup refs from the daemon's durable internal store. */
+function readAcceptedBinding(internalPath, agentId) {
+  const internal = parseToml(readFileSync(internalPath, 'utf8'))
+  const slice = internal.configRuntime?.accepted?.[agentId]
+  assert(slice !== undefined && typeof slice.snapshot === 'string',
+    `the daemon durable store has no accepted snapshot for ${agentId}`)
+  let snapshot
+  try {
+    snapshot = JSON.parse(slice.snapshot)
+  } catch {
+    fail(`the daemon durable accepted snapshot for ${agentId} is not valid JSON`)
+  }
+  const binding = snapshot?.agents?.[agentId]
+  assert(binding?.primary?.providerInstanceId !== undefined && binding?.primary?.modelId !== undefined,
+    `the daemon durable accepted snapshot has no primary binding for ${agentId}`)
+  return {
+    accepted_revision: slice.acceptedRevision,
+    primary: {
+      providerInstanceId: binding.primary.providerInstanceId,
+      modelId: binding.primary.modelId,
+    },
+    backup: binding.backup === undefined ? null : {
+      providerInstanceId: binding.backup.providerInstanceId,
+      modelId: binding.backup.modelId,
+    },
+  }
 }
 
 /** Replace every occurrence of a provisioned credential value in recorded text. */
@@ -1558,20 +1596,29 @@ async function bb09BrowserAcceptance(options) {
     'article.teams-provider-card .teams-provider-actions button:nth-of-type(2)')
   const refreshedCatalog = await waitForAsync(async () => {
     const current = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-refreshed-dom', profile,
-      `JSON.stringify({ catalog: document.querySelector('article.teams-provider-card .teams-catalog-state')?.textContent ?? null, models: [...document.querySelectorAll('article.teams-provider-card select.teams-select option')].map(option => option.value) })`))
-    return current.models.includes(bb09StubModelId) ? current : undefined
-  }, 60_000, 'the refreshed provider catalog to render the declared model')
-  assert(refreshedCatalog.models.includes(bb09StubModelId),
-    `the settings panel did not show the refreshed provider catalog: ${JSON.stringify(refreshedCatalog)}`)
+      `JSON.stringify({ catalog: document.querySelector('article.teams-provider-card .teams-catalog-state')?.textContent ?? null, models: [...document.querySelectorAll('article.teams-provider-card select.teams-select option')].map(option => option.value), selectedAgent: document.querySelector('div.teams-config-toolbar select.teams-select')?.value ?? null, liveRegion: document.querySelector('.teams-live-region')?.textContent ?? null, liveRegionIsError: document.querySelector('.teams-live-region')?.classList.contains('is-error') ?? false, refreshDisabled: document.querySelector('article.teams-provider-card .teams-provider-actions button:nth-of-type(2)')?.disabled ?? null })`))
+    if (current.liveRegionIsError === true) {
+      writeJson(join(evidenceDir, 'browser-config-refresh-error.json'), current)
+      fail(`the Console catalog refresh reported an error: ${JSON.stringify(current)}`)
+    }
+    return bb09RefreshCompletion(current) ? current : undefined
+  }, 60_000, 'the refreshed provider catalog to complete successfully')
+  assert(bb09RefreshCompletion(refreshedCatalog),
+    `the settings panel did not show the completed provider refresh: ${JSON.stringify(refreshedCatalog)}`)
   const refreshReadback = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-refresh-after',
     profile, `fetch('/api/v1/projection').then(r => r.json()).then(j => JSON.stringify({ configs: j.configs }))`))
   const refreshRow = refreshReadback.configs.find(row => row.agentId === workProviderId)
   assert(refreshRow.acceptedRevision === beforeRow.acceptedRevision,
     `the catalog refresh advanced the accepted revision: ${JSON.stringify([beforeRow.acceptedRevision, refreshRow.acceptedRevision])}`)
-  const bindSelection = await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-bind-select', profile,
-    `(() => { const select = document.querySelector('article.teams-provider-card select.teams-select'); if (select === null) return 'missing'; select.value = ${JSON.stringify(bb09StubModelId)}; select.dispatchEvent(new Event('change', { bubbles: true })); return select.value })()`)
-  assert(bindSelection === bb09StubModelId,
-    `the settings panel did not select the catalog model: ${bindSelection}`)
+  const bindPreclick = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-bind-select', profile,
+    `JSON.stringify((() => { const select = document.querySelector('article.teams-provider-card select.teams-select'); if (select === null) return { selectValue: null, bindDisabled: null, liveRegion: null, liveRegionIsError: null }; select.value = ${JSON.stringify(bb09StubModelId)}; select.dispatchEvent(new Event('change', { bubbles: true })); return { selectValue: select.value, bindDisabled: document.querySelector('article.teams-provider-card .teams-model-row .teams-button-primary')?.disabled ?? null, liveRegion: document.querySelector('.teams-live-region')?.textContent ?? null, liveRegionIsError: document.querySelector('.teams-live-region')?.classList.contains('is-error') ?? null } })())`))
+  writeJson(join(evidenceDir, 'browser-config-bind-preclick.json'), bindPreclick)
+  assert(bindPreclick.selectValue === bb09StubModelId,
+    `the settings panel did not select the catalog model: ${JSON.stringify(bindPreclick)}`)
+  assert(bindPreclick.bindDisabled === false,
+    `the bind button was not enabled before the real click: ${JSON.stringify(bindPreclick)}`)
+  assert(bindPreclick.liveRegion === bb09RefreshSuccessNotice && bindPreclick.liveRegionIsError === false,
+    `the bind click did not follow the completed refresh notice: ${JSON.stringify(bindPreclick)}`)
   camoClick(fixture, camo, evidenceDir, 'browser-config-actions', profile,
     'article.teams-provider-card .teams-model-row .teams-button-primary')
   const bindDiagScript = `JSON.stringify({ liveRegion: document.querySelector('.teams-live-region')?.textContent ?? null, drawer: document.querySelector('.teams-drawer')?.textContent ?? null, errorPanel: document.querySelector('.teams-error-panel')?.textContent ?? null, fieldHints: [...document.querySelectorAll('.teams-field-hint')].map(node => node.textContent), bindDisabled: document.querySelector('article.teams-provider-card .teams-model-row .teams-button-primary')?.disabled ?? null, selectValue: document.querySelector('article.teams-provider-card select.teams-select')?.value ?? null })`
@@ -2854,22 +2901,37 @@ async function runBB10(context) {
     const rccTurn = await visibleAssistantTurn(client, sessionAgentId, session.sessionId,
       bb10VisibleTaskPrompt, evidenceDir, 'bb10-rcc', 'the real RCC provider turn')
 
-    // (d) Explicitly select the canonical provider as primary and backup through
-    // the Console config entry, then apply it through the installed restart.
+    // (d) Explicitly switch the canonical provider to primary, then retain the
+    // original RCC primary as the backup reference through the Console config
+    // entry, then apply it through the installed restart.
     const beforeSelection = (await readInstalledProjection(client, undefined, 'bb10-selection-before'))
       .configs.find(row => row.agentId === sessionAgentId)
     const selectionRevision = beforeSelection.acceptedRevision
-    const selectBackup = await client.command({ kind: 'config.agent.select-backup', agentId: sessionAgentId,
-      expectedRevision: selectionRevision,
-      backup: { providerInstanceId: canonicalProviderId, modelId: preconditions.canonical.defaultModel } })
-    assert(selectBackup.body.ok === true, `the explicit backup selection failed: ${JSON.stringify(selectBackup.body)}`)
     const bindModel = await client.command({ kind: 'config.bindModel', agentId: sessionAgentId,
-      expectedRevision: selectionRevision + 1, providerId: canonicalProviderId, modelId: preconditions.canonical.defaultModel })
+      expectedRevision: selectionRevision, providerId: canonicalProviderId, modelId: preconditions.canonical.defaultModel })
     assert(bindModel.body.ok === true, `the explicit primary selection failed: ${JSON.stringify(bindModel.body)}`)
+    const acceptedPrimary = (await readInstalledProjection(client, evidenceDir, 'bb10-selection-primary-accepted'))
+      .configs.find(row => row.agentId === sessionAgentId)
+    assert(acceptedPrimary.acceptedRevision === selectionRevision + 1,
+      `the explicit primary selection did not advance by one: ${JSON.stringify(acceptedPrimary)}`)
+    const selectBackup = await client.command({ kind: 'config.agent.select-backup', agentId: sessionAgentId,
+      expectedRevision: selectionRevision + 1,
+      backup: { providerInstanceId: rccProviderId, modelId: rccSelectedModelToken } })
+    assert(selectBackup.body.ok === true, `the explicit backup selection failed: ${JSON.stringify(selectBackup.body)}`)
     const acceptedSelection = (await readInstalledProjection(client, evidenceDir, 'bb10-selection-accepted'))
       .configs.find(row => row.agentId === sessionAgentId)
     assert(acceptedSelection.acceptedRevision === selectionRevision + 2,
       `the accepted revision did not advance with the explicit selection: ${JSON.stringify(acceptedSelection)}`)
+    const acceptedBinding = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
+    writeJson(join(evidenceDir, 'bb10-selection-binding.json'), acceptedBinding)
+    assert(acceptedBinding.accepted_revision === selectionRevision + 2,
+      `the durable accepted binding did not retain the explicit selection revision: ${JSON.stringify(acceptedBinding)}`)
+    assert(acceptedBinding.primary.providerInstanceId === canonicalProviderId
+      && acceptedBinding.primary.modelId === preconditions.canonical.defaultModel,
+    `the durable accepted binding did not make canonical primary: ${JSON.stringify(acceptedBinding)}`)
+    assert(acceptedBinding.backup?.providerInstanceId === rccProviderId
+      && acceptedBinding.backup.modelId === rccSelectedModelToken,
+    `the durable accepted binding did not retain RCC as backup: ${JSON.stringify(acceptedBinding)}`)
 
     const generationBefore = lifecycle.parsed.generation
     const switchStop = await stopSessionFixture(fixture, lifecycle, evidenceDir, 'bb10-switch')
@@ -2882,6 +2944,14 @@ async function runBB10(context) {
       .configs.find(row => row.agentId === sessionAgentId)
     assert(restartedRow.acceptedRevision === selectionRevision + 2,
       `the accepted explicit selection did not survive the installed restart: ${JSON.stringify(restartedRow)}`)
+    const restartedBinding = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
+    writeJson(join(evidenceDir, 'bb10-switch-binding.json'), restartedBinding)
+    assert(restartedBinding.accepted_revision === selectionRevision + 2
+      && restartedBinding.primary.providerInstanceId === canonicalProviderId
+      && restartedBinding.primary.modelId === preconditions.canonical.defaultModel
+      && restartedBinding.backup?.providerInstanceId === rccProviderId
+      && restartedBinding.backup.modelId === rccSelectedModelToken,
+    `the durable accepted primary/backup selection did not survive restart: ${JSON.stringify(restartedBinding)}`)
     const switchedApply = await applySessionConfigAndWait(switchedClient, sessionAgentId, evidenceDir, 'bb10-switch')
     assert(switchedApply.agent.providerId === canonicalProviderId
       && switchedApply.agent.modelId === preconditions.canonical.defaultModel,
@@ -2922,8 +2992,8 @@ async function runBB10(context) {
           'POST /api/v1/command {"kind":"config.apply","agentId":"bb-provider"}',
           'POST /api/v1/command {"kind":"session.create","agentId":"bb-provider"}',
           'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S1> {"text":"<visible task>"} (real RCC provider)',
-          'POST /api/v1/command {"kind":"config.agent.select-backup","backup":{"providerInstanceId":"goaichat-openai"}}',
           'POST /api/v1/command {"kind":"config.bindModel","providerId":"goaichat-openai"}',
+          'POST /api/v1/command {"kind":"config.agent.select-backup","backup":{"providerInstanceId":"rcc-4444"}}',
           'agentteams stop --config <isolated-home>/.agentteams/config.toml --generation <G>',
           'agentteams start --config <isolated-home>/.agentteams/config.toml',
           'agentteams console start --config <isolated-home>/.agentteams/config.toml',
@@ -2955,12 +3025,12 @@ async function runBB10(context) {
           accepted_revision_after_refresh: refreshedRow.acceptedRevision,
         },
         rcc_binding: { apply: firstApply, config: publicJson(appliedConfig), session: session.created, turn: rccTurn },
-        explicit_selection: { accepted_revision_before: selectionRevision, select_backup: publicJson(selectBackup.body),
-          bind_model: publicJson(bindModel.body), accepted_revision_after: acceptedSelection.acceptedRevision,
-          accepted_row: publicJson(acceptedSelection) },
+        explicit_selection: { accepted_revision_before: selectionRevision, bind_model: publicJson(bindModel.body),
+          select_backup: publicJson(selectBackup.body), accepted_revision_after: acceptedSelection.acceptedRevision,
+          accepted_row: publicJson(acceptedSelection), accepted_binding: acceptedBinding },
         switch_apply: { launcher_generation_before: generationBefore, launcher_generation_after: lifecycle.parsed.generation,
           accepted_after_restart: publicJson(restartedRow), effective_after_switch: publicJson(switchedApply.agent),
-          session: switchedSession.created },
+          restarted_binding: restartedBinding, session: switchedSession.created },
         canonical_binding: { turn: canonicalTurn, config: publicJson(readbackConfig), agent: publicJson(readbackAgent) },
         lifecycle_anomaly: {
           switch_stop_relay_exit: switchStop.relay_anomaly,
@@ -4727,6 +4797,7 @@ export {
   Bb10SourceError,
   bb10LaunchEnv,
   bb09ConfigText,
+  bb09RefreshCompletion,
   canonicalSessionConfigText,
   cases,
   parseArgs,
