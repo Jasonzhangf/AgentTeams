@@ -7,9 +7,23 @@ import {
   parseSessionCancelUnknownDetail,
   parseSessionCreateResult,
   projectCapabilityDetails,
+  type ConsoleAcceptedBinding,
 } from './console-api.ts'
 
+const canonicalAcceptedBinding: ConsoleAcceptedBinding = {
+  primary: { providerInstanceId: 'p', modelId: 'm' },
+  backup: { providerInstanceId: 'b', modelId: 'mb' },
+}
+
 describe('Console control ingress', () => {
+  it('publishes the accepted binding reference type without config or credential fields', () => {
+    expect(canonicalAcceptedBinding).toEqual({
+      primary: { providerInstanceId: 'p', modelId: 'm' },
+      backup: { providerInstanceId: 'b', modelId: 'mb' },
+    })
+    expect(Object.keys(canonicalAcceptedBinding).sort()).toEqual(['backup', 'primary'])
+  })
+
   it('admits each frozen command without changing it', () => {
     const commands = [
       { kind: 'session.open', agentId: 'a', sessionId: 's' },

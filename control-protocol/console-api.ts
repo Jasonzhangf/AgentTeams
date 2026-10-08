@@ -25,6 +25,14 @@ export interface ConsoleProviderView {
   readonly models: readonly { readonly id: string; readonly label?: string }[]
   readonly error?: ConsoleServiceError
 }
+export interface ConsoleBindingRef {
+  readonly providerInstanceId: string
+  readonly modelId: string
+}
+export interface ConsoleAcceptedBinding {
+  readonly primary: ConsoleBindingRef
+  readonly backup?: ConsoleBindingRef
+}
 export interface ConsoleModelMetadata {
   readonly label?: string
   readonly contextWindow?: number
@@ -343,6 +351,8 @@ export interface ConsoleProjectionV1 {
     readonly agentId: string; readonly acceptedRevision: number; readonly effectiveRevision?: number
     /** Durable config-owner fence projection; always emitted by the U2 config binding. */
     readonly applyState?: 'clean' | 'uncertain'
+    /** Accepted binding from the same config view; null before the first explicit accept. */
+    readonly acceptedBinding?: ConsoleAcceptedBinding | null
     readonly providers: readonly ConsoleProviderView[]; readonly error?: ConsoleServiceError
   }[]
   readonly sessionEvents?: readonly ConsoleSessionEventView[]

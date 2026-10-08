@@ -18,12 +18,16 @@ it('routes config CAS to durable owner and retains apply failure without effecti
     models: { listModels: async () => [{ modelId: 'm', metadata: {} }] },
     applier: { apply: async () => ({ status: 'unsupported', error: { code: 'UNSUPPORTED_OPERATION', message: 'Managed child absent' } }) },
   })
+  expect(await binding.readProjection()).toMatchObject({ agentId: 'a', acceptedRevision: 0, acceptedBinding: null })
   await binding.command({ kind: 'config.putProvider', agentId: 'a', expectedRevision: 0, provider: {
     id: 'p', label: 'P', protocol: 'openai-chat', apiBaseUrl: 'https://example.test/v1', enabled: true, auth: { kind: 'none' },
   } })
   await expect(binding.command({ kind: 'config.refreshModels', agentId: 'a', expectedRevision: 0, providerId: 'p' })).resolves.toMatchObject({ ok: false, error: { code: 'REVISION_CONFLICT' } })
   await binding.command({ kind: 'config.refreshModels', agentId: 'a', expectedRevision: 1, providerId: 'p' })
   await binding.command({ kind: 'config.bindModel', agentId: 'a', expectedRevision: 1, providerId: 'p', modelId: 'm' })
+  expect(await binding.readProjection()).toMatchObject({
+    agentId: 'a', acceptedRevision: 2, acceptedBinding: { primary: { providerInstanceId: 'p', modelId: 'm' } },
+  })
   await expect(binding.command({ kind: 'config.apply', agentId: 'a' })).resolves.toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
   const reloaded = await createRuntimeConfigStore(createJsonFileConfigPersistence(file)).read()
   expect(reloaded.agents.a.primary).toEqual({ providerInstanceId: 'p', modelId: 'm' })
@@ -31,6 +35,7 @@ it('routes config CAS to durable owner and retains apply failure without effecti
   expect(reloaded.effectiveRevision).toBeUndefined()
   expect(reloaded.lastApplyError?.code).toBe('UNSUPPORTED_OPERATION')
   expect(await binding.readProjection()).toMatchObject({ agentId: 'a', acceptedRevision: 2,
+    acceptedBinding: { primary: { providerInstanceId: 'p', modelId: 'm' } },
     providers: [{ id: 'p', authKind: 'none', catalogState: 'ready', models: [{ id: 'm' }] }],
     error: { code: 'UNSUPPORTED_OPERATION' },
   })
@@ -52,7 +57,13 @@ it('puts a manual model through the typed console binding with CAS and projectio
   await expect(binding.command({ kind: 'config.model.put', agentId: 'a', expectedRevision: 0, entry })).resolves.toMatchObject({ ok: false, error: { code: 'REVISION_CONFLICT' } })
   await expect(binding.command({ kind: 'config.model.put', agentId: 'a', expectedRevision: 1, entry })).resolves.toEqual({ ok: true })
   expect((await store.read()).acceptedRevision).toBe(2)
-  expect(await binding.readProjection()).toMatchObject({ acceptedRevision: 2, providers: [{ id: 'p', catalogState: 'ready', models: [{ id: 'manual', label: 'Pinned' }] }] })
+  await binding.command({ kind: 'config.bindModel', agentId: 'a', expectedRevision: 2, providerId: 'p', modelId: 'manual' })
+  expect((await store.read()).acceptedRevision).toBe(3)
+  expect(await binding.readProjection()).toMatchObject({
+    acceptedRevision: 3,
+    acceptedBinding: { primary: { providerInstanceId: 'p', modelId: 'manual' } },
+    providers: [{ id: 'p', catalogState: 'ready', models: [{ id: 'manual', label: 'Pinned' }] }],
+  })
   expect(JSON.stringify(await binding.readProjection())).not.toContain('credential')
 })
 it('selects explicit backup through console binding, advances accepted revision, and readback survives restart after apply', async () => {
@@ -77,6 +88,9 @@ it('selects explicit backup through console binding, advances accepted revision,
   await binding.command({ kind: 'config.refreshModels', agentId: 'a', expectedRevision: 2, providerId: 'goaichat' })
   await binding.command({ kind: 'config.bindModel', agentId: 'a', expectedRevision: 2, providerId: 'rcc', modelId: 'gpt-5.5' })
   expect((await store.read()).agents.a).toEqual({ primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } })
+  expect(await binding.readProjection()).toMatchObject({
+    acceptedRevision: 3, acceptedBinding: { primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } },
+  })
 
   await binding.command({ kind: 'config.agent.select-backup', agentId: 'a', expectedRevision: 3, backup: { providerInstanceId: 'goaichat', modelId: 'qwen3.8-max' } })
   expect((await store.read()).acceptedRevision).toBe(4)
@@ -85,6 +99,13 @@ it('selects explicit backup through console binding, advances accepted revision,
     backup: { providerInstanceId: 'goaichat', modelId: 'qwen3.8-max' },
   })
   expect(await store.readEffective()).toMatchObject({ acceptedRevision: 4, applyState: 'clean' })
+  expect(await binding.readProjection()).toMatchObject({
+    acceptedRevision: 4,
+    acceptedBinding: {
+      primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' },
+      backup: { providerInstanceId: 'goaichat', modelId: 'qwen3.8-max' },
+    },
+  })
   await binding.command({ kind: 'config.apply', agentId: 'a' })
   expect(await store.readEffective()).toMatchObject({ acceptedRevision: 4, effectiveRevision: 4, applyState: 'clean' })
 
@@ -94,6 +115,10 @@ it('selects explicit backup through console binding, advances accepted revision,
   })
   expect(await restarted.readProjection()).toMatchObject({
     agentId: 'a', acceptedRevision: 4, effectiveRevision: 4,
+    acceptedBinding: {
+      primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' },
+      backup: { providerInstanceId: 'goaichat', modelId: 'qwen3.8-max' },
+    },
     providers: [
       { id: 'rcc', authKind: 'none', catalogState: 'ready', models: [{ id: 'gpt-5.5' }] },
       { id: 'goaichat', authKind: 'bearer', catalogState: 'ready', models: [{ id: 'qwen3.8-max' }] },
@@ -101,6 +126,19 @@ it('selects explicit backup through console binding, advances accepted revision,
   })
   expect(JSON.stringify(await restarted.readProjection())).not.toContain('secret-not-projected')
   expect(JSON.stringify(await restarted.readProjection())).not.toContain('cred:goaichat')
+})
+it('fails explicitly when accepted revision is present but its binding is absent', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'teams-console-binding-missing-')); directories.push(directory)
+  const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(directory, 'config.json')))
+  await store.putProviderInstance(0, {
+    id: 'p', label: 'P', protocol: 'openai-chat', apiBaseUrl: 'https://example.test/v1', enabled: true, auth: { kind: 'none' },
+  })
+  const binding = createConsoleConfigBinding({ agentId: 'a', store,
+    models: { listModels: async () => [] },
+    applier: { apply: async () => ({ status: 'unsupported', error: { code: 'UNSUPPORTED_OPERATION', message: 'not invoked' } }) },
+  })
+  expect((await store.read()).acceptedRevision).toBe(1)
+  await expect(binding.readProjection()).rejects.toMatchObject({ code: 'UNAVAILABLE', message: expect.stringContaining('accepted binding') })
 })
 it('rejects stale, missing, conflicting, and wrong-target backup selection without mutating config', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'teams-console-backup-errors-')); directories.push(directory)
@@ -126,12 +164,18 @@ it('rejects stale, missing, conflicting, and wrong-target backup selection witho
     backup: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } })).resolves.toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
   expect((await store.read()).acceptedRevision).toBe(current)
   expect((await store.read()).agents.a).toEqual({ primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } })
+  expect(await binding.readProjection()).toMatchObject({
+    acceptedRevision: current,
+    acceptedBinding: { primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' } },
+  })
 })
 it('carries credential error context through real HTTP to the UI client without converting it to success', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'teams-console-errors-')); directories.push(directory)
   const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(directory, 'config.json')))
   await store.putProviderInstance(0, { id: 'p', label: 'P', protocol: 'openai-chat', apiBaseUrl: 'https://example.test/v1', enabled: true,
     auth: { kind: 'bearer', credentialRef: 'private-reference' } })
+  await store.putModelEntry(1, { ref: { providerInstanceId: 'p', modelId: 'm' }, origin: 'manual', base: {}, overrides: {} })
+  await store.bindAgentModel(2, 'a', { primary: { providerInstanceId: 'p', modelId: 'm' } })
   const binding = createConsoleConfigBinding({ agentId: 'a', store,
     models: { listModels: async () => { throw new Error('must not reach provider without credentials') } },
     applier: { apply: async () => { throw new Error('not invoked') } },
@@ -148,7 +192,7 @@ it('carries credential error context through real HTTP to the UI client without 
   try {
     const address = server.address() as { port: number }
     const client = createConsoleHttpClient({ baseUrl: `http://127.0.0.1:${address.port}` })
-    const result = await client.command({ kind: 'config.refreshModels', agentId: 'a', expectedRevision: 1, providerId: 'p' })
+    const result = await client.command({ kind: 'config.refreshModels', agentId: 'a', expectedRevision: 3, providerId: 'p' })
     expect(result).toEqual({ ok: false, error: (await store.read()).catalogs.p.error })
     expect(result).toMatchObject({ ok: false, error: { code: 'CREDENTIAL_UNAVAILABLE', providerInstanceId: 'p' } })
     expect(JSON.stringify(result)).not.toContain('private-reference')

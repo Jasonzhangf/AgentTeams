@@ -36,6 +36,27 @@ it('rejects a cross-Agent projection instead of merging it into another owner', 
   await expect(client.readProjection()).rejects.toMatchObject({ code: 'INVALID_INPUT' })
 })
 
+it('carries the accepted binding through owner aggregation and rejects a crossed config row', async () => {
+  const configRow = (agentId: string) => ({
+    agentId, acceptedRevision: 2, effectiveRevision: 2, applyState: 'clean' as const,
+    acceptedBinding: { primary: { providerInstanceId: 'provider-a', modelId: 'model-a' } },
+    providers: [],
+  })
+  const owned = createConsoleHub([{ agentId: 'a', client: {
+    readProjection: async () => ({ version: 1 as const, agents: [], sessions: [], configs: [configRow('a')],
+      notifications: [], works: [], relations: [] }),
+    command: async () => ({ ok: true as const }), sendSession: async () => ({ ok: true as const }),
+  } }])
+  expect((await owned.readProjection()).configs).toEqual([configRow('a')])
+
+  const crossed = createConsoleHub([{ agentId: 'a', client: {
+    readProjection: async () => ({ version: 1 as const, agents: [], sessions: [], configs: [configRow('b')],
+      notifications: [], works: [], relations: [] }),
+    command: async () => ({ ok: true as const }), sendSession: async () => ({ ok: true as const }),
+  } }])
+  await expect(crossed.readProjection()).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+})
+
 it('rejects a cross-Agent Session event and accepts the owned event', async () => {
   const event = (agentId: string) => ({ eventId: 'e', agentId, sessionId: 's', kind: 'message' as const, state: 'completed' as const,
     messageId: 'm', role: 'assistant' as const })
