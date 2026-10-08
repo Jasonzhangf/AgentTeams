@@ -727,7 +727,7 @@ in progress` 之外的无解释失败；Console runtime 最终状态由实际 st
 | 静态绑定（显式 `[console].agentIds`） | 独立隔离 fixture（自有 HOME/prefix/data dir/动态端口/Camo profile）内两个同域 daemon 显式授权 `__console`；安装态 projection 恰为显式两个 ID 且 online；卡片与详情按值对应 label/machineId 与 `capabilityDetails`；不重复配置交互、离线 Work 与完整 Session | `cases/BB09/static-binding/` 下 `npm-pack.json`、`npm-install.json`、`init.json`、`bb09-static-start.json`、`bb09-static-status.json`、`browser-start.json`、`browser-clean-navigation.json`、`browser-projection-status.json`、`browser-projection.json`、`browser-agents-dom.json`、`browser-detail-action.json`、`browser-detail-dom.json`、`browser-resources-dom.json`、`browser-cleanup.json`、`cleanup.json`、`static-binding.json` |
 | 权威服务/资源 | browser API 返回真实 producer 的 `capabilityDetails`；DOM 展示 capability/version/operation/resourceId/capacity/unit，并与公开 installed status 的声明对应 | `browser-projection.json`、`browser-resources-dom.json` |
 | 观察交互 | 点击 Agent 详情，drawer 显示对应 Agent 的声明；刷新仍从 owner projection 读回 | `browser-detail-action.json`、`browser-detail-dom.json` |
-| 配置交互 | 真实点击「服务配置」、选择目标 Agent、执行一次现有 provider 配置操作；公开 accepted revision 前进，另一 Agent 不变；DOM 刷新显示读回值 | `browser-config-actions.json`、`browser-config-before.json`、`browser-config-after.json` |
+| 配置交互 | 真实点击「服务配置」、选择目标 Agent、先执行一次真实 `refreshModels` 并等到该动作**真正结束**（本次动作的成功 notice 出现、该卡片的操作按钮恢复可用、live region 无错误），再选择模型并在真实点击前证明 bind 按钮已启用；公开 accepted revision 恰前进 1，另一 Agent 不变；DOM 刷新显示读回值 | `browser-config-actions.json`、`browser-config-before.json`、`browser-config-refresh-after.json`、`browser-config-bind-preclick.json`、`browser-config-after.json` |
 | auth 拒绝 | fresh 未认证 profile 页面/API 401；未认证管理命令 401，配置无变化 | `browser-unauthenticated.json`、`auth-refusals.json` |
 | origin 拒绝 | 对安装后 listener 发 authenticated 错 Origin/cross-site 请求，返回既有 401；合法同源 browser 操作仍成功 | `origin-refusals.json`、`browser-same-origin.json` |
 | Agent policy 拒绝 | 隔离未授权 manager 场景经公开管理入口得到 `FORBIDDEN`；配置 revision 不变 | `agent-policy-refusal.json`、前后公开 projection |
@@ -742,8 +742,12 @@ real-provider PASS。O1 的「选择后无配置数据」只证明控件能力�
 配置交互的次序与 owner 边界：`config.refreshModels` 只写 catalog observation，**不推进**
 accepted revision；accepted revision 只能由真实 accept 路径（如 `config.bindModel` → `mutate`）
 推进。BB09 的配置交互因此先执行一次真实 refresh（断言 accepted revision 不变），再执行一次
-真实 bind（断言 accepted revision 恰前进 1，且另一 Agent 配置不变）。BB09 汇总目录发现与
-静态绑定两份观察，任一子场景失败则 BB09 不得 passed。
+真实 bind（断言 accepted revision 恰前进 1，且另一 Agent 配置不变）。**模型选项出现在 DOM 里
+不等于该动作已经结束**：Console 在动作进行中把操作按钮置为 disabled，动作结束时的重渲染又会按
+投影重建控件（本场景该 Agent 尚无生效绑定，模型下拉回到占位符）。驱动因此必须在同一次轮询里
+等到本次动作的成功 notice 与按钮恢复可用，选择模型后在真实点击前断言 bind 已启用；选择与点击
+之间不得插入其他 Console 动作。BB09 汇总目录发现与静态绑定两份观察，任一子场景失败则 BB09
+不得 passed。
 
 ---
 
