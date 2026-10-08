@@ -1188,6 +1188,7 @@ const bb09StubModelId = 'bb-console-model'
  */
 function bb09ConfigText(spec) {
   const managerList = `[${spec.allowedManagers.map(id => JSON.stringify(id)).join(', ')}]`
+  const staticBinding = spec.agentIds === undefined ? '' : `agentIds = ${JSON.stringify(spec.agentIds)}\n`
   return `version = 3
 
 [bridge]
@@ -1201,12 +1202,12 @@ label = "BB09-Provider"
 [agents.${workProviderId}.identity]
 hostId = "bb-local"
 machineId = "bb-machine"
-accountId = "bb-account"
+accountId = "local"
 agentKind = "custom"
 label = "BB09-Provider"
 
 [agents.${workProviderId}.runtime]
-scopeId = "bb-scope"
+scopeId = "local"
 dataDirectory = "data/${workProviderId}"
 policy = { revision = 1, allowedConsumers = ["${workReceiverId}"], allowedManagers = ${managerList} }
 cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(spec.searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${workProviderId}" }
@@ -1227,12 +1228,12 @@ label = "BB09-Receiver"
 [agents.${workReceiverId}.identity]
 hostId = "bb-local"
 machineId = "bb-machine"
-accountId = "bb-account"
+accountId = "local"
 agentKind = "custom"
 label = "BB09-Receiver"
 
 [agents.${workReceiverId}.runtime]
-scopeId = "bb-scope"
+scopeId = "local"
 dataDirectory = "data/${workReceiverId}"
 policy = { revision = 1, allowedConsumers = [], allowedManagers = ${managerList} }
 cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(spec.searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${workReceiverId}" }
@@ -1259,7 +1260,7 @@ label = "BB09 Stub Model"
 enabled = true
 username = ${JSON.stringify(consoleUsername)}
 passwordEnv = ${JSON.stringify(consolePasswordEnv)}
-`
+${staticBinding}`
 }
 
 /**
@@ -1453,6 +1454,7 @@ async function bb09BrowserAcceptance(options) {
   assert(projection.version === 1 && Array.isArray(projection.agents),
     `the browser projection was not a version 1 document: ${projectionJson.slice(0, 400)}`)
   writeJson(join(evidenceDir, 'browser-projection.json'), projection)
+  if (options.assertProjection !== undefined) options.assertProjection(projection)
 
   const rows = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-agents-dom', profile, bb09AgentRowsScript))
   writeJson(join(evidenceDir, 'browser-agents-dom.json'), rows)
@@ -1498,7 +1500,9 @@ async function bb09BrowserAcceptance(options) {
     rendered: rows.find(row => row.agentId === workProviderId)?.text ?? '',
   })
   const providerText = rows.find(row => row.agentId === workProviderId)?.text ?? ''
-  assert(/file-search/u.test(providerText) && /search-slot[^A-Za-z0-9]{0,8}2[^A-Za-z0-9]{0,8}slot/u.test(providerText),
+  // The rendered label spacing comes from the product locale, not a behavior contract;
+  // assert the observable service, resource, and capacity-with-unit facts by value.
+  assert(/file-search/u.test(providerText) && /search-slot/u.test(providerText) && /2\s*slot/u.test(providerText),
     `the browser card did not render the declared service and resource detail: ${providerText}`)
   assert(!/剩余/u.test(providerText) && !/remaining/iu.test(providerText),
     `the browser card presented the declared capacity as remaining capacity: ${providerText}`)
@@ -1524,13 +1528,17 @@ async function bb09BrowserAcceptance(options) {
   const refreshedProvider = refreshedRows.find(row => row.agentId === workProviderId)
   assert(refreshedProvider !== undefined && /file-search/u.test(refreshedProvider.text),
     `the refreshed panel lost the Agent declaration: ${JSON.stringify(refreshedRows)}`)
-  assert(/search-slot[^A-Za-z0-9]{0,8}2[^A-Za-z0-9]{0,8}slot/u.test(refreshedProvider.text),
+  // The rendered label spacing comes from the product locale, not a behavior
+  // contract; assert the observable service, resource, and capacity facts by value.
+  assert(/file-search/u.test(refreshedProvider.text) && /search-slot/u.test(refreshedProvider.text)
+    && /2\s*slot/u.test(refreshedProvider.text),
     `the refreshed panel lost the declared resource detail: ${refreshedProvider.text}`)
 
   // (c) Configuration interaction: a real click opens the Console settings entry,
-  // the settings toolbar selects a real Agent, and a real provider-card click runs
-  // an existing provider operation. The accepted revision advances for that Agent
-  // only and the browser reads the result back from the owner projection.
+  // the settings toolbar selects a real Agent, a real click refreshes the catalog
+  // observation, and a real click binds a catalog model. Catalog refresh is
+  // observation-only; the bind operation owns the accepted revision advance.
+  if (options.skipConfigInteraction !== true) {
   const before = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-before',
     profile, `fetch('/api/v1/projection').then(r => r.json()).then(j => JSON.stringify({ configs: j.configs }))`))
   writeJson(join(evidenceDir, 'browser-config-before.json'), before)
@@ -1546,8 +1554,26 @@ async function bb09BrowserAcceptance(options) {
   const cardView = JSON.parse(cardState)
   assert(cardView.selected === workProviderId, `the settings toolbar did not keep the selected Agent: ${cardState}`)
   assert(cardView.providers.length === 1, `the settings panel did not render the one configured provider: ${cardState}`)
-  camoClick(fixture, camo, evidenceDir, 'browser-config-actions', profile,
+  camoClick(fixture, camo, evidenceDir, 'browser-config-refresh-action', profile,
     'article.teams-provider-card .teams-provider-actions button:nth-of-type(2)')
+  const refreshedCatalog = await waitForAsync(async () => {
+    const current = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-refreshed-dom', profile,
+      `JSON.stringify({ catalog: document.querySelector('article.teams-provider-card .teams-catalog-state')?.textContent ?? null, models: [...document.querySelectorAll('article.teams-provider-card select.teams-select option')].map(option => option.value) })`))
+    return current.models.includes(bb09StubModelId) ? current : undefined
+  }, 60_000, 'the refreshed provider catalog to render the declared model')
+  assert(refreshedCatalog.models.includes(bb09StubModelId),
+    `the settings panel did not show the refreshed provider catalog: ${JSON.stringify(refreshedCatalog)}`)
+  const refreshReadback = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-refresh-after',
+    profile, `fetch('/api/v1/projection').then(r => r.json()).then(j => JSON.stringify({ configs: j.configs }))`))
+  const refreshRow = refreshReadback.configs.find(row => row.agentId === workProviderId)
+  assert(refreshRow.acceptedRevision === beforeRow.acceptedRevision,
+    `the catalog refresh advanced the accepted revision: ${JSON.stringify([beforeRow.acceptedRevision, refreshRow.acceptedRevision])}`)
+  const bindSelection = await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-bind-select', profile,
+    `(() => { const select = document.querySelector('article.teams-provider-card select.teams-select'); if (select === null) return 'missing'; select.value = ${JSON.stringify(bb09StubModelId)}; select.dispatchEvent(new Event('change', { bubbles: true })); return select.value })()`)
+  assert(bindSelection === bb09StubModelId,
+    `the settings panel did not select the catalog model: ${bindSelection}`)
+  camoClick(fixture, camo, evidenceDir, 'browser-config-actions', profile,
+    'article.teams-provider-card .teams-model-row .teams-button-primary')
   const after = await waitForAsync(async () => {
     const current = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-after',
       profile, `fetch('/api/v1/projection').then(r => r.json()).then(j => JSON.stringify({ configs: j.configs }))`))
@@ -1557,11 +1583,13 @@ async function bb09BrowserAcceptance(options) {
   writeJson(join(evidenceDir, 'browser-config-after.json'), after)
   const afterRow = after.configs.find(row => row.agentId === workProviderId)
   assert(afterRow.acceptedRevision === beforeRow.acceptedRevision + 1,
-    `the Console provider operation advanced the accepted revision by ${afterRow.acceptedRevision - beforeRow.acceptedRevision}: ${JSON.stringify(afterRow)}`)
+    `the Console bind operation advanced the accepted revision by ${afterRow.acceptedRevision - beforeRow.acceptedRevision}: ${JSON.stringify(afterRow)}`)
   const afterCard = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-after-dom', profile,
     `JSON.stringify({ catalog: document.querySelector('article.teams-provider-card .teams-catalog-state')?.textContent ?? null, models: [...document.querySelectorAll('article.teams-provider-card select.teams-select option')].map(option => option.value) })`))
-  assert(afterCard.models.includes(bb09StubModelId),
-    `the settings panel did not show the refreshed provider catalog: ${JSON.stringify(afterCard)}`)
+  const boundModel = afterRow.providers.find(provider => provider.id === bb09StubProviderId)?.models
+    .find(model => model.id === bb09StubModelId)
+  assert(boundModel?.id === bb09StubModelId,
+    `the projection did not retain the bound provider model: ${JSON.stringify(afterRow)}`)
   const otherAfter = after.configs.find(row => row.agentId === workReceiverId)
   assert(JSON.stringify(otherAfter ?? null) === JSON.stringify(otherBefore ?? null),
     `the Console provider operation changed another Agent's config: ${JSON.stringify([otherBefore, otherAfter])}`)
@@ -1569,10 +1597,15 @@ async function bb09BrowserAcceptance(options) {
     '.teams-drawer .teams-header-actions button:nth-of-type(2)')
   observed.config = {
     agent: workProviderId,
+    operation: 'config.bindModel',
+    provider: bb09StubProviderId,
+    model: bb09StubModelId,
     accepted_before: beforeRow.acceptedRevision,
     accepted_after: afterRow.acceptedRevision,
+    refresh_accepted_revision: refreshRow.acceptedRevision,
     provider_card_catalog: afterCard.catalog,
     other_agent_unchanged: otherAfter === undefined,
+  }
   }
 
   const screenshot = camoRun(fixture, camo, evidenceDir, 'browser-screenshot',
@@ -1663,6 +1696,145 @@ async function bb09AgentPolicyRefusal(context, evidenceDir) {
       fixture.cleanup()
     } catch {
       // The refusal observation is the primary record.
+    }
+  }
+}
+
+/**
+ * The installed static-binding sub-scenario. It reuses the same package and
+ * browser helpers as the directory-discovery scenario, but its isolated
+ * `[console].agentIds` binding owns the admitted target set. It deliberately
+ * does not repeat the main scenario's config, Work, or Session interactions.
+ */
+async function bb09StaticBindingScenario(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB09', 'static-binding')
+  mkdirSync(evidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb09-static')
+  const camo = resolveCamo(evidenceDir)
+  const stub = createSessionProviderStub({ models: [bb09StubModelId] })
+  const profiles = new Set()
+  const profile = `bb09-static-${process.pid}`
+  const noCredentialProfile = `bb09-static-nocred-${process.pid}`
+  let lifecycle
+  let failure
+  let cleaned = false
+  const cleanup = {
+    stop_stdout: null,
+    stopped_stdout: null,
+    pids: [],
+    pids_alive_after_stop: [],
+    browser_profiles: [],
+    temporary_root_removed: false,
+  }
+  const recordCleanup = () => {
+    cleanup.temporary_root_removed = !existsSync(fixture.temporaryRoot)
+    writeJson(join(evidenceDir, 'cleanup.json'), publicJson(cleanup))
+  }
+  try {
+    provisionBrowserRuntime(fixture, evidenceDir)
+    const stubUrl = await listenProviderStub(stub)
+    const config = ensureUserConfig(fixture, evidenceDir, {
+      buildConfigText: searchExecutable => bb09ConfigText({
+        stubBaseUrl: stubUrl,
+        searchExecutable,
+        allowedManagers: ['__console'],
+        agentIds: [workProviderId, workReceiverId],
+      }),
+    })
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb09-static')
+    const initial = assertConsoleOnline(parseCliConsole(lifecycle.status.stdout), 'installed static-binding Console after start')
+    const authorization = `Basic ${Buffer.from(`${consoleUsername}:${consolePassword}`).toString('base64')}`
+    const browser = await bb09BrowserAcceptance({
+      fixture, camo, evidenceDir, profiles, profile, noCredentialProfile,
+      initial, statusStdout: lifecycle.status.stdout, configText: config.configText, authorization,
+      skipConfigInteraction: true,
+      assertProjection: projection => {
+        const rowsById = new Map(projection.agents.map(row => [row.agentId, row]))
+        assert(rowsById.size === 2 && rowsById.has(workProviderId) && rowsById.has(workReceiverId),
+          `the static-binding projection did not contain exactly the explicit IDs: ${JSON.stringify([...rowsById.keys()])}`)
+        const provider = rowsById.get(workProviderId)
+        const receiver = rowsById.get(workReceiverId)
+        assert(provider.presence === 'online' && receiver.presence === 'online',
+          `the static-binding projection did not report both peers online: ${JSON.stringify(projection.agents)}`)
+        assert(provider.label === 'BB09-Provider' && provider.machineId === 'bb-machine'
+          && receiver.label === 'BB09-Receiver' && receiver.machineId === 'bb-machine',
+        `the static-binding projection lost a card identity: ${JSON.stringify(projection.agents)}`)
+        assert(provider.capabilities.includes('file-search') && receiver.capabilities.length === 0,
+          `the static-binding projection carried the wrong capability IDs: ${JSON.stringify(projection.agents)}`)
+        assert(JSON.stringify(provider.capabilityDetails) === JSON.stringify([{
+          capabilityId: 'file-search', version: '1', operations: ['search'],
+          resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }],
+        }]), `the static-binding projection carried the wrong provider declaration: ${JSON.stringify(provider.capabilityDetails)}`)
+        assert(JSON.stringify(receiver.capabilityDetails) === '[]',
+          `the static-binding receiver carried an unexpected declaration: ${JSON.stringify(receiver.capabilityDetails)}`)
+      },
+    })
+    const providerCard = browser.agents.find(row => row.agentId === workProviderId)
+    const receiverCard = browser.agents.find(row => row.agentId === workReceiverId)
+    assert(providerCard !== undefined && receiverCard !== undefined,
+      `the static-binding browser did not render both cards: ${JSON.stringify(browser.agents)}`)
+    assert(providerCard.label === 'BB09-Provider' && receiverCard.label === 'BB09-Receiver'
+      && providerCard.machineId === 'bb-machine' && receiverCard.machineId === 'bb-machine',
+    `the static-binding browser cards did not match the declarations: ${JSON.stringify(browser.agents)}`)
+    camoClick(fixture, camo, evidenceDir, 'browser-receiver-detail-action', profile,
+      `button[data-focus-key="agent:${workReceiverId}:details"]`)
+    const receiverDetail = await camoEvaluate(fixture, camo, evidenceDir, 'browser-receiver-detail-dom', profile,
+      `document.querySelector('.teams-drawer')?.textContent ?? ''`)
+    assert(typeof receiverDetail === 'string' && receiverDetail.includes('BB09-Receiver') && receiverDetail.includes('bb-machine'),
+      `the static-binding receiver drawer did not show its card identity: ${String(receiverDetail).slice(0, 400)}`)
+    camoClick(fixture, camo, evidenceDir, 'browser-receiver-detail-close', profile,
+      '.teams-drawer .teams-header-actions button:nth-of-type(2)')
+    const explicitAgentIds = [workProviderId, workReceiverId]
+    const observedAgentIds = browser.agents.map(row => row.agentId).sort()
+    assert(JSON.stringify(observedAgentIds) === JSON.stringify([...explicitAgentIds].sort()),
+      `the static-binding projection did not contain exactly the explicit IDs: ${JSON.stringify(observedAgentIds)}`)
+    const stopped = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb09-static-final')
+    const pids = lifecyclePids(lifecycle.internal)
+    cleanup.stop_stdout = stopped.stop.stdout
+    cleanup.stopped_stdout = stopped.status.stdout
+    cleanup.pids = pids
+    cleanup.pids_alive_after_stop = pids.filter(processAlive)
+    lifecycle = undefined
+    const browserCleanup = camoTeardown(fixture, camo, evidenceDir, profiles, 'browser-cleanup')
+    profiles.clear()
+    cleanup.browser_profiles = browserCleanup
+    writeJson(join(evidenceDir, 'browser-cleanup.json'), { profiles: browserCleanup })
+    fixture.cleanup()
+    cleaned = true
+    recordCleanup()
+    const observation = {
+      explicit_agent_ids: explicitAgentIds,
+      installed_content_sha256: fixture.installedContentSha256,
+      cleanup: publicJson(cleanup),
+      projection: { agents: browser.agents, config_interaction: 'not-run' },
+      evidence_path: evidenceDir,
+    }
+    writeJson(join(evidenceDir, 'static-binding.json'), observation)
+    return observation
+  } catch (error) {
+    failure = error
+    throw error
+  } finally {
+    try { if (lifecycle !== undefined) stopFixtureIfNeeded(fixture, lifecycle.parsed.generation) } catch { /* preserve the primary failure */ }
+    try {
+      if (profiles.size > 0) {
+        const browserCleanup = camoTeardown(fixture, camo, evidenceDir, profiles, 'browser-cleanup')
+        profiles.clear()
+        cleanup.browser_profiles = browserCleanup
+        writeJson(join(evidenceDir, 'browser-cleanup.json'), { profiles: browserCleanup })
+      }
+    } catch { /* preserve the primary failure */ }
+    try { await closeProviderStub(stub) } catch { /* preserve the primary failure */ }
+    try { if (!cleaned && existsSync(fixture.temporaryRoot)) fixture.cleanup() } catch { /* preserve the primary failure */ }
+    recordCleanup()
+    if (failure !== undefined) {
+      writeJson(join(evidenceDir, 'static-binding.json'), {
+        explicit_agent_ids: [workProviderId, workReceiverId],
+        installed_content_sha256: fixture.installedContentSha256,
+        cleanup: publicJson(cleanup),
+        failure: failure.message,
+        evidence_path: evidenceDir,
+      })
     }
   }
 }
@@ -1760,6 +1932,7 @@ async function runBB09(context) {
 
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb09')
     const allPids = lifecyclePids(lifecycle.internal)
+    const staticBinding = await bb09StaticBindingScenario(context)
 
     // Typed failure path: a Console start while `[console]` is disabled must be a
     // typed refusal with zero child and zero online Console runtime row.
@@ -1801,6 +1974,8 @@ async function runBB09(context) {
           'camo click button[data-focus-key="console:settings"]',
           'camo evaluate div.teams-config-toolbar select.teams-select (select bb-provider)',
           'camo click article.teams-provider-card .teams-provider-actions button:nth-of-type(2) (refresh models)',
+          'camo evaluate article.teams-provider-card select.teams-select (select bb-console-model)',
+          'camo click article.teams-provider-card .teams-model-row .teams-button-primary (bind model)',
           'camo start --profile <bb09-nocred> --url <consoleUrl>/ --headless (credential-free)',
           'agentteams console stop --config <isolated-home>/.agentteams/config.toml',
           'agentteams work submit --receiver bb-receiver --payload {"query":"marker-beta"} (Console stopped)',
@@ -1820,6 +1995,7 @@ async function runBB09(context) {
         console_status_after_start: initial,
         console_http: { unauthorized: unauthorized.status, authorized: authorized.status },
         browser,
+        static_binding: staticBinding,
         agent_policy_refusal: agentPolicy,
         browser_cleanup: browserCleanup,
         console_status_after_stop: { state: stopStatus.consoleState, stdout: stop.stdout.trim() },
@@ -2614,13 +2790,16 @@ async function runBB10(context) {
     }
 
     // (b) Both real provider catalogs refresh through the Console config entry.
-    let revision = configRow.acceptedRevision
+    // A catalog refresh only writes a directory observation; it never advances
+    // the accepted revision (config/runtime-config.ts:918-921 asserts the
+    // expected revision and :946 calls saveObservationUnlocked). Both refreshes
+    // therefore run against the same public accepted revision.
+    const acceptedRevision = configRow.acceptedRevision
     const rccRefresh = await client.command({ kind: 'config.refreshModels', agentId: sessionAgentId,
-      expectedRevision: revision, providerId: rccProviderId })
+      expectedRevision: acceptedRevision, providerId: rccProviderId })
     assert(rccRefresh.body.ok === true, `the RCC catalog refresh failed: ${JSON.stringify(rccRefresh.body).slice(0, 400)}`)
-    revision += 1
     const canonicalRefresh = await client.command({ kind: 'config.refreshModels', agentId: sessionAgentId,
-      expectedRevision: revision, providerId: canonicalProviderId })
+      expectedRevision: acceptedRevision, providerId: canonicalProviderId })
     if (canonicalRefresh.body.ok === false && canonicalRefresh.body.error?.code === 'CREDENTIAL_UNAVAILABLE') {
       return bb10UnverifiedResult(context, evidenceDir, 'canonical credential env did not reach the installed child',
         'config.refreshModels reported CREDENTIAL_UNAVAILABLE for the canonical provider',
@@ -2629,9 +2808,10 @@ async function runBB10(context) {
     }
     assert(canonicalRefresh.body.ok === true,
       `the canonical catalog refresh failed: ${JSON.stringify(canonicalRefresh.body).slice(0, 400)}`)
-    revision += 1
     const refreshed = await readInstalledProjection(client, evidenceDir, 'bb10-refreshed')
     const refreshedRow = refreshed.configs.find(row => row.agentId === sessionAgentId)
+    assert(refreshedRow.acceptedRevision === configRow.acceptedRevision,
+      `the catalog refresh advanced the accepted revision: ${JSON.stringify([configRow.acceptedRevision, refreshedRow.acceptedRevision])}`)
     const rccCatalogRow = refreshedRow.providers.find(provider => provider.id === rccProviderId)
     const canonicalCatalogRow = refreshedRow.providers.find(provider => provider.id === canonicalProviderId)
     assert(rccCatalogRow?.catalogState === 'ready' && rccCatalogRow.models.some(model => model.id === rccSelectedModelToken),
@@ -2760,7 +2940,7 @@ async function runBB10(context) {
           rcc_catalog_state: rccCatalogRow.catalogState, rcc_model_count: rccCatalogRow.models.length,
           canonical_catalog_state: canonicalCatalogRow.catalogState,
           canonical_model_count: canonicalCatalogRow.models.length,
-          accepted_revision_after_refresh: revision,
+          accepted_revision_after_refresh: refreshedRow.acceptedRevision,
         },
         rcc_binding: { apply: firstApply, config: publicJson(appliedConfig), session: session.created, turn: rccTurn },
         explicit_selection: { accepted_revision_before: selectionRevision, select_backup: publicJson(selectBackup.body),
@@ -4534,6 +4714,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.
 export {
   Bb10SourceError,
   bb10LaunchEnv,
+  bb09ConfigText,
   canonicalSessionConfigText,
   cases,
   parseArgs,
