@@ -2497,19 +2497,19 @@ async function createAndOpenSession(client, title, evidenceDir, prefix) {
 
 /**
  * Combine only the accepted-side facts available before config.apply. The
+ * accepted binding and revision come from the same public config row; the
  * public effective slice and running Agent fields do not exist until apply.
- * The accepted-revision check still prevents mismatched evidence from being
- * joined.
  */
-function boundaryAcceptedBindingSnapshot(projection, agentId, acceptedBinding) {
+function boundaryAcceptedBindingSnapshot(projection, agentId) {
   const config = projection.configs.find(row => row.agentId === agentId)
   assert(config !== undefined, `the installed projection published no config row for ${agentId}`)
   assert(typeof config.acceptedRevision === 'number' && Number.isSafeInteger(config.acceptedRevision),
     `the installed config row for ${agentId} has no acceptedRevision`)
-  assert(acceptedBinding?.primary?.providerInstanceId !== undefined && acceptedBinding?.primary?.modelId !== undefined,
-    `the durable accepted binding for ${agentId} has no primary provider/model`)
-  assert(acceptedBinding.accepted_revision === config.acceptedRevision,
-    `the durable accepted revision ${acceptedBinding.accepted_revision} does not match the public config revision ${config.acceptedRevision} for ${agentId}`)
+  const acceptedBinding = config.acceptedBinding
+  assert(acceptedBinding !== null && typeof acceptedBinding === 'object'
+    && typeof acceptedBinding.primary?.providerInstanceId === 'string'
+    && typeof acceptedBinding.primary?.modelId === 'string',
+  `the public config row for ${agentId} has no accepted primary provider/model`)
   return {
     config: {
       acceptedRevision: config.acceptedRevision,
@@ -2521,24 +2521,24 @@ function boundaryAcceptedBindingSnapshot(projection, agentId, acceptedBinding) {
 }
 
 /**
- * Combine the installed Console projection with the durable accepted binding
- * the caller already resolved. The two reads are sequential, not atomic; the
- * accepted-revision check below prevents mismatched evidence from being joined.
- * Provider catalog observations are deliberately omitted because a rejected
- * catalog refresh may update them while accepted/effective/binding stay fixed.
+ * Combine the accepted binding, effective revision and running Agent row from
+ * one installed Console projection response. Provider catalog observations are
+ * deliberately omitted because a rejected catalog refresh may update them while
+ * accepted/effective/binding stay fixed.
  */
-function boundaryBindingSnapshot(projection, agentId, acceptedBinding) {
+function boundaryBindingSnapshot(projection, agentId) {
   const config = projection.configs.find(row => row.agentId === agentId)
   assert(config !== undefined, `the installed projection published no config row for ${agentId}`)
   assert(typeof config.acceptedRevision === 'number' && Number.isSafeInteger(config.acceptedRevision),
     `the installed config row for ${agentId} has no acceptedRevision`)
   assert(config.effectiveRevision !== undefined, `the installed config row for ${agentId} has no effectiveRevision`)
+  const acceptedBinding = config.acceptedBinding
+  assert(acceptedBinding !== null && typeof acceptedBinding === 'object'
+    && typeof acceptedBinding.primary?.providerInstanceId === 'string'
+    && typeof acceptedBinding.primary?.modelId === 'string',
+  `the public config row for ${agentId} has no accepted primary provider/model`)
   const agent = projection.agents.find(row => row.agentId === agentId)
   assert(agent !== undefined, `the installed projection published no runtime row for ${agentId}`)
-  assert(acceptedBinding?.primary?.providerInstanceId !== undefined && acceptedBinding?.primary?.modelId !== undefined,
-    `the durable accepted binding for ${agentId} has no primary provider/model`)
-  assert(acceptedBinding.accepted_revision === config.acceptedRevision,
-    `the durable accepted revision ${acceptedBinding.accepted_revision} does not match the public config revision ${config.acceptedRevision} for ${agentId}`)
   return {
     config: {
       acceptedRevision: config.acceptedRevision,
@@ -2554,9 +2554,9 @@ function boundaryBindingSnapshot(projection, agentId, acceptedBinding) {
   }
 }
 
-/** Read the durable accepted binding and combine it with the public projection. */
-function installedBindingSnapshot(projection, internalPath, agentId) {
-  return boundaryBindingSnapshot(projection, agentId, readAcceptedBinding(internalPath, agentId))
+/** Read the public binding snapshot; private durable snapshots remain diagnostics only. */
+function installedBindingSnapshot(projection, agentId) {
+  return boundaryBindingSnapshot(projection, agentId)
 }
 
 /** A turn passes only when the public final completed and carried assistant text. */
@@ -2684,7 +2684,7 @@ function bb10BaselinePass(baseline) {
     || bind.request.expectedRevision !== 0 || bind.request.providerId !== sessionPrimaryProviderId
     || bind.request.modelId !== sessionPrimaryModel || bind.reply?.ok !== true) return false
   const accepted = baseline.accepted_after_bind
-  if (accepted?.public?.acceptedRevision !== 1 || accepted.durable_accepted_revision !== 1) return false
+  if (accepted?.public?.acceptedRevision !== 1) return false
   if (accepted.binding?.primary?.providerInstanceId !== sessionPrimaryProviderId
     || accepted.binding.primary.modelId !== sessionPrimaryModel
     || accepted.binding.backup?.providerInstanceId !== sessionBackupProviderId
@@ -2771,12 +2771,12 @@ async function runBB10Boundary(context, evidenceDir) {
   let cleanupEvidence
   const results = {}
   const snapshotSources = {
-    binding: 'target daemon durable internal store accepted snapshot',
+    binding: 'installed Console /api/v1/projection config row acceptedBinding',
     config: 'installed Console /api/v1/projection config row',
     agent: 'installed Console /api/v1/projection Agent row',
     provider_requests: 'boundary provider stub external request records',
     session_terminal: 'installed Console /api/v1/projection Session events',
-    combination: 'sequential reads cross-checked by accepted revision; not an atomic cross-source snapshot',
+    combination: 'config acceptedBinding and effective revision from one projection response; Agent row validated under the same public read',
   }
   try {
     const primaryUrl = await listenProviderStub(primary)
@@ -2822,21 +2822,24 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(baselineBind.body.ok === true,
       `the boundary baseline accept failed: ${JSON.stringify(baselineBind.body)}`)
     // Before apply there is no effective slice, so step 3 checks only the
-    // accepted projection and durable accepted binding.
+    // accepted binding from the public config row.
     const afterBaselineBind = await readInstalledProjection(client, boundaryRoot, 'boundary-baseline-bind')
     const acceptedAfterBind = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
-    const baselineBinding = boundaryAcceptedBindingSnapshot(afterBaselineBind, sessionAgentId, acceptedAfterBind)
+    writeJson(join(boundaryRoot, 'baseline-durable-diagnostic.json'), acceptedAfterBind)
+    const baselineBinding = boundaryAcceptedBindingSnapshot(afterBaselineBind, sessionAgentId)
     baselineReceipt.accepted_after_bind = {
       public: baselineBinding.config,
       binding: baselineBinding.binding,
-      durable_accepted_revision: acceptedAfterBind.accepted_revision,
+      durable_accepted_revision_diagnostic: acceptedAfterBind.accepted_revision,
       effective_revision_reason: baselineBinding.config.effectiveRevision === null
         ? 'the public effective revision is not published before config.apply'
         : null,
     }
     writeJson(join(boundaryRoot, 'baseline.json'), baselineReceipt)
-    assert(acceptedAfterBind.accepted_revision === 1 && baselineBinding.config.acceptedRevision === 1,
-      `the boundary baseline bind did not create accepted revision 1: ${JSON.stringify({
+    assert(baselineBinding.config.acceptedRevision === 1,
+      `the boundary baseline bind did not create public accepted revision 1: ${JSON.stringify(baselineBinding.config)}`)
+    assert(acceptedAfterBind.accepted_revision === baselineBinding.config.acceptedRevision,
+      `the private baseline diagnostic disagrees with the public accepted revision: ${JSON.stringify({
         durable: acceptedAfterBind.accepted_revision, public: baselineBinding.config.acceptedRevision,
       })}`)
     assert(baselineBinding.binding.primary.providerInstanceId === sessionPrimaryProviderId
@@ -2854,7 +2857,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(firstApply.agent.providerId === sessionPrimaryProviderId && firstApply.agent.modelId === sessionPrimaryModel,
       `the boundary initial primary binding was not effective: ${JSON.stringify(firstApply.agent)}`)
     const baselineProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-baseline')
-    const baseline = installedBindingSnapshot(baselineProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const baseline = installedBindingSnapshot(baselineProjection, sessionAgentId)
     assert(baseline.config.acceptedRevision === 1 && baseline.config.effectiveRevision === 1
       && baseline.config.applyState === 'clean' && baseline.agent.sessionEffectiveRevision === 1,
       `the boundary baseline is not settled: ${JSON.stringify(baseline.config)}`)
@@ -2890,7 +2893,7 @@ async function runBB10Boundary(context, evidenceDir) {
     const putRow = afterPut.configs.find(row => row.agentId === sessionAgentId)
     assert(putRow.acceptedRevision === baseline.config.acceptedRevision + 1,
       `the boundary manual model put did not advance accepted by one: ${JSON.stringify(putRow)}`)
-    const beforeSelection = installedBindingSnapshot(afterPut, lifecycle.internal.internalPath, sessionAgentId)
+    const beforeSelection = installedBindingSnapshot(afterPut, sessionAgentId)
     assert(beforeSelection.config.acceptedRevision === baseline.config.acceptedRevision + 1
       && beforeSelection.config.effectiveRevision === baseline.config.effectiveRevision
       && beforeSelection.agent.providerId === sessionPrimaryProviderId
@@ -2910,7 +2913,7 @@ async function runBB10Boundary(context, evidenceDir) {
     const bindRow = afterBind.configs.find(row => row.agentId === sessionAgentId)
     assert(bindRow.acceptedRevision === baseline.config.acceptedRevision + 2,
       `the boundary manual model bind did not advance accepted by one: ${JSON.stringify(bindRow)}`)
-    const beforeRestart = installedBindingSnapshot(afterBind, lifecycle.internal.internalPath, sessionAgentId)
+    const beforeRestart = installedBindingSnapshot(afterBind, sessionAgentId)
     assert(beforeRestart.config.acceptedRevision === baseline.config.acceptedRevision + 2
       && beforeRestart.config.effectiveRevision === baseline.config.effectiveRevision
       && beforeRestart.agent.providerId === sessionPrimaryProviderId
@@ -2993,7 +2996,7 @@ async function runBB10Boundary(context, evidenceDir) {
     // (2) A stale Console revision is refused without moving accepted,
     // effective, binding, or the running Agent.
     const staleBeforeProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-stale-before')
-    const staleBefore = installedBindingSnapshot(staleBeforeProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const staleBefore = installedBindingSnapshot(staleBeforeProjection, sessionAgentId)
     const staleRevision = baseline.config.acceptedRevision
     assert(staleRevision === baseline.config.acceptedRevision
       && staleBefore.config.acceptedRevision === baseline.config.acceptedRevision + 2
@@ -3009,7 +3012,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(staleReply.body.ok === false && staleReply.body.error?.code === 'REVISION_CONFLICT',
       `the boundary stale revision was not refused as REVISION_CONFLICT: ${JSON.stringify(staleReply.body)}`)
     const staleAfterProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-stale-after')
-    const staleAfter = installedBindingSnapshot(staleAfterProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const staleAfter = installedBindingSnapshot(staleAfterProjection, sessionAgentId)
     assert(JSON.stringify(staleAfter) === JSON.stringify(staleBefore),
       `the boundary stale refusal mutated the accepted/effective binding: ${JSON.stringify({ before: staleBefore, after: staleAfter })}`)
     const staleCas = { stale_revision: staleRevision, current_revision: staleBefore.config.acceptedRevision,
@@ -3020,7 +3023,7 @@ async function runBB10Boundary(context, evidenceDir) {
     // (3) A synthetic bearer credential whose provider answers 401 maps to
     // UNAUTHENTICATED while the configured binding stays unchanged.
     const invalidBeforeProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-invalid-before')
-    const invalidBefore = installedBindingSnapshot(invalidBeforeProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const invalidBefore = installedBindingSnapshot(invalidBeforeProjection, sessionAgentId)
     assert(invalidBefore.config.acceptedRevision === 3 && invalidBefore.config.effectiveRevision === 3,
       `the boundary invalid-credential precondition was not settled at revision 3: ${JSON.stringify(invalidBefore.config)}`)
     const invalidCatalogRequestsBefore = invalidCredentialStub.catalogRequests.length
@@ -3052,7 +3055,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(invalidApply.agent.providerId === sessionManualProviderId && invalidApply.agent.modelId === sessionManualModel,
       `the boundary invalid-credential restart changed the effective manual binding: ${JSON.stringify(invalidApply.agent)}`)
     const invalidAppliedProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-invalid-applied')
-    const invalidApplied = installedBindingSnapshot(invalidAppliedProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const invalidApplied = installedBindingSnapshot(invalidAppliedProjection, sessionAgentId)
     assert(invalidApplied.config.acceptedRevision === invalidBefore.config.acceptedRevision + 1
       && invalidApplied.config.effectiveRevision === invalidBefore.config.acceptedRevision + 1
       && invalidApplied.config.applyState === 'clean',
@@ -3066,7 +3069,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(refreshInvalid.body.error?.providerInstanceId === sessionPrimaryProviderId,
       `the boundary invalid credential refusal did not identify the probed provider: ${JSON.stringify(refreshInvalid.body)}`)
     const invalidAfterProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-invalid-after')
-    const invalidAfter = installedBindingSnapshot(invalidAfterProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const invalidAfter = installedBindingSnapshot(invalidAfterProjection, sessionAgentId)
     assert(JSON.stringify(invalidAfter) === JSON.stringify(invalidApplied),
       `the boundary invalid-credential refusal mutated accepted/effective/binding: ${JSON.stringify({ before: invalidApplied, after: invalidAfter })}`)
     assert(invalidCredentialStub.catalogRequests.length >= invalidCatalogRequestsBefore + 1
@@ -3108,7 +3111,7 @@ async function runBB10Boundary(context, evidenceDir) {
       .find(request => JSON.stringify(request.messages ?? '').includes(warmupPrompt)), 120_000,
     'the boundary manual provider to receive the warm-up prompt')
     const noFailoverBeforeProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-no-failover-before')
-    const noFailoverBefore = installedBindingSnapshot(noFailoverBeforeProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const noFailoverBefore = installedBindingSnapshot(noFailoverBeforeProjection, sessionAgentId)
     assert(noFailoverBefore.config.acceptedRevision === 4 && noFailoverBefore.config.effectiveRevision === 4
       && noFailoverBefore.agent.sessionEffectiveRevision === 4
       && noFailoverBefore.binding.primary.providerInstanceId === sessionManualProviderId
@@ -3141,7 +3144,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(failedFinal.messageId !== undefined && failedFinal.sessionId === noFailoverSession.sessionId,
       `the boundary failed final did not preserve Session/message identity: ${JSON.stringify(failedFinal)}`)
     const noFailoverAfterProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-no-failover-after')
-    const noFailoverAfter = installedBindingSnapshot(noFailoverAfterProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const noFailoverAfter = installedBindingSnapshot(noFailoverAfterProjection, sessionAgentId)
     const failedFinalsAfter = readSessionEvents(noFailoverAfterProjection, sessionAgentId, noFailoverSession.sessionId)
       .filter(event => event.kind === 'final' && event.state === 'failed').length
     assert(JSON.stringify(noFailoverAfter) === JSON.stringify(noFailoverBefore),
@@ -3500,11 +3503,16 @@ async function resolveBb10Preconditions(evidenceDir) {
  * persisted; the value itself is never written to any user or derived config.
  */
 function canonicalSessionConfigText(spec, searchExecutable) {
-  // Teams joins `/models` and `/chat/completions` onto `apiBaseUrl`, so the
-  // declared source base URL (which already ends in `/v1`) is persisted as-is.
-  const provider = (id, label, baseUrl, credentialEnv) => `
+  const protocolFor = (protocol, label) => {
+    if (protocol === 'openai-chat' || protocol === 'openai-responses') return protocol
+    fail(`${label} protocol is missing or unsupported: ${JSON.stringify(protocol)}`)
+  }
+  // Teams joins `/models` and the endpoint selected by this declared protocol
+  // onto `apiBaseUrl`, so the source base URL (already ending in `/v1`) is
+  // persisted as-is and every provider keeps its own protocol.
+  const provider = (id, label, baseUrl, protocol, credentialEnv) => `
 [providers.${id}]
-protocol = "openai-chat"
+protocol = ${JSON.stringify(protocolFor(protocol, `${label} provider`))}
 apiBaseUrl = ${JSON.stringify(baseUrl.replace(/\/+$/u, ''))}
 label = ${JSON.stringify(label)}
 enabled = true${credentialEnv === undefined ? '' : `\ncredentialEnv = ${JSON.stringify(credentialEnv)}`}`
@@ -3557,8 +3565,8 @@ enabled = true
 username = ${JSON.stringify(consoleUsername)}
 passwordEnv = ${JSON.stringify(consolePasswordEnv)}
 agentIds = ["${sessionAgentId}", "${passiveAgentId}"]
-${provider(rccProviderId, 'RCC 4444', spec.rccBaseUrl)}
-${provider(canonicalProviderId, 'GoAIChat OpenAI', spec.canonicalBaseUrl, canonicalCredentialEnv)}
+${provider(rccProviderId, 'RCC 4444', spec.rccBaseUrl, spec.rccProtocol)}
+${provider(canonicalProviderId, 'GoAIChat OpenAI', spec.canonicalBaseUrl, spec.canonicalProtocol, canonicalCredentialEnv)}
 
 [[models]]
 provider = "${rccProviderId}"
@@ -3657,7 +3665,9 @@ async function runBB10(context) {
     const config = ensureUserConfig(fixture, evidenceDir, {
       buildConfigText: searchExecutable => canonicalSessionConfigText({
         rccBaseUrl: preconditions.rcc.baseUrl,
+        rccProtocol: preconditions.rcc.protocol,
         canonicalBaseUrl: preconditions.canonical.baseUrl,
+        canonicalProtocol: preconditions.canonical.protocol,
         canonicalModel: preconditions.canonical.defaultModel,
       }, searchExecutable),
     })
@@ -3757,16 +3767,21 @@ async function runBB10(context) {
       .configs.find(row => row.agentId === sessionAgentId)
     assert(acceptedSelection.acceptedRevision === selectionRevision + 2,
       `the accepted revision did not advance with the explicit selection: ${JSON.stringify(acceptedSelection)}`)
-    const acceptedBinding = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
-    writeJson(join(evidenceDir, 'bb10-selection-binding.json'), acceptedBinding)
-    assert(acceptedBinding.accepted_revision === selectionRevision + 2,
-      `the durable accepted binding did not retain the explicit selection revision: ${JSON.stringify(acceptedBinding)}`)
+    const acceptedBinding = acceptedSelection.acceptedBinding
+    assert(acceptedBinding !== null && typeof acceptedBinding === 'object',
+      `the public config row did not publish an accepted binding: ${JSON.stringify(acceptedSelection)}`)
     assert(acceptedBinding.primary.providerInstanceId === canonicalProviderId
       && acceptedBinding.primary.modelId === preconditions.canonical.defaultModel,
-    `the durable accepted binding did not make canonical primary: ${JSON.stringify(acceptedBinding)}`)
+    `the public accepted binding did not make canonical primary: ${JSON.stringify(acceptedBinding)}`)
     assert(acceptedBinding.backup?.providerInstanceId === rccProviderId
       && acceptedBinding.backup.modelId === rccSelectedModelToken,
-    `the durable accepted binding did not retain RCC as backup: ${JSON.stringify(acceptedBinding)}`)
+    `the public accepted binding did not retain RCC as backup: ${JSON.stringify(acceptedBinding)}`)
+    const acceptedBindingDiagnostic = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
+    writeJson(join(evidenceDir, 'bb10-selection-binding-diagnostic.json'), acceptedBindingDiagnostic)
+    assert(acceptedBindingDiagnostic.accepted_revision === acceptedSelection.acceptedRevision,
+      `the private accepted binding diagnostic disagrees with the public accepted revision: ${JSON.stringify({
+        durable: acceptedBindingDiagnostic.accepted_revision, public: acceptedSelection.acceptedRevision,
+      })}`)
 
     const generationBefore = lifecycle.parsed.generation
     const switchStop = await stopSessionFixture(fixture, lifecycle, evidenceDir, 'bb10-switch')
@@ -3779,14 +3794,19 @@ async function runBB10(context) {
       .configs.find(row => row.agentId === sessionAgentId)
     assert(restartedRow.acceptedRevision === selectionRevision + 2,
       `the accepted explicit selection did not survive the installed restart: ${JSON.stringify(restartedRow)}`)
-    const restartedBinding = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
-    writeJson(join(evidenceDir, 'bb10-switch-binding.json'), restartedBinding)
-    assert(restartedBinding.accepted_revision === selectionRevision + 2
+    const restartedBinding = restartedRow.acceptedBinding
+    assert(restartedBinding !== null && typeof restartedBinding === 'object'
       && restartedBinding.primary.providerInstanceId === canonicalProviderId
       && restartedBinding.primary.modelId === preconditions.canonical.defaultModel
       && restartedBinding.backup?.providerInstanceId === rccProviderId
       && restartedBinding.backup.modelId === rccSelectedModelToken,
-    `the durable accepted primary/backup selection did not survive restart: ${JSON.stringify(restartedBinding)}`)
+    `the public accepted primary/backup selection did not survive restart: ${JSON.stringify(restartedBinding)}`)
+    const restartedBindingDiagnostic = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
+    writeJson(join(evidenceDir, 'bb10-switch-binding-diagnostic.json'), restartedBindingDiagnostic)
+    assert(restartedBindingDiagnostic.accepted_revision === restartedRow.acceptedRevision,
+      `the private accepted binding diagnostic disagrees with the public accepted revision after restart: ${JSON.stringify({
+        durable: restartedBindingDiagnostic.accepted_revision, public: restartedRow.acceptedRevision,
+      })}`)
     const switchedApply = await applySessionConfigAndWait(switchedClient, sessionAgentId, evidenceDir, 'bb10-switch')
     assert(switchedApply.agent.providerId === canonicalProviderId
       && switchedApply.agent.modelId === preconditions.canonical.defaultModel,
