@@ -160,6 +160,24 @@ describe('Console HTTP v1 adapter', () => {
     }
   })
 
+  it('admits the declared capability detail and rejects an undeclared nested field', async () => {
+    const detail = [{ capabilityId: 'file-search', version: '3', operations: ['search'],
+      resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'context' }] }]
+    const withDetail = {
+      ...projection,
+      agents: [{ kind: 'directory', agentId: 'worker', label: 'Worker', machineId: 'Build', presence: 'offline',
+        capabilities: ['file-search'], capabilityDetails: detail }],
+    }
+    const client = createConsoleHttpClient({ fetchImpl: async () => new Response(JSON.stringify(withDetail), { status: 200 }) })
+    await expect(client.readProjection()).resolves.toEqual(withDetail)
+
+    const illegal = createConsoleHttpClient({ fetchImpl: async () => new Response(JSON.stringify({
+      ...withDetail,
+      agents: [{ ...withDetail.agents[0], capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 1, unit: 'slot', sharing: 'shared' }] }] }],
+    }), { status: 200 }) })
+    await expect(illegal.readProjection()).rejects.toThrow(/invalid v1 projection/)
+  })
+
   it('supports host-specific versioned paths without changing the client contract', async () => {
     const requests: string[] = []
     const client = createConsoleHttpClient({

@@ -1,4 +1,5 @@
 import type {
+  ConsoleCapabilityDetail as CanonicalCapabilityDetail,
   ConsoleClientV1 as CanonicalClient,
   ConsoleCommandResultV1 as CanonicalCommandResult,
   ConsoleCommandV1 as CanonicalCommand,
@@ -6,6 +7,7 @@ import type {
   ConsoleProviderView as CanonicalProvider,
 } from '../../../control-protocol/console-api.ts'
 import type {
+  ConsoleCapabilityDetail as UiCapabilityDetail,
   ConsoleClientV1 as UiClient,
   ConsoleCommandResultV1 as UiCommandResult,
   ConsoleCommandV1 as UiCommand,
@@ -20,6 +22,7 @@ type Assert<T extends true> = T
 type Compatible<Left, Right> = [Left] extends [Right] ? ([Right] extends [Left] ? true : false) : false
 
 const _provider: Assert<Compatible<UiProvider, CanonicalProvider>> = true
+const _detail: Assert<Compatible<UiCapabilityDetail, CanonicalCapabilityDetail>> = true
 const _projection: Assert<Compatible<UiProjection, CanonicalProjection>> = true
 const _command: Assert<Compatible<UiCommand, CanonicalCommand>> = true
 const _result: Assert<Compatible<UiCommandResult, CanonicalCommandResult>> = true
@@ -28,7 +31,7 @@ const _projectionKeys: Assert<Compatible<keyof UiProjection, keyof CanonicalProj
 
 describe('contract compatibility', () => {
   it('keeps the UI adapter assignable to the frozen ConsoleClientV1 contract', () => {
-    expect([_provider, _projection, _command, _result, _client, _projectionKeys]).toEqual([true, true, true, true, true, true])
+    expect([_provider, _detail, _projection, _command, _result, _client, _projectionKeys]).toEqual([true, true, true, true, true, true, true])
   })
 
   it('re-exports the canonical projection instead of declaring a UI fork', () => {

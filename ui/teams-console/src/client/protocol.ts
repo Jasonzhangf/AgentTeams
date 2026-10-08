@@ -1,6 +1,7 @@
 import type { ConsoleCommandResultV1, ConsoleServiceError, JsonValue } from '../../../../control-protocol/console-api.ts'
 export type {
   ConsoleAgentObservationV1,
+  ConsoleCapabilityDetail,
   ConsoleClientV1,
   ConsoleCommandResultV1,
   ConsoleCommandV1,

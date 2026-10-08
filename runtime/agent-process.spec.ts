@@ -178,7 +178,10 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
     outputSchema: { required: ['query', 'status', 'exitCode', 'matches', 'truncated', 'stdout', 'stderr'] },
   })
   const management = createRelayConsoleClient(consumer, 'provider', 2000)
-  expect((await management.readProjection()).agents[0]).toMatchObject({ agentId: 'provider', presence: 'online', capabilities: ['file-search'] })
+  expect((await management.readProjection()).agents[0]).toMatchObject({ agentId: 'provider', presence: 'online', capabilities: ['file-search'],
+    // The real Agent process publishes the declared summary, not only the capability IDs.
+    capabilityDetails: [{ capabilityId: 'file-search', version: '1', operations: ['search'],
+      resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot' }] }] })
   expect(await management.command({ kind: 'config.apply', agentId: 'provider' })).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
   const directoryPeers = await consumer.directory(false)
   expect(directoryPeers.some(peer => peer.declaration.identity.agentId === 'consumer')).toBe(true)
@@ -1096,6 +1099,16 @@ describe('Session host admission, cancel causality and observation', () => {
     expect(current).toMatchObject({ sessionAvailability: 'current', sessionEffectiveRevision: 4, providerId: 'p', modelId: 'm', sessionObservation: { state: 'degraded' } })
     // Observation degradation never rewrites availability.
     expect(current).toMatchObject({ sessionAvailability: 'current' })
+  })
+
+  it('passes the declared capability detail through the runtime management row', () => {
+    const base = { agentId: 'a', machineId: 'm', label: 'A', presence: 'online' as const, capabilities: ['file-search'] }
+    const capabilityDetails = [{ capabilityId: 'file-search', version: '3', operations: ['search'],
+      resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'slot' as const }] }]
+    expect(projectRuntimeAgentRow({ ...base, capabilityDetails, sessionCapable: false }))
+      .toMatchObject({ kind: 'runtime', capabilities: ['file-search'], capabilityDetails })
+    // An absent detail stays absent: the row never invents a declaration summary.
+    expect(projectRuntimeAgentRow({ ...base, sessionCapable: false })).not.toHaveProperty('capabilityDetails')
   })
 
   it('projects the current owner session into Console projection rows', async () => {
