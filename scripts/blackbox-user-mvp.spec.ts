@@ -15,19 +15,35 @@ import { createRelayServer } from '../server/relay.ts'
 import {
   Bb10SourceError,
   agentPolicyRefusalExpectedRevision,
+  bb10BoundaryResultPass,
+  bb10InvalidCredentialPass,
   bb10LaunchEnv,
+  bb10ManualSelectionPass,
+  bb10NoImplicitFailoverPass,
+  bb10PassVerdict,
+  bb10RealAcceptancePass,
+  bb10StaleCasPass,
   bb09ConfigText,
   bb09RefreshCompletion,
   canonicalSessionConfigText,
   cases,
+  closeProviderStub,
+  createSessionProviderStub,
   exitCode,
+  listenProviderStub,
   parseArgs,
   parseCanonicalProviderSource,
   parseFlatSecretKey,
   parseRccServerSource,
+  publicBindingSnapshot,
   readAcceptedConfigRevision,
   readDeclaredSecretKey,
   redactCredential,
+  sessionBackupModel,
+  sessionManualModel,
+  sessionManualProviderId,
+  sessionPrimaryModel,
+  sessionPrimaryProviderId,
 } from './blackbox-user-mvp.mjs'
 
 const temporaryRoots: string[] = []
@@ -715,5 +731,278 @@ describe('BB10 config operation semantics', () => {
     expect(final.acceptedRevision).toBe(before.acceptedRevision + 2)
     expect(final.agents[agentId]).toEqual({ primary: canonical, backup: rcc })
     expect(final.agents[agentId].backup).not.toEqual(final.agents[agentId].primary)
+  })
+})
+
+// A minimal, well-formed boundary receipt. Each test mutates exactly one field
+// so the single-owner PASS verdict must reject the mutation and nothing else.
+function passingRealAcceptance(): any {
+  const primary = { providerInstanceId: 'goaichat-openai', modelId: 'sample-max' }
+  return {
+    status: 'passed',
+    installed_identity: { installed_content_sha256: 'sha-1', expected_content_sha256: 'sha-1' },
+    rcc_turn: { final: { state: 'completed' }, text: 'rcc answer' },
+    canonical_turn: { final: { state: 'completed' }, text: 'canonical answer' },
+    explicit_selection: { primary },
+    readback: {
+      config: { acceptedRevision: 2, effectiveRevision: 2, applyState: 'clean' },
+      agent: { providerId: primary.providerInstanceId, modelId: primary.modelId },
+    },
+    cleanup: { console_listener_gone: true, owned_pids_alive_after_stop: [], temporary_root_removed: true },
+  }
+}
+
+function passingBoundary(): any {
+  const binding = {
+    primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
+    backup: { providerInstanceId: 'bb-backup', modelId: sessionBackupModel },
+  }
+  const before = { config: { acceptedRevision: 2, effectiveRevision: 2, applyState: 'clean' } }
+  return {
+    status: 'passed',
+    installed_identity: { installed_content_sha256: 'sha-1', expected_content_sha256: 'sha-1' },
+    cleanup: { stopped: true, console_listener_gone: true, owned_pids_alive_after_stop: [], temporary_root_removed: true },
+    results: {
+      manual_selection: {
+        refresh: { ok: true },
+        catalog_state: 'empty',
+        model_count: 0,
+        accepted_revision_before: 0,
+        accepted_revision_after: 2,
+        put_model: { ok: true },
+        bind_model: { ok: true },
+        restarted_accepted_revision: 2,
+        effective_before_restart: {
+          config: { effectiveRevision: 0 },
+          agent: { providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
+        },
+        effective_before_apply: {
+          config: { effectiveRevision: 0 },
+          agent: { providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
+        },
+        effective_after_apply: {
+          providerId: sessionManualProviderId, modelId: sessionManualModel, sessionEffectiveRevision: 2,
+        },
+        turn: { final: { state: 'completed' }, text: 'manual answer' },
+        provider_request_model: sessionManualModel,
+        primary_requests_before: 0,
+        backup_requests_before: 0,
+        primary_requests: 0,
+        backup_requests: 0,
+      },
+      stale_cas: {
+        stale_revision: 0,
+        current_revision: 2,
+        reply: { ok: false, error: { code: 'REVISION_CONFLICT' } },
+        before,
+        after: { config: { acceptedRevision: 2, effectiveRevision: 2, applyState: 'clean' } },
+      },
+      invalid_credential: {
+        refresh: { ok: false, error: { code: 'UNAUTHENTICATED', providerInstanceId: sessionPrimaryProviderId } },
+        catalog_requests: [{ method: 'GET', path: '/v1/models', status: 401 }],
+        manual_inference_requests_before: 1,
+        manual_inference_requests_after: 1,
+        backup_inference_requests_before: 0,
+        backup_inference_requests_after: 0,
+        before: { config: { acceptedRevision: 3 } },
+        after: { config: { acceptedRevision: 3 } },
+      },
+      no_implicit_failover: {
+        prompt: 'probe',
+        failed_final: { kind: 'final', state: 'failed', error: { name: 'APIError', data: { statusCode: 500 } } },
+        bound_provider_request: { model: sessionManualModel, status: 500 },
+        failed_finals_before: 0,
+        failed_finals_after: 1,
+        accepted_revision_before: 3,
+        effective_revision_before: 3,
+        accepted_revision_after: 3,
+        effective_revision_after: 3,
+        snapshot_before: { config: { acceptedRevision: 3, effectiveRevision: 3 }, binding },
+        snapshot_after: { config: { acceptedRevision: 3, effectiveRevision: 3 }, binding },
+        primary_inference_requests_before: 0,
+        primary_inference_requests_after: 0,
+        backup_inference_requests_before: 0,
+        backup_inference_requests_after: 0,
+        manual_inference_requests_before: 1,
+        manual_inference_requests_after: 2,
+      },
+    },
+  }
+}
+
+describe('BB10 two-section PASS conjunction', () => {
+  it('accepts only when the real acceptance and the boundary section both pass', () => {
+    expect(bb10RealAcceptancePass(passingRealAcceptance())).toBe(true)
+    expect(bb10BoundaryResultPass(passingBoundary())).toBe(true)
+    expect(bb10PassVerdict(passingRealAcceptance(), passingBoundary())).toBe(true)
+  })
+
+  it('rejects a missing or unsuccessful real acceptance', () => {
+    expect(bb10PassVerdict(undefined, passingBoundary())).toBe(false)
+    const incomplete = passingRealAcceptance()
+    incomplete.canonical_turn.final.state = 'failed'
+    expect(bb10RealAcceptancePass(incomplete)).toBe(false)
+    expect(bb10PassVerdict(incomplete, passingBoundary())).toBe(false)
+    const silent = passingRealAcceptance()
+    silent.rcc_turn.text = '   '
+    expect(bb10RealAcceptancePass(silent)).toBe(false)
+  })
+
+  it('rejects a boundary receipt that is missing any of the four named results', () => {
+    for (const key of ['manual_selection', 'stale_cas', 'invalid_credential', 'no_implicit_failover']) {
+      const boundary = passingBoundary()
+      delete boundary.results[key]
+      expect(bb10BoundaryResultPass(boundary)).toBe(false)
+      expect(bb10PassVerdict(passingRealAcceptance(), boundary)).toBe(false)
+    }
+  })
+
+  it('rejects counter growth on the unselected providers or the backup', () => {
+    const primaryGrew = passingBoundary()
+    primaryGrew.results.manual_selection.primary_requests += 1
+    expect(bb10BoundaryResultPass(primaryGrew)).toBe(false)
+
+    const backupGrew = passingBoundary()
+    backupGrew.results.no_implicit_failover.backup_inference_requests_after = 1
+    expect(bb10BoundaryResultPass(backupGrew)).toBe(false)
+  })
+
+  it('rejects ACK-only or timeout-only evidence with no failed final and no bound-provider 500', () => {
+    const ackOnly = passingBoundary()
+    delete ackOnly.results.no_implicit_failover.failed_final
+    expect(bb10BoundaryResultPass(ackOnly)).toBe(false)
+
+    const noUpstream = passingBoundary()
+    noUpstream.results.no_implicit_failover.bound_provider_request = { model: sessionManualModel, status: 0 }
+    expect(bb10BoundaryResultPass(noUpstream)).toBe(false)
+  })
+})
+
+describe('BB10 no-failover receipt verdict', () => {
+  it('accepts a structured failed final with unchanged primary/backup counters', () => {
+    expect(bb10NoImplicitFailoverPass(passingBoundary().results.no_implicit_failover)).toBe(true)
+  })
+
+  it('rejects an old final that was already present before the probe', () => {
+    const stale = passingBoundary().results.no_implicit_failover
+    stale.failed_finals_after = stale.failed_finals_before
+    expect(bb10NoImplicitFailoverPass(stale)).toBe(false)
+  })
+
+  it('rejects a completed final and a missing structured error', () => {
+    const completed = passingBoundary().results.no_implicit_failover
+    completed.failed_final.state = 'completed'
+    expect(bb10NoImplicitFailoverPass(completed)).toBe(false)
+
+    const structureless = passingBoundary().results.no_implicit_failover
+    delete structureless.failed_final.error
+    expect(bb10NoImplicitFailoverPass(structureless)).toBe(false)
+
+    const wrongStatus = passingBoundary().results.no_implicit_failover
+    wrongStatus.failed_final.error.data.statusCode = 502
+    expect(bb10NoImplicitFailoverPass(wrongStatus)).toBe(false)
+  })
+
+  it('rejects backup counter growth', () => {
+    const backupGrew = passingBoundary().results.no_implicit_failover
+    backupGrew.backup_inference_requests_after = backupGrew.backup_inference_requests_before + 1
+    expect(bb10NoImplicitFailoverPass(backupGrew)).toBe(false)
+  })
+})
+
+describe('BB10 boundary sub-scenario verdicts', () => {
+  it('rejects a stale-CAS reply that is not a REVISION_CONFLICT or that mutates the snapshot', () => {
+    const accepted = passingBoundary().results.stale_cas
+    expect(bb10StaleCasPass(accepted)).toBe(true)
+    const wrongCode = passingBoundary().results.stale_cas
+    wrongCode.reply.error.code = 'CONFLICT'
+    expect(bb10StaleCasPass(wrongCode)).toBe(false)
+    const mutated = passingBoundary().results.stale_cas
+    mutated.after.config.acceptedRevision = 5
+    expect(bb10StaleCasPass(mutated)).toBe(false)
+  })
+
+  it('rejects an invalid-credential probe without a real 401 or with a mutated binding', () => {
+    const accepted = passingBoundary().results.invalid_credential
+    expect(bb10InvalidCredentialPass(accepted)).toBe(true)
+    const notUnauthenticated = passingBoundary().results.invalid_credential
+    notUnauthenticated.refresh.error.code = 'CREDENTIAL_UNAVAILABLE'
+    expect(bb10InvalidCredentialPass(notUnauthenticated)).toBe(false)
+    const noCatalogHit = passingBoundary().results.invalid_credential
+    noCatalogHit.catalog_requests = []
+    expect(bb10InvalidCredentialPass(noCatalogHit)).toBe(false)
+    const mutated = passingBoundary().results.invalid_credential
+    mutated.after.config.acceptedRevision = 9
+    expect(bb10InvalidCredentialPass(mutated)).toBe(false)
+  })
+
+  it('rejects a manual-selection receipt that only proves put/bind ACK', () => {
+    const ackOnly = passingBoundary().results.manual_selection
+    ackOnly.turn.final.state = 'failed'
+    expect(bb10ManualSelectionPass(ackOnly)).toBe(false)
+    const wrongModel = passingBoundary().results.manual_selection
+    wrongModel.provider_request_model = sessionPrimaryModel
+    expect(bb10ManualSelectionPass(wrongModel)).toBe(false)
+  })
+})
+
+describe('BB10 public binding snapshot', () => {
+  it('saves the binding/revision fields and ignores catalog observation changes', () => {
+    const configRow = (catalogState: string) => ({
+      agentId: 'bb-provider',
+      acceptedRevision: 4,
+      effectiveRevision: 4,
+      applyState: 'clean',
+      providers: [{ id: sessionPrimaryProviderId, catalogState, models: [] }],
+    })
+    const agentRow = {
+      agentId: 'bb-provider',
+      providerId: sessionManualProviderId,
+      modelId: sessionManualModel,
+      sessionEffectiveRevision: 4,
+    }
+    const binding = {
+      accepted_revision: 4,
+      primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
+      backup: null,
+    }
+    const ready = publicBindingSnapshot({ configs: [configRow('ready')], agents: [agentRow] }, 'bb-provider', binding)
+    const errored = publicBindingSnapshot({ configs: [configRow('error')], agents: [agentRow] }, 'bb-provider', binding)
+    expect(ready).toEqual(errored)
+    expect(ready.config).toEqual({ acceptedRevision: 4, effectiveRevision: 4, applyState: 'clean' })
+    expect(ready.agent).toEqual({
+      providerId: sessionManualProviderId, modelId: sessionManualModel, sessionEffectiveRevision: 4,
+    })
+    expect(ready.binding).toEqual({
+      primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
+      backup: null,
+    })
+  })
+})
+
+describe('BB10 session provider stub catalog modes', () => {
+  it('returns a real loopback 401 only in the optional catalog-401 mode and records no headers', async () => {
+    const normal = createSessionProviderStub({ models: [sessionPrimaryModel] })
+    const rejected = createSessionProviderStub({ models: [], catalog401: true })
+    const normalUrl = await listenProviderStub(normal)
+    const rejectedUrl = await listenProviderStub(rejected)
+    try {
+      const normalResponse = await fetch(`${normalUrl}/v1/models`)
+      expect(normalResponse.status).toBe(200)
+      const catalog = await normalResponse.json()
+      expect(catalog.data.map((row: any) => row.id)).toEqual([sessionPrimaryModel])
+
+      const rejectedResponse = await fetch(`${rejectedUrl}/v1/models`, {
+        headers: { authorization: 'Bearer boundary-secret-value' },
+      })
+      expect(rejectedResponse.status).toBe(401)
+      expect(rejected.catalogRequests).toEqual([{ method: 'GET', path: '/v1/models', status: 401 }])
+      const recorded = JSON.stringify(rejected.catalogRequests)
+      expect(recorded).not.toContain('boundary-secret-value')
+      expect(recorded.toLowerCase()).not.toContain('authorization')
+    } finally {
+      await closeProviderStub(normal)
+      await closeProviderStub(rejected)
+    }
   })
 })
