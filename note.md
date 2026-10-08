@@ -147,3 +147,33 @@
 - AppSDK 0.1.6 原始 canonical contract 判断存在真实路径兼容缺陷：新正式路径为 `contracts/transitions/zone-transition.manifest.json`，既有测试/迁移夹具仍使用 `zone-transition-manifest.json`。修复位于 AppSDK `assert_declared_contracts` owner：拆分 canonical 条件并兼容两种已存在路径，未恢复旧 Teams governance root、未引入 fallback。
 - AppSDK 修复 worktree 的 `cargo fmt --check`、`cargo test --all-targets --no-fail-fast` 均通过，CLI smoke 为 `51/51`；Teams 使用修复版 binary 串行执行 `guide compile`、`compile`、`verify` 全部通过，`verify` 返回 `ok=true`、`stage=contract_bound`。
 - 本轮未执行 runtime install/restart/live replay；未执行 AppSDK/Teams review、commit、push、merge 或 worktree cleanup。AppSDK 修复源仍在独立 worktree，Teams 当前治理 binary 已内置并锁定。
+
+## 2026-10-07 U7 round 12 设计准入输入（BB06/BB09/BB10）
+
+- 任务：`u7-user-driver-20261006`，round 12。候选 base `4aed787041f387e090e141d276b41eab877278e6`
+  （本地 main == origin/main == 远端）。本轮只做设计准入，不是实现完成、不是任何 PASS。
+- 起因：milestone review `teams-local-mvp-milestone-20261007-r11`（Codex oauth / gpt-6.1-sol）FAIL，
+  3 条 P1：BB09 只用 HTTP 可用性代替真实浏览器 Console 验收；BB10 只用本地 provider stub；
+  BB06 用 Provider 私有账本断言容量拒绝。原 finding 见
+  `/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r11/reviews/milestone-r11/review.final.md`。
+- 本轮规划与观察（reviewer 可直接读取，均为绝对路径）：
+  - 计划：`/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/plan-v3.md`
+    （READY；前两版 `plan.md`、`plan-v2.md` 为 BLOCKED 记录）。
+  - 观察：同目录 `observation.md`、`observation-v2.md`、`observation-v3.md`。
+  - 能力证据：`o1-browser/report.md`（headless Camo 打开安装后 Console、Basic challenge、DOM/API、
+    交互与拒绝路径、teardown）、`o2-projection.md`（Console 投影首丢点与唯一 owner）、
+    `o3-provider/report.md`（RCC 4444 与 canonical provider 真源）、
+    `o5-canonical-provider/report.md`（RCC 无凭据导出通道；canonical 端点可达且真实调用成功）。
+  - 阶段笔记：`/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r11/note.md`。
+- 本次设计提交（D2）追加的契约：
+  - `docs/design/teams-local-console-v1.md` r3 §6.5 声明明细 `capabilityDetails` 投影契约与
+    §13.6 BB09 浏览器断言/证据集；动态 `allocations` 明确不在本轮范围。
+  - `docs/design/teams-local-work-entry-v1.md` r7：`buildCompletedReceipt` 从 ARC typed
+    `control.reply.error` 投影到既有 `receipt.control.error`，`closeError` 优先级不变；§11.9 BB06i。
+  - `docs/design/teams-provider-config.md` §5.1–§5.3：两实例真源与三种 model 写法、校正后的
+    `select-backup` 语义、canonical 凭据的操作者供应边界、BB10 运行期前置/终态/可见输出要求。
+  - 五张 `docs/architecture/*.json` 绑定上述 owner、调用边与 gate；六张既有图未改。
+- 权威需求：`.appsdk/goal.json` 的 `acceptance_criteria`；`docs/goals/teams-user-delivery-plan.md:235-245`
+  （BB06/BB09/BB10 行）；`docs/goals/teams-agent-handoff-20261005.md`。
+- 本轮 review 边界：**编码前设计准入**（需求 → 设计 → 验收路径），不是实现后的架构 review，
+  也不代表产品功能 PASS。实现后的 U7 review 与 milestone review 仍是独立门禁。
