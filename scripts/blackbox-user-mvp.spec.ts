@@ -1,8 +1,16 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { get as httpsGet } from 'node:https'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { parse as parseToml } from 'toml'
 import { afterEach, describe, expect, it } from 'vitest'
+import { createJsonFileConfigPersistence, createRuntimeConfigStore } from '../config/runtime-config.ts'
+import { createRelayClient, type RelayClient } from '../network/relay-client.ts'
+import { serveConsole } from '../network/console-channel.ts'
+import { startConsoleRuntime } from '../runtime/console-runtime.ts'
+import { createConsoleConfigBinding } from '../runtime/console-config.ts'
+import { createRelayServer } from '../server/relay.ts'
 import {
   Bb10SourceError,
   bb10LaunchEnv,
@@ -29,6 +37,160 @@ function temporaryRoot(): string {
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
+
+interface HttpProjectionIdentity {
+  readonly agentId: string
+  readonly accountId: string
+  readonly scopeId: string
+}
+
+function tlsMaterial(root: string): { readonly key: Buffer; readonly cert: Buffer } {
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+    '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1',
+    '-keyout', join(root, 'key'), '-out', join(root, 'cert')], { stdio: 'ignore' })
+  return { key: readFileSync(join(root, 'key')), cert: readFileSync(join(root, 'cert')) }
+}
+
+function projectionFixture(agentId: string) {
+  return {
+    version: 1 as const,
+    agents: [],
+    sessions: [],
+    notifications: [],
+    configs: [],
+    works: [{
+      agentId,
+      workId: `work-${agentId}`,
+      consumerAgentId: 'consumer',
+      providerAgentId: agentId,
+      capabilityId: 'file-search',
+      capabilityVersion: '1',
+      policyRevision: 1,
+      state: 'accepted' as const,
+    }],
+    relations: [{
+      agentId,
+      consumerAgentId: 'consumer',
+      providerAgentId: agentId,
+      capabilityId: 'file-search',
+      capabilityVersion: '1',
+      relationPermission: 'granted' as const,
+      workId: `work-${agentId}`,
+    }],
+  }
+}
+
+function httpsProjection(url: string, ca: Buffer): Promise<{ readonly status: number; readonly body: any }> {
+  const authorization = `Basic ${Buffer.from('operator:test-secret').toString('base64')}`
+  return new Promise((resolveResponse, reject) => {
+    httpsGet(`${url}/api/v1/projection`, { ca, headers: { authorization } }, response => {
+      let text = ''
+      response.setEncoding('utf8')
+      response.on('data', chunk => { text += chunk })
+      response.on('end', () => {
+        let body: unknown
+        try { body = JSON.parse(text) } catch { body = { raw: text } }
+        resolveResponse({ status: response.statusCode ?? 0, body })
+      })
+    }).on('error', reject)
+  })
+}
+
+async function runHttpProjectionCase(input: {
+  readonly console: HttpProjectionIdentity
+  readonly peers: readonly HttpProjectionIdentity[]
+}): Promise<{ readonly response: { readonly status: number; readonly body: any }; readonly admitted: readonly string[] }> {
+  const root = temporaryRoot()
+  const tls = tlsMaterial(root)
+  const identities = new Map([
+    [input.console.agentId, input.console],
+    ...input.peers.map(peer => [peer.agentId, peer] as const),
+  ])
+  let relay: Awaited<ReturnType<typeof createRelayServer>> | undefined
+  let consoleRuntime: Awaited<ReturnType<typeof startConsoleRuntime>> | undefined
+  const peers: { readonly client: RelayClient; readonly served: Promise<void>[] }[] = []
+  try {
+    relay = await createRelayServer({
+      host: '127.0.0.1', port: 0, key: tls.key, cert: tls.cert,
+      maxPayload: 65536, maxConnections: 16, maxGrants: 8, maxBufferedAmount: 65536,
+      maxPendingMessages: 16, maxPendingBytes: 131072, grantTtlMs: 10000,
+      authenticate: credential => {
+        const token = credential?.startsWith('Bearer ') ? credential.slice(7) : undefined
+        const identity = token === undefined ? undefined : identities.get(token)
+        return identity === undefined ? null : { agentId: identity.agentId, accountId: identity.accountId, scopeId: identity.scopeId }
+      },
+    })
+
+    for (const peer of input.peers) {
+      let client: RelayClient | undefined
+      const served: Promise<void>[] = []
+      client = await createRelayClient({
+        transport: { endpoint: relay.url, credential: `Bearer ${peer.agentId}`, ca: tls.cert,
+          connectTimeoutMs: 1000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 },
+        admissionTimeoutMs: 1000, requestTimeoutMs: 1000, maxPendingRequests: 8, maxDataConnections: 8,
+        declaration: {
+          identity: { hostId: `${peer.agentId}-host`, machineId: `${peer.agentId}-machine`, agentId: peer.agentId,
+            accountId: peer.accountId, agentKind: 'custom', label: `Peer ${peer.agentId}` },
+          scopeId: peer.scopeId, revision: 1,
+          capabilities: [{
+            capabilityId: 'file-search', version: '1',
+            operations: [{ operation: 'search', inputSchema: {}, outputSchema: {}, cancellation: 'unsupported' }],
+            resources: [{ resourceId: 'search-slot', capacity: 2, unit: 'slot', sharing: 'exclusive', allocationScope: 'request' }],
+          }],
+          routes: [],
+        },
+        onEvent: async event => {
+          if (event.kind !== 'relay.offer') return
+          const socket = await client!.openData(event.grant)
+          const serving = serveConsole(socket, async request => {
+            if (request.kind !== 'console.projection') {
+              return { kind: 'console.result' as const, correlationId: request.correlationId,
+                result: { ok: false as const, error: { code: 'UNSUPPORTED_OPERATION' as const, message: 'projection only' } } }
+            }
+            return { kind: 'console.projection.result' as const, correlationId: request.correlationId,
+              projection: projectionFixture(peer.agentId) }
+          }, 2000)
+          void serving.catch(() => undefined)
+          served.push(serving)
+        },
+      })
+      const directory = await client.directory(false)
+      expect(directory.find(row => row.declaration.identity.agentId === peer.agentId)?.presence).toBe('online')
+      peers.push({ client, served })
+    }
+
+    consoleRuntime = await startConsoleRuntime({
+      host: '127.0.0.1', port: 0, origin: 'https://127.0.0.1', username: 'operator', password: 'test-secret', tls,
+      agentIds: [], sessionRequestTimeoutMs: 600_000,
+      staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
+      daemon: {
+        presenceIntervalMs: 1000,
+        relay: {
+          declaration: {
+            identity: { hostId: 'console-host', machineId: 'console-machine', agentId: input.console.agentId,
+              accountId: input.console.accountId, agentKind: 'custom', label: 'Console' },
+            scopeId: input.console.scopeId, revision: 1, capabilities: [], routes: [],
+          },
+          transport: { endpoint: relay.url, credential: `Bearer ${input.console.agentId}`, ca: tls.cert,
+            connectTimeoutMs: 1000, maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 },
+          admissionTimeoutMs: 1000, requestTimeoutMs: 2000, maxPendingRequests: 4, maxDataConnections: 4,
+        },
+      },
+    })
+
+    const response = await httpsProjection(consoleRuntime.url, tls.cert)
+    await Promise.all(peers.flatMap(peer => peer.served))
+    return { response, admitted: input.peers.map(peer => peer.agentId) }
+  } finally {
+    if (consoleRuntime !== undefined) {
+      await consoleRuntime.stop().catch(() => undefined)
+      await consoleRuntime.closed.catch(() => undefined)
+    }
+    await Promise.all(peers.map(peer => peer.client.close().catch(() => undefined)))
+    await relay?.close().catch(() => undefined)
+    rmSync(root, { recursive: true, force: true })
+  }
+}
 
 /** A declared canonical provider source. It carries no real credential. */
 function canonicalSourceText(options: { entries?: string, providerId?: string, providerType?: string, withProvider?: boolean, withAuth?: boolean } = {}): string {
@@ -300,5 +462,111 @@ describe('BB09 fixture identity domain', () => {
     expect(main.console.agentIds).toBeUndefined()
     // The refusal scenario also stays on directory discovery.
     expect(refusal.console.agentIds).toBeUndefined()
+  })
+
+  it('BB09 static fixture preserves explicit agentIds', () => {
+    const build = (agentIds?: string[]) => parseToml(bb09ConfigText({
+      stubBaseUrl: 'http://127.0.0.1:1',
+      searchExecutable: '/usr/bin/rg',
+      allowedManagers: ['__console'],
+      ...(agentIds === undefined ? {} : { agentIds }),
+    })) as Record<string, any>
+    const explicit = build(['bb-provider', 'bb-receiver'])
+    const defaultMain = build()
+
+    expect(explicit.console.agentIds).toEqual(['bb-provider', 'bb-receiver'])
+    for (const agentId of ['bb-provider', 'bb-receiver']) {
+      expect(explicit.agents[agentId].identity.accountId).toBe('local')
+      expect(explicit.agents[agentId].runtime.scopeId).toBe('local')
+      expect(explicit.agents[agentId].runtime.policy.allowedManagers).toEqual(['__console'])
+    }
+    expect(defaultMain.console.agentIds).toBeUndefined()
+  })
+})
+
+describe('BB09 HTTP projection admission', () => {
+  it('BB09 HTTP projection account mismatch', async () => {
+    const { response, admitted } = await runHttpProjectionCase({
+      console: { agentId: 'console', accountId: 'account-a', scopeId: 'scope-a' },
+      peers: [
+        { agentId: 'peer-1', accountId: 'account-b', scopeId: 'scope-a' },
+        { agentId: 'peer-2', accountId: 'account-b', scopeId: 'scope-a' },
+      ],
+    })
+
+    expect(admitted).toEqual(['peer-1', 'peer-2'])
+    expect(response.status).toBe(200)
+    expect(response.body.agents).toEqual([])
+    expect(response.body.agents.some((row: any) => row.agentId === 'peer-1' || row.agentId === 'peer-2')).toBe(false)
+  })
+
+  it('BB09 HTTP projection scope mismatch', async () => {
+    const { response, admitted } = await runHttpProjectionCase({
+      console: { agentId: 'console', accountId: 'account-a', scopeId: 'scope-a' },
+      peers: [
+        { agentId: 'peer-1', accountId: 'account-a', scopeId: 'scope-b' },
+        { agentId: 'peer-2', accountId: 'account-a', scopeId: 'scope-b' },
+      ],
+    })
+
+    expect(admitted).toEqual(['peer-1', 'peer-2'])
+    expect(response.status).toBe(200)
+    expect(response.body.agents).toEqual([])
+    expect(response.body.agents.some((row: any) => row.agentId === 'peer-1' || row.agentId === 'peer-2')).toBe(false)
+  })
+
+  it('BB09 HTTP projection same domain', async () => {
+    const { response, admitted } = await runHttpProjectionCase({
+      console: { agentId: 'console', accountId: 'account-a', scopeId: 'scope-a' },
+      peers: [
+        { agentId: 'peer-1', accountId: 'account-a', scopeId: 'scope-a' },
+        { agentId: 'peer-2', accountId: 'account-a', scopeId: 'scope-a' },
+      ],
+    })
+
+    expect(admitted).toEqual(['peer-1', 'peer-2'])
+    expect(response.status).toBe(200)
+    const agentIds = response.body.agents.map((row: any) => row.agentId).sort()
+    expect(agentIds).toEqual(['peer-1', 'peer-2'])
+    expect(agentIds).not.toContain('console')
+    expect(response.body.works.map((row: any) => row.workId).sort()).toEqual(['work-peer-1', 'work-peer-2'])
+  })
+})
+
+describe('BB09 config operation semantics', () => {
+  it('uses a real accepting bindModel operation after refresh stays observation-only', async () => {
+    const root = temporaryRoot()
+    const agentId = 'bb-provider'
+    const providerId = 'bb-console-stub'
+    const modelId = 'bb-console-model'
+    const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(root, 'config.json')))
+    const binding = createConsoleConfigBinding({
+      agentId,
+      store,
+      models: { listModels: async () => [{ modelId, metadata: {} }] },
+      applier: { apply: async request => ({ status: 'applied', effectiveRevision: request.config.acceptedRevision }) },
+    })
+
+    await binding.command({
+      kind: 'config.putProvider', agentId, expectedRevision: 0,
+      provider: {
+        id: providerId, label: 'BB09 Console Stub', protocol: 'openai-chat',
+        apiBaseUrl: 'http://127.0.0.1:1/v1', enabled: true, auth: { kind: 'none' },
+      },
+    })
+    const acceptedBeforeRefresh = (await store.read()).acceptedRevision
+    expect(acceptedBeforeRefresh).toBe(1)
+
+    await expect(binding.command({
+      kind: 'config.refreshModels', agentId, expectedRevision: acceptedBeforeRefresh, providerId,
+    })).resolves.toEqual({ ok: true })
+    expect((await store.read()).acceptedRevision).toBe(acceptedBeforeRefresh)
+
+    await expect(binding.command({
+      kind: 'config.bindModel', agentId, expectedRevision: acceptedBeforeRefresh, providerId, modelId,
+    })).resolves.toEqual({ ok: true })
+    const acceptedAfterBind = await store.read()
+    expect(acceptedAfterBind.acceptedRevision).toBe(acceptedBeforeRefresh + 1)
+    expect(acceptedAfterBind.agents[agentId].primary).toEqual({ providerInstanceId: providerId, modelId })
   })
 })
