@@ -186,8 +186,16 @@ function parseInternal(path, agentIds = defaultAgentIds) {
     const record = internal.daemon?.[id]
     assert(record?.pid > 0 && Number.isSafeInteger(record.pid), `internal ${id} pid is missing`)
     assert(typeof record.entryPath === 'string' && record.entryPath.length > 0, `internal ${id} entryPath is missing`)
+    assert(typeof record.projectionPath === 'string' && record.projectionPath.length > 0, `internal ${id} projectionPath is missing`)
     assert(record.generation === launcher.generation, `internal ${id} generation does not match launcher`)
-    return { id, pid: record.pid, entryPath: record.entryPath, generation: record.generation, startToken: record.startToken }
+    return {
+      id,
+      pid: record.pid,
+      entryPath: record.entryPath,
+      projectionPath: record.projectionPath,
+      generation: record.generation,
+      startToken: record.startToken,
+    }
   })
   const relayProjection = JSON.parse(internal.relay?.config ?? '')
   const daemonConfigs = Object.fromEntries(agentIds.map(id => {
@@ -4446,6 +4454,66 @@ function latestSmokeReceipt(state) {
   return { path: receiptPath, receipt: readJson(receiptPath) }
 }
 
+/**
+ * A legal, input-preserving reorder of the real Work graph: node IDs, operators,
+ * versions, ARCs, selectors and the edge list stay identical; only the node array
+ * order changes. The real graph parser and the real lifecycle compile/gate still
+ * consume it, so the change is a genuine graph input rather than an arbitrary
+ * documentation field.
+ */
+function reorderWorkGraphNodes(sourceText) {
+  const graph = JSON.parse(sourceText)
+  assert(Array.isArray(graph.nodes) && graph.nodes.length > 1,
+    'the BB13 graph fixture has no node array to reorder')
+  const before = graph.nodes.map(node => ({
+    id: node.id, operator: node.operator, operator_version: node.operator_version,
+    inputs: node.inputs, output: node.output, iterator: node.iterator,
+  }))
+  graph.nodes = [graph.nodes.at(-1), ...graph.nodes.slice(0, -1)]
+  const after = graph.nodes.map(node => ({
+    id: node.id, operator: node.operator, operator_version: node.operator_version,
+    inputs: node.inputs, output: node.output, iterator: node.iterator,
+  }))
+  const signature = nodes => JSON.stringify([...nodes].sort((left, right) => left.id.localeCompare(right.id)))
+  assert(signature(before) === signature(after),
+    'the BB13 graph reorder changed node identity, operator, version or ARC')
+  return JSON.stringify(graph, null, 2) + '\n'
+}
+
+/** The two governed stages this matrix observes, reduced to their execution identity. */
+function stageExecutionSummary(state) {
+  return Object.fromEntries(['pnpm-verify', 'pnpm-smoke-installed'].map(stageId => {
+    const stage = state?.stages?.[stageId]
+    return [stageId, stage === undefined ? null : {
+      status: stage.status ?? null,
+      fingerprint: stage.fingerprint ?? null,
+      receiptId: stage.receiptId ?? null,
+      receiptPath: stage.receiptPath ?? null,
+      reuseReceiptId: stage.reuseReceiptId ?? null,
+      invalidationReason: stage.invalidationReason ?? null,
+      evidenceIds: Array.isArray(stage.evidenceIds) ? stage.evidenceIds : [],
+      logPath: stage.logPath ?? null,
+    }]
+  }))
+}
+
+/**
+ * Reduce one lifecycle invocation to the increment since its `before` capture.
+ * Only `history.slice(historyStart)` and the new reuse receipts are inspected, so
+ * a record left by an earlier phase can never satisfy this phase's assertion.
+ */
+function bb13PhaseDelta(before, after) {
+  return {
+    history: after.state.invalidationHistory.slice(before.historyLength),
+    newReuseReceipts: after.state.reuseReceipts.slice(before.reuseLength),
+    counts: {
+      verify: after.counts.verify - before.counts.verify,
+      smokeInstalled: after.counts.smokeInstalled - before.counts.smokeInstalled,
+    },
+    stages: stageExecutionSummary(after.state),
+  }
+}
+
 async function runBB13(context) {
   const evidenceDir = join(context.caseEvidenceRoot, 'BB13')
   mkdirSync(evidenceDir, { recursive: true })
@@ -4476,117 +4544,235 @@ async function runBB13(context) {
     const excludePath = join(fixtureRoot, '.git', 'info', 'exclude')
     writeFileSync(excludePath, `${readFileSync(excludePath, 'utf8')}node_modules\n`, { encoding: 'utf8' })
 
+    // Uniform capture/assert vocabulary: every phase snapshots candidate identity,
+    // input hashes, history/reuse lengths, invocation counts and both stage
+    // fingerprints before running the real adapter once, then asserts on the
+    // increment after that invocation only.
+    const capture = (label, inputHashes) => {
+      const store = readLifecycleState(fixtureRoot)
+      return {
+        label,
+        candidate: currentCandidateIdentity(fixtureRoot),
+        input_hashes: inputHashes,
+        historyLength: store.state.invalidationHistory.length,
+        reuseLength: store.state.reuseReceipts.length,
+        counts: pnpmInvocationCounts(proofDir),
+        stages: stageExecutionSummary(store.state),
+        storePath: store.path,
+      }
+    }
+    const inputHashes = paths => Object.fromEntries(paths.map(path => [path, sha256File(join(fixtureRoot, path))]))
+    const runPhase = (name, before) => {
+      const run = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, `${name}.json`))
+      assert(run.status === 0, `BB13 ${name} invocation did not pass: ${run.stdout}${run.stderr}`)
+      const store = readLifecycleState(fixtureRoot)
+      const after = { state: store.state, counts: pnpmInvocationCounts(proofDir) }
+      const delta = bb13PhaseDelta(before, { state: store.state, counts: after.counts })
+      observations.push({
+        phase: name,
+        before: { candidate: before.candidate, input_hashes: before.input_hashes,
+          history_length: before.historyLength, reuse_length: before.reuseLength,
+          counts: before.counts, stages: before.stages },
+        invocation: { exit: run.status, stdout: run.stdout.trim(), stderr: run.stderr.trim() },
+        delta,
+        after: { stages: delta.stages, counts: after.counts },
+      })
+      return { run, store, delta }
+    }
+    const expectDelta = (phase, delta, expected) => {
+      assert(delta.counts.verify === expected.verify,
+        `BB13 ${phase} verify increment was ${delta.counts.verify}, expected ${expected.verify}`)
+      assert(delta.counts.smokeInstalled === expected.smoke,
+        `BB13 ${phase} smoke increment was ${delta.counts.smokeInstalled}, expected ${expected.smoke}`)
+    }
+    const expectInvalidated = (phase, delta, stageId, reason) => {
+      const entry = delta.history.find(item => item.stage_id === stageId)
+      assert(entry !== undefined, `BB13 ${phase} recorded no invalidation for ${stageId}`)
+      assert(entry.reason === reason,
+        `BB13 ${phase} ${stageId} invalidation reason was ${entry.reason}, expected ${reason}`)
+      return entry
+    }
+    const expectExecuted = (phase, delta, stageId) => {
+      const stage = delta.stages[stageId]
+      assert(stage.status === 'passed', `BB13 ${phase} ${stageId} did not settle passed: ${stage.status}`)
+      const newReceipt = delta.history.length > 0 && stage.status === 'passed'
+      assert(newReceipt, `BB13 ${phase} ${stageId} has no invalidation in this invocation`)
+      assert(stage.receiptId !== null && stage.receiptPath !== null && existsSync(stage.receiptPath),
+        `BB13 ${phase} ${stageId} has no fresh receipt`)
+      assert(delta.newReuseReceipts.every(receipt => receipt.stage_id !== stageId),
+        `BB13 ${phase} ${stageId} reused instead of executing`)
+      return stage
+    }
+    const expectReused = (phase, delta, stageId) => {
+      const stage = delta.stages[stageId]
+      assert(stage.status === 'reused', `BB13 ${phase} ${stageId} was not reused: ${stage.status}`)
+      const reuse = delta.newReuseReceipts.find(receipt => receipt.stage_id === stageId)
+      assert(reuse !== undefined, `BB13 ${phase} ${stageId} recorded no new reuse receipt`)
+      assert(reuse.original_receipt?.receipt_id !== undefined && existsSync(reuse.original_receipt.path),
+        `BB13 ${phase} ${stageId} reuse does not reference an existing valid receipt`)
+      assert(reuse.original_receipt.receipt_id === stage.receiptId,
+        `BB13 ${phase} ${stageId} reuse references ${reuse.original_receipt.receipt_id}, not ${stage.receiptId}`)
+      return stage
+    }
+
+    const graphRelPath = 'docs/design/dagpipe/graphs/work-request.graph.json'
+    const graphPath = join(fixtureRoot, graphRelPath)
+    assert(existsSync(graphPath), `BB13 real Work graph is missing: ${graphPath}`)
+    const graphOriginal = readFileSync(graphPath, 'utf8')
+
     const failure = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'failure.json'))
     assert(failure.status !== 0, 'BB13 injected smoke failure unexpectedly succeeded')
     let store = readLifecycleState(fixtureRoot)
     assert(store.state.stages['pnpm-verify']?.status === 'passed', 'verify stage did not persist before smoke failure')
     assert(store.state.stages['pnpm-smoke-installed']?.status === 'blocked', 'smoke stage did not record the deterministic failure')
-    observations.push({ phase: 'failure', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    observations.push({ phase: 'failure', counts: pnpmInvocationCounts(proofDir),
+      stages: stageExecutionSummary(store.state), failure_exit: failure.status,
+      smoke_error: readJson(join(evidenceDir, 'failure.json')).stderr.trim().split('\n').at(-1) })
 
-    const recovery = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'recovery.json'))
-    assert(recovery.status === 0, 'BB13 recovery did not pass')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.stages['pnpm-verify']?.status === 'reused', 'verify stage was not reused after recovery')
-    assert(store.state.stages['pnpm-smoke-installed']?.status === 'passed', 'smoke stage did not recover to passed')
-    const countsAfterRecovery = pnpmInvocationCounts(proofDir)
-    observations.push({ phase: 'recovery', state: store.state, counts: countsAfterRecovery })
+    // (1) Deterministic smoke failure recovery: verify reuses, only the first
+    // failing node's dependent smoke stage re-executes.
+    {
+      const before = capture('recovery', inputHashes([graphRelPath]))
+      const { delta } = runPhase('recovery', before)
+      expectDelta('recovery', delta, { verify: 0, smoke: 1 })
+      expectReused('recovery', delta, 'pnpm-verify')
+      expectExecuted('recovery', delta, 'pnpm-smoke-installed')
+    }
 
-    // Unchanged-input re-entry with the completed validation record intact must
-    // be idempotent: the adapter returns the existing validation without touching
-    // the stages or re-executing a command.
-    const idempotent = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'idempotent-entry.json'))
-    assert(idempotent.status === 0, 'BB13 idempotent re-entry did not pass')
-    assert(/"idempotent":true/u.test(idempotent.stdout),
-      `BB13 idempotent re-entry did not return the completed validation: ${idempotent.stdout.trim()}`)
-    const countsAfterIdempotent = pnpmInvocationCounts(proofDir)
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.stages['pnpm-verify']?.status === 'reused' && store.state.stages['pnpm-smoke-installed']?.status === 'passed',
-      'BB13 idempotent re-entry mutated the completed stages')
-    assert(countsAfterIdempotent.verify === countsAfterRecovery.verify && countsAfterIdempotent.smokeInstalled === countsAfterRecovery.smokeInstalled,
-      'BB13 idempotent re-entry re-executed a completed stage')
-    observations.push({ phase: 'idempotent-entry', state: store.state, counts: countsAfterIdempotent })
+    // (2) Unchanged input re-entry with the completed validation record intact is
+    // idempotent and executes nothing.
+    {
+      const before = capture('idempotent-entry', inputHashes([graphRelPath]))
+      const run = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'idempotent-entry.json'))
+      assert(run.status === 0, 'BB13 idempotent re-entry did not pass')
+      assert(/"idempotent":true/u.test(run.stdout),
+        `BB13 idempotent re-entry did not return the completed validation: ${run.stdout.trim()}`)
+      const storeNow = readLifecycleState(fixtureRoot)
+      const delta = bb13PhaseDelta(before, { state: storeNow.state, counts: pnpmInvocationCounts(proofDir) })
+      expectDelta('idempotent-entry', delta, { verify: 0, smoke: 0 })
+      assert(delta.history.length === 0 && delta.newReuseReceipts.length === 0,
+        'BB13 idempotent re-entry mutated the completed stages')
+      observations.push({
+        phase: 'idempotent-entry',
+        before: { candidate: before.candidate, input_hashes: before.input_hashes,
+          history_length: before.historyLength, reuse_length: before.reuseLength, counts: before.counts, stages: before.stages },
+        invocation: { exit: run.status, stdout: run.stdout.trim(), stderr: run.stderr.trim() },
+        delta, after: { stages: delta.stages, counts: pnpmInvocationCounts(proofDir) },
+      })
+    }
 
-    // Interrupted-recovery re-entry: the validation record is gone while stage
-    // state and receipts survive, so the adapter re-enters the stage loop and
-    // reuses both unchanged stages instead of re-executing them.
-    const removedValidationRecords = removeValidationRecords(fixtureRoot)
-    assert(removedValidationRecords.length > 0, 'BB13 interrupted-recovery step found no validation record to remove')
-    const reentry = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'reentry.json'))
-    assert(reentry.status === 0, 'BB13 re-entry did not pass')
-    const countsAfterReentry = pnpmInvocationCounts(proofDir)
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.stages['pnpm-verify']?.status === 'reused' && store.state.stages['pnpm-smoke-installed']?.status === 'reused',
-      'BB13 re-entry did not reuse both completed stages')
-    assert(countsAfterReentry.verify === countsAfterRecovery.verify && countsAfterReentry.smokeInstalled === countsAfterRecovery.smokeInstalled,
-      'BB13 re-entry re-executed a completed stage')
-    observations.push({ phase: 'reentry', state: store.state, counts: countsAfterReentry })
+    // (3) Interrupted recovery re-entry: the validation record is gone while stage
+    // state and receipts survive, so both unchanged stages reuse their original
+    // valid receipts instead of re-executing.
+    {
+      const before = capture('reentry', inputHashes([graphRelPath]))
+      const removedValidationRecords = removeValidationRecords(fixtureRoot)
+      assert(removedValidationRecords.length > 0, 'BB13 interrupted-recovery step found no validation record to remove')
+      const { delta } = runPhase('reentry', before)
+      expectDelta('reentry', delta, { verify: 0, smoke: 0 })
+      const verifyReuse = expectReused('reentry', delta, 'pnpm-verify')
+      expectReused('reentry', delta, 'pnpm-smoke-installed')
+      observations.at(-1).removed_validation_records = removedValidationRecords
+      observations.at(-1).reused_receipts = delta.newReuseReceipts.map(receipt => ({
+        stage_id: receipt.stage_id, original_receipt_id: receipt.original_receipt?.receipt_id,
+      }))
+      assert(verifyReuse.receiptId !== null, 'BB13 reentry verify lost its original receipt id')
+    }
 
-    const sourcePath = join(fixtureRoot, 'network', 'relay-client.ts')
-    writeFileSync(sourcePath, `${readFileSync(sourcePath, 'utf8')}\n// BB13 source invalidation fixture\n`)
-    commitFixtureChange(fixtureRoot, 'bb13 source change')
-    const sourceRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'source-change.json'))
-    assert(sourceRun.status === 0, 'BB13 source change did not recover')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-verify' && entry.reason === 'fingerprint_changed'),
-      'BB13 source change did not invalidate the verify stage')
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-smoke-installed' && entry.reason === 'fingerprint_changed'),
-      'BB13 source change did not invalidate the dependent smoke stage')
-    observations.push({ phase: 'source-change', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    // (4) Source change: both stages invalidate on this invocation's fingerprint
+    // change and both execute; the reuse path is not taken.
+    {
+      const sourcePath = 'network/relay-client.ts'
+      writeFileSync(join(fixtureRoot, sourcePath), `${readFileSync(join(fixtureRoot, sourcePath), 'utf8')}\n// BB13 source invalidation fixture\n`)
+      commitFixtureChange(fixtureRoot, 'bb13 source change')
+      const before = capture('source-change', inputHashes([sourcePath, graphRelPath]))
+      const { delta } = runPhase('source-change', before)
+      expectDelta('source-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('source-change', delta, 'pnpm-verify', 'fingerprint_changed')
+      expectInvalidated('source-change', delta, 'pnpm-smoke-installed', 'fingerprint_changed')
+      expectExecuted('source-change', delta, 'pnpm-verify')
+      expectExecuted('source-change', delta, 'pnpm-smoke-installed')
+    }
 
-    const graphPath = join(fixtureRoot, 'docs', 'architecture', 'verification-map.json')
-    const graph = readJson(graphPath)
-    graph.bb13_graph_registry_probe = 'changed for the BB13 invalidation matrix'
-    writeJson(graphPath, graph)
-    commitFixtureChange(fixtureRoot, 'bb13 graph registry change')
-    const graphRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'graph-registry-change.json'))
-    assert(graphRun.status === 0, 'BB13 graph/registry change did not recover')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-verify' && entry.reason === 'fingerprint_changed'),
-      'BB13 graph/registry change did not invalidate the verify stage')
-    observations.push({ phase: 'graph-registry-change', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    // (5) Graph input change: the real Work graph nodes are legally reordered
+    // (identity, operator, version, ARC and edges unchanged), so the real parser
+    // and compile/gates consume a changed graph and both stages re-execute.
+    {
+      writeFileSync(graphPath, reorderWorkGraphNodes(graphOriginal))
+      commitFixtureChange(fixtureRoot, 'bb13 graph change')
+      const before = capture('graph-change', inputHashes([graphRelPath]))
+      const { delta } = runPhase('graph-change', before)
+      expectDelta('graph-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('graph-change', delta, 'pnpm-verify', 'fingerprint_changed')
+      expectInvalidated('graph-change', delta, 'pnpm-smoke-installed', 'fingerprint_changed')
+      expectExecuted('graph-change', delta, 'pnpm-verify')
+      expectExecuted('graph-change', delta, 'pnpm-smoke-installed')
+      observations.at(-1).graph_reorder = {
+        path: graphRelPath,
+        node_ids: JSON.parse(graphOriginal).nodes.map(node => node.id),
+        reordered_node_ids: JSON.parse(readFileSync(graphPath, 'utf8')).nodes.map(node => node.id),
+      }
+    }
 
-    const configPath = join(fixtureRoot, 'pnpm-workspace.yaml')
-    writeFileSync(configPath, `${readFileSync(configPath, 'utf8')}\n# BB13 config invalidation fixture\n`)
-    commitFixtureChange(fixtureRoot, 'bb13 config change')
-    const configRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'config-change.json'))
-    assert(configRun.status === 0, 'BB13 config change did not recover')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-verify' && entry.reason === 'fingerprint_changed'),
-      'BB13 config change did not invalidate the verify stage')
-    observations.push({ phase: 'config-change', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    // (6) Config change: both stages invalidate on this invocation's fingerprint
+    // change and both execute.
+    {
+      const configPath = 'pnpm-workspace.yaml'
+      writeFileSync(join(fixtureRoot, configPath), `${readFileSync(join(fixtureRoot, configPath), 'utf8')}\n# BB13 config invalidation fixture\n`)
+      commitFixtureChange(fixtureRoot, 'bb13 config change')
+      const before = capture('config-change', inputHashes([configPath, graphRelPath]))
+      const { delta } = runPhase('config-change', before)
+      expectDelta('config-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('config-change', delta, 'pnpm-verify', 'fingerprint_changed')
+      expectInvalidated('config-change', delta, 'pnpm-smoke-installed', 'fingerprint_changed')
+      expectExecuted('config-change', delta, 'pnpm-verify')
+      expectExecuted('config-change', delta, 'pnpm-smoke-installed')
+    }
 
-    const artifactPath = join(fixtureRoot, 'generated', 'modules', 'teams-source', 'module.compiled.json')
-    writeFileSync(artifactPath, `${readFileSync(artifactPath, 'utf8')}\n`)
-    const artifactRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'artifact-change.json'))
-    assert(artifactRun.status === 0, 'BB13 artifact change did not recover')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-verify' && entry.reason === 'receipt_or_required_input_invalid'),
-      'BB13 artifact change did not invalidate the verify stage')
-    observations.push({ phase: 'artifact-change', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    // (7) Artifact change: the verify-required compiled artifact input is
+    // invalidated, so verify re-executes and the dependent smoke re-executes; the
+    // smoke reason is read from this invocation's own fingerprint comparison.
+    {
+      const artifactPath = 'generated/modules/teams-source/module.compiled.json'
+      writeFileSync(join(fixtureRoot, artifactPath), `${readFileSync(join(fixtureRoot, artifactPath), 'utf8')}\n`)
+      const before = capture('artifact-change', inputHashes([artifactPath, graphRelPath]))
+      const { delta } = runPhase('artifact-change', before)
+      expectDelta('artifact-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('artifact-change', delta, 'pnpm-verify', 'receipt_or_required_input_invalid')
+      const smokeEntry = expectInvalidated('artifact-change', delta, 'pnpm-smoke-installed', 'fingerprint_changed')
+      observations.at(-1).smoke_reason_fingerprint_change =
+        smokeEntry.previous_fingerprint !== delta.stages['pnpm-smoke-installed'].fingerprint
+      expectExecuted('artifact-change', delta, 'pnpm-verify')
+      expectExecuted('artifact-change', delta, 'pnpm-smoke-installed')
+    }
 
-    const smoke = latestSmokeReceipt(store.state)
-    const evidenceId = smoke.receipt.evidence_ids[0]
-    const evidencePath = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source', `${evidenceId}.json`)
-    assert(existsSync(evidencePath), `BB13 evidence file is missing: ${evidencePath}`)
-    rmSync(evidencePath)
-    const beforeMissingCounts = pnpmInvocationCounts(proofDir)
-    const missingRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'evidence-delete.json'))
-    assert(missingRun.status === 0, 'BB13 evidence deletion did not recover')
-    store = readLifecycleState(fixtureRoot)
-    const afterMissingCounts = pnpmInvocationCounts(proofDir)
-    assert(afterMissingCounts.verify === beforeMissingCounts.verify, 'BB13 evidence deletion re-executed the independent verify stage')
-    assert(afterMissingCounts.smokeInstalled === beforeMissingCounts.smokeInstalled + 1, 'BB13 evidence deletion did not re-execute the dependent smoke stage')
-    // A stage re-execution mints a new attempt-scoped receipt and evidence ids, so
-    // the deleted file is superseded rather than rewritten at the same path. The
-    // honest observable is a fresh receipt whose referenced evidence records all exist.
-    const regeneratedSmoke = latestSmokeReceipt(store.state)
-    assert(regeneratedSmoke.receipt.receipt_id !== smoke.receipt.receipt_id,
-      'BB13 evidence deletion reused the stale smoke receipt instead of re-executing')
-    const evidenceRoot = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source')
-    assert(regeneratedSmoke.receipt.evidence_ids.length > 0 &&
-      regeneratedSmoke.receipt.evidence_ids.every(id => existsSync(join(evidenceRoot, `${id}.json`))),
-      'BB13 deleted required evidence was not regenerated as fresh present records')
-    observations.push({ phase: 'evidence-delete', state: store.state, counts: afterMissingCounts })
+    // (8) Deleted smoke-required evidence: the independent verify stage reuses,
+    // and only the dependent smoke stage re-executes with a fresh receipt and
+    // freshly present evidence. This and the failure-recovery phase prove "first
+    // invalidated node and dependent successors" without a second lifecycle stage.
+    {
+      const smoke = latestSmokeReceipt(store.state)
+      const evidenceId = smoke.receipt.evidence_ids[0]
+      const evidenceRelPath = `.appsdk/records/evidence/teams-source/${evidenceId}.json`
+      const evidencePath = join(fixtureRoot, evidenceRelPath)
+      assert(existsSync(evidencePath), `BB13 evidence file is missing: ${evidencePath}`)
+      const before = capture('evidence-delete', inputHashes([graphRelPath]))
+      rmSync(evidencePath)
+      const { delta } = runPhase('evidence-delete', before)
+      expectDelta('evidence-delete', delta, { verify: 0, smoke: 1 })
+      expectReused('evidence-delete', delta, 'pnpm-verify')
+      const smokeStage = expectExecuted('evidence-delete', delta, 'pnpm-smoke-installed')
+      const regenerated = latestSmokeReceipt(store.state)
+      assert(regenerated.receipt.receipt_id !== smoke.receipt.receipt_id,
+        'BB13 evidence deletion reused the stale smoke receipt instead of re-executing')
+      assert(smokeStage.receiptId === regenerated.receipt.receipt_id,
+        'BB13 evidence deletion did not publish the regenerated smoke receipt as the stage receipt')
+      const evidenceRoot = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source')
+      assert(regenerated.receipt.evidence_ids.length > 0 &&
+        regenerated.receipt.evidence_ids.every(id => existsSync(join(evidenceRoot, `${id}.json`))),
+        'BB13 deleted required evidence was not regenerated as fresh present records')
+      observations.at(-1).deleted_evidence = evidenceId
+    }
 
     result = {
       status: 'passed',
@@ -4594,7 +4780,8 @@ async function runBB13(context) {
         lifecycle_adapter: 'node scripts/lifecycle-adapter.mjs',
         store: '.appsdk-control/lifecycle-adapter/stages/teams-lifecycle-admission.json',
         fault: 'one-shot smoke:installed exit 86',
-        mutations: ['source', 'graph/registry', 'config', 'artifact', 'required evidence file deletion'],
+        mutations: ['source', 'real Work graph node reorder', 'config', 'artifact', 'required evidence file deletion'],
+        graph_input: graphRelPath,
       },
       external_observation: {
         fixture_root: fixtureRoot,
@@ -4603,15 +4790,18 @@ async function runBB13(context) {
         store_path: store.path,
         phases: observations.map(observation => ({
           phase: observation.phase,
-          counts: observation.counts,
-          stages: Object.fromEntries(Object.entries(observation.state.stages).map(([id, stage]) => [id, {
-            status: stage.status,
-            receiptId: stage.receiptId,
-            reuseReceiptId: stage.reuseReceiptId,
-            evidenceIds: stage.evidenceIds,
-          }])),
-          reuseReceipts: observation.state.reuseReceipts.length,
-          invalidationHistory: observation.state.invalidationHistory.slice(-4),
+          counts: observation.counts ?? observation.after?.counts ?? undefined,
+          before: observation.before,
+          invocation: observation.invocation,
+          delta: observation.delta,
+          after: observation.after,
+          failure_exit: observation.failure_exit,
+          smoke_error: observation.smoke_error,
+          removed_validation_records: observation.removed_validation_records,
+          reused_receipts: observation.reused_receipts,
+          graph_reorder: observation.graph_reorder,
+          smoke_reason_fingerprint_change: observation.smoke_reason_fingerprint_change,
+          deleted_evidence: observation.deleted_evidence,
         })),
         final_counts: pnpmInvocationCounts(proofDir),
       },
