@@ -1574,6 +1574,9 @@ async function bb09BrowserAcceptance(options) {
     `the settings panel did not select the catalog model: ${bindSelection}`)
   camoClick(fixture, camo, evidenceDir, 'browser-config-actions', profile,
     'article.teams-provider-card .teams-model-row .teams-button-primary')
+  const bindDiagScript = `JSON.stringify({ liveRegion: document.querySelector('.teams-live-region')?.textContent ?? null, drawer: document.querySelector('.teams-drawer')?.textContent ?? null, errorPanel: document.querySelector('.teams-error-panel')?.textContent ?? null, fieldHints: [...document.querySelectorAll('.teams-field-hint')].map(node => node.textContent), bindDisabled: document.querySelector('article.teams-provider-card .teams-model-row .teams-button-primary')?.disabled ?? null, selectValue: document.querySelector('article.teams-provider-card select.teams-select')?.value ?? null })`
+  writeJson(join(evidenceDir, 'browser-config-bind-diag-click.json'),
+    JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-bind-diag-click', profile, bindDiagScript)))
   let after
   try {
     after = await waitForAsync(async () => {
@@ -1584,9 +1587,8 @@ async function bb09BrowserAcceptance(options) {
     }, 60_000, 'the Console provider operation to advance the accepted revision')
   } catch (error) {
     try {
-      const panel = await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-bind-diag', profile,
-        `JSON.stringify({ drawer: document.querySelector('.teams-drawer')?.textContent ?? null, errorPanel: document.querySelector('.teams-error-panel')?.textContent ?? null, fieldHints: [...document.querySelectorAll('.teams-field-hint')].map(node => node.textContent), bindDisabled: document.querySelector('article.teams-provider-card .teams-model-row .teams-button-primary')?.disabled ?? null, selectValue: document.querySelector('article.teams-provider-card select.teams-select')?.value ?? null })`)
-      writeJson(join(evidenceDir, 'browser-config-bind-diag.json'), JSON.parse(panel))
+      writeJson(join(evidenceDir, 'browser-config-bind-diag.json'),
+        JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-bind-diag', profile, bindDiagScript)))
     } catch { /* preserve the primary failure */ }
     throw error
   }
