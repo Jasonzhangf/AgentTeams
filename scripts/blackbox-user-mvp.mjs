@@ -2454,15 +2454,17 @@ function startInstalledSessionConsole(fixture, evidenceDir, prefix) {
   }
 }
 
-async function applySessionConfigAndWait(client, agentId, evidenceDir, prefix) {
+async function applySessionConfigAndWait(client, agentId, evidenceDir, prefix, onReply) {
   const applied = await client.command({ kind: 'config.apply', agentId })
+  const reply = publicJson(applied.body)
+  writeJson(join(evidenceDir, `${prefix}-config-apply.json`), reply)
+  onReply?.(reply)
   assert(applied.body.ok === true, `config.apply failed for ${agentId}: ${JSON.stringify(applied.body)}`)
   const agent = await waitForAsync(async () => {
     const row = (await readInstalledProjection(client, undefined, 'apply')).agents.find(candidate => candidate.agentId === agentId)
     return row?.sessionCapable === true && row.sessionAvailability === 'current' ? row : undefined
   }, 180_000, `the installed ${agentId} Session runtime to become current`)
-  writeJson(join(evidenceDir, `${prefix}-config-apply.json`), publicJson(applied.body))
-  return { applied: publicJson(applied.body), agent: publicJson(agent) }
+  return { applied: reply, agent: publicJson(agent) }
 }
 
 function waitForSessionTurn(sessionEvents, previousFinals, label) {
@@ -2494,19 +2496,24 @@ async function createAndOpenSession(client, title, evidenceDir, prefix) {
 }
 
 /**
- * Snapshot only the public facts the boundary invariants require. It reads the
- * durable accepted binding the caller already resolved and deliberately omits
- * the provider catalog observation: a rejected catalog refresh may update that
- * observation while accepted/effective/binding stay unchanged.
+ * Combine the installed Console projection with the durable accepted binding
+ * the caller already resolved. The two reads are sequential, not atomic; the
+ * accepted-revision check below prevents mismatched evidence from being joined.
+ * Provider catalog observations are deliberately omitted because a rejected
+ * catalog refresh may update them while accepted/effective/binding stay fixed.
  */
-function publicBindingSnapshot(projection, agentId, acceptedBinding) {
+function boundaryBindingSnapshot(projection, agentId, acceptedBinding) {
   const config = projection.configs.find(row => row.agentId === agentId)
   assert(config !== undefined, `the installed projection published no config row for ${agentId}`)
+  assert(typeof config.acceptedRevision === 'number' && Number.isSafeInteger(config.acceptedRevision),
+    `the installed config row for ${agentId} has no acceptedRevision`)
   assert(config.effectiveRevision !== undefined, `the installed config row for ${agentId} has no effectiveRevision`)
   const agent = projection.agents.find(row => row.agentId === agentId)
   assert(agent !== undefined, `the installed projection published no runtime row for ${agentId}`)
   assert(acceptedBinding?.primary?.providerInstanceId !== undefined && acceptedBinding?.primary?.modelId !== undefined,
     `the durable accepted binding for ${agentId} has no primary provider/model`)
+  assert(acceptedBinding.accepted_revision === config.acceptedRevision,
+    `the durable accepted revision ${acceptedBinding.accepted_revision} does not match the public config revision ${config.acceptedRevision} for ${agentId}`)
   return {
     config: {
       acceptedRevision: config.acceptedRevision,
@@ -2522,9 +2529,9 @@ function publicBindingSnapshot(projection, agentId, acceptedBinding) {
   }
 }
 
-/** Read the durable accepted binding and take its public snapshot in one step. */
+/** Read the durable accepted binding and combine it with the public projection. */
 function installedBindingSnapshot(projection, internalPath, agentId) {
-  return publicBindingSnapshot(projection, agentId, readAcceptedBinding(internalPath, agentId))
+  return boundaryBindingSnapshot(projection, agentId, readAcceptedBinding(internalPath, agentId))
 }
 
 /** A turn passes only when the public final completed and carried assistant text. */
@@ -2556,15 +2563,33 @@ function bb10ManualSelectionPass(selection) {
   if (selection === undefined) return false
   if (selection.refresh?.ok !== true) return false
   if (selection.catalog_state !== 'empty' || selection.model_count !== 0) return false
-  if (typeof selection.accepted_revision_before !== 'number') return false
+  if (selection.accepted_revision_before !== 1) return false
   if (selection.accepted_revision_after !== selection.accepted_revision_before + 2) return false
   if (selection.put_model?.ok !== true || selection.bind_model?.ok !== true) return false
   if (selection.restarted_accepted_revision !== selection.accepted_revision_after) return false
-  for (const snapshot of [selection.effective_before_restart, selection.effective_before_apply]) {
-    if (snapshot?.config?.effectiveRevision !== selection.accepted_revision_before) return false
-    if (snapshot?.agent?.providerId !== sessionPrimaryProviderId
-      || snapshot?.agent?.modelId !== sessionPrimaryModel) return false
-  }
+  const beforeRestart = selection.effective_before_restart
+  if (beforeRestart?.config?.acceptedRevision !== selection.accepted_revision_before + 1
+    || beforeRestart.config.effectiveRevision !== selection.accepted_revision_before) return false
+  if (beforeRestart.agent?.providerId !== sessionPrimaryProviderId
+    || beforeRestart.agent.modelId !== sessionPrimaryModel) return false
+  if (beforeRestart.binding?.primary?.providerInstanceId !== sessionPrimaryProviderId
+    || beforeRestart.binding.primary.modelId !== sessionPrimaryModel
+    || beforeRestart.binding.backup?.providerInstanceId !== sessionBackupProviderId
+    || beforeRestart.binding.backup?.modelId !== sessionBackupModel) return false
+  const beforeApply = selection.effective_before_apply
+  if (beforeApply?.config?.acceptedRevision !== selection.accepted_revision_before + 2
+    || beforeApply.config.effectiveRevision !== selection.accepted_revision_before) return false
+  if (beforeApply.agent?.providerId !== sessionPrimaryProviderId
+    || beforeApply.agent.modelId !== sessionPrimaryModel) return false
+  if (beforeApply.binding?.primary?.providerInstanceId !== sessionManualProviderId
+    || beforeApply.binding.primary.modelId !== sessionManualModel
+    || beforeApply.binding.backup?.providerInstanceId !== sessionBackupProviderId
+    || beforeApply.binding.backup?.modelId !== sessionBackupModel) return false
+  const stages = selection.sampling_stages
+  if (stages?.effective_before_restart?.after !== 'config.model.put'
+    || stages.effective_before_restart.before !== 'manual config.bindModel'
+    || stages.effective_before_apply?.after !== 'manual config.bindModel'
+    || stages.effective_before_apply.before !== 'installed restart and explicit config.apply') return false
   const afterApply = selection.effective_after_apply
   if (afterApply?.providerId !== sessionManualProviderId || afterApply?.modelId !== sessionManualModel) return false
   if (afterApply?.sessionEffectiveRevision !== selection.accepted_revision_after) return false
@@ -2578,8 +2603,7 @@ function bb10ManualSelectionPass(selection) {
 function bb10StaleCasPass(stale) {
   if (stale === undefined) return false
   if (stale.reply?.ok !== false || stale.reply?.error?.code !== 'REVISION_CONFLICT') return false
-  if (typeof stale.stale_revision !== 'number' || typeof stale.current_revision !== 'number') return false
-  if (!(stale.stale_revision < stale.current_revision)) return false
+  if (stale.stale_revision !== 1 || stale.current_revision !== 3) return false
   return JSON.stringify(stale.before) === JSON.stringify(stale.after)
 }
 
@@ -2591,6 +2615,14 @@ function bb10InvalidCredentialPass(invalid) {
   if (!Array.isArray(invalid.catalog_requests) || invalid.catalog_requests.length === 0) return false
   if (!invalid.catalog_requests.some(request => request?.status === 401)) return false
   if (JSON.stringify(invalid.before) !== JSON.stringify(invalid.after)) return false
+  if (invalid.before?.config?.acceptedRevision !== 4 || invalid.before.config.effectiveRevision !== 4
+    || invalid.before.config.applyState !== 'clean') return false
+  if (invalid.before.binding?.primary?.providerInstanceId !== sessionManualProviderId
+    || invalid.before.binding.primary.modelId !== sessionManualModel
+    || invalid.before.binding.backup?.providerInstanceId !== sessionBackupProviderId
+    || invalid.before.binding.backup?.modelId !== sessionBackupModel) return false
+  if (invalid.before.agent?.providerId !== sessionManualProviderId || invalid.before.agent.modelId !== sessionManualModel
+    || invalid.before.agent.sessionEffectiveRevision !== 4) return false
   if (invalid.manual_inference_requests_after !== invalid.manual_inference_requests_before) return false
   return invalid.backup_inference_requests_after === invalid.backup_inference_requests_before
 }
@@ -2610,12 +2642,53 @@ function bb10NoImplicitFailoverPass(noFailover) {
   if (!(noFailover.manual_inference_requests_after > noFailover.manual_inference_requests_before)) return false
   if (noFailover.accepted_revision_before !== noFailover.effective_revision_before) return false
   if (noFailover.accepted_revision_after !== noFailover.effective_revision_after) return false
+  if (noFailover.accepted_revision_before !== 4 || noFailover.accepted_revision_after !== 4) return false
+  if (noFailover.snapshot_before?.binding?.primary?.providerInstanceId !== sessionManualProviderId
+    || noFailover.snapshot_before.binding.primary.modelId !== sessionManualModel
+    || noFailover.snapshot_before.binding.backup?.providerInstanceId !== sessionBackupProviderId
+    || noFailover.snapshot_before.binding.backup?.modelId !== sessionBackupModel) return false
   return JSON.stringify(noFailover.snapshot_before) === JSON.stringify(noFailover.snapshot_after)
+}
+
+/** The accepted baseline is part of the boundary receipt, not an unrecorded fixture step. */
+function bb10BaselinePass(baseline) {
+  if (baseline?.discovery?.acceptedRevision !== 0) return false
+  if (baseline.discovery.manual_catalog_state !== 'empty' || baseline.discovery.manual_model_count !== 0) return false
+  const bind = baseline.bind_model
+  if (bind?.request?.kind !== 'config.bindModel' || bind.request.agentId !== sessionAgentId
+    || bind.request.expectedRevision !== 0 || bind.request.providerId !== sessionPrimaryProviderId
+    || bind.request.modelId !== sessionPrimaryModel || bind.reply?.ok !== true) return false
+  const accepted = baseline.accepted_after_bind
+  if (accepted?.public?.acceptedRevision !== 1 || accepted.durable_accepted_revision !== 1) return false
+  if (accepted.binding?.primary?.providerInstanceId !== sessionPrimaryProviderId
+    || accepted.binding.primary.modelId !== sessionPrimaryModel
+    || accepted.binding.backup?.providerInstanceId !== sessionBackupProviderId
+    || accepted.binding.backup?.modelId !== sessionBackupModel) return false
+  const apply = baseline.apply
+  if (apply?.request?.kind !== 'config.apply' || apply.request.agentId !== sessionAgentId || apply.reply?.ok !== true) return false
+  if (apply.agent?.providerId !== sessionPrimaryProviderId || apply.agent.modelId !== sessionPrimaryModel
+    || apply.agent.sessionEffectiveRevision !== 1) return false
+  const settled = baseline.settled
+  if (settled?.config?.acceptedRevision !== 1 || settled.config.effectiveRevision !== 1
+    || settled.config.applyState !== 'clean') return false
+  if (settled.agent?.providerId !== sessionPrimaryProviderId || settled.agent.modelId !== sessionPrimaryModel
+    || settled.agent.sessionEffectiveRevision !== 1) return false
+  return settled.binding?.primary?.providerInstanceId === sessionPrimaryProviderId
+    && settled.binding.primary.modelId === sessionPrimaryModel
+    && settled.binding.backup?.providerInstanceId === sessionBackupProviderId
+    && settled.binding.backup?.modelId === sessionBackupModel
+}
+
+/** A boundary PASS receipt must disclose where each asserted fact came from. */
+function bb10BoundarySourcesPass(sources) {
+  return ['binding', 'config', 'agent', 'provider_requests', 'session_terminal', 'combination']
+    .every(key => typeof sources?.[key] === 'string' && sources[key].trim() !== '')
 }
 
 /** Boundary section: four named results plus installed identity and cleanup. */
 function bb10BoundaryResultPass(boundary) {
   if (boundary?.status !== 'passed') return false
+  if (!bb10BaselinePass(boundary.baseline) || !bb10BoundarySourcesPass(boundary.sources)) return false
   const identity = boundary.installed_identity
   if (identity?.installed_content_sha256 === undefined
     || identity.installed_content_sha256 !== identity.expected_content_sha256) return false
@@ -2672,6 +2745,14 @@ async function runBB10Boundary(context, evidenceDir) {
   let client
   let cleanupEvidence
   const results = {}
+  const snapshotSources = {
+    binding: 'target daemon durable internal store accepted snapshot',
+    config: 'installed Console /api/v1/projection config row',
+    agent: 'installed Console /api/v1/projection Agent row',
+    provider_requests: 'boundary provider stub external request records',
+    session_terminal: 'installed Console /api/v1/projection Session events',
+    combination: 'sequential reads cross-checked by accepted revision; not an atomic cross-source snapshot',
+  }
   try {
     const primaryUrl = await listenProviderStub(primary)
     const backupUrl = await listenProviderStub(backup)
@@ -2688,20 +2769,69 @@ async function runBB10Boundary(context, evidenceDir) {
     client = sessionConsoleClient(console.url, console.authorization)
     const launchEnvironment = fixture.env
 
-    // (1) Empty catalog, explicit manual model selection, installed restart and
-    // apply, then one successful public Session turn on the manual binding.
+    // (0) Establish an accepted/effective baseline before the four sub-scenarios.
+    // Discovery reads no durable accepted binding: the first accept must happen
+    // through the public command path below.
     const discovery = await readInstalledProjection(client, boundaryRoot, 'boundary-discovery')
-    const manualCatalog = discovery.configs.find(row => row.agentId === sessionAgentId)
-      ?.providers.find(provider => provider.id === sessionManualProviderId)
+    const discoveryConfig = discovery.configs.find(row => row.agentId === sessionAgentId)
+    assert(discoveryConfig !== undefined && discoveryConfig.acceptedRevision === 0,
+      `the boundary fixture did not start at accepted revision 0: ${JSON.stringify(discoveryConfig)}`)
+    const manualCatalog = discoveryConfig.providers.find(provider => provider.id === sessionManualProviderId)
     assert(manualCatalog?.catalogState === 'empty' && manualCatalog.models.length === 0,
       `the boundary manual provider catalog was not empty: ${JSON.stringify(manualCatalog)}`)
-    const firstApply = await applySessionConfigAndWait(client, sessionAgentId, boundaryRoot, 'boundary-initial')
+    const baselineReceipt = {
+      discovery: {
+        acceptedRevision: discoveryConfig.acceptedRevision,
+        manual_catalog_state: manualCatalog.catalogState,
+        manual_model_count: manualCatalog.models.length,
+      },
+    }
+    results.baseline = baselineReceipt
+    writeJson(join(boundaryRoot, 'baseline.json'), baselineReceipt)
+    const baselineBindRequest = { kind: 'config.bindModel', agentId: sessionAgentId,
+      expectedRevision: discoveryConfig.acceptedRevision,
+      providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel }
+    const baselineBind = await client.command(baselineBindRequest)
+    baselineReceipt.bind_model = { request: baselineBindRequest, reply: publicJson(baselineBind.body) }
+    writeJson(join(boundaryRoot, 'baseline.json'), baselineReceipt)
+    assert(baselineBind.body.ok === true,
+      `the boundary baseline accept failed: ${JSON.stringify(baselineBind.body)}`)
+    const afterBaselineBind = await readInstalledProjection(client, boundaryRoot, 'boundary-baseline-bind')
+    const acceptedAfterBind = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
+    const baselineBinding = boundaryBindingSnapshot(afterBaselineBind, sessionAgentId, acceptedAfterBind)
+    baselineReceipt.accepted_after_bind = { public: baselineBinding.config, binding: baselineBinding.binding,
+      durable_accepted_revision: acceptedAfterBind.accepted_revision }
+    writeJson(join(boundaryRoot, 'baseline.json'), baselineReceipt)
+    assert(acceptedAfterBind.accepted_revision === 1 && baselineBinding.config.acceptedRevision === 1,
+      `the boundary baseline bind did not create accepted revision 1: ${JSON.stringify({
+        durable: acceptedAfterBind.accepted_revision, public: baselineBinding.config.acceptedRevision,
+      })}`)
+    assert(baselineBinding.binding.primary.providerInstanceId === sessionPrimaryProviderId
+      && baselineBinding.binding.primary.modelId === sessionPrimaryModel,
+    `the boundary baseline bind changed the primary binding: ${JSON.stringify(baselineBinding.binding)}`)
+    assert(baselineBinding.binding.backup?.providerInstanceId === sessionBackupProviderId
+      && baselineBinding.binding.backup?.modelId === sessionBackupModel,
+    `the boundary baseline bind did not preserve the existing backup: ${JSON.stringify(baselineBinding.binding)}`)
+
+    // (1) Apply the accepted baseline, then exercise empty-catalog explicit
+    // manual model selection, installed restart, and one successful Session.
+    const baselineApplyRequest = { kind: 'config.apply', agentId: sessionAgentId }
+    const firstApply = await applySessionConfigAndWait(client, sessionAgentId, boundaryRoot, 'boundary-initial',
+      reply => { baselineReceipt.apply = { request: baselineApplyRequest, reply }; writeJson(join(boundaryRoot, 'baseline.json'), baselineReceipt) })
     assert(firstApply.agent.providerId === sessionPrimaryProviderId && firstApply.agent.modelId === sessionPrimaryModel,
       `the boundary initial primary binding was not effective: ${JSON.stringify(firstApply.agent)}`)
     const baselineProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-baseline')
     const baseline = installedBindingSnapshot(baselineProjection, lifecycle.internal.internalPath, sessionAgentId)
-    assert(baseline.config.acceptedRevision === baseline.config.effectiveRevision,
+    assert(baseline.config.acceptedRevision === 1 && baseline.config.effectiveRevision === 1
+      && baseline.config.applyState === 'clean' && baseline.agent.sessionEffectiveRevision === 1,
       `the boundary baseline is not settled: ${JSON.stringify(baseline.config)}`)
+    baselineReceipt.apply.agent = firstApply.agent
+    baselineReceipt.settled = baseline
+    writeJson(join(boundaryRoot, 'baseline.json'), baselineReceipt)
+    assert(primary.requests.length === 0 && backup.requests.length === 0 && manual.requests.length === 0,
+      `the boundary baseline bind/apply sent an inference request: ${JSON.stringify({
+        primary: primary.requests.length, backup: backup.requests.length, manual: manual.requests.length,
+      })}`)
 
     const refresh = await client.command({ kind: 'config.refreshModels', agentId: sessionAgentId,
       expectedRevision: baseline.config.acceptedRevision, providerId: sessionManualProviderId })
@@ -2711,7 +2841,12 @@ async function runBB10Boundary(context, evidenceDir) {
     const refreshedManual = refreshedRow.providers.find(provider => provider.id === sessionManualProviderId)
     assert(refreshedManual?.catalogState === 'empty' && refreshedManual.models.length === 0,
       `the boundary manual catalog refresh was not observed as empty: ${JSON.stringify(refreshedManual)}`)
-    assert(refreshedRow.acceptedRevision === baseline.config.acceptedRevision,
+    const refreshedAgent = afterRefresh.agents.find(row => row.agentId === sessionAgentId)
+    assert(refreshedRow.acceptedRevision === baseline.config.acceptedRevision
+      && refreshedRow.effectiveRevision === baseline.config.effectiveRevision
+      && refreshedAgent?.providerId === sessionPrimaryProviderId
+      && refreshedAgent.modelId === sessionPrimaryModel
+      && refreshedAgent.sessionEffectiveRevision === 1,
       `the boundary manual catalog refresh advanced accepted: ${JSON.stringify(refreshedRow)}`)
     const manualEntry = { ref: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
       origin: 'manual', base: { label: 'BB Boundary Manual Model' }, overrides: {} }
@@ -2723,9 +2858,15 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(putRow.acceptedRevision === baseline.config.acceptedRevision + 1,
       `the boundary manual model put did not advance accepted by one: ${JSON.stringify(putRow)}`)
     const beforeSelection = installedBindingSnapshot(afterPut, lifecycle.internal.internalPath, sessionAgentId)
-    assert(beforeSelection.agent.providerId === sessionPrimaryProviderId
+    assert(beforeSelection.config.acceptedRevision === baseline.config.acceptedRevision + 1
+      && beforeSelection.config.effectiveRevision === baseline.config.effectiveRevision
+      && beforeSelection.agent.providerId === sessionPrimaryProviderId
       && beforeSelection.agent.modelId === sessionPrimaryModel
-      && beforeSelection.agent.sessionEffectiveRevision === baseline.agent.sessionEffectiveRevision,
+      && beforeSelection.agent.sessionEffectiveRevision === baseline.agent.sessionEffectiveRevision
+      && beforeSelection.binding.primary.providerInstanceId === sessionPrimaryProviderId
+      && beforeSelection.binding.primary.modelId === sessionPrimaryModel
+      && beforeSelection.binding.backup?.providerInstanceId === sessionBackupProviderId
+      && beforeSelection.binding.backup?.modelId === sessionBackupModel,
     `the boundary put changed the running Agent binding before restart: ${JSON.stringify(beforeSelection.agent)}`)
     const primaryRequestsBeforeSelection = primary.requests.length
     const backupRequestsBeforeSelection = backup.requests.length
@@ -2737,9 +2878,15 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(bindRow.acceptedRevision === baseline.config.acceptedRevision + 2,
       `the boundary manual model bind did not advance accepted by one: ${JSON.stringify(bindRow)}`)
     const beforeRestart = installedBindingSnapshot(afterBind, lifecycle.internal.internalPath, sessionAgentId)
-    assert(beforeRestart.agent.providerId === sessionPrimaryProviderId
+    assert(beforeRestart.config.acceptedRevision === baseline.config.acceptedRevision + 2
+      && beforeRestart.config.effectiveRevision === baseline.config.effectiveRevision
+      && beforeRestart.agent.providerId === sessionPrimaryProviderId
       && beforeRestart.agent.modelId === sessionPrimaryModel
-      && beforeRestart.agent.sessionEffectiveRevision === baseline.agent.sessionEffectiveRevision,
+      && beforeRestart.agent.sessionEffectiveRevision === baseline.agent.sessionEffectiveRevision
+      && beforeRestart.binding.primary.providerInstanceId === sessionManualProviderId
+      && beforeRestart.binding.primary.modelId === sessionManualModel
+      && beforeRestart.binding.backup?.providerInstanceId === sessionBackupProviderId
+      && beforeRestart.binding.backup?.modelId === sessionBackupModel,
     `the boundary bind changed the running Agent before restart: ${JSON.stringify(beforeRestart.agent)}`)
     const generationBeforeSwitch = lifecycle.parsed.generation
     await stopSessionFixture(fixture, lifecycle, boundaryRoot, 'bb10-boundary-switch')
@@ -2757,7 +2904,7 @@ async function runBB10Boundary(context, evidenceDir) {
       `the boundary manual selection did not become effective: ${JSON.stringify(switchedApply.agent)}`)
     const switchedProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-switch-effective')
     const switchedConfig = switchedProjection.configs.find(row => row.agentId === sessionAgentId)
-    assert(switchedConfig.effectiveRevision === switchedConfig.acceptedRevision,
+    assert(switchedConfig.acceptedRevision === 3 && switchedConfig.effectiveRevision === 3,
       `the boundary apply did not settle effective at accepted: ${JSON.stringify(switchedConfig)}`)
     assert(switchedApply.agent.sessionEffectiveRevision === switchedConfig.acceptedRevision,
       `the boundary Agent session revision does not match accepted: ${JSON.stringify(switchedApply.agent)}`)
@@ -2783,6 +2930,20 @@ async function runBB10Boundary(context, evidenceDir) {
       accepted_revision_after: bindRow.acceptedRevision,
       effective_before_restart: beforeSelection,
       effective_before_apply: beforeRestart,
+      sampling_stages: {
+        effective_before_restart: {
+          after: 'config.model.put',
+          before: 'manual config.bindModel',
+          accepted_revision: beforeSelection.config.acceptedRevision,
+          effective_revision: beforeSelection.config.effectiveRevision,
+        },
+        effective_before_apply: {
+          after: 'manual config.bindModel',
+          before: 'installed restart and explicit config.apply',
+          accepted_revision: beforeRestart.config.acceptedRevision,
+          effective_revision: beforeRestart.config.effectiveRevision,
+        },
+      },
       restarted_accepted_revision: restartedConfig.acceptedRevision,
       effective_after_apply: publicJson(switchedApply.agent),
       turn: manualTurn,
@@ -2801,8 +2962,14 @@ async function runBB10Boundary(context, evidenceDir) {
     const staleBeforeProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-stale-before')
     const staleBefore = installedBindingSnapshot(staleBeforeProjection, lifecycle.internal.internalPath, sessionAgentId)
     const staleRevision = baseline.config.acceptedRevision
-    assert(staleRevision < staleBefore.config.acceptedRevision,
-      `the boundary stale revision is not strictly older: ${JSON.stringify({ staleRevision, current: staleBefore.config.acceptedRevision })}`)
+    assert(staleRevision === baseline.config.acceptedRevision
+      && staleBefore.config.acceptedRevision === baseline.config.acceptedRevision + 2
+      && staleBefore.config.effectiveRevision === baseline.config.acceptedRevision + 2
+      && staleRevision < staleBefore.config.acceptedRevision,
+    `the boundary stale revision is not strictly older: ${JSON.stringify({
+      staleRevision, current: staleBefore.config.acceptedRevision,
+      effective: staleBefore.config.effectiveRevision,
+    })}`)
     const staleRequest = { kind: 'config.bindModel', agentId: sessionAgentId, expectedRevision: staleRevision,
       providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel }
     const staleReply = await client.command(staleRequest)
@@ -2821,6 +2988,8 @@ async function runBB10Boundary(context, evidenceDir) {
     // UNAUTHENTICATED while the configured binding stays unchanged.
     const invalidBeforeProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-invalid-before')
     const invalidBefore = installedBindingSnapshot(invalidBeforeProjection, lifecycle.internal.internalPath, sessionAgentId)
+    assert(invalidBefore.config.acceptedRevision === 3 && invalidBefore.config.effectiveRevision === 3,
+      `the boundary invalid-credential precondition was not settled at revision 3: ${JSON.stringify(invalidBefore.config)}`)
     const invalidCatalogRequestsBefore = invalidCredentialStub.catalogRequests.length
     const manualInferenceBeforeInvalid = manual.requests.length
     const backupInferenceBeforeInvalid = backup.requests.length
@@ -2844,15 +3013,19 @@ async function runBB10Boundary(context, evidenceDir) {
     client = sessionConsoleClient(console.url, console.authorization)
     const invalidRestarted = await readInstalledProjection(client, boundaryRoot, 'boundary-invalid-restarted')
     const invalidRestartedConfig = invalidRestarted.configs.find(row => row.agentId === sessionAgentId)
-    assert(invalidRestartedConfig.acceptedRevision === invalidBefore.config.acceptedRevision + 1,
+    assert(invalidRestartedConfig.acceptedRevision === 4,
       `the boundary invalid provider accepted revision did not survive restart: ${JSON.stringify(invalidRestartedConfig)}`)
     const invalidApply = await applySessionConfigAndWait(client, sessionAgentId, boundaryRoot, 'boundary-invalid-apply')
     assert(invalidApply.agent.providerId === sessionManualProviderId && invalidApply.agent.modelId === sessionManualModel,
       `the boundary invalid-credential restart changed the effective manual binding: ${JSON.stringify(invalidApply.agent)}`)
     const invalidAppliedProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-invalid-applied')
     const invalidApplied = installedBindingSnapshot(invalidAppliedProjection, lifecycle.internal.internalPath, sessionAgentId)
-    assert(invalidApplied.config.acceptedRevision === invalidBefore.config.acceptedRevision + 1,
+    assert(invalidApplied.config.acceptedRevision === invalidBefore.config.acceptedRevision + 1
+      && invalidApplied.config.effectiveRevision === invalidBefore.config.acceptedRevision + 1
+      && invalidApplied.config.applyState === 'clean',
       `the boundary invalid-credential apply changed accepted unexpectedly: ${JSON.stringify(invalidApplied.config)}`)
+    assert(invalidApply.agent.sessionEffectiveRevision === invalidBefore.config.acceptedRevision + 1,
+      `the boundary invalid-credential apply changed the Agent session revision: ${JSON.stringify(invalidApply.agent)}`)
     const refreshInvalid = await client.command({ kind: 'config.refreshModels', agentId: sessionAgentId,
       expectedRevision: invalidApplied.config.acceptedRevision, providerId: sessionPrimaryProviderId })
     assert(refreshInvalid.body.ok === false && refreshInvalid.body.error?.code === 'UNAUTHENTICATED',
@@ -2903,6 +3076,13 @@ async function runBB10Boundary(context, evidenceDir) {
     'the boundary manual provider to receive the warm-up prompt')
     const noFailoverBeforeProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-no-failover-before')
     const noFailoverBefore = installedBindingSnapshot(noFailoverBeforeProjection, lifecycle.internal.internalPath, sessionAgentId)
+    assert(noFailoverBefore.config.acceptedRevision === 4 && noFailoverBefore.config.effectiveRevision === 4
+      && noFailoverBefore.agent.sessionEffectiveRevision === 4
+      && noFailoverBefore.binding.primary.providerInstanceId === sessionManualProviderId
+      && noFailoverBefore.binding.primary.modelId === sessionManualModel
+      && noFailoverBefore.binding.backup?.providerInstanceId === sessionBackupProviderId
+      && noFailoverBefore.binding.backup?.modelId === sessionBackupModel,
+    `the boundary no-failover baseline was not settled at revision 4: ${JSON.stringify(noFailoverBefore)}`)
     const eventsBefore = readSessionEvents(noFailoverBeforeProjection, sessionAgentId, noFailoverSession.sessionId)
     const failedFinalsBefore = eventsBefore.filter(event => event.kind === 'final' && event.state === 'failed').length
     const primaryInferenceBeforeFailover = primary.requests.length
@@ -2983,6 +3163,8 @@ async function runBB10Boundary(context, evidenceDir) {
     writeJson(join(boundaryRoot, 'cleanup.json'), cleanupEvidence)
     const boundaryResult = {
       status: 'passed',
+      baseline: publicJson(results.baseline),
+      sources: publicJson(snapshotSources),
       installed_identity: {
         installed_content_sha256: fixture.installedContentSha256,
         installed_tarball_sha256: fixture.tarballSha256,
@@ -3003,6 +3185,8 @@ async function runBB10Boundary(context, evidenceDir) {
       status: 'failed',
       stage: 'boundary',
       error: error instanceof Error ? error.message : String(error),
+      baseline: publicJson(results.baseline ?? null),
+      sources: publicJson(snapshotSources),
       results: publicJson(results),
       evidence_path: boundaryRoot,
     }
@@ -5459,6 +5643,8 @@ export {
   Bb10SourceError,
   agentPolicyRefusalExpectedRevision,
   bb10BoundaryResultPass,
+  bb10BaselinePass,
+  bb10BoundarySourcesPass,
   bb10InvalidCredentialPass,
   bb10LaunchEnv,
   bb10ManualSelectionPass,
@@ -5477,7 +5663,7 @@ export {
   parseCanonicalProviderSource,
   parseFlatSecretKey,
   parseRccServerSource,
-  publicBindingSnapshot,
+  boundaryBindingSnapshot,
   readAcceptedConfigRevision,
   readDeclaredSecretKey,
   redactCredential,

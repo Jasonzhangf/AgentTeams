@@ -15,6 +15,8 @@ import { createRelayServer } from '../server/relay.ts'
 import {
   Bb10SourceError,
   agentPolicyRefusalExpectedRevision,
+  bb10BaselinePass,
+  bb10BoundarySourcesPass,
   bb10BoundaryResultPass,
   bb10InvalidCredentialPass,
   bb10LaunchEnv,
@@ -35,11 +37,12 @@ import {
   parseCanonicalProviderSource,
   parseFlatSecretKey,
   parseRccServerSource,
-  publicBindingSnapshot,
+  boundaryBindingSnapshot,
   readAcceptedConfigRevision,
   readDeclaredSecretKey,
   redactCredential,
   sessionBackupModel,
+  sessionBackupProviderId,
   sessionManualModel,
   sessionManualProviderId,
   sessionPrimaryModel,
@@ -687,6 +690,60 @@ describe('BB09 config operation semantics', () => {
 })
 
 describe('BB10 config operation semantics', () => {
+  it('accepts an initial same-value bind at revision 0 and preserves the declared backup', async () => {
+    const root = temporaryRoot()
+    const agentId = 'bb-provider'
+    const configPath = join(root, 'config.toml')
+    const internalPath = join(root, 'internal.toml')
+    const original = {
+      primary: { providerInstanceId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
+      backup: { providerInstanceId: sessionBackupProviderId, modelId: sessionBackupModel },
+    }
+    const configText = `version = 3
+
+[providers.${sessionPrimaryProviderId}]
+protocol = "openai-chat"
+apiBaseUrl = "http://127.0.0.1:1/v1"
+label = "BB Primary"
+enabled = true
+
+[providers.${sessionBackupProviderId}]
+protocol = "openai-chat"
+apiBaseUrl = "http://127.0.0.1:2/v1"
+label = "BB Backup"
+enabled = true
+
+[[models]]
+provider = "${sessionPrimaryProviderId}"
+id = "${sessionPrimaryModel}"
+
+[[models]]
+provider = "${sessionBackupProviderId}"
+id = "${sessionBackupModel}"
+
+[agents.${agentId}.model]
+primary = { provider = "${sessionPrimaryProviderId}", model = "${sessionPrimaryModel}" }
+backup = { provider = "${sessionBackupProviderId}", model = "${sessionBackupModel}" }
+`
+    await writeLocalConfig(configPath, configText)
+    const store = createRuntimeConfigStore(createTomlRuntimeConfigPersistence({ configPath, internalPath, agentId }))
+    const binding = createConsoleConfigBinding({
+      agentId,
+      store,
+      models: { listModels: async () => [] },
+      applier: { apply: async request => ({ status: 'applied', effectiveRevision: request.config.acceptedRevision }) },
+    })
+
+    expect((await store.read()).acceptedRevision).toBe(0)
+    await expect(binding.command({
+      kind: 'config.bindModel', agentId, expectedRevision: 0,
+      providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel,
+    })).resolves.toEqual({ ok: true })
+    const accepted = await store.read()
+    expect(accepted.acceptedRevision).toBe(1)
+    expect(accepted.agents[agentId]).toEqual(original)
+  })
+
   it('switches canonical primary first and keeps the original RCC primary as a distinct backup', async () => {
     const root = temporaryRoot()
     const agentId = 'bb-provider'
@@ -753,13 +810,58 @@ function passingRealAcceptance(): any {
 }
 
 function passingBoundary(): any {
-  const binding = {
-    primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
-    backup: { providerInstanceId: 'bb-backup', modelId: sessionBackupModel },
+  const copy = (value: any) => JSON.parse(JSON.stringify(value))
+  const originalBinding = {
+    primary: { providerInstanceId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
+    backup: { providerInstanceId: sessionBackupProviderId, modelId: sessionBackupModel },
   }
-  const before = { config: { acceptedRevision: 2, effectiveRevision: 2, applyState: 'clean' } }
+  const manualBinding = {
+    primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
+    backup: { providerInstanceId: sessionBackupProviderId, modelId: sessionBackupModel },
+  }
+  const baselineAgent = {
+    providerId: sessionPrimaryProviderId,
+    modelId: sessionPrimaryModel,
+    sessionEffectiveRevision: 1,
+  }
+  const manualAgent = {
+    providerId: sessionManualProviderId,
+    modelId: sessionManualModel,
+    sessionEffectiveRevision: 3,
+  }
+  const snapshot = (acceptedRevision: number, effectiveRevision: number, binding: any, agent: any = manualAgent) => ({
+    config: { acceptedRevision, effectiveRevision, applyState: 'clean' },
+    agent,
+    binding,
+  })
+  const invalidApplied = {
+    config: { acceptedRevision: 4, effectiveRevision: 4, applyState: 'clean' },
+    agent: { ...manualAgent, sessionEffectiveRevision: 4 },
+    binding: manualBinding,
+  }
+  const staleBefore = snapshot(3, 3, manualBinding)
+  const staleAfter = snapshot(3, 3, manualBinding)
   return {
     status: 'passed',
+    baseline: {
+      discovery: { acceptedRevision: 0, manual_catalog_state: 'empty', manual_model_count: 0 },
+      bind_model: {
+        request: { kind: 'config.bindModel', agentId: 'bb-provider', expectedRevision: 0,
+          providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
+        reply: { ok: true },
+      },
+      accepted_after_bind: { public: { acceptedRevision: 1 }, durable_accepted_revision: 1, binding: originalBinding },
+      apply: { request: { kind: 'config.apply', agentId: 'bb-provider' }, reply: { ok: true }, agent: baselineAgent },
+      settled: snapshot(1, 1, originalBinding, baselineAgent),
+    },
+    sources: {
+      binding: 'target daemon durable internal store accepted snapshot',
+      config: 'installed Console /api/v1/projection config row',
+      agent: 'installed Console /api/v1/projection Agent row',
+      provider_requests: 'boundary provider stub external request records',
+      session_terminal: 'installed Console /api/v1/projection Session events',
+      combination: 'sequential reads cross-checked by accepted revision; not an atomic cross-source snapshot',
+    },
     installed_identity: { installed_content_sha256: 'sha-1', expected_content_sha256: 'sha-1' },
     cleanup: { stopped: true, console_listener_gone: true, owned_pids_alive_after_stop: [], temporary_root_removed: true },
     results: {
@@ -767,22 +869,18 @@ function passingBoundary(): any {
         refresh: { ok: true },
         catalog_state: 'empty',
         model_count: 0,
-        accepted_revision_before: 0,
-        accepted_revision_after: 2,
+        accepted_revision_before: 1,
+        accepted_revision_after: 3,
         put_model: { ok: true },
         bind_model: { ok: true },
-        restarted_accepted_revision: 2,
-        effective_before_restart: {
-          config: { effectiveRevision: 0 },
-          agent: { providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
+        restarted_accepted_revision: 3,
+        effective_before_restart: snapshot(2, 1, originalBinding, baselineAgent),
+        effective_before_apply: snapshot(3, 1, manualBinding, baselineAgent),
+        sampling_stages: {
+          effective_before_restart: { after: 'config.model.put', before: 'manual config.bindModel' },
+          effective_before_apply: { after: 'manual config.bindModel', before: 'installed restart and explicit config.apply' },
         },
-        effective_before_apply: {
-          config: { effectiveRevision: 0 },
-          agent: { providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
-        },
-        effective_after_apply: {
-          providerId: sessionManualProviderId, modelId: sessionManualModel, sessionEffectiveRevision: 2,
-        },
+        effective_after_apply: manualAgent,
         turn: { final: { state: 'completed' }, text: 'manual answer' },
         provider_request_model: sessionManualModel,
         primary_requests_before: 0,
@@ -791,11 +889,11 @@ function passingBoundary(): any {
         backup_requests: 0,
       },
       stale_cas: {
-        stale_revision: 0,
-        current_revision: 2,
+        stale_revision: 1,
+        current_revision: 3,
         reply: { ok: false, error: { code: 'REVISION_CONFLICT' } },
-        before,
-        after: { config: { acceptedRevision: 2, effectiveRevision: 2, applyState: 'clean' } },
+        before: staleBefore,
+        after: staleAfter,
       },
       invalid_credential: {
         refresh: { ok: false, error: { code: 'UNAUTHENTICATED', providerInstanceId: sessionPrimaryProviderId } },
@@ -804,8 +902,8 @@ function passingBoundary(): any {
         manual_inference_requests_after: 1,
         backup_inference_requests_before: 0,
         backup_inference_requests_after: 0,
-        before: { config: { acceptedRevision: 3 } },
-        after: { config: { acceptedRevision: 3 } },
+        before: copy(invalidApplied),
+        after: copy(invalidApplied),
       },
       no_implicit_failover: {
         prompt: 'probe',
@@ -813,12 +911,12 @@ function passingBoundary(): any {
         bound_provider_request: { model: sessionManualModel, status: 500 },
         failed_finals_before: 0,
         failed_finals_after: 1,
-        accepted_revision_before: 3,
-        effective_revision_before: 3,
-        accepted_revision_after: 3,
-        effective_revision_after: 3,
-        snapshot_before: { config: { acceptedRevision: 3, effectiveRevision: 3 }, binding },
-        snapshot_after: { config: { acceptedRevision: 3, effectiveRevision: 3 }, binding },
+        accepted_revision_before: 4,
+        effective_revision_before: 4,
+        accepted_revision_after: 4,
+        effective_revision_after: 4,
+        snapshot_before: copy(invalidApplied),
+        snapshot_after: copy(invalidApplied),
         primary_inference_requests_before: 0,
         primary_inference_requests_after: 0,
         backup_inference_requests_before: 0,
@@ -855,6 +953,24 @@ describe('BB10 two-section PASS conjunction', () => {
       expect(bb10BoundaryResultPass(boundary)).toBe(false)
       expect(bb10PassVerdict(passingRealAcceptance(), boundary)).toBe(false)
     }
+  })
+
+  it('requires the accepted baseline and disclosed source map', () => {
+    const baseline = passingBoundary()
+    expect(bb10BaselinePass(baseline.baseline)).toBe(true)
+    expect(bb10BoundarySourcesPass(baseline.sources)).toBe(true)
+
+    const missingBaseline = passingBoundary()
+    delete missingBaseline.baseline
+    expect(bb10BoundaryResultPass(missingBaseline)).toBe(false)
+
+    const wrongBindRevision = passingBoundary()
+    wrongBindRevision.baseline.bind_model.request.expectedRevision = 1
+    expect(bb10BoundaryResultPass(wrongBindRevision)).toBe(false)
+
+    const missingSources = passingBoundary()
+    delete missingSources.sources
+    expect(bb10BoundaryResultPass(missingSources)).toBe(false)
   })
 
   it('rejects counter growth on the unselected providers or the backup', () => {
@@ -914,6 +1030,9 @@ describe('BB10 boundary sub-scenario verdicts', () => {
   it('rejects a stale-CAS reply that is not a REVISION_CONFLICT or that mutates the snapshot', () => {
     const accepted = passingBoundary().results.stale_cas
     expect(bb10StaleCasPass(accepted)).toBe(true)
+    const wrongRevision = passingBoundary().results.stale_cas
+    wrongRevision.stale_revision = 0
+    expect(bb10StaleCasPass(wrongRevision)).toBe(false)
     const wrongCode = passingBoundary().results.stale_cas
     wrongCode.reply.error.code = 'CONFLICT'
     expect(bb10StaleCasPass(wrongCode)).toBe(false)
@@ -925,6 +1044,9 @@ describe('BB10 boundary sub-scenario verdicts', () => {
   it('rejects an invalid-credential probe without a real 401 or with a mutated binding', () => {
     const accepted = passingBoundary().results.invalid_credential
     expect(bb10InvalidCredentialPass(accepted)).toBe(true)
+    const wrongRevision = passingBoundary().results.invalid_credential
+    wrongRevision.after.config.acceptedRevision = 3
+    expect(bb10InvalidCredentialPass(wrongRevision)).toBe(false)
     const notUnauthenticated = passingBoundary().results.invalid_credential
     notUnauthenticated.refresh.error.code = 'CREDENTIAL_UNAVAILABLE'
     expect(bb10InvalidCredentialPass(notUnauthenticated)).toBe(false)
@@ -943,11 +1065,14 @@ describe('BB10 boundary sub-scenario verdicts', () => {
     const wrongModel = passingBoundary().results.manual_selection
     wrongModel.provider_request_model = sessionPrimaryModel
     expect(bb10ManualSelectionPass(wrongModel)).toBe(false)
+    const wrongStage = passingBoundary().results.manual_selection
+    wrongStage.sampling_stages.effective_before_apply.after = 'installed restart'
+    expect(bb10ManualSelectionPass(wrongStage)).toBe(false)
   })
 })
 
-describe('BB10 public binding snapshot', () => {
-  it('saves the binding/revision fields and ignores catalog observation changes', () => {
+describe('BB10 boundary binding snapshot', () => {
+  it('combines cross-checked sources and ignores catalog observation changes', () => {
     const configRow = (catalogState: string) => ({
       agentId: 'bb-provider',
       acceptedRevision: 4,
@@ -966,8 +1091,8 @@ describe('BB10 public binding snapshot', () => {
       primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
       backup: null,
     }
-    const ready = publicBindingSnapshot({ configs: [configRow('ready')], agents: [agentRow] }, 'bb-provider', binding)
-    const errored = publicBindingSnapshot({ configs: [configRow('error')], agents: [agentRow] }, 'bb-provider', binding)
+    const ready = boundaryBindingSnapshot({ configs: [configRow('ready')], agents: [agentRow] }, 'bb-provider', binding)
+    const errored = boundaryBindingSnapshot({ configs: [configRow('error')], agents: [agentRow] }, 'bb-provider', binding)
     expect(ready).toEqual(errored)
     expect(ready.config).toEqual({ acceptedRevision: 4, effectiveRevision: 4, applyState: 'clean' })
     expect(ready.agent).toEqual({
@@ -977,6 +1102,23 @@ describe('BB10 public binding snapshot', () => {
       primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
       backup: null,
     })
+  })
+
+  it('fails explicitly when the durable and public accepted revisions disagree', () => {
+    const config = {
+      agentId: 'bb-provider', acceptedRevision: 4, effectiveRevision: 4, applyState: 'clean', providers: [],
+    }
+    const agent = {
+      agentId: 'bb-provider', providerId: sessionManualProviderId, modelId: sessionManualModel,
+      sessionEffectiveRevision: 4,
+    }
+    const binding = {
+      accepted_revision: 3,
+      primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
+      backup: null,
+    }
+    expect(() => boundaryBindingSnapshot({ configs: [config], agents: [agent] }, 'bb-provider', binding))
+      .toThrow(/durable accepted revision 3 does not match the public config revision 4/)
   })
 })
 
