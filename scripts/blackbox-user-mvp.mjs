@@ -119,6 +119,39 @@ function runChecked(command, args, options = {}) {
   return run(command, args, { ...options, expectStatus: 0 })
 }
 
+/**
+ * Start one public command without blocking the driver. The BB07 fault
+ * sub-scenario must inject a provider failure while the installed CLI request
+ * is still in flight, so this runner only records the exact command result.
+ */
+function runAsync(command, args, options = {}) {
+  const child = spawn(command, args, {
+    cwd: options.cwd ?? root,
+    env: options.env ?? process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let stdout = ''
+  let stderr = ''
+  let settled = false
+  const result = new Promise(resolve => {
+    child.stdout?.on('data', chunk => { stdout += chunk.toString() })
+    child.stderr?.on('data', chunk => { stderr += chunk.toString() })
+    child.once('error', error => {
+      settled = true
+      const output = { command, args, status: null, signal: null, stdout, stderr, error: error.message }
+      if (options.logPath !== undefined) writeJson(options.logPath, output)
+      resolve(output)
+    })
+    child.once('close', (status, signal) => {
+      settled = true
+      const output = { command, args, status, signal, stdout, stderr }
+      if (options.logPath !== undefined) writeJson(options.logPath, output)
+      resolve(output)
+    })
+  })
+  return { child, result, isSettled: () => settled }
+}
+
 function processAlive(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false
   try {
@@ -127,6 +160,72 @@ function processAlive(pid) {
   } catch (error) {
     return error?.code === 'EPERM'
   }
+}
+
+function processState(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+  const result = spawnSync('ps', ['-p', String(pid), '-o', 'state='], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+  })
+  return result.status === 0 ? result.stdout.trim() : undefined
+}
+
+function processCommandLine(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+  const result = spawnSync('ps', ['-p', String(pid), '-o', 'command='], {
+    encoding: 'utf8',
+    maxBuffer: 4 * 1024 * 1024,
+  })
+  const command = result.status === 0 ? result.stdout.trim() : ''
+  return command.length === 0 ? undefined : command
+}
+
+function processParentPid(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+  const result = spawnSync('ps', ['-p', String(pid), '-o', 'ppid='], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+  })
+  const parent = Number(result.status === 0 ? result.stdout.trim() : '')
+  return Number.isSafeInteger(parent) && parent > 0 ? parent : undefined
+}
+
+/** Split one `ps` command line without invoking a shell. */
+function splitProcessCommand(command) {
+  const args = []
+  let current = ''
+  let quote
+  let escaped = false
+  for (const character of command.trim()) {
+    if (escaped) {
+      current += character
+      escaped = false
+    } else if (character === '\\' && quote !== "'") {
+      escaped = true
+    } else if (quote !== undefined) {
+      if (character === quote) quote = undefined
+      else current += character
+    } else if (character === '"' || character === "'") {
+      quote = character
+    } else if (/\s/u.test(character)) {
+      if (current.length > 0) args.push(current)
+      current = ''
+    } else {
+      current += character
+    }
+  }
+  if (escaped) current += '\\'
+  if (current.length > 0) args.push(current)
+  return args
+}
+
+function commandOwnsInstalledEntry(command, entryPath, configPath, startToken) {
+  if (command === undefined) return false
+  const args = splitProcessCommand(command)
+  const entryIndex = args.findIndex(argument => resolve(argument) === resolve(entryPath))
+  return entryIndex >= 0 && args[entryIndex + 1] === '--config' && args[entryIndex + 2] === resolve(configPath) &&
+    args[entryIndex + 3] === '--launcher-start-token' && args[entryIndex + 4] === startToken
 }
 
 async function waitForProcessesGone(pids, timeoutMs = 5_000) {
@@ -752,6 +851,98 @@ function runWork(fixture, evidenceDir, name, args, options = {}) {
   })
 }
 
+/**
+ * Install a transparent search executable. It records every launch, waits for a
+ * driver-owned release marker, then starts the real `rg` with the same argv and
+ * forwards its real exit, stdout and stderr. It never synthesizes a search result.
+ */
+function installSearchBarrier(fixture, evidenceDir, realSearchExecutable, label) {
+  const controlRoot = join(fixture.temporaryRoot, `search-barrier-${label}`)
+  const executable = join(controlRoot, 'search-wrapper.mjs')
+  const binary = join(controlRoot, 'search-wrapper')
+  const recordPath = join(controlRoot, 'launch.json')
+  const releasePath = join(controlRoot, 'release')
+  mkdirSync(controlRoot, { recursive: true })
+  writeFileSync(executable, `#!/usr/bin/env node
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+
+const recordPath = process.env.BB07_BARRIER_RECORD
+const releasePath = process.env.BB07_BARRIER_RELEASE
+const realExecutable = process.env.BB07_REAL_SEARCH
+const argv = process.argv.slice(2)
+const startedAt = new Date().toISOString()
+const record = {
+  at: startedAt,
+  wrapper_pid: process.pid,
+  real_executable: realExecutable,
+  argv,
+}
+appendFileSync(recordPath, JSON.stringify(record) + '\\n')
+
+let released = existsSync(releasePath)
+while (!released) {
+  await new Promise(resolve => setTimeout(resolve, 10))
+  released = existsSync(releasePath)
+}
+
+const child = spawn(realExecutable, argv, {
+  cwd: process.cwd(),
+  env: process.env,
+  shell: false,
+  stdio: ['pipe', 'pipe', 'pipe'],
+})
+process.kill(child.pid, 'SIGSTOP')
+appendFileSync(recordPath, JSON.stringify({
+  ...record,
+  real_pid: child.pid,
+  real_started_at: new Date().toISOString(),
+  real_held_state: 'SIGSTOP',
+}) + '\\n')
+child.stdin.end()
+child.stdout.pipe(process.stdout)
+child.stderr.pipe(process.stderr)
+child.once('error', error => {
+  console.error(JSON.stringify({ code: 'SEARCH_WRAPPER_SPAWN_FAILED', message: error.message }))
+  process.exitCode = 127
+})
+child.once('close', (code, signal) => {
+  appendFileSync(recordPath, JSON.stringify({
+    ...record,
+    real_pid: child.pid,
+    real_exit: code,
+    real_signal: signal,
+    at: new Date().toISOString(),
+  }) + '\\n')
+  if (signal !== null) process.kill(process.pid, signal)
+  else process.exitCode = code ?? 1
+})
+`, { encoding: 'utf8', mode: 0o700 })
+  symlinkSync(executable, binary)
+  const wrapperEnv = {
+    ...fixture.env,
+    BB07_BARRIER_RECORD: recordPath,
+    BB07_BARRIER_RELEASE: releasePath,
+    BB07_REAL_SEARCH: realSearchExecutable,
+  }
+  return {
+    executable: binary,
+    recordPath,
+    releasePath,
+    env: wrapperEnv,
+    release() { writeFileSync(releasePath, `${new Date().toISOString()}\n`, { encoding: 'utf8' }) },
+    launches() {
+      if (!existsSync(recordPath)) return []
+      return readFileSync(recordPath, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+    },
+    executionCount() {
+      return new Set(this.launches()
+        .map(record => record.real_pid)
+        .filter(pid => Number.isSafeInteger(pid) && pid > 0)).size
+    },
+  }
+}
+
 function completedWorkReceipt(output) {
   const text = output.stdout.trim()
   assert(text.length > 0, `work command produced no stdout: ${output.stderr.trim()}`)
@@ -956,6 +1147,7 @@ async function runBB07(context) {
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb07-final')
     const allPids = lifecyclePids(lifecycle.internal)
     fixture.cleanup()
+    const executionFailure = await runBB07ExecutionFailure(context)
     result = {
       status: 'passed',
       public_input: {
@@ -984,6 +1176,7 @@ async function runBB07(context) {
         owned_pids_after_stop: allPids,
         owned_pids_alive_after_stop: allPids.filter(processAlive),
         temporary_root_removed: !existsSync(fixture.temporaryRoot),
+        execution_failure: executionFailure,
       },
       evidence_path: evidenceDir,
     }
@@ -996,6 +1189,256 @@ async function runBB07(context) {
     }
   }
   return result
+}
+
+async function stopFaultLifecycle(fixture, lifecycle, evidenceDir, prefix) {
+  const pids = lifecyclePids(lifecycle.internal)
+  // The injected provider fault can make the supervisor report that failure from
+  // the stop command. Tolerate a nonzero stop only when the persisted launcher
+  // still reaches a terminal state and every owned process/port is gone.
+  const stop = run(fixture.cli, ['stop', '--config', fixture.configPath, '--generation', String(lifecycle.parsed.generation)], {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
+    logPath: join(evidenceDir, `${prefix}-stop.json`),
+  })
+  await waitForProcessesGone(pids)
+  const status = runChecked(fixture.cli, ['status', '--config', fixture.configPath], {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
+    logPath: join(evidenceDir, `${prefix}-stopped-status.json`),
+  })
+  const parsed = parseCliStatus(status.stdout)
+  assert(parsed.state === 'stopped' || parsed.state === 'failed',
+    `the fault fixture did not reach a terminal launcher state: ${status.stdout.trim()}`)
+  assertPortsClosed(lifecycle.internal.ports)
+  return { stop, status, parsed, pids }
+}
+
+async function waitForAsyncResult(run, timeoutMs, label) {
+  return await waitForAsync(() => run.isSettled() ? run.result : undefined, timeoutMs, label)
+}
+
+/**
+ * BB07's execution-interruption sub-scenario. The installed provider's search
+ * executable is a transparent wrapper around real `rg`. The wrapper records the
+ * exact launch and waits behind a driver-controlled barrier. The driver then
+ * stops only the provider PID, proves the real search child ownership, explicitly
+ * terminates that child, and verifies the provider owner persists a real failed
+ * result before the public restart query reads it back.
+ */
+async function runBB07ExecutionFailure(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB07-execution-failure')
+  mkdirSync(evidenceDir, { recursive: true })
+  const realSearchExecutable = resolveExecutable('rg', evidenceDir)
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb07-failure')
+  let lifecycle
+  let restarted
+  let barrier
+  let openRun
+  try {
+    barrier = installSearchBarrier(fixture, evidenceDir, realSearchExecutable, 'bb07')
+    fixture.env = barrier.env
+    const config = ensureUserConfig(fixture, evidenceDir, {
+      buildConfigText: () => configFixtureText(barrier.executable),
+    })
+    writeWorkFixture(fixture)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb07-failure')
+    const provider = lifecycle.internal.processes.find(process => process.id === workProviderId)
+    assert(provider !== undefined, 'the fault fixture did not publish the provider process record')
+    const providerCommand = processCommandLine(provider.pid)
+    assert(commandOwnsInstalledEntry(providerCommand, provider.entryPath, provider.projectionPath, provider.startToken),
+      `the provider PID does not match its installed lifecycle record: pid=${provider.pid} command=${providerCommand ?? 'missing'}`)
+
+    const binding = ['--provider', workProviderId, '--provider-generation', String(provider.generation),
+      '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search']
+    openRun = runAsync(fixture.cli, ['work', 'open', '--config', fixture.configPath,
+      '--receiver', workReceiverId, ...binding, '--demands', workDemands,
+      '--payload', '{"query":"marker-alpha"}'], {
+      cwd: fixture.temporaryRoot,
+      env: fixture.env,
+      logPath: join(evidenceDir, 'bb07-fault-open.json'),
+    })
+
+    const launch = await waitForAsync(() => {
+      const records = barrier.launches()
+      return records.find(record => record.real_pid === undefined)
+    }, 10_000, 'the BB07 search wrapper launch record')
+    assert(openRun.isSettled() === false, 'the BB07 CLI finished before the wrapper barrier was established')
+    assert(Number.isSafeInteger(launch.wrapper_pid) && processAlive(launch.wrapper_pid),
+      `the BB07 wrapper PID is not active: ${JSON.stringify(launch)}`)
+
+    barrier.release()
+    const real = await waitForAsync(() => {
+      const records = barrier.launches()
+      return records.find(record => Number.isSafeInteger(record.real_pid) && record.real_pid > 0)
+    }, 10_000, 'the BB07 real search process record')
+    assert(openRun.isSettled() === false, 'the BB07 CLI finished before the real search process was active')
+    assert(processAlive(real.real_pid), `the BB07 real search PID is not active: ${JSON.stringify(real)}`)
+    assert(processAlive(launch.wrapper_pid), 'the BB07 search wrapper exited before fault injection')
+
+    const wrapperCommand = processCommandLine(launch.wrapper_pid)
+    const realCommand = processCommandLine(real.real_pid)
+    assert(wrapperCommand?.includes(barrier.executable) === true,
+      `the BB07 wrapper PID does not own the installed search wrapper: ${wrapperCommand ?? 'missing'}`)
+    assert(realCommand?.includes(realSearchExecutable) === true,
+      `the BB07 real search PID does not own real rg: ${realCommand ?? 'missing'}`)
+    assert(processParentPid(launch.wrapper_pid) === provider.pid,
+      `the BB07 wrapper is not a direct child of the provider: wrapper=${launch.wrapper_pid} parent=${processParentPid(launch.wrapper_pid)} provider=${provider.pid}`)
+    assert(processParentPid(real.real_pid) === launch.wrapper_pid,
+      `the BB07 real search process is not a direct child of the wrapper: real=${real.real_pid} parent=${processParentPid(real.real_pid)} wrapper=${launch.wrapper_pid}`)
+    const externalStateBefore = processState(real.real_pid)
+    assert(externalStateBefore !== undefined && externalStateBefore.startsWith('T'),
+      `the BB07 real search process is not held active: pid=${real.real_pid} state=${externalStateBefore ?? 'missing'}`)
+    const launchCountBefore = barrier.executionCount()
+
+    const providerFault = {
+      pid: provider.pid,
+      generation: provider.generation,
+      start_token: provider.startToken,
+      entry_path: provider.entryPath,
+      projection_path: provider.projectionPath,
+      command: providerCommand,
+      signal: 'SIGTERM',
+      at: now(),
+    }
+    process.kill(provider.pid, 'SIGTERM')
+    const externalExecution = {
+      pid: real.real_pid,
+      wrapper_pid: launch.wrapper_pid,
+      provider_pid: provider.pid,
+      owner: 'provider Work owner (bb-provider)',
+      fixture_owner: 'driver BB07 execution-failure fixture',
+      state_before_release: externalStateBefore,
+      responsibility: 'driver must explicitly terminate this still-active external execution and retain the provider ledger failure',
+      release_action: 'SIGTERM to the exact real rg PID after provider stop admission',
+    }
+    assert(openRun.isSettled() === false, 'the BB07 CLI finished before the provider fault was injected')
+    assert(processAlive(real.real_pid), 'the BB07 real search process exited during provider drain')
+    process.kill(real.real_pid, 'SIGTERM')
+    process.kill(real.real_pid, 'SIGCONT')
+    await waitForProcessesGone([real.real_pid, launch.wrapper_pid])
+
+    const openOutput = await waitForAsyncResult(openRun, 30_000, 'the BB07 original CLI terminal result')
+    const originalReceipt = workReceipt(openOutput)
+    assert(originalReceipt.control.workId !== undefined && originalReceipt.control.requestId !== undefined,
+      `the original BB07 CLI result lost its Work identity: ${JSON.stringify(originalReceipt.control)}`)
+    assert(originalReceipt.control.targetGeneration === provider.generation,
+      `the original BB07 CLI result lost its target generation: ${JSON.stringify(originalReceipt.control)}`)
+    assert(originalReceipt.status === 'failed' || originalReceipt.control.requestState === 'failed' || originalReceipt.control.deliveryState === 'unconfirmed',
+      `the original BB07 CLI result did not record failure or unconfirmed delivery: ${JSON.stringify(originalReceipt)}`)
+
+    const providerLedgerAfterFault = providerLedger(fixture)
+    assert(providerLedgerAfterFault.snapshot !== undefined, 'the fault fixture provider ledger is missing after the interruption')
+    const failedRequest = providerLedgerAfterFault.snapshot.requests.find(request => request.control.workId === originalReceipt.control.workId &&
+      request.control.requestId === originalReceipt.control.requestId)
+    assert(failedRequest?.state === 'failed',
+      `the provider owner did not persist the real failed request: ${JSON.stringify(failedRequest ?? null)}`)
+    // `search-slot` is a request-scoped resource, so the provider ledger must
+    // hold exactly this request's allocation and it must be released on failure.
+    const failedRequestAllocations = providerLedgerAfterFault.snapshot.allocations
+      .filter(allocation => allocation.requestId === originalReceipt.control.requestId)
+    assert(failedRequestAllocations.length > 0 && failedRequestAllocations.every(allocation => allocation.state === 'released'),
+      `the provider owner did not release the failed request allocation: ${JSON.stringify(failedRequestAllocations)}`)
+
+    const faultStop = await stopFaultLifecycle(fixture, lifecycle, evidenceDir, 'bb07-failure')
+    lifecycle = undefined
+    const generationBeforeRestart = faultStop.parsed.generation
+    restarted = startAndReadLifecycle(fixture, evidenceDir, 'bb07-failure-restart')
+    assert(restarted.parsed.generation > generationBeforeRestart,
+      `the fault restart did not advance the launcher generation: ${generationBeforeRestart} -> ${restarted.parsed.generation}`)
+
+    const queryArgs = ['work', 'query', '--config', fixture.configPath, '--receiver', workReceiverId,
+      '--service-selection', 'capability', '--work-id', originalReceipt.control.workId,
+      '--request-id', originalReceipt.control.requestId, ...binding]
+    const recoveredOutput = runWork(fixture, evidenceDir, 'bb07-fault-query', queryArgs)
+    // A failed request readback can arrive as a completed graph receipt that
+    // carries `control.requestState: 'failed'`, so parse the general receipt and
+    // then require the failed request state explicitly.
+    const recovered = workReceipt(recoveredOutput)
+    assert(recovered.control.workId === originalReceipt.control.workId && recovered.control.requestId === originalReceipt.control.requestId,
+      'the BB07 fault recovery query did not preserve the original Work/request identity')
+    assert(recovered.control.targetGeneration === provider.generation,
+      `the BB07 fault recovery query lost the original target generation: ${JSON.stringify(recovered.control)}`)
+    assert(recovered.control.requestState === 'failed' || recovered.status === 'failed',
+      `the BB07 fault recovery query did not read a failed request: ${JSON.stringify(recovered)}`)
+    assert(recovered.control.error?.code !== undefined && recovered.control.error.code.length > 0,
+      `the BB07 fault recovery query did not expose a typed error: ${JSON.stringify(recovered.control.error)}`)
+    assert(recovered.evidence?.hostOperations?.includes('agentWork.get') === true,
+      `the BB07 fault recovery query did not read the provider ledger: ${JSON.stringify(recovered.evidence?.hostOperations)}`)
+    assert(!recovered.evidence.hostOperations.includes('agentWork.request') && !recovered.evidence.hostOperations.includes('agentWork.propose'),
+      `the BB07 fault recovery query re-executed business work: ${JSON.stringify(recovered.evidence.hostOperations)}`)
+    const launchCountAfterQuery = barrier.executionCount()
+    assert(launchCountAfterQuery === launchCountBefore,
+      `the BB07 recovery query started external search work: before=${launchCountBefore} after=${launchCountAfterQuery}`)
+
+    const final = await stopAndAssertClean(fixture, restarted, evidenceDir, 'bb07-failure-final')
+    const allPids = lifecyclePids(restarted.internal)
+    const restartedGeneration = restarted.parsed.generation
+    restarted = undefined
+    const finalWrapperRecords = barrier.launches()
+    const finalRealRecord = finalWrapperRecords.at(-1)
+    fixture.cleanup()
+    return {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        receiver: workReceiverId,
+        commands: [
+          'agentteams work open --provider bb-provider --provider-generation <g> --operation search ...',
+          'SIGTERM to the exact provider PID from internal.toml',
+          'SIGTERM to the exact still-active real rg PID from the wrapper record',
+          'agentteams stop --generation <g>',
+          'agentteams start',
+          'agentteams work query --service-selection capability --work-id <W> --request-id <R> ...',
+          'agentteams stop --generation <g2>',
+        ],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        config_sha256: config.configSha256,
+        search_wrapper: {
+          executable: barrier.executable,
+          real_executable: realSearchExecutable,
+          launch_count_before_query: launchCountBefore,
+          launch_count_after_query: launchCountAfterQuery,
+          final_record: finalRealRecord,
+        },
+        provider_fault: providerFault,
+        external_execution: {
+          ...externalExecution,
+          exit_confirmed: !processAlive(real.real_pid) && !processAlive(launch.wrapper_pid),
+          wrapper_exit_observed: !processAlive(launch.wrapper_pid),
+          real_exit_observed: !processAlive(real.real_pid),
+        },
+        original_cli: { status: openOutput.status, signal: openOutput.signal, stdout: openOutput.stdout.trim(), stderr: openOutput.stderr.trim(), receipt: originalReceipt },
+        provider_ledger_after_fault: { path: providerLedgerAfterFault.path, failed_request: failedRequest },
+        fault_stop: { stdout: faultStop.stop.stdout, stopped_stdout: faultStop.status.stdout, pids: faultStop.pids },
+        restart_generation: { from: generationBeforeRestart, to: restartedGeneration },
+        recovered,
+        final_stop_stdout: final.stop.stdout,
+        final_stopped_stdout: final.status.stdout,
+        owned_pids_after_stop: allPids,
+        owned_pids_alive_after_stop: allPids.filter(processAlive),
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, restarted?.parsed.generation ?? lifecycle?.parsed.generation)
+    // Release the barrier so a still-waiting wrapper cannot hang, then close the
+    // driver-owned async CLI handle if a pre-injection assertion failed.
+    if (barrier !== undefined) {
+      try { barrier.release() } catch { /* release marker may already exist */ }
+    }
+    if (openRun !== undefined && !openRun.isSettled()) {
+      openRun.child.kill('SIGTERM')
+    }
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
 }
 
 async function runBB08(context) {
