@@ -1276,12 +1276,33 @@ ${staticBinding}`
 /**
  * The accepted config revision an Agent durably owns. The management policy of
  * the refusal scenario denies the Console's observation too, so the revision
- * non-advance is read from the Agent's own derived internal projection.
+ * non-advance is read from the Agent's own durable internal store.
  */
 function readAcceptedConfigRevision(internalPath, agentId) {
-  const internal = parseToml(readFileSync(internalPath, 'utf8'))
+  let text
+  try {
+    text = readFileSync(internalPath, 'utf8')
+  } catch (cause) {
+    fail(`the daemon durable internal store could not be read: ${internalPath}: ${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+  let internal
+  try {
+    internal = parseToml(text)
+  } catch (cause) {
+    fail(`the daemon durable internal store is not valid TOML: ${internalPath}: ${cause instanceof Error ? cause.message : String(cause)}`)
+  }
   const slice = internal.configRuntime?.accepted?.[agentId]
-  return slice === undefined ? undefined : slice.acceptedRevision
+  if (slice === undefined) return undefined
+  assert(typeof slice.acceptedRevision === 'number' && Number.isSafeInteger(slice.acceptedRevision),
+    `the daemon durable accepted slice for ${agentId} has no valid acceptedRevision`)
+  return slice.acceptedRevision
+}
+
+function agentPolicyRefusalExpectedRevision(before) {
+  if (before === undefined) return 0
+  assert(before === 0,
+    `the refusal fixture already has an accepted config revision: ${before}; the Agent-policy refusal precondition requires an unaccepted durable store`)
+  return 0
 }
 
 /** Read the accepted primary/backup refs from the daemon's durable internal store. */
@@ -1729,26 +1750,36 @@ async function bb09AgentPolicyRefusal(context, evidenceDir) {
     lifecycle = startAndReadLifecycle(fixture, refusalDir, 'bb09-refusal')
     const console = startInstalledSessionConsole(fixture, refusalDir, 'bb09-refusal')
     const before = readAcceptedConfigRevision(lifecycle.internal.internalPath, workProviderId)
-    assert(before !== undefined, 'the refusal fixture published no accepted config revision')
+    const expectedRevision = agentPolicyRefusalExpectedRevision(before)
+    const command = { kind: 'config.refreshModels', agentId: workProviderId, expectedRevision, providerId: bb09StubProviderId }
     const refusal = await consoleHttp(console.url, console.authorization, '/api/v1/command', {
-      body: { kind: 'config.refreshModels', agentId: workProviderId, expectedRevision: before, providerId: bb09StubProviderId },
+      body: command,
     })
     assert(refusal.status === 200 && refusal.body?.ok === false && refusal.body.error?.code === 'FORBIDDEN',
       `the public management entry did not refuse an unauthorized manager: ${refusal.status} ${refusal.text.slice(0, 300)}`)
     const after = readAcceptedConfigRevision(lifecycle.internal.internalPath, workProviderId)
     assert(after === before, `the refused management command advanced the Agent config revision: ${before} -> ${after}`)
     writeJson(join(refusalDir, 'agent-policy-refusal.json'), {
-      command: { kind: 'config.refreshModels', agentId: workProviderId, providerId: bb09StubProviderId },
+      command,
       http_status: refusal.status,
       result: publicJson(refusal.body),
-      accepted_revision_before: before,
-      accepted_revision_after: after,
+      accepted_revision_before: before ?? null,
+      accepted_slice_present_before: before !== undefined,
+      accepted_revision_after: after ?? null,
+      accepted_slice_present_after: after !== undefined,
+      accepted_revision_observation_source: 'target Agent durable internal store',
+      view_semantics_revision: 0,
+      view_semantics_note: 'derived from the product initial-view rule, not an HTTP readback',
       console_config_sha256: config.configSha256,
     })
     const stopped = await stopAndAssertClean(fixture, lifecycle, refusalDir, 'bb09-refusal-final')
     lifecycle = undefined
-    return { http_status: refusal.status, error: publicJson(refusal.body.error), accepted_revision_before: before,
-      accepted_revision_after: after, stop_stdout: stopped.stop.stdout }
+    return { command,
+      http_status: refusal.status, error: publicJson(refusal.body.error),
+      accepted_revision_before: before ?? null, accepted_slice_present_before: before !== undefined,
+      accepted_revision_after: after ?? null, accepted_slice_present_after: after !== undefined,
+      accepted_revision_observation_source: 'target Agent durable internal store',
+      stop_stdout: stopped.stop.stdout }
   } finally {
     stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
     try {
@@ -4795,6 +4826,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.
 
 export {
   Bb10SourceError,
+  agentPolicyRefusalExpectedRevision,
   bb10LaunchEnv,
   bb09ConfigText,
   bb09RefreshCompletion,
@@ -4804,6 +4836,7 @@ export {
   parseCanonicalProviderSource,
   parseFlatSecretKey,
   parseRccServerSource,
+  readAcceptedConfigRevision,
   readDeclaredSecretKey,
   redactCredential,
 }

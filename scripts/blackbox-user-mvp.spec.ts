@@ -8,11 +8,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createJsonFileConfigPersistence, createRuntimeConfigStore } from '../config/runtime-config.ts'
 import { createRelayClient, type RelayClient } from '../network/relay-client.ts'
 import { serveConsole } from '../network/console-channel.ts'
+import { admitMachineSource, createTomlRuntimeConfigPersistence, serializeTomlDocument, writeLocalConfig } from '../runtime/local-config.ts'
 import { startConsoleRuntime } from '../runtime/console-runtime.ts'
 import { createConsoleConfigBinding } from '../runtime/console-config.ts'
 import { createRelayServer } from '../server/relay.ts'
 import {
   Bb10SourceError,
+  agentPolicyRefusalExpectedRevision,
   bb10LaunchEnv,
   bb09ConfigText,
   bb09RefreshCompletion,
@@ -23,6 +25,7 @@ import {
   parseCanonicalProviderSource,
   parseFlatSecretKey,
   parseRccServerSource,
+  readAcceptedConfigRevision,
   readDeclaredSecretKey,
   redactCredential,
 } from './blackbox-user-mvp.mjs'
@@ -531,6 +534,86 @@ describe('BB09 HTTP projection admission', () => {
     expect(agentIds).toEqual(['peer-1', 'peer-2'])
     expect(agentIds).not.toContain('console')
     expect(response.body.works.map((row: any) => row.workId).sort()).toEqual(['work-peer-1', 'work-peer-2'])
+  })
+})
+
+describe('BB09 accepted config revision preconditions', () => {
+  const agentId = 'bb-provider'
+  const configText = 'version = 3\n\n[bridge]\nenabled = true\n'
+
+  it('reads a missing durable slice as undefined while the real TOML view starts at revision 0 without creating a slice', async () => {
+    const root = temporaryRoot()
+    const configPath = join(root, 'config.toml')
+    const internalPath = join(root, 'internal.toml')
+    await writeLocalConfig(configPath, configText)
+    await admitMachineSource(internalPath, configText)
+    const beforeText = readFileSync(internalPath, 'utf8')
+
+    const persistence = createTomlRuntimeConfigPersistence({ configPath, internalPath, agentId })
+    const view = await persistence.loadDaemonUnlocked(agentId)
+    expect(view.acceptedRevision).toBe(0)
+    expect(readAcceptedConfigRevision(internalPath, agentId)).toBeUndefined()
+
+    expect(readFileSync(internalPath, 'utf8')).toBe(beforeText)
+    const durable = parseToml(readFileSync(internalPath, 'utf8')) as any
+    expect(durable.configRuntime?.accepted?.[agentId]).toBeUndefined()
+  })
+
+  it('keeps a durable revision 0 distinct from a missing accepted slice', async () => {
+    const root = temporaryRoot()
+    const configPath = join(root, 'config.toml')
+    const internalPath = join(root, 'internal.toml')
+    await writeLocalConfig(configPath, configText)
+    writeFileSync(internalPath, serializeTomlDocument({
+      version: 2,
+      configRuntime: {
+        accepted: {
+          [agentId]: {
+            acceptedRevision: 0,
+            acceptedSourceRevision: 0,
+            acceptedSourceHash: 'sha256:test',
+          },
+        },
+      },
+    }))
+
+    const persistence = createTomlRuntimeConfigPersistence({ configPath, internalPath, agentId })
+    const view = await persistence.loadDaemonUnlocked(agentId)
+    expect(view.acceptedRevision).toBe(0)
+    expect(readAcceptedConfigRevision(internalPath, agentId)).toBe(0)
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['non-number', 'zero'],
+    ['fractional', 1.5],
+  ])('rejects a durable accepted slice with %s acceptedRevision', (_, acceptedRevision) => {
+    const root = temporaryRoot()
+    const internalPath = join(root, 'internal.toml')
+    const slice: Record<string, unknown> = { acceptedSourceRevision: 0, acceptedSourceHash: 'sha256:test' }
+    if (acceptedRevision !== undefined) slice.acceptedRevision = acceptedRevision
+    writeFileSync(internalPath, serializeTomlDocument({
+      version: 2,
+      configRuntime: { accepted: { [agentId]: slice } },
+    }))
+
+    expect(() => readAcceptedConfigRevision(internalPath, agentId)).toThrow(/acceptedRevision/)
+  })
+
+  it('fails explicitly when the durable store cannot be read or parsed', () => {
+    const root = temporaryRoot()
+    const missingPath = join(root, 'missing.toml')
+    const malformedPath = join(root, 'malformed.toml')
+    writeFileSync(malformedPath, 'not = [')
+
+    expect(() => readAcceptedConfigRevision(missingPath, agentId)).toThrow(/could not be read/)
+    expect(() => readAcceptedConfigRevision(malformedPath, agentId)).toThrow(/valid TOML/)
+  })
+
+  it('resolves the production refusal precondition from a missing slice or revision 0 and rejects an advanced revision', () => {
+    expect(agentPolicyRefusalExpectedRevision(undefined)).toBe(0)
+    expect(agentPolicyRefusalExpectedRevision(0)).toBe(0)
+    expect(() => agentPolicyRefusalExpectedRevision(1)).toThrow(/already has an accepted config revision/)
   })
 })
 
