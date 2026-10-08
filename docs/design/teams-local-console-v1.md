@@ -730,7 +730,7 @@ in progress` 之外的无解释失败；Console runtime 最终状态由实际 st
 | 配置交互 | 真实点击「服务配置」、选择目标 Agent、先执行一次真实 `refreshModels` 并等到该动作**真正结束**（本次动作的成功 notice 出现、该卡片的操作按钮恢复可用、live region 无错误），再选择模型并在真实点击前证明 bind 按钮已启用；公开 accepted revision 恰前进 1，另一 Agent 不变；DOM 刷新显示读回值 | `browser-config-actions.json`、`browser-config-before.json`、`browser-config-refresh-after.json`、`browser-config-bind-preclick.json`、`browser-config-after.json` |
 | auth 拒绝 | fresh 未认证 profile 页面/API 401；未认证管理命令 401，配置无变化 | `browser-unauthenticated.json`、`auth-refusals.json` |
 | origin 拒绝 | 对安装后 listener 发 authenticated 错 Origin/cross-site 请求，返回既有 401；合法同源 browser 操作仍成功 | `origin-refusals.json`、`browser-same-origin.json` |
-| Agent policy 拒绝 | 隔离未授权 manager 场景经公开管理入口得到 `FORBIDDEN`；配置 revision 不变 | `agent-policy-refusal.json`、前后公开 projection |
+| Agent policy 拒绝 | 隔离未授权 manager fixture（`allowedManagers = []`）经公开管理入口得到 HTTP 200 + `FORBIDDEN`；新建且尚未 accept 的 Agent 视图 revision 为 0、durable accepted slice 可以不存在，命令显式携带 `expectedRevision: 0`；前后 durable slice 存在性与原始 revision 严格不变（缺失→缺失、`0`→`0` 通过；缺失↔`0` 或任意推进失败） | `agent-policy-refusal.json`（含命令输入、前后 durable 原始 revision 与 slice 存在性、观察来源＝目标 Agent 的 durable internal store） |
 | Console 可关闭 | installed `console stop` 后 Console PID/listener 消失，两 daemon PID/generation 不变 | `bb09-console-stop.json`、`bb09-status-after-console-stop.json` |
 | Console 离线后新 Work | 关闭后才生成的新 Work/request ID；真实 file-search 返回对应 fixture 文件 | `bb09-work-without-console.json` |
 | 生命周期失败终点 | 保留既有 unavailable/disabled 检查；失败有显式结果及零新增子进程 | 既有失败文件与 cleanup receipt |
