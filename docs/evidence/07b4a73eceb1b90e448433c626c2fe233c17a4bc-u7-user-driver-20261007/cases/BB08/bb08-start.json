@@ -1,0 +1,12 @@
+{
+  "command": "/tmp/agentteams-u7-bb08-cA3igp/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "start",
+    "--config",
+    "/tmp/agentteams-u7-bb08-cA3igp/home/.agentteams/config.toml"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "started state=running generation=1 config=/tmp/agentteams-u7-bb08-cA3igp/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb08-cA3igp/home/.agentteams/internal.toml pid=31457\n",
+  "stderr": ""
+}

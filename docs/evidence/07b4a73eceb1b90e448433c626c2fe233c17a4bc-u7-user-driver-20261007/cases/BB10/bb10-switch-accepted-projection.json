@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB-Session",
+      "presence": "online",
+      "capabilities": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "current",
+      "sessionObservation": {
+        "state": "degraded",
+        "reason": "projection-loss",
+        "detail": "unsupported OpenCode event catalog.updated",
+        "droppedEvents": 50
+      },
+      "sessionEffectiveRevision": 0,
+      "currentSessionId": "ses_ee6856d95ffejQgcANEeHybnmx",
+      "providerId": "bb-primary",
+      "modelId": "bb-primary-model"
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB-Passive",
+      "presence": "online",
+      "capabilities": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [
+    {
+      "agentId": "bb-provider",
+      "sessionId": "ses_ee6856d95ffejQgcANEeHybnmx",
+      "title": "BB10 installed explicit model"
+    }
+  ],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 2,
+      "applyState": "clean",
+      "effectiveRevision": 0,
+      "providers": [
+        {
+          "id": "bb-primary",
+          "label": "BB Primary",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:52235/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-primary-model",
+              "label": "BB Primary Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-backup",
+          "label": "BB Backup",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:52236/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-backup-model",
+              "label": "BB Backup Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-manual",
+          "label": "BB Manual",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:52237/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-manual-model",
+              "label": "BB Manual Model"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": [],
+  "sessionEvents": [
+    {
+      "eventId": "message.updated:ses_ee6856d95ffejQgcANEeHybnmx:msg_ijQNjiiPeAIgbQ7BrHGrizv1kt",
+      "sessionId": "ses_ee6856d95ffejQgcANEeHybnmx",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_ijQNjiiPeAIgbQ7BrHGrizv1kt",
+      "role": "user"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee6856d95ffejQgcANEeHybnmx:msg_ijQNjiiPeAIgbQ7BrHGrizv1kt",
+      "sessionId": "ses_ee6856d95ffejQgcANEeHybnmx",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "pending",
+      "messageId": "msg_ijQNjiiPeAIgbQ7BrHGrizv1kt",
+      "partId": "prt_1197a92e2001JywbE9pAcPvPKA",
+      "partType": "text",
+      "text": "bb10 explicit primary probe"
+    },
+    {
+      "eventId": "message.updated:ses_ee6856d95ffejQgcANEeHybnmx:msg_1197a93d2001TiCoQAnYAeKSnj",
+      "sessionId": "ses_ee6856d95ffejQgcANEeHybnmx",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_1197a93d2001TiCoQAnYAeKSnj",
+      "role": "assistant"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee6856d95ffejQgcANEeHybnmx:msg_1197a93d2001TiCoQAnYAeKSnj",
+      "sessionId": "ses_ee6856d95ffejQgcANEeHybnmx",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_1197a93d2001TiCoQAnYAeKSnj",
+      "partId": "prt_1197a985b001n8HwR1a9GlEf3X",
+      "partType": "step-start",
+      "sourcePart": {
+        "id": "prt_1197a985b001n8HwR1a9GlEf3X",
+        "messageID": "msg_1197a93d2001TiCoQAnYAeKSnj",
+        "sessionID": "ses_ee6856d95ffejQgcANEeHybnmx",
+        "type": "step-start"
+      }
+    },
+    {
+      "eventId": "message.part.updated:ses_ee6856d95ffejQgcANEeHybnmx:msg_1197a93d2001TiCoQAnYAeKSnj",
+      "sessionId": "ses_ee6856d95ffejQgcANEeHybnmx",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg_1197a93d2001TiCoQAnYAeKSnj",
+      "partId": "prt_1197a985d001KUNvX2KFg3pfH8",
+      "partType": "text",
+      "text": "bb-session-provider-ok"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee6856d95ffejQgcANEeHybnmx:msg_1197a93d2001TiCoQAnYAeKSnj",
+      "sessionId": "ses_ee6856d95ffejQgcANEeHybnmx",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_1197a93d2001TiCoQAnYAeKSnj",
+      "partId": "prt_1197a9862001Fm9mLivtXARJ1P",
+      "partType": "step-finish",
+      "sourcePart": {
+        "id": "prt_1197a9862001Fm9mLivtXARJ1P",
+        "reason": "stop",
+        "messageID": "msg_1197a93d2001TiCoQAnYAeKSnj",
+        "sessionID": "ses_ee6856d95ffejQgcANEeHybnmx",
+        "type": "step-finish",
+        "tokens": {
+          "total": 2,
+          "input": 1,
+          "output": 1,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0
+      }
+    },
+    {
+      "eventId": "message.updated:ses_ee6856d95ffejQgcANEeHybnmx:msg_1197a93d2001TiCoQAnYAeKSnj",
+      "sessionId": "ses_ee6856d95ffejQgcANEeHybnmx",
+      "agentId": "bb-provider",
+      "kind": "final",
+      "state": "completed",
+      "messageId": "msg_1197a93d2001TiCoQAnYAeKSnj",
+      "finish": "stop"
+    }
+  ]
+}

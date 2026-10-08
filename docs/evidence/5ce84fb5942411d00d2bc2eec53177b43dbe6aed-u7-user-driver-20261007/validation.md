@@ -4,6 +4,12 @@ Task: `docs/goals/teams-agent-handoff-20261005.md` §1 — final BB01–BB14 on 
 Date: 2026-10-07 (America/Los_Angeles)
 Status: `INSTALLED PUBLIC-ENTRY EVIDENCE / TREE-BOUND / 13 of 14 PASSED, BB13 ENVIRONMENT-BLOCKED`
 
+> **Superseded 2026-10-07 (U7 round 11).** This directory is kept as history only. Its 13/14 result
+> and its BB13 pin-mismatch blocker are no longer the current U7 evidence. The current evidence is
+> `docs/evidence/07b4a73eceb1b90e448433c626c2fe233c17a4bc-u7-user-driver-20261007/`, which passes
+> all 14 cases on candidate `50bf7aa1788294943ad032809bf2fed14e213e3c`. Nothing below has been
+> rewritten. See `superseded.md` in this directory.
+
 ## Which commit this directory is about
 
 This directory is named after the **tree hash**, because the receipt binds the tree, not the
