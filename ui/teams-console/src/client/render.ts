@@ -223,8 +223,55 @@ function renderAgentCard(
   if (projection?.configs.some(config => config.agentId === agent.agentId)) {
     append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:configure`))
   }
-  append(card, header, meta.childElementCount === 0 ? null : meta, capability, actions)
+  append(card, header, meta.childElementCount === 0 ? null : meta, capability, renderDeclaredCapabilities(agent, t), actions)
   return card
+}
+
+function fieldHint(text: string): HTMLElement {
+  const value = element('span', 'teams-field-hint')
+  value.textContent = text
+  return value
+}
+
+/**
+ * The published declaration summary. A missing detail is an explicit unavailable state:
+ * the UI never guesses services, resources or capacity from capability IDs.
+ */
+function renderDeclaredCapabilities(agent: import('./model.ts').AgentRow, t: Record<MessageKey, string>): HTMLElement {
+  const section = element('section', 'teams-capability-detail')
+  const heading = element('h4', 'teams-capability-detail-title')
+  heading.textContent = t.declaredServices
+  append(section, heading)
+  if (agent.capabilityDetails === undefined) {
+    append(section, fieldHint(t.capabilityDetailUnavailable))
+    return section
+  }
+  if (agent.capabilityDetails.length === 0) {
+    append(section, fieldHint(t.capabilityDetailEmpty))
+    return section
+  }
+  const list = element('ul', 'teams-capability-list')
+  for (const capability of agent.capabilityDetails) {
+    const item = element('li', 'teams-capability-item')
+    const identity = element('strong')
+    identity.textContent = `${capability.capabilityId} · ${capability.version}`
+    const operations = fieldHint(`${t.operations}: ${capability.operations.length === 0 ? '—' : capability.operations.join(', ')}`)
+    append(item, identity, operations)
+    if (capability.resources.length === 0) {
+      append(item, fieldHint(t.noDeclaredResources))
+    } else {
+      const resources = element('ul', 'teams-resource-list')
+      for (const resource of capability.resources) {
+        const declared = element('li', 'teams-resource-item')
+        declared.textContent = `${resource.resourceId} · ${t.declaredCapacity}: ${resource.capacity} ${resource.unit}`
+        append(resources, declared)
+      }
+      append(item, resources)
+    }
+    append(list, item)
+  }
+  append(section, list)
+  return section
 }
 
 function sessionAvailabilityLabel(availability: string | undefined, t: Record<MessageKey, string>): string {
@@ -415,7 +462,7 @@ function renderAgentDetail(controller: TeamsConsoleController, state: ConsoleSta
   if (projection?.configs.some(config => config.agentId === agent.agentId) === true) {
     append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state), `drawer-agent:${agent.agentId}:configure`))
   }
-  append(value, title, intro, actions)
+  append(value, title, intro, actions, renderDeclaredCapabilities(agent, t))
   return value
 }
 

@@ -15,6 +15,7 @@ import { createConsoleIngress } from '../agent-host/console-ingress.ts'
 import { acceptAgentData } from './agent-data.ts'
 import type {
   ConsoleAgentObservationV1,
+  ConsoleCapabilityDetail,
   ConsoleClientV1,
   ConsoleCommandResultV1,
   ConsoleCommandV1,
@@ -25,6 +26,7 @@ import type {
   SessionCancelUnknownDetail,
   SessionObservationState,
 } from '../control-protocol/console-api.ts'
+import { projectCapabilityDetails } from '../control-protocol/console-api.ts'
 type ConsoleServiceErrorCode = ConsoleServiceError['code']
 import { projectConsoleWorkObservations } from './console-work-projection.ts'
 import type { RelayClientOptions } from '../network/relay-client.ts'
@@ -152,6 +154,7 @@ export function projectRuntimeAgentRow(input: {
   readonly label: string
   readonly presence: 'online' | 'offline' | 'unknown'
   readonly capabilities: readonly string[]
+  readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
   readonly generation?: number
   readonly sessionCapable: boolean
   readonly readiness?: ManagedRuntimeReadiness
@@ -162,6 +165,7 @@ export function projectRuntimeAgentRow(input: {
     kind: 'runtime' as const,
     agentId: input.agentId, machineId: input.machineId, label: input.label,
     presence: input.presence, capabilities: [...input.capabilities],
+    ...(input.capabilityDetails === undefined ? {} : { capabilityDetails: input.capabilityDetails }),
     ...(input.generation === undefined ? {} : { generation: input.generation }),
   }
   const readiness = input.readiness
@@ -1053,6 +1057,8 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
         label: config.declaration.identity.label,
         presence: daemon?.status().state === 'online' ? 'online' as const : 'offline' as const,
         capabilities: advertisedCapabilities.map(item => item.capabilityId),
+        // Same-package producers always emit the complete declared summary beside the IDs.
+        capabilityDetails: projectCapabilityDetails(advertisedCapabilities),
         ...(generation === undefined ? {} : { generation }),
       }
       // The advertised capability and the dispatch path are the same fact:

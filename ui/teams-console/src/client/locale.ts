@@ -18,6 +18,8 @@ type MessageKey =
   | 'invalidNotificationTarget' | 'createSession' | 'cancelSession' | 'directoryRow'
   | 'availabilityChanging' | 'availabilityStopped' | 'availabilityNoCurrent' | 'availabilityUncertain'
   | 'availabilityNotApplicable' | 'availabilityCurrent' | 'observationDegraded' | 'observationLost'
+  | 'declaredServices' | 'capabilityDetailUnavailable' | 'capabilityDetailEmpty' | 'noDeclaredResources'
+  | 'declaredCapacity' | 'operations'
 
 const en: Record<MessageKey, string> = {
   brand: 'Teams Console', topology: 'Agents', conversations: 'Sessions', notifications: 'Notifications', search: 'Search', memory: 'Memory', settings: 'Provider configuration',
@@ -35,6 +37,8 @@ const en: Record<MessageKey, string> = {
   createSession: 'Create session', cancelSession: 'Cancel session', directoryRow: 'Directory only',
   availabilityChanging: 'Session runtime changing', availabilityStopped: 'Session runtime stopped', availabilityNoCurrent: 'Session runtime not applied', availabilityUncertain: 'Session runtime uncertain',
   availabilityNotApplicable: 'No Session owner', availabilityCurrent: 'Session ready', observationDegraded: 'Session observation degraded', observationLost: 'Session observation lost',
+  declaredServices: 'Declared services', capabilityDetailUnavailable: 'Service and resource detail is unavailable.', capabilityDetailEmpty: 'This Agent declares no services.',
+  noDeclaredResources: 'No declared resources', declaredCapacity: 'Declared capacity', operations: 'Operations',
 }
 
 const zh: Record<MessageKey, string> = {
@@ -53,6 +57,8 @@ const zh: Record<MessageKey, string> = {
   createSession: '新建会话', cancelSession: '取消会话', directoryRow: '仅目录',
   availabilityChanging: '会话运行环境切换中', availabilityStopped: '会话运行环境已停止', availabilityNoCurrent: '会话运行环境未生效', availabilityUncertain: '会话运行环境不确定',
   availabilityNotApplicable: '无会话所有者', availabilityCurrent: '会话就绪', observationDegraded: '会话观察降级', observationLost: '会话观察丢失',
+  declaredServices: '已声明服务', capabilityDetailUnavailable: '服务与资源明细不可用。', capabilityDetailEmpty: '该智能体未声明任何服务。',
+  noDeclaredResources: '未声明资源', declaredCapacity: '声明容量', operations: '操作',
 }
 
 export function messages(locale: Locale): Record<MessageKey, string> {

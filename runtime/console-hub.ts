@@ -1,6 +1,6 @@
 import type { ConsoleClientV1, ConsoleProjectionV1 } from '../control-protocol/console-api.ts'
 import type { RelayPeer } from '../control-protocol/agent-services.ts'
-import { parseConsoleWorkRelationProjection } from '../control-protocol/console-api.ts'
+import { parseConsoleWorkRelationProjection, projectCapabilityDetails } from '../control-protocol/console-api.ts'
 import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
 
 export interface ConsoleDirectoryBinding {
@@ -61,6 +61,7 @@ export function createConsoleHub(
           generation: peer.generation,
           presence: peer.presence,
           capabilities: peer.declaration.capabilities.map(capability => capability.capabilityId),
+          capabilityDetails: projectCapabilityDetails(peer.declaration.capabilities),
         } as const
         if (client === undefined) {
           if (directoryAgent) agents.push(directoryAgent)
@@ -79,8 +80,11 @@ export function createConsoleHub(
         }
         const projectedAgents = projection.agents.length === 0 && directoryAgent ? [directoryAgent] : projection.agents.map(agent => ({
           ...agent,
+          // The online directory row owns the ID list and its detail together: never keep the
+          // runtime fixture's detail beside the directory's IDs.
           ...(directoryAgent === undefined ? {} : { label: directoryAgent.label, machineId: directoryAgent.machineId,
-            generation: directoryAgent.generation, presence: directoryAgent.presence, capabilities: directoryAgent.capabilities }),
+            generation: directoryAgent.generation, presence: directoryAgent.presence, capabilities: directoryAgent.capabilities,
+            capabilityDetails: directoryAgent.capabilityDetails }),
         }))
         agents.push(...projectedAgents)
         sessions.push(...projection.sessions)

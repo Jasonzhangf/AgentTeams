@@ -3,10 +3,20 @@ import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleProjectionV1, Json
 export const fixtureProjection: ConsoleProjectionV1 = {
   version: 1,
   agents: [
-    { kind: 'runtime', agentId: 'planner', label: 'Planner', machineId: 'Mac Studio', presence: 'online', capabilities: ['session', 'config'], sessionCapable: true, sessionAvailability: 'current', sessionEffectiveRevision: 6, currentSessionId: 'planner-current', providerId: 'rcc', modelId: 'deepseek-v4' },
-    { kind: 'runtime', agentId: 'reviewer', label: 'Reviewer', machineId: 'Mac Studio', presence: 'unknown', capabilities: ['session'], sessionCapable: true, sessionAvailability: 'uncertain', sessionEffectiveRevision: 2, currentSessionId: 'reviewer-current', providerId: 'openai', modelId: 'gpt-5.6-sol', sessionObservation: { state: 'degraded', reason: 'projection-loss', detail: 'one part event lacked identity', droppedEvents: 1 } },
+    { kind: 'runtime', agentId: 'planner', label: 'Planner', machineId: 'Mac Studio', presence: 'online', capabilities: ['session', 'config'],
+      capabilityDetails: [
+        { capabilityId: 'session', version: '1', operations: ['session.create', 'session.cancel'], resources: [{ resourceId: 'session-slot', capacity: 2, unit: 'slot' }] },
+        { capabilityId: 'config', version: '1', operations: ['config.apply'], resources: [{ resourceId: 'config-context', capacity: 1, unit: 'context' }] },
+      ],
+      sessionCapable: true, sessionAvailability: 'current', sessionEffectiveRevision: 6, currentSessionId: 'planner-current', providerId: 'rcc', modelId: 'deepseek-v4' },
+    { kind: 'runtime', agentId: 'reviewer', label: 'Reviewer', machineId: 'Mac Studio', presence: 'unknown', capabilities: ['session'],
+      capabilityDetails: [{ capabilityId: 'session', version: '1', operations: ['session.create'], resources: [] }],
+      sessionCapable: true, sessionAvailability: 'uncertain', sessionEffectiveRevision: 2, currentSessionId: 'reviewer-current', providerId: 'openai', modelId: 'gpt-5.6-sol', sessionObservation: { state: 'degraded', reason: 'projection-loss', detail: 'one part event lacked identity', droppedEvents: 1 } },
     { kind: 'directory', agentId: 'offline-agent', label: 'Offline Agent', machineId: 'Build Mac', presence: 'offline', capabilities: ['session'] },
-    { kind: 'runtime', agentId: 'browser-agent', label: 'AgentBrowser', machineId: 'MacBook Pro', presence: 'online', capabilities: ['browser'], sessionCapable: false, sessionAvailability: 'not-applicable' },
+    { kind: 'runtime', agentId: 'browser-agent', label: 'AgentBrowser', machineId: 'MacBook Pro', presence: 'online', capabilities: ['browser'],
+      capabilityDetails: [{ capabilityId: 'browser', version: '1', operations: ['context.create', 'navigate', 'snapshot', 'context.destroy'],
+        resources: [{ resourceId: 'browser-context', capacity: 2, unit: 'context' }, { resourceId: 'browser-slot', capacity: 2, unit: 'slot' }] }],
+      sessionCapable: false, sessionAvailability: 'not-applicable' },
   ],
   sessions: [
     { agentId: 'planner', sessionId: 'planner-current', title: 'Plan Teams runtime' },

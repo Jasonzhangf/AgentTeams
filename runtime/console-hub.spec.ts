@@ -147,3 +147,27 @@ it('emits directory rows for offline peers and preserves owner runtime Session f
   expect(worker).toMatchObject({ kind: 'directory', presence: 'offline' })
   expect(worker).not.toHaveProperty('sessionCapable')
 })
+
+it('projects directory declaration detail and takes the ID list and detail from the same source', async () => {
+  const directoryCapability = { capabilityId: 'file-search', version: '2',
+    operations: [{ operation: 'search', inputSchema: {}, outputSchema: {}, cancellation: 'unsupported' as const }],
+    resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'slot' as const, sharing: 'exclusive' as const, allocationScope: 'request' as const }] }
+  const online: RelayPeer = {
+    declaration: { identity: { hostId: 'browser-host', machineId: 'browser-machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
+      scopeId: 'scope', revision: 1, capabilities: [directoryCapability], routes: [] },
+    connectionId: 'browser-connection', generation: 3, lastSeenAt: new Date(0).toISOString(), presence: 'online',
+  }
+  const staleRuntimeDetail = [{ capabilityId: 'stale', version: '1', operations: [], resources: [] }]
+  const client = createConsoleHub([], async () => ({ peers: [online], client: () => ({
+    readProjection: async () => ({ version: 1 as const, agents: [{ kind: 'runtime' as const, agentId: 'browser', machineId: 'stale', label: 'stale',
+      presence: 'unknown' as const, capabilities: ['stale'], capabilityDetails: staleRuntimeDetail, sessionCapable: false as const, sessionAvailability: 'not-applicable' as const }],
+      sessions: [], configs: [], notifications: [], works: [], relations: [] }),
+    command: async () => ({ ok: true as const }), sendSession: async () => ({ ok: true as const }),
+  }) }))
+  const agent = (await client.readProjection()).agents[0]
+  // The online directory row owns both the ID list and its detail; the stale runtime
+  // fixture must not leave a detail that disagrees with the merged capability IDs.
+  expect(agent.capabilities).toEqual(['file-search'])
+  expect(agent.capabilityDetails).toEqual([{ capabilityId: 'file-search', version: '2', operations: ['search'],
+    resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'slot' }] }])
+})

@@ -6,6 +6,7 @@ import {
   parseConsoleWorkRelationProjection,
   parseSessionCancelUnknownDetail,
   parseSessionCreateResult,
+  projectCapabilityDetails,
 } from './console-api.ts'
 
 describe('Console control ingress', () => {
@@ -123,5 +124,41 @@ describe('Console control ingress', () => {
     expect(parseSessionCancelUnknownDetail(detail(false))).toMatchObject({ baseAccepted: false })
     expect(parseSessionCancelUnknownDetail(detail(undefined))).toMatchObject({ sessionId: 's' })
     expect(() => parseSessionCancelUnknownDetail({ ...detail(true), reconciliation: 'confirmed' })).toThrow()
+  })
+
+  it('accepts the declared capability detail summary and rejects illegal nested shapes', () => {
+    const detail = [{ capabilityId: 'file-search', version: '3', operations: ['search'],
+      resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'context' }] }]
+    const runtime = { kind: 'runtime', agentId: 'a', label: 'A', machineId: 'm', presence: 'online', capabilities: ['file-search'],
+      capabilityDetails: detail, sessionCapable: true, sessionAvailability: 'current', sessionEffectiveRevision: 3 }
+    expect(parseConsoleAgentObservation(runtime)).toEqual(runtime)
+    expect(parseConsoleAgentObservation({ kind: 'directory', agentId: 'a', label: 'A', machineId: 'm', presence: 'offline',
+      capabilities: ['file-search'], capabilityDetails: detail })).toMatchObject({ kind: 'directory', capabilityDetails: detail })
+    // An explicit empty declaration stays empty; it is not the same as an absent field.
+    expect(parseConsoleAgentObservation({ kind: 'runtime', agentId: 'a', label: 'A', machineId: 'm', presence: 'online',
+      capabilities: [], capabilityDetails: [], sessionCapable: false, sessionAvailability: 'not-applicable' }))
+      .toMatchObject({ capabilityDetails: [] })
+    for (const invalid of [
+      { ...runtime, capabilityDetails: [{ ...detail[0], capacity: 1 }] },
+      { ...runtime, capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 0, unit: 'slot' }] }] },
+      { ...runtime, capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 1.5, unit: 'slot' }] }] },
+      { ...runtime, capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 1, unit: 'core' }] }] },
+      { ...runtime, capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 1 }] }] },
+      { ...runtime, capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 1, unit: 'slot', sharing: 'exclusive' }] }] },
+      { ...runtime, capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 1, unit: 'slot', allocationScope: 'work' }] }] },
+      { ...runtime, capabilityDetails: [{ ...detail[0], operations: ['search', ''] }] },
+      { ...runtime, capabilityDetails: [{ ...detail[0], version: '' }] },
+      { ...runtime, capabilityDetails: [{ ...detail[0], allocationScope: 'work' }] },
+      { ...runtime, capabilityDetails: 'none' },
+    ]) expect(() => parseConsoleAgentObservation(invalid)).toThrow()
+  })
+
+  it('projects a published declaration into the canonical detail summary', () => {
+    const declaration = [{ capabilityId: 'file-search', version: '3',
+      operations: [{ operation: 'search', inputSchema: { type: 'object' }, outputSchema: {}, cancellation: 'unsupported' as const }],
+      resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'context' as const, sharing: 'exclusive' as const, allocationScope: 'request' as const }] }]
+    expect(projectCapabilityDetails(declaration)).toEqual([{ capabilityId: 'file-search', version: '3', operations: ['search'],
+      resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'context' }] }])
+    expect(projectCapabilityDetails([])).toEqual([])
   })
 })

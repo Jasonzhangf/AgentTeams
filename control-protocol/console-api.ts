@@ -1,4 +1,5 @@
-import type { JsonValue, ServiceError, ServiceErrorCode, WorkState } from './agent-services.ts'
+import type { CapabilityDeclaration, JsonValue, ServiceError, ServiceErrorCode, WorkState } from './agent-services.ts'
+import type { EndpointCapabilitySummary, EndpointResourceSummary } from './endpoint-ref.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
 export type { JsonValue } from './agent-services.ts'
 
@@ -276,6 +277,15 @@ export interface SessionCancelConfirmed {
 }
 
 /**
+ * Canonical Console summary of one published capability declaration. It reuses the
+ * Endpoint summary field types and carries declared capacity only: never remaining
+ * capacity, live usage, or an allocation ledger.
+ */
+export interface ConsoleCapabilityDetail extends EndpointCapabilitySummary {
+  readonly resources: readonly EndpointResourceSummary[]
+}
+
+/**
  * Agent management row. The runtime/directory discriminated union is not a Work capability and
  * is not a second source of config or runtime truth.
  */
@@ -288,6 +298,7 @@ export type ConsoleAgentObservationV1 =
       readonly generation?: number
       readonly presence: 'online' | 'offline' | 'unknown'
       readonly capabilities: readonly string[]
+      readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
       readonly sessionCapable: true
       readonly sessionAvailability: 'changing' | 'stopped' | 'no-current' | 'uncertain' | 'current'
       readonly sessionObservation?: SessionObservationState
@@ -304,6 +315,7 @@ export type ConsoleAgentObservationV1 =
       readonly generation?: number
       readonly presence: 'online' | 'offline' | 'unknown'
       readonly capabilities: readonly string[]
+      readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
       readonly sessionCapable: false
       readonly sessionAvailability: 'not-applicable'
     }
@@ -315,6 +327,7 @@ export type ConsoleAgentObservationV1 =
       readonly generation?: number
       readonly presence: 'online' | 'offline' | 'unknown'
       readonly capabilities: readonly string[]
+      readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
     }
 export interface ConsoleProjectionV1 {
   readonly version: 1
@@ -547,10 +560,48 @@ export function parseSessionObservationState(value: unknown): SessionObservation
   return observation as unknown as SessionObservationState
 }
 
+const CAPABILITY_DETAIL_FIELDS = ['capabilityId', 'version', 'operations', 'resources'] as const
+const CAPABILITY_RESOURCE_FIELDS = ['resourceId', 'capacity', 'unit'] as const
+
+/** Closed validation of the declared capability detail; nested objects close explicitly. */
+function parseCapabilityDetails(value: unknown): void {
+  if (!Array.isArray(value)) throw new Error('Console agent capabilityDetails must be an array')
+  for (const entry of value) {
+    const detail = object(entry)
+    assertEnvelopeKeys(detail, CAPABILITY_DETAIL_FIELDS, 'Console capability detail')
+    text(detail.capabilityId); text(detail.version)
+    if (!Array.isArray(detail.operations)) throw new Error('Console capability detail operations must be an array')
+    for (const operation of detail.operations) text(operation)
+    if (!Array.isArray(detail.resources)) throw new Error('Console capability detail resources must be an array')
+    for (const resource of detail.resources) {
+      const declared = object(resource)
+      assertEnvelopeKeys(declared, CAPABILITY_RESOURCE_FIELDS, 'Console capability resource')
+      text(declared.resourceId)
+      if (!Number.isSafeInteger(declared.capacity) || (declared.capacity as number) < 1) {
+        throw new Error('Console capability resource capacity must be a positive safe integer')
+      }
+      choiceOf(declared.unit, ['slot', 'context'], 'Console capability resource unit')
+    }
+  }
+}
+
+/**
+ * The one published-declaration → Console detail summary mapping. Both the Agent runtime row
+ * and the Console directory row project through this helper; no second state store exists.
+ */
+export function projectCapabilityDetails(capabilities: readonly CapabilityDeclaration[]): readonly ConsoleCapabilityDetail[] {
+  return capabilities.map(capability => ({
+    capabilityId: capability.capabilityId,
+    version: capability.version,
+    operations: capability.operations.map(operation => operation.operation),
+    resources: capability.resources.map(resource => ({ resourceId: resource.resourceId, capacity: resource.capacity, unit: resource.unit })),
+  }))
+}
+
 /** Closed validation of one Agent management row; rejects session/model fields on directory/false rows. */
 export function parseConsoleAgentObservation(value: unknown): ConsoleAgentObservationV1 {
   const agent = object(value)
-  const common = ['kind', 'agentId', 'label', 'machineId', 'generation', 'presence', 'capabilities']
+  const common = ['kind', 'agentId', 'label', 'machineId', 'generation', 'presence', 'capabilities', 'capabilityDetails']
   text(agent.agentId); text(agent.label); text(agent.machineId)
   if (agent.generation !== undefined) {
     if (!Number.isSafeInteger(agent.generation) || (agent.generation as number) < 1) throw new Error('Console agent generation invalid')
@@ -558,6 +609,7 @@ export function parseConsoleAgentObservation(value: unknown): ConsoleAgentObserv
   choiceOf(agent.presence, PRESENCE, 'Console agent presence')
   if (!Array.isArray(agent.capabilities)) throw new Error('Console agent capabilities must be an array')
   for (const capability of agent.capabilities) text(capability)
+  if (agent.capabilityDetails !== undefined) parseCapabilityDetails(agent.capabilityDetails)
   if (agent.kind === 'directory') {
     assertEnvelopeKeys(agent, common, 'Console directory agent')
     return agent as unknown as ConsoleAgentObservationV1

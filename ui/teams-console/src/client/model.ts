@@ -1,4 +1,4 @@
-import type { ConsoleProjectionV1, ConsoleProviderView, ConsoleSessionEventView } from './protocol.ts'
+import type { ConsoleCapabilityDetail, ConsoleProjectionV1, ConsoleProviderView, ConsoleSessionEventView } from './protocol.ts'
 
 export type ConsoleEntry = 'topology' | 'conversations' | 'notifications' | 'search' | 'memory'
 export type UiStatus = 'online' | 'offline' | 'unknown'
@@ -10,6 +10,7 @@ export interface AgentRow {
   readonly generation?: number
   readonly presence: UiStatus
   readonly capabilities: readonly string[]
+  readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
   readonly kind: 'runtime' | 'directory'
   readonly sessionCapable?: boolean
   readonly sessionAvailability?: 'changing' | 'stopped' | 'no-current' | 'uncertain' | 'current' | 'not-applicable'

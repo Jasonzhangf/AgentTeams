@@ -45,6 +45,17 @@ describe('projection mapping', () => {
     expect(canOperateSession({ ...base, presence: 'offline', sessionCapable: true, sessionAvailability: 'current' })).toBe(false)
   })
 
+  it('preserves the declared capability detail summary without inventing one', () => {
+    const detail = [{ capabilityId: 'file-search', version: '3', operations: ['search'],
+      resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'context' as const }] }]
+    const agents = projectAgents({ ...projection, agents: [
+      { kind: 'runtime', agentId: 'a', label: 'A', machineId: 'M', presence: 'online', capabilities: ['file-search'], capabilityDetails: detail,
+        sessionCapable: false, sessionAvailability: 'not-applicable' },
+    ] })
+    expect(agents[0].capabilityDetails).toEqual(detail)
+    expect(projectAgents(projection)[0]).not.toHaveProperty('capabilityDetails')
+  })
+
   it('keeps a degraded Session observation independent of readiness', () => {
     const degraded = projectAgents({
       ...projection,

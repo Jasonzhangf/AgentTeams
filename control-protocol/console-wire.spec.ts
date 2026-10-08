@@ -66,6 +66,20 @@ it('closes the Agent observation union and keeps observation decoupled from read
   ]) expect(() => parseConsoleWireReply(JSON.stringify(frame(invalid)))).toThrow()
 })
 
+it('carries the declared capability detail through a wire reply and closes its nested objects', () => {
+  const base = { version: 1, sessions: [], notifications: [], configs: [] }
+  const detail = [{ capabilityId: 'file-search', version: '3', operations: ['search'],
+    resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'context' }] }]
+  const directory = { kind: 'directory', agentId: 'a', machineId: 'm', label: 'A', presence: 'offline', capabilities: ['file-search'], capabilityDetails: detail }
+  const frame = (agents: unknown) => ({ kind: 'console.projection.result', correlationId: 'r', projection: { ...base, agents } })
+  expect(parseConsoleWireReply(JSON.stringify(frame([directory])))).toMatchObject({ projection: { agents: [{ capabilityDetails: detail }] } })
+  for (const invalid of [
+    [{ ...directory, capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 1, unit: 'slot', sharing: 'shared' }] }] }],
+    [{ ...directory, capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 1, unit: 'bogus' }] }] }],
+    [{ ...directory, capabilityDetails: [{ ...detail[0], resources: [{ resourceId: 'r', capacity: 1, unit: 'slot', payload: {} }] }] }],
+  ]) expect(() => parseConsoleWireReply(JSON.stringify(frame(invalid)))).toThrow()
+})
+
 it('closes create results and preserves cancel baseAccepted three-state', () => {
   const createFrame = (result: unknown) => ({ kind: 'console.result', correlationId: 'r', result })
   expect(parseConsoleWireReply(JSON.stringify(createFrame({ ok: true, result: { kind: 'session.create', agentId: 'a', sessionId: 's', title: 'T', directory: '/tmp', time: { created: 1 } } }))))
