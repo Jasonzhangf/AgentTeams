@@ -349,7 +349,12 @@ function runStage({ state, statePath, receiptRoot, stageId, command, logPath, ca
 }
 
 function git(args) {
-  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' })
+  // The candidate fingerprint diffs the whole base...head range as binary. A
+  // governance promotion can push that past the 1 MiB spawnSync default, which
+  // surfaces as status null plus ENOBUFS and would otherwise be misreported as a
+  // diff-shaped failure. Give git room and report a real overflow as itself.
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+  if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`${result.stderr || result.stdout}`.trim())
   return result.stdout.trim()
 }
