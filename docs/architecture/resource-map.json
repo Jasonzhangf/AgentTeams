@@ -51,7 +51,9 @@
       "forbidden_relations": [
         "session_payload",
         "network_truth"
-      ]
+      ],
+      "design_doc": "docs/design/teams-provider-config.md",
+      "note": "The Console config projection row's public acceptedBinding comes from this same Config accepted view (target daemon durable accepted snapshot); it is not a second store and never substitutes the machine source. Round 15 publishes acceptedBinding (primary plus optional backup, or null before the first accept) through runtime/console-config.ts readProjection."
     },
     {
       "resource_id": "account-permission",
@@ -310,7 +312,9 @@
       "forbidden_relations": [
         "network_truth",
         "session_payload"
-      ]
+      ],
+      "design_doc": "docs/design/teams-provider-config.md",
+      "note": "The Console config projection row is projected from this same Config accepted view: readProjection emits acceptedRevision/applyState/acceptedBinding from the target daemon durable accepted snapshot in one read, while providers/effectiveRevision come from the catalog/effective observation. acceptedBinding is null before the first accept and carries only providerInstanceId/modelId references (primary plus optional backup); the backup reference never triggers an automatic dispatch."
     },
     {
       "resource_id": "config-sync-transaction",

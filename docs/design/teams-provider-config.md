@@ -109,6 +109,36 @@ endpoint。缓存按 provider instance、endpoint/protocol 与 credential revisi
 引用/可用性。远程复制 provider 时目标必须有可解析的凭据引用，不能认为本机路径
 跨设备有效。服务端校验操作者和目标 Agent 的配置权限。
 
+### 4.1 公开投影 acceptedBinding（round 15）
+
+Console 配置投影行公开**已接受**的 Agent binding，作为跨 Console 读回 binding 的
+唯一公开形状。canonical owner 是 `control-protocol/console-api.ts` 的
+`ConsoleProjectionV1.configs[]`；producer 是 `runtime/console-config.ts` 的
+`createConsoleConfigBinding`：
+
+```ts
+readonly acceptedBinding?: {
+  readonly primary: { readonly providerInstanceId: string; readonly modelId: string }
+  readonly backup?: { readonly providerInstanceId: string; readonly modelId: string }
+} | null
+```
+
+语义（冻结）：
+
+- 只含 `providerInstanceId` 与 `modelId` 两个引用；不含凭据、baseURL、endpoint、
+  revision 或任何秘密。投影不得反推或回填 binding。
+- **首次 accept 前**（durable `acceptedRevision === 0`）字段为 `null`，表示“尚无
+  已接受 binding”，不是缺字段、也不是空对象。
+- **同一 revision 来源**：`acceptedBinding` 与 `acceptedRevision`/`applyState` 来自
+  **同一个** Config accepted view（目标 daemon 的 durable accepted snapshot），
+  与 `providers` 目录、`effectiveRevision` 分开读取。accepted revision 已推进但
+  accepted binding 缺失时，producer 显式失败（`UNAVAILABLE`），不得回落到机器源或
+  上一次读值。
+- **backup 无自动 dispatch**：`backup` 只是已接受的备用引用；它不触发重试、切换或
+  第二次 dispatch。真正的第二次 dispatch 必须显式 `config.bindModel` 到 backup
+  provider/model，再读回 accepted/effective。没有自动 failover。
+- `optional` 只保留既有 v1 行的可解析性；同包新 producer 必须发出该字段。
+
 ## 5. 当前测试 provider
 
 | 实例建议 ID | 配置来源 | 用途与边界 |
