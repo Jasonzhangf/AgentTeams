@@ -700,6 +700,15 @@ function buildCompletedReceipt(
   const control = arc.payload.control;
   const target = control.target as Record<string, JsonValue> | undefined;
   const closeError = control.closeError as { code?: unknown; message?: unknown; deliveryState?: unknown } | undefined;
+  // The provider's typed refusal already reaches this ARC as `control.reply.error`
+  // (`agent-host/work-ingress.ts` -> `work.result` -> runner `control.reply`); it is
+  // a `ServiceError` with string `code`/`message`, so it is projected verbatim.
+  const replyError = (control.reply as { readonly error?: { readonly code: string; readonly message: string } } | undefined)?.error;
+  // Close-failure evidence keeps precedence over the provider's typed refusal.
+  const controlError = closeError === undefined ? replyError : {
+    code: typeof closeError.code === 'string' ? closeError.code : 'CLEANUP_FAILED',
+    message: typeof closeError.message === 'string' ? closeError.message : 'Work close failed',
+  };
   const workClosure = control.workClosure as ProjectExecutionControl['workClosure'];
   const requestState = control.requestState as RequestState | undefined;
   const providerAgentId = typeof control.targetAgentId === 'string'
@@ -735,12 +744,7 @@ function buildCompletedReceipt(
       ...(workClosure === undefined ? {} : { workClosure }),
       ...(deliveryState === undefined ? {} : { deliveryState }),
       ...(control.observed === true ? { observed: true as const } : {}),
-      ...(closeError === undefined ? {} : {
-        error: {
-          code: typeof closeError.code === 'string' ? closeError.code : 'CLEANUP_FAILED',
-          message: typeof closeError.message === 'string' ? closeError.message : 'Work close failed',
-        },
-      }),
+      ...(controlError === undefined ? {} : { error: controlError }),
     },
     ...(arc.payload.business === undefined ? {} : { business: arc.payload.business }),
     cleanup,

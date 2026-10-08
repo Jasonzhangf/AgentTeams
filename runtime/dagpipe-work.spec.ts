@@ -853,6 +853,112 @@ describe('Teams DAGpipe SDK Work runner and Node host', () => {
     }
   }, 30_000)
 
+  it('projects a provider typed refusal from control.reply.error when no close error exists', async () => {
+    const harness = await startHarness()
+    try {
+      const refused = await runWorkExecution(harness.client, {
+        runnerPath,
+        graphPath: agentWorkGraph,
+        projectId,
+        executionId: 'exec-resource-refused',
+        attemptId: '1',
+        intent: {
+          control: {
+            ...submitControl('work-refused', 'req-refused'),
+            demands: [{ resourceId: 'search-slot', amount: 3 }],
+          },
+          business: { query: 'alpha marker' },
+        },
+      })
+
+      expect(refused.control.error).toEqual({ code: 'RESOURCE_EXHAUSTED', message: 'resource search-slot capacity exhausted' })
+      expect(refused.status).toBe('completed')
+      expect(refused.control.requestState).toBe('failed')
+      expect(refused.control.workClosure).toBe('closed')
+      expect(refused.business).toBeUndefined()
+      expect(refused.cleanup).toEqual({ channelsOpened: 1, channelsDisposed: 1 })
+      expect(harness.executeCount()).toBe(0)
+      expect(harness.ledger.snapshot.works.map(work => work.state)).toEqual(['closed'])
+      expect(harness.ledger.snapshot.requests.map(request => request.state)).toEqual(['failed'])
+
+      evidence.push({ case: 'provider-typed-refusal', refused })
+    } finally {
+      await harness.stop()
+    }
+  }, 30_000)
+
+  it('keeps the close failure precedence over a provider typed refusal in one receipt', async () => {
+    const harness = await startHarness()
+    const fixtureDirectory = mkdtempSync(join(tmpdir(), 'teams-d3-u4-close-precedence-'))
+    const closePrecedenceRunner = join(fixtureDirectory, 'close-precedence-runner.mjs')
+    const executionId = 'exec-close-precedence'
+    try {
+      const frame = {
+        type: 'execution.result',
+        identity: {
+          project_id: projectId,
+          graph_id: 'agentteams.agent-work',
+          graph_version: '2',
+          execution_id: executionId,
+          attempt_id: '1',
+        },
+        compiled: {
+          id: 'agentteams.agent-work',
+          version: '2',
+          node_ids: ['resolve-service', 'open-link', 'admit-work', 'request-work', 'settle-work'],
+          input_arcs: ['work.intent'],
+          output_arcs: ['work.receipt'],
+        },
+        outputs: {
+          'work.receipt': {
+            id: 'work.receipt',
+            version: 1,
+            schema: 'Object',
+            payload: {
+              control: {
+                workId: 'work-close-precedence',
+                requestId: 'req-close-precedence',
+                requestState: 'failed',
+                workClosure: 'close-failed',
+                closeError: { code: 'CLOSE_LINK_LOST', message: 'close reply deadline elapsed' },
+                reply: { state: 'failed', error: { code: 'RESOURCE_EXHAUSTED', message: 'resource search-slot capacity exhausted' } },
+              },
+            },
+          },
+        },
+        journal: [],
+      }
+      writeFileSync(closePrecedenceRunner, [
+        '#!/usr/bin/env node',
+        `process.stdout.write(${JSON.stringify(`${JSON.stringify(frame)}\n`)});`,
+        'process.stdin.resume();',
+        "process.stdin.on('end', () => process.exit(0));",
+        '',
+      ].join('\n'), { mode: 0o755 })
+
+      const receipt = await runWorkExecution(harness.client, {
+        runnerPath: closePrecedenceRunner,
+        graphPath: agentWorkGraph,
+        projectId,
+        executionId,
+        attemptId: '1',
+        intent: { control: submitControl('work-close-precedence', 'req-close-precedence'), business: { query: 'alpha marker' } },
+      })
+
+      expect(receipt.status).toBe('failed')
+      expect(receipt.control.workClosure).toBe('close-failed')
+      expect(receipt.control.error).toEqual({ code: 'CLOSE_LINK_LOST', message: 'close reply deadline elapsed' })
+      expect(receipt.cleanup).toEqual({ channelsOpened: 0, channelsDisposed: 0 })
+      expect(harness.ledger.snapshot.works).toHaveLength(0)
+      expect(harness.ledger.snapshot.requests).toHaveLength(0)
+
+      evidence.push({ case: 'close-error-precedence', receipt })
+    } finally {
+      rmSync(fixtureDirectory, { recursive: true, force: true })
+      await harness.stop()
+    }
+  }, 20_000)
+
   it('fails explicitly on host EOF and makes no further host call', async () => {
     const intent = { control: submitControl('work-eof', 'req-eof'), business: { query: 'alpha marker' } }
     const child = spawn(runnerPath, ['run', '--graph', agentWorkGraph, '--project-id', projectId,
