@@ -1,0 +1,10 @@
+{
+  "command": "which",
+  "args": [
+    "pnpm"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "/opt/homebrew/bin/pnpm\n",
+  "stderr": ""
+}

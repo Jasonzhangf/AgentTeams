@@ -1,0 +1,1588 @@
+14:07:44 gates start
+### gate teams-provider-config-effective
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+
+(node:35887) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/dagpipe/.build/build-tRjzhx)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.44s
+stderr | runtime/agent-process.spec.ts > Session host admission, cancel causality and observation > separates observation degradation from owner readiness and contains expected errors
+Promise returned by `expect(actual).resolves.toMatchObject(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in the next Vitest major. Please remember to await the assertion.
+    at /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/agent-process.spec.ts:1363:62
+
+ ✓ runtime/agent-process.spec.ts (40 tests) 31849ms
+   ✓ executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state  5281ms
+   ✓ keeps an Agent with an accepted model binding but an unresolved managed executable passive and unavailable  312ms
+   ✓ persists unknown state before refusing a restart with active Work  348ms
+   ✓ recovers a stale work lock only after the previous daemon lease is reacquired  302ms
+   ✓ runs real persistent Camo browser Work through current SDK graphs and restores capacity  20044ms
+     ✓ keeps a multi-match assistant identity ambiguous and never confirms its cancel  5011ms
+ ✓ runtime/managed-opencode-session.spec.ts (1 test) 1496ms
+   ✓ sends one real OpenCode Session request through the selected managed provider  1496ms
+ ✓ runtime/local-config.spec.ts (40 tests) 728ms
+ ✓ runtime/managed-config-live.spec.ts (1 test) 734ms
+   ✓ applies accepted Teams config to a real isolated OpenCode child and reads effective revision  734ms
+ ✓ scripts/blackbox-user-mvp.spec.ts (49 tests) 372ms
+ ✓ runtime/managed-config-owner.spec.ts (7 tests) 80ms
+ ✓ runtime/console-config.spec.ts (5 tests) 36ms
+ ✓ control-protocol/console-api.spec.ts (8 tests) 7ms
+
+ Test Files  8 passed (8)
+      Tests  151 passed (151)
+   Start at  14:07:46
+   Duration  37.14s (transform 475ms, setup 0ms, import 906ms, tests 35.30s, environment 0ms)
+
+gate24 exit=0
+### gate teams-console-directory-discovery
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+
+ ✓ ui/teams-console/tests/render.spec.ts (2 tests) 6428ms
+     ✓ renders declared services and resources and an explicit unavailable state  3317ms
+     ✓ keeps the busy window distinct from completion and enables bind after reselection  3110ms
+ ✓ runtime/console-runtime.spec.ts (1 test) 279ms
+ ✓ scripts/blackbox-user-mvp.spec.ts (49 tests) 315ms
+ ✓ ui/teams-console/tests/api.spec.ts (11 tests) 29ms
+ ✓ control-protocol/console-wire.spec.ts (5 tests) 7ms
+ ✓ runtime/console-hub.spec.ts (10 tests) 8ms
+ ✓ ui/teams-console/tests/model.spec.ts (8 tests) 3ms
+
+ Test Files  7 passed (7)
+      Tests  86 passed (86)
+   Start at  14:08:24
+   Duration  8.49s (transform 295ms, setup 0ms, import 666ms, tests 7.07s, environment 0ms)
+
+
+> agentteams@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    39.88 kB │ gzip: 9.71 kB
+ℹ lib/index.d.mts  26.99 kB │ gzip: 6.09 kB
+ℹ 2 files, total: 66.87 kB
+✔ Build complete in 756ms
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/console-host
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/ui/teams-console
+> tsc -p tsconfig.json --noEmit
+
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+
+> agentteams@0.1.0 smoke /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node scripts/artifact-smoke.mjs && node scripts/runtime-smoke.mjs
+
+Packaged Console smoke passed: one staged final pack root, actual Basic auth, static/UI bytes, and owner-denied API. No provider or cross-device claim.
+Packaged runtime smoke passed: real TLS Relay, daemon library admission/directory, stop and fresh generation. No OS process deployment, executor or NAT claim.
+gate26 exit=0
+14:08:40 verify start
+
+> agentteams@0.1.0 verify /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> pnpm test && pnpm typecheck && appsdk guide compile && appsdk compile && pnpm smoke && appsdk verify
+
+
+> agentteams@0.1.0 test /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> pnpm build:runtime && pnpm --dir opencode-adapter build && node scripts/regression.mjs
+
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    39.88 kB │ gzip: 9.71 kB
+ℹ lib/index.d.mts  26.99 kB │ gzip: 6.09 kB
+ℹ 2 files, total: 66.87 kB
+✔ Build complete in 608ms
+Regression gate: TEAMS_CONSOLE_REAL_DOM=1 (real Chrome required)
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+(node:50601) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/dagpipe/.build/build-adrdVH)
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.20s
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/dagpipe/.build/build-33PeEF)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.84s
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/dagpipe/.build/build-JBFaKA)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.41s
+Test Files 83 passed
+Tests 737 passed
+
+> agentteams@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    39.88 kB │ gzip: 9.71 kB
+ℹ lib/index.d.mts  26.99 kB │ gzip: 6.09 kB
+ℹ 2 files, total: 66.87 kB
+✔ Build complete in 624ms
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/console-host
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/ui/teams-console
+> tsc -p tsconfig.json --noEmit
+
+{
+  "enforcement": "advisory",
+  "harness": "appsdk-development-process-control",
+  "manifest_hash": "sha256:fed402c5d7e543e293deaabc6ba90c9de5158358439cfc6c57b2955720f05f20",
+  "project_contract_digest": "sha256:be6b094e22c6e63820ec07e82f9786a4e90504ff226e9a2f3922e1d642c42ed1",
+  "rules": [
+    {
+      "description": "Read only rule sources declared by the project contract.",
+      "rule_id": "use-declared-sources",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Execute only the projected node and adjacent workflow edges.",
+      "rule_id": "adjacent-transition",
+      "severity": "forbidden"
+    },
+    {
+      "description": "A passing required step must bind evidence.",
+      "rule_id": "evidence-required",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Revise the plan after project, goal, source, scope, owner, or rule-context drift.",
+      "rule_id": "context-drift",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Do not overwrite or delete plan revisions and execution events.",
+      "rule_id": "append-only-history",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Do not claim lifecycle completion before canonical AppSDK gates pass.",
+      "rule_id": "lifecycle-truth",
+      "severity": "forbidden"
+    },
+    {
+      "description": "New or changed control and configuration behavior must use declared typed control resources, error chains, or project configuration sources, never payloads, metadata, debug logs, or implicit context.",
+      "rule_id": "changed-scope-control-truth",
+      "severity": "forbidden"
+    },
+    {
+      "description": "New or changed behavior must retain one semantic owner and one implementation, with no duplicate path, fallback, or temporary bypass.",
+      "rule_id": "changed-scope-single-owner",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Preserve fixed operation/hook/gate boundaries only where the project declares them. Missing required capabilities fail explicitly; never mock success.",
+      "rule_id": "changed-scope-configured-orchestration",
+      "severity": "forbidden"
+    },
+    {
+      "description": "Compare deletion, reuse and direct implementation by actual complexity. Optional simplification does not block; concrete quality, safety or ownership regressions remain forbidden.",
+      "rule_id": "changed-scope-ablation-and-sharing",
+      "severity": "advisory"
+    },
+    {
+      "description": "Report untouched historical violations as recommendations; do not block the candidate unless they enter changed scope or affect safety, ownership, evidence truth, or required delivery.",
+      "rule_id": "historical-architecture-debt",
+      "severity": "advisory"
+    },
+    {
+      "description": "Locate feature and debug work in the declared function and verification maps before implementation.",
+      "rule_id": "project-context-binding",
+      "severity": "warning"
+    },
+    {
+      "description": "During debug exploration, append observations, hypotheses, and evidence to the active run notes before resolution.",
+      "rule_id": "debug-notes-required",
+      "severity": "warning"
+    },
+    {
+      "description": "Update function ownership and verification gates in the same change when the implementation changes them.",
+      "rule_id": "map-gate-update",
+      "severity": "advisory"
+    },
+    {
+      "description": "Record requirement, architecture, and detailed-design closure before feature implementation.",
+      "rule_id": "recommended-design",
+      "severity": "warning"
+    },
+    {
+      "description": "Check prior verified successes and failures before repeating exploration.",
+      "rule_id": "prior-record-search",
+      "severity": "advisory"
+    }
+  ],
+  "schema_version": 1,
+  "sources": [
+    {
+      "digest": "sha256:73e7e17ee694534065a3a288651535b4c3ae9235cf9800fac28b85c339c0bc56",
+      "kind": "agents",
+      "path": "AGENTS.md",
+      "precedence": 100,
+      "present": true,
+      "required": true,
+      "source_id": "project-agents"
+    },
+    {
+      "contract_digest": "sha256:565eb018676581216e97017506401734c10e60244fe3def4d7dc3fe64c9252c3",
+      "contract_path": ".appsdk/skills/appsdk-project-governance/appsdk-guidance.json",
+      "digest": "sha256:085114962d22c43c71670e6cf514bfa3d04793676cb9eea43094583bb73c38cb",
+      "kind": "skill",
+      "path": ".appsdk/skills/appsdk-project-governance/SKILL.md",
+      "precedence": 200,
+      "present": true,
+      "required": true,
+      "source_id": "appsdk-governance-skill"
+    }
+  ],
+  "workflows": [
+    {
+      "domain": "bootstrap",
+      "edges": [
+        {
+          "from": "prepare",
+          "to": "initialize"
+        },
+        {
+          "from": "initialize",
+          "to": "baseline_verify"
+        }
+      ],
+      "entry_node": "prepare",
+      "nodes": [
+        {
+          "evidence": [
+            "preparation-record"
+          ],
+          "instruction": "Run prepare and confirm scope, roots, boundaries, and acceptance.",
+          "node_id": "prepare",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "initialized-layout"
+          ],
+          "instruction": "Run idempotent initialization for the confirmed project root.",
+          "node_id": "initialize",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "verify-result"
+          ],
+          "instruction": "Verify the initialized governance baseline.",
+          "node_id": "baseline_verify",
+          "owner": "project"
+        }
+      ],
+      "objective": "Enter AppSDK governance without destroying existing project truth."
+    },
+    {
+      "domain": "migration",
+      "edges": [
+        {
+          "from": "inspect_legacy",
+          "to": "choose_route"
+        },
+        {
+          "from": "choose_route",
+          "to": "apply_route"
+        },
+        {
+          "from": "apply_route",
+          "to": "migration_verify"
+        }
+      ],
+      "entry_node": "inspect_legacy",
+      "nodes": [
+        {
+          "evidence": [
+            "legacy-inventory"
+          ],
+          "instruction": "Inventory old governance truth and disposable runtime state.",
+          "node_id": "inspect_legacy",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "migration-route"
+          ],
+          "instruction": "Choose preserve-and-migrate or the explicitly authorized clean-epoch reset for each named control-plane owner.",
+          "node_id": "choose_route",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "migration-record"
+          ],
+          "instruction": "Execute the canonical AppSDK migration/reset and the separate Collab migration/reset through their respective owners; never substitute one transaction for the other.",
+          "node_id": "apply_route",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "verify-result"
+          ],
+          "instruction": "Verify the resulting single governance truth.",
+          "node_id": "migration_verify",
+          "owner": "project"
+        }
+      ],
+      "objective": "Reconcile or reset legacy governance through an explicit, auditable route."
+    },
+    {
+      "domain": "governance-preflight",
+      "edges": [
+        {
+          "from": "goal_scope",
+          "to": "architecture_maps"
+        },
+        {
+          "from": "architecture_maps",
+          "to": "owner_worktree"
+        },
+        {
+          "from": "owner_worktree",
+          "to": "preflight_verify"
+        }
+      ],
+      "entry_node": "goal_scope",
+      "nodes": [
+        {
+          "evidence": [
+            "goal-record"
+          ],
+          "instruction": "Confirm objective, scope, acceptance, non-goals, and owner.",
+          "node_id": "goal_scope",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "map-check"
+          ],
+          "instruction": "Bind resource, function, mainline, verification, and module maps.",
+          "node_id": "architecture_maps",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "worktree-record"
+          ],
+          "instruction": "Create the clean owner worktree from latest origin/main.",
+          "node_id": "owner_worktree",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "verify-result"
+          ],
+          "instruction": "Run the applicable AppSDK and project preflight checks.",
+          "node_id": "preflight_verify",
+          "owner": "project"
+        }
+      ],
+      "objective": "Bind goal, module, owner, maps, worktree, and required gates before code work."
+    },
+    {
+      "domain": "develop",
+      "edges": [
+        {
+          "from": "requirements",
+          "to": "map_check"
+        },
+        {
+          "from": "map_check",
+          "to": "architecture"
+        },
+        {
+          "from": "map_check",
+          "to": "implementation"
+        },
+        {
+          "from": "architecture",
+          "to": "detailed_design"
+        },
+        {
+          "from": "architecture",
+          "to": "implementation"
+        },
+        {
+          "from": "detailed_design",
+          "to": "implementation"
+        },
+        {
+          "from": "implementation",
+          "to": "candidate"
+        },
+        {
+          "from": "candidate",
+          "to": "validation"
+        },
+        {
+          "from": "validation",
+          "to": "map_update"
+        },
+        {
+          "from": "validation",
+          "to": "review"
+        },
+        {
+          "from": "map_update",
+          "to": "review"
+        },
+        {
+          "from": "review",
+          "to": "effectiveness"
+        },
+        {
+          "from": "effectiveness",
+          "to": "integration"
+        },
+        {
+          "from": "integration",
+          "to": "promotion"
+        },
+        {
+          "from": "integration",
+          "to": "cleanup"
+        },
+        {
+          "from": "promotion",
+          "to": "cleanup"
+        }
+      ],
+      "entry_node": "requirements",
+      "nodes": [
+        {
+          "evidence": [
+            "requirements"
+          ],
+          "instruction": "Define the user-visible contract, scope, non-goals, acceptance, and required evidence; reuse an existing confirmed decision when present.",
+          "node_id": "requirements",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "function-map-binding",
+            "verification-map-binding"
+          ],
+          "instruction": "Read the declared function and verification maps, bind the owner, allowed and forbidden paths, required gates, and prior records, and note any map entry that the change must add.",
+          "node_id": "map_check",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "architecture-design"
+          ],
+          "instruction": "For a new project or meaningful cross-module or semantic change, close top-down modules, resources, boundaries, and mainline flow; otherwise record why existing architecture is sufficient.",
+          "node_id": "architecture",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "detailed-design"
+          ],
+          "instruction": "When the change introduces non-trivial behavior, close calls, data, errors, and verification mapping before implementation.",
+          "node_id": "detailed_design",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "source-diff",
+            "worktree-record"
+          ],
+          "instruction": "Implement the smallest change through the mapped owner in a clean owner worktree.",
+          "node_id": "implementation",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "candidate-record"
+          ],
+          "instruction": "Create and bind the exact candidate commit and tree.",
+          "node_id": "candidate",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "validation-record"
+          ],
+          "instruction": "Run focused tests and mapped gates, then add build, install, restart, and same-entry replay only when the change affects those surfaces.",
+          "node_id": "validation",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "function-map-binding",
+            "verification-map-binding"
+          ],
+          "instruction": "Update declared function ownership, paths, call edges, and verification gates when the validated change altered them.",
+          "node_id": "map_update",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "architecture-conformance",
+            "review-record"
+          ],
+          "instruction": "Review the validated candidate against applicable quality, safety, evidence and owner contracts. Block concrete regressions; optional simplification and unrelated historical debt are advisory.",
+          "node_id": "review",
+          "owner": "project",
+          "reminders": [
+            {
+              "blocking": false,
+              "command": "project-memory review --run <run-id>",
+              "kind": "memory_review"
+            }
+          ]
+        },
+        {
+          "evidence": [
+            "effectiveness-record"
+          ],
+          "instruction": "Check effectiveness identity and freshness; reuse valid unchanged candidate evidence and rerun only affected checks on drift.",
+          "node_id": "effectiveness",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "mainline-receipt"
+          ],
+          "instruction": "Integrate on latest main and verify the exact integration tree.",
+          "node_id": "integration",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "freeze-record"
+          ],
+          "instruction": "Compile, publish Active, archive Protected, and freeze when required.",
+          "node_id": "promotion",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "cleanup-record"
+          ],
+          "instruction": "Record actual retained resources and owner or verified authorized removal. Delivery can complete with retention; do not claim Collab resource close before its cleanup requirements pass.",
+          "node_id": "cleanup",
+          "owner": "project"
+        }
+      ],
+      "objective": "Develop features through project context, proportionate design, exact validation, and verified cleanup."
+    },
+    {
+      "domain": "debug",
+      "edges": [
+        {
+          "from": "orient",
+          "to": "explore"
+        },
+        {
+          "from": "explore",
+          "to": "resolve"
+        },
+        {
+          "from": "resolve",
+          "to": "candidate"
+        },
+        {
+          "from": "candidate",
+          "to": "validation"
+        },
+        {
+          "from": "validation",
+          "to": "review"
+        },
+        {
+          "from": "review",
+          "to": "integration"
+        },
+        {
+          "from": "integration",
+          "to": "cleanup"
+        }
+      ],
+      "entry_node": "orient",
+      "nodes": [
+        {
+          "evidence": [
+            "orientation-record",
+            "function-map-binding",
+            "verification-map-binding"
+          ],
+          "instruction": "Read project AGENTS, declared function and verification maps, and existing run notes and records; bind the failing request to an owner and required gates.",
+          "node_id": "orient",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "exploration-record",
+            "debug-notes"
+          ],
+          "instruction": "Append observations, one active hypothesis, confirmation and falsification signals, and evidence to run notes; reproduce when feasible and locate the first semantic divergence.",
+          "node_id": "explore",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "resolution-record",
+            "red-green-test"
+          ],
+          "instruction": "After causal evidence, fix the unique mapped owner, add proportionate regression coverage, and update maps or gates when their truth changed.",
+          "node_id": "resolve",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "candidate-record"
+          ],
+          "instruction": "Create and bind the exact fix candidate.",
+          "node_id": "candidate",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "validation-record"
+          ],
+          "instruction": "Run focused tests and mapped gates, then choose build, install, restart, and original-input replay according to runtime impact.",
+          "node_id": "validation",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "architecture-conformance",
+            "review-record"
+          ],
+          "instruction": "Review the validated fix against applicable quality, safety, evidence and owner contracts. Block concrete regressions; optional simplification and unrelated historical debt are advisory.",
+          "node_id": "review",
+          "owner": "project",
+          "reminders": [
+            {
+              "blocking": false,
+              "command": "project-memory review --run <run-id>",
+              "kind": "memory_review"
+            }
+          ]
+        },
+        {
+          "evidence": [
+            "mainline-receipt"
+          ],
+          "instruction": "Integrate on latest main and verify the exact tree.",
+          "node_id": "integration",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "cleanup-record"
+          ],
+          "instruction": "Record evidence and actual retained resources or verified authorized removal; delivery and resource closure are separate.",
+          "node_id": "cleanup",
+          "owner": "project"
+        }
+      ],
+      "objective": "Orient to project truth, record evidence while exploring, and resolve through the unique mapped owner."
+    },
+    {
+      "domain": "review",
+      "edges": [
+        {
+          "from": "review_admission",
+          "to": "architecture_review"
+        },
+        {
+          "from": "architecture_review",
+          "to": "unchanged_effectiveness"
+        }
+      ],
+      "entry_node": "review_admission",
+      "nodes": [
+        {
+          "evidence": [
+            "pre-review-validation"
+          ],
+          "instruction": "Pass AppSDK review admission for the exact candidate.",
+          "node_id": "review_admission",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "architecture-conformance",
+            "review-record"
+          ],
+          "instruction": "Run the user-selected or configured review route. Block concrete quality, safety, contract and material structural regressions; optional simplifications are advisory.",
+          "node_id": "architecture_review",
+          "owner": "project",
+          "reminders": [
+            {
+              "blocking": false,
+              "command": "project-memory review --run <run-id>",
+              "kind": "memory_review"
+            }
+          ]
+        },
+        {
+          "evidence": [
+            "effectiveness-record"
+          ],
+          "instruction": "Replay effectiveness without source drift.",
+          "node_id": "unchanged_effectiveness",
+          "owner": "project"
+        }
+      ],
+      "objective": "Admit and review the exact evidence-bound candidate."
+    },
+    {
+      "domain": "delivery",
+      "edges": [
+        {
+          "from": "whitebox",
+          "to": "build"
+        },
+        {
+          "from": "build",
+          "to": "install"
+        },
+        {
+          "from": "build",
+          "to": "restart"
+        },
+        {
+          "from": "build",
+          "to": "blackbox"
+        },
+        {
+          "from": "install",
+          "to": "restart"
+        },
+        {
+          "from": "install",
+          "to": "blackbox"
+        },
+        {
+          "from": "restart",
+          "to": "blackbox"
+        },
+        {
+          "from": "blackbox",
+          "to": "bind_validation"
+        }
+      ],
+      "entry_node": "whitebox",
+      "nodes": [
+        {
+          "evidence": [
+            "whitebox-evidence"
+          ],
+          "instruction": "Run project-owned internal validation.",
+          "node_id": "whitebox",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "artifact"
+          ],
+          "instruction": "Build the exact candidate artifact.",
+          "node_id": "build",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "install-receipt"
+          ],
+          "instruction": "Install the exact artifact into the declared environment.",
+          "node_id": "install",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "restart-receipt"
+          ],
+          "instruction": "Restart the declared runtime when required.",
+          "node_id": "restart",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "blackbox-evidence"
+          ],
+          "instruction": "Replay through the public deployed entrypoint.",
+          "node_id": "blackbox",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "pre-review-validation"
+          ],
+          "instruction": "Bind whitebox, artifact, deployment, and blackbox evidence.",
+          "node_id": "bind_validation",
+          "owner": "project"
+        }
+      ],
+      "objective": "Prove the candidate through its real deployed entrypoint."
+    },
+    {
+      "domain": "communication-recovery",
+      "edges": [
+        {
+          "from": "preserve_error",
+          "to": "inspect_state"
+        },
+        {
+          "from": "inspect_state",
+          "to": "recover_route"
+        },
+        {
+          "from": "recover_route",
+          "to": "verify_route"
+        },
+        {
+          "from": "verify_route",
+          "to": "replay_native"
+        },
+        {
+          "from": "replay_native",
+          "to": "consume_receipt"
+        }
+      ],
+      "entry_node": "preserve_error",
+      "nodes": [
+        {
+          "evidence": [
+            "communication-failure-record"
+          ],
+          "instruction": "Persist the exact error, durable IDs, source commit, installed binary, daemon PID/socket, and current task/bug binding; do not classify ACK, notification acceptance, health, or timeout as delivery.",
+          "node_id": "preserve_error",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "communication-state"
+          ],
+          "instruction": "Run `collab context` once and read the returned identity, route, daemon, task, inbox, and authority state. If the daemon is explicitly down or context returns a runtime error, preserve the exact error and stop; daemon maintenance is human-authorized.",
+          "node_id": "inspect_state",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "recovery-receipt"
+          ],
+          "instruction": "If context returns `required_fields`, supply only those real facts once with `collab context --provide '<JSON>'`. The supplement may contain only requested `session_id`, `thread_id`, `endpoint`, or `namespace` facts; it never supplies a worker, approval, token, route, or binding. The daemon owns identity creation, selection, recovery, registration, route publication, and lease restoration. Do not choose or hunt a worker and do not run a separate recovery command.",
+          "node_id": "recover_route",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "recovered-route"
+          ],
+          "instruction": "Use the snapshot returned by context or its one factual supplement. Continue only when it is registered and the target route is live; otherwise preserve the exact failure and stop.",
+          "node_id": "verify_route",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "native-target-result"
+          ],
+          "instruction": "Replay the same native target through the installed binary and record the target result item; queue acceptance or a daemon health response alone is insufficient.",
+          "node_id": "replay_native",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "durable-receipt",
+            "issue-update"
+          ],
+          "instruction": "Consume the durable receipt for the target result through the canonical receive/consume operation; read-only inspection alone does not close. Update the bound bug or feature record and close only when the result and receipt evidence are present.",
+          "node_id": "consume_receipt",
+          "owner": "project"
+        }
+      ],
+      "objective": "Restore communication after an exact route, identity, daemon, or transport failure and prove the original native path again."
+    },
+    {
+      "domain": "integration",
+      "edges": [
+        {
+          "from": "refresh_main",
+          "to": "integration_verify"
+        },
+        {
+          "from": "integration_verify",
+          "to": "merge_push"
+        },
+        {
+          "from": "merge_push",
+          "to": "remote_receipt"
+        }
+      ],
+      "entry_node": "refresh_main",
+      "nodes": [
+        {
+          "evidence": [
+            "main-base"
+          ],
+          "instruction": "Fetch latest origin/main and refresh the integration base.",
+          "node_id": "refresh_main",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "integration-record"
+          ],
+          "instruction": "Verify the exact integrated tree and affected gates.",
+          "node_id": "integration_verify",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "merge-record"
+          ],
+          "instruction": "Merge and push through the protected mainline route.",
+          "node_id": "merge_push",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "mainline-receipt"
+          ],
+          "instruction": "Observe the remote main ref and bind its receipt.",
+          "node_id": "remote_receipt",
+          "owner": "project"
+        }
+      ],
+      "objective": "Merge only an exact candidate verified against latest main."
+    },
+    {
+      "domain": "promotion",
+      "edges": [
+        {
+          "from": "regression",
+          "to": "compile"
+        },
+        {
+          "from": "compile",
+          "to": "publish"
+        }
+      ],
+      "entry_node": "regression",
+      "nodes": [
+        {
+          "evidence": [
+            "regression-report"
+          ],
+          "instruction": "Run and bind the required merged-source regression suite.",
+          "node_id": "regression",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "compiled-artifact"
+          ],
+          "instruction": "Compile the canonical merged project artifact.",
+          "node_id": "compile",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "promotion-record"
+          ],
+          "instruction": "Publish the immutable Active artifact.",
+          "node_id": "publish",
+          "owner": "project"
+        }
+      ],
+      "objective": "Turn a verified mainline source into immutable consumable output."
+    },
+    {
+      "domain": "freeze",
+      "edges": [
+        {
+          "from": "archive",
+          "to": "freeze_record"
+        },
+        {
+          "from": "freeze_record",
+          "to": "freeze_verify"
+        }
+      ],
+      "entry_node": "archive",
+      "nodes": [
+        {
+          "evidence": [
+            "protected-archive"
+          ],
+          "instruction": "Create the canonical Protected archive.",
+          "node_id": "archive",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "freeze-record"
+          ],
+          "instruction": "Bind source, artifact, API, regression, and promotion truth.",
+          "node_id": "freeze_record",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "verify-result"
+          ],
+          "instruction": "Verify Active and Protected immutability.",
+          "node_id": "freeze_verify",
+          "owner": "project"
+        }
+      ],
+      "objective": "Protect the exact published source, contracts, and artifact."
+    },
+    {
+      "domain": "cleanup",
+      "edges": [
+        {
+          "from": "cleanup_record",
+          "to": "remove_worktree"
+        },
+        {
+          "from": "remove_worktree",
+          "to": "release_claim"
+        }
+      ],
+      "entry_node": "cleanup_record",
+      "nodes": [
+        {
+          "evidence": [
+            "cleanup-record"
+          ],
+          "instruction": "Record retained evidence and disposable state.",
+          "node_id": "cleanup_record",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "worktree-removal"
+          ],
+          "instruction": "Remove the merged clean owner worktree and branch.",
+          "node_id": "remove_worktree",
+          "owner": "project"
+        },
+        {
+          "evidence": [
+            "claim-release"
+          ],
+          "instruction": "Release the task claim after worktree cleanup.",
+          "node_id": "release_claim",
+          "owner": "project"
+        }
+      ],
+      "objective": "Release only resources whose delivery and retention evidence is complete."
+    }
+  ]
+}
+{
+  "artifact_hash": "sha256:27d5045968bf6f764040fefe237c5db814870299ff7a95e2e536f18196445896",
+  "artifact_paths": [
+    "generated/modules/teams-source/package-receipt.json",
+    "generated/modules/teams-source/lib/package.json",
+    "generated/modules/teams-source/lib/cli/agentteams.mjs",
+    "generated/modules/teams-source/lib/generated/runtime-lib/network/wss-connection.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/network/relay-login.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-runtime.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-process.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-config.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-process.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-supervisor.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-process.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/server/relay.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/server/relay-process.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/agent/work-resource.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/config/runtime-config.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/endpoint-ref.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/json-value.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/relay-codec.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/work-wire.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/network/work-channel.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-work-client.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/host.js",
+    "generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/protocol.js",
+    "generated/modules/teams-source/lib/console-host/lib/index.mjs",
+    "generated/modules/teams-source/lib/console-host/lib/index.d.mts",
+    "generated/modules/teams-source/lib/console-host/static/console.html",
+    "generated/modules/teams-source/lib/console-host/static/console-entry.js",
+    "generated/modules/teams-source/lib/ui/teams-console/index.js",
+    "generated/modules/teams-source/lib/ui/teams-console/browser.js",
+    "generated/modules/teams-source/lib/ui/teams-console/client/render.js",
+    "generated/modules/teams-source/lib/ui/teams-console/assets/agentbrowser-icon.jpg",
+    "generated/modules/teams-source/lib/runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner",
+    "generated/modules/teams-source/lib/runtime/dagpipe/manifest.json",
+    "generated/modules/teams-source/lib/runtime/dagpipe/graphs/agent-work.graph.json",
+    "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-open.graph.json",
+    "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-request.graph.json",
+    "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-close.graph.json",
+    "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-query.graph.json"
+  ],
+  "artifact_schema": 1,
+  "artifacts": [
+    {
+      "hash": "sha256:e600bb7d6295bc954be9f6b06b0b739af8e15c14490515e903693e53faf0434f",
+      "path": "generated/modules/teams-source/package-receipt.json"
+    },
+    {
+      "hash": "sha256:e37961174e4dc6dd744466d5a2be46062c230e244c4f4409cc760bdc5ed40b84",
+      "path": "generated/modules/teams-source/lib/package.json"
+    },
+    {
+      "hash": "sha256:bf71deb5778099b6c83f9b6596a25cd771c4e99e34810410ba02e9f3c7c669f0",
+      "path": "generated/modules/teams-source/lib/cli/agentteams.mjs"
+    },
+    {
+      "hash": "sha256:33fdd0abdebbc00597c547014a5b501300ea487c5d76db6ef219af23e47e00c3",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/network/wss-connection.js"
+    },
+    {
+      "hash": "sha256:2542c4bcd0333a79b5f218c8a1e1f1526052f1f927582116447e9cbd09991f8b",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/network/relay-login.js"
+    },
+    {
+      "hash": "sha256:077e32e672c490f12e942be8d5e276400fdb4c64e75472a43492b851a405319d",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-runtime.js"
+    },
+    {
+      "hash": "sha256:701fed4b20f0c97d648c202a9c77939db7a54656d0d26407fecfb85d0ea2cd67",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/console-process.js"
+    },
+    {
+      "hash": "sha256:ed090ea68742b8f10202c5be8184e4d6644e8b6658dfc5b8c8e978b3e79db980",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-config.js"
+    },
+    {
+      "hash": "sha256:c1c7334a32c7dd5bc706f35bd0b1043d5e99e9e9fd93c7fa6ce1b64dbc34b054",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-process.js"
+    },
+    {
+      "hash": "sha256:23846596d94edb83f947d20d117f0dde6a8d52fd5a53f5611930f8690ad9d1b5",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/local-supervisor.js"
+    },
+    {
+      "hash": "sha256:0e11accd13c4895e56c3748bd67ec8e67f6c04dca2e48fbc04343d13e65d172a",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-process.js"
+    },
+    {
+      "hash": "sha256:7d2144d5263ea956fba4025b158f60cfb1c21a7213e7213e7534e7c602f8806c",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/server/relay.js"
+    },
+    {
+      "hash": "sha256:3387737036e7c54a6b8c54c370ce6a06fff25c0e43d70aafd67e3f310d4106bf",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/server/relay-process.js"
+    },
+    {
+      "hash": "sha256:c86065ecf8128ac0c5c427803bbb135e35ea804069912d8e8f26d3acb9396902",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/agent/work-resource.js"
+    },
+    {
+      "hash": "sha256:ddfbe5bdcbb37d438fa3bd844d70410cfbe7a925317fd1d954e6b0beb202a3fb",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/config/runtime-config.js"
+    },
+    {
+      "hash": "sha256:92a958a058f6aceadb0dbca90753008c6f957975921eab4446f09ec934f33e09",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/endpoint-ref.js"
+    },
+    {
+      "hash": "sha256:c29a7049f267407dfa1737fd4d6889a0952c569a4e1807bd3d4111d59c30d18f",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/json-value.js"
+    },
+    {
+      "hash": "sha256:5a43e3095b1f825a06783294cefad38aa1a24b29e485d49c6f645ff8ffac2741",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/relay-codec.js"
+    },
+    {
+      "hash": "sha256:2861b4896e5363be12b473ae9fbd18c89214be1e6f7e0f1e798691be3eebe01d",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/control-protocol/work-wire.js"
+    },
+    {
+      "hash": "sha256:1c3fcc905d69e8eeec4abdaff2122f23cb3bfd2b2eabb24cf0d97407950e0be9",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/network/work-channel.js"
+    },
+    {
+      "hash": "sha256:dc5aad448210f2b9426f32a9a6144c968fc076f14ffc4138ab58ed690a0e4b14",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/agent-work-client.js"
+    },
+    {
+      "hash": "sha256:4251cf36a36aabf633ff9278e3ebf459ff8a6296cacd333c464107839a3aabd7",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/host.js"
+    },
+    {
+      "hash": "sha256:b7dc82d7dd18e6d435d307dfe28ad3b7f79644ec301a3cdb2f9830212d9f88f0",
+      "path": "generated/modules/teams-source/lib/generated/runtime-lib/runtime/dagpipe/protocol.js"
+    },
+    {
+      "hash": "sha256:bcde17c3645418150d4301769ee6440789e59cfa45437a090a984d1c4f5f2c20",
+      "path": "generated/modules/teams-source/lib/console-host/lib/index.mjs"
+    },
+    {
+      "hash": "sha256:00c4effc3d29a956acceb1f167717ff93b3b86ae8dfde2d5df63ffa6cf87352b",
+      "path": "generated/modules/teams-source/lib/console-host/lib/index.d.mts"
+    },
+    {
+      "hash": "sha256:2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21",
+      "path": "generated/modules/teams-source/lib/console-host/static/console.html"
+    },
+    {
+      "hash": "sha256:da3abef3af6da4d6119bff1e195a1b4bfca83982981e0f093943b544836f0b15",
+      "path": "generated/modules/teams-source/lib/console-host/static/console-entry.js"
+    },
+    {
+      "hash": "sha256:a5ee64c2b8aabc7ae6b92b4eee4840ddca81190976d5b3b0490034f2c555ce95",
+      "path": "generated/modules/teams-source/lib/ui/teams-console/index.js"
+    },
+    {
+      "hash": "sha256:e0c26f25c15308a638ec4fca5d2cc58b50df3d266a647495248377ca92d52aa9",
+      "path": "generated/modules/teams-source/lib/ui/teams-console/browser.js"
+    },
+    {
+      "hash": "sha256:7d29d57e382ebe1df3cafa3fb79a290919c8c5aad0b864b9773e521fac036a30",
+      "path": "generated/modules/teams-source/lib/ui/teams-console/client/render.js"
+    },
+    {
+      "hash": "sha256:e310c0ee9f7ebb9da88f68498a90e6cd83f4540541574251c90da5e83e736587",
+      "path": "generated/modules/teams-source/lib/ui/teams-console/assets/agentbrowser-icon.jpg"
+    },
+    {
+      "hash": "sha256:a6f02fcf36b8bd279ec3dc3b0de992be02bbe3770a03660800ce69d4d679f875",
+      "path": "generated/modules/teams-source/lib/runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner"
+    },
+    {
+      "hash": "sha256:6f6eebaeb13303b108228e6af0e126f8a193b652bf1a5ef3680751ac2003f465",
+      "path": "generated/modules/teams-source/lib/runtime/dagpipe/manifest.json"
+    },
+    {
+      "hash": "sha256:868eaca31896dff5d260fe0a5d87a8d1c0f005f7a378a7703f747fdda4a3f974",
+      "path": "generated/modules/teams-source/lib/runtime/dagpipe/graphs/agent-work.graph.json"
+    },
+    {
+      "hash": "sha256:a31a356c5f2b22e3ced58213b3e3723e73304b4fd9ff0fe1c148d8c6db6843f6",
+      "path": "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-open.graph.json"
+    },
+    {
+      "hash": "sha256:cb19ed740057304decd76eb64bb33a44fac89ca4e061f220ffcd15bf07c028b8",
+      "path": "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-request.graph.json"
+    },
+    {
+      "hash": "sha256:0682d0937d504b9daa66b91133348089289716df62abfbee41bbce004896d34f",
+      "path": "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-close.graph.json"
+    },
+    {
+      "hash": "sha256:9903e27c0833c11aee9bdb2803e530386d59cb64eff9c3bbdf90cdf90ca26bf0",
+      "path": "generated/modules/teams-source/lib/runtime/dagpipe/graphs/work-query.graph.json"
+    }
+  ],
+  "build": {
+    "args": [
+      "build:governance"
+    ],
+    "program": "pnpm",
+    "working_directory": "."
+  },
+  "contract_hash": "sha256:6c405d10c78153f92a2ef1ea6009c4de871b0f05d45494ee7e28d059ed43b8bf",
+  "dependency_hashes": [],
+  "deployment_operations": [
+    "install",
+    "restart"
+  ],
+  "module_id": "teams-source",
+  "public_api_hash": "sha256:4cf9cc221a11170ffbc76d962ac97492bc5603572fc032d0026dbf814bebf98c",
+  "source_hash": "sha256:2259179dbe724816bc29839b4f35f8e753ad10cdcc91e9d896d7c3461f7d48a1",
+  "stage": "source_implemented"
+}
+{
+  "artifact_hash": "sha256:cd9309e82108a699de08b72cc758bee9a3e94bc0cf967b6a625ee09d47257e32",
+  "artifact_schema": 1,
+  "modules": [
+    {
+      "active_artifact": "active/lib/teams-source/**",
+      "generated_outputs": [
+        "generated/modules/teams-source/**"
+      ],
+      "module_id": "teams-source",
+      "owned_paths": [
+        "agent/**",
+        "agent-host/**",
+        "cli-adapter/**",
+        "endpoint/**",
+        "config/**",
+        "control-protocol/**",
+        "network/**",
+        "runtime/**",
+        "server/**",
+        "opencode-adapter/src/**",
+        "opencode-adapter/tests/**",
+        "opencode-adapter/package.json",
+        "opencode-adapter/tsconfig.json",
+        "opencode-adapter/tsdown.config.ts",
+        "console-host/src/**",
+        "console-host/tests/**",
+        "console-host/static/**",
+        "console-host/package.json",
+        "console-host/tsconfig.json",
+        "console-host/vitest.config.ts",
+        "ui/teams-console/src/**",
+        "ui/teams-console/tests/**",
+        "ui/teams-console/package.json",
+        "ui/teams-console/tsconfig.json",
+        "ui/teams-console/vitest.config.ts",
+        "ui/teams-console/tsconfig.build.json",
+        "ui/teams-console/fixture/**",
+        "ui/teams-console/assets/**",
+        "memory-plugin/**",
+        "search-plugin/**",
+        "docs/**",
+        "scripts/**",
+        "AGENTS.md",
+        "README.md",
+        "package.json",
+        "pnpm-workspace.yaml",
+        "pnpm-lock.yaml",
+        "tsconfig.json",
+        "tsconfig.runtime.json",
+        "vitest.config.ts",
+        ".gitignore"
+      ],
+      "regression": {
+        "allow_skipped": false,
+        "command": {
+          "args": [
+            "test"
+          ],
+          "program": "pnpm",
+          "working_directory": "."
+        },
+        "input_paths": [
+          "agent/**",
+          "agent-host/**",
+          "endpoint/**",
+          "config/**",
+          "control-protocol/**",
+          "network/**",
+          "runtime/**",
+          "server/**",
+          "opencode-adapter/src/**",
+          "opencode-adapter/tests/**",
+          "opencode-adapter/package.json",
+          "opencode-adapter/tsconfig.json",
+          "opencode-adapter/tsdown.config.ts",
+          "console-host/src/**",
+          "console-host/tests/**",
+          "console-host/static/**",
+          "console-host/package.json",
+          "console-host/tsconfig.json",
+          "console-host/vitest.config.ts",
+          "ui/teams-console/src/**",
+          "ui/teams-console/tests/**",
+          "ui/teams-console/package.json",
+          "ui/teams-console/tsconfig.json",
+          "ui/teams-console/vitest.config.ts",
+          "ui/teams-console/tsconfig.build.json",
+          "ui/teams-console/fixture/**",
+          "ui/teams-console/assets/**",
+          "memory-plugin/**",
+          "search-plugin/**",
+          "scripts/**",
+          "package.json",
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          "tsconfig.json",
+          "tsconfig.runtime.json",
+          "vitest.config.ts",
+          "docs/architecture/**"
+        ],
+        "minimum_test_count": 304,
+        "ordinary_mode_after_freeze": "disabled",
+        "reenable_on": [
+          "source_change",
+          "contract_change",
+          "public_api_change",
+          "artifact_change",
+          "dependency_change"
+        ],
+        "required_before_freeze": true,
+        "suite_id": "teams-source-regression"
+      },
+      "source_owner": "teams-source",
+      "stage": "source_implemented"
+    }
+  ],
+  "project_id": "agentteams",
+  "sdk": {
+    "bundle_manifest": ".appsdk/contracts/sdk-bundle.manifest.json",
+    "name": "appsdk",
+    "resource_record": ".appsdk/sdk-resources.json",
+    "version": "0.1.0012"
+  }
+}
+
+> agentteams@0.1.0 smoke /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node scripts/artifact-smoke.mjs && node scripts/runtime-smoke.mjs
+
+Packaged Console smoke passed: one staged final pack root, actual Basic auth, static/UI bytes, and owner-denied API. No provider or cross-device claim.
+Packaged runtime smoke passed: real TLS Relay, daemon library admission/directory, stop and fresh generation. No OS process deployment, executor or NAT claim.
+{"baseline_status":"current","command_ok":true,"delivery_assessed":false,"delivery_verified":false,"development_ready":true,"ok":false,"project_id":"agentteams","reason":"delivery_not_evaluated","stage":"contract_bound","test_governance":{"mode":"off","objects":[],"status":"not_selected"}}
+verify exit=0
+14:11:25 build start
+
+> agentteams@0.1.0 build:governance /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> pnpm build && node scripts/package-artifact.mjs --mode final
+
+
+> agentteams@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> pnpm --dir opencode-adapter build && pnpm --dir console-host build && pnpm --dir ui/teams-console build && pnpm build:runtime
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    39.88 kB │ gzip: 9.71 kB
+ℹ lib/index.d.mts  26.99 kB │ gzip: 6.09 kB
+ℹ 2 files, total: 66.87 kB
+✔ Build complete in 623ms
+
+> @deepseek-ai/teams-console-host@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/console-host
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/console-host/package.json 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    14.40 kB │ gzip: 4.29 kB
+ℹ lib/index.d.mts  17.36 kB │ gzip: 3.83 kB
+ℹ 2 files, total: 31.76 kB
+✔ Build complete in 536ms
+
+> @deepseek-ai/teams-console@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/ui/teams-console
+> tsc -p tsconfig.build.json && node scripts/finalize-build.mjs
+
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/dagpipe/.build/build-ddh2Lx)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.48s
+package artifact final agentteams@0.1.0 fa457369457fb98336bf676e3a88fddade2f9e5ef93d48397377edeff04fda73 generated/modules/teams-source/lib
+build exit=0
+14:11:35 admission start
+
+> agentteams@0.1.0 lifecycle:admission /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node scripts/lifecycle-adapter.mjs
+
+{"ok":true,"attempt":"attempt-1791493896644-29254883-8dec-4741-82b4-664c7868c0d8","candidate":"4aeaf50465978ef724d60b9bd251a249a8a7b8f1","artifact_hash":"sha256:cf66e735bdf6a48d9c2eabedad5a1429437cb5396f865227ba93571962f207f5","records":"/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/.appsdk/records/pre-review-validation-record-teams-source-4aeaf50465978ef724d60b9bd251a249a8a7b8f1-attempt-1791493896644-29254883-8dec-4741-82b4-664c7868c0d8.json"}
+admission exit=0
+14:14:12 all end
+?? .appsdk/records/

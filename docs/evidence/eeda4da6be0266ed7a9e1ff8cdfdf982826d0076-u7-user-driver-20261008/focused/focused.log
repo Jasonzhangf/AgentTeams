@@ -1,0 +1,4 @@
+14:15:26 focused start
+{"receipt":"/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v7/focused.receipt.json","cases":[{"case_id":"BB06","status":"passed"},{"case_id":"BB09","status":"passed"},{"case_id":"BB10","status":"passed"}],"exit_code":0}
+focused exit=0
+14:18:36 focused end

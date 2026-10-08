@@ -1,0 +1,21 @@
+{
+  "declared": "file-search@1:search[search-slot:2:slot]",
+  "projected": "file-search@1:search[search-slot:2:slot]",
+  "capabilityDetails": [
+    {
+      "capabilityId": "file-search",
+      "version": "1",
+      "operations": [
+        "search"
+      ],
+      "resources": [
+        {
+          "resourceId": "search-slot",
+          "capacity": 2,
+          "unit": "slot"
+        }
+      ]
+    }
+  ],
+  "rendered": "BB09-Providerbb-machine · 在线0 通知会话运行环境未生效能力: file-search已声明服务file-search · 1操作: searchsearch-slot · 声明容量: 2 slot详情配置"
+}

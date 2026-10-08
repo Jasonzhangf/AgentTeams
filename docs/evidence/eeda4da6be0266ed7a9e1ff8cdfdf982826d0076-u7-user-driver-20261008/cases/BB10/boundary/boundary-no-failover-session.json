@@ -1,0 +1,19 @@
+{
+  "created": {
+    "ok": true,
+    "result": {
+      "kind": "session.create",
+      "agentId": "bb-provider",
+      "sessionId": "ses_ee29959fdffe4tt2OABrcoTCT2",
+      "title": "BB10 boundary no implicit failover",
+      "directory": "/private/tmp/agentteams-u7-bb10-boundary-nQ09Iv/home/.agentteams/data/bb-provider",
+      "time": {
+        "created": 1791494628866,
+        "updated": 1791494628866
+      }
+    }
+  },
+  "opened": {
+    "ok": true
+  }
+}

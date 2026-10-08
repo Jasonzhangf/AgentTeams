@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "click",
+    "--profile",
+    "bb09-main-65980",
+    "--selector",
+    ".teams-panel .teams-header-actions button:nth-of-type(2)"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"click\",\n  \"profile\": \"bb09-main-65980\",\n  \"target\": \"t_e7c217230272\",\n  \"selector\": \".teams-panel .teams-header-actions button:nth-of-type(2)\",\n  \"text\": null,\n  \"button\": \"left\",\n  \"dialogAction\": null,\n  \"dialogText\": null,\n  \"dialog\": null,\n  \"timeout\": null,\n  \"clicked\": true,\n  \"issuedAt\": \"2026-10-08T21:16:03.429Z\",\n  \"traceId\": \"cli-1791494163392\"\n}\n",
+  "stderr": ""
+}

@@ -1,0 +1,24 @@
+{
+  "stop_stdout": "stopped state=stopped generation=1 config=/tmp/agentteams-u7-bb09-static-D1fH69/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-static-D1fH69/home/.agentteams/internal.toml pid=74125\n",
+  "stopped_stdout": "status state=stopped generation=1 config=/tmp/agentteams-u7-bb09-static-D1fH69/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-static-D1fH69/home/.agentteams/internal.toml pid=74125 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB09-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB09-Receiver role=receiver presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=1 consoleCredential=configured\n",
+  "pids": [
+    74125,
+    74164,
+    74207,
+    74330
+  ],
+  "pids_alive_after_stop": [],
+  "browser_profiles": [
+    {
+      "profile": "bb09-static-42697",
+      "stop_status": 0,
+      "daemon_status": 0
+    },
+    {
+      "profile": "bb09-static-nocred-42697",
+      "stop_status": 2,
+      "daemon_status": 0
+    }
+  ],
+  "temporary_root_removed": true
+}

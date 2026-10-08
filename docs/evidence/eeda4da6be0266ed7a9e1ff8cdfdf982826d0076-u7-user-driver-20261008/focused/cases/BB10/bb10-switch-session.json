@@ -1,0 +1,19 @@
+{
+  "created": {
+    "ok": true,
+    "result": {
+      "kind": "session.create",
+      "agentId": "bb-provider",
+      "sessionId": "ses_ee29f77b2ffeAi7btmyrZbr9kE",
+      "title": "BB10 real canonical model",
+      "directory": "/private/tmp/agentteams-u7-bb10-xtoHeZ/home/.agentteams/data/bb-provider",
+      "time": {
+        "created": 1791494228045,
+        "updated": 1791494228045
+      }
+    }
+  },
+  "opened": {
+    "ok": true
+  }
+}

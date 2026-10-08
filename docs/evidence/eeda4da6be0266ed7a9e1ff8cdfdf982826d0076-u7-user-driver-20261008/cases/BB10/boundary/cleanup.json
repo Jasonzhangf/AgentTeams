@@ -1,0 +1,14 @@
+{
+  "stopped": true,
+  "stop_stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-nQ09Iv/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-nQ09Iv/home/.agentteams/internal.toml pid=88131\n",
+  "stopped_stdout": "status state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-nQ09Iv/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-nQ09Iv/home/.agentteams/internal.toml pid=88131 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB-Session role=provider presence=offline generation=1 capabilities=- endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB-Passive role=provider presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=3 consoleCredential=configured\n",
+  "console_listener_gone": true,
+  "owned_pids_after_stop": [
+    88131,
+    88132,
+    88140,
+    88213
+  ],
+  "owned_pids_alive_after_stop": [],
+  "temporary_root_removed": true
+}

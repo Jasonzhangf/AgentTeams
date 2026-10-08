@@ -1,0 +1,14 @@
+{
+  "profiles": [
+    {
+      "profile": "bb09-main-65980",
+      "stop_status": 0,
+      "daemon_status": 0
+    },
+    {
+      "profile": "bb09-nocred-65980",
+      "stop_status": 2,
+      "daemon_status": 0
+    }
+  ]
+}

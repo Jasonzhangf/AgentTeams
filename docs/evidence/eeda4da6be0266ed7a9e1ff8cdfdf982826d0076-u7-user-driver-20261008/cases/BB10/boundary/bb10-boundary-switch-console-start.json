@@ -1,0 +1,13 @@
+{
+  "command": "/tmp/agentteams-u7-bb10-boundary-nQ09Iv/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "console",
+    "start",
+    "--config",
+    "/tmp/agentteams-u7-bb10-boundary-nQ09Iv/home/.agentteams/config.toml"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "console launcher=running console=enabled consoleState=online consoleGeneration=2 consoleCredential=configured consoleUrl=http://127.0.0.1:64284 consolePid=87189\n",
+  "stderr": ""
+}

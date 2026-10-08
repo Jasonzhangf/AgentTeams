@@ -1,0 +1,18 @@
+{
+  "prompt": "请用一句简短中文解释什么是回声。不要调用工具，也不要读写文件。",
+  "dispatch": {
+    "ok": true
+  },
+  "final": {
+    "eventId": "message.updated:ses_ee29f77b2ffeAi7btmyrZbr9kE:msg_11d60897d001Ppx9W2N2LHckHA",
+    "sessionId": "ses_ee29f77b2ffeAi7btmyrZbr9kE",
+    "agentId": "bb-provider",
+    "kind": "final",
+    "state": "completed",
+    "messageId": "msg_11d60897d001Ppx9W2N2LHckHA",
+    "finish": "stop"
+  },
+  "assistant_text": "回声是声音遇到障碍物反射回来、与原声有一段时间延迟的现象。",
+  "assistant_parts": 2,
+  "finish": "stop"
+}

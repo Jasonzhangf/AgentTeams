@@ -1,0 +1,12 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "stop",
+    "--profile",
+    "teams-bb-provider-dbb5c6fdd8c67ebcf41a620d82cb5549159e5f9a4b3961326b0884661e06a944"
+  ],
+  "status": 2,
+  "signal": null,
+  "stdout": "",
+  "stderr": "camo: no active daemon for profile \"teams-bb-provider-dbb5c6fdd8c67ebcf41a620d82cb5549159e5f9a4b3961326b0884661e06a944\". Run 'camo daemon start --profile teams-bb-provider-dbb5c6fdd8c67ebcf41a620d82cb5549159e5f9a4b3961326b0884661e06a944' first, or set CAMO_AUTOSTART=1.\n"
+}

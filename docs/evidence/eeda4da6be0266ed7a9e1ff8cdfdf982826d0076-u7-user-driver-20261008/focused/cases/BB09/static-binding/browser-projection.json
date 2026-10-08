@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB09-Provider",
+      "presence": "online",
+      "capabilities": [
+        "file-search"
+      ],
+      "capabilityDetails": [
+        {
+          "capabilityId": "file-search",
+          "version": "1",
+          "operations": [
+            "search"
+          ],
+          "resources": [
+            {
+              "resourceId": "search-slot",
+              "capacity": 2,
+              "unit": "slot"
+            }
+          ]
+        }
+      ],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "no-current",
+      "sessionObservation": {
+        "state": "live"
+      }
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB09-Receiver",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 0,
+      "applyState": "clean",
+      "providers": [
+        {
+          "id": "bb-console-stub",
+          "label": "BB09 Console Stub",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:61021/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-console-model",
+              "label": "BB09 Stub Model"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": []
+}

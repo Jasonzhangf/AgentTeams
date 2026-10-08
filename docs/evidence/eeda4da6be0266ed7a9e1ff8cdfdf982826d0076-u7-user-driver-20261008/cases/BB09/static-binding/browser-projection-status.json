@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-static-42697",
+    "--script",
+    "fetch('/api/v1/projection', { method: 'GET' }).then(r => r.status)"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-static-42697\",\n  \"target\": \"t_2f9821282ae0\",\n  \"result\": 200,\n  \"issuedAt\": \"2026-10-08T21:22:55.163Z\",\n  \"traceId\": \"cli-1791494575125\"\n}\n",
+  "stderr": ""
+}

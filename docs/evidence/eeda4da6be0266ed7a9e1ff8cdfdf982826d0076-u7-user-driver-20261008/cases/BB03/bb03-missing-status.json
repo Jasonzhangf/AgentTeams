@@ -1,0 +1,12 @@
+{
+  "command": "/tmp/agentteams-u7-bb03-vMRz7u/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "status",
+    "--config",
+    "/tmp/agentteams-u7-bb03-vMRz7u/home/.agentteams/config.toml"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "status state=failed generation=2 config=/tmp/agentteams-u7-bb03-vMRz7u/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb03-vMRz7u/home/.agentteams/internal.toml pid=48243 error=local agent exited before readiness code=1 signal=null stderr=INVALID_INPUT: camoExecutable cannot be inspected: ENOENT: no such file or directory, lstat '/missing/camo'\n endpoints=missing console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+  "stderr": ""
+}

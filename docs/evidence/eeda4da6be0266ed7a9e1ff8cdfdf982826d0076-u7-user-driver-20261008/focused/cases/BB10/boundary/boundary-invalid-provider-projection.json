@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB-Session",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "current",
+      "sessionObservation": {
+        "state": "degraded",
+        "reason": "projection-loss",
+        "detail": "unsupported OpenCode event catalog.updated",
+        "droppedEvents": 50
+      },
+      "sessionEffectiveRevision": 3,
+      "currentSessionId": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+      "providerId": "bb-manual",
+      "modelId": "bb-manual-model"
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB-Passive",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [
+    {
+      "agentId": "bb-provider",
+      "sessionId": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+      "title": "BB10 boundary manual selection"
+    }
+  ],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 4,
+      "applyState": "clean",
+      "effectiveRevision": 3,
+      "providers": [
+        {
+          "id": "bb-primary",
+          "label": "BB Boundary Invalid Credential",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:61494/v1",
+          "enabled": true,
+          "authKind": "bearer",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-primary-model",
+              "label": "BB Primary Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-backup",
+          "label": "BB Backup",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:61492/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-backup-model",
+              "label": "BB Backup Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-manual",
+          "label": "BB Manual",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:61493/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "empty",
+          "models": [
+            {
+              "id": "bb-manual-model",
+              "label": "BB Boundary Manual Model"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": [],
+  "sessionEvents": [
+    {
+      "eventId": "message.updated:ses_ee29f40b3ffeKnmCGaHdwyj89d:msg_g3Mty6LzngLLQhzDbtWQ6MEvE7",
+      "sessionId": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_g3Mty6LzngLLQhzDbtWQ6MEvE7",
+      "role": "user"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee29f40b3ffeKnmCGaHdwyj89d:msg_g3Mty6LzngLLQhzDbtWQ6MEvE7",
+      "sessionId": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "pending",
+      "messageId": "msg_g3Mty6LzngLLQhzDbtWQ6MEvE7",
+      "partId": "prt_11d60bfa1001VM4xf2GCAwHOUc",
+      "partType": "text",
+      "text": "bb10 boundary manual selection probe"
+    },
+    {
+      "eventId": "message.updated:ses_ee29f40b3ffeKnmCGaHdwyj89d:msg_11d60c086001Zv2TA5RSAlFDBI",
+      "sessionId": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_11d60c086001Zv2TA5RSAlFDBI",
+      "role": "assistant"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee29f40b3ffeKnmCGaHdwyj89d:msg_11d60c086001Zv2TA5RSAlFDBI",
+      "sessionId": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_11d60c086001Zv2TA5RSAlFDBI",
+      "partId": "prt_11d60c25a001C1qlHXH7Nz41pM",
+      "partType": "step-start",
+      "sourcePart": {
+        "id": "prt_11d60c25a001C1qlHXH7Nz41pM",
+        "messageID": "msg_11d60c086001Zv2TA5RSAlFDBI",
+        "sessionID": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+        "type": "step-start"
+      }
+    },
+    {
+      "eventId": "message.part.updated:ses_ee29f40b3ffeKnmCGaHdwyj89d:msg_11d60c086001Zv2TA5RSAlFDBI",
+      "sessionId": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg_11d60c086001Zv2TA5RSAlFDBI",
+      "partId": "prt_11d60c25c001EW0Sv7yDqTCZBv",
+      "partType": "text",
+      "text": "bb-session-provider-ok"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee29f40b3ffeKnmCGaHdwyj89d:msg_11d60c086001Zv2TA5RSAlFDBI",
+      "sessionId": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_11d60c086001Zv2TA5RSAlFDBI",
+      "partId": "prt_11d60c262001QOTOSH4BVarte5",
+      "partType": "step-finish",
+      "sourcePart": {
+        "id": "prt_11d60c262001QOTOSH4BVarte5",
+        "reason": "stop",
+        "messageID": "msg_11d60c086001Zv2TA5RSAlFDBI",
+        "sessionID": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+        "type": "step-finish",
+        "tokens": {
+          "total": 2,
+          "input": 1,
+          "output": 1,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0
+      }
+    },
+    {
+      "eventId": "message.updated:ses_ee29f40b3ffeKnmCGaHdwyj89d:msg_11d60c086001Zv2TA5RSAlFDBI",
+      "sessionId": "ses_ee29f40b3ffeKnmCGaHdwyj89d",
+      "agentId": "bb-provider",
+      "kind": "final",
+      "state": "completed",
+      "messageId": "msg_11d60c086001Zv2TA5RSAlFDBI",
+      "finish": "stop"
+    }
+  ]
+}

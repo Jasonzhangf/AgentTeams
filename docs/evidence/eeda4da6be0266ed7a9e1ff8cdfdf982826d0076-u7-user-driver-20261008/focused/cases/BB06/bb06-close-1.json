@@ -1,0 +1,27 @@
+{
+  "command": "/tmp/agentteams-u7-bb06-XWHFQF/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "close",
+    "--config",
+    "/tmp/agentteams-u7-bb06-XWHFQF/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver-1",
+    "--work-id",
+    "5357629f-e65d-4ded-9416-c0d45e79092f",
+    "--provider",
+    "bb-provider",
+    "--provider-generation",
+    "1",
+    "--capability-id",
+    "browser",
+    "--capability-version",
+    "1",
+    "--operation",
+    "context.create"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\"status\":\"completed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"agentteams.work-close\",\"graphVersion\":\"1\",\"executionId\":\"56686d1e-7be5-469a-b7c0-76183b8588ea\",\"attemptId\":\"6708115a-7fca-48ba-8750-75e7b0ddc6a8\",\"workId\":\"5357629f-e65d-4ded-9416-c0d45e79092f\",\"requestId\":\"f93267ef-95aa-4dee-b09f-e7c6da782c43\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"browser\",\"capabilityVersion\":\"1\",\"operation\":\"context.create\",\"workClosure\":\"closed\"},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"completed\",\"graphId\":\"agentteams.work-close\",\"graphVersion\":\"1\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"close-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"close-work\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.close\",\"agentWork.dispose\"]}}\n",
+  "stderr": ""
+}

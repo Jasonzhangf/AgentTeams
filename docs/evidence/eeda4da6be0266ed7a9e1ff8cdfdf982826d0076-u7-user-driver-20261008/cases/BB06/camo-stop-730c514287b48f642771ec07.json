@@ -1,0 +1,12 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "stop",
+    "--profile",
+    "teams-bb-provider-233f18bf1d77eecbf312c197d367d29cf456d263730c514287b48f642771ec07"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"stop\",\n  \"profile\": \"teams-bb-provider-233f18bf1d77eecbf312c197d367d29cf456d263730c514287b48f642771ec07\",\n  \"ephemeral\": false,\n  \"state\": \"stopped\",\n  \"releasedAt\": \"2026-10-08T21:21:50.083Z\",\n  \"traceId\": \"cli-1791494510044\"\n}\n",
+  "stderr": ""
+}

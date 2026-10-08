@@ -1,0 +1,358 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB10-Real",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "current",
+      "sessionObservation": {
+        "state": "degraded",
+        "reason": "projection-loss",
+        "detail": "unsupported OpenCode event message.part.delta",
+        "droppedEvents": 77
+      },
+      "sessionEffectiveRevision": 0,
+      "currentSessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "providerId": "rcc-4444",
+      "modelId": "goaichat_openai.qwen3.8-max"
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB10-Passive",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [
+    {
+      "agentId": "bb-provider",
+      "sessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "title": "BB10 real RCC model"
+    }
+  ],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 2,
+      "applyState": "clean",
+      "effectiveRevision": 0,
+      "providers": [
+        {
+          "id": "rcc-4444",
+          "label": "RCC 4444",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:4444/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "goaichat_openai.qwen3.8-max",
+              "label": "RCC canonical model"
+            },
+            {
+              "id": "goaichat.glm-5.3",
+              "label": "goaichat.glm-5.3"
+            },
+            {
+              "id": "goaichat.qwen3.8-max-0902",
+              "label": "goaichat.qwen3.8-max-0902"
+            },
+            {
+              "id": "goaichat-ai.glm-5.3",
+              "label": "goaichat-ai.glm-5.3"
+            },
+            {
+              "id": "goaichat-ai.qwen3.8-max",
+              "label": "goaichat-ai.qwen3.8-max"
+            },
+            {
+              "id": "goaichat_ai_responses.deepseek-v4.1-flash",
+              "label": "goaichat_ai_responses.deepseek-v4.1-flash"
+            },
+            {
+              "id": "goaichat_ciyuan.deepseek-v4.1-flash",
+              "label": "goaichat_ciyuan.deepseek-v4.1-flash"
+            },
+            {
+              "id": "goaichat_ciyuan.glm-5.3",
+              "label": "goaichat_ciyuan.glm-5.3"
+            },
+            {
+              "id": "goaichat_ciyuan.qwen3.8-max",
+              "label": "goaichat_ciyuan.qwen3.8-max"
+            },
+            {
+              "id": "goaichat_model.deepseek-v4.1-flash",
+              "label": "goaichat_model.deepseek-v4.1-flash"
+            },
+            {
+              "id": "goaichat_model.glm-5.3",
+              "label": "goaichat_model.glm-5.3"
+            },
+            {
+              "id": "goaichat_model.qwen3.8-max",
+              "label": "goaichat_model.qwen3.8-max"
+            },
+            {
+              "id": "goaichat_responses.deepseek-v4.1-flash",
+              "label": "goaichat_responses.deepseek-v4.1-flash"
+            },
+            {
+              "id": "goaichat_vibe.deepseek-v4.1-flash",
+              "label": "goaichat_vibe.deepseek-v4.1-flash"
+            },
+            {
+              "id": "goaichat_vibe.glm-5.3",
+              "label": "goaichat_vibe.glm-5.3"
+            },
+            {
+              "id": "goaichat_vibe.qwen3.8-max",
+              "label": "goaichat_vibe.qwen3.8-max"
+            },
+            {
+              "id": "lifeai.wb-deepseek-v4.1-flash",
+              "label": "lifeai.wb-deepseek-v4.1-flash"
+            },
+            {
+              "id": "lifeai_chat.wb-deepseek-v4.1-flash",
+              "label": "lifeai_chat.wb-deepseek-v4.1-flash"
+            },
+            {
+              "id": "minimax_anthropic.MiniMax-M3",
+              "label": "minimax_anthropic.MiniMax-M3"
+            },
+            {
+              "id": "mtplx.mtplx-flash-next-optimized-speed",
+              "label": "mtplx.mtplx-flash-next-optimized-speed"
+            },
+            {
+              "id": "qiluyun.deepseek-v4.1-flash-sg",
+              "label": "qiluyun.deepseek-v4.1-flash-sg"
+            },
+            {
+              "id": "whitehat.deepseek-v4.1-flash",
+              "label": "whitehat.deepseek-v4.1-flash"
+            },
+            {
+              "id": "xmcc2.deepseek-v4.1-flash",
+              "label": "xmcc2.deepseek-v4.1-flash"
+            },
+            {
+              "id": "xmcc2.kimi-k3",
+              "label": "xmcc2.kimi-k3"
+            },
+            {
+              "id": "gpt-5.5",
+              "label": "gpt-5.5"
+            }
+          ]
+        },
+        {
+          "id": "goaichat-openai",
+          "label": "GoAIChat OpenAI",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "https://llm.goaichat.top/v1",
+          "enabled": true,
+          "authKind": "bearer",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "qwen3.8-max",
+              "label": "GoAIChat default model"
+            },
+            {
+              "id": "deepseek-v4-flash",
+              "label": "deepseek-v4-flash"
+            },
+            {
+              "id": "deepseek-v4-pro",
+              "label": "deepseek-v4-pro"
+            },
+            {
+              "id": "glm-5.2",
+              "label": "glm-5.2"
+            },
+            {
+              "id": "kimi-k2.6",
+              "label": "kimi-k2.6"
+            },
+            {
+              "id": "kimi-k2.7-code",
+              "label": "kimi-k2.7-code"
+            },
+            {
+              "id": "minimax-m3",
+              "label": "minimax-m3"
+            },
+            {
+              "id": "qwen3.7-plus",
+              "label": "qwen3.7-plus"
+            },
+            {
+              "id": "qwen3.6-plus",
+              "label": "qwen3.6-plus"
+            },
+            {
+              "id": "qwen3.7-max",
+              "label": "qwen3.7-max"
+            },
+            {
+              "id": "deepseek-v4-flash-0731",
+              "label": "deepseek-v4-flash-0731"
+            },
+            {
+              "id": "glm-5.3",
+              "label": "glm-5.3"
+            },
+            {
+              "id": "deepseek-v4-pro-0813",
+              "label": "deepseek-v4-pro-0813"
+            },
+            {
+              "id": "kimi-k3",
+              "label": "kimi-k3"
+            },
+            {
+              "id": "qwen3.8-max-0902",
+              "label": "qwen3.8-max-0902"
+            },
+            {
+              "id": "qwen3.8-flash",
+              "label": "qwen3.8-flash"
+            },
+            {
+              "id": "glm-5.3-flash",
+              "label": "glm-5.3-flash"
+            },
+            {
+              "id": "deepseek-v4.1-flash",
+              "label": "deepseek-v4.1-flash"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": [],
+  "sessionEvents": [
+    {
+      "eventId": "message.updated:ses_ee29f93f4ffetvWxcAbQqDj8kT:msg_Xi7f0C1uqbQ5GHrU5NvcegUQke",
+      "sessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_Xi7f0C1uqbQ5GHrU5NvcegUQke",
+      "role": "user"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee29f93f4ffetvWxcAbQqDj8kT:msg_Xi7f0C1uqbQ5GHrU5NvcegUQke",
+      "sessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "pending",
+      "messageId": "msg_Xi7f0C1uqbQ5GHrU5NvcegUQke",
+      "partId": "prt_11d606c66001tJfqZ6biHdcxU1",
+      "partType": "text",
+      "text": "请用一句简短中文解释什么是回声。不要调用工具，也不要读写文件。"
+    },
+    {
+      "eventId": "message.updated:ses_ee29f93f4ffetvWxcAbQqDj8kT:msg_11d606d59001d01RDyzV2J3qfu",
+      "sessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_11d606d59001d01RDyzV2J3qfu",
+      "role": "assistant"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee29f93f4ffetvWxcAbQqDj8kT:msg_11d606d59001d01RDyzV2J3qfu",
+      "sessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_11d606d59001d01RDyzV2J3qfu",
+      "partId": "prt_11d607ddf001AcVZSkVyY7Gfnn",
+      "partType": "step-start",
+      "sourcePart": {
+        "id": "prt_11d607ddf001AcVZSkVyY7Gfnn",
+        "messageID": "msg_11d606d59001d01RDyzV2J3qfu",
+        "sessionID": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+        "type": "step-start"
+      }
+    },
+    {
+      "eventId": "message.part.updated:ses_ee29f93f4ffetvWxcAbQqDj8kT:msg_11d606d59001d01RDyzV2J3qfu",
+      "sessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg_11d606d59001d01RDyzV2J3qfu",
+      "partId": "prt_11d607de1001v5rIMbqiffVlMK",
+      "partType": "reasoning",
+      "text": "The user asks in Chinese for a short one-sentence explanation of what an echo is. No tools, no file reading/writing."
+    },
+    {
+      "eventId": "message.part.updated:ses_ee29f93f4ffetvWxcAbQqDj8kT:msg_11d606d59001d01RDyzV2J3qfu",
+      "sessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg_11d606d59001d01RDyzV2J3qfu",
+      "partId": "prt_11d607de50014O2JGnyJgl1XpI",
+      "partType": "text",
+      "text": "回声是声音在传播中遇到障碍物反射回来，与原声有一定时间差后被听到的现象。"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee29f93f4ffetvWxcAbQqDj8kT:msg_11d606d59001d01RDyzV2J3qfu",
+      "sessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_11d606d59001d01RDyzV2J3qfu",
+      "partId": "prt_11d607dea001BfTERE3PfYIUiR",
+      "partType": "step-finish",
+      "sourcePart": {
+        "id": "prt_11d607dea001BfTERE3PfYIUiR",
+        "reason": "stop",
+        "messageID": "msg_11d606d59001d01RDyzV2J3qfu",
+        "sessionID": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+        "type": "step-finish",
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0
+      }
+    },
+    {
+      "eventId": "message.updated:ses_ee29f93f4ffetvWxcAbQqDj8kT:msg_11d606d59001d01RDyzV2J3qfu",
+      "sessionId": "ses_ee29f93f4ffetvWxcAbQqDj8kT",
+      "agentId": "bb-provider",
+      "kind": "final",
+      "state": "completed",
+      "messageId": "msg_11d606d59001d01RDyzV2J3qfu",
+      "finish": "stop"
+    }
+  ]
+}

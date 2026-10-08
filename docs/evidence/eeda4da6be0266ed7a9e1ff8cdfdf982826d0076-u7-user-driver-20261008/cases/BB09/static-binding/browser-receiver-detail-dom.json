@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-static-42697",
+    "--script",
+    "document.querySelector('.teams-drawer')?.textContent ?? ''"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-static-42697\",\n  \"target\": \"t_2f9821282ae0\",\n  \"result\": \"BB09-Receiverbb-machine展开关闭BB09-Receiverbb-machine · 在线 · 0 能力已声明服务该智能体未声明任何服务。\",\n  \"issuedAt\": \"2026-10-08T21:23:04.157Z\",\n  \"traceId\": \"cli-1791494584119\"\n}\n",
+  "stderr": ""
+}

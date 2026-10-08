@@ -1,0 +1,13 @@
+{
+  "command": "/tmp/agentteams-u7-bb09-shUV2i/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "console",
+    "status",
+    "--config",
+    "/tmp/agentteams-u7-bb09-shUV2i/home/.agentteams/config.toml"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "local Console control socket is unavailable: connect ENOENT /tmp/agentteams-u7-bb09-shUV2i/home/.agentteams/.internal/work-control.sock\n"
+}

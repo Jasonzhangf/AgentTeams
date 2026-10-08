@@ -1,0 +1,14 @@
+{
+  "command": "/private/tmp/agentteams-u7-bb11-mVoDIo/prefix/node_modules/agentteams/runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner",
+  "args": [
+    "compile",
+    "--graph",
+    "/private/tmp/agentteams-u7-bb11-mVoDIo/prefix/node_modules/agentteams/runtime/dagpipe/graphs/agent-work.graph.json",
+    "--capabilities",
+    "[]"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\"graph_id\":\"agentteams.agent-work\",\"graph_version\":\"2\",\"message\":\"node `resolve-service` requires undeclared capability `directory.read`\",\"stage\":\"compile\",\"type\":\"compile.failure\"}\n",
+  "stderr": ""
+}

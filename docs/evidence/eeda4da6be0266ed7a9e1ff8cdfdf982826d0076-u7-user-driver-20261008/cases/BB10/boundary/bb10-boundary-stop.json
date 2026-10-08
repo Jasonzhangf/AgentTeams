@@ -1,0 +1,14 @@
+{
+  "command": "/tmp/agentteams-u7-bb10-boundary-nQ09Iv/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "stop",
+    "--config",
+    "/tmp/agentteams-u7-bb10-boundary-nQ09Iv/home/.agentteams/config.toml",
+    "--generation",
+    "3"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-nQ09Iv/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-nQ09Iv/home/.agentteams/internal.toml pid=88131\n",
+  "stderr": ""
+}

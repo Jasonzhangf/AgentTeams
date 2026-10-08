@@ -1,0 +1,10 @@
+{
+  "command": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node",
+  "args": [
+    "scripts/lifecycle-adapter.mjs"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\"ok\":true,\"attempt\":\"attempt-1791495057926-359ea442-4d4e-4c68-b2ad-d41d8a865003\",\"candidate\":\"fc590c8f2b9c5dbea7a7c2bd5770e3bbb300879f\",\"artifact_hash\":\"sha256:56e12f9742e7f06b98c60544afb65dfea991fb0fc25d34908dc1a09f556aea1a\",\"records\":\"/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-u7-bb13-LSQfEx/.appsdk/records/pre-review-validation-record-teams-source-fc590c8f2b9c5dbea7a7c2bd5770e3bbb300879f-attempt-1791495057926-359ea442-4d4e-4c68-b2ad-d41d8a865003.json\"}\n",
+  "stderr": ""
+}

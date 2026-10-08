@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB-Session",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "current",
+      "sessionObservation": {
+        "state": "live"
+      },
+      "sessionEffectiveRevision": 4,
+      "providerId": "bb-manual",
+      "modelId": "bb-manual-model"
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB-Passive",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [
+    {
+      "agentId": "bb-provider",
+      "sessionId": "ses_ee2996af0ffeVyLE4NXSBpRQzN",
+      "title": "BB10 boundary manual selection"
+    }
+  ],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 4,
+      "applyState": "clean",
+      "effectiveRevision": 4,
+      "providers": [
+        {
+          "id": "bb-primary",
+          "label": "BB Boundary Invalid Credential",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:64277/v1",
+          "enabled": true,
+          "authKind": "bearer",
+          "catalogState": "error",
+          "error": {
+            "code": "UNAUTHENTICATED",
+            "message": "config: model catalog request returned HTTP 401",
+            "status": 401,
+            "providerInstanceId": "bb-primary"
+          },
+          "models": [
+            {
+              "id": "bb-primary-model",
+              "label": "BB Primary Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-backup",
+          "label": "BB Backup",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:64275/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-backup-model",
+              "label": "BB Backup Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-manual",
+          "label": "BB Manual",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:64276/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "empty",
+          "models": [
+            {
+              "id": "bb-manual-model",
+              "label": "BB Boundary Manual Model"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": []
+}

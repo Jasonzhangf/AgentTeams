@@ -1,0 +1,26 @@
+{
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 0,
+      "applyState": "clean",
+      "providers": [
+        {
+          "id": "bb-console-stub",
+          "label": "BB09 Console Stub",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:60714/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-console-model",
+              "label": "BB09 Stub Model"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

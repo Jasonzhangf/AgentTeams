@@ -1,0 +1,19 @@
+{
+  "created": {
+    "ok": true,
+    "result": {
+      "kind": "session.create",
+      "agentId": "bb-provider",
+      "sessionId": "ses_ee297dee8ffem2sCBCqyLMlbaI",
+      "title": "BB12 installed Session entry",
+      "directory": "/private/tmp/agentteams-u7-bb12-TTEeKe/home/.agentteams/data/bb-provider",
+      "time": {
+        "created": 1791494725911,
+        "updated": 1791494725911
+      }
+    }
+  },
+  "opened": {
+    "ok": true
+  }
+}

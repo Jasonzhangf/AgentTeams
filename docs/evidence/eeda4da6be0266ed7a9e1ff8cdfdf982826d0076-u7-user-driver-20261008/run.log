@@ -1,0 +1,4 @@
+14:20:47 full start
+{"receipt":"/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v7/full.receipt.json","cases":[{"case_id":"BB01","status":"passed"},{"case_id":"BB02","status":"passed"},{"case_id":"BB03","status":"passed"},{"case_id":"BB04","status":"passed"},{"case_id":"BB05","status":"passed"},{"case_id":"BB06","status":"passed"},{"case_id":"BB07","status":"passed"},{"case_id":"BB08","status":"passed"},{"case_id":"BB09","status":"passed"},{"case_id":"BB10","status":"passed"},{"case_id":"BB11","status":"passed"},{"case_id":"BB12","status":"passed"},{"case_id":"BB13","status":"passed"},{"case_id":"BB14","status":"passed"}],"exit_code":0}
+full exit=0
+14:34:56 full end

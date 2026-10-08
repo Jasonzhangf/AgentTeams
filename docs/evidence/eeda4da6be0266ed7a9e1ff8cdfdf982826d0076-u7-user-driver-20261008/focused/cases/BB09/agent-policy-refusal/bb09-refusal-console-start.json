@@ -1,0 +1,13 @@
+{
+  "command": "/tmp/agentteams-u7-bb09-refusal-BRHwuS/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "console",
+    "start",
+    "--config",
+    "/tmp/agentteams-u7-bb09-refusal-BRHwuS/home/.agentteams/config.toml"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "console launcher=running console=enabled consoleState=online consoleGeneration=1 consoleCredential=configured consoleUrl=http://127.0.0.1:60958 consolePid=79235\n",
+  "stderr": ""
+}

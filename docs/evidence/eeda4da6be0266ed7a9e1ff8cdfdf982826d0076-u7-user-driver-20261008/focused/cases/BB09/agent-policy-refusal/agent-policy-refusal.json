@@ -1,0 +1,24 @@
+{
+  "command": {
+    "kind": "config.refreshModels",
+    "agentId": "bb-provider",
+    "expectedRevision": 0,
+    "providerId": "bb-console-stub"
+  },
+  "http_status": 200,
+  "result": {
+    "ok": false,
+    "error": {
+      "code": "FORBIDDEN",
+      "message": "Agent management policy denied this request"
+    }
+  },
+  "accepted_revision_before": null,
+  "accepted_slice_present_before": false,
+  "accepted_revision_after": null,
+  "accepted_slice_present_after": false,
+  "accepted_revision_observation_source": "target Agent durable internal store",
+  "view_semantics_revision": 0,
+  "view_semantics_note": "derived from the product initial-view rule, not an HTTP readback",
+  "console_config_sha256": "55cf5d9a4139b2cf867f749560c7945d137feb437bbf5f0ede9278138c19b3e4"
+}

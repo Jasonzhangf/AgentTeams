@@ -1,0 +1,113 @@
+{
+  "refresh": {
+    "ok": true
+  },
+  "catalog_state": "empty",
+  "model_count": 0,
+  "accepted_revision_before": 1,
+  "put_model": {
+    "ok": true
+  },
+  "bind_model": {
+    "ok": true
+  },
+  "accepted_revision_after": 3,
+  "effective_before_restart": {
+    "config": {
+      "acceptedRevision": 2,
+      "effectiveRevision": 1,
+      "applyState": "clean"
+    },
+    "agent": {
+      "providerId": "bb-primary",
+      "modelId": "bb-primary-model",
+      "sessionEffectiveRevision": 1
+    },
+    "binding": {
+      "primary": {
+        "providerInstanceId": "bb-primary",
+        "modelId": "bb-primary-model"
+      },
+      "backup": {
+        "providerInstanceId": "bb-backup",
+        "modelId": "bb-backup-model"
+      }
+    }
+  },
+  "effective_before_apply": {
+    "config": {
+      "acceptedRevision": 3,
+      "effectiveRevision": 1,
+      "applyState": "clean"
+    },
+    "agent": {
+      "providerId": "bb-primary",
+      "modelId": "bb-primary-model",
+      "sessionEffectiveRevision": 1
+    },
+    "binding": {
+      "primary": {
+        "providerInstanceId": "bb-manual",
+        "modelId": "bb-manual-model"
+      },
+      "backup": {
+        "providerInstanceId": "bb-backup",
+        "modelId": "bb-backup-model"
+      }
+    }
+  },
+  "sampling_stages": {
+    "effective_before_restart": {
+      "after": "config.model.put",
+      "before": "manual config.bindModel",
+      "accepted_revision": 2,
+      "effective_revision": 1
+    },
+    "effective_before_apply": {
+      "after": "manual config.bindModel",
+      "before": "installed restart and explicit config.apply",
+      "accepted_revision": 3,
+      "effective_revision": 1
+    }
+  },
+  "restarted_accepted_revision": 3,
+  "effective_after_apply": {
+    "kind": "runtime",
+    "agentId": "bb-provider",
+    "machineId": "bb-machine",
+    "label": "BB-Session",
+    "presence": "online",
+    "capabilities": [],
+    "capabilityDetails": [],
+    "generation": 1,
+    "sessionCapable": true,
+    "sessionAvailability": "current",
+    "sessionObservation": {
+      "state": "live"
+    },
+    "sessionEffectiveRevision": 3,
+    "providerId": "bb-manual",
+    "modelId": "bb-manual-model"
+  },
+  "turn": {
+    "dispatch": {
+      "ok": true
+    },
+    "final": {
+      "eventId": "message.updated:ses_ee2996af0ffeVyLE4NXSBpRQzN:msg_11d669656001YD1ZI7uZllLg11",
+      "sessionId": "ses_ee2996af0ffeVyLE4NXSBpRQzN",
+      "agentId": "bb-provider",
+      "kind": "final",
+      "state": "completed",
+      "messageId": "msg_11d669656001YD1ZI7uZllLg11",
+      "finish": "stop"
+    },
+    "text": "bb-session-provider-ok"
+  },
+  "provider_request_model": "bb-manual-model",
+  "primary_requests_before": 0,
+  "backup_requests_before": 0,
+  "primary_requests": 0,
+  "backup_requests": 0,
+  "manual_requests": 1
+}

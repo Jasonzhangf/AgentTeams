@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-main-65980",
+    "--script",
+    "document.querySelector('.teams-drawer')?.textContent ?? ''"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-65980\",\n  \"target\": \"t_e7c217230272\",\n  \"result\": \"BB09-Providerbb-machine展开关闭BB09-Providerbb-machine · 在线 · 1 能力配置已声明服务file-search · 1操作: searchsearch-slot · 声明容量: 2 slot\",\n  \"issuedAt\": \"2026-10-08T21:16:02.429Z\",\n  \"traceId\": \"cli-1791494162388\"\n}\n",
+  "stderr": ""
+}
