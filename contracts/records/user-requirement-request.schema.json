@@ -1,0 +1,105 @@
+{
+  "$id": "https://appsdk.local/contracts/records/user-requirement-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "create",
+              "replace"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "revoke",
+              "cancel"
+            ]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "text"
+          ]
+        }
+      }
+    }
+  ],
+  "properties": {
+    "authorization": {
+      "additionalProperties": false,
+      "properties": {
+        "original_text": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "role": {
+          "const": "user"
+        },
+        "source": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "source",
+        "original_text"
+      ],
+      "type": "object"
+    },
+    "base_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "operation": {
+      "enum": [
+        "create",
+        "replace",
+        "revoke",
+        "cancel"
+      ]
+    },
+    "project_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "request_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "requirement_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "text": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "request_id",
+    "requirement_id",
+    "base_version",
+    "operation",
+    "authorization"
+  ],
+  "title": "user-requirement-request",
+  "type": "object"
+}
