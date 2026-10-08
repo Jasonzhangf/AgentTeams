@@ -2488,7 +2488,9 @@ function observationToToml(observation: ProviderCatalogObservation): LocalIntern
     providerFingerprint: observation.providerFingerprint,
     observedAcceptedRevision: observation.observedAcceptedRevision,
     observedAcceptedSourceRevision: observation.observedAcceptedSourceRevision,
-    observedAcceptedSourceHash: observation.observedAcceptedSourceHash,
+    ...(observation.observedAcceptedSourceHash === ''
+      ? {}
+      : { observedAcceptedSourceHash: observation.observedAcceptedSourceHash }),
     observedEndpoint: observation.observedEndpoint,
     ...(observation.observedCredentialRef === undefined ? {} : { observedCredentialRef: observation.observedCredentialRef }),
     entries: JSON.stringify(observation.discoveredEntries),

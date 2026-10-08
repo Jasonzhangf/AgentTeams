@@ -7,7 +7,7 @@ import { configSourceHash, createTomlRuntimeConfigPersistence, defaultLocalConfi
 import { parse as parseToml } from 'toml'
 import { loadAgentProcessConfig } from './agent-process.ts'
 import { loadConsoleProcessConfig } from './console-process.ts'
-import { providerIntentFingerprint } from '../config/runtime-config.ts'
+import { createRuntimeConfigStore, providerIntentFingerprint } from '../config/runtime-config.ts'
 
 it('loads a persisted TOML launcher config and resolves paths relative to the file', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-local-config-'))
@@ -425,6 +425,162 @@ label = "RCC configured model"
 [agents.provider.model]
 primary = { provider = "rcc", model = "gpt-5.5" }
 `
+
+const V3_EMPTY_RCC_CATALOG_CONFIG = `version = 3
+
+[bridge]
+enabled = true
+
+[agents.provider]
+enabled = true
+role = "provider"
+label = "Local provider"
+
+[agents.provider.identity]
+hostId = "local"
+machineId = "local"
+accountId = "local"
+agentKind = "custom"
+label = "Local provider"
+
+[agents.provider.runtime]
+scopeId = "local"
+dataDirectory = "data/provider"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = "files", profilePrefix = "teams-provider" }
+
+[providers.rcc]
+protocol = "openai-responses"
+apiBaseUrl = "http://127.0.0.1:4444/v1"
+label = "RCC"
+enabled = true
+
+[providers.other]
+protocol = "openai-chat"
+apiBaseUrl = "http://127.0.0.1:5555/v1"
+label = "Other"
+enabled = true
+
+[[models]]
+provider = "other"
+id = "manual-model"
+label = "Manual model"
+
+[agents.provider.model]
+primary = { provider = "other", model = "manual-model" }
+`
+
+async function createCatalogObservationFixture(configText = V3_PRIMARY_CONFIG) {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-v3-catalog-observation-'))
+  const agentteams = join(directory, '.agentteams')
+  const configPath = join(agentteams, 'config.toml')
+  const internalPath = join(agentteams, 'internal.toml')
+  await writeLocalConfig(configPath, configText)
+  await loadLocalConfig(configPath)
+  const makeStore = () => createRuntimeConfigStore(createTomlRuntimeConfigPersistence({ configPath, internalPath, agentId: 'provider' }), { agentId: 'provider' })
+  return { directory, configPath, internalPath, makeStore, store: makeStore() }
+}
+
+it('persists an unaccepted catalog observation without writing an empty accepted source hash', async () => {
+  const fixture = await createCatalogObservationFixture()
+  try {
+    const before = await fixture.store.read()
+    expect(before.acceptedRevision).toBe(0)
+    expect(before.acceptedSourceRevision).toBe(0)
+    expect(before.acceptedSourceHash).toBe('')
+
+    const result = await fixture.store.refreshProviderModels(before.acceptedRevision, 'rcc', {
+      listModels: async () => [{ modelId: 'discovered-model', metadata: { label: 'Discovered model' } }],
+    })
+
+    expect(result.status).toBe('ready')
+    expect(result.config.catalogs.rcc?.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ref: { providerInstanceId: 'rcc', modelId: 'discovered-model' }, origin: 'discovered' }),
+    ]))
+    const after = await fixture.store.read()
+    expect(after.acceptedRevision).toBe(0)
+    expect(after.acceptedSourceRevision).toBe(0)
+    expect(after.acceptedSourceHash).toBe('')
+    expect(after.catalogs.rcc?.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ref: { providerInstanceId: 'rcc', modelId: 'discovered-model' }, origin: 'discovered' }),
+    ]))
+
+    const reloaded = await fixture.makeStore().read()
+    expect(reloaded.acceptedRevision).toBe(0)
+    expect(reloaded.acceptedSourceRevision).toBe(0)
+    expect(reloaded.catalogs.rcc?.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ref: { providerInstanceId: 'rcc', modelId: 'discovered-model' }, origin: 'discovered' }),
+    ]))
+  } finally { await rm(fixture.directory, { recursive: true, force: true }) }
+})
+
+it('persists an unaccepted empty catalog observation while preserving unrelated manual models', async () => {
+  const fixture = await createCatalogObservationFixture(V3_EMPTY_RCC_CATALOG_CONFIG)
+  try {
+    const before = await fixture.store.read()
+    const result = await fixture.store.refreshProviderModels(before.acceptedRevision, 'rcc', { listModels: async () => [] })
+
+    expect(result.status).toBe('empty')
+    const after = await fixture.store.read()
+    expect(after.catalogs.rcc).toMatchObject({ state: 'empty', entries: [] })
+    expect(after.catalogs.other?.entries).toEqual([
+      expect.objectContaining({ ref: { providerInstanceId: 'other', modelId: 'manual-model' }, origin: 'manual' }),
+    ])
+
+    const reloaded = await fixture.makeStore().read()
+    expect(reloaded.catalogs.rcc).toMatchObject({ state: 'empty', entries: [] })
+    expect(reloaded.catalogs.other?.entries).toEqual([
+      expect.objectContaining({ ref: { providerInstanceId: 'other', modelId: 'manual-model' }, origin: 'manual' }),
+    ])
+  } finally { await rm(fixture.directory, { recursive: true, force: true }) }
+})
+
+it('persists an unaccepted failed catalog observation with its typed provider error', async () => {
+  const fixture = await createCatalogObservationFixture()
+  try {
+    const before = await fixture.store.read()
+    const result = await fixture.store.refreshProviderModels(before.acceptedRevision, 'rcc', {
+      listModels: async () => { throw Object.assign(new Error('unauthorized'), { status: 401 }) },
+    })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toMatchObject({ code: 'UNAUTHENTICATED', status: 401 })
+    const after = await fixture.store.read()
+    expect(after.catalogs.rcc?.error).toMatchObject({ code: 'UNAUTHENTICATED', status: 401 })
+    await expect(fixture.makeStore().read()).resolves.toMatchObject({ catalogs: { rcc: { error: { code: 'UNAUTHENTICATED' } } } })
+  } finally { await rm(fixture.directory, { recursive: true, force: true }) }
+})
+
+it('keeps a non-empty accepted source hash in persisted catalog observations', async () => {
+  const fixture = await createCatalogObservationFixture()
+  try {
+    await fixture.store.putProviderInstance(0, {
+      id: 'rcc',
+      label: 'RCC accepted',
+      protocol: 'openai-responses',
+      apiBaseUrl: 'http://127.0.0.1:4444/v1',
+      enabled: true,
+      auth: { kind: 'none' },
+    })
+    const accepted = await fixture.store.read()
+    expect(accepted.acceptedRevision).toBe(1)
+    expect(accepted.acceptedSourceHash).toMatch(/^sha256:/)
+
+    const result = await fixture.store.refreshProviderModels(accepted.acceptedRevision, 'rcc', {
+      listModels: async () => [{ modelId: 'discovered-model', metadata: {} }],
+    })
+
+    expect(result.status).toBe('ready')
+    const internal = await readLocalInternalConfig(fixture.internalPath)
+    expect(internal.configRuntime?.catalogs.provider?.rcc?.observedAcceptedSourceHash).toBe(accepted.acceptedSourceHash)
+    const reloaded = await fixture.makeStore().read()
+    expect(reloaded.acceptedRevision).toBe(accepted.acceptedRevision)
+    expect(reloaded.acceptedSourceHash).toBe(accepted.acceptedSourceHash)
+    expect(reloaded.catalogs.rcc?.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ref: { providerInstanceId: 'rcc', modelId: 'discovered-model' }, origin: 'discovered' }),
+    ]))
+  } finally { await rm(fixture.directory, { recursive: true, force: true }) }
+})
 
 it('parses v3 user intent without reading relay or provider JSON and records internal v2 relocation', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-v3-config-'))
