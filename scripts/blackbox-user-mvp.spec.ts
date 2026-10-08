@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parse as parseToml } from 'toml'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   Bb10SourceError,
   bb10LaunchEnv,
+  bb09ConfigText,
   canonicalSessionConfigText,
   cases,
   exitCode,
@@ -256,5 +258,47 @@ describe('BB10 isolated config and launch environment', () => {
     const redacted = redactCredential('http://console:secret-value@127.0.0.1:9/ secret-value', ['secret-value'])
     expect(redacted).not.toContain('secret-value')
     expect(redacted).toBe('http://console:<redacted>@127.0.0.1:9/ <redacted>')
+  })
+})
+
+describe('BB09 fixture identity domain', () => {
+  // Contract: the BB09 fixture identity domain must equal the system-generated
+  // Console domain. The Console identity is fixed to local/local --
+  // runtime/local-config.ts:1285-1292 (CONSOLE_IDENTITY.accountId 'local') and
+  // runtime/local-config.ts:1510 (scopeId 'local'). The relay directory is the
+  // only filter point -- server/relay.ts:474 keeps a peer only when
+  // peer.declaration.identity.accountId and peer.declaration.scopeId match the
+  // connecting Console auth. A daemon in another account/scope is therefore
+  // invisible to directory discovery, so the fixture must stay in the Console
+  // domain. This guard parses the real TOML the driver emits with the same
+  // parser the driver uses.
+  it('keeps both BB09 daemons in the Console local/local domain and leaves static binding unset', () => {
+    const build = (allowedManagers: string[]) => parseToml(bb09ConfigText({
+      stubBaseUrl: 'http://127.0.0.1:1',
+      searchExecutable: '/usr/bin/rg',
+      allowedManagers,
+    })) as Record<string, any>
+    const main = build(['__console'])
+    const refusal = build([])
+
+    for (const agentId of ['bb-provider', 'bb-receiver']) {
+      // Both daemons must share the system-generated Console identity domain;
+      // a fabricated bb-account/bb-scope makes the relay return zero peers.
+      expect(main.agents[agentId].identity.accountId).toBe('local')
+      expect(main.agents[agentId].runtime.scopeId).toBe('local')
+      // The identity domain is the only change: the daemon still declares the
+      // __console manager and the refusal scenario still denies it.
+      expect(main.agents[agentId].runtime.policy.allowedManagers).toEqual(['__console'])
+      expect(refusal.agents[agentId].runtime.policy.allowedManagers).toEqual([])
+    }
+    // The agent ids (TOML table keys) are unchanged.
+    expect(Object.keys(main.agents).sort()).toEqual(['bb-provider', 'bb-receiver'])
+
+    // The main scenario must keep directory discovery: a static [console]
+    // agentIds binding would bypass the relay filter and hide this bug.
+    expect(main.console.enabled).toBe(true)
+    expect(main.console.agentIds).toBeUndefined()
+    // The refusal scenario also stays on directory discovery.
+    expect(refusal.console.agentIds).toBeUndefined()
   })
 })

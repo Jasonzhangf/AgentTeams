@@ -1201,12 +1201,12 @@ label = "BB09-Provider"
 [agents.${workProviderId}.identity]
 hostId = "bb-local"
 machineId = "bb-machine"
-accountId = "bb-account"
+accountId = "local"
 agentKind = "custom"
 label = "BB09-Provider"
 
 [agents.${workProviderId}.runtime]
-scopeId = "bb-scope"
+scopeId = "local"
 dataDirectory = "data/${workProviderId}"
 policy = { revision = 1, allowedConsumers = ["${workReceiverId}"], allowedManagers = ${managerList} }
 cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(spec.searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${workProviderId}" }
@@ -1227,12 +1227,12 @@ label = "BB09-Receiver"
 [agents.${workReceiverId}.identity]
 hostId = "bb-local"
 machineId = "bb-machine"
-accountId = "bb-account"
+accountId = "local"
 agentKind = "custom"
 label = "BB09-Receiver"
 
 [agents.${workReceiverId}.runtime]
-scopeId = "bb-scope"
+scopeId = "local"
 dataDirectory = "data/${workReceiverId}"
 policy = { revision = 1, allowedConsumers = [], allowedManagers = ${managerList} }
 cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(spec.searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${workReceiverId}" }
@@ -2614,13 +2614,16 @@ async function runBB10(context) {
     }
 
     // (b) Both real provider catalogs refresh through the Console config entry.
-    let revision = configRow.acceptedRevision
+    // A catalog refresh only writes a directory observation; it never advances
+    // the accepted revision (config/runtime-config.ts:918-921 asserts the
+    // expected revision and :946 calls saveObservationUnlocked). Both refreshes
+    // therefore run against the same public accepted revision.
+    const acceptedRevision = configRow.acceptedRevision
     const rccRefresh = await client.command({ kind: 'config.refreshModels', agentId: sessionAgentId,
-      expectedRevision: revision, providerId: rccProviderId })
+      expectedRevision: acceptedRevision, providerId: rccProviderId })
     assert(rccRefresh.body.ok === true, `the RCC catalog refresh failed: ${JSON.stringify(rccRefresh.body).slice(0, 400)}`)
-    revision += 1
     const canonicalRefresh = await client.command({ kind: 'config.refreshModels', agentId: sessionAgentId,
-      expectedRevision: revision, providerId: canonicalProviderId })
+      expectedRevision: acceptedRevision, providerId: canonicalProviderId })
     if (canonicalRefresh.body.ok === false && canonicalRefresh.body.error?.code === 'CREDENTIAL_UNAVAILABLE') {
       return bb10UnverifiedResult(context, evidenceDir, 'canonical credential env did not reach the installed child',
         'config.refreshModels reported CREDENTIAL_UNAVAILABLE for the canonical provider',
@@ -2629,9 +2632,10 @@ async function runBB10(context) {
     }
     assert(canonicalRefresh.body.ok === true,
       `the canonical catalog refresh failed: ${JSON.stringify(canonicalRefresh.body).slice(0, 400)}`)
-    revision += 1
     const refreshed = await readInstalledProjection(client, evidenceDir, 'bb10-refreshed')
     const refreshedRow = refreshed.configs.find(row => row.agentId === sessionAgentId)
+    assert(refreshedRow.acceptedRevision === configRow.acceptedRevision,
+      `the catalog refresh advanced the accepted revision: ${JSON.stringify([configRow.acceptedRevision, refreshedRow.acceptedRevision])}`)
     const rccCatalogRow = refreshedRow.providers.find(provider => provider.id === rccProviderId)
     const canonicalCatalogRow = refreshedRow.providers.find(provider => provider.id === canonicalProviderId)
     assert(rccCatalogRow?.catalogState === 'ready' && rccCatalogRow.models.some(model => model.id === rccSelectedModelToken),
@@ -2760,7 +2764,7 @@ async function runBB10(context) {
           rcc_catalog_state: rccCatalogRow.catalogState, rcc_model_count: rccCatalogRow.models.length,
           canonical_catalog_state: canonicalCatalogRow.catalogState,
           canonical_model_count: canonicalCatalogRow.models.length,
-          accepted_revision_after_refresh: revision,
+          accepted_revision_after_refresh: refreshedRow.acceptedRevision,
         },
         rcc_binding: { apply: firstApply, config: publicJson(appliedConfig), session: session.created, turn: rccTurn },
         explicit_selection: { accepted_revision_before: selectionRevision, select_backup: publicJson(selectBackup.body),
@@ -4534,6 +4538,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.
 export {
   Bb10SourceError,
   bb10LaunchEnv,
+  bb09ConfigText,
   canonicalSessionConfigText,
   cases,
   parseArgs,
