@@ -11,6 +11,7 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -475,10 +476,15 @@ function assertInstalledEntries(fixture, internal) {
   }
 }
 
-function startAndReadLifecycle(fixture, evidenceDir, prefix, agentIds = defaultAgentIds) {
+/**
+ * Start the installed launcher. `options.launchEnv` is the dedicated child-env
+ * object for a credential-holding launch; every other command keeps `fixture.env`
+ * so a credential reaches only the owned launcher child and its descendants.
+ */
+function startAndReadLifecycle(fixture, evidenceDir, prefix, agentIds = defaultAgentIds, options = {}) {
   const start = runChecked(fixture.cli, ['start', '--config', fixture.configPath], {
     cwd: fixture.temporaryRoot,
-    env: fixture.env,
+    env: options.launchEnv ?? fixture.env,
     logPath: join(evidenceDir, `${prefix}-start.json`),
   })
   const status = runChecked(fixture.cli, ['status', '--config', fixture.configPath], {
@@ -537,11 +543,11 @@ async function stopAndAssertClean(fixture, lifecycle, evidenceDir, prefix) {
  * the observable cleanup: every owned process gone, every owned port closed and
  * a terminal launcher state.
  */
-async function stopSessionFixture(fixture, lifecycle, evidenceDir, prefix) {
+async function stopSessionFixture(fixture, lifecycle, evidenceDir, prefix, options = {}) {
   const pids = lifecyclePids(lifecycle.internal)
   const stop = run(fixture.cli, ['stop', '--config', fixture.configPath, '--generation', String(lifecycle.parsed.generation)], {
     cwd: fixture.temporaryRoot,
-    env: fixture.env,
+    env: options.launchEnv ?? fixture.env,
     logPath: join(evidenceDir, `${prefix}-stop.json`),
   })
   const relayAnomaly = stop.status !== 0 && /local relay exited unexpectedly/.test(String(stop.stderr))
@@ -1164,14 +1170,520 @@ socket.once('error', () => finish(false))
   return result.stdout.trim() === 'gone'
 }
 
+// ---------------------------------------------------------------------------
+// BB09 round 12: the installed Console observed in a real headless Camo browser.
+// The Console URL, credential and static assets all come from the installed
+// package; every browser assertion reads the same owner projection the installed
+// Console serves. The canonical credential of BB10 never reaches this fixture.
+// ---------------------------------------------------------------------------
+
+const bb09StubProviderId = 'bb-console-stub'
+const bb09StubModelId = 'bb-console-model'
+
+/**
+ * The BB09 user `config.toml`. Both daemons are real and both explicitly
+ * authorize `__console`; a local OpenAI-compatible stub provider gives the
+ * Console a real provider/model row to configure. The refusal scenario reuses
+ * this text with an empty manager list.
+ */
+function bb09ConfigText(spec) {
+  const managerList = `[${spec.allowedManagers.map(id => JSON.stringify(id)).join(', ')}]`
+  return `version = 3
+
+[bridge]
+enabled = true
+
+[agents.${workProviderId}]
+enabled = true
+role = "provider"
+label = "BB09-Provider"
+
+[agents.${workProviderId}.identity]
+hostId = "bb-local"
+machineId = "bb-machine"
+accountId = "bb-account"
+agentKind = "custom"
+label = "BB09-Provider"
+
+[agents.${workProviderId}.runtime]
+scopeId = "bb-scope"
+dataDirectory = "data/${workProviderId}"
+policy = { revision = 1, allowedConsumers = ["${workReceiverId}"], allowedManagers = ${managerList} }
+cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(spec.searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${workProviderId}" }
+
+[agents.${workProviderId}.services.file-search]
+version = "1"
+operations = ["search"]
+resources = [{ resourceId = "search-slot", capacity = 2, unit = "slot" }]
+
+[agents.${workProviderId}.model]
+primary = { provider = "${bb09StubProviderId}", model = "${bb09StubModelId}" }
+
+[agents.${workReceiverId}]
+enabled = true
+role = "receiver"
+label = "BB09-Receiver"
+
+[agents.${workReceiverId}.identity]
+hostId = "bb-local"
+machineId = "bb-machine"
+accountId = "bb-account"
+agentKind = "custom"
+label = "BB09-Receiver"
+
+[agents.${workReceiverId}.runtime]
+scopeId = "bb-scope"
+dataDirectory = "data/${workReceiverId}"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = ${managerList} }
+cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(spec.searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${workReceiverId}" }
+
+[agents.${workReceiverId}.connect]
+targetAgentId = "${workProviderId}"
+capabilityId = "file-search"
+capabilityVersion = "1"
+operation = "search"
+demands = [{ resourceId = "search-slot", amount = 1 }]
+
+[providers.${bb09StubProviderId}]
+protocol = "openai-chat"
+apiBaseUrl = ${JSON.stringify(`${spec.stubBaseUrl}/v1`)}
+label = "BB09 Console Stub"
+enabled = true
+
+[[models]]
+provider = "${bb09StubProviderId}"
+id = "${bb09StubModelId}"
+label = "BB09 Stub Model"
+
+[console]
+enabled = true
+username = ${JSON.stringify(consoleUsername)}
+passwordEnv = ${JSON.stringify(consolePasswordEnv)}
+`
+}
+
+/**
+ * The accepted config revision an Agent durably owns. The management policy of
+ * the refusal scenario denies the Console's observation too, so the revision
+ * non-advance is read from the Agent's own derived internal projection.
+ */
+function readAcceptedConfigRevision(internalPath, agentId) {
+  const internal = parseToml(readFileSync(internalPath, 'utf8'))
+  const slice = internal.configRuntime?.accepted?.[agentId]
+  return slice === undefined ? undefined : slice.acceptedRevision
+}
+
+/** Replace every occurrence of a provisioned credential value in recorded text. */
+function redactCredential(text, secrets) {
+  let redacted = String(text)
+  for (const secret of secrets) {
+    if (typeof secret !== 'string' || secret.length === 0) continue
+    redacted = redacted.split(secret).join('<redacted>')
+  }
+  return redacted.replace(/:\/\/([^/@\s:]+):[^/@\s]*@/gu, '://$1:<redacted>@')
+}
+
+/** Run one real Camo invocation against the isolated fixture HOME. */
+function camoRun(fixture, camo, evidenceDir, name, args, options = {}) {
+  return run(camo.executable, args, {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
+    ...(options.record === false ? {} : { logPath: join(evidenceDir, `${name}.json`) }),
+    ...options.run,
+  })
+}
+
+/**
+ * Run a Camo invocation whose argv or output can carry a provisioned secret. The
+ * redacted record is written before any exit-status check, so a failing credential
+ * bearing invocation still produces redacted evidence and never prints the value.
+ */
+function camoRunRedacted(fixture, camo, evidenceDir, name, args, secrets, options = {}) {
+  const { run: runOptions = {}, ...rest } = options
+  const { expectStatus, ...keptRunOptions } = runOptions
+  const output = camoRun(fixture, camo, evidenceDir, name, args, { ...rest, record: false, run: keptRunOptions })
+  const record = {
+    command: output.command,
+    args: output.args.map(argument => redactCredential(argument, secrets)),
+    status: output.status,
+    signal: output.signal,
+    stdout: redactCredential(output.stdout, secrets),
+    stderr: redactCredential(output.stderr, secrets),
+  }
+  writeJson(join(evidenceDir, `${name}.json`), record)
+  if (expectStatus !== undefined && output.status !== expectStatus) {
+    fail(`${output.command} ${record.args.join(' ')} exited ${output.status}; expected ${expectStatus}\n${record.stderr || record.stdout}`)
+  }
+  return { ...output, stdout: record.stdout, stderr: record.stderr }
+}
+
+function camoJson(output, label) {
+  const text = output.stdout.trim()
+  assert(text.length > 0, `${label} printed no stdout: ${output.stderr.trim()}`)
+  try {
+    return JSON.parse(text)
+  } catch {
+    return fail(`${label} did not print one JSON document: ${text.slice(0, 400)}`)
+  }
+}
+
+function camoEvaluate(fixture, camo, evidenceDir, name, profile, script, secrets = []) {
+  const output = secrets.length === 0
+    ? camoRun(fixture, camo, evidenceDir, name, ['evaluate', '--profile', profile, '--script', script], { expectStatus: 0 })
+    : camoRunRedacted(fixture, camo, evidenceDir, name, ['evaluate', '--profile', profile, '--script', script], secrets, { run: { expectStatus: 0 } })
+  const parsed = camoJson(output, name)
+  assert(Object.hasOwn(parsed, 'result'), `${name} returned no evaluate result: ${output.stdout.trim()}`)
+  return parsed.result
+}
+
+function camoClick(fixture, camo, evidenceDir, name, profile, selector, secrets = []) {
+  const args = ['click', '--profile', profile, '--selector', selector]
+  const output = secrets.length === 0
+    ? camoRun(fixture, camo, evidenceDir, name, args, { expectStatus: 0 })
+    : camoRunRedacted(fixture, camo, evidenceDir, name, args, secrets, { run: { expectStatus: 0 } })
+  const parsed = camoJson(output, name)
+  assert(parsed.clicked === true, `${name} did not report a real click: ${output.stdout.trim()}`)
+  return parsed
+}
+
+function camoStopProfile(fixture, camo, evidenceDir, name, profile) {
+  const output = camoRun(fixture, camo, evidenceDir, name, ['stop', '--profile', profile])
+  return output
+}
+
+function camoStopDaemon(fixture, camo, evidenceDir, name, profile) {
+  return camoRun(fixture, camo, evidenceDir, name, ['daemon', 'stop', '--profile', profile])
+}
+
+/**
+ * Release every owned browser profile and its daemon. Best-effort by contract:
+ * a failure is recorded in the cleanup receipt and never replaces the primary
+ * observation.
+ */
+function camoTeardown(fixture, camo, evidenceDir, profiles, label) {
+  const records = []
+  for (const profile of profiles) {
+    const stop = camoStopProfile(fixture, camo, evidenceDir, `${label}-stop-${profile}`, profile)
+    const daemon = camoStopDaemon(fixture, camo, evidenceDir, `${label}-daemon-${profile}`, profile)
+    records.push({ profile, stop_status: stop.status, daemon_status: daemon.status })
+  }
+  return records
+}
+
+/** Fail the case if any recorded evidence file contains a provisioned secret. */
+/** Refuse to keep any evidence artifact that captured a provisioned credential value. */
+function assertNoSecretInEvidence(directory, secrets) {
+  for (const entry of readdirSync(directory)) {
+    const path = join(directory, entry)
+    if (statSync(path).isDirectory()) {
+      assertNoSecretInEvidence(path, secrets)
+      continue
+    }
+    const text = readFileSync(path)
+    for (const secret of secrets) {
+      if (typeof secret !== 'string' || secret.length === 0) continue
+      assert(!text.includes(secret), `evidence ${path} contains a provisioned credential value`)
+    }
+  }
+}
+
+const bb09AgentRowsScript = `JSON.stringify([...document.querySelectorAll('article.teams-agent-card')].map(card => {
+  const keys = [...card.querySelectorAll('button[data-focus-key]')].map(node => node.dataset.focusKey)
+  const details = keys.find(key => /^agent:.+:details$/u.test(key))
+  const presence = card.querySelector('.teams-presence')
+  return {
+    agentId: details === undefined ? null : details.replace(/^agent:/u, '').replace(/:details$/u, ''),
+    label: card.querySelector('.teams-identity-copy strong')?.textContent ?? null,
+    machineId: (card.querySelector('.teams-identity-copy span')?.textContent ?? '').split(' · ')[0],
+    presence: presence === null ? null : [...presence.classList].find(name => name.startsWith('teams-presence-'))?.slice('teams-presence-'.length) ?? null,
+    text: card.textContent ?? '',
+  }
+}))`
+
+/**
+ * The real headless Camo acceptance of the installed Console. Returns every
+ * observation the BB09 receipt records; every assertion is on a browser-visible
+ * or browser-fetched fact, never on a fixture client.
+ */
+async function bb09BrowserAcceptance(options) {
+  const { fixture, camo, evidenceDir, profiles, initial, configText, authorization } = options
+  const profile = options.profile
+  const cleanUrl = `${initial.url}/`
+  const userinfo = new URL(initial.url)
+  userinfo.username = consoleUsername
+  userinfo.password = consolePassword
+  const secrets = [consolePassword]
+  const observed = {}
+
+  const started = camoRunRedacted(fixture, camo, evidenceDir, 'browser-start',
+    ['start', '--profile', profile, '--url', userinfo.toString(), '--headless'], secrets, { run: { expectStatus: 0 } })
+  const startResult = camoJson(started, 'browser-start')
+  assert(typeof startResult.target === 'string' && startResult.target.length > 0,
+    `the installed Console browser session published no target: ${started.stdout}`)
+  assert(!started.stdout.includes(consolePassword) && !started.stderr.includes(consolePassword),
+    'the browser start evidence still carried the Console credential')
+  profiles.add(profile)
+  observed.start = { target: startResult.target, sessionId: startResult.sessionId, profile: startResult.profile }
+
+  const userinfoInfo = camoJson(camoRun(fixture, camo, evidenceDir, 'browser-userinfo-page',
+    ['get-page-info', '--profile', profile], { expectStatus: 0 }), 'browser-userinfo-page')
+  assert(userinfoInfo.info?.title === 'AgentTeams Console',
+    `the installed Console page did not publish its title: ${JSON.stringify(userinfoInfo.info)}`)
+
+  // The credential-bearing load cannot serve the page's own relative fetches, so
+  // the observed recipe re-navigates the same authenticated profile to the clean
+  // URL and asserts the UI, its title and its API from there.
+  camoRun(fixture, camo, evidenceDir, 'browser-clean-navigation',
+    ['goto', cleanUrl, '--profile', profile, '--waitUntil', 'load'], { expectStatus: 0 })
+  const cleanInfo = camoJson(camoRun(fixture, camo, evidenceDir, 'browser-page',
+    ['get-page-info', '--profile', profile], { expectStatus: 0 }), 'browser-page')
+  assert(cleanInfo.info?.url === cleanUrl, `the clean Console navigation landed elsewhere: ${JSON.stringify(cleanInfo.info)}`)
+  assert(cleanInfo.info?.title === 'AgentTeams Console', `the clean Console page lost its title: ${JSON.stringify(cleanInfo.info)}`)
+  assert(cleanInfo.info?.readyState === 'complete', `the clean Console page never finished loading: ${JSON.stringify(cleanInfo.info)}`)
+  observed.clean = { url: cleanInfo.info.url, title: cleanInfo.info.title, readyState: cleanInfo.info.readyState }
+
+  const projectionStatus = await camoEvaluate(fixture, camo, evidenceDir, 'browser-projection-status',
+    profile, `fetch('/api/v1/projection', { method: 'GET' }).then(r => r.status)`)
+  assert(projectionStatus === 200, `the browser projection fetch did not succeed: ${projectionStatus}`)
+  const projectionJson = await camoEvaluate(fixture, camo, evidenceDir, 'browser-projection',
+    profile, `fetch('/api/v1/projection', { method: 'GET' }).then(r => r.json()).then(j => JSON.stringify(j))`)
+  assert(typeof projectionJson === 'string' && projectionJson.length > 0,
+    'the browser projection fetch returned no document')
+  const projection = JSON.parse(projectionJson)
+  assert(projection.version === 1 && Array.isArray(projection.agents),
+    `the browser projection was not a version 1 document: ${projectionJson.slice(0, 400)}`)
+  writeJson(join(evidenceDir, 'browser-projection.json'), projection)
+
+  const rows = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-agents-dom', profile, bb09AgentRowsScript))
+  writeJson(join(evidenceDir, 'browser-agents-dom.json'), rows)
+  assert(rows.length === 2, `the browser rendered ${rows.length} Agent rows, not two: ${JSON.stringify(rows)}`)
+  for (const agentId of [workProviderId, workReceiverId]) {
+    const domRow = rows.find(row => row.agentId === agentId)
+    const projectionRow = projection.agents.find(row => row.agentId === agentId)
+    assert(domRow !== undefined, `the browser rendered no row for the real daemon ${agentId}: ${JSON.stringify(rows)}`)
+    assert(projectionRow !== undefined, `the owner projection has no row for the real daemon ${agentId}`)
+    assert(projectionRow.presence === 'online', `the owner projection reports ${agentId} as ${projectionRow.presence}`)
+    assert(domRow.presence === 'online', `the browser rendered ${agentId} as ${domRow.presence}`)
+    assert(domRow.label === projectionRow.label && domRow.machineId === projectionRow.machineId,
+      `the browser row for ${agentId} did not match the owner projection: ${JSON.stringify(domRow)}`)
+  }
+  observed.agents = rows.map(row => ({ agentId: row.agentId, label: row.label, machineId: row.machineId, presence: row.presence }))
+
+  // (a) Authoritative declaration detail: the owner projection must carry the
+  // producer's declared services/resources, the rendered card must show the
+  // capability, its operations and its declared capacity, and both must agree with
+  // the installed public `status` declaration.
+  const providerProjection = projection.agents.find(row => row.agentId === workProviderId)
+  const declared = 'file-search@1:search[search-slot:2:slot]'
+  assert(options.statusStdout.includes(`capabilities=${declared}`),
+    `the installed public status did not declare the producer capability and resource: ${options.statusStdout.trim()}`)
+  assert(configText.includes('resourceId = "search-slot"') && configText.includes('capacity = 2'),
+    'the BB09 fixture did not declare the file-search resource the case asserts')
+  const details = providerProjection.capabilityDetails
+  assert(Array.isArray(details) && details.length > 0,
+    `the owner projection carried no capabilityDetails for ${workProviderId}: ${JSON.stringify(providerProjection)}`)
+  const fileSearch = details.find(entry => entry.capabilityId === 'file-search')
+  assert(fileSearch !== undefined && fileSearch.version === '1'
+    && Array.isArray(fileSearch.operations) && fileSearch.operations.includes('search'),
+  `the owner projection did not carry the declared file-search service: ${JSON.stringify(details)}`)
+  const resource = fileSearch.resources?.find(entry => entry.resourceId === 'search-slot')
+  assert(resource?.capacity === 2 && resource.unit === 'slot',
+    `the owner projection did not carry the declared search-slot resource: ${JSON.stringify(fileSearch.resources)}`)
+  const projectedDeclaration = `${fileSearch.capabilityId}@${fileSearch.version}:${fileSearch.operations.join(',')}`
+    + `[${(fileSearch.resources ?? []).map(entry => `${entry.resourceId}:${entry.capacity}:${entry.unit}`).join(',')}]`
+  assert(projectedDeclaration === declared,
+    `the owner projection declaration ${projectedDeclaration} does not match the installed public status declaration ${declared}`)
+  writeJson(join(evidenceDir, 'browser-resources-dom.json'), {
+    declared, projected: projectedDeclaration, capabilityDetails: details,
+    rendered: rows.find(row => row.agentId === workProviderId)?.text ?? '',
+  })
+  const providerText = rows.find(row => row.agentId === workProviderId)?.text ?? ''
+  assert(/file-search/u.test(providerText) && /search-slot[^A-Za-z0-9]{0,8}2[^A-Za-z0-9]{0,8}slot/u.test(providerText),
+    `the browser card did not render the declared service and resource detail: ${providerText}`)
+  assert(!/剩余/u.test(providerText) && !/remaining/iu.test(providerText),
+    `the browser card presented the declared capacity as remaining capacity: ${providerText}`)
+
+  // (b) Observation interaction: a real click opens the Agent drawer, a real click
+  // closes it, and a real panel refresh reads the declaration back. The installed
+  // Console marks the panel inert while a drawer is open, so panel buttons are only
+  // clicked with the drawer closed and drawer buttons only while it is open.
+  camoClick(fixture, camo, evidenceDir, 'browser-detail-action', profile,
+    `button[data-focus-key="agent:${workProviderId}:details"]`)
+  const detailText = await camoEvaluate(fixture, camo, evidenceDir, 'browser-detail-dom',
+    profile, `document.querySelector('.teams-drawer')?.textContent ?? ''`)
+  assert(typeof detailText === 'string' && detailText.includes('file-search'),
+    `the Agent drawer did not show the agent declaration: ${String(detailText).slice(0, 400)}`)
+  assert(/search-slot/u.test(detailText),
+    `the Agent drawer did not show the declared resource: ${String(detailText).slice(0, 400)}`)
+  camoClick(fixture, camo, evidenceDir, 'browser-detail-close', profile,
+    '.teams-drawer .teams-header-actions button:nth-of-type(2)')
+  camoClick(fixture, camo, evidenceDir, 'browser-refresh-action', profile,
+    '.teams-panel .teams-header-actions button:nth-of-type(2)')
+  const refreshedRows = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-refresh-dom',
+    profile, bb09AgentRowsScript))
+  const refreshedProvider = refreshedRows.find(row => row.agentId === workProviderId)
+  assert(refreshedProvider !== undefined && /file-search/u.test(refreshedProvider.text),
+    `the refreshed panel lost the Agent declaration: ${JSON.stringify(refreshedRows)}`)
+  assert(/search-slot[^A-Za-z0-9]{0,8}2[^A-Za-z0-9]{0,8}slot/u.test(refreshedProvider.text),
+    `the refreshed panel lost the declared resource detail: ${refreshedProvider.text}`)
+
+  // (c) Configuration interaction: a real click opens the Console settings entry,
+  // the settings toolbar selects a real Agent, and a real provider-card click runs
+  // an existing provider operation. The accepted revision advances for that Agent
+  // only and the browser reads the result back from the owner projection.
+  const before = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-before',
+    profile, `fetch('/api/v1/projection').then(r => r.json()).then(j => JSON.stringify({ configs: j.configs }))`))
+  writeJson(join(evidenceDir, 'browser-config-before.json'), before)
+  const beforeRow = before.configs.find(row => row.agentId === workProviderId)
+  assert(beforeRow !== undefined, `the installed Console published no config row for ${workProviderId}: ${JSON.stringify(before.configs)}`)
+  const otherBefore = before.configs.find(row => row.agentId === workReceiverId)
+  camoClick(fixture, camo, evidenceDir, 'browser-config-open', profile, 'button[data-focus-key="console:settings"]')
+  const selectAction = await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-select-action', profile,
+    `(() => { const select = document.querySelector('div.teams-config-toolbar select.teams-select'); if (select === null) return 'missing'; select.value = ${JSON.stringify(workProviderId)}; select.dispatchEvent(new Event('change', { bubbles: true })); return select.value })()`)
+  assert(selectAction === workProviderId, `the Console settings panel did not select ${workProviderId}: ${selectAction}`)
+  const cardState = await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-card', profile,
+    `JSON.stringify({ selected: document.querySelector('div.teams-config-toolbar select.teams-select')?.value ?? null, providers: [...document.querySelectorAll('article.teams-provider-card')].map(card => ({ text: card.textContent ?? '', catalog: card.querySelector('.teams-catalog-state')?.textContent ?? null })) })`)
+  const cardView = JSON.parse(cardState)
+  assert(cardView.selected === workProviderId, `the settings toolbar did not keep the selected Agent: ${cardState}`)
+  assert(cardView.providers.length === 1, `the settings panel did not render the one configured provider: ${cardState}`)
+  camoClick(fixture, camo, evidenceDir, 'browser-config-actions', profile,
+    'article.teams-provider-card .teams-provider-actions button:nth-of-type(2)')
+  const after = await waitForAsync(async () => {
+    const current = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-after',
+      profile, `fetch('/api/v1/projection').then(r => r.json()).then(j => JSON.stringify({ configs: j.configs }))`))
+    const row = current.configs.find(candidate => candidate.agentId === workProviderId)
+    return row !== undefined && row.acceptedRevision > beforeRow.acceptedRevision ? current : undefined
+  }, 60_000, 'the Console provider operation to advance the accepted revision')
+  writeJson(join(evidenceDir, 'browser-config-after.json'), after)
+  const afterRow = after.configs.find(row => row.agentId === workProviderId)
+  assert(afterRow.acceptedRevision === beforeRow.acceptedRevision + 1,
+    `the Console provider operation advanced the accepted revision by ${afterRow.acceptedRevision - beforeRow.acceptedRevision}: ${JSON.stringify(afterRow)}`)
+  const afterCard = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-after-dom', profile,
+    `JSON.stringify({ catalog: document.querySelector('article.teams-provider-card .teams-catalog-state')?.textContent ?? null, models: [...document.querySelectorAll('article.teams-provider-card select.teams-select option')].map(option => option.value) })`))
+  assert(afterCard.models.includes(bb09StubModelId),
+    `the settings panel did not show the refreshed provider catalog: ${JSON.stringify(afterCard)}`)
+  const otherAfter = after.configs.find(row => row.agentId === workReceiverId)
+  assert(JSON.stringify(otherAfter ?? null) === JSON.stringify(otherBefore ?? null),
+    `the Console provider operation changed another Agent's config: ${JSON.stringify([otherBefore, otherAfter])}`)
+  camoClick(fixture, camo, evidenceDir, 'browser-config-close', profile,
+    '.teams-drawer .teams-header-actions button:nth-of-type(2)')
+  observed.config = {
+    agent: workProviderId,
+    accepted_before: beforeRow.acceptedRevision,
+    accepted_after: afterRow.acceptedRevision,
+    provider_card_catalog: afterCard.catalog,
+    other_agent_unchanged: otherAfter === undefined,
+  }
+
+  const screenshot = camoRun(fixture, camo, evidenceDir, 'browser-screenshot',
+    ['screenshot', '--profile', profile, '--path', join(evidenceDir, 'browser-page.png')], { expectStatus: 0 })
+  observed.screenshot = camoJson(screenshot, 'browser-screenshot').path
+
+  // (d) Authentication refusal: a fresh, credential-free profile gets the browser
+  // challenge and the same-origin API still answers 401.
+  const noCredProfile = options.noCredentialProfile
+  const noCredStart = camoRun(fixture, camo, evidenceDir, 'browser-unauthenticated-start',
+    ['start', '--profile', noCredProfile, '--url', cleanUrl, '--headless'], { expectStatus: 0 })
+  camoJson(noCredStart, 'browser-unauthenticated-start')
+  profiles.add(noCredProfile)
+  const noCredBody = await camoEvaluate(fixture, camo, evidenceDir, 'browser-unauthenticated',
+    noCredProfile, 'document.body.innerText')
+  assert(typeof noCredBody === 'string' && /Authentication required/u.test(noCredBody),
+    `the credential-free browser was not challenged: ${String(noCredBody).slice(0, 200)}`)
+  const noCredStatus = await camoEvaluate(fixture, camo, evidenceDir, 'browser-unauthenticated-api',
+    noCredProfile, `fetch('/api/v1/projection', { method: 'GET' }).then(r => r.status)`)
+  assert(noCredStatus === 401, `the credential-free browser API returned ${noCredStatus}, not 401`)
+  observed.unauthenticated = { body: noCredBody, projection_status: noCredStatus }
+
+  // (e) Origin refusal: an authenticated wrong-Origin request is refused while the
+  // same-origin browser operation above already succeeded.
+  const wrongOrigin = await fetch(`${cleanUrl}api/v1/projection`, { headers: { authorization, origin: 'http://bb-cross-site.invalid' } })
+  const crossSite = await fetch(`${cleanUrl}api/v1/projection`, { headers: { authorization, 'sec-fetch-site': 'cross-site' } })
+  const sameOrigin = await fetch(`${cleanUrl}api/v1/projection`, { headers: { authorization, 'sec-fetch-site': 'same-origin' } })
+  assert(wrongOrigin.status === 401, `an authenticated wrong-Origin request returned ${wrongOrigin.status}`)
+  assert(crossSite.status === 401, `an authenticated cross-site request returned ${crossSite.status}`)
+  assert(sameOrigin.status === 200, `an authenticated same-origin request returned ${sameOrigin.status}`)
+  writeJson(join(evidenceDir, 'origin-refusals.json'), { wrong_origin: wrongOrigin.status, cross_site: crossSite.status })
+  writeJson(join(evidenceDir, 'browser-same-origin.json'), { status: sameOrigin.status, projection_fetch: projectionStatus })
+  observed.origin = { wrong_origin: wrongOrigin.status, cross_site: crossSite.status, same_origin: sameOrigin.status }
+
+  const authRefusals = await fetch(`${cleanUrl}api/v1/command`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ kind: 'config.refreshModels', agentId: workProviderId, expectedRevision: 0, providerId: bb09StubProviderId }),
+  })
+  assert(authRefusals.status === 401, `an unauthenticated management command returned ${authRefusals.status}`)
+  writeJson(join(evidenceDir, 'auth-refusals.json'), { unauthenticated_command: authRefusals.status, unauthenticated_projection: 401 })
+  observed.auth_refusals = { unauthenticated_command: authRefusals.status }
+
+  assertNoSecretInEvidence(evidenceDir, secrets)
+  return observed
+}
+
+/**
+ * The isolated Agent-policy refusal scenario: a second real install whose daemons
+ * do not authorize `__console`. The public management entry must answer FORBIDDEN
+ * and the refused Agent's own accepted revision must not advance.
+ */
+async function bb09AgentPolicyRefusal(context, evidenceDir) {
+  const refusalDir = join(evidenceDir, 'agent-policy-refusal')
+  mkdirSync(refusalDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, refusalDir, 'bb09-refusal',
+    { AGENTTEAMS_OPENCODE_EXECUTABLE: openCodeExecutablePath(refusalDir) })
+  let lifecycle
+  try {
+    const config = ensureUserConfig(fixture, refusalDir, {
+      buildConfigText: searchExecutable => bb09ConfigText({ stubBaseUrl: 'http://127.0.0.1:1', searchExecutable, allowedManagers: [] }),
+    })
+    lifecycle = startAndReadLifecycle(fixture, refusalDir, 'bb09-refusal')
+    const console = startInstalledSessionConsole(fixture, refusalDir, 'bb09-refusal')
+    const before = readAcceptedConfigRevision(lifecycle.internal.internalPath, workProviderId)
+    assert(before !== undefined, 'the refusal fixture published no accepted config revision')
+    const refusal = await consoleHttp(console.url, console.authorization, '/api/v1/command', {
+      body: { kind: 'config.refreshModels', agentId: workProviderId, expectedRevision: before, providerId: bb09StubProviderId },
+    })
+    assert(refusal.status === 200 && refusal.body?.ok === false && refusal.body.error?.code === 'FORBIDDEN',
+      `the public management entry did not refuse an unauthorized manager: ${refusal.status} ${refusal.text.slice(0, 300)}`)
+    const after = readAcceptedConfigRevision(lifecycle.internal.internalPath, workProviderId)
+    assert(after === before, `the refused management command advanced the Agent config revision: ${before} -> ${after}`)
+    writeJson(join(refusalDir, 'agent-policy-refusal.json'), {
+      command: { kind: 'config.refreshModels', agentId: workProviderId, providerId: bb09StubProviderId },
+      http_status: refusal.status,
+      result: publicJson(refusal.body),
+      accepted_revision_before: before,
+      accepted_revision_after: after,
+      console_config_sha256: config.configSha256,
+    })
+    const stopped = await stopAndAssertClean(fixture, lifecycle, refusalDir, 'bb09-refusal-final')
+    lifecycle = undefined
+    return { http_status: refusal.status, error: publicJson(refusal.body.error), accepted_revision_before: before,
+      accepted_revision_after: after, stop_stdout: stopped.stop.stdout }
+  } finally {
+    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      fixture.cleanup()
+    } catch {
+      // The refusal observation is the primary record.
+    }
+  }
+}
+
 async function runBB09(context) {
   const evidenceDir = join(context.caseEvidenceRoot, 'BB09')
   mkdirSync(evidenceDir, { recursive: true })
-  const fixture = installPackage(context.packRoot, evidenceDir, 'bb09')
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb09',
+    { AGENTTEAMS_OPENCODE_EXECUTABLE: openCodeExecutablePath(evidenceDir) })
+  const camo = resolveCamo(evidenceDir)
+  provisionBrowserRuntime(fixture, evidenceDir)
+  const stub = createSessionProviderStub({ models: [bb09StubModelId] })
+  const profiles = new Set()
+  const camoProfiles = [`bb09-main-${process.pid}`, `bb09-nocred-${process.pid}`]
   let lifecycle
   let result
   try {
-    const config = ensureUserConfig(fixture, evidenceDir, { console: true })
+    const stubUrl = await listenProviderStub(stub)
+    const config = ensureUserConfig(fixture, evidenceDir, {
+      buildConfigText: searchExecutable => bb09ConfigText({ stubBaseUrl: stubUrl, searchExecutable, allowedManagers: ['__console'] }),
+    })
     writeWorkFixture(fixture)
     lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb09')
 
@@ -1194,6 +1706,16 @@ async function runBB09(context) {
     const authorization = `Basic ${Buffer.from(`${consoleUsername}:${consolePassword}`).toString('base64')}`
     const authorized = await fetch(initial.url, { headers: { authorization } })
     assert(authorized.status === 200, `installed Console rejected the configured credential: ${authorized.status}`)
+
+    // The real browser acceptance of the installed Console: two real daemons, the
+    // authoritative declaration, the observation/config interactions and the
+    // authentication/origin refusals, all from a headless Camo browser.
+    const browser = await bb09BrowserAcceptance({
+      fixture, camo, evidenceDir, profiles,
+      profile: camoProfiles[0], noCredentialProfile: camoProfiles[1],
+      initial, statusStdout: lifecycle.status.stdout, configText: config.configText, authorization,
+    })
+    const agentPolicy = await bb09AgentPolicyRefusal(context, evidenceDir)
 
     // Stop Console through the installed CLI, then assert the installed Console
     // endpoint is gone while Work submitted through the installed CLI still
@@ -1256,6 +1778,10 @@ async function runBB09(context) {
       `a disabled Console start wrote a live runtime row: ${JSON.stringify(disabledRuntime)}`)
     const disabledFinal = await stopAndAssertClean(fixture, disabledLifecycle, evidenceDir, 'bb09-disabled-final')
     const disabledPids = lifecyclePids(disabledLifecycle.internal)
+    const browserCleanup = camoTeardown(fixture, camo, evidenceDir, profiles, 'browser-cleanup')
+    profiles.clear()
+    writeJson(join(evidenceDir, 'browser-cleanup.json'), { profiles: browserCleanup })
+    assertNoSecretInEvidence(evidenceDir, [consolePassword])
     fixture.cleanup()
     result = {
       status: 'passed',
@@ -1266,6 +1792,16 @@ async function runBB09(context) {
           'agentteams init',
           'agentteams start --config <isolated-home>/.agentteams/config.toml',
           'agentteams status --config <isolated-home>/.agentteams/config.toml',
+          'camo start --profile <bb09> --url http://<user>:<redacted>@<consoleUrl>/ --headless',
+          'camo goto <consoleUrl>/ --profile <bb09>',
+          'camo evaluate fetch(/api/v1/projection)',
+          'camo click button[data-focus-key="agent:bb-provider:details"]',
+          'camo click .teams-drawer .teams-header-actions button:nth-of-type(2) (close drawer)',
+          'camo click .teams-panel .teams-header-actions button:nth-of-type(2) (refresh projection)',
+          'camo click button[data-focus-key="console:settings"]',
+          'camo evaluate div.teams-config-toolbar select.teams-select (select bb-provider)',
+          'camo click article.teams-provider-card .teams-provider-actions button:nth-of-type(2) (refresh models)',
+          'camo start --profile <bb09-nocred> --url <consoleUrl>/ --headless (credential-free)',
           'agentteams console stop --config <isolated-home>/.agentteams/config.toml',
           'agentteams work submit --receiver bb-receiver --payload {"query":"marker-beta"} (Console stopped)',
           'agentteams console start --config <isolated-home>/.agentteams/config.toml (same persisted url)',
@@ -1283,6 +1819,9 @@ async function runBB09(context) {
         console_entry_path: entry.entryPath,
         console_status_after_start: initial,
         console_http: { unauthorized: unauthorized.status, authorized: authorized.status },
+        browser,
+        agent_policy_refusal: agentPolicy,
+        browser_cleanup: browserCleanup,
         console_status_after_stop: { state: stopStatus.consoleState, stdout: stop.stdout.trim() },
         console_listener_gone_after_stop: consoleListenerGone(initial.url),
         work_without_console: offlineWork.control,
@@ -1302,6 +1841,12 @@ async function runBB09(context) {
     }
   } finally {
     stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    try {
+      if (existsSync(fixture.temporaryRoot)) camoTeardown(fixture, camo, evidenceDir, profiles, 'browser-final')
+    } catch {
+      // Browser teardown is best-effort; the cleanup record carries the outcome.
+    }
+    await closeProviderStub(stub)
     try {
       fixture.cleanup()
     } catch {
@@ -1635,25 +2180,6 @@ async function applySessionConfigAndWait(client, agentId, evidenceDir, prefix) {
   return { applied: publicJson(applied.body), agent: publicJson(agent) }
 }
 
-/**
- * A failed `config.apply` records its uncertainty fence in the Agent's own
- * internal state. Read that fence back so a case reports the substrate error
- * that produced it, not only the persistence wrapper error.
- */
-function readUncertaintyFences(configPath) {
-  const internalPath = join(dirname(configPath), 'internal.toml')
-  if (!existsSync(internalPath)) return { internalPath, fences: [], internal_text: null }
-  const text = readFileSync(internalPath, 'utf8')
-  const effective = parseToml(text).configRuntime?.effective ?? {}
-  const fences = []
-  for (const [agentId, slice] of Object.entries(effective)) {
-    const raw = slice?.uncertain
-    if (typeof raw !== 'string' || raw === '') continue
-    try { fences.push({ agentId, operations: JSON.parse(raw) }) } catch { fences.push({ agentId, raw }) }
-  }
-  return { internalPath, fences, internal_text: text }
-}
-
 function waitForSessionTurn(sessionEvents, previousFinals, label) {
   return waitForAsync(async () => {
     const finals = (await sessionEvents()).filter(event => event.kind === 'final')
@@ -1682,159 +2208,506 @@ async function createAndOpenSession(client, title, evidenceDir, prefix) {
   return { sessionId, created: publicJson(created.body), opened: publicJson(opened.body) }
 }
 
+// ---------------------------------------------------------------------------
+// BB10 round 12: two real Teams provider instances. The case derives both
+// provider instances from their then-current declared sources, persists only the
+// credential *env name* in the isolated fixture config, and passes the single
+// declared secret value to the owned installed launcher through one dedicated
+// child-env object. Every missing precondition is a typed precondition failure
+// (`status: 'unverified'`), never a fabricated success and never a silent skip.
+// ---------------------------------------------------------------------------
+
+const canonicalProviderId = 'goaichat-openai'
+const rccProviderId = 'rcc-4444'
+const canonicalCredentialEnv = 'TEAMS_BB10_CANONICAL_API_KEY'
+const rccConfigSourcePath = '/Volumes/extension/.rcc/config.toml'
+const canonicalProviderSourcePath = '/Volumes/extension/.rcc/provider/goaichat_openai/config.v2.toml'
+const rccServerId = 'routecodex_v3_4444'
+// Confirmed against the then-current catalog at implementation time. Teams
+// persists and sends exactly this token: no `/` <-> `.` rewrite, no guessing.
+const rccSelectedModelToken = 'goaichat_openai.qwen3.8-max'
+const bb10DispatchTimeoutMs = 120_000
+const bb10VisibleTaskPrompt = '请用一句简短中文解释什么是回声。不要调用工具，也不要读写文件。'
+
+/** A precondition failure: not a product failure and not a fabricated pass. */
+class Bb10SourceError extends Error {
+  constructor(missingCapability, message, detail = {}) {
+    super(message)
+    this.name = 'Bb10SourceError'
+    this.missingCapability = missingCapability
+    this.detail = detail
+  }
+}
+
+function bb10SourceFailure(missingCapability, message, detail = {}) {
+  throw new Bb10SourceError(missingCapability, message, detail)
+}
+
+function bb10Record(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function bb10RequiredText(value, missingCapability, label) {
+  if (typeof value !== 'string' || value.trim() === '') bb10SourceFailure(missingCapability, `${label} is missing or empty`)
+  return value
+}
+
+function bb10ParseToml(text, missingCapability, label) {
+  try {
+    return parseToml(text)
+  } catch (error) {
+    return bb10SourceFailure(missingCapability, `${label} is not valid TOML`,
+      { reason: error instanceof Error ? error.message : String(error) })
+  }
+}
+
+function bb10ProtocolFromSource(type, label) {
+  if (type === 'openai_chat') return 'openai-chat'
+  if (type === 'openai_responses') return 'openai-responses'
+  return bb10SourceFailure('canonical provider protocol is unsupported',
+    `${label} declares an unsupported provider type`, { provider_type: type })
+}
+
+/**
+ * Derive the canonical Teams provider instance from its declared source. The
+ * declared provider id is normalized to the Teams instance id (`_` -> `-`).
+ */
+function parseCanonicalProviderSource(text, label) {
+  const capability = 'canonical provider source is unusable'
+  const root = bb10ParseToml(text, capability, label)
+  const provider = root.provider
+  if (!bb10Record(provider)) bb10SourceFailure(capability, `${label} declares no [provider] table`)
+  const id = bb10RequiredText(provider.id, capability, `${label} provider.id`)
+  const type = bb10RequiredText(provider.type, capability, `${label} provider.type`)
+  const baseUrl = bb10RequiredText(provider.baseURL, capability, `${label} provider.baseURL`)
+  const defaultModel = bb10RequiredText(provider.defaultModel, capability, `${label} provider.defaultModel`)
+  const auth = provider.auth
+  if (!bb10Record(auth)) bb10SourceFailure(capability, `${label} declares no [provider.auth] table`)
+  const entries = auth.entries
+  if (!Array.isArray(entries) || entries.length !== 1) {
+    bb10SourceFailure('canonical credential entry is not unique',
+      `${label} declares ${Array.isArray(entries) ? entries.length : 'no'} auth entries; exactly one is required`)
+  }
+  const entry = entries[0]
+  if (!bb10Record(entry)) bb10SourceFailure(capability, `${label} auth entry is not a table`)
+  const alias = bb10RequiredText(entry.alias, capability, `${label} auth entry alias`)
+  const secretFile = bb10RequiredText(entry.secretFile, capability, `${label} auth entry secretFile`)
+  const secretKey = bb10RequiredText(entry.secretKey, capability, `${label} auth entry secretKey`)
+  return {
+    label, id, instanceId: id.replace(/_/gu, '-'), type, protocol: bb10ProtocolFromSource(type, label),
+    baseUrl, defaultModel, authAlias: alias, secretFile, secretKey,
+  }
+}
+
+/** Derive the RCC provider instance from its declared server block. */
+function parseRccServerSource(text, label, serverId) {
+  const capability = 'rcc server source is unusable'
+  const root = bb10ParseToml(text, capability, label)
+  const servers = root.servers
+  if (!bb10Record(servers)) bb10SourceFailure(capability, `${label} declares no [servers] table`)
+  const server = servers[serverId]
+  if (!bb10Record(server)) bb10SourceFailure(capability, `${label} declares no server ${serverId}`, { server_id: serverId })
+  if (server.enabled !== true) bb10SourceFailure(capability, `${label} server ${serverId} is not enabled`, { server_id: serverId })
+  const bind = bb10RequiredText(server.bind, capability, `${label} server ${serverId} bind`)
+  const port = server.port
+  if (!Number.isSafeInteger(port) || port <= 0 || port > 65535) {
+    bb10SourceFailure(capability, `${label} server ${serverId} port is not a usable TCP port`, { server_id: serverId })
+  }
+  const endpoints = server.endpoints
+  if (!Array.isArray(endpoints) || !endpoints.includes('openai_chat')) {
+    bb10SourceFailure('rcc server does not expose the openai_chat endpoint',
+      `${label} server ${serverId} endpoints do not include openai_chat`, { server_id: serverId })
+  }
+  const host = bind === '0.0.0.0' || bind === '::' ? '127.0.0.1' : bind
+  return { label, serverId, bind, host, port, protocol: 'openai-chat', baseUrl: `http://${host}:${port}/v1` }
+}
+
+/**
+ * The declared credential source is a flat `name = value` file, not hierarchical
+ * TOML. Parse it line by line: trim, skip blank lines and whole-line `#`
+ * comments, split at the first `=`, trim name and value, match the exact key and
+ * strip only outer quotes. No interpolation, no escaping, no shell. Errors carry
+ * only the class, path, key name and line number, never the raw line or value.
+ */
+function parseFlatSecretKey(text, keyName, label) {
+  const capability = 'canonical credential source is unusable'
+  const values = new Map()
+  const lines = String(text).split(/\r?\n/u)
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (line === '' || line.startsWith('#')) continue
+    const equals = line.indexOf('=')
+    if (equals <= 0) bb10SourceFailure(capability, `${label} has a malformed credential line`, { line: index + 1 })
+    const name = line.slice(0, equals).trim()
+    if (name === '') bb10SourceFailure(capability, `${label} has a credential line with no key name`, { line: index + 1 })
+    let value = line.slice(equals + 1).trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    if (value === '') bb10SourceFailure(capability, `${label} declares an empty credential value`, { key: name, line: index + 1 })
+    if (values.has(name)) bb10SourceFailure(capability, `${label} declares the credential key more than once`, { key: name, line: index + 1 })
+    values.set(name, value)
+  }
+  const value = values.get(keyName)
+  if (value === undefined) {
+    bb10SourceFailure('canonical credential key is absent', `${label} does not declare the selected credential key`, { key: keyName })
+  }
+  return value
+}
+
+/** Read only the single declared auth entry's secret value. Never log the value. */
+function readDeclaredSecretKey(secretFile, secretKey) {
+  const capability = 'canonical credential source is unusable'
+  if (!existsSync(secretFile)) bb10SourceFailure(capability, 'the declared credential file does not exist', { secret_file: secretFile })
+  let text
+  try {
+    text = readFileSync(secretFile, 'utf8')
+  } catch {
+    return bb10SourceFailure(capability, 'the declared credential file could not be read', { secret_file: secretFile })
+  }
+  return parseFlatSecretKey(text, secretKey, secretFile)
+}
+
+/** Probe one provider's declared model catalog without any credential. */
+async function probeProviderCatalog(baseUrl, missingCapability, label) {
+  const url = `${baseUrl.replace(/\/+$/u, '')}/models`
+  let response
+  try {
+    response = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(20_000) })
+  } catch (error) {
+    return bb10SourceFailure(missingCapability, `${label} did not answer at ${url}`,
+      { url, reason: error instanceof Error ? error.message : String(error) })
+  }
+  const text = await response.text()
+  let body
+  try { body = JSON.parse(text) } catch { body = undefined }
+  const list = body === undefined ? [] : [body.data, body.models].find(Array.isArray) ?? []
+  return { url, status: response.status, ids: list.map(entry => bb10Record(entry) ? entry.id : entry).filter(id => typeof id === 'string') }
+}
+
+/**
+ * Resolve every BB10 precondition from the then-current sources. Each failure is
+ * a typed `Bb10SourceError`, so the case reports `unverified` with the missing
+ * capability instead of a fabricated pass.
+ */
+async function resolveBb10Preconditions(evidenceDir) {
+  let openCodeExecutable
+  try {
+    openCodeExecutable = openCodeExecutablePath(evidenceDir)
+  } catch (error) {
+    return bb10SourceFailure('managed OpenCode executable is unavailable',
+      'the installed OpenCode executable is not resolvable', { reason: error instanceof Error ? error.message : String(error) })
+  }
+  if (!existsSync(rccConfigSourcePath)) {
+    bb10SourceFailure('rcc config source is unavailable', 'the declared RCC config source is missing', { source: rccConfigSourcePath })
+  }
+  const rcc = parseRccServerSource(readFileSync(rccConfigSourcePath, 'utf8'), rccConfigSourcePath, rccServerId)
+  const rccCatalog = await probeProviderCatalog(rcc.baseUrl, 'rcc endpoint is unreachable', `the RCC server ${rcc.serverId}`)
+  if (rccCatalog.status !== 200) {
+    bb10SourceFailure('rcc catalog is unavailable', `the RCC catalog returned HTTP ${rccCatalog.status}`, { url: rccCatalog.url })
+  }
+  if (!rccCatalog.ids.includes(rccSelectedModelToken)) {
+    bb10SourceFailure('selected rcc model is absent from the current catalog',
+      'the selected RCC model token is not in the then-current catalog',
+      { url: rccCatalog.url, model_count: rccCatalog.ids.length })
+  }
+  if (!existsSync(canonicalProviderSourcePath)) {
+    bb10SourceFailure('canonical provider source is unavailable', 'the declared canonical provider source is missing',
+      { source: canonicalProviderSourcePath })
+  }
+  const canonical = parseCanonicalProviderSource(readFileSync(canonicalProviderSourcePath, 'utf8'), canonicalProviderSourcePath)
+  if (canonical.instanceId !== canonicalProviderId) {
+    bb10SourceFailure('canonical provider identity changed',
+      'the declared provider id no longer maps to the Teams instance id this case binds',
+      { instance_id: canonical.instanceId })
+  }
+  const canonicalCatalog = await probeProviderCatalog(canonical.baseUrl, 'canonical endpoint is unreachable',
+    `the canonical provider ${canonical.id}`)
+  if (canonicalCatalog.status !== 200 && canonicalCatalog.status !== 401) {
+    bb10SourceFailure('canonical catalog is unavailable', `the canonical endpoint returned HTTP ${canonicalCatalog.status}`,
+      { url: canonicalCatalog.url })
+  }
+  const credentialValue = readDeclaredSecretKey(canonical.secretFile, canonical.secretKey)
+  writeJson(join(evidenceDir, 'bb10-sources.json'), {
+    opencode_executable: openCodeExecutable,
+    rcc: { source: rccConfigSourcePath, server_id: rcc.serverId, base_url: rcc.baseUrl, protocol: rcc.protocol,
+      bind: rcc.bind, port: rcc.port, selected_model: rccSelectedModelToken,
+      catalog_url: rccCatalog.url, catalog_status: rccCatalog.status, catalog_model_count: rccCatalog.ids.length },
+    canonical: { source: canonicalProviderSourcePath, provider_id: canonical.id, protocol: canonical.protocol,
+      base_url: canonical.baseUrl, default_model: canonical.defaultModel, auth_alias: canonical.authAlias,
+      secret_key: canonical.secretKey, secret_file: canonical.secretFile, credential_env: canonicalCredentialEnv,
+      credential_length: credentialValue.length, catalog_url: canonicalCatalog.url,
+      catalog_status: canonicalCatalog.status, catalog_model_count: canonicalCatalog.ids.length },
+  })
+  return { openCodeExecutable, rcc, canonical, credentialValue }
+}
+
+/**
+ * The BB10 user `config.toml`. Both real providers are declared with the exact
+ * model spellings their own catalogs publish. Only the credential *env name* is
+ * persisted; the value itself is never written to any user or derived config.
+ */
+function canonicalSessionConfigText(spec, searchExecutable) {
+  // Teams joins `/models` and `/chat/completions` onto `apiBaseUrl`, so the
+  // declared source base URL (which already ends in `/v1`) is persisted as-is.
+  const provider = (id, label, baseUrl, credentialEnv) => `
+[providers.${id}]
+protocol = "openai-chat"
+apiBaseUrl = ${JSON.stringify(baseUrl.replace(/\/+$/u, ''))}
+label = ${JSON.stringify(label)}
+enabled = true${credentialEnv === undefined ? '' : `\ncredentialEnv = ${JSON.stringify(credentialEnv)}`}`
+  return `version = 3
+
+[bridge]
+enabled = true
+
+[agents.${sessionAgentId}]
+enabled = true
+role = "provider"
+label = "BB10-Real"
+
+[agents.${sessionAgentId}.identity]
+hostId = "bb-local"
+machineId = "bb-machine"
+accountId = "local"
+agentKind = "custom"
+label = "BB10-Real"
+
+[agents.${sessionAgentId}.runtime]
+scopeId = "local"
+dataDirectory = "data/${sessionAgentId}"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = ["__console"] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${sessionAgentId}" }
+
+[agents.${sessionAgentId}.model]
+primary = { provider = "${rccProviderId}", model = "${rccSelectedModelToken}" }
+
+[agents.${passiveAgentId}]
+enabled = true
+role = "provider"
+label = "BB10-Passive"
+
+[agents.${passiveAgentId}.identity]
+hostId = "bb-local"
+machineId = "bb-machine"
+accountId = "local"
+agentKind = "custom"
+label = "BB10-Passive"
+
+[agents.${passiveAgentId}.runtime]
+scopeId = "local"
+dataDirectory = "data/${passiveAgentId}"
+policy = { revision = 1, allowedConsumers = [], allowedManagers = ["__console"] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = ${JSON.stringify(searchExecutable)}, searchRoot = "files", profilePrefix = "teams-${passiveAgentId}" }
+
+[console]
+enabled = true
+username = ${JSON.stringify(consoleUsername)}
+passwordEnv = ${JSON.stringify(consolePasswordEnv)}
+agentIds = ["${sessionAgentId}", "${passiveAgentId}"]
+${provider(rccProviderId, 'RCC 4444', spec.rccBaseUrl)}
+${provider(canonicalProviderId, 'GoAIChat OpenAI', spec.canonicalBaseUrl, canonicalCredentialEnv)}
+
+[[models]]
+provider = "${rccProviderId}"
+id = "${rccSelectedModelToken}"
+label = "RCC canonical model"
+
+[[models]]
+provider = "${canonicalProviderId}"
+id = "${spec.canonicalModel}"
+label = "GoAIChat default model"
+`
+}
+
+/** The single dedicated child-env object that carries the credential value. */
+function bb10LaunchEnv(fixture, credentialValue) {
+  return { ...fixture.env, [canonicalCredentialEnv]: credentialValue }
+}
+
+/**
+ * One real provider turn through the installed Console Session entry. The
+ * assertion is on the visible result: a successful dispatch, a successful final
+ * and at least one non-empty assistant text part. Reasoning, tool results, ACKs,
+ * HTTP 200 and a provider capability test do not count.
+ */
+async function visibleAssistantTurn(client, agentId, sessionId, prompt, evidenceDir, prefix, label) {
+  const events = async () => readSessionEvents(
+    await readInstalledProjection(client, undefined, `${prefix}-events`), agentId, sessionId)
+  const finalsBefore = (await events()).filter(event => event.kind === 'final').length
+  const sent = await client.sessionMessage(agentId, sessionId, { text: prompt }, bb10DispatchTimeoutMs)
+  assert(sent.body.ok === true, `${label} dispatch failed: ${JSON.stringify(sent.body).slice(0, 400)}`)
+  const final = await waitForSessionTurn(events, finalsBefore, `${label} final event`)
+  const all = await events()
+  const parts = all.filter(event => event.kind === 'part' && event.partType === 'text'
+    && typeof event.text === 'string' && event.text.trim() !== '')
+  assert(final.state === 'completed', `${label} did not complete successfully: ${JSON.stringify(final)}`)
+  assert(parts.length > 0,
+    `${label} produced no non-empty assistant text part (reasoning and tool parts do not count): ${JSON.stringify(all.filter(event => event.kind === 'part').map(publicJson))}`)
+  const text = parts.at(-1).text.trim()
+  writeJson(join(evidenceDir, `${prefix}-turn.json`), {
+    prompt, dispatch: publicJson(sent.body), final: publicJson(final),
+    assistant_text: text, assistant_parts: parts.length, finish: final.finish ?? null,
+  })
+  return { dispatch: publicJson(sent.body), final: publicJson(final), text, parts: parts.length, finish: final.finish ?? null }
+}
+
+function bb10UnverifiedResult(context, evidenceDir, missingCapability, message, detail = {}, cleanup = {}) {
+  writeJson(join(evidenceDir, 'bb10-unverified.json'), {
+    missing_capability: missingCapability, message, detail: publicJson(detail), cleanup,
+  })
+  return {
+    status: 'unverified',
+    missing_capability: missingCapability,
+    public_input: { package: context.packRoot, case: 'BB10' },
+    external_observation: { missing_capability: missingCapability, error: message, detail: publicJson(detail), cleanup },
+    evidence_path: evidenceDir,
+  }
+}
+
 async function runBB10(context) {
   const evidenceDir = join(context.caseEvidenceRoot, 'BB10')
   mkdirSync(evidenceDir, { recursive: true })
-  const fixture = installPackage(context.packRoot, evidenceDir, 'bb10',
-    { AGENTTEAMS_OPENCODE_EXECUTABLE: openCodeExecutablePath(evidenceDir) })
-  const primary = createSessionProviderStub({ models: [sessionPrimaryModel] })
-  const backup = createSessionProviderStub({ models: [sessionBackupModel] })
-  const manual = createSessionProviderStub({ models: [] })
+  let fixture
   let lifecycle
   let result
   try {
-    const primaryUrl = await listenProviderStub(primary)
-    const backupUrl = await listenProviderStub(backup)
-    const manualUrl = await listenProviderStub(manual)
+    let preconditions
+    try {
+      preconditions = await resolveBb10Preconditions(evidenceDir)
+    } catch (error) {
+      if (!(error instanceof Bb10SourceError)) throw error
+      return bb10UnverifiedResult(context, evidenceDir, error.missingCapability, error.message, error.detail,
+        { fixture_created: false, installed_processes: 'none', retained_obligations: [] })
+    }
+
+    fixture = installPackage(context.packRoot, evidenceDir, 'bb10',
+      { AGENTTEAMS_OPENCODE_EXECUTABLE: preconditions.openCodeExecutable })
+    const launchEnv = bb10LaunchEnv(fixture, preconditions.credentialValue)
     const config = ensureUserConfig(fixture, evidenceDir, {
-      buildConfigText: searchExecutable => sessionConfigFixtureText({ primary: primaryUrl, backup: backupUrl, manual: manualUrl }, searchExecutable),
+      buildConfigText: searchExecutable => canonicalSessionConfigText({
+        rccBaseUrl: preconditions.rcc.baseUrl,
+        canonicalBaseUrl: preconditions.canonical.baseUrl,
+        canonicalModel: preconditions.canonical.defaultModel,
+      }, searchExecutable),
     })
-    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb10')
+    assert(!config.configText.includes(preconditions.credentialValue),
+      'the isolated user config persisted the canonical credential value instead of its env name')
+    assert(config.configText.includes(canonicalCredentialEnv),
+      'the isolated user config did not persist the canonical credential env name')
+
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb10', defaultAgentIds, { launchEnv })
     const console = startInstalledSessionConsole(fixture, evidenceDir, 'bb10')
     const client = sessionConsoleClient(console.url, console.authorization)
-    const sessionEvents = async () => readSessionEvents(await readInstalledProjection(client, undefined, 'events'), sessionAgentId, sessionId)
 
+    // (a) Two real daemons with two real configured provider rows.
     const discovery = await readInstalledProjection(client, evidenceDir, 'bb10')
     const sessionRow = discovery.agents.find(agent => agent.agentId === sessionAgentId)
     const passiveRow = discovery.agents.find(agent => agent.agentId === passiveAgentId)
     assert(sessionRow?.sessionCapable === true, `the installed ${sessionAgentId} row is not Session capable: ${JSON.stringify(sessionRow)}`)
-    assert(passiveRow?.sessionCapable === false && passiveRow.sessionAvailability === 'not-applicable',
-      `the installed ${passiveAgentId} row is not a passive runtime row: ${JSON.stringify(passiveRow)}`)
-    const manualCatalog = discovery.configs.find(row => row.agentId === sessionAgentId)
-      ?.providers.find(provider => provider.id === sessionManualProviderId)
-    assert(manualCatalog?.catalogState === 'empty' && manualCatalog.models.length === 0,
-      `the unbound provider catalog was not empty before the explicit selection: ${JSON.stringify(manualCatalog)}`)
-
-    const firstApply = await applySessionConfigAndWait(client, sessionAgentId, evidenceDir, 'bb10')
-    assert(firstApply.agent.providerId === sessionPrimaryProviderId && firstApply.agent.modelId === sessionPrimaryModel,
-      `the installed projection did not report the explicit primary binding: ${JSON.stringify(firstApply.agent)}`)
-
-    const session = await createAndOpenSession(client, 'BB10 installed explicit model', evidenceDir, 'bb10')
-    const sessionId = session.sessionId
-
-    // (1) The explicit primary binding is what the real provider call used.
-    const primaryPrompt = 'bb10 explicit primary probe'
-    const primaryFinals = (await sessionEvents()).filter(event => event.kind === 'final').length
-    const primarySent = await client.sessionMessage(sessionAgentId, sessionId, { text: primaryPrompt })
-    assert(primarySent.body.ok === true, `the explicit primary prompt failed: ${JSON.stringify(primarySent.body)}`)
-    await waitForSessionTurn(sessionEvents, primaryFinals, 'the explicit primary turn to finish')
-    const primaryRequest = await waitForAsync(async () => primary.requests.map(text => JSON.parse(text))
-      .find(request => JSON.stringify(request.messages ?? '').includes(primaryPrompt)), 120_000,
-    'the explicit primary provider stub to receive the Session prompt')
-    assert(primaryRequest.model === sessionPrimaryModel,
-      `the Session prompt used model ${primaryRequest.model}, not the explicit binding ${sessionPrimaryModel}`)
-    assert(backup.requests.length === 0 && manual.requests.length === 0,
-      'a provider outside the explicit binding received the Session prompt')
-
-    // (2) An explicit Console selection moves the next real call to the newly
-    // selected provider/model, including the empty-catalog path where the manual
-    // model entry is the only catalog entry for that provider. Accepted and
-    // effective are read back separately: the Console change is accepted at once
-    // and becomes effective on the next installed lifecycle generation.
-    const configRow = (await readInstalledProjection(client, undefined, 'config')).configs.find(row => row.agentId === sessionAgentId)
-    assert(typeof configRow?.acceptedRevision === 'number', `the installed projection has no config row for ${sessionAgentId}`)
-    const revisionBeforeSelection = configRow.acceptedRevision
-    const manualEntry = { ref: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
-      origin: 'manual', base: { label: 'BB Manual Model' }, overrides: {} }
-    const putModel = await client.command({ kind: 'config.model.put', agentId: sessionAgentId,
-      expectedRevision: revisionBeforeSelection, entry: manualEntry })
-    assert(putModel.body.ok === true, `config.model.put on an empty catalog failed: ${JSON.stringify(putModel.body)}`)
-    const bindModel = await client.command({ kind: 'config.bindModel', agentId: sessionAgentId,
-      expectedRevision: revisionBeforeSelection + 1, providerId: sessionManualProviderId, modelId: sessionManualModel })
-    assert(bindModel.body.ok === true, `the explicit Console model selection failed: ${JSON.stringify(bindModel.body)}`)
-    const acceptedProjection = await readInstalledProjection(client, evidenceDir, 'bb10-switch-accepted')
-    const acceptedRow = acceptedProjection.configs.find(row => row.agentId === sessionAgentId)
-    assert(acceptedRow.acceptedRevision === revisionBeforeSelection + 2,
-      `the accepted revision did not advance with the Console selection: ${JSON.stringify(acceptedRow)}`)
-    const effectiveBeforeSwitch = acceptedProjection.agents.find(agent => agent.agentId === sessionAgentId)
-    assert(effectiveBeforeSwitch.providerId === sessionPrimaryProviderId && effectiveBeforeSwitch.modelId === sessionPrimaryModel,
-      `the accepted Console selection replaced the running binding before it was effective: ${JSON.stringify(effectiveBeforeSwitch)}`)
-
-    // The installed public lifecycle applies the accepted binding to the next
-    // generation. No private state and no direct substrate call is involved.
-    const generationBeforeSwitch = lifecycle.parsed.generation
-    const primaryRequestsBeforeSwitch = primary.requests.length
-    let switchedConsole
-    let switchedClient
-    let switchedAgent
-    let restartedRow
-    let switchStop
-    try {
-      switchStop = await stopSessionFixture(fixture, lifecycle, evidenceDir, 'bb10-switch')
-      lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb10-switch')
-      assert(lifecycle.parsed.generation > generationBeforeSwitch,
-        `the installed restart did not advance the launcher generation: ${generationBeforeSwitch} -> ${lifecycle.parsed.generation}`)
-      switchedConsole = startInstalledSessionConsole(fixture, evidenceDir, 'bb10-switch')
-      switchedClient = sessionConsoleClient(switchedConsole.url, switchedConsole.authorization)
-      const restartedProjection = await readInstalledProjection(switchedClient, evidenceDir, 'bb10-switch-restarted')
-      restartedRow = restartedProjection.configs.find(row => row.agentId === sessionAgentId)
-      assert(restartedRow.acceptedRevision === revisionBeforeSelection + 2,
-        `the accepted Console selection did not survive the installed restart: ${JSON.stringify(restartedRow)}`)
-      switchedAgent = (await applySessionConfigAndWait(switchedClient, sessionAgentId, evidenceDir, 'bb10-switch')).agent
-    } catch (error) {
-      writeJson(join(evidenceDir, 'bb10-switch-failure.json'), {
-        error: error instanceof Error ? error.message : String(error),
-        ...readUncertaintyFences(fixture.configPath),
-      })
-      throw error
+    assert(passiveRow?.sessionCapable === false, `the installed ${passiveAgentId} row is not passive: ${JSON.stringify(passiveRow)}`)
+    const configRow = discovery.configs.find(row => row.agentId === sessionAgentId)
+    assert(configRow !== undefined, `the installed projection published no config row for ${sessionAgentId}`)
+    const providerIds = configRow.providers.map(provider => provider.id)
+    for (const id of [rccProviderId, canonicalProviderId]) {
+      assert(providerIds.includes(id), `the installed config row does not publish the real provider ${id}: ${JSON.stringify(providerIds)}`)
     }
-    assert(switchedAgent.providerId === sessionManualProviderId && switchedAgent.modelId === sessionManualModel,
-      `the explicit Console selection did not become the Session binding: ${JSON.stringify(switchedAgent)}`)
-    const switchedSession = await createAndOpenSession(switchedClient, 'BB10 installed explicit model (switched)', evidenceDir, 'bb10-switch')
-    const switchedEvents = async () => readSessionEvents(
-      await readInstalledProjection(switchedClient, undefined, 'switch-events'), sessionAgentId, switchedSession.sessionId)
 
-    const switchedPrompt = 'bb10 explicit switched probe'
-    const switchedFinals = (await switchedEvents()).filter(event => event.kind === 'final').length
-    const switchedSent = await switchedClient.sessionMessage(sessionAgentId, switchedSession.sessionId, { text: switchedPrompt })
-    assert(switchedSent.body.ok === true, `the explicitly switched prompt failed: ${JSON.stringify(switchedSent.body)}`)
-    await waitForSessionTurn(switchedEvents, switchedFinals, 'the explicitly switched turn to finish')
-    const manualRequest = await waitForAsync(async () => manual.requests.map(text => JSON.parse(text))
-      .find(request => JSON.stringify(request.messages ?? '').includes(switchedPrompt)), 120_000,
-    'the explicitly selected provider stub to receive the Session prompt')
-    assert(manualRequest.model === sessionManualModel,
-      `the switched Session prompt used model ${manualRequest.model}, not the explicit selection ${sessionManualModel}`)
-    assert(backup.requests.length === 0 && primary.requests.length === primaryRequestsBeforeSwitch,
-      `the explicit switch did not move the real call to the selected provider: ${JSON.stringify({ primary: primary.requests.length, backup: backup.requests.length })}`)
+    // (b) Both real provider catalogs refresh through the Console config entry.
+    let revision = configRow.acceptedRevision
+    const rccRefresh = await client.command({ kind: 'config.refreshModels', agentId: sessionAgentId,
+      expectedRevision: revision, providerId: rccProviderId })
+    assert(rccRefresh.body.ok === true, `the RCC catalog refresh failed: ${JSON.stringify(rccRefresh.body).slice(0, 400)}`)
+    revision += 1
+    const canonicalRefresh = await client.command({ kind: 'config.refreshModels', agentId: sessionAgentId,
+      expectedRevision: revision, providerId: canonicalProviderId })
+    if (canonicalRefresh.body.ok === false && canonicalRefresh.body.error?.code === 'CREDENTIAL_UNAVAILABLE') {
+      return bb10UnverifiedResult(context, evidenceDir, 'canonical credential env did not reach the installed child',
+        'config.refreshModels reported CREDENTIAL_UNAVAILABLE for the canonical provider',
+        { rcc_refresh: publicJson(rccRefresh.body), canonical_refresh: publicJson(canonicalRefresh.body) },
+        { fixture_created: true, cleanup: 'case finally block: installed stop, temp root removal' })
+    }
+    assert(canonicalRefresh.body.ok === true,
+      `the canonical catalog refresh failed: ${JSON.stringify(canonicalRefresh.body).slice(0, 400)}`)
+    revision += 1
+    const refreshed = await readInstalledProjection(client, evidenceDir, 'bb10-refreshed')
+    const refreshedRow = refreshed.configs.find(row => row.agentId === sessionAgentId)
+    const rccCatalogRow = refreshedRow.providers.find(provider => provider.id === rccProviderId)
+    const canonicalCatalogRow = refreshedRow.providers.find(provider => provider.id === canonicalProviderId)
+    assert(rccCatalogRow?.catalogState === 'ready' && rccCatalogRow.models.some(model => model.id === rccSelectedModelToken),
+      `the RCC catalog did not publish the selected model: ${JSON.stringify(rccCatalogRow).slice(0, 400)}`)
+    if (!(canonicalCatalogRow?.catalogState === 'ready'
+      && canonicalCatalogRow.models.some(model => model.id === preconditions.canonical.defaultModel))) {
+      // The canonical provider's declared default model is the only model this
+      // case may bind; if its live catalog no longer publishes it, the real
+      // provider precondition is gone and the case reports unverified.
+      return bb10UnverifiedResult(context, evidenceDir, 'canonical declared model is absent from the current catalog',
+        'the canonical provider catalog did not publish its declared default model',
+        { catalog_state: canonicalCatalogRow?.catalogState ?? null,
+          model_count: canonicalCatalogRow?.models.length ?? 0 },
+        { fixture_created: true, cleanup: 'case finally block: installed stop, temp root removal' })
+    }
 
-    // (3) A stale Console revision must be a typed refusal that changes nothing.
-    const bindingBeforeStale = (await readInstalledProjection(switchedClient, undefined, 'config-stale-before')).configs.find(row => row.agentId === sessionAgentId)
-    const stale = await switchedClient.command({ kind: 'config.bindModel', agentId: sessionAgentId,
-      expectedRevision: revisionBeforeSelection, providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel })
-    assert(stale.body.ok === false && stale.body.error?.code === 'REVISION_CONFLICT',
-      `a stale Console revision was not refused as REVISION_CONFLICT: ${JSON.stringify(stale.body)}`)
-    const bindingAfterStale = (await readInstalledProjection(switchedClient, undefined, 'config-stale-after')).configs.find(row => row.agentId === sessionAgentId)
-    assert(bindingAfterStale.acceptedRevision === bindingBeforeStale.acceptedRevision
-      && bindingAfterStale.effectiveRevision === bindingBeforeStale.effectiveRevision,
-      'the stale Console revision mutated the accepted or effective config')
+    // (c) Apply the accepted RCC binding, then run one real RCC Session turn.
+    const firstApply = await applySessionConfigAndWait(client, sessionAgentId, evidenceDir, 'bb10')
+    assert(firstApply.agent.providerId === rccProviderId && firstApply.agent.modelId === rccSelectedModelToken,
+      `the installed projection did not report the RCC binding: ${JSON.stringify(firstApply.agent)}`)
+    const appliedConfig = (await readInstalledProjection(client, evidenceDir, 'bb10-rcc-config'))
+      .configs.find(row => row.agentId === sessionAgentId)
+    assert(appliedConfig !== undefined && appliedConfig.effectiveRevision === appliedConfig.acceptedRevision,
+      `the RCC apply left the effective revision behind the accepted revision: ${JSON.stringify(appliedConfig)}`)
+    assert(firstApply.agent.sessionEffectiveRevision === appliedConfig.acceptedRevision,
+      `the running RCC runtime revision does not match the accepted revision: ${JSON.stringify([firstApply.agent, appliedConfig])}`)
+    const session = await createAndOpenSession(client, 'BB10 real RCC model', evidenceDir, 'bb10')
+    const rccTurn = await visibleAssistantTurn(client, sessionAgentId, session.sessionId,
+      bb10VisibleTaskPrompt, evidenceDir, 'bb10-rcc', 'the real RCC provider turn')
 
-    // (4) No implicit failover: when the bound provider fails, the backup slot
-    // must stay untouched and the failure must stay observable.
-    const backupRequestsBefore = backup.requests.length
-    const manualRequestsBeforeFailure = manual.requests.length
-    const failedFinals = (await switchedEvents()).filter(event => event.kind === 'final' && event.state === 'failed').length
-    manual.state.fail = true
-    const failedDispatch = await switchedClient.sessionMessage(sessionAgentId, switchedSession.sessionId, { text: 'bb10 no failover probe' }, 180_000)
-      .then(response => ({ ok: true, response }), error => ({ ok: false, error }))
-    await waitForAsync(async () => manual.requests.length > manualRequestsBeforeFailure ? true : undefined,
-      120_000, 'the failing bound provider to receive the prompt')
-    const failedFinal = await optionalWait(async () => {
-      const failures = (await switchedEvents()).filter(event => event.kind === 'final' && event.state === 'failed')
-      return failures.length > failedFinals ? failures.at(-1) : undefined
-    }, 120_000)
-    assert(failedDispatch.ok === false || failedFinal !== undefined,
-      `the failing bound provider produced neither a typed dispatch failure nor a failed final: ${JSON.stringify(failedDispatch.ok ? failedDispatch.response.body : String(failedDispatch.error))}`)
-    assert(backup.requests.length === backupRequestsBefore, 'the Session silently failed over to the backup provider')
+    // (d) Explicitly select the canonical provider as primary and backup through
+    // the Console config entry, then apply it through the installed restart.
+    const beforeSelection = (await readInstalledProjection(client, undefined, 'bb10-selection-before'))
+      .configs.find(row => row.agentId === sessionAgentId)
+    const selectionRevision = beforeSelection.acceptedRevision
+    const selectBackup = await client.command({ kind: 'config.agent.select-backup', agentId: sessionAgentId,
+      expectedRevision: selectionRevision,
+      backup: { providerInstanceId: canonicalProviderId, modelId: preconditions.canonical.defaultModel } })
+    assert(selectBackup.body.ok === true, `the explicit backup selection failed: ${JSON.stringify(selectBackup.body)}`)
+    const bindModel = await client.command({ kind: 'config.bindModel', agentId: sessionAgentId,
+      expectedRevision: selectionRevision + 1, providerId: canonicalProviderId, modelId: preconditions.canonical.defaultModel })
+    assert(bindModel.body.ok === true, `the explicit primary selection failed: ${JSON.stringify(bindModel.body)}`)
+    const acceptedSelection = (await readInstalledProjection(client, evidenceDir, 'bb10-selection-accepted'))
+      .configs.find(row => row.agentId === sessionAgentId)
+    assert(acceptedSelection.acceptedRevision === selectionRevision + 2,
+      `the accepted revision did not advance with the explicit selection: ${JSON.stringify(acceptedSelection)}`)
+
+    const generationBefore = lifecycle.parsed.generation
+    const switchStop = await stopSessionFixture(fixture, lifecycle, evidenceDir, 'bb10-switch')
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb10-switch', defaultAgentIds, { launchEnv })
+    assert(lifecycle.parsed.generation > generationBefore,
+      `the installed restart did not advance the launcher generation: ${generationBefore} -> ${lifecycle.parsed.generation}`)
+    const switchedConsole = startInstalledSessionConsole(fixture, evidenceDir, 'bb10-switch')
+    const switchedClient = sessionConsoleClient(switchedConsole.url, switchedConsole.authorization)
+    const restartedRow = (await readInstalledProjection(switchedClient, evidenceDir, 'bb10-switch-restarted'))
+      .configs.find(row => row.agentId === sessionAgentId)
+    assert(restartedRow.acceptedRevision === selectionRevision + 2,
+      `the accepted explicit selection did not survive the installed restart: ${JSON.stringify(restartedRow)}`)
+    const switchedApply = await applySessionConfigAndWait(switchedClient, sessionAgentId, evidenceDir, 'bb10-switch')
+    assert(switchedApply.agent.providerId === canonicalProviderId
+      && switchedApply.agent.modelId === preconditions.canonical.defaultModel,
+    `the explicit selection did not become the effective Session binding: ${JSON.stringify(switchedApply.agent)}`)
+
+    // (e) One real canonical-provider Session turn through the same public entry.
+    const switchedSession = await createAndOpenSession(switchedClient, 'BB10 real canonical model', evidenceDir, 'bb10-switch')
+    const canonicalTurn = await visibleAssistantTurn(switchedClient, sessionAgentId, switchedSession.sessionId,
+      bb10VisibleTaskPrompt, evidenceDir, 'bb10-canonical', 'the real canonical provider turn')
+    const readback = await readInstalledProjection(switchedClient, evidenceDir, 'bb10-readback')
+    const readbackConfig = readback.configs.find(row => row.agentId === sessionAgentId)
+    const readbackAgent = readback.agents.find(row => row.agentId === sessionAgentId)
+    assert(readbackConfig !== undefined && readbackConfig.effectiveRevision === readbackConfig.acceptedRevision
+      && readbackConfig.applyState === 'clean',
+    `the canonical binding did not settle clean at its accepted revision: ${JSON.stringify(readbackConfig)}`)
+    assert(readbackAgent?.providerId === canonicalProviderId
+      && readbackAgent?.modelId === preconditions.canonical.defaultModel,
+    `the canonical binding did not survive the canonical Session: ${JSON.stringify(readbackAgent)}`)
 
     const final = await stopSessionFixture(fixture, lifecycle, evidenceDir, 'bb10')
     const allPids = lifecyclePids(lifecycle.internal)
@@ -1850,21 +2723,20 @@ async function runBB10(context) {
         passive_agent: passiveAgentId,
         commands: [
           'agentteams init',
-          'agentteams start --config <isolated-home>/.agentteams/config.toml',
+          'agentteams start --config <isolated-home>/.agentteams/config.toml (credential env passed only to this child)',
           'agentteams console start --config <isolated-home>/.agentteams/config.toml',
+          'POST /api/v1/command {"kind":"config.refreshModels","providerId":"rcc-4444"}',
+          'POST /api/v1/command {"kind":"config.refreshModels","providerId":"goaichat-openai"}',
           'POST /api/v1/command {"kind":"config.apply","agentId":"bb-provider"}',
           'POST /api/v1/command {"kind":"session.create","agentId":"bb-provider"}',
-          'POST /api/v1/command {"kind":"session.open","agentId":"bb-provider","sessionId":"<S>"}',
-          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S> {"text":"<prompt>"}',
-          'POST /api/v1/command {"kind":"config.model.put","expectedRevision":<R>,"entry":{"origin":"manual",...}}',
-          'POST /api/v1/command {"kind":"config.bindModel","expectedRevision":<R+1>,"providerId":"bb-manual","modelId":"bb-manual-model"}',
+          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S1> {"text":"<visible task>"} (real RCC provider)',
+          'POST /api/v1/command {"kind":"config.agent.select-backup","backup":{"providerInstanceId":"goaichat-openai"}}',
+          'POST /api/v1/command {"kind":"config.bindModel","providerId":"goaichat-openai"}',
           'agentteams stop --config <isolated-home>/.agentteams/config.toml --generation <G>',
           'agentteams start --config <isolated-home>/.agentteams/config.toml',
           'agentteams console start --config <isolated-home>/.agentteams/config.toml',
-          'POST /api/v1/command {"kind":"session.create","agentId":"bb-provider"} (switched binding)',
-          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S2> {"text":"<switched prompt>"}',
-          'POST /api/v1/command {"kind":"config.bindModel","expectedRevision":<R>} (stale, typed refusal)',
-          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S2> {"text":"bb10 no failover probe"} (bound provider fails)',
+          'POST /api/v1/command {"kind":"config.apply","agentId":"bb-provider"} (canonical binding)',
+          'POST /api/v1/session-message?agentId=bb-provider&sessionId=<S2> {"text":"<visible task>"} (real canonical provider)',
           'agentteams stop --generation <generation>',
         ],
       },
@@ -1873,26 +2745,37 @@ async function runBB10(context) {
         installed_tarball_sha256: fixture.tarballSha256,
         cli_realpath: fixture.cliRealpath,
         launcher: lifecycle.parsed,
-        console: { url: console.url, pid: console.pid, generation: console.generation },
-        console_after_switch: { url: switchedConsole.url, pid: switchedConsole.pid, generation: switchedConsole.generation },
-        discovery: { session_agent: publicJson(sessionRow), passive_agent: publicJson(passiveRow), manual_catalog: publicJson(manualCatalog) },
-        first_apply: firstApply,
-        session: session.created,
-        primary_prompt: { prompt: primaryPrompt, result: publicJson(primarySent.body), provider_request_model: primaryRequest.model },
-        explicit_selection: { accepted_revision_before: revisionBeforeSelection, put_model: publicJson(putModel.body),
-          bind_model: publicJson(bindModel.body), accepted_revision_after: acceptedRow.acceptedRevision,
-          accepted_row: publicJson(acceptedRow), effective_before_switch: publicJson(effectiveBeforeSwitch) },
-        switch_apply: { launcher_generation_before: generationBeforeSwitch, launcher_generation_after: lifecycle.parsed.generation,
-          accepted_after_restart: publicJson(restartedRow), effective_after_switch: publicJson(switchedAgent), session: switchedSession.created },
-        lifecycle_anomaly: { switch_stop_relay_exit: switchStop.relay_anomaly, switch_stop_stderr: switchStop.relay_anomaly ? switchStop.stop.stderr.trim() : '',
-          final_stop_relay_exit: final.relay_anomaly, final_stop_stderr: final.relay_anomaly ? final.stop.stderr.trim() : '' },
-        switched_prompt: { prompt: switchedPrompt, result: publicJson(switchedSent.body), provider_request_model: manualRequest.model },
-        stale_revision: { result: publicJson(stale.body), accepted_revision_before: bindingBeforeStale.acceptedRevision,
-          accepted_revision_after: bindingAfterStale.acceptedRevision, effective_revision_after: bindingAfterStale.effectiveRevision },
-        no_failover: { dispatch: failedDispatch.ok ? publicJson(failedDispatch.response.body) : String(failedDispatch.error),
-          failed_final: failedFinal === undefined ? null : publicJson(failedFinal),
-          bound_provider_requests: manual.requests.length, backup_provider_requests: backup.requests.length },
-        provider_request_counts: { primary: primary.requests.length, backup: backup.requests.length, manual: manual.requests.length },
+        sources: {
+          rcc: { source: rccConfigSourcePath, server_id: rccServerId, base_url: preconditions.rcc.baseUrl,
+            selected_model: rccSelectedModelToken },
+          canonical: { source: canonicalProviderSourcePath, provider_id: preconditions.canonical.id,
+            base_url: preconditions.canonical.baseUrl, default_model: preconditions.canonical.defaultModel,
+            auth_alias: preconditions.canonical.authAlias, secret_key: preconditions.canonical.secretKey,
+            credential_env: canonicalCredentialEnv, credential_length: preconditions.credentialValue.length },
+        },
+        discovery: { session_agent: publicJson(sessionRow), passive_agent: publicJson(passiveRow),
+          providers: providerIds, accepted_revision: configRow.acceptedRevision },
+        catalogs: {
+          rcc_refresh: publicJson(rccRefresh.body), canonical_refresh: publicJson(canonicalRefresh.body),
+          rcc_catalog_state: rccCatalogRow.catalogState, rcc_model_count: rccCatalogRow.models.length,
+          canonical_catalog_state: canonicalCatalogRow.catalogState,
+          canonical_model_count: canonicalCatalogRow.models.length,
+          accepted_revision_after_refresh: revision,
+        },
+        rcc_binding: { apply: firstApply, config: publicJson(appliedConfig), session: session.created, turn: rccTurn },
+        explicit_selection: { accepted_revision_before: selectionRevision, select_backup: publicJson(selectBackup.body),
+          bind_model: publicJson(bindModel.body), accepted_revision_after: acceptedSelection.acceptedRevision,
+          accepted_row: publicJson(acceptedSelection) },
+        switch_apply: { launcher_generation_before: generationBefore, launcher_generation_after: lifecycle.parsed.generation,
+          accepted_after_restart: publicJson(restartedRow), effective_after_switch: publicJson(switchedApply.agent),
+          session: switchedSession.created },
+        canonical_binding: { turn: canonicalTurn, config: publicJson(readbackConfig), agent: publicJson(readbackAgent) },
+        lifecycle_anomaly: {
+          switch_stop_relay_exit: switchStop.relay_anomaly,
+          switch_stop_stderr: switchStop.relay_anomaly ? switchStop.stop.stderr.trim() : '',
+          final_stop_relay_exit: final.relay_anomaly,
+          final_stop_stderr: final.relay_anomaly ? final.stop.stderr.trim() : '',
+        },
         console_listener_gone_after_stop: consoleGone,
         stop_stdout: final.stop.stdout,
         stopped_stdout: final.status.stdout,
@@ -1904,11 +2787,8 @@ async function runBB10(context) {
     }
   } finally {
     stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    await closeProviderStub(primary)
-    await closeProviderStub(backup)
-    await closeProviderStub(manual)
     try {
-      fixture.cleanup()
+      fixture?.cleanup()
     } catch {
       // The case result records the primary observation.
     }
@@ -3246,6 +4126,38 @@ async function runBB05(context) {
   return result
 }
 
+/**
+ * BB06i round 12: the provider's typed capacity refusal must be readable from the
+ * public receipt alone. The host projects the typed output ARC `control.reply.error`
+ * into the existing `control.error`; this assertion never reads the provider's
+ * private ledger, so a refusal that stays only in the ledger fails here.
+ */
+function assertCapacityRefusal(receipt, label, expected) {
+  const control = receipt.control
+  assert(receipt.status === 'completed', `${label}: the refusal receipt was not completed: ${JSON.stringify(receipt)}`)
+  assert(receipt.business === undefined,
+    `${label}: an over-capacity receipt returned a business result: ${JSON.stringify(receipt.business)}`)
+  assert(control.requestState === 'failed' && control.workClosure === 'retained',
+    `${label}: the over-capacity Work was not retained as a failed request: ${JSON.stringify(control)}`)
+  assert(control.error?.code === 'RESOURCE_EXHAUSTED',
+    `${label}: the public receipt did not carry the typed capacity refusal: ${JSON.stringify(control.error)}`)
+  assert(/capacity exhausted|is occupied/u.test(String(control.error?.message ?? '')),
+    `${label}: the typed capacity refusal carried no provider resource reason: ${JSON.stringify(control.error)}`)
+  assert(control.workId === expected.workId, `${label}: the refusal lost the original workId: ${JSON.stringify(control)}`)
+  assert(typeof control.requestId === 'string' && control.requestId.length > 0,
+    `${label}: the refusal carried no request identity: ${JSON.stringify(control)}`)
+  if (expected.previousRequestId !== undefined) {
+    assert(control.requestId !== expected.previousRequestId,
+      `${label}: the refusal replayed the previous request identity: ${JSON.stringify(control)}`)
+  }
+  assert(control.providerAgentId === expected.providerAgentId && control.targetGeneration === expected.targetGeneration,
+    `${label}: the refusal lost the original provider/generation binding: ${JSON.stringify(control)}`)
+  assert(control.capabilityId === expected.capabilityId && control.capabilityVersion === expected.capabilityVersion
+    && control.operation === expected.operation,
+  `${label}: the refusal lost the original capability/operation binding: ${JSON.stringify(control)}`)
+  return control
+}
+
 async function runBB06(context) {
   const evidenceDir = join(context.caseEvidenceRoot, 'BB06')
   mkdirSync(evidenceDir, { recursive: true })
@@ -3301,29 +4213,25 @@ async function runBB06(context) {
     // (1) Over capacity: a third persistent Work is refused without a third context.
     const overCapacity = openBrowserContext(fixture, evidenceDir, 'bb06-open-3', browserReceiverOne, provider.generation, page.url)
     const overControl = overCapacity.receipt.control
-    assert(overCapacity.receipt.business === undefined,
-      `an over-capacity Work returned a business result: ${JSON.stringify(overCapacity.receipt.business)}`)
-    assert(overControl.requestState === 'failed' && overControl.workClosure === 'retained',
-      `an over-capacity Work was admitted: ${JSON.stringify(overControl)}`)
+    assertCapacityRefusal(overCapacity.receipt, 'the over-capacity open', {
+      workId: overControl.workId,
+      providerAgentId: workProviderId, targetGeneration: provider.generation,
+      capabilityId: browserCapabilityId, capabilityVersion: '1', operation: 'context.create',
+    })
     const afterRefusal = browserProfilesUnder(fixture)
     assert(afterRefusal.size === 2, `the over-capacity refusal created an extra context: ${JSON.stringify([...afterRefusal.keys()])}`)
     // The retained Work refuses the request again. The public entry reports the
-    // refusal as a failed request; the installed provider records the typed
-    // capacity refusal in its durable ledger.
+    // typed provider refusal on the same receipt the caller already holds.
     const refused = runWorkReceipt(fixture, evidenceDir, 'bb06-request-over-capacity', ['work', 'request', '--config', fixture.configPath,
       '--receiver', browserReceiverOne, '--work-id', overControl.workId,
       ...browserBinding(provider.generation, browserCapabilityId, 'context.create'),
       '--demands', browserContextDemands, '--payload', JSON.stringify({ initialUrl: page.url })])
     const refusedControl = refused.receipt.control
-    assert(refused.receipt.status === 'completed' && refusedControl.requestState === 'failed' && refusedControl.workClosure === 'retained',
-      `the retained over-capacity Work did not refuse the request: ${JSON.stringify(refused.receipt)}`)
-    assert(refused.receipt.business === undefined, 'an over-capacity request returned a business result')
-    const refusedRecord = (providerLedger(fixture).snapshot ?? emptyProviderLedger).requests
-      .find(request => request.control?.requestId === refusedControl.requestId)
-    assert(refusedRecord?.state === 'failed' && refusedRecord.error?.code === 'RESOURCE_EXHAUSTED',
-      `the installed provider did not record the typed capacity refusal: ${JSON.stringify(refusedRecord)}`)
-    assert(/capacity exhausted|is occupied/u.test(refusedRecord.error.message),
-      `the typed capacity refusal carried no resource reason: ${JSON.stringify(refusedRecord.error)}`)
+    assertCapacityRefusal(refused.receipt, 'the retained over-capacity request', {
+      workId: overControl.workId, previousRequestId: overControl.requestId,
+      providerAgentId: workProviderId, targetGeneration: provider.generation,
+      capabilityId: browserCapabilityId, capabilityVersion: '1', operation: 'context.create',
+    })
     assert(browserProfilesUnder(fixture).size === 2,
       `the over-capacity request created an extra context: ${JSON.stringify([...browserProfilesUnder(fixture).keys()])}`)
 
@@ -3396,7 +4304,6 @@ async function runBB06(context) {
         over_capacity: {
           open: { exit_status: overCapacity.output.status, control: publicJson(overControl) },
           request: { exit_status: refused.output.status, control: publicJson(refusedControl) },
-          provider_request_record: publicJson(refusedRecord),
           real_contexts_after: afterRefusal.size,
         },
         release: { close: publicJson(closedOne.receipt.control), released_context: observedOne.business.contextId },
@@ -3624,4 +4531,15 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.
   await main()
 }
 
-export { cases, parseArgs }
+export {
+  Bb10SourceError,
+  bb10LaunchEnv,
+  canonicalSessionConfigText,
+  cases,
+  parseArgs,
+  parseCanonicalProviderSource,
+  parseFlatSecretKey,
+  parseRccServerSource,
+  readDeclaredSecretKey,
+  redactCredential,
+}
