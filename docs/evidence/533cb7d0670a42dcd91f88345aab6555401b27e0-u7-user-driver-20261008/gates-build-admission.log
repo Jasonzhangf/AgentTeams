@@ -1,0 +1,180 @@
+11:02:05 gates start
+### gate teams-provider-config-effective
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+
+ ✓ control-protocol/console-api.spec.ts (8 tests) 7ms
+ ✓ runtime/console-config.spec.ts (5 tests) 39ms
+ ✓ runtime/managed-config-owner.spec.ts (7 tests) 85ms
+(node:80941) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ scripts/blackbox-user-mvp.spec.ts (31 tests) 242ms
+ ✓ runtime/managed-config-live.spec.ts (1 test) 784ms
+   ✓ applies accepted Teams config to a real isolated OpenCode child and reads effective revision  783ms
+ ✓ runtime/local-config.spec.ts (40 tests) 806ms
+ ✓ runtime/managed-opencode-session.spec.ts (1 test) 1572ms
+   ✓ sends one real OpenCode Session request through the selected managed provider  1571ms
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/dagpipe/.build/build-p43d91)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.67s
+stderr | runtime/agent-process.spec.ts > Session host admission, cancel causality and observation > separates observation degradation from owner readiness and contains expected errors
+Promise returned by `expect(actual).resolves.toMatchObject(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in the next Vitest major. Please remember to await the assertion.
+    at /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/agent-process.spec.ts:1363:62
+
+ ✓ runtime/agent-process.spec.ts (40 tests) 33354ms
+   ✓ executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state  5749ms
+   ✓ keeps an Agent with an accepted model binding but an unresolved managed executable passive and unavailable  334ms
+   ✓ persists unknown state before refusing a restart with active Work  416ms
+   ✓ runs real persistent Camo browser Work through current SDK graphs and restores capacity  20954ms
+     ✓ keeps a multi-match assistant identity ambiguous and never confirms its cancel  5011ms
+
+ Test Files  8 passed (8)
+      Tests  133 passed (133)
+   Start at  11:02:06
+   Duration  34.07s (transform 1.57s, setup 0ms, import 2.47s, tests 36.89s, environment 0ms)
+
+gate24 exit=0
+### gate teams-console-directory-discovery
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+
+ ✓ ui/teams-console/tests/model.spec.ts (8 tests) 4ms
+ ✓ control-protocol/console-wire.spec.ts (5 tests) 6ms
+ ✓ runtime/console-hub.spec.ts (10 tests) 8ms
+ ✓ ui/teams-console/tests/api.spec.ts (11 tests) 29ms
+ ✓ scripts/blackbox-user-mvp.spec.ts (31 tests) 214ms
+ ✓ runtime/console-runtime.spec.ts (1 test) 347ms
+   ✓ owns an authenticated HTTPS listener and releases its relay registration on stop  346ms
+ ✓ ui/teams-console/tests/render.spec.ts (2 tests) 6031ms
+     ✓ renders declared services and resources and an explicit unavailable state  3095ms
+     ✓ keeps the busy window distinct from completion and enables bind after reselection  2935ms
+
+ Test Files  7 passed (7)
+      Tests  68 passed (68)
+   Start at  11:02:41
+   Duration  6.51s (transform 909ms, setup 0ms, import 1.46s, tests 6.64s, environment 0ms)
+
+
+> agentteams@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    39.88 kB │ gzip: 9.71 kB
+ℹ lib/index.d.mts  26.99 kB │ gzip: 6.09 kB
+ℹ 2 files, total: 66.87 kB
+✔ Build complete in 965ms
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/console-host
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/ui/teams-console
+> tsc -p tsconfig.json --noEmit
+
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+
+> agentteams@0.1.0 smoke /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node scripts/artifact-smoke.mjs && node scripts/runtime-smoke.mjs
+
+Packaged Console smoke passed: one staged final pack root, actual Basic auth, static/UI bytes, and owner-denied API. No provider or cross-device claim.
+Packaged runtime smoke passed: real TLS Relay, daemon library admission/directory, stop and fresh generation. No OS process deployment, executor or NAT claim.
+gate26 exit=0
+11:02:57 build start
+
+> agentteams@0.1.0 build:governance /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> pnpm build && node scripts/package-artifact.mjs --mode final
+
+
+> agentteams@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> pnpm --dir opencode-adapter build && pnpm --dir console-host build && pnpm --dir ui/teams-console build && pnpm build:runtime
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    39.88 kB │ gzip: 9.71 kB
+ℹ lib/index.d.mts  26.99 kB │ gzip: 6.09 kB
+ℹ 2 files, total: 66.87 kB
+✔ Build complete in 652ms
+
+> @deepseek-ai/teams-console-host@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/console-host
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/console-host/package.json 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    14.40 kB │ gzip: 4.29 kB
+ℹ lib/index.d.mts  17.36 kB │ gzip: 3.83 kB
+ℹ 2 files, total: 31.76 kB
+✔ Build complete in 548ms
+
+> @deepseek-ai/teams-console@0.1.0 build /Volumes/Intel/playground/agentteams/u7-user-driver-20261006/ui/teams-console
+> tsc -p tsconfig.build.json && node scripts/finalize-build.mjs
+
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/runtime/dagpipe/.build/build-5xh5PU)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.81s
+package artifact final agentteams@0.1.0 e25c165bc52924d9224a8f7de373077e95ba5b222c64e4397e94d3a13e7f07e8 generated/modules/teams-source/lib
+build exit=0
+11:03:08 admission start
+
+> agentteams@0.1.0 lifecycle:admission /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node scripts/lifecycle-adapter.mjs
+
+{"ok":true,"attempt":"attempt-1791482589431-e9904e46-2cac-4df7-aa3a-a682c75412d2","candidate":"5bae61472f21d88543fba3a61832e0cb37566b19","artifact_hash":"sha256:03f24d4ea7827582890b9b3c9fa00a521125e8bd8bc3b69339fc8597083afa04","records":"/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/.appsdk/records/pre-review-validation-record-teams-source-5bae61472f21d88543fba3a61832e0cb37566b19-attempt-1791482589431-e9904e46-2cac-4df7-aa3a-a682c75412d2.json"}
+admission exit=0
+11:07:04 all end

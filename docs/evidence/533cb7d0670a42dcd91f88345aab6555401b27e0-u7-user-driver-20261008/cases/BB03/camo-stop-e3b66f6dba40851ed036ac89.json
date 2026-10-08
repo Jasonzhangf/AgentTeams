@@ -1,0 +1,12 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "stop",
+    "--profile",
+    "teams-bb-provider-315f93d0e545173c90d4c8ca61ac58419e4bb12ee3b66f6dba40851ed036ac89"
+  ],
+  "status": null,
+  "signal": null,
+  "stdout": "",
+  "stderr": ""
+}

@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "click",
+    "--profile",
+    "bb09-main-30129",
+    "--selector",
+    "article.teams-provider-card .teams-model-row .teams-button-primary"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"click\",\n  \"profile\": \"bb09-main-30129\",\n  \"target\": \"t_db232716cfd6\",\n  \"selector\": \"article.teams-provider-card .teams-model-row .teams-button-primary\",\n  \"text\": null,\n  \"button\": \"left\",\n  \"dialogAction\": null,\n  \"dialogText\": null,\n  \"dialog\": null,\n  \"timeout\": null,\n  \"clicked\": true,\n  \"issuedAt\": \"2026-10-08T18:13:35.406Z\",\n  \"traceId\": \"cli-1791483215368\"\n}\n",
+  "stderr": ""
+}

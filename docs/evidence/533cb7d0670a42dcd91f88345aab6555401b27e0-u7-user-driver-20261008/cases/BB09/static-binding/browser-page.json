@@ -1,0 +1,12 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "get-page-info",
+    "--profile",
+    "bb09-static-30129"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"get-page-info\",\n  \"profile\": \"bb09-static-30129\",\n  \"target\": \"t_1eb996eda57e\",\n  \"info\": {\n    \"cmd\": \"get-page-info\",\n    \"ok\": true,\n    \"target\": \"t_1eb996eda57e\",\n    \"page\": \"page_b21f020035f1\",\n    \"url\": \"http://127.0.0.1:64453/\",\n    \"title\": \"AgentTeams Console\",\n    \"viewportWidth\": 1366,\n    \"viewportHeight\": 900,\n    \"scrollWidth\": 1366,\n    \"scrollHeight\": 900,\n    \"scrollX\": 0,\n    \"scrollY\": 0,\n    \"readyState\": \"complete\"\n  },\n  \"issuedAt\": \"2026-10-08T18:14:03.989Z\",\n  \"traceId\": \"cli-1791483243951\"\n}\n",
+  "stderr": ""
+}

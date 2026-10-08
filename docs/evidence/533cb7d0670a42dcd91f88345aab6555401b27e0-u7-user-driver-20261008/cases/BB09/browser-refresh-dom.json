@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-main-30129",
+    "--script",
+    "JSON.stringify([...document.querySelectorAll('article.teams-agent-card')].map(card => {\n  const keys = [...card.querySelectorAll('button[data-focus-key]')].map(node => node.dataset.focusKey)\n  const details = keys.find(key => /^agent:.+:details$/u.test(key))\n  const presence = card.querySelector('.teams-presence')\n  return {\n    agentId: details === undefined ? null : details.replace(/^agent:/u, '').replace(/:details$/u, ''),\n    label: card.querySelector('.teams-identity-copy strong')?.textContent ?? null,\n    machineId: (card.querySelector('.teams-identity-copy span')?.textContent ?? '').split(' · ')[0],\n    presence: presence === null ? null : [...presence.classList].find(name => name.startsWith('teams-presence-'))?.slice('teams-presence-'.length) ?? null,\n    text: card.textContent ?? '',\n  }\n}))"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-30129\",\n  \"target\": \"t_db232716cfd6\",\n  \"result\": \"[{\\\"agentId\\\":\\\"bb-provider\\\",\\\"label\\\":\\\"BB09-Provider\\\",\\\"machineId\\\":\\\"bb-machine\\\",\\\"presence\\\":\\\"online\\\",\\\"text\\\":\\\"BB09-Providerbb-machine · 在线0 通知会话运行环境未生效能力: file-search已声明服务file-search · 1操作: searchsearch-slot · 声明容量: 2 slot详情配置\\\"},{\\\"agentId\\\":\\\"bb-receiver\\\",\\\"label\\\":\\\"BB09-Receiver\\\",\\\"machineId\\\":\\\"bb-machine\\\",\\\"presence\\\":\\\"online\\\",\\\"text\\\":\\\"BB09-Receiverbb-machine · 在线0 通知能力: —已声明服务该智能体未声明任何服务。详情\\\"}]\",\n  \"issuedAt\": \"2026-10-08T18:13:29.674Z\",\n  \"traceId\": \"cli-1791483209637\"\n}\n",
+  "stderr": ""
+}

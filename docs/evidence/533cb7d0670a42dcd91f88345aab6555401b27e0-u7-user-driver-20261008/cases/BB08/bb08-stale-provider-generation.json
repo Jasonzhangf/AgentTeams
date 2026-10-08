@@ -1,0 +1,23 @@
+{
+  "command": "/tmp/agentteams-u7-bb08-frLYVN/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "open",
+    "--config",
+    "/tmp/agentteams-u7-bb08-frLYVN/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--operation",
+    "search",
+    "--demands",
+    "[{\"resourceId\":\"search-slot\",\"amount\":1}]",
+    "--provider-generation",
+    "99",
+    "--payload",
+    "{\"query\":\"marker-alpha\"}"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"bb64d720-a1d6-41d2-802e-6e5f6718bac6\",\"attemptId\":\"c7786013-2466-46c9-85a8-0eed129cb27c\",\"workId\":\"e6079e52-ccf4-4996-a4eb-fd4d9a378578\",\"requestId\":\"6369d7ed-f40c-4e65-b84d-c38e9ff762c1\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":99,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"STALE_GENERATION\",\"message\":\"Provider bb-provider generation 99 is not current\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
+}

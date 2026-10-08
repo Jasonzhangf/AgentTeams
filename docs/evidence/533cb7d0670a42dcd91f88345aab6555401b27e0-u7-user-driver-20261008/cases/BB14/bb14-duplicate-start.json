@@ -1,0 +1,12 @@
+{
+  "command": "/tmp/agentteams-u7-bb14-tAS43x/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "start",
+    "--config",
+    "/tmp/agentteams-u7-bb14-tAS43x/home/.agentteams/config.toml"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "local supervisor is already running pid=46392 generation=1\n"
+}

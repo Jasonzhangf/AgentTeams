@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-nocred-30129",
+    "--script",
+    "fetch('/api/v1/projection', { method: 'GET' }).then(r => r.status)"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-nocred-30129\",\n  \"target\": \"t_e0fc5880c7df\",\n  \"result\": 401,\n  \"issuedAt\": \"2026-10-08T18:13:42.058Z\",\n  \"traceId\": \"cli-1791483221998\"\n}\n",
+  "stderr": ""
+}

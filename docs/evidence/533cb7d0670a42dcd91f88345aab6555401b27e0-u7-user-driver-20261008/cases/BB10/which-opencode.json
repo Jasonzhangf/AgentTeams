@@ -1,0 +1,10 @@
+{
+  "command": "which",
+  "args": [
+    "opencode"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "/Users/fanzhang/.opencode/bin/opencode\n",
+  "stderr": ""
+}

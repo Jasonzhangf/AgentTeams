@@ -1,0 +1,13 @@
+{
+  "command": "git",
+  "args": [
+    "checkout",
+    "--quiet",
+    "--detach",
+    "5bae61472f21d88543fba3a61832e0cb37566b19"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "",
+  "stderr": ""
+}

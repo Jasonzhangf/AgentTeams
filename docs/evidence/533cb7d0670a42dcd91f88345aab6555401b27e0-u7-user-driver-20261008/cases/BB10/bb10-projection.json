@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB10-Real",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "no-current",
+      "sessionObservation": {
+        "state": "live"
+      }
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB10-Passive",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 0,
+      "applyState": "clean",
+      "providers": [
+        {
+          "id": "rcc-4444",
+          "label": "RCC 4444",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:4444/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "goaichat_openai.qwen3.8-max",
+              "label": "RCC canonical model"
+            }
+          ]
+        },
+        {
+          "id": "goaichat-openai",
+          "label": "GoAIChat OpenAI",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "https://llm.goaichat.top/v1",
+          "enabled": true,
+          "authKind": "bearer",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "qwen3.8-max",
+              "label": "GoAIChat default model"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": []
+}

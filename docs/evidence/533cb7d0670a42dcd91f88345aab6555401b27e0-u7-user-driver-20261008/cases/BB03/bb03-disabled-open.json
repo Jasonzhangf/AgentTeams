@@ -1,0 +1,29 @@
+{
+  "command": "/tmp/agentteams-u7-bb03-oz2HtO/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "open",
+    "--config",
+    "/tmp/agentteams-u7-bb03-oz2HtO/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--provider",
+    "bb-provider",
+    "--provider-generation",
+    "1",
+    "--capability-id",
+    "browser",
+    "--capability-version",
+    "1",
+    "--operation",
+    "context.create",
+    "--demands",
+    "[{\"resourceId\":\"browser-context\",\"amount\":1},{\"resourceId\":\"browser-slot\",\"amount\":1}]",
+    "--payload",
+    "{\"initialUrl\":\"http://127.0.0.1:63496/\"}"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"17895b4b-a5a2-40d9-b5b8-82efdb17353b\",\"attemptId\":\"101515b4-fc1d-4cbb-939d-b8c7521b0662\",\"workId\":\"7a836afd-05b3-4a66-ab1c-da65f6475974\",\"requestId\":\"8f591b93-c1d7-47f7-9fcf-dd90147caa0e\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"browser\",\"capabilityVersion\":\"1\",\"operation\":\"context.create\",\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Provider bb-provider does not declare browser\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
+}

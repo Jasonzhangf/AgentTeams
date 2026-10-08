@@ -1,0 +1,16 @@
+[
+  {
+    "agentId": "bb-provider",
+    "label": "BB09-Provider",
+    "machineId": "bb-machine",
+    "presence": "online",
+    "text": "BB09-Providerbb-machine · 在线0 通知会话运行环境未生效能力: file-search已声明服务file-search · 1操作: searchsearch-slot · 声明容量: 2 slot详情配置"
+  },
+  {
+    "agentId": "bb-receiver",
+    "label": "BB09-Receiver",
+    "machineId": "bb-machine",
+    "presence": "online",
+    "text": "BB09-Receiverbb-machine · 在线0 通知能力: —已声明服务该智能体未声明任何服务。详情"
+  }
+]

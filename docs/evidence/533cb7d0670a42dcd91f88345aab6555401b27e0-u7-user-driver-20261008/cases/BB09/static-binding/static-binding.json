@@ -1,0 +1,49 @@
+{
+  "explicit_agent_ids": [
+    "bb-provider",
+    "bb-receiver"
+  ],
+  "installed_content_sha256": "af1daf791760002cc7f95c8cb3162578fe5491d1c2da025b7a1a81f647f6cc37",
+  "cleanup": {
+    "stop_stdout": "stopped state=stopped generation=1 config=/tmp/agentteams-u7-bb09-static-wK94GI/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-static-wK94GI/home/.agentteams/internal.toml pid=68365\n",
+    "stopped_stdout": "status state=stopped generation=1 config=/tmp/agentteams-u7-bb09-static-wK94GI/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-static-wK94GI/home/.agentteams/internal.toml pid=68365 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB09-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB09-Receiver role=receiver presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=1 consoleCredential=configured\n",
+    "pids": [
+      68365,
+      68410,
+      68411,
+      68412
+    ],
+    "pids_alive_after_stop": [],
+    "browser_profiles": [
+      {
+        "profile": "bb09-static-30129",
+        "stop_status": 0,
+        "daemon_status": 0
+      },
+      {
+        "profile": "bb09-static-nocred-30129",
+        "stop_status": 2,
+        "daemon_status": 0
+      }
+    ],
+    "temporary_root_removed": true
+  },
+  "projection": {
+    "agents": [
+      {
+        "agentId": "bb-provider",
+        "label": "BB09-Provider",
+        "machineId": "bb-machine",
+        "presence": "online"
+      },
+      {
+        "agentId": "bb-receiver",
+        "label": "BB09-Receiver",
+        "machineId": "bb-machine",
+        "presence": "online"
+      }
+    ],
+    "config_interaction": "not-run"
+  },
+  "evidence_path": "/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v4/full/cases/BB09/static-binding"
+}

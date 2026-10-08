@@ -1,0 +1,1637 @@
+{
+  "schema_version": 1,
+  "driver": "scripts/blackbox-user-mvp.mjs",
+  "generated_at": "2026-10-08T18:08:12.362Z",
+  "candidate": {
+    "head_commit": "5bae61472f21d88543fba3a61832e0cb37566b19",
+    "base_commit": "4aed787041f387e090e141d276b41eab877278e6",
+    "tree_hash": "533cb7d0670a42dcd91f88345aab6555401b27e0",
+    "indexed_tree_hash": "533cb7d0670a42dcd91f88345aab6555401b27e0",
+    "source_state": "committed"
+  },
+  "candidate_commit": "5bae61472f21d88543fba3a61832e0cb37566b19",
+  "candidate_tree_hash": "533cb7d0670a42dcd91f88345aab6555401b27e0",
+  "installed_package": {
+    "pack_root": "/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/generated/modules/teams-source/lib",
+    "package_receipt": "/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/generated/modules/teams-source/package-receipt.json",
+    "content_sha256": "af1daf791760002cc7f95c8cb3162578fe5491d1c2da025b7a1a81f647f6cc37",
+    "mode": "final",
+    "version": "0.1.0"
+  },
+  "cases": [
+    {
+      "case_id": "BB06",
+      "owner": "U3+U4",
+      "capability_gate": "persistent browser Work capacity",
+      "status": "passed",
+      "public_input": {
+        "package": "/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/generated/modules/teams-source/lib",
+        "commands": [
+          "agentteams init",
+          "agentteams start",
+          "agentteams status",
+          "agentteams work open --receiver bb-receiver-1 --operation context.create",
+          "agentteams work open --receiver bb-receiver-2 --operation context.create",
+          "agentteams work open (over capacity)",
+          "agentteams work close",
+          "agentteams work open (after confirmed release)",
+          "agentteams stop --generation <generation>"
+        ]
+      },
+      "external_observation": {
+        "installed_content_sha256": "af1daf791760002cc7f95c8cb3162578fe5491d1c2da025b7a1a81f647f6cc37",
+        "installed_tarball_sha256": "84e58136b730e583c15c870ef5f7da98b189b7d3581d7038d18772aceacefb59",
+        "cli_realpath": "/private/tmp/agentteams-u7-bb06-l9C9MV/prefix/node_modules/agentteams/cli/agentteams.mjs",
+        "camo": {
+          "executable": "/opt/homebrew/bin/camo",
+          "version": "0.4.10"
+        },
+        "camoufox_runtime": {
+          "source": "/Users/fanzhang/Library/Caches/camoufox",
+          "target": "/tmp/agentteams-u7-bb06-l9C9MV/home/Library/Caches/camoufox",
+          "resolved": "/Users/fanzhang/Library/Caches/camoufox"
+        },
+        "advertised_capability": "browser@1:context.create,navigate,snapshot,context.destroy[browser-context:2:context,browser-slot:2:slot]",
+        "holding": {
+          "first": {
+            "receiver": "bb-receiver-1",
+            "control": {
+              "projectId": "agentteams-local-work",
+              "graphId": "agentteams.work-query",
+              "graphVersion": "1",
+              "executionId": "61736fd6-afa4-4edb-8527-a201d251cbae",
+              "attemptId": "c3093d2f-1ff5-4fd8-8385-fe4d272caf2c",
+              "workId": "6b749665-c9a3-4d1e-ac45-75462fc91ddd",
+              "requestId": "52fe4a95-f627-4770-84cf-e1b532c33c6b",
+              "providerAgentId": "bb-provider",
+              "targetGeneration": 1,
+              "linkGeneration": 1,
+              "serviceSelection": "capability",
+              "capabilityId": "browser",
+              "capabilityVersion": "1",
+              "operation": "context.create",
+              "requestState": "succeeded",
+              "observed": true
+            },
+            "business": {
+              "contextId": "browser-context-3f05535b-e09d-41b5-bd51-4ed59feb242a",
+              "profile": "teams-bb-provider-fc73265cbfe9da02a63be062066eeacb485fe566ff072367a1fac25894b52688",
+              "raw": {
+                "cmd": "start",
+                "ephemeral": false,
+                "headless": true,
+                "issuedAt": "2026-10-08T18:08:25.143Z",
+                "profile": "teams-bb-provider-fc73265cbfe9da02a63be062066eeacb485fe566ff072367a1fac25894b52688",
+                "reused": false,
+                "sessionId": "camoufox-85896",
+                "target": "t_2fc9f5e4fe4e",
+                "traceId": "cli-1791482902206",
+                "url": "http://127.0.0.1:61900/"
+              },
+              "sessionId": "camoufox-85896"
+            },
+            "process_pids": [
+              86400
+            ]
+          },
+          "second": {
+            "receiver": "bb-receiver-2",
+            "control": {
+              "projectId": "agentteams-local-work",
+              "graphId": "agentteams.work-query",
+              "graphVersion": "1",
+              "executionId": "a075c7c4-6d91-47d2-aab4-3f3325608d93",
+              "attemptId": "90406f25-726d-409a-9770-c4c87fbdacf3",
+              "workId": "c7ddcaf8-23e9-4900-bf53-d3f17e075e8f",
+              "requestId": "0f2927bd-5a77-4597-bc50-fb5afd6f974a",
+              "providerAgentId": "bb-provider",
+              "targetGeneration": 1,
+              "linkGeneration": 1,
+              "serviceSelection": "capability",
+              "capabilityId": "browser",
+              "capabilityVersion": "1",
+              "operation": "context.create",
+              "requestState": "succeeded",
+              "observed": true
+            },
+            "business": {
+              "contextId": "browser-context-023cf3ce-ae5c-4999-bffe-3d823efc5586",
+              "profile": "teams-bb-provider-525c759154b1a39a8b5b0d047c25331448bef3c8c43de1f707acbeeed5714a68",
+              "raw": {
+                "cmd": "start",
+                "ephemeral": false,
+                "headless": true,
+                "issuedAt": "2026-10-08T18:08:25.670Z",
+                "profile": "teams-bb-provider-525c759154b1a39a8b5b0d047c25331448bef3c8c43de1f707acbeeed5714a68",
+                "reused": false,
+                "sessionId": "camoufox-85896",
+                "target": "t_57d82e2bf73b",
+                "traceId": "cli-1791482903090",
+                "url": "http://127.0.0.1:61900/"
+              },
+              "sessionId": "camoufox-85896"
+            },
+            "process_pids": [
+              86608
+            ]
+          },
+          "real_contexts": 2
+        },
+        "over_capacity": {
+          "open": {
+            "exit_status": 0,
+            "control": {
+              "projectId": "agentteams-local-work",
+              "graphId": "agentteams.work-open",
+              "graphVersion": "1",
+              "executionId": "1bde7aee-c6ad-4b08-8112-6bc10eda6459",
+              "attemptId": "171c96d1-de87-4474-b7cd-c1c8075af377",
+              "workId": "d2fc7526-f37d-4b2b-9f99-f9601609ba28",
+              "requestId": "1b08b18d-eb75-434d-a4d9-bce7020b4053",
+              "providerAgentId": "bb-provider",
+              "targetGeneration": 1,
+              "serviceSelection": "capability",
+              "capabilityId": "browser",
+              "capabilityVersion": "1",
+              "operation": "context.create",
+              "requestState": "failed",
+              "workClosure": "retained",
+              "error": {
+                "code": "RESOURCE_EXHAUSTED",
+                "message": "resource browser-context capacity exhausted"
+              }
+            }
+          },
+          "request": {
+            "exit_status": 0,
+            "control": {
+              "projectId": "agentteams-local-work",
+              "graphId": "agentteams.work-request",
+              "graphVersion": "1",
+              "executionId": "af385bbc-2ebc-4e64-b245-51a06bdb7864",
+              "attemptId": "35e345d3-8cf6-495a-b78e-8f5f2c6267e5",
+              "workId": "d2fc7526-f37d-4b2b-9f99-f9601609ba28",
+              "requestId": "cb83c2a3-7fcb-4e64-90f7-f4a30ce6e07a",
+              "providerAgentId": "bb-provider",
+              "targetGeneration": 1,
+              "serviceSelection": "capability",
+              "capabilityId": "browser",
+              "capabilityVersion": "1",
+              "operation": "context.create",
+              "requestState": "failed",
+              "workClosure": "retained",
+              "error": {
+                "code": "RESOURCE_EXHAUSTED",
+                "message": "resource browser-context capacity exhausted"
+              }
+            }
+          },
+          "real_contexts_after": 2
+        },
+        "release": {
+          "close": {
+            "projectId": "agentteams-local-work",
+            "graphId": "agentteams.work-close",
+            "graphVersion": "1",
+            "executionId": "4a69bb0f-d487-4ea8-a29b-c584de1a803b",
+            "attemptId": "5794c17c-2060-4a53-b997-1df81b7b51cb",
+            "workId": "6b749665-c9a3-4d1e-ac45-75462fc91ddd",
+            "requestId": "050252bf-a1a2-43a1-aedb-73ac08c2de78",
+            "providerAgentId": "bb-provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "browser",
+            "capabilityVersion": "1",
+            "operation": "context.create",
+            "workClosure": "closed"
+          },
+          "released_context": "browser-context-3f05535b-e09d-41b5-bd51-4ed59feb242a"
+        },
+        "readmitted": {
+          "control": {
+            "projectId": "agentteams-local-work",
+            "graphId": "agentteams.work-query",
+            "graphVersion": "1",
+            "executionId": "825efda4-8db6-4e48-9e96-a56e1f1f0f61",
+            "attemptId": "f989c3a1-d65c-4464-b3bc-405fc9f5d9f1",
+            "workId": "121ae60f-0dd6-4b1d-90a7-be2555a7e8fd",
+            "requestId": "67e81516-4a86-433f-8d16-29d57cc03be4",
+            "providerAgentId": "bb-provider",
+            "targetGeneration": 1,
+            "linkGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "browser",
+            "capabilityVersion": "1",
+            "operation": "context.create",
+            "requestState": "succeeded",
+            "observed": true
+          },
+          "business": {
+            "contextId": "browser-context-1dfd4823-d90b-4d3c-94b8-0203f6e87ba8",
+            "profile": "teams-bb-provider-4b5d4e10290ccdf54000feb6299ec4ba064581da8d74ba413f2a0671444efe97",
+            "raw": {
+              "cmd": "start",
+              "ephemeral": false,
+              "headless": true,
+              "issuedAt": "2026-10-08T18:08:30.505Z",
+              "profile": "teams-bb-provider-4b5d4e10290ccdf54000feb6299ec4ba064581da8d74ba413f2a0671444efe97",
+              "reused": false,
+              "sessionId": "camoufox-85896",
+              "target": "t_f17a414eee7e",
+              "traceId": "cli-1791482908291",
+              "url": "http://127.0.0.1:61900/"
+            },
+            "sessionId": "camoufox-85896"
+          },
+          "process_pids": [
+            87914
+          ]
+        },
+        "browser_processes_after_cleanup": 0,
+        "temporary_root_removed": true
+      },
+      "evidence_path": "/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v4/focused/cases/BB06"
+    },
+    {
+      "case_id": "BB09",
+      "owner": "U5",
+      "capability_gate": "installed Console lifecycle and offline Work",
+      "status": "passed",
+      "public_input": {
+        "package": "/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/generated/modules/teams-source/lib",
+        "config_sha256": "0e497a8e60047641cc7117c69687fbc5f73926e6d338e4c6824fb0b4bb872642",
+        "commands": [
+          "agentteams init",
+          "agentteams start --config <isolated-home>/.agentteams/config.toml",
+          "agentteams status --config <isolated-home>/.agentteams/config.toml",
+          "camo start --profile <bb09> --url http://<user>:<redacted>@<consoleUrl>/ --headless",
+          "camo goto <consoleUrl>/ --profile <bb09>",
+          "camo evaluate fetch(/api/v1/projection)",
+          "camo click button[data-focus-key=\"agent:bb-provider:details\"]",
+          "camo click .teams-drawer .teams-header-actions button:nth-of-type(2) (close drawer)",
+          "camo click .teams-panel .teams-header-actions button:nth-of-type(2) (refresh projection)",
+          "camo click button[data-focus-key=\"console:settings\"]",
+          "camo evaluate div.teams-config-toolbar select.teams-select (select bb-provider)",
+          "camo click article.teams-provider-card .teams-provider-actions button:nth-of-type(2) (refresh models)",
+          "camo evaluate article.teams-provider-card select.teams-select (select bb-console-model)",
+          "camo click article.teams-provider-card .teams-model-row .teams-button-primary (bind model)",
+          "camo start --profile <bb09-nocred> --url <consoleUrl>/ --headless (credential-free)",
+          "agentteams console stop --config <isolated-home>/.agentteams/config.toml",
+          "agentteams work submit --receiver bb-receiver --payload {\"query\":\"marker-beta\"} (Console stopped)",
+          "agentteams console start --config <isolated-home>/.agentteams/config.toml (same persisted url)",
+          "agentteams console status --config <isolated-home>/.agentteams/config.toml (unreadable observation, CONSOLE_STATUS_UNAVAILABLE)",
+          "agentteams stop --generation <generation>",
+          "set [console].enabled=false; agentteams start",
+          "agentteams console start --config <isolated-home>/.agentteams/config.toml (CONSOLE_DISABLED)"
+        ]
+      },
+      "external_observation": {
+        "installed_content_sha256": "af1daf791760002cc7f95c8cb3162578fe5491d1c2da025b7a1a81f647f6cc37",
+        "installed_tarball_sha256": "84e58136b730e583c15c870ef5f7da98b189b7d3581d7038d18772aceacefb59",
+        "cli_realpath": "/private/tmp/agentteams-u7-bb09-zavsWJ/prefix/node_modules/agentteams/cli/agentteams.mjs",
+        "launcher": {
+          "state": "running",
+          "generation": 1,
+          "pid": 91366,
+          "endpoints": [
+            {
+              "agentId": "bb-provider",
+              "identity": "bb-local/bb-machine/bb-provider/local/custom/BB09-Provider",
+              "role": "provider",
+              "presence": "online",
+              "generation": 1,
+              "capabilities": [
+                "file-search@1:search[search-slot:2:slot]"
+              ]
+            },
+            {
+              "agentId": "bb-receiver",
+              "identity": "bb-local/bb-machine/bb-receiver/local/custom/BB09-Receiver",
+              "role": "receiver",
+              "presence": "online",
+              "generation": 1,
+              "capabilities": []
+            }
+          ]
+        },
+        "console_entry_path": "/private/tmp/agentteams-u7-bb09-zavsWJ/prefix/node_modules/agentteams/generated/runtime-lib/runtime/console-process.js",
+        "console_status_after_start": {
+          "generation": 1,
+          "pid": 91465,
+          "url": "http://127.0.0.1:62089"
+        },
+        "console_http": {
+          "unauthorized": 401,
+          "authorized": 200
+        },
+        "browser": {
+          "start": {
+            "target": "t_e8aaf1e7190c",
+            "sessionId": "camoufox-91836",
+            "profile": "bb09-main-83516"
+          },
+          "clean": {
+            "url": "http://127.0.0.1:62089/",
+            "title": "AgentTeams Console",
+            "readyState": "complete"
+          },
+          "agents": [
+            {
+              "agentId": "bb-provider",
+              "label": "BB09-Provider",
+              "machineId": "bb-machine",
+              "presence": "online"
+            },
+            {
+              "agentId": "bb-receiver",
+              "label": "BB09-Receiver",
+              "machineId": "bb-machine",
+              "presence": "online"
+            }
+          ],
+          "config": {
+            "agent": "bb-provider",
+            "operation": "config.bindModel",
+            "provider": "bb-console-stub",
+            "model": "bb-console-model",
+            "accepted_before": 0,
+            "accepted_after": 1,
+            "refresh_accepted_revision": 0,
+            "provider_card_catalog": "已加载",
+            "other_agent_unchanged": true
+          },
+          "screenshot": "/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v4/focused/cases/BB09/browser-page.png",
+          "unauthenticated": {
+            "body": "Authentication required",
+            "projection_status": 401
+          },
+          "origin": {
+            "wrong_origin": 401,
+            "cross_site": 401,
+            "same_origin": 200
+          },
+          "auth_refusals": {
+            "unauthenticated_command": 401
+          }
+        },
+        "static_binding": {
+          "explicit_agent_ids": [
+            "bb-provider",
+            "bb-receiver"
+          ],
+          "installed_content_sha256": "af1daf791760002cc7f95c8cb3162578fe5491d1c2da025b7a1a81f647f6cc37",
+          "cleanup": {
+            "stop_stdout": "stopped state=stopped generation=1 config=/tmp/agentteams-u7-bb09-static-45F29G/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-static-45F29G/home/.agentteams/internal.toml pid=2178\n",
+            "stopped_stdout": "status state=stopped generation=1 config=/tmp/agentteams-u7-bb09-static-45F29G/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-static-45F29G/home/.agentteams/internal.toml pid=2178 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB09-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB09-Receiver role=receiver presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=1 consoleCredential=configured\n",
+            "pids": [
+              2178,
+              2179,
+              2180,
+              2246
+            ],
+            "pids_alive_after_stop": [],
+            "browser_profiles": [
+              {
+                "profile": "bb09-static-83516",
+                "stop_status": 0,
+                "daemon_status": 0
+              },
+              {
+                "profile": "bb09-static-nocred-83516",
+                "stop_status": 2,
+                "daemon_status": 0
+              }
+            ],
+            "temporary_root_removed": true
+          },
+          "projection": {
+            "agents": [
+              {
+                "agentId": "bb-provider",
+                "label": "BB09-Provider",
+                "machineId": "bb-machine",
+                "presence": "online"
+              },
+              {
+                "agentId": "bb-receiver",
+                "label": "BB09-Receiver",
+                "machineId": "bb-machine",
+                "presence": "online"
+              }
+            ],
+            "config_interaction": "not-run"
+          },
+          "evidence_path": "/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v4/focused/cases/BB09/static-binding"
+        },
+        "agent_policy_refusal": {
+          "command": {
+            "kind": "config.refreshModels",
+            "agentId": "bb-provider",
+            "expectedRevision": 0,
+            "providerId": "bb-console-stub"
+          },
+          "http_status": 200,
+          "error": {
+            "code": "FORBIDDEN",
+            "message": "Agent management policy denied this request"
+          },
+          "accepted_revision_before": null,
+          "accepted_slice_present_before": false,
+          "accepted_revision_after": null,
+          "accepted_slice_present_after": false,
+          "accepted_revision_observation_source": "target Agent durable internal store",
+          "stop_stdout": "stopped state=stopped generation=1 config=/tmp/agentteams-u7-bb09-refusal-v55w2q/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-refusal-v55w2q/home/.agentteams/internal.toml pid=98516\n"
+        },
+        "browser_cleanup": [
+          {
+            "profile": "bb09-main-83516",
+            "stop_status": 0,
+            "daemon_status": 0
+          },
+          {
+            "profile": "bb09-nocred-83516",
+            "stop_status": 2,
+            "daemon_status": 0
+          }
+        ],
+        "console_status_after_stop": {
+          "state": "stopped",
+          "stdout": "console launcher=running console=enabled consoleState=stopped consoleGeneration=1 consoleCredential=configured"
+        },
+        "console_listener_gone_after_stop": true,
+        "work_without_console": {
+          "projectId": "agentteams-local-work",
+          "graphId": "agentteams.agent-work",
+          "graphVersion": "2",
+          "executionId": "42996b2e-f630-4b65-a5c9-06c4b98cfe0f",
+          "attemptId": "f056ce11-6319-48ab-b9c7-4ec73efa41b2",
+          "workId": "2c55312b-32d5-4743-bacd-dad053b66cd7",
+          "requestId": "ec7a16bb-7d98-4be4-ab50-5fb779e0b437",
+          "providerAgentId": "bb-provider",
+          "targetGeneration": 1,
+          "capabilityId": "file-search",
+          "capabilityVersion": "1",
+          "operation": "search",
+          "requestState": "succeeded",
+          "workClosure": "closed"
+        },
+        "console_status_after_restart": {
+          "generation": 2,
+          "pid": 99359,
+          "url": "http://127.0.0.1:62089"
+        },
+        "console_status_unavailable": {
+          "cli": "local Console control socket is unavailable: connect ENOENT /tmp/agentteams-u7-bb09-zavsWJ/home/.agentteams/.internal/work-control.sock"
+        },
+        "disabled_console_start": {
+          "cli": "Console is disabled; set [console].enabled=true in config.toml",
+          "runtime": {
+            "enabled": true,
+            "generation": 2,
+            "entryPath": "/private/tmp/agentteams-u7-bb09-zavsWJ/prefix/node_modules/agentteams/generated/runtime-lib/runtime/console-process.js",
+            "state": "stopped",
+            "identityRef": "console:local"
+          }
+        },
+        "stop_stdout": "stopped state=stopped generation=1 config=/tmp/agentteams-u7-bb09-zavsWJ/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-zavsWJ/home/.agentteams/internal.toml pid=91366\n",
+        "stopped_stdout": "status state=stopped generation=1 config=/tmp/agentteams-u7-bb09-zavsWJ/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-zavsWJ/home/.agentteams/internal.toml pid=91366 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB09-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB09-Receiver role=receiver presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=2 consoleCredential=configured\n",
+        "disabled_stop_stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb09-zavsWJ/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-zavsWJ/home/.agentteams/internal.toml pid=6978\n",
+        "owned_pids_after_stop": [
+          91366,
+          91414,
+          91463,
+          91464
+        ],
+        "owned_pids_alive_after_stop": [],
+        "disabled_pids_after_stop": [
+          6978,
+          6991,
+          7040,
+          7041
+        ],
+        "disabled_pids_alive_after_stop": [],
+        "temporary_root_removed": true
+      },
+      "evidence_path": "/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v4/focused/cases/BB09"
+    },
+    {
+      "case_id": "BB10",
+      "owner": "U2+U6",
+      "capability_gate": "installed explicit provider/model session",
+      "status": "passed",
+      "public_input": {
+        "package": "/Volumes/Intel/playground/agentteams/u7-user-driver-20261006/generated/modules/teams-source/lib",
+        "config_sha256": "2b03e36f2b3c6c0decb3b6c506933bc8332abe29c176413c0e3be903ce7ef6f0",
+        "session_agent": "bb-provider",
+        "passive_agent": "bb-receiver",
+        "commands": [
+          "agentteams init",
+          "agentteams start --config <isolated-home>/.agentteams/config.toml (credential env passed only to this child)",
+          "agentteams console start --config <isolated-home>/.agentteams/config.toml",
+          "POST /api/v1/command {\"kind\":\"config.refreshModels\",\"providerId\":\"rcc-4444\"}",
+          "POST /api/v1/command {\"kind\":\"config.refreshModels\",\"providerId\":\"goaichat-openai\"}",
+          "POST /api/v1/command {\"kind\":\"config.apply\",\"agentId\":\"bb-provider\"}",
+          "POST /api/v1/command {\"kind\":\"session.create\",\"agentId\":\"bb-provider\"}",
+          "POST /api/v1/session-message?agentId=bb-provider&sessionId=<S1> {\"text\":\"<visible task>\"} (real RCC provider)",
+          "POST /api/v1/command {\"kind\":\"config.bindModel\",\"providerId\":\"goaichat-openai\"}",
+          "POST /api/v1/command {\"kind\":\"config.agent.select-backup\",\"backup\":{\"providerInstanceId\":\"rcc-4444\"}}",
+          "agentteams stop --config <isolated-home>/.agentteams/config.toml --generation <G>",
+          "agentteams start --config <isolated-home>/.agentteams/config.toml",
+          "agentteams console start --config <isolated-home>/.agentteams/config.toml",
+          "POST /api/v1/command {\"kind\":\"config.apply\",\"agentId\":\"bb-provider\"} (canonical binding)",
+          "POST /api/v1/session-message?agentId=bb-provider&sessionId=<S2> {\"text\":\"<visible task>\"} (real canonical provider)",
+          "agentteams stop --generation <generation>"
+        ]
+      },
+      "external_observation": {
+        "installed_content_sha256": "af1daf791760002cc7f95c8cb3162578fe5491d1c2da025b7a1a81f647f6cc37",
+        "installed_tarball_sha256": "84e58136b730e583c15c870ef5f7da98b189b7d3581d7038d18772aceacefb59",
+        "cli_realpath": "/private/tmp/agentteams-u7-bb10-2KCc4A/prefix/node_modules/agentteams/cli/agentteams.mjs",
+        "launcher": {
+          "state": "running",
+          "generation": 2,
+          "pid": 11637,
+          "endpoints": [
+            {
+              "agentId": "bb-provider",
+              "identity": "bb-local/bb-machine/bb-provider/local/custom/BB10-Real",
+              "role": "provider",
+              "presence": "online",
+              "generation": 1,
+              "capabilities": []
+            },
+            {
+              "agentId": "bb-receiver",
+              "identity": "bb-local/bb-machine/bb-receiver/local/custom/BB10-Passive",
+              "role": "provider",
+              "presence": "online",
+              "generation": 1,
+              "capabilities": []
+            }
+          ]
+        },
+        "sources": {
+          "rcc": {
+            "source": "/Volumes/extension/.rcc/config.toml",
+            "server_id": "routecodex_v3_4444",
+            "base_url": "http://127.0.0.1:4444/v1",
+            "selected_model": "goaichat_openai.qwen3.8-max"
+          },
+          "canonical": {
+            "source": "/Volumes/extension/.rcc/provider/goaichat_openai/config.v2.toml",
+            "provider_id": "goaichat_openai",
+            "base_url": "https://llm.goaichat.top/v1",
+            "default_model": "qwen3.8-max",
+            "auth_alias": "key1",
+            "secret_key": "goaichat.key1",
+            "credential_env": "TEAMS_BB10_CANONICAL_API_KEY",
+            "credential_length": 67
+          }
+        },
+        "discovery": {
+          "session_agent": {
+            "kind": "runtime",
+            "agentId": "bb-provider",
+            "machineId": "bb-machine",
+            "label": "BB10-Real",
+            "presence": "online",
+            "capabilities": [],
+            "capabilityDetails": [],
+            "generation": 1,
+            "sessionCapable": true,
+            "sessionAvailability": "no-current",
+            "sessionObservation": {
+              "state": "live"
+            }
+          },
+          "passive_agent": {
+            "kind": "runtime",
+            "agentId": "bb-receiver",
+            "machineId": "bb-machine",
+            "label": "BB10-Passive",
+            "presence": "online",
+            "capabilities": [],
+            "capabilityDetails": [],
+            "generation": 1,
+            "sessionCapable": false,
+            "sessionAvailability": "not-applicable"
+          },
+          "providers": [
+            "rcc-4444",
+            "goaichat-openai"
+          ],
+          "accepted_revision": 0
+        },
+        "catalogs": {
+          "rcc_refresh": {
+            "ok": true
+          },
+          "canonical_refresh": {
+            "ok": true
+          },
+          "rcc_catalog_state": "ready",
+          "rcc_model_count": 25,
+          "canonical_catalog_state": "ready",
+          "canonical_model_count": 18,
+          "accepted_revision_after_refresh": 0
+        },
+        "rcc_binding": {
+          "apply": {
+            "applied": {
+              "ok": true
+            },
+            "agent": {
+              "kind": "runtime",
+              "agentId": "bb-provider",
+              "machineId": "bb-machine",
+              "label": "BB10-Real",
+              "presence": "online",
+              "capabilities": [],
+              "capabilityDetails": [],
+              "generation": 1,
+              "sessionCapable": true,
+              "sessionAvailability": "current",
+              "sessionObservation": {
+                "state": "live"
+              },
+              "sessionEffectiveRevision": 0,
+              "providerId": "rcc-4444",
+              "modelId": "goaichat_openai.qwen3.8-max"
+            }
+          },
+          "config": {
+            "agentId": "bb-provider",
+            "acceptedRevision": 0,
+            "applyState": "clean",
+            "effectiveRevision": 0,
+            "providers": [
+              {
+                "id": "rcc-4444",
+                "label": "RCC 4444",
+                "protocol": "openai-chat",
+                "apiBaseUrl": "http://127.0.0.1:4444/v1",
+                "enabled": true,
+                "authKind": "none",
+                "catalogState": "ready",
+                "models": [
+                  {
+                    "id": "goaichat_openai.qwen3.8-max",
+                    "label": "RCC canonical model"
+                  },
+                  {
+                    "id": "goaichat.glm-5.3",
+                    "label": "goaichat.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat.qwen3.8-max-0902",
+                    "label": "goaichat.qwen3.8-max-0902"
+                  },
+                  {
+                    "id": "goaichat-ai.glm-5.3",
+                    "label": "goaichat-ai.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat-ai.qwen3.8-max",
+                    "label": "goaichat-ai.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_ai_responses.deepseek-v4.1-flash",
+                    "label": "goaichat_ai_responses.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.deepseek-v4.1-flash",
+                    "label": "goaichat_ciyuan.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.glm-5.3",
+                    "label": "goaichat_ciyuan.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.qwen3.8-max",
+                    "label": "goaichat_ciyuan.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_model.deepseek-v4.1-flash",
+                    "label": "goaichat_model.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_model.glm-5.3",
+                    "label": "goaichat_model.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_model.qwen3.8-max",
+                    "label": "goaichat_model.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_responses.deepseek-v4.1-flash",
+                    "label": "goaichat_responses.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_vibe.deepseek-v4.1-flash",
+                    "label": "goaichat_vibe.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_vibe.glm-5.3",
+                    "label": "goaichat_vibe.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_vibe.qwen3.8-max",
+                    "label": "goaichat_vibe.qwen3.8-max"
+                  },
+                  {
+                    "id": "lifeai.wb-deepseek-v4.1-flash",
+                    "label": "lifeai.wb-deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "lifeai_chat.wb-deepseek-v4.1-flash",
+                    "label": "lifeai_chat.wb-deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "minimax_anthropic.MiniMax-M3",
+                    "label": "minimax_anthropic.MiniMax-M3"
+                  },
+                  {
+                    "id": "mtplx.mtplx-flash-next-optimized-speed",
+                    "label": "mtplx.mtplx-flash-next-optimized-speed"
+                  },
+                  {
+                    "id": "qiluyun.deepseek-v4.1-flash-sg",
+                    "label": "qiluyun.deepseek-v4.1-flash-sg"
+                  },
+                  {
+                    "id": "whitehat.deepseek-v4.1-flash",
+                    "label": "whitehat.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "xmcc2.deepseek-v4.1-flash",
+                    "label": "xmcc2.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "xmcc2.kimi-k3",
+                    "label": "xmcc2.kimi-k3"
+                  },
+                  {
+                    "id": "gpt-5.5",
+                    "label": "gpt-5.5"
+                  }
+                ]
+              },
+              {
+                "id": "goaichat-openai",
+                "label": "GoAIChat OpenAI",
+                "protocol": "openai-chat",
+                "apiBaseUrl": "https://llm.goaichat.top/v1",
+                "enabled": true,
+                "authKind": "bearer",
+                "catalogState": "ready",
+                "models": [
+                  {
+                    "id": "qwen3.8-max",
+                    "label": "GoAIChat default model"
+                  },
+                  {
+                    "id": "deepseek-v4-flash",
+                    "label": "deepseek-v4-flash"
+                  },
+                  {
+                    "id": "deepseek-v4-pro",
+                    "label": "deepseek-v4-pro"
+                  },
+                  {
+                    "id": "glm-5.2",
+                    "label": "glm-5.2"
+                  },
+                  {
+                    "id": "kimi-k2.6",
+                    "label": "kimi-k2.6"
+                  },
+                  {
+                    "id": "kimi-k2.7-code",
+                    "label": "kimi-k2.7-code"
+                  },
+                  {
+                    "id": "minimax-m3",
+                    "label": "minimax-m3"
+                  },
+                  {
+                    "id": "qwen3.7-plus",
+                    "label": "qwen3.7-plus"
+                  },
+                  {
+                    "id": "qwen3.6-plus",
+                    "label": "qwen3.6-plus"
+                  },
+                  {
+                    "id": "qwen3.7-max",
+                    "label": "qwen3.7-max"
+                  },
+                  {
+                    "id": "deepseek-v4-flash-0731",
+                    "label": "deepseek-v4-flash-0731"
+                  },
+                  {
+                    "id": "glm-5.3",
+                    "label": "glm-5.3"
+                  },
+                  {
+                    "id": "deepseek-v4-pro-0813",
+                    "label": "deepseek-v4-pro-0813"
+                  },
+                  {
+                    "id": "kimi-k3",
+                    "label": "kimi-k3"
+                  },
+                  {
+                    "id": "qwen3.8-max-0902",
+                    "label": "qwen3.8-max-0902"
+                  },
+                  {
+                    "id": "qwen3.8-flash",
+                    "label": "qwen3.8-flash"
+                  },
+                  {
+                    "id": "glm-5.3-flash",
+                    "label": "glm-5.3-flash"
+                  },
+                  {
+                    "id": "deepseek-v4.1-flash",
+                    "label": "deepseek-v4.1-flash"
+                  }
+                ]
+              }
+            ]
+          },
+          "session": {
+            "ok": true,
+            "result": {
+              "kind": "session.create",
+              "agentId": "bb-provider",
+              "sessionId": "ses_ee34ad227ffehlAvRkqQk4QwZt",
+              "title": "BB10 real RCC model",
+              "directory": "/private/tmp/agentteams-u7-bb10-2KCc4A/home/.agentteams/data/bb-provider",
+              "time": {
+                "created": 1791482998233,
+                "updated": 1791482998233
+              }
+            }
+          },
+          "turn": {
+            "dispatch": {
+              "ok": true
+            },
+            "final": {
+              "eventId": "message.updated:ses_ee34ad227ffehlAvRkqQk4QwZt:msg_11cb52f29001ceALtwx9Nn3et5",
+              "sessionId": "ses_ee34ad227ffehlAvRkqQk4QwZt",
+              "agentId": "bb-provider",
+              "kind": "final",
+              "state": "completed",
+              "messageId": "msg_11cb52f29001ceALtwx9Nn3et5",
+              "finish": "stop"
+            },
+            "text": "回声是声波传播遇到障碍物后反射回来，与原声相隔一定时间再次被人耳听到的现象。",
+            "parts": 2,
+            "finish": "stop"
+          }
+        },
+        "explicit_selection": {
+          "accepted_revision_before": 0,
+          "bind_model": {
+            "ok": true
+          },
+          "select_backup": {
+            "ok": true
+          },
+          "accepted_revision_after": 2,
+          "accepted_row": {
+            "agentId": "bb-provider",
+            "acceptedRevision": 2,
+            "applyState": "clean",
+            "effectiveRevision": 0,
+            "providers": [
+              {
+                "id": "rcc-4444",
+                "label": "RCC 4444",
+                "protocol": "openai-chat",
+                "apiBaseUrl": "http://127.0.0.1:4444/v1",
+                "enabled": true,
+                "authKind": "none",
+                "catalogState": "ready",
+                "models": [
+                  {
+                    "id": "goaichat_openai.qwen3.8-max",
+                    "label": "RCC canonical model"
+                  },
+                  {
+                    "id": "goaichat.glm-5.3",
+                    "label": "goaichat.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat.qwen3.8-max-0902",
+                    "label": "goaichat.qwen3.8-max-0902"
+                  },
+                  {
+                    "id": "goaichat-ai.glm-5.3",
+                    "label": "goaichat-ai.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat-ai.qwen3.8-max",
+                    "label": "goaichat-ai.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_ai_responses.deepseek-v4.1-flash",
+                    "label": "goaichat_ai_responses.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.deepseek-v4.1-flash",
+                    "label": "goaichat_ciyuan.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.glm-5.3",
+                    "label": "goaichat_ciyuan.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.qwen3.8-max",
+                    "label": "goaichat_ciyuan.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_model.deepseek-v4.1-flash",
+                    "label": "goaichat_model.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_model.glm-5.3",
+                    "label": "goaichat_model.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_model.qwen3.8-max",
+                    "label": "goaichat_model.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_responses.deepseek-v4.1-flash",
+                    "label": "goaichat_responses.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_vibe.deepseek-v4.1-flash",
+                    "label": "goaichat_vibe.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_vibe.glm-5.3",
+                    "label": "goaichat_vibe.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_vibe.qwen3.8-max",
+                    "label": "goaichat_vibe.qwen3.8-max"
+                  },
+                  {
+                    "id": "lifeai.wb-deepseek-v4.1-flash",
+                    "label": "lifeai.wb-deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "lifeai_chat.wb-deepseek-v4.1-flash",
+                    "label": "lifeai_chat.wb-deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "minimax_anthropic.MiniMax-M3",
+                    "label": "minimax_anthropic.MiniMax-M3"
+                  },
+                  {
+                    "id": "mtplx.mtplx-flash-next-optimized-speed",
+                    "label": "mtplx.mtplx-flash-next-optimized-speed"
+                  },
+                  {
+                    "id": "qiluyun.deepseek-v4.1-flash-sg",
+                    "label": "qiluyun.deepseek-v4.1-flash-sg"
+                  },
+                  {
+                    "id": "whitehat.deepseek-v4.1-flash",
+                    "label": "whitehat.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "xmcc2.deepseek-v4.1-flash",
+                    "label": "xmcc2.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "xmcc2.kimi-k3",
+                    "label": "xmcc2.kimi-k3"
+                  },
+                  {
+                    "id": "gpt-5.5",
+                    "label": "gpt-5.5"
+                  }
+                ]
+              },
+              {
+                "id": "goaichat-openai",
+                "label": "GoAIChat OpenAI",
+                "protocol": "openai-chat",
+                "apiBaseUrl": "https://llm.goaichat.top/v1",
+                "enabled": true,
+                "authKind": "bearer",
+                "catalogState": "ready",
+                "models": [
+                  {
+                    "id": "qwen3.8-max",
+                    "label": "GoAIChat default model"
+                  },
+                  {
+                    "id": "deepseek-v4-flash",
+                    "label": "deepseek-v4-flash"
+                  },
+                  {
+                    "id": "deepseek-v4-pro",
+                    "label": "deepseek-v4-pro"
+                  },
+                  {
+                    "id": "glm-5.2",
+                    "label": "glm-5.2"
+                  },
+                  {
+                    "id": "kimi-k2.6",
+                    "label": "kimi-k2.6"
+                  },
+                  {
+                    "id": "kimi-k2.7-code",
+                    "label": "kimi-k2.7-code"
+                  },
+                  {
+                    "id": "minimax-m3",
+                    "label": "minimax-m3"
+                  },
+                  {
+                    "id": "qwen3.7-plus",
+                    "label": "qwen3.7-plus"
+                  },
+                  {
+                    "id": "qwen3.6-plus",
+                    "label": "qwen3.6-plus"
+                  },
+                  {
+                    "id": "qwen3.7-max",
+                    "label": "qwen3.7-max"
+                  },
+                  {
+                    "id": "deepseek-v4-flash-0731",
+                    "label": "deepseek-v4-flash-0731"
+                  },
+                  {
+                    "id": "glm-5.3",
+                    "label": "glm-5.3"
+                  },
+                  {
+                    "id": "deepseek-v4-pro-0813",
+                    "label": "deepseek-v4-pro-0813"
+                  },
+                  {
+                    "id": "kimi-k3",
+                    "label": "kimi-k3"
+                  },
+                  {
+                    "id": "qwen3.8-max-0902",
+                    "label": "qwen3.8-max-0902"
+                  },
+                  {
+                    "id": "qwen3.8-flash",
+                    "label": "qwen3.8-flash"
+                  },
+                  {
+                    "id": "glm-5.3-flash",
+                    "label": "glm-5.3-flash"
+                  },
+                  {
+                    "id": "deepseek-v4.1-flash",
+                    "label": "deepseek-v4.1-flash"
+                  }
+                ]
+              }
+            ]
+          },
+          "accepted_binding": {
+            "accepted_revision": 2,
+            "primary": {
+              "providerInstanceId": "goaichat-openai",
+              "modelId": "qwen3.8-max"
+            },
+            "backup": {
+              "providerInstanceId": "rcc-4444",
+              "modelId": "goaichat_openai.qwen3.8-max"
+            }
+          }
+        },
+        "switch_apply": {
+          "launcher_generation_before": 1,
+          "launcher_generation_after": 2,
+          "accepted_after_restart": {
+            "agentId": "bb-provider",
+            "acceptedRevision": 2,
+            "applyState": "clean",
+            "effectiveRevision": 0,
+            "providers": [
+              {
+                "id": "rcc-4444",
+                "label": "RCC 4444",
+                "protocol": "openai-chat",
+                "apiBaseUrl": "http://127.0.0.1:4444/v1",
+                "enabled": true,
+                "authKind": "none",
+                "catalogState": "ready",
+                "models": [
+                  {
+                    "id": "goaichat_openai.qwen3.8-max",
+                    "label": "RCC canonical model"
+                  },
+                  {
+                    "id": "goaichat.glm-5.3",
+                    "label": "goaichat.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat.qwen3.8-max-0902",
+                    "label": "goaichat.qwen3.8-max-0902"
+                  },
+                  {
+                    "id": "goaichat-ai.glm-5.3",
+                    "label": "goaichat-ai.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat-ai.qwen3.8-max",
+                    "label": "goaichat-ai.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_ai_responses.deepseek-v4.1-flash",
+                    "label": "goaichat_ai_responses.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.deepseek-v4.1-flash",
+                    "label": "goaichat_ciyuan.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.glm-5.3",
+                    "label": "goaichat_ciyuan.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.qwen3.8-max",
+                    "label": "goaichat_ciyuan.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_model.deepseek-v4.1-flash",
+                    "label": "goaichat_model.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_model.glm-5.3",
+                    "label": "goaichat_model.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_model.qwen3.8-max",
+                    "label": "goaichat_model.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_responses.deepseek-v4.1-flash",
+                    "label": "goaichat_responses.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_vibe.deepseek-v4.1-flash",
+                    "label": "goaichat_vibe.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_vibe.glm-5.3",
+                    "label": "goaichat_vibe.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_vibe.qwen3.8-max",
+                    "label": "goaichat_vibe.qwen3.8-max"
+                  },
+                  {
+                    "id": "lifeai.wb-deepseek-v4.1-flash",
+                    "label": "lifeai.wb-deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "lifeai_chat.wb-deepseek-v4.1-flash",
+                    "label": "lifeai_chat.wb-deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "minimax_anthropic.MiniMax-M3",
+                    "label": "minimax_anthropic.MiniMax-M3"
+                  },
+                  {
+                    "id": "mtplx.mtplx-flash-next-optimized-speed",
+                    "label": "mtplx.mtplx-flash-next-optimized-speed"
+                  },
+                  {
+                    "id": "qiluyun.deepseek-v4.1-flash-sg",
+                    "label": "qiluyun.deepseek-v4.1-flash-sg"
+                  },
+                  {
+                    "id": "whitehat.deepseek-v4.1-flash",
+                    "label": "whitehat.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "xmcc2.deepseek-v4.1-flash",
+                    "label": "xmcc2.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "xmcc2.kimi-k3",
+                    "label": "xmcc2.kimi-k3"
+                  },
+                  {
+                    "id": "gpt-5.5",
+                    "label": "gpt-5.5"
+                  }
+                ]
+              },
+              {
+                "id": "goaichat-openai",
+                "label": "GoAIChat OpenAI",
+                "protocol": "openai-chat",
+                "apiBaseUrl": "https://llm.goaichat.top/v1",
+                "enabled": true,
+                "authKind": "bearer",
+                "catalogState": "ready",
+                "models": [
+                  {
+                    "id": "qwen3.8-max",
+                    "label": "GoAIChat default model"
+                  },
+                  {
+                    "id": "deepseek-v4-flash",
+                    "label": "deepseek-v4-flash"
+                  },
+                  {
+                    "id": "deepseek-v4-pro",
+                    "label": "deepseek-v4-pro"
+                  },
+                  {
+                    "id": "glm-5.2",
+                    "label": "glm-5.2"
+                  },
+                  {
+                    "id": "kimi-k2.6",
+                    "label": "kimi-k2.6"
+                  },
+                  {
+                    "id": "kimi-k2.7-code",
+                    "label": "kimi-k2.7-code"
+                  },
+                  {
+                    "id": "minimax-m3",
+                    "label": "minimax-m3"
+                  },
+                  {
+                    "id": "qwen3.7-plus",
+                    "label": "qwen3.7-plus"
+                  },
+                  {
+                    "id": "qwen3.6-plus",
+                    "label": "qwen3.6-plus"
+                  },
+                  {
+                    "id": "qwen3.7-max",
+                    "label": "qwen3.7-max"
+                  },
+                  {
+                    "id": "deepseek-v4-flash-0731",
+                    "label": "deepseek-v4-flash-0731"
+                  },
+                  {
+                    "id": "glm-5.3",
+                    "label": "glm-5.3"
+                  },
+                  {
+                    "id": "deepseek-v4-pro-0813",
+                    "label": "deepseek-v4-pro-0813"
+                  },
+                  {
+                    "id": "kimi-k3",
+                    "label": "kimi-k3"
+                  },
+                  {
+                    "id": "qwen3.8-max-0902",
+                    "label": "qwen3.8-max-0902"
+                  },
+                  {
+                    "id": "qwen3.8-flash",
+                    "label": "qwen3.8-flash"
+                  },
+                  {
+                    "id": "glm-5.3-flash",
+                    "label": "glm-5.3-flash"
+                  },
+                  {
+                    "id": "deepseek-v4.1-flash",
+                    "label": "deepseek-v4.1-flash"
+                  }
+                ]
+              }
+            ]
+          },
+          "effective_after_switch": {
+            "kind": "runtime",
+            "agentId": "bb-provider",
+            "machineId": "bb-machine",
+            "label": "BB10-Real",
+            "presence": "online",
+            "capabilities": [],
+            "capabilityDetails": [],
+            "generation": 1,
+            "sessionCapable": true,
+            "sessionAvailability": "current",
+            "sessionObservation": {
+              "state": "live"
+            },
+            "sessionEffectiveRevision": 2,
+            "providerId": "goaichat-openai",
+            "modelId": "qwen3.8-max"
+          },
+          "restarted_binding": {
+            "accepted_revision": 2,
+            "primary": {
+              "providerInstanceId": "goaichat-openai",
+              "modelId": "qwen3.8-max"
+            },
+            "backup": {
+              "providerInstanceId": "rcc-4444",
+              "modelId": "goaichat_openai.qwen3.8-max"
+            }
+          },
+          "session": {
+            "ok": true,
+            "result": {
+              "kind": "session.create",
+              "agentId": "bb-provider",
+              "sessionId": "ses_ee34ab51affePxas1B10JXfd4x",
+              "title": "BB10 real canonical model",
+              "directory": "/private/tmp/agentteams-u7-bb10-2KCc4A/home/.agentteams/data/bb-provider",
+              "time": {
+                "created": 1791483005669,
+                "updated": 1791483005669
+              }
+            }
+          }
+        },
+        "canonical_binding": {
+          "turn": {
+            "dispatch": {
+              "ok": true
+            },
+            "final": {
+              "eventId": "message.updated:ses_ee34ab51affePxas1B10JXfd4x:msg_11cb54c16001wXk9NtG0KsWN0W",
+              "sessionId": "ses_ee34ab51affePxas1B10JXfd4x",
+              "agentId": "bb-provider",
+              "kind": "final",
+              "state": "completed",
+              "messageId": "msg_11cb54c16001wXk9NtG0KsWN0W",
+              "finish": "stop"
+            },
+            "text": "回声是声音在障碍物上反射回来又被我们再次听到的现象。",
+            "parts": 2,
+            "finish": "stop"
+          },
+          "config": {
+            "agentId": "bb-provider",
+            "acceptedRevision": 2,
+            "applyState": "clean",
+            "effectiveRevision": 2,
+            "providers": [
+              {
+                "id": "rcc-4444",
+                "label": "RCC 4444",
+                "protocol": "openai-chat",
+                "apiBaseUrl": "http://127.0.0.1:4444/v1",
+                "enabled": true,
+                "authKind": "none",
+                "catalogState": "ready",
+                "models": [
+                  {
+                    "id": "goaichat_openai.qwen3.8-max",
+                    "label": "RCC canonical model"
+                  },
+                  {
+                    "id": "goaichat.glm-5.3",
+                    "label": "goaichat.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat.qwen3.8-max-0902",
+                    "label": "goaichat.qwen3.8-max-0902"
+                  },
+                  {
+                    "id": "goaichat-ai.glm-5.3",
+                    "label": "goaichat-ai.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat-ai.qwen3.8-max",
+                    "label": "goaichat-ai.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_ai_responses.deepseek-v4.1-flash",
+                    "label": "goaichat_ai_responses.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.deepseek-v4.1-flash",
+                    "label": "goaichat_ciyuan.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.glm-5.3",
+                    "label": "goaichat_ciyuan.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_ciyuan.qwen3.8-max",
+                    "label": "goaichat_ciyuan.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_model.deepseek-v4.1-flash",
+                    "label": "goaichat_model.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_model.glm-5.3",
+                    "label": "goaichat_model.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_model.qwen3.8-max",
+                    "label": "goaichat_model.qwen3.8-max"
+                  },
+                  {
+                    "id": "goaichat_responses.deepseek-v4.1-flash",
+                    "label": "goaichat_responses.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_vibe.deepseek-v4.1-flash",
+                    "label": "goaichat_vibe.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "goaichat_vibe.glm-5.3",
+                    "label": "goaichat_vibe.glm-5.3"
+                  },
+                  {
+                    "id": "goaichat_vibe.qwen3.8-max",
+                    "label": "goaichat_vibe.qwen3.8-max"
+                  },
+                  {
+                    "id": "lifeai.wb-deepseek-v4.1-flash",
+                    "label": "lifeai.wb-deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "lifeai_chat.wb-deepseek-v4.1-flash",
+                    "label": "lifeai_chat.wb-deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "minimax_anthropic.MiniMax-M3",
+                    "label": "minimax_anthropic.MiniMax-M3"
+                  },
+                  {
+                    "id": "mtplx.mtplx-flash-next-optimized-speed",
+                    "label": "mtplx.mtplx-flash-next-optimized-speed"
+                  },
+                  {
+                    "id": "qiluyun.deepseek-v4.1-flash-sg",
+                    "label": "qiluyun.deepseek-v4.1-flash-sg"
+                  },
+                  {
+                    "id": "whitehat.deepseek-v4.1-flash",
+                    "label": "whitehat.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "xmcc2.deepseek-v4.1-flash",
+                    "label": "xmcc2.deepseek-v4.1-flash"
+                  },
+                  {
+                    "id": "xmcc2.kimi-k3",
+                    "label": "xmcc2.kimi-k3"
+                  },
+                  {
+                    "id": "gpt-5.5",
+                    "label": "gpt-5.5"
+                  }
+                ]
+              },
+              {
+                "id": "goaichat-openai",
+                "label": "GoAIChat OpenAI",
+                "protocol": "openai-chat",
+                "apiBaseUrl": "https://llm.goaichat.top/v1",
+                "enabled": true,
+                "authKind": "bearer",
+                "catalogState": "ready",
+                "models": [
+                  {
+                    "id": "qwen3.8-max",
+                    "label": "GoAIChat default model"
+                  },
+                  {
+                    "id": "deepseek-v4-flash",
+                    "label": "deepseek-v4-flash"
+                  },
+                  {
+                    "id": "deepseek-v4-pro",
+                    "label": "deepseek-v4-pro"
+                  },
+                  {
+                    "id": "glm-5.2",
+                    "label": "glm-5.2"
+                  },
+                  {
+                    "id": "kimi-k2.6",
+                    "label": "kimi-k2.6"
+                  },
+                  {
+                    "id": "kimi-k2.7-code",
+                    "label": "kimi-k2.7-code"
+                  },
+                  {
+                    "id": "minimax-m3",
+                    "label": "minimax-m3"
+                  },
+                  {
+                    "id": "qwen3.7-plus",
+                    "label": "qwen3.7-plus"
+                  },
+                  {
+                    "id": "qwen3.6-plus",
+                    "label": "qwen3.6-plus"
+                  },
+                  {
+                    "id": "qwen3.7-max",
+                    "label": "qwen3.7-max"
+                  },
+                  {
+                    "id": "deepseek-v4-flash-0731",
+                    "label": "deepseek-v4-flash-0731"
+                  },
+                  {
+                    "id": "glm-5.3",
+                    "label": "glm-5.3"
+                  },
+                  {
+                    "id": "deepseek-v4-pro-0813",
+                    "label": "deepseek-v4-pro-0813"
+                  },
+                  {
+                    "id": "kimi-k3",
+                    "label": "kimi-k3"
+                  },
+                  {
+                    "id": "qwen3.8-max-0902",
+                    "label": "qwen3.8-max-0902"
+                  },
+                  {
+                    "id": "qwen3.8-flash",
+                    "label": "qwen3.8-flash"
+                  },
+                  {
+                    "id": "glm-5.3-flash",
+                    "label": "glm-5.3-flash"
+                  },
+                  {
+                    "id": "deepseek-v4.1-flash",
+                    "label": "deepseek-v4.1-flash"
+                  }
+                ]
+              }
+            ]
+          },
+          "agent": {
+            "kind": "runtime",
+            "agentId": "bb-provider",
+            "machineId": "bb-machine",
+            "label": "BB10-Real",
+            "presence": "online",
+            "capabilities": [],
+            "capabilityDetails": [],
+            "generation": 1,
+            "sessionCapable": true,
+            "sessionAvailability": "current",
+            "sessionObservation": {
+              "state": "degraded",
+              "reason": "projection-loss",
+              "detail": "unsupported OpenCode event message.part.delta",
+              "droppedEvents": 57
+            },
+            "sessionEffectiveRevision": 2,
+            "currentSessionId": "ses_ee34ab51affePxas1B10JXfd4x",
+            "providerId": "goaichat-openai",
+            "modelId": "qwen3.8-max"
+          }
+        },
+        "lifecycle_anomaly": {
+          "switch_stop_relay_exit": false,
+          "switch_stop_stderr": "",
+          "final_stop_relay_exit": false,
+          "final_stop_stderr": ""
+        },
+        "console_listener_gone_after_stop": true,
+        "stop_stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb10-2KCc4A/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-2KCc4A/home/.agentteams/internal.toml pid=11637\n",
+        "stopped_stdout": "status state=stopped generation=2 config=/tmp/agentteams-u7-bb10-2KCc4A/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-2KCc4A/home/.agentteams/internal.toml pid=11637 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB10-Real role=provider presence=offline generation=1 capabilities=- endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB10-Passive role=provider presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=2 consoleCredential=configured\n",
+        "owned_pids_after_stop": [
+          11637,
+          11667,
+          11712,
+          11792
+        ],
+        "owned_pids_alive_after_stop": [],
+        "temporary_root_removed": true
+      },
+      "evidence_path": "/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v4/focused/cases/BB10"
+    }
+  ],
+  "exit": {
+    "code": 0,
+    "failed": [],
+    "unverified": []
+  }
+}

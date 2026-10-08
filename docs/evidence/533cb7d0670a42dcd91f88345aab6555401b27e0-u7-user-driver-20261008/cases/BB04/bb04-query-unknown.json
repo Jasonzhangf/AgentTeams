@@ -1,0 +1,19 @@
+{
+  "command": "/tmp/agentteams-u7-bb04-lRSYsf/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "query",
+    "--config",
+    "/tmp/agentteams-u7-bb04-lRSYsf/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--work-id",
+    "bb04-unknown-work",
+    "--request-id",
+    "bb04-unknown-request"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"2c909bf5-e3ca-4e2d-aa0d-5e6c6b76d336\",\"attemptId\":\"146a5620-992d-43b9-87b6-aa43c6be1771\",\"workId\":\"bb04-unknown-work\",\"requestId\":\"bb04-unknown-request\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"endpoint\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"FORBIDDEN: Work is not owned by this authenticated consumer\",\"operation\":\"agentWork.get\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
+}

@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "screenshot",
+    "--profile",
+    "bb09-main-30129",
+    "--path",
+    "/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v4/full/cases/BB09/browser-page.png"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"screenshot\",\n  \"profile\": \"bb09-main-30129\",\n  \"target\": \"t_db232716cfd6\",\n  \"path\": \"/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/v4/full/cases/BB09/browser-page.png\",\n  \"saved\": true,\n  \"issuedAt\": \"2026-10-08T18:13:38.165Z\",\n  \"traceId\": \"cli-1791483218088\"\n}\n",
+  "stderr": ""
+}

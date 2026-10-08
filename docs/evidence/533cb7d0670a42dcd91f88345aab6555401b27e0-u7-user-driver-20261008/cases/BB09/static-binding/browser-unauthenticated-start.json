@@ -1,0 +1,15 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "start",
+    "--profile",
+    "bb09-static-nocred-30129",
+    "--url",
+    "http://127.0.0.1:64453/",
+    "--headless"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"start\",\n  \"sessionId\": \"camoufox-68782\",\n  \"profile\": \"bb09-static-nocred-30129\",\n  \"target\": \"t_6bf1af0168ad\",\n  \"ephemeral\": false,\n  \"reused\": false,\n  \"headless\": true,\n  \"url\": \"http://127.0.0.1:64453/\",\n  \"issuedAt\": \"2026-10-08T18:14:11.708Z\",\n  \"traceId\": \"cli-1791483249500\"\n}\n",
+  "stderr": ""
+}

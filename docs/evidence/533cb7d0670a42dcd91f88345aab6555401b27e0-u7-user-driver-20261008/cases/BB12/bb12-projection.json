@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB-Session",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "no-current",
+      "sessionObservation": {
+        "state": "live"
+      }
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB-Passive",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 0,
+      "applyState": "clean",
+      "providers": [
+        {
+          "id": "bb-primary",
+          "label": "BB Primary",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:65116/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-primary-model",
+              "label": "BB Primary Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-backup",
+          "label": "BB Backup",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:65116/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-backup-model",
+              "label": "BB Backup Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-manual",
+          "label": "BB Manual",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:65116/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "empty",
+          "models": []
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": []
+}

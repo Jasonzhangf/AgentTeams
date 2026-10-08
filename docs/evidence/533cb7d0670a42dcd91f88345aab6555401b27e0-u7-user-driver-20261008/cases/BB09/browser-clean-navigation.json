@@ -1,0 +1,15 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "goto",
+    "http://127.0.0.1:64114/",
+    "--profile",
+    "bb09-main-30129",
+    "--waitUntil",
+    "load"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"goto\",\n  \"profile\": \"bb09-main-30129\",\n  \"target\": \"t_db232716cfd6\",\n  \"url\": \"http://127.0.0.1:64114/\",\n  \"waitUntil\": \"load\",\n  \"navigated\": true,\n  \"issuedAt\": \"2026-10-08T18:13:24.663Z\",\n  \"traceId\": \"cli-1791483204622\"\n}\n",
+  "stderr": ""
+}

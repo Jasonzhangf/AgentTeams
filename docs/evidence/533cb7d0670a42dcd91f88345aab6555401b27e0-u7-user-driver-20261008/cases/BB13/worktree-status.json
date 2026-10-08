@@ -1,0 +1,11 @@
+{
+  "command": "git",
+  "args": [
+    "status",
+    "--porcelain"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "?? .appsdk/records/\n",
+  "stderr": ""
+}

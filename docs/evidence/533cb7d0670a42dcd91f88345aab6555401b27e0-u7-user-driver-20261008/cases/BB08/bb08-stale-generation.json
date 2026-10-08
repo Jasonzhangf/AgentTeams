@@ -1,0 +1,19 @@
+{
+  "command": "/tmp/agentteams-u7-bb08-frLYVN/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "submit",
+    "--config",
+    "/tmp/agentteams-u7-bb08-frLYVN/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--generation",
+    "1",
+    "--payload",
+    "{\"query\":\"marker-beta\"}"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "stale launcher generation: expected=1 current=2\n"
+}

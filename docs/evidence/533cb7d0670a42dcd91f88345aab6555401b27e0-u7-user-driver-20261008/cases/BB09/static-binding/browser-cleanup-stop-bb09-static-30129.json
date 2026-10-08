@@ -1,0 +1,12 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "stop",
+    "--profile",
+    "bb09-static-30129"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"stop\",\n  \"profile\": \"bb09-static-30129\",\n  \"ephemeral\": false,\n  \"state\": \"stopped\",\n  \"releasedAt\": \"2026-10-08T18:14:15.604Z\",\n  \"traceId\": \"cli-1791483255432\"\n}\n",
+  "stderr": ""
+}

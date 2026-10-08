@@ -1,0 +1,18 @@
+{
+  "prompt": "请用一句简短中文解释什么是回声。不要调用工具，也不要读写文件。",
+  "dispatch": {
+    "ok": true
+  },
+  "final": {
+    "eventId": "message.updated:ses_ee346a6c5ffe9shm4KVqeO4dps:msg_11cb95a8f001DWxTovbAUYdHC1",
+    "sessionId": "ses_ee346a6c5ffe9shm4KVqeO4dps",
+    "agentId": "bb-provider",
+    "kind": "final",
+    "state": "completed",
+    "messageId": "msg_11cb95a8f001DWxTovbAUYdHC1",
+    "finish": "stop"
+  },
+  "assistant_text": "回声是声音在传播过程中遇到障碍物反射回来、与原声形成先后或重合的重复声音现象。",
+  "assistant_parts": 2,
+  "finish": "stop"
+}

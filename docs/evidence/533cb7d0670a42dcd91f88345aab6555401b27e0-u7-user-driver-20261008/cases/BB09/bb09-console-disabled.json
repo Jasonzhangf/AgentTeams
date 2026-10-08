@@ -1,0 +1,13 @@
+{
+  "command": "/tmp/agentteams-u7-bb09-ktCRuB/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "console",
+    "start",
+    "--config",
+    "/tmp/agentteams-u7-bb09-ktCRuB/home/.agentteams/config.toml"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "Console is disabled; set [console].enabled=true in config.toml\n"
+}

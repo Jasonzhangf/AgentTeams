@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-main-30129",
+    "--script",
+    "fetch('/api/v1/projection').then(r => r.json()).then(j => JSON.stringify({ configs: j.configs }))"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-30129\",\n  \"target\": \"t_db232716cfd6\",\n  \"result\": \"{\\\"configs\\\":[{\\\"agentId\\\":\\\"bb-provider\\\",\\\"acceptedRevision\\\":0,\\\"applyState\\\":\\\"clean\\\",\\\"providers\\\":[{\\\"id\\\":\\\"bb-console-stub\\\",\\\"label\\\":\\\"BB09 Console Stub\\\",\\\"protocol\\\":\\\"openai-chat\\\",\\\"apiBaseUrl\\\":\\\"http://127.0.0.1:64108/v1\\\",\\\"enabled\\\":true,\\\"authKind\\\":\\\"none\\\",\\\"catalogState\\\":\\\"ready\\\",\\\"models\\\":[{\\\"id\\\":\\\"bb-console-model\\\",\\\"label\\\":\\\"BB09 Stub Model\\\"}]}]}]}\",\n  \"issuedAt\": \"2026-10-08T18:13:34.326Z\",\n  \"traceId\": \"cli-1791483214287\"\n}\n",
+  "stderr": ""
+}
