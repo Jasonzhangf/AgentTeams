@@ -723,7 +723,8 @@ in progress` 之外的无解释失败；Console runtime 最终状态由实际 st
 | 权威要求 | 黑盒断言 | 证据文件 |
 | --- | --- | --- |
 | 安装资产真实入口 | URL 来自 installed CLI；Camo clean URL 加载，title 正确，无加载错误，projection fetch 200 | `browser-start.json`、`browser-clean-navigation.json`、`browser-page.json`、`browser-dom.json`、截图 |
-| 两个真实 daemon | installed status 记录两个独立 daemon PID；browser projection/DOM 中两个 agentId、label、machineId、online 状态对应 | `bb09-status.json`、`browser-projection.json`、`browser-agents-dom.json` |
+| 目录发现（缺省/空 `agentIds`） | installed status 记录两个独立 daemon PID；主 BB09 场景的 browser projection/DOM 中两个 agentId、label、machineId、online 状态对应；Relay 目录过滤的 account 不匹配/scope 不匹配负例（HTTP 200 且 `agents=[]`）与同域正例（恰两个目标 ID）由真实 Relay + 真实 Console runtime + 真实 HTTPS `/api/v1/projection` 的 driver spec 覆盖 | `bb09-status.json`、`browser-projection.json`、`browser-agents-dom.json`；`scripts/blackbox-user-mvp.spec.ts` 的 `BB09 HTTP projection account mismatch`、`BB09 HTTP projection scope mismatch`、`BB09 HTTP projection same domain` |
+| 静态绑定（显式 `[console].agentIds`） | 独立隔离 fixture（自有 HOME/prefix/data dir/动态端口/Camo profile）内两个同域 daemon 显式授权 `__console`；安装态 projection 恰为显式两个 ID 且 online；卡片与详情按值对应 label/machineId 与 `capabilityDetails`；不重复配置交互、离线 Work 与完整 Session | `cases/BB09/static-binding/` 下 `npm-pack.json`、`npm-install.json`、`init.json`、`bb09-static-start.json`、`bb09-static-status.json`、`browser-start.json`、`browser-clean-navigation.json`、`browser-projection-status.json`、`browser-projection.json`、`browser-agents-dom.json`、`browser-detail-action.json`、`browser-detail-dom.json`、`browser-resources-dom.json`、`browser-cleanup.json`、`cleanup.json`、`static-binding.json` |
 | 权威服务/资源 | browser API 返回真实 producer 的 `capabilityDetails`；DOM 展示 capability/version/operation/resourceId/capacity/unit，并与公开 installed status 的声明对应 | `browser-projection.json`、`browser-resources-dom.json` |
 | 观察交互 | 点击 Agent 详情，drawer 显示对应 Agent 的声明；刷新仍从 owner projection 读回 | `browser-detail-action.json`、`browser-detail-dom.json` |
 | 配置交互 | 真实点击「服务配置」、选择目标 Agent、执行一次现有 provider 配置操作；公开 accepted revision 前进，另一 Agent 不变；DOM 刷新显示读回值 | `browser-config-actions.json`、`browser-config-before.json`、`browser-config-after.json` |
@@ -737,6 +738,12 @@ in progress` 之外的无解释失败；Console runtime 最终状态由实际 st
 
 配置交互场景使用既有 stub provider，只验证 Console→config owner 的提交/读回；不在该场景生成
 real-provider PASS。O1 的「选择后无配置数据」只证明控件能力，不能替代本表的配置提交。
+
+配置交互的次序与 owner 边界：`config.refreshModels` 只写 catalog observation，**不推进**
+accepted revision；accepted revision 只能由真实 accept 路径（如 `config.bindModel` → `mutate`）
+推进。BB09 的配置交互因此先执行一次真实 refresh（断言 accepted revision 不变），再执行一次
+真实 bind（断言 accepted revision 恰前进 1，且另一 Agent 配置不变）。BB09 汇总目录发现与
+静态绑定两份观察，任一子场景失败则 BB09 不得 passed。
 
 ---
 
