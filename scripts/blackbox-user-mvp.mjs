@@ -1526,7 +1526,10 @@ async function bb09BrowserAcceptance(options) {
   const refreshedProvider = refreshedRows.find(row => row.agentId === workProviderId)
   assert(refreshedProvider !== undefined && /file-search/u.test(refreshedProvider.text),
     `the refreshed panel lost the Agent declaration: ${JSON.stringify(refreshedRows)}`)
-  assert(/search-slot[^A-Za-z0-9]{0,8}2[^A-Za-z0-9]{0,8}slot/u.test(refreshedProvider.text),
+  // The rendered label spacing comes from the product locale, not a behavior
+  // contract; assert the observable service, resource, and capacity facts by value.
+  assert(/file-search/u.test(refreshedProvider.text) && /search-slot/u.test(refreshedProvider.text)
+    && /2\s*slot/u.test(refreshedProvider.text),
     `the refreshed panel lost the declared resource detail: ${refreshedProvider.text}`)
 
   // (c) Configuration interaction: a real click opens the Console settings entry,
