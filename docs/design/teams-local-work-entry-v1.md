@@ -74,6 +74,17 @@ capability declaration。未确认/失败 `control` 携带该固定 binding 与�
 prepare/ACK 协议、第二 resolver、execution ledger、scheduler 或 fallback。本修订只做设计，
 不声明 runtime/SDK/install PASS。
 
+修订 r7（round 12，`codex/u7-user-driver-20261006`）追加 **provider typed refusal 的 receipt
+投影契约**：provider 的 typed 拒绝已无损到达 output ARC（`agent-host/work-ingress.ts:16-17`
+把 `record.error` 放进 `work.result` control，`runtime/dagpipe/runner/src/bin/runner.rs:590`
+把 reply control 放进 `control.reply`），但唯一 owner `runtime/dagpipe/host.ts` 的
+`buildCompletedReceipt`（`:685-756`，投影 `:700-744`）只读 `closeError`，公开 receipt 因此丢失
+该 error。本修订规定：没有 `closeError` 时，从 `control.reply.error` 原样投影 provider 的
+`code`/`message` 到既有 `receipt.control.error`；有 `closeError` 时保持今日优先级与
+close-failure 表达。`status`、request/work 状态、binding、business、cleanup 与 identity 语义
+不变；不改 runner、admission、ledger、retry 或 CLI 第二投影。新增 BB06i 黑盒断言覆盖超容量
+open 与 retained request。本修订只做设计，不声明 runtime/install PASS。
+
 ## 0. 目标与已证实缺口
 
 目标：用户只用正式 CLI 与 `config.toml`，即可在不启动 Console 的情况下提交一次新的
@@ -381,6 +392,14 @@ control 帧传递，不经配置、不从启动回执读取。
   `cleanupError`，`status` 变 `failed`，不写成完整成功。
 - 公开结果无损：`business` 为原始 `JsonValue`，不做截断/改写/字段裁剪；control receipt 与
   business 物理分离；execution journal 只作执行证据，业务决策不得从日志重建。
+- **provider typed refusal 投影（BB06 round 12 契约，提案）**：provider 的 typed 拒绝已经无损
+  到达 output ARC —— `agent-host/work-ingress.ts:16-17` 把 `record.error` 放进 `work.result`
+  control，`runtime/dagpipe/runner/src/bin/runner.rs:590` 把整个 reply control 放进
+  `control.reply`。唯一 owner 是 `runtime/dagpipe/host.ts` 的 `buildCompletedReceipt`
+  （`:685-756`，投影 `:700-744`），当前只读 `closeError`。新规则：没有 `closeError` 时，从
+  `control.reply.error` 原样投影 provider 的 `code`/`message` 到既有 `receipt.control.error`；
+  有 `closeError` 时保持今日优先级与 close-failure 表达。`status`、request/work 状态、binding、
+  business、cleanup 与 identity 语义不变。不改 runner、admission、ledger、retry 或 CLI 第二投影。
 
 ## 8. launcher / daemon 清理语义
 
@@ -488,7 +507,7 @@ req_a=$(node -e 'console.log(require(process.argv[1]).control.requestId)' "$ev/s
 | §11.6 | 已知失败 vs 未确认 vs unknown/retained | 已实现：安装包 smoke 覆盖失败与未确认回执 |
 | §11.7 | CLI 断连 / receiver 重启 / generation 失效 | 部分覆盖：丢失 socket 的 failed/unconfirmed 回执已回放，其余待 BB 驱动矩阵 |
 | §11.8 | 受影响文件 / maps / tests | 已交付：文件、maps 与测试见本节表格 |
-| §11.9 | 黑盒命令 / 用例 | 公开入口部分已回放；BB06a–BB06h 与其余 BB 用例待执行 |
+| §11.9 | 黑盒命令 / 用例 | 公开入口部分已回放；BB06a–BB06i 与其余 BB 用例待执行 |
 
 当前真正仍未完成的是 BB 驱动矩阵、Console offline Work 与最终同包用户验收，这三项在各 map 中
 单独标注。
@@ -875,14 +894,14 @@ admission 拒绝。此区分不新增 U2 配置字段、resolver、ledger 或 sc
 | provider | `agent-host/work-host.ts`、`agent/work-resource.ts`（仅适用校验/容量接线，无新账本） | `close` 委派 `executor.destroy`；unknown/running 时拒绝 close 并保留；ledger 校验原 Work/consumer 归属 | agent provider owner |
 | maps | `docs/architecture/verification-map.json`（`teams-behavior-dag-topology` 五图静态命令）、`docs/architecture/function-map.json`（`work_graph_execution` design paths）、`docs/architecture/resource-map.json`、`docs/architecture/mainline-call-map.json`（`work-query-user-entry-v1`） | r5 只做 design ownership/静态拓扑 admission：五图均 SESE 且静态 operator binding 存在；query 的 endpoint/capability 双模式与显式 binding 一致；在 r5 时 `teams-work-sdk-installed`、三个新 Operator 注册与 pack/manifest 指纹仍 PENDING。其中三个 Operator 注册现已完成（`work-open@1`/`work-request@1`/`work-close@1` 编译并绑定）；`teams-work-sdk-installed` 与最终 pack/manifest 指纹仍由最终同包验收判定 | 集成 owner（primary） |
 
-### 11.9 黑盒命令 / 用例（公开入口部分已由安装包 smoke 回放；BB06a–BB06h 驱动矩阵仍未执行）
+### 11.9 黑盒命令 / 用例（公开入口部分已由安装包 smoke 回放；BB06a–BB06i 驱动矩阵仍未执行）
 
 前置同 §9：隔离 HOME + 隔离 npm prefix；`config.toml` 含 provider/receiver/`connect`；
 provider 启用 browser capability（`context.create`/`navigate`/`snapshot`/`context.destroy`）
 且 `browser-context` 容量为 2（`agent-host/cli-executor.ts` 声明）；provider searchRoot 下建
 fixture。以下命令是最终 BB 驱动矩阵的用例定义：公开入口部分（submit/query、open/request/close、
 省略 `--demands` 的拒绝、无法解析 provider 的 open 拒绝、丢失 socket 的 failed/unconfirmed
-回执）已由安装包 smoke 从公开入口回放；BB06a–BB06h 与其余 BB 用例仍未执行，最终驱动入口是
+回执）已由安装包 smoke 从公开入口回放；BB06a–BB06i 与其余 BB 用例仍未执行，最终驱动入口是
 U7 的 `scripts/blackbox-user-mvp.mjs`。
 
 业务 payload 形状对齐 `cli-adapter/cli.ts` 的真实契约：`context.create` 的 payload 是 `{}`
@@ -1011,11 +1030,34 @@ op_capacity_a=$(node -e 'process.stdout.write(require(process.argv[1]).control.o
   --capability-id "$cap_lost" --capability-version "$ver_lost" --operation context.create > "$ev/close-lost.json"
 #     断言：仅在 provider confirmWorkDestroyed 后 closed；容量释放；P2 未被选中或触及。
 #  4. 全程不读取 open.json（该文件不存在或被删除）仍可完成 2、3。
+
+# BB06i 超容量 open / retained request 的 typed 拒绝 receipt（round 12）
+# 前置同 BB06b：provider 声明 browser-context 容量 2，已持有 2 个真实 context。
+# 第三次 open 由 provider admission 以 RESOURCE_EXHAUSTED 拒绝（无新 context）：
+"$CLI" work open --config "$cfgC" --provider "$provC" --provider-generation "$genC" \
+  --operation context.create --demands '[{"resourceId":"browser-context","amount":1},{"resourceId":"browser-slot","amount":1}]' \
+  --payload '{}' > "$ev/overflow-open.json"
+# 对已接纳 Work 的 request 同样触发 provider typed 拒绝（Work 保留）：
+"$CLI" work request --config "$cfg" --work-id "$work_a" --provider "$prov_a" --provider-generation "$gen_a" \
+  --capability-id "$cap_a" --capability-version "$ver_a" \
+  --operation context.create --demands '[{"resourceId":"browser-context","amount":1},{"resourceId":"browser-slot","amount":1}]' \
+  --payload '{}' > "$ev/overflow-request.json"
+# 断言（两条 receipt 都必须成立）：
+#  status = completed
+#  control.requestState = failed
+#  control.workClosure = retained
+#  control.error.code = RESOURCE_EXHAUSTED
+#  control.error.message = provider 提供的明确资源原因
+#  business 不存在
+#  原 work/request/provider/generation/capability binding 保留
+#  实际 context/profile 数仍为 2
+#  确认销毁一个 context 后，新 Work 可接纳
+#  最终全部自有 context 消失
 ```
 
 上述期望以 §2 的 JSON 形状、§6 的 identity 事实与 §11.6/§11.7 的失败/代次语义为准。本节
 所有 graph、Operator、pack、CLI、maps 条目当时是**实现义务**；公开 Work 入口与三个新 Operator
-现已交付并由安装包 smoke 从公开入口覆盖，BB06a–BB06h 驱动矩阵仍待执行。
+现已交付并由安装包 smoke 从公开入口覆盖，BB06a–BB06i 驱动矩阵仍待执行。
 
 ## Primary 设计消费澄清
 

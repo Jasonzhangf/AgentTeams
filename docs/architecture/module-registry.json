@@ -40,6 +40,7 @@
       "module_id": "control-protocol",
       "owner": "control-protocol",
       "status": "implemented",
+      "note": "Canonical owner of the Console observation wire contract. BB09 round 12 adds the optional capabilityDetails declaration summary to the shared runtime|directory Agent row fields, its closed parser validation (existing string and capacity/unit checks; illegal shapes rejected, never stripped) and the single declaration-to-summary helper reused by the runtime and Console-hub producers.",
       "owned_paths": [
         "control-protocol/**"
       ],
@@ -181,6 +182,7 @@
       "module_id": "ui",
       "owner": "ui",
       "status": "design",
+      "note": "BB09 round 12 renders the declaration detail (capability id/version/operations, resource id/capacity/unit) with the existing safe text DOM and locale, reusing the canonical console-api type; declared capacity is labelled as declared, and absent detail shows an explicit unavailable label.",
       "owned_paths": [
         "ui/**"
       ],

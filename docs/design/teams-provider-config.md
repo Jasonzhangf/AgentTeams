@@ -96,7 +96,7 @@ API 返回的数据与用户 override 分开；未知能力保持 unknown，不�
 | `config.models.refresh` | targetAgent、instanceId、expectedRevision | catalog 状态、revision、added/removed IDs；失败不冒充空成功 |
 | `config.model.put` | targetAgent、expectedRevision、entry | 手动模型或 override 的新 revision |
 | `config.agent.bind` | targetAgent、expectedRevision、binding | accepted revision 与 apply 状态 |
-| `config.agent.select-backup` | targetAgent、expectedRevision | 校验 backup 后明确更新 primary；不重放旧请求 |
+| `config.agent.select-backup` | targetAgent、expectedRevision | 只校验并设置 backup 引用，**不**把 backup 变成 primary；不重放旧请求。真正的第二次 dispatch 必须显式 `config.bindModel` 到 backup provider/model，再读回 accepted/effective |
 | `config.effective.get` | targetAgent | accepted/effective revision 与结构化 apply error |
 
 模型刷新在执行 daemon 的网络位置进行；Console 不用自己的 localhost 代替 Agent
@@ -127,6 +127,85 @@ expose_models 声明 `gpt-5.5`。差异尚未定位，不把该模型冒充为�
 RCC 内部已有的 provider routing 由 RCC 自己管理。Teams 将 RCC 视为一个 endpoint，
 不镜像其路由表；goaichat 备用引用由 Teams config 明确选择，不叠加隐藏 failover。
 
+### 5.1 两实例的当时真源与模型选择（BB10 round 12）
+
+两个 Teams provider 实例必须区分，并各自只以**当时真源**为准：
+
+| Teams 实例 | 真源 | 模型选择 |
+|---|---|---|
+| `rcc-4444` | `.rcc/config.toml` 的 `servers.routecodex_v3_4444`，地址由端口/endpoint 声明解析 | 当前 source 所选的显式 RCC model；用 O3 已证的 `goaichat_openai.qwen3.8-max` 时再以当次 catalog 确认 |
+| `goaichat-openai` | `provider/goaichat_openai/config.v2.toml` 的 `baseURL`、`type`、`defaultModel`、auth reference | 当时 canonical model（如 `qwen3.8-max`）；**绝不**从 RCC response 的 `model` 反推 |
+
+三种 model 写法属于三个不同边界，不得互相替换或改写：
+
+- RCC **路由声明**引用：`goaichat_openai/qwen3.8-max`（`/`），来自 RCC route 配置。
+- RCC **API token**：`goaichat_openai.qwen3.8-max`（`.`），由当次 catalog 返回并确认。
+- canonical **API model**：`qwen3.8-max`，来自 provider source 的 `defaultModel`。
+
+凭据边界：Teams TOML 只写 credential 的 **env 变量名**（`credentialEnv`），值只存在于解析
+进程与 fixture child environment。RCC client credential **不得**当作 canonical upstream
+credential；RCC 自己到 canonical endpoint 的上游凭据与 Teams 直连该 endpoint 所需的凭据是
+两个不同边界。
+
+Backup 语义（已校正）：`config.agent.select-backup` 只设置 backup 引用，**不**使它成为
+primary；真正的第二次 dispatch 需要显式 `config.bindModel` 到 backup provider/model，并读回
+accepted/effective。没有自动 failover。
+
+### 5.2 BB10 运行期前置与终态（round 12）
+
+真实两 provider 验收的唯一 owner 是 U7 driver；Config、managed OpenCode 与 provider 产品语义
+沿用既有 owner。**不在产品代码中增加 `.rcc` discovery 或 secretFile reader。**
+
+运行期必须重做当前易变的前置检查：source 可读且可解析、所选声明唯一、credential env 可解析、
+两个 endpoint 可达、OpenCode executable 可用。source 中相关地址/model/auth reference 在运行
+期间漂移时，对应证据失效；无需 hash 整份 secret 或整个 RCC 配置。
+
+终态：
+
+- 必需 source/resolver/credential/endpoint 前置缺失：BB10 记 `unverified`，给出具体
+  `missing_capability`，cleanup 仍执行（全局无其他 failed 时 exit 2，MVP INCOMPLETE）。
+- 前置通过但 Session dispatch/final 失败：BB10 记 `failed`，保留原错。
+- 禁止 fallback 到 stub、别的 provider，或用两个 RCC alias 制造 real PASS。
+
+### 5.3 canonical 凭据的操作者供应边界（round 12）
+
+**事实**：canonical 凭据的 resolver 属于 RCC 内部
+（`routecodex-v3-config/src/lib.rs:496`、`:644`；`routecodex-v3-provider-responses/src/provider_auth.rs:14`），
+`rcc` CLI 没有返回该值的命令，`GOAICHAT_TOKEN`/`GOAICHAT_API_KEY` 未设置；provider source 只以
+`secretFile` + `secretKey` 声明凭据（`config.v2.toml:14-16`）。因此本机不存在 RCC 提供的
+sanctioned credential-export 通道。
+
+**契约（操作者供应，非 RCC API）**：canonical Teams provider 实例的凭据由**操作者**（本轮为
+验收驱动）在运行期从当时声明的真源读取，并且只经自有 installed child 的环境传递。Teams 产品
+只持久化 env 名，产品代码不增加 `.rcc` discovery 或 secretFile reader。
+
+- **读取范围**：选中唯一声明的 auth entry，只读该 entry 的 `secretFile` 与 `secretKey`。不得
+  写死路径或键名，不得枚举其他 provider 键，不得尝试第二个键，不得在多个 entry 间自动选择。
+- **格式**：声明文件是 flat `name = value`，不是普通 TOML 层级，也不得 `source`/`eval`/交给
+  shell。解析逐行 trim、忽略空行与整行 `#` 注释、在第一个 `=` 分割、trim 名与值、匹配完整
+  键名、只剥去外层引号、不做插值或转义求值；格式错误、重复键或空值显式拒绝。错误输出只含
+  错误类别、路径、键名和必要行号，不含原始行。
+- **传递**：值进入专属 child-env 对象，经 `spawn` 的 `env` 交给本轮 installed launcher，再沿
+  既有 `credentialEnv → runtime resolver → managed OpenCode child env` 传递。不写父进程全局
+  env，不写 `.env`、rc、TOML 值或命令行参数；Camo、stub、review 与无关 CLI 不接收该凭据。
+  自有 restart 复用同一限定 env 路径，并在 restart 后重新核对 effective 与 generation。
+- **脱敏**：允许记录 source 路径、auth alias、secret 键名、env 名、availability、目标值长度、
+  provider ID、baseURL、model、accepted/effective revision、Session/request ID、公开
+  dispatch/final、可见文本和非敏感 usage、清理结果与保留责任。禁止记录 secret 值、hash、前缀、
+  Authorization、全量 env 或原始 secret 行，也不得对 secret 文件生成内容摘要。
+- **漂移**：运行期读取的公开 endpoint/model/auth reference 若变化，对应证据失效，不静默跟随
+  新 source 继续原 attempt。
+- **边界声明**：这不是 RCC 原本支持的 sanctioned export API，也不修改 RCC、共享用户 config、
+  Teams 产品 credential resolver 或 managed OpenCode 凭据语义。若实际访问政策禁止该
+  provisioning，必须报告政策与具体缺口并停止 BB10，不得暗中绕过。
+
+**可见输出要求**：两个真实 provider 各自经 installed Console 公开 Session 入口提交一次独立
+短任务（无工具、无文件访问）。不得复制 O5 的低 `max_tokens` 预算；使用 installed OpenCode 的
+正常预算，保持既有 120 秒 dispatch 边界，不提高 deadline，不自动重发 inference，只轮询同一
+Session 的公开事件。必须同时断言：dispatch 成功、相应成功 final、至少一个真实 assistant text
+part 的 trim 后内容非空。reasoning、工具结果、ACK、HTTP 200 或 provider capability-test
+`passed` 都不算可见回答；`finish_reason=length` 且仅有 reasoning 时该 attempt 判失败。
+
 ## 6. 验证与消融
 
 先复用现有 config revision CAS 扩展，不增加新的配置框架。模型发现/配置编译由
@@ -135,6 +214,8 @@ adapter 负责，业务推理继续由 OpenCode 执行。需要验证：
 - 同协议两实例、同名模型、跨 Console CAS 冲突与停用/删除引用保护。
 - URL 路径、真实 401/403、空目录、网络失败、credential 轮换与模型 override 保留。
 - 运行中请求不受配置修改隐式影响；accepted/effective 分离且可跨 Console 读回。
-- RCC 主实例与显式选择 goaichat 各完成实际 OpenCode session/tool/approval 回放。
+- RCC 主实例与 canonical `goaichat-openai` 各完成一次真实 OpenCode session/tool/approval 回放；
+  第二次 dispatch 由显式 `config.bindModel` 到 backup provider/model 触发，并读回 accepted/effective；
+  全程无自动 failover。
 - 非 LLM 浏览器 Agent 无 provider/model 也能声明能力并执行匹配请求。
 - Console 全部离线后，已接受的 Agent 配置和协作仍然有效。

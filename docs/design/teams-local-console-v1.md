@@ -1,11 +1,13 @@
 # AgentTeams U5 窄 Console 设计 v1
 
-状态：U5 编码前 design candidate r2，feature `b0f7f3b`，实际基线
+状态：U5 编码前 design candidate r3，feature `b0f7f3b`，实际基线
 `c3aa36fc637e2da4ac821d1b26d587eadbbf1268`。本文只是设计准备，不是产品实现、不是 U5
 完成，也不是任何 PASS。文中所有“提案 / 待接入 / 未实现”标记的接口都尚未存在于产品代码，
 不得被当作既有 API 使用。产品源码在本次任务中只读。r1 独立审查的两个 P1 分别由三张独立
 Console 生命周期 SESE 图和 `[consoleRuntime]` 独立运行事实表修正；五张 architecture map
-只登记本设计的 design/pending 绑定。
+只登记本设计的 design/pending 绑定。r3（round 12）追加 §6.5 声明明细投影契约与 §13.6
+浏览器验收断言集，记录 BB09 补链；这两节只新增 Console 观察投影与验收断言，不改 §1–§5
+的 U5 生命周期契约，也不构成实现或 PASS。
 
 owner 接缝：`runtime/local-process.ts` + `runtime/local-supervisor.ts`（唯一本地
 launcher/supervisor 生命周期 owner）与 `runtime/console-process.ts` + `console-host/**`
@@ -372,6 +374,60 @@ config owner/CAS 拥有；Session 由 U6 拥有。
 - Console 的 `sendSession`/`session-message` 是独立业务入口；U5 只区分观察/配置/Session，
   不拥有执行/取消语义。
 
+### 6.5 声明明细投影契约（BB09 round 12，提案）
+
+BB09 要求「展示两个真实 daemon 及权威服务/资源」。当前 Console 观察行只承载
+`capabilities: string[]`，无法表达 service version/operation 与 resource capacity/unit，因此
+本轮在既有 typed projection 上增加一个**可选**字段。canonical owner 是
+`control-protocol/console-api.ts`；字段放在 runtime 两个变体与 directory 变体的共同部分：
+
+```ts
+readonly capabilityDetails?: readonly {
+  readonly capabilityId: string
+  readonly version: string
+  readonly operations: readonly string[]
+  readonly resources: readonly {
+    readonly resourceId: string
+    readonly capacity: number
+    readonly unit: 'slot' | 'context'
+  }[]
+}[]
+```
+
+语义（冻结）：
+
+- 内容是 Agent 的**已发布声明摘要**，不是剩余容量、实时用量或分配账本。
+- 复用 `EndpointCapabilitySummary`/`EndpointResourceSummary` 的字段类型；runtime 不得反向依赖
+  control-protocol 类型。
+- 声明→摘要映射：`OperationDeclaration.operation` → `operations[]`；`ResourceDeclaration` 只保留
+  `resourceId`/`capacity`/`unit`，`sharing`/`allocationScope` 不进入摘要。
+- `capabilities: string[]` 现有意义不变。明细缺失时 UI 必须显示「服务/资源明细不可用」；
+  不得根据 ID 猜明细。
+- `capabilityDetails: []` 表示来源明确声明没有服务；某 capability 的 `resources: []` 表示该服务
+  明确声明无资源。
+- parser 接受新 optional 字段并关闭其嵌套对象；复用既有字符串与 capacity/unit 校验语义；
+  非法字段或形状显式拒绝，绝不 strip。
+- 不新增声明 revision、hash、allocation state 或可用量字段。
+- 同包新 producer 必须发出完整明细。`optional` 只保留既有 v1 行的可解析性；本轮只承诺同包
+  protocol/UI 配套交付。
+
+生产者（两 producer 复用同一个 canonical 声明→摘要 helper）：
+
+1. `runtime/agent-process.ts` 从 `advertisedCapabilities` 投影明细；`projectRuntimeAgentRow`
+   接收并传递它。
+2. `runtime/console-hub.ts` 从 `peer.declaration.capabilities` 投影同一字段。
+3. hub 合并在线 directory 行与 runtime 行时，`capabilities` 与 `capabilityDetails` 必须来自
+   **同一**来源；不得一个取 directory、另一个留 runtime。
+4. 声明→摘要的转换只有一个 canonical helper，与类型/parser 同属 control-protocol；两 producer
+   复用，不另建状态存储。
+5. UI `model.ts` 复用该类型；`render.ts` 展示 capability id、version、operations、resource id、
+   capacity、unit，沿用既有安全文本 DOM 渲染与 locale，不拼接不可信 HTML。
+
+动态 `allocations` **本轮明确不做**。理由：当前可复用的公开契约是声明摘要；BB06 另以公开
+拒绝与真实 context 副作用证明动态容量行为。引入 allocations 需要新的 Provider-ledger→Console
+权限、聚合、freshness 与重启语义，超出本轮最小补链。UI 必须标「声明容量」，不得标为
+「剩余容量」。
+
 ---
 
 ## 7. 安全
@@ -657,6 +713,30 @@ in progress` 之外的无解释失败；Console runtime 最终状态由实际 st
 证据：两个命令的 argv/exit code/完整 stdout/stderr；launcher generation；`internal.toml`
 前后 hash 与脱敏字段 diff；console PID/startToken/generation；最终公开 `console status`；
 失败时保留的 owner/资源/恢复动作。未实现前本用例只属 design。
+
+### 13.6 浏览器验收断言集（BB09 round 12）
+
+§13.2 的步骤表是早期提案；本轮 BB09 以安装后的真实 Camo 入口执行，断言与证据文件如下。
+证据根为 `$RUN/full/cases/BB09/`（focused 使用同形目录）。真实配置只写隔离 HOME 的
+`config.toml`，两个 daemon 都明确授权 `__console`，拒绝场景另设独立 fixture。
+
+| 权威要求 | 黑盒断言 | 证据文件 |
+| --- | --- | --- |
+| 安装资产真实入口 | URL 来自 installed CLI；Camo clean URL 加载，title 正确，无加载错误，projection fetch 200 | `browser-start.json`、`browser-clean-navigation.json`、`browser-page.json`、`browser-dom.json`、截图 |
+| 两个真实 daemon | installed status 记录两个独立 daemon PID；browser projection/DOM 中两个 agentId、label、machineId、online 状态对应 | `bb09-status.json`、`browser-projection.json`、`browser-agents-dom.json` |
+| 权威服务/资源 | browser API 返回真实 producer 的 `capabilityDetails`；DOM 展示 capability/version/operation/resourceId/capacity/unit，并与公开 installed status 的声明对应 | `browser-projection.json`、`browser-resources-dom.json` |
+| 观察交互 | 点击 Agent 详情，drawer 显示对应 Agent 的声明；刷新仍从 owner projection 读回 | `browser-detail-action.json`、`browser-detail-dom.json` |
+| 配置交互 | 真实点击「服务配置」、选择目标 Agent、执行一次现有 provider 配置操作；公开 accepted revision 前进，另一 Agent 不变；DOM 刷新显示读回值 | `browser-config-actions.json`、`browser-config-before.json`、`browser-config-after.json` |
+| auth 拒绝 | fresh 未认证 profile 页面/API 401；未认证管理命令 401，配置无变化 | `browser-unauthenticated.json`、`auth-refusals.json` |
+| origin 拒绝 | 对安装后 listener 发 authenticated 错 Origin/cross-site 请求，返回既有 401；合法同源 browser 操作仍成功 | `origin-refusals.json`、`browser-same-origin.json` |
+| Agent policy 拒绝 | 隔离未授权 manager 场景经公开管理入口得到 `FORBIDDEN`；配置 revision 不变 | `agent-policy-refusal.json`、前后公开 projection |
+| Console 可关闭 | installed `console stop` 后 Console PID/listener 消失，两 daemon PID/generation 不变 | `bb09-console-stop.json`、`bb09-status-after-console-stop.json` |
+| Console 离线后新 Work | 关闭后才生成的新 Work/request ID；真实 file-search 返回对应 fixture 文件 | `bb09-work-without-console.json` |
+| 生命周期失败终点 | 保留既有 unavailable/disabled 检查；失败有显式结果及零新增子进程 | 既有失败文件与 cleanup receipt |
+| 清理 | browser profiles、fixture child、listener 和临时安装均无残留 | `browser-cleanup.json`、`cleanup.json` |
+
+配置交互场景使用既有 stub provider，只验证 Console→config owner 的提交/读回；不在该场景生成
+real-provider PASS。O1 的「选择后无配置数据」只证明控件能力，不能替代本表的配置提交。
 
 ---
 
