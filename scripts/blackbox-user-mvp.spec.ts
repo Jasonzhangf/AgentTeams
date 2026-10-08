@@ -37,6 +37,7 @@ import {
   parseCanonicalProviderSource,
   parseFlatSecretKey,
   parseRccServerSource,
+  boundaryAcceptedBindingSnapshot,
   boundaryBindingSnapshot,
   readAcceptedConfigRevision,
   readDeclaredSecretKey,
@@ -1072,6 +1073,31 @@ describe('BB10 boundary sub-scenario verdicts', () => {
 })
 
 describe('BB10 boundary binding snapshot', () => {
+  it('accepts the apply-before projection shape only for the accepted-side baseline snapshot', () => {
+    const config = {
+      agentId: 'bb-provider', acceptedRevision: 1, applyState: 'clean', providers: [],
+    }
+    const agent = { agentId: 'bb-provider', sessionAvailability: 'no-current' }
+    const binding = {
+      accepted_revision: 1,
+      primary: { providerInstanceId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
+      backup: { providerInstanceId: sessionBackupProviderId, modelId: sessionBackupModel },
+    }
+    const projection = { configs: [config], agents: [agent] }
+
+    expect(boundaryAcceptedBindingSnapshot(projection, 'bb-provider', binding)).toEqual({
+      config: { acceptedRevision: 1, effectiveRevision: null, applyState: 'clean' },
+      binding: {
+        primary: { providerInstanceId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
+        backup: { providerInstanceId: sessionBackupProviderId, modelId: sessionBackupModel },
+      },
+    })
+    expect(() => boundaryAcceptedBindingSnapshot(projection, 'bb-provider', { ...binding, accepted_revision: 0 }))
+      .toThrow(/the durable accepted revision 0 does not match the public config revision 1/)
+    expect(() => boundaryBindingSnapshot(projection, 'bb-provider', binding))
+      .toThrow(/the installed config row for bb-provider has no effectiveRevision/)
+  })
+
   it('combines cross-checked sources and ignores catalog observation changes', () => {
     const configRow = (catalogState: string) => ({
       agentId: 'bb-provider',

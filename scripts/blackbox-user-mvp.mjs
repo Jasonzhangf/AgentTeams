@@ -2496,6 +2496,31 @@ async function createAndOpenSession(client, title, evidenceDir, prefix) {
 }
 
 /**
+ * Combine only the accepted-side facts available before config.apply. The
+ * public effective slice and running Agent fields do not exist until apply.
+ * The accepted-revision check still prevents mismatched evidence from being
+ * joined.
+ */
+function boundaryAcceptedBindingSnapshot(projection, agentId, acceptedBinding) {
+  const config = projection.configs.find(row => row.agentId === agentId)
+  assert(config !== undefined, `the installed projection published no config row for ${agentId}`)
+  assert(typeof config.acceptedRevision === 'number' && Number.isSafeInteger(config.acceptedRevision),
+    `the installed config row for ${agentId} has no acceptedRevision`)
+  assert(acceptedBinding?.primary?.providerInstanceId !== undefined && acceptedBinding?.primary?.modelId !== undefined,
+    `the durable accepted binding for ${agentId} has no primary provider/model`)
+  assert(acceptedBinding.accepted_revision === config.acceptedRevision,
+    `the durable accepted revision ${acceptedBinding.accepted_revision} does not match the public config revision ${config.acceptedRevision} for ${agentId}`)
+  return {
+    config: {
+      acceptedRevision: config.acceptedRevision,
+      effectiveRevision: config.effectiveRevision ?? null,
+      applyState: config.applyState ?? null,
+    },
+    binding: { primary: acceptedBinding.primary, backup: acceptedBinding.backup ?? null },
+  }
+}
+
+/**
  * Combine the installed Console projection with the durable accepted binding
  * the caller already resolved. The two reads are sequential, not atomic; the
  * accepted-revision check below prevents mismatched evidence from being joined.
@@ -2796,11 +2821,19 @@ async function runBB10Boundary(context, evidenceDir) {
     writeJson(join(boundaryRoot, 'baseline.json'), baselineReceipt)
     assert(baselineBind.body.ok === true,
       `the boundary baseline accept failed: ${JSON.stringify(baselineBind.body)}`)
+    // Before apply there is no effective slice, so step 3 checks only the
+    // accepted projection and durable accepted binding.
     const afterBaselineBind = await readInstalledProjection(client, boundaryRoot, 'boundary-baseline-bind')
     const acceptedAfterBind = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
-    const baselineBinding = boundaryBindingSnapshot(afterBaselineBind, sessionAgentId, acceptedAfterBind)
-    baselineReceipt.accepted_after_bind = { public: baselineBinding.config, binding: baselineBinding.binding,
-      durable_accepted_revision: acceptedAfterBind.accepted_revision }
+    const baselineBinding = boundaryAcceptedBindingSnapshot(afterBaselineBind, sessionAgentId, acceptedAfterBind)
+    baselineReceipt.accepted_after_bind = {
+      public: baselineBinding.config,
+      binding: baselineBinding.binding,
+      durable_accepted_revision: acceptedAfterBind.accepted_revision,
+      effective_revision_reason: baselineBinding.config.effectiveRevision === null
+        ? 'the public effective revision is not published before config.apply'
+        : null,
+    }
     writeJson(join(boundaryRoot, 'baseline.json'), baselineReceipt)
     assert(acceptedAfterBind.accepted_revision === 1 && baselineBinding.config.acceptedRevision === 1,
       `the boundary baseline bind did not create accepted revision 1: ${JSON.stringify({
@@ -5663,6 +5696,7 @@ export {
   parseCanonicalProviderSource,
   parseFlatSecretKey,
   parseRccServerSource,
+  boundaryAcceptedBindingSnapshot,
   boundaryBindingSnapshot,
   readAcceptedConfigRevision,
   readDeclaredSecretKey,
