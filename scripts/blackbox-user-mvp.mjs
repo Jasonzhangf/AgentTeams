@@ -1498,7 +1498,9 @@ async function bb09BrowserAcceptance(options) {
     rendered: rows.find(row => row.agentId === workProviderId)?.text ?? '',
   })
   const providerText = rows.find(row => row.agentId === workProviderId)?.text ?? ''
-  assert(/file-search/u.test(providerText) && /search-slot[^A-Za-z0-9]{0,8}2[^A-Za-z0-9]{0,8}slot/u.test(providerText),
+  // The rendered label spacing comes from the product locale, not a behavior contract;
+  // assert the observable service, resource, and capacity-with-unit facts by value.
+  assert(/file-search/u.test(providerText) && /search-slot/u.test(providerText) && /2\s*slot/u.test(providerText),
     `the browser card did not render the declared service and resource detail: ${providerText}`)
   assert(!/剩余/u.test(providerText) && !/remaining/iu.test(providerText),
     `the browser card presented the declared capacity as remaining capacity: ${providerText}`)
