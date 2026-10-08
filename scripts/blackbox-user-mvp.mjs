@@ -1574,12 +1574,22 @@ async function bb09BrowserAcceptance(options) {
     `the settings panel did not select the catalog model: ${bindSelection}`)
   camoClick(fixture, camo, evidenceDir, 'browser-config-actions', profile,
     'article.teams-provider-card .teams-model-row .teams-button-primary')
-  const after = await waitForAsync(async () => {
-    const current = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-after',
-      profile, `fetch('/api/v1/projection').then(r => r.json()).then(j => JSON.stringify({ configs: j.configs }))`))
-    const row = current.configs.find(candidate => candidate.agentId === workProviderId)
-    return row !== undefined && row.acceptedRevision > beforeRow.acceptedRevision ? current : undefined
-  }, 60_000, 'the Console provider operation to advance the accepted revision')
+  let after
+  try {
+    after = await waitForAsync(async () => {
+      const current = JSON.parse(await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-after',
+        profile, `fetch('/api/v1/projection').then(r => r.json()).then(j => JSON.stringify({ configs: j.configs }))`))
+      const row = current.configs.find(candidate => candidate.agentId === workProviderId)
+      return row !== undefined && row.acceptedRevision > beforeRow.acceptedRevision ? current : undefined
+    }, 60_000, 'the Console provider operation to advance the accepted revision')
+  } catch (error) {
+    try {
+      const panel = await camoEvaluate(fixture, camo, evidenceDir, 'browser-config-bind-diag', profile,
+        `JSON.stringify({ drawer: document.querySelector('.teams-drawer')?.textContent ?? null, errorPanel: document.querySelector('.teams-error-panel')?.textContent ?? null, fieldHints: [...document.querySelectorAll('.teams-field-hint')].map(node => node.textContent), bindDisabled: document.querySelector('article.teams-provider-card .teams-model-row .teams-button-primary')?.disabled ?? null, selectValue: document.querySelector('article.teams-provider-card select.teams-select')?.value ?? null })`)
+      writeJson(join(evidenceDir, 'browser-config-bind-diag.json'), JSON.parse(panel))
+    } catch { /* preserve the primary failure */ }
+    throw error
+  }
   writeJson(join(evidenceDir, 'browser-config-after.json'), after)
   const afterRow = after.configs.find(row => row.agentId === workProviderId)
   assert(afterRow.acceptedRevision === beforeRow.acceptedRevision + 1,
