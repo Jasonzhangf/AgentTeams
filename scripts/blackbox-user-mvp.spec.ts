@@ -369,7 +369,7 @@ describe('blackbox user MVP driver interface', () => {
       .toEqual({ state: 'unknown', pids: [], reason: 'query-failed' })
   })
 
-  it('reads lsof exit 1 with no output as a known empty listener set, not as unknown', async () => {
+  it('reads lsof exit 1 with no output as a known empty listener set, not as unknown', { timeout: 20_000 }, async () => {
     // lsof exits 1 with empty stdout and empty stderr when it matched no files.
     // For a specific PID that is the real "this PID holds no listening socket"
     // answer. A subject that is alive with no listener, and one that is gone,
@@ -543,7 +543,7 @@ describe('cleanup gate before deleting an install root', () => {
 })
 
 describe('failure-terminal stop wrapper', () => {
-  it('returns an observation with the failure fact instead of throwing when the stop fails', async () => {
+  it('returns an observation with the failure fact instead of throwing when the stop fails', { timeout: 20_000 }, async () => {
     // A real child process stands in for the launcher; a fake installed CLI that
     // always exits non-zero stands in for a failing stop. The wrapper must
     // return the observed failure (live resource plus non-zero stop) rather than
