@@ -5142,6 +5142,11 @@ async function runBB10(context) {
     const allPids = lifecyclePids(lifecycle.internal)
     const consoleGone = consoleListenerGone(switchedConsole.url)
     assert(consoleGone, `the installed Console endpoint survived the launcher stop: ${switchedConsole.url}`)
+    // The real segment asserts its own cleanup before the boundary section runs,
+    // so its success-path deletion consumes the stop's confirmed observation
+    // here. `finalizeCaseCleanup` in the finally still owns the last write and
+    // reuses this observation rather than issuing a second stop.
+    const realDeletion = fixture.cleanup(final.cleanup)
     const realAcceptance = {
       status: 'passed',
       installed_identity: {
@@ -5169,7 +5174,7 @@ async function runBB10(context) {
         console_listener_gone: consoleGone,
         owned_pids_after_stop: allPids,
         owned_pids_alive_after_stop: allPids.filter(processAlive),
-        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+        temporary_root_removed: realDeletion.deleted === true,
       },
       evidence_path: evidenceDir,
     }
