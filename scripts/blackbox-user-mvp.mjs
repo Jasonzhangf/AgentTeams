@@ -1217,6 +1217,12 @@ async function waitForAsyncResult(run, timeoutMs, label) {
   return await waitForAsync(() => run.isSettled() ? run.result : undefined, timeoutMs, label)
 }
 
+// The provider drain and its failed-state ledger write follow the consumer-side
+// link break, so the driver must wait for the real terminal state. 20 s is a
+// bounded margin above the drain (the in-flight execution is already
+// terminated); a longer absence means the provider genuinely never persisted.
+const bb07ProviderTerminalWaitMs = 20_000
+
 /**
  * BB07's execution-interruption sub-scenario. The installed provider's search
  * executable is a transparent wrapper around real `rg`. The wrapper records the
@@ -1328,18 +1334,35 @@ async function runBB07ExecutionFailure(context) {
     assert(originalReceipt.status === 'failed' || originalReceipt.control.requestState === 'failed' || originalReceipt.control.deliveryState === 'unconfirmed',
       `the original BB07 CLI result did not record failure or unconfirmed delivery: ${JSON.stringify(originalReceipt)}`)
 
-    const providerLedgerAfterFault = providerLedger(fixture)
-    assert(providerLedgerAfterFault.snapshot !== undefined, 'the fault fixture provider ledger is missing after the interruption')
-    const failedRequest = providerLedgerAfterFault.snapshot.requests.find(request => request.control.workId === originalReceipt.control.workId &&
-      request.control.requestId === originalReceipt.control.requestId)
-    assert(failedRequest?.state === 'failed',
-      `the provider owner did not persist the real failed request: ${JSON.stringify(failedRequest ?? null)}`)
-    // `search-slot` is a request-scoped resource, so the provider ledger must
-    // hold exactly this request's allocation and it must be released on failure.
-    const failedRequestAllocations = providerLedgerAfterFault.snapshot.allocations
-      .filter(allocation => allocation.requestId === originalReceipt.control.requestId)
-    assert(failedRequestAllocations.length > 0 && failedRequestAllocations.every(allocation => allocation.state === 'released'),
-      `the provider owner did not release the failed request allocation: ${JSON.stringify(failedRequestAllocations)}`)
+    // The consumer CLI settles the request as soon as the link breaks, which can
+    // happen before the provider's drain finishes persisting the failed terminal
+    // state. Wait (bounded) for that real terminal state instead of sampling the
+    // ledger once. A timeout keeps the last observation and fails: an
+    // unpersisted failure is a real product/orchestration divergence.
+    let lastFaultLedger
+    const faultLedger = await waitForAsync(() => {
+      const current = providerLedger(fixture)
+      lastFaultLedger = current
+      if (current.snapshot === undefined) return undefined
+      const request = current.snapshot.requests.find(candidate => candidate.control.workId === originalReceipt.control.workId &&
+        candidate.control.requestId === originalReceipt.control.requestId)
+      if (request?.state !== 'failed') return undefined
+      // `search-slot` is a request-scoped resource, so the provider ledger must
+      // hold exactly this request's allocation and it must be released on failure.
+      const allocations = current.snapshot.allocations
+        .filter(allocation => allocation.requestId === originalReceipt.control.requestId)
+      if (allocations.length === 0 || allocations.some(allocation => allocation.state !== 'released')) return undefined
+      return { path: current.path, failedRequest: request, failedRequestAllocations: allocations }
+    }, bb07ProviderTerminalWaitMs, 'the provider to persist the real failed request and release its allocation')
+      .catch(error => {
+        if (error?.absentObservation === true) {
+          fail(`the provider owner did not persist the real failed request within ${bb07ProviderTerminalWaitMs} ms: ${JSON.stringify(lastFaultLedger ?? null)}`)
+        }
+        throw error
+      })
+    const providerLedgerAfterFault = { path: faultLedger.path }
+    const failedRequest = faultLedger.failedRequest
+    const failedRequestAllocations = faultLedger.failedRequestAllocations
 
     const faultStop = await stopFaultLifecycle(fixture, lifecycle, evidenceDir, 'bb07-failure')
     lifecycle = undefined
