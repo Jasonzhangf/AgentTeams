@@ -285,7 +285,6 @@ function parseInternal(path, agentIds = defaultAgentIds) {
     const record = internal.daemon?.[id]
     assert(record?.pid > 0 && Number.isSafeInteger(record.pid), `internal ${id} pid is missing`)
     assert(typeof record.entryPath === 'string' && record.entryPath.length > 0, `internal ${id} entryPath is missing`)
-    assert(typeof record.projectionPath === 'string' && record.projectionPath.length > 0, `internal ${id} projectionPath is missing`)
     assert(record.generation === launcher.generation, `internal ${id} generation does not match launcher`)
     return {
       id,
@@ -1246,6 +1245,8 @@ async function runBB07ExecutionFailure(context) {
     const provider = lifecycle.internal.processes.find(process => process.id === workProviderId)
     assert(provider !== undefined, 'the fault fixture did not publish the provider process record')
     const providerCommand = processCommandLine(provider.pid)
+    assert(typeof provider.projectionPath === 'string' && provider.projectionPath.length > 0,
+      `the provider process record has no projectionPath: pid=${provider.pid}`)
     assert(commandOwnsInstalledEntry(providerCommand, provider.entryPath, provider.projectionPath, provider.startToken),
       `the provider PID does not match its installed lifecycle record: pid=${provider.pid} command=${providerCommand ?? 'missing'}`)
 
@@ -5035,11 +5036,15 @@ async function runBB13(context) {
         `BB13 ${phase} ${stageId} invalidation reason was ${entry.reason}, expected ${reason}`)
       return entry
     }
-    const expectExecuted = (phase, delta, stageId) => {
+    const expectExecuted = (phase, delta, stageId, requireInvalidation = true) => {
       const stage = delta.stages[stageId]
       assert(stage.status === 'passed', `BB13 ${phase} ${stageId} did not settle passed: ${stage.status}`)
-      const newReceipt = delta.history.length > 0 && stage.status === 'passed'
-      assert(newReceipt, `BB13 ${phase} ${stageId} has no invalidation in this invocation`)
+      // A stage recovering from a blocked failure has no prior passed/reused
+      // fingerprint to invalidate, so this invocation records no invalidation.
+      if (requireInvalidation) {
+        assert(delta.history.some(entry => entry.stage_id === stageId),
+          `BB13 ${phase} ${stageId} has no invalidation in this invocation`)
+      }
       assert(stage.receiptId !== null && stage.receiptPath !== null && existsSync(stage.receiptPath),
         `BB13 ${phase} ${stageId} has no fresh receipt`)
       assert(delta.newReuseReceipts.every(receipt => receipt.stage_id !== stageId),
@@ -5079,7 +5084,7 @@ async function runBB13(context) {
       const { delta } = runPhase('recovery', before)
       expectDelta('recovery', delta, { verify: 0, smoke: 1 })
       expectReused('recovery', delta, 'pnpm-verify')
-      expectExecuted('recovery', delta, 'pnpm-smoke-installed')
+      expectExecuted('recovery', delta, 'pnpm-smoke-installed', false)
     }
 
     // (2) Unchanged input re-entry with the completed validation record intact is
