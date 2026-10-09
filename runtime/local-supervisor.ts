@@ -482,6 +482,13 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   let workControl: LocalWorkControlServer | undefined
   let lifecycle: LocalSupervisorState = 'stopped'
   let lastFailure: Error | undefined
+  // Set for the whole of one teardown. The teardown loop owns the diagnosis of
+  // every child it stops, so a child exit observed during teardown must never
+  // overwrite lastFailure. Reading lifecycle alone is not enough: the loop marks
+  // the launcher failed as soon as one child cannot confirm its exit, so later
+  // child exits would otherwise replace the real cleanup failure with a
+  // misleading "exited unexpectedly" message.
+  let tearingDown = false
   let lifecycleGeneration = 0
   let starting: Promise<void> | undefined
   let stopping: Promise<void> | undefined
@@ -862,6 +869,7 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
     operation = (async () => {
       const hadFailure = lifecycle === 'failed' || lastFailure !== undefined
       lifecycle = 'stopping'
+      tearingDown = true
       const failures: unknown[] = []
       // Stop must not depend on a receiver reply. Closing the listener stops new
       // admissions synchronously, but its drain also waits for every accepted
@@ -959,6 +967,7 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
       if (lifecycle === 'stopping') lifecycle = lastFailure ? 'failed' : 'running'
       throw error
     }).finally(() => {
+      tearingDown = false
       if (stopping === completion) stopping = undefined
     })
     stopping = completion
@@ -1011,12 +1020,12 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
             await writeLocalInternalState(config.internalPath, { [spec.id]: { pid: child.pid ?? 0, entryPath: spec.entry, startToken, state: 'online', ...(launcherGeneration === undefined ? {} : { generation: launcherGeneration }) } })
           }
           const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
-            if (lifecycle === 'stopping' || lifecycle === 'stopped') return
+            if (tearingDown || lifecycle === 'stopping' || lifecycle === 'stopped') return
             lastFailure = new Error(`local ${spec.kind} exited unexpectedly code=${code ?? 'null'} signal=${signal ?? 'null'}`)
             lifecycle = 'failed'
           }
           const onError = (error: Error) => {
-            if (lifecycle === 'stopping' || lifecycle === 'stopped') return
+            if (tearingDown || lifecycle === 'stopping' || lifecycle === 'stopped') return
             lastFailure = error
             lifecycle = 'failed'
           }

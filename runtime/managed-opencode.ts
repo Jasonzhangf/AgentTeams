@@ -45,20 +45,47 @@ export async function startManagedOpenCode(options: ManagedOpenCodeOptions) {
     stdio: 'ignore',
   })
   let ended = false
+  let exitFailure: Error | undefined
   const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-    child.once('error', error => { ended = true; reject(error) })
+    child.once('error', error => { ended = true; exitFailure = error; reject(error) })
     child.once('exit', (code, signal) => { ended = true; resolve({ code, signal }) })
   })
   void closed.catch(() => undefined)
+  // Confirms the child settles inside one bounded window. Resolves on exit and
+  // rethrows the recorded spawn error, so a native cause such as ENOENT still
+  // reaches the caller instead of being reported as an exit.
+  const confirmExit = async (deadlineMs: number): Promise<boolean> => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([closed, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('managed OpenCode exit window elapsed')), deadlineMs) })])
+      return true
+    } catch (error) {
+      if (exitFailure !== undefined) throw exitFailure
+      return false
+    } finally { clearTimeout(timer) }
+  }
   let stopping: Promise<void> | undefined
   const stop = (): Promise<void> => {
     if (stopping) return stopping
     stopping = (async () => {
-      if (!ended) child.kill('SIGTERM')
-      let timer: ReturnType<typeof setTimeout> | undefined
-      try {
-        await Promise.race([closed, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Managed OpenCode exit remains unconfirmed')), options.stopTimeoutMs) })])
-      } finally { clearTimeout(timer) }
+      if (ended) {
+        // An already observed exit needs no signal; a spawn failure keeps its cause.
+        if (exitFailure !== undefined) throw exitFailure
+        return
+      }
+      // stopTimeoutMs bounds the whole confirmation, so an uncooperative
+      // substrate still settles inside the Agent's teardown budget. The first
+      // half is the graceful window; the rest confirms the forced exit.
+      const deadline = Date.now() + options.stopTimeoutMs
+      const gracefulMs = Math.max(1, Math.floor(options.stopTimeoutMs / 2))
+      child.kill('SIGTERM')
+      if (await confirmExit(gracefulMs)) return
+      // The Agent cannot exit while this owned child handle is live. Escalating
+      // keeps one substrate that ignores SIGTERM from holding the Agent, its
+      // launcher, and their terminals open past the stop deadline.
+      child.kill('SIGKILL')
+      if (await confirmExit(Math.max(1, deadline - Date.now()))) return
+      throw new Error('Managed OpenCode exit remains unconfirmed')
     })()
     return stopping
   }
