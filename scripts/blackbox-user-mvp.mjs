@@ -3866,20 +3866,21 @@ async function runBB10Boundary(context, evidenceDir) {
     // (5) Provider error-body echo: the bound provider's HTTP 500 body carries
     // the boundary's own synthetic credential and an auth field. Only this
     // boundary env supplies the value. The original observation assertions above
-    // are already complete; this named sub-scenario records the EXPECTED boundary
-    // rejection and never persists the raw provider error.
-    const echoSession = await createAndOpenSession(client, 'BB10 boundary credential echo',
-      boundaryRoot, 'boundary-echo')
+    // are already complete; this named sub-scenario reuses the same live Session
+    // (so it allocates no new managed child) and records the EXPECTED boundary
+    // rejection. The raw provider error is never persisted.
+    const echoPrompt = 'bb10 boundary credential echo probe'
     manual.state.failBody = { error: { message: `upstream rejected ${bb10BoundarySyntheticCredentialValue}`,
       authorization: `Bearer ${bb10BoundarySyntheticCredentialValue}` } }
-    const echoDispatch = await client.sessionMessage(sessionAgentId, echoSession.sessionId,
-      { text: 'bb10 boundary credential echo probe' }, bb10DispatchTimeoutMs).then(
+    const echoDispatch = await client.sessionMessage(sessionAgentId, noFailoverSession.sessionId,
+      { text: echoPrompt }, bb10DispatchTimeoutMs).then(
       response => ({ ok: true, response }), error => ({ ok: false, error }))
     const echoFailedFinal = await waitForAsync(async () => {
       const failures = readSessionEvents(await readInstalledProjection(client, undefined, 'boundary-echo-events'),
-        sessionAgentId, echoSession.sessionId)
+        sessionAgentId, noFailoverSession.sessionId)
         .filter(event => event.kind === 'final' && event.state === 'failed')
-      return failures.length > 0 ? failures.at(-1) : undefined
+      const newest = failures.at(-1)
+      return newest !== undefined && newest.messageId !== failedFinal.messageId ? newest : undefined
     }, 120_000, 'the boundary credential-echo failed Session final')
     // Prove the substrate really propagated the polluted body to a public face.
     const propagated = JSON.stringify(echoFailedFinal).includes(bb10BoundarySyntheticCredentialValue)
@@ -3901,7 +3902,7 @@ async function runBB10Boundary(context, evidenceDir) {
       status: propagated ? 'propagated_and_rejected' : 'not_propagated',
       synthetic_credential_env: bb10BoundarySyntheticCredentialEnv,
       synthetic_credential_length: bb10BoundarySyntheticCredentialValue.length,
-      session: echoSession.created,
+      session_id: noFailoverSession.sessionId,
       dispatch_ok: echoDispatch.ok,
       failed_final_observed: echoFailedFinal !== undefined,
       failed_final_error_name: echoFailedFinal.error?.name ?? null,
