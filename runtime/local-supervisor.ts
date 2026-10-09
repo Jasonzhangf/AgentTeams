@@ -488,6 +488,10 @@ export function createLocalSupervisor(config: LocalConfig, options: LocalSupervi
   // the launcher failed as soon as one child cannot confirm its exit, so later
   // child exits would otherwise replace the real cleanup failure with a
   // misleading "exited unexpectedly" message.
+  // Boundary: a failed teardown keeps its children in `children` and leaves
+  // lifecycle 'failed', so a child that dies after the flag clears (rather than
+  // during teardown) still gets no new attribution. That window is already
+  // marked failed and the child is reaped by the teardown that failed it.
   let tearingDown = false
   let lifecycleGeneration = 0
   let starting: Promise<void> | undefined

@@ -67,7 +67,7 @@ it('escalates so a substrate that ignores SIGTERM cannot hold stop open', async 
     // The whole stop stays inside one stopTimeoutMs budget, so the Agent's own
     // teardown window still has room to observe the exit.
     expect(elapsed).toBeLessThan(4000)
-    expect(handle.closed).resolves.toBeDefined()
+    await expect(handle.closed).resolves.toMatchObject({ signal: 'SIGKILL' })
   } finally {
     try { process.kill(pid, 'SIGKILL') } catch { /* already reaped */ }
     await rm(directory, { recursive: true })
