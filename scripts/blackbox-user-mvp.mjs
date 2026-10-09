@@ -28,6 +28,8 @@ export const exitCode = Object.freeze({ passed: 0, failed: 1, unverified: 2 })
 
 // The BB09 installed Console fixture owns one credential reference. The value
 // only exists in this process environment and in the isolated installed HOME.
+// The password value is registered with the evidence boundary so no evidence
+// sink can persist it; only the user name, env name and length stay recordable.
 const consoleUsername = 'bb-console'
 const consolePasswordEnv = 'AGENTTEAMS_BB_CONSOLE_PASSWORD'
 const consolePassword = 'bb-console-pass'
@@ -62,7 +64,10 @@ Exit codes: 0 passed, 1 failed, 2 unverified`
 }
 
 function fail(message) {
-  throw new Error(`blackbox-user-mvp: ${message}`)
+  // Every thrown driver error passes through here, so any subprocess text a
+  // caller embedded is replaced by the safe substitute before it becomes an
+  // `Error.message`. A clean message is returned unchanged.
+  throw new Error(`blackbox-user-mvp: ${safeSubprocessText(String(message), 'thrown-error')}`)
 }
 
 function assert(condition, message) {
@@ -81,7 +86,197 @@ function sha256File(path) {
   return sha256(readFileSync(path))
 }
 
+// ---------------------------------------------------------------------------
+// Single evidence boundary. One run-level, in-memory registry of the sensitive
+// values this run provisioned, plus one detection/rejection implementation that
+// every evidence sink funnels through. The registry is never serialized and the
+// values are only ever used for exact containment checks.
+// ---------------------------------------------------------------------------
+
+const EVIDENCE_BOUNDARY_PREFIX = 'blackbox-user-mvp: evidence boundary rejected'
+
+// Auth-field JSON keys are matched case-insensitively with `_`/`-`/space
+// variants collapsed. These name a material value; public references such as
+// `auth.kind`, `credentialRef`, `auth_alias`, `secret_key`, `secret_file` and
+// `credential_env` are deliberately absent and stay recordable.
+const evidenceAuthFieldKeys = new Set([
+  'authorization',
+  'proxyauthorization',
+  'xapikey',
+  'apikey',
+  'accesstoken',
+  'refreshtoken',
+  'bearertoken',
+  'password',
+  'clientsecret',
+  'credentialvalue',
+  'authorizationheader',
+])
+
+// `Basic`/`Bearer` followed by a token-shaped literal of at least 12 characters
+// that contains at least one digit or symbol. Real tokens (JWT, base64, API key)
+// carry a `-`/`_`/`.`/`+`/`/`/`=` or a digit; an English word such as
+// `authentication` or a bare challenge phrase such as `Basic realm="..."` does
+// not, so neither is mistaken for authentication material.
+const evidenceAuthValuePattern = /(?:\bBasic[ \t\r\n]+|\bBearer[ \t\r\n]+)([A-Za-z0-9\-._~+/=]{12,})/gu
+const evidenceAuthValueShapePattern = /[0-9\-._~+/=]/u
+// A quoted JSON scalar (`:"value"`) or a bare unquoted scalar (`:value`) where
+// `value` starts with an alphanumeric or a `$`/`_`/`.`. Unquoted matches stop at
+// whitespace or a structural character, so an auth-kind string is not a value.
+const evidenceJsonAuthFieldPattern = /"([^"\\]*)"[ \t\r\n]*:[ \t\r\n]*(?:"((?:[^"\\]|\\.)*)"|([A-Za-z0-9$_.][A-Za-z0-9$_.\-+/=]*))/gu
+
+const evidenceSecretRegistry = new Set()
+
+/** Register one provisioned sensitive value. Only non-empty strings count, and a registered value can never be withdrawn. */
+function registerEvidenceSecret(value) {
+  if (typeof value === 'string' && value.length > 0) evidenceSecretRegistry.add(value)
+}
+
+function normalizeEvidenceAuthKey(key) {
+  return key.toLowerCase().replace(/[_\-\s]/gu, '')
+}
+
+function evidenceAuthFieldViolation(text) {
+  for (const match of text.matchAll(evidenceJsonAuthFieldPattern)) {
+    if (!evidenceAuthFieldKeys.has(normalizeEvidenceAuthKey(match[1]))) continue
+    const value = match[2] !== undefined ? match[2] : match[3]
+    if (value !== undefined && value !== '') return 'auth-field'
+  }
+  return undefined
+}
+
+function evidenceAuthValueViolation(text) {
+  for (const match of text.matchAll(evidenceAuthValuePattern)) {
+    if (match[1].length >= 12 && evidenceAuthValueShapePattern.test(match[1])) return 'auth-value'
+  }
+  return undefined
+}
+
+/**
+ * Return a safe violation category for one text blob, or `undefined` when the
+ * text is clean. Only the category is ever returned: never the offending value.
+ */
+function findEvidenceViolation(text) {
+  if (typeof text !== 'string' || text.length === 0) return undefined
+  for (const secret of evidenceSecretRegistry) {
+    if (text.includes(secret)) return 'registered-credential'
+  }
+  return evidenceAuthFieldViolation(text) ?? evidenceAuthValueViolation(text)
+}
+
+/** Recursively collect the string form of every key and value, so nested arrays/objects are covered. */
+function collectEvidenceStrings(value, sink) {
+  if (typeof value === 'string') {
+    sink.push(value)
+    return
+  }
+  if (value === null || value === undefined || typeof value !== 'object') return
+  if (Array.isArray(value)) {
+    for (const item of value) collectEvidenceStrings(item, sink)
+    return
+  }
+  for (const [key, item] of Object.entries(value)) {
+    sink.push(key)
+    collectEvidenceStrings(item, sink)
+  }
+}
+
+function evidenceBoundaryRejection(sink, caseId, category) {
+  const suffix = [category, sink, caseId].filter(part => typeof part === 'string' && part.length > 0).join(' ')
+  const error = new Error(`${EVIDENCE_BOUNDARY_PREFIX}: ${suffix}`)
+  error.evidenceBoundaryRejected = true
+  error.evidenceCategory = category
+  error.evidenceSink = sink
+  if (typeof caseId === 'string') error.evidenceCaseId = caseId
+  return error
+}
+
+function activeEvidenceCaseId() {
+  return evidenceBoundaryContext?.caseId
+}
+
+/** Reject a JSON value that carries a registered value or auth material before any file is created or replaced. */
+function ensureEvidenceWritability(_path, value, options = {}) {
+  const sink = options.sink ?? 'writeJson'
+  const caseId = options.caseId ?? activeEvidenceCaseId()
+  // Scan the serialized structure so object/array keys and values are covered in
+  // their real JSON shape (`"authorization": "..."`, nested `Bearer <token>`).
+  let serialized
+  try {
+    serialized = JSON.stringify(value)
+  } catch {
+    serialized = undefined
+  }
+  if (typeof serialized === 'string') {
+    const category = findEvidenceViolation(serialized)
+    if (category !== undefined) throw evidenceBoundaryRejection(sink, caseId, category)
+  }
+  // Scan each raw string too, so a registered value carrying JSON-special
+  // characters (which serialization escapes) is still an exact containment hit.
+  const strings = []
+  collectEvidenceStrings(value, strings)
+  for (const text of strings) {
+    const category = findEvidenceViolation(text)
+    if (category !== undefined) throw evidenceBoundaryRejection(sink, caseId, category)
+  }
+}
+
+/**
+ * Guard text that would otherwise be embedded in an up-thrown error message or
+ * passed upward. On a hit the caller keeps its own control flow; the offending
+ * text is replaced by a fixed, safe substitute that names only sink/case/category.
+ */
+function safeSubprocessText(text, sink, caseId = activeEvidenceCaseId()) {
+  const category = findEvidenceViolation(text)
+  if (category === undefined) return text
+  return `<evidence boundary rejected ${[category, sink, caseId].filter(Boolean).join(' ')}>`
+}
+
+/**
+ * Fail a runner path with a fixed, safe boundary error when the candidate text
+ * carries sensitive material; otherwise fail with the given message. The
+ * original text never reaches the thrown Error.
+ */
+function failGuarded(message, text, sink) {
+  const category = findEvidenceViolation(text)
+  if (category !== undefined) throw evidenceBoundaryRejection(sink, activeEvidenceCaseId(), category)
+  fail(message)
+}
+
+/**
+ * Which evidence sink/case currently owns writes. `runCases` sets the case
+ * before invoking a case runner; nothing here inspects or mutates case state.
+ */
+let evidenceBoundaryContext
+
+async function withEvidenceCase(caseId, run) {
+  const previous = evidenceBoundaryContext
+  evidenceBoundaryContext = caseId === undefined ? undefined : { caseId }
+  try {
+    return await run()
+  } finally {
+    evidenceBoundaryContext = previous
+  }
+}
+
+/**
+ * Reduce any thrown value to a safe message string. A message that carries a
+ * registered value or auth material is replaced by the fixed boundary text so
+ * the original content can never reach a receipt, terminal or log.
+ */
+function safeErrorMessage(value, sink = 'propagated-error', caseId = activeEvidenceCaseId()) {
+  const text = value instanceof Error ? value.message : String(value)
+  const category = findEvidenceViolation(text)
+  if (category === undefined) return text
+  return `${EVIDENCE_BOUNDARY_PREFIX}: ${[category, sink, caseId].filter(Boolean).join(' ')}`
+}
+
+// The driver's own generated Console Basic password is registered once, before
+// any BB09/BB10/BB12 fixture starts, and stays registered for the run.
+registerEvidenceSecret(consolePassword)
+
 function writeJson(path, value) {
+  ensureEvidenceWritability(path, value)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
 }
@@ -107,10 +302,12 @@ function run(command, args, options = {}) {
   }
   if (options.logPath !== undefined) writeJson(options.logPath, output)
   if (options.expectStatus !== undefined && result.status !== options.expectStatus) {
-    fail(`${command} ${args.join(' ')} exited ${result.status}; expected ${options.expectStatus}\n${output.stderr || output.stdout}`)
+    failGuarded(`${command} ${args.join(' ')} exited ${result.status}; expected ${options.expectStatus}\n${result.stderr || result.stdout || ''}`,
+      result.stderr || result.stdout || '', 'run-failure-detail')
   }
   if (options.expectNonZero === true && (result.status === 0 || result.status === null)) {
-    fail(`${command} ${args.join(' ')} unexpectedly succeeded\n${output.stdout}${output.stderr}`)
+    failGuarded(`${command} ${args.join(' ')} unexpectedly succeeded\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      `${result.stdout ?? ''}${result.stderr ?? ''}`, 'run-failure-detail')
   }
   return output
 }
@@ -1912,8 +2109,12 @@ function camoTeardown(fixture, camo, evidenceDir, profiles, label) {
   return records
 }
 
-/** Fail the case if any recorded evidence file contains a provisioned secret. */
-/** Refuse to keep any evidence artifact that captured a provisioned credential value. */
+/**
+ * The post-hoc audit that complements the pre-write boundary: fail the case if
+ * any recorded evidence file carries a registered credential value or any
+ * auth-field/auth-value material. The explicit `secrets` list is checked in
+ * addition to the run-level registry, so a caller can name values it owns.
+ */
 function assertNoSecretInEvidence(directory, secrets) {
   for (const entry of readdirSync(directory)) {
     const path = join(directory, entry)
@@ -1921,11 +2122,13 @@ function assertNoSecretInEvidence(directory, secrets) {
       assertNoSecretInEvidence(path, secrets)
       continue
     }
-    const text = readFileSync(path)
+    const text = readFileSync(path, 'utf8')
     for (const secret of secrets) {
       if (typeof secret !== 'string' || secret.length === 0) continue
       assert(!text.includes(secret), `evidence ${path} contains a provisioned credential value`)
     }
+    const category = findEvidenceViolation(text)
+    assert(category === undefined, `evidence ${path} carries ${category} material`)
   }
 }
 
@@ -2786,9 +2989,11 @@ function createSessionProviderStub(options = {}) {
       const newest = messages[messages.length - 1]
       const promptText = typeof newest?.content === 'string' ? newest.content : JSON.stringify(newest?.content ?? '')
       if (state.fail) {
+        const failureBody = state.failBody ?? options.failBody
+          ?? { error: { message: 'bb session provider stub failure', type: 'api_error' } }
         inferenceResponses.push({ model: requestModel, prompt: promptText, status: 500 })
         response.writeHead(500, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ error: { message: 'bb session provider stub failure', type: 'api_error' } }))
+        response.end(JSON.stringify(failureBody))
         return
       }
       if (options.holdMarker !== undefined && promptText.includes(options.holdMarker)) {
@@ -3233,6 +3438,10 @@ async function boundarySuccessfulTurn(client, sessionId, prompt, label) {
  * stopped and removed before this section starts.
  */
 async function runBB10Boundary(context, evidenceDir) {
+  // The boundary's own synthetic credential is registered before the fixture
+  // starts so no boundary evidence sink can persist it, including the polluted
+  // provider-error object this section deliberately constructs.
+  registerEvidenceSecret(bb10BoundarySyntheticCredentialValue)
   const boundaryRoot = join(evidenceDir, 'boundary')
   mkdirSync(boundaryRoot, { recursive: true })
   const fixture = installPackage(context.packRoot, boundaryRoot, 'bb10-boundary')
@@ -3624,12 +3833,6 @@ async function runBB10Boundary(context, evidenceDir) {
       .filter(event => event.kind === 'final' && event.state === 'failed').length
     assert(JSON.stringify(noFailoverAfter) === JSON.stringify(noFailoverBefore),
       `the boundary failed turn mutated accepted/effective/binding: ${JSON.stringify({ before: noFailoverBefore, after: noFailoverAfter })}`)
-    const finalStop = await stopSessionFixture(fixture, lifecycle, boundaryRoot, 'bb10-boundary')
-    const finalPids = lifecyclePids(lifecycle.internal)
-    const consoleGone = consoleListenerGone(console.url)
-    assert(consoleGone, `the boundary Console endpoint survived stop: ${console.url}`)
-    assert(finalPids.every(pid => !processAlive(pid)),
-      `the boundary owned processes remain after stop: ${finalPids.filter(processAlive).join(', ')}`)
     assert(primary.requests.length === primaryInferenceBeforeFailover
       && backup.requests.length === backupInferenceBeforeFailover,
     `the boundary failed manual turn silently failed over: ${JSON.stringify({
@@ -3660,6 +3863,64 @@ async function runBB10Boundary(context, evidenceDir) {
     results.no_implicit_failover = noImplicitFailover
     writeJson(join(boundaryRoot, 'no-failover.json'), noImplicitFailover)
 
+    // (5) Provider error-body echo: the bound provider's HTTP 500 body carries
+    // the boundary's own synthetic credential and an auth field. Only this
+    // boundary env supplies the value. The original observation assertions above
+    // are already complete; this named sub-scenario records the EXPECTED boundary
+    // rejection and never persists the raw provider error.
+    const echoSession = await createAndOpenSession(client, 'BB10 boundary credential echo',
+      boundaryRoot, 'boundary-echo')
+    manual.state.failBody = { error: { message: `upstream rejected ${bb10BoundarySyntheticCredentialValue}`,
+      authorization: `Bearer ${bb10BoundarySyntheticCredentialValue}` } }
+    const echoDispatch = await client.sessionMessage(sessionAgentId, echoSession.sessionId,
+      { text: 'bb10 boundary credential echo probe' }, bb10DispatchTimeoutMs).then(
+      response => ({ ok: true, response }), error => ({ ok: false, error }))
+    const echoFailedFinal = await waitForAsync(async () => {
+      const failures = readSessionEvents(await readInstalledProjection(client, undefined, 'boundary-echo-events'),
+        sessionAgentId, echoSession.sessionId)
+        .filter(event => event.kind === 'final' && event.state === 'failed')
+      return failures.length > 0 ? failures.at(-1) : undefined
+    }, 120_000, 'the boundary credential-echo failed Session final')
+    // Prove the substrate really propagated the polluted body to a public face.
+    const propagated = JSON.stringify(echoFailedFinal).includes(bb10BoundarySyntheticCredentialValue)
+    manual.state.failBody = undefined
+    let echoRejection
+    try {
+      writeJson(join(boundaryRoot, 'credential-echo.json'), {
+        provider_error: publicJson(echoFailedFinal),
+        dispatch: echoDispatch.ok ? publicJson(echoDispatch.response.body) : null,
+      })
+    } catch (error) {
+      echoRejection = error
+    }
+    if (propagated) {
+      assert(echoRejection?.evidenceBoundaryRejected === true,
+        `the boundary did not reject a provider error that echoed the synthetic credential: ${String(echoRejection)}`)
+    }
+    const credentialEcho = {
+      status: propagated ? 'propagated_and_rejected' : 'not_propagated',
+      synthetic_credential_env: bb10BoundarySyntheticCredentialEnv,
+      synthetic_credential_length: bb10BoundarySyntheticCredentialValue.length,
+      session: echoSession.created,
+      dispatch_ok: echoDispatch.ok,
+      failed_final_observed: echoFailedFinal !== undefined,
+      failed_final_error_name: echoFailedFinal.error?.name ?? null,
+      failed_final_status_code: echoFailedFinal.error?.data?.statusCode ?? null,
+      provider_error_stored: false,
+      expected_rejection: propagated
+        ? { required: true, observed: echoRejection?.evidenceBoundaryRejected === true,
+            category: echoRejection?.evidenceCategory ?? null, sink: echoRejection?.evidenceSink ?? null }
+        : { required: false, observed: false, reason: 'the substrate did not propagate the synthetic value to a public Session final' },
+    }
+    results.credential_echo = credentialEcho
+    writeJson(join(boundaryRoot, 'credential-echo-observation.json'), credentialEcho)
+
+    const finalStop = await stopSessionFixture(fixture, lifecycle, boundaryRoot, 'bb10-boundary')
+    const finalPids = lifecyclePids(lifecycle.internal)
+    const consoleGone = consoleListenerGone(console.url)
+    assert(consoleGone, `the boundary Console endpoint survived stop: ${console.url}`)
+    assert(finalPids.every(pid => !processAlive(pid)),
+      `the boundary owned processes remain after stop: ${finalPids.filter(processAlive).join(', ')}`)
     lifecycle = undefined
     fixture.cleanup()
     cleanupEvidence = {
@@ -3690,6 +3951,10 @@ async function runBB10Boundary(context, evidenceDir) {
       === boundaryResult.installed_identity.expected_content_sha256,
     `the boundary fixture installed content does not match the frozen package hash: ${JSON.stringify(boundaryResult.installed_identity)}`)
     writeJson(join(boundaryRoot, 'boundary-result.json'), boundaryResult)
+    // Post-hoc audit of the whole boundary tree, covering both the real and the
+    // synthetic credential. This complements the pre-write boundary.
+    assertNoSecretInEvidence(evidenceDir,
+      [bb10BoundarySyntheticCredentialValue, consolePassword])
     return boundaryResult
   } catch (error) {
     const partial = {
@@ -3958,6 +4223,9 @@ async function resolveBb10Preconditions(evidenceDir) {
       { url: canonicalCatalog.url })
   }
   const credentialValue = readDeclaredSecretKey(canonical.secretFile, canonical.secretKey)
+  // Register the real canonical credential with the run-level evidence boundary
+  // before any BB10 evidence is written and before the launcher is started.
+  registerEvidenceSecret(credentialValue)
   writeJson(join(evidenceDir, 'bb10-sources.json'), {
     opencode_executable: openCodeExecutable,
     rcc: { source: rccConfigSourcePath, server_id: rcc.serverId, base_url: rcc.baseUrl, protocol: rcc.protocol,
@@ -4343,6 +4611,11 @@ async function runBB10(context) {
     assert(realAcceptance.cleanup.console_listener_gone && realAcceptance.cleanup.owned_pids_alive_after_stop.length === 0
       && realAcceptance.cleanup.temporary_root_removed,
     `the real fixture cleanup was not confirmed before the boundary section: ${JSON.stringify(realAcceptance.cleanup)}`)
+    // Post-hoc audit of the real segment: no file under BB10 (including any
+    // boundary directory written later) may carry a registered value or auth
+    // material. This complements, and never replaces, the pre-write boundary.
+    assertNoSecretInEvidence(evidenceDir,
+      [preconditions.credentialValue, bb10BoundarySyntheticCredentialValue, consolePassword])
     const boundary = await runBB10Boundary(context, evidenceDir)
     assert(bb10PassVerdict(realAcceptance, boundary),
       `the BB10 two-section conjunction did not pass: ${JSON.stringify({
@@ -6256,7 +6529,8 @@ async function runCases(parsed) {
     mkdirSync(caseEvidenceDir, { recursive: true })
     if (definition.implemented === true) {
       try {
-        const result = await definition.run({ candidate, packRoot: staged.packRoot, caseEvidenceRoot })
+        const result = await withEvidenceCase(id,
+          () => definition.run({ candidate, packRoot: staged.packRoot, caseEvidenceRoot }))
         receipt.cases.push({ case_id: id, owner: definition.owner, capability_gate: definition.gate, ...result })
       } catch (error) {
         receipt.cases.push({
@@ -6265,7 +6539,7 @@ async function runCases(parsed) {
           capability_gate: definition.gate,
           status: 'failed',
           public_input: { case: id },
-          external_observation: { error: error instanceof Error ? error.message : String(error) },
+          external_observation: { error: safeErrorMessage(error, 'case-receipt', id) },
           evidence_path: caseEvidenceDir,
         })
       }
@@ -6297,7 +6571,7 @@ async function runCases(parsed) {
           capability_gate: definition.gate,
           status: 'failed',
           public_input: { case: id },
-          external_observation: { error: error instanceof Error ? error.message : String(error) },
+          external_observation: { error: safeErrorMessage(error, 'case-receipt', id) },
           evidence_path: caseEvidenceDir,
         })
       } finally {
@@ -6344,7 +6618,7 @@ async function main() {
     })}\n`)
     process.exitCode = receipt.exit.code
   } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    process.stderr.write(`${safeErrorMessage(error, 'terminal-stderr')}\n`)
     process.exitCode = exitCode.failed
   }
 }
@@ -6355,6 +6629,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.
 
 export {
   Bb10SourceError,
+  EVIDENCE_BOUNDARY_PREFIX,
   agentPolicyRefusalExpectedRevision,
   bb10BoundaryResultPass,
   bb10BaselinePass,
@@ -6371,6 +6646,7 @@ export {
   canonicalSessionConfigText,
   cases,
   closeProviderStub,
+  findEvidenceViolation,
   createSessionProviderStub,
   listenProviderStub,
   parseArgs,
@@ -6382,10 +6658,14 @@ export {
   readAcceptedConfigRevision,
   readDeclaredSecretKey,
   redactCredential,
+  registerEvidenceSecret,
+  run,
+  safeErrorMessage,
   sessionBackupModel,
   sessionBackupProviderId,
   sessionManualModel,
   sessionManualProviderId,
   sessionPrimaryModel,
   sessionPrimaryProviderId,
+  writeJson,
 }

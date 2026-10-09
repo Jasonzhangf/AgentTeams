@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { get as httpsGet } from 'node:https'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -14,6 +15,7 @@ import { createConsoleConfigBinding } from '../runtime/console-config.ts'
 import { createRelayServer } from '../server/relay.ts'
 import {
   Bb10SourceError,
+  EVIDENCE_BOUNDARY_PREFIX,
   agentPolicyRefusalExpectedRevision,
   bb10BaselinePass,
   bb10BoundarySourcesPass,
@@ -39,15 +41,20 @@ import {
   parseRccServerSource,
   boundaryAcceptedBindingSnapshot,
   boundaryBindingSnapshot,
+  findEvidenceViolation,
   readAcceptedConfigRevision,
   readDeclaredSecretKey,
   redactCredential,
+  registerEvidenceSecret,
+  run,
+  safeErrorMessage,
   sessionBackupModel,
   sessionBackupProviderId,
   sessionManualModel,
   sessionManualProviderId,
   sessionPrimaryModel,
   sessionPrimaryProviderId,
+  writeJson,
 } from './blackbox-user-mvp.mjs'
 
 const temporaryRoots: string[] = []
@@ -1195,5 +1202,216 @@ describe('BB10 session provider stub catalog modes', () => {
       await closeProviderStub(normal)
       await closeProviderStub(rejected)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P1-A evidence boundary. Every test calls the same production sink helpers the
+// driver uses, so a regression that stops guarding a sink fails here.
+// ---------------------------------------------------------------------------
+
+const boundarySpecRoots: string[] = []
+
+function boundaryRootDir(): string {
+  const root = mkdtempSync(join(tmpdir(), 'bb10-boundary-'))
+  boundarySpecRoots.push(root)
+  return root
+}
+
+afterEach(() => {
+  for (const root of boundarySpecRoots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
+
+function syntheticCredential(label: string): string {
+  return `bb10-boundary-${label}-${randomUUID()}`
+}
+
+describe('BB10 evidence boundary: registered credential values', () => {
+  it('rejects a registered value without creating the target file', () => {
+    const secret = syntheticCredential('create')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const target = join(root, 'nested', 'evidence.json')
+    let thrown: unknown
+    try {
+      writeJson(target, { nested: { note: `prefix ${secret} suffix` }, list: [secret] })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).toContain(EVIDENCE_BOUNDARY_PREFIX)
+    expect((thrown as Error).message).toContain('registered-credential')
+    expect((thrown as Error).message).not.toContain(secret)
+    expect(existsSync(target)).toBe(false)
+  })
+
+  it('rejects a registered value without overwriting an existing safe file', () => {
+    const secret = syntheticCredential('overwrite')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const target = join(root, 'existing.json')
+    const safe = { status: 'passed', credential_env: 'TEAMS_BB10_CANONICAL_API_KEY' }
+    writeJson(target, safe)
+    const before = readFileSync(target, 'utf8')
+    expect(() => writeJson(target, { status: 'passed', echo: secret })).toThrow(/evidence boundary rejected/u)
+    expect(readFileSync(target, 'utf8')).toBe(before)
+  })
+})
+
+describe('BB10 evidence boundary: auth-field and auth-value rules', () => {
+  it('rejects nested auth fields even when the value was never registered', () => {
+    const root = boundaryRootDir()
+    const nested = join(root, 'nested.json')
+    expect(() => writeJson(nested, { error: { detail: { authorization: 'Basic YWJjZGVmZ2hpamtsbW5vcA==' } } }))
+      .toThrow(new RegExp(`evidence boundary rejected: (auth-field|auth-value)`, 'u'))
+    expect(existsSync(nested)).toBe(false)
+
+    const plain = join(root, 'plain.json')
+    expect(() => writeJson(plain, { upstream: { 'x-api-key': 'abcdef123456' } }))
+      .toThrow(/evidence boundary rejected: auth-field/u)
+    expect(existsSync(plain)).toBe(false)
+  })
+
+  it('rejects a Bearer/Basic token literal inside a plain string', () => {
+    expect(findEvidenceViolation('Authorization: Bearer abcdef123456ghi789')).toBe('auth-value')
+    expect(findEvidenceViolation('failed with Basic YmFzZTY0dG9rZW52YWx1ZQ==')).toBe('auth-value')
+  })
+
+  it('does not reject public auth reference fields or the Console challenge', () => {
+    const samples: readonly unknown[] = [
+      { auth: { kind: 'bearer' } },
+      { auth: { kind: 'bearer', credentialRef: 'TEAMS_BB10_CANONICAL_API_KEY' } },
+      { auth_alias: 'key1' },
+      { secret_key: 'sample.key1' },
+      { secret_file: '/Volumes/extension/.rcc/secrets/v3/provider-auth.conf' },
+      { credential_env: 'TEAMS_BB10_CANONICAL_API_KEY' },
+      { credential_length: 64 },
+      { authenticationChallenge: 'Basic realm="AgentTeams", charset="UTF-8"' },
+      { passwordEnv: 'AGENTTEAMS_BB_CONSOLE_PASSWORD' },
+    ]
+    const root = boundaryRootDir()
+    for (const [index, sample] of samples.entries()) {
+      const target = join(root, `public-${index}.json`)
+      expect(() => writeJson(target, sample)).not.toThrow()
+      expect(existsSync(target)).toBe(true)
+      expect(findEvidenceViolation(JSON.stringify(sample))).toBeUndefined()
+    }
+    // A `Bearer` word with no token literal is prose, not material.
+    expect(findEvidenceViolation('the provider uses Bearer authentication')).toBeUndefined()
+  })
+})
+
+describe('BB10 evidence boundary: subprocess logPath and error text', () => {
+  it('refuses the logPath and the up-thrown error when a child echoes the credential', () => {
+    const secret = syntheticCredential('child')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const logPath = join(root, 'child-output.json')
+    const script = 'process.stdout.write(process.env.LEAK); process.stderr.write("authorization: Bearer " + process.env.LEAK)'
+    let thrown: unknown
+    try {
+      run(process.execPath, ['-e', script], {
+        env: { ...process.env, LEAK: secret },
+        logPath,
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).not.toContain(secret)
+    expect((thrown as Error).message).toMatch(new RegExp(`${EVIDENCE_BOUNDARY_PREFIX}: `, 'u'))
+    if (existsSync(logPath)) expect(readFileSync(logPath, 'utf8')).not.toContain(secret)
+  })
+
+  it('keeps the expectStatus failure path free of the credential value', () => {
+    const secret = syntheticCredential('status')
+    registerEvidenceSecret(secret)
+    let thrown: unknown
+    try {
+      run(process.execPath, ['-e', 'process.stderr.write(process.env.LEAK); process.exit(3)'], {
+        env: { ...process.env, LEAK: secret },
+        expectStatus: 0,
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).not.toContain(secret)
+    expect((thrown as Error).message).toContain(EVIDENCE_BOUNDARY_PREFIX)
+  })
+
+  it('keeps the expectNonZero failure path free of the credential value', () => {
+    const secret = syntheticCredential('nonzero')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const logPath = join(root, 'nonzero-output.json')
+    let thrown: unknown
+    try {
+      run(process.execPath, ['-e', 'process.stdout.write(process.env.LEAK)'], {
+        env: { ...process.env, LEAK: secret },
+        logPath,
+        expectNonZero: true,
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).not.toContain(secret)
+    expect((thrown as Error).message).toContain(EVIDENCE_BOUNDARY_PREFIX)
+  })
+})
+
+describe('BB10 evidence boundary: case receipt and terminal propagation', () => {
+  it('writes a safe case receipt and rejects a raw credential-bearing receipt', () => {
+    const secret = syntheticCredential('receipt')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const receiptPath = join(root, 'receipt.json')
+    const primaryError = new Error(`provider dispatch failed with Authorization: Bearer ${secret}`)
+    const safeError = safeErrorMessage(primaryError, 'case-receipt', 'BB10')
+    expect(safeError).not.toContain(secret)
+    expect(safeError.startsWith(EVIDENCE_BOUNDARY_PREFIX)).toBe(true)
+    expect(safeError).toMatch(/registered-credential|auth-value|auth-field/u)
+
+    const receipt = {
+      case_id: 'BB10',
+      status: 'failed',
+      public_input: { case: 'BB10' },
+      external_observation: { error: safeError },
+    }
+    writeJson(receiptPath, receipt)
+    expect(readFileSync(receiptPath, 'utf8')).not.toContain(secret)
+
+    // Even if a caller forgets to sanitize, the same receipt sink refuses it.
+    const rawPath = join(root, 'raw-receipt.json')
+    expect(() => writeJson(rawPath, { external_observation: { error: primaryError.message } }))
+      .toThrow(/evidence boundary rejected/u)
+    expect(existsSync(rawPath)).toBe(false)
+  })
+
+  it('keeps the real driver terminal path non-zero and free of a synthetic value', () => {
+    // The real CLI over a failing input must exit non-zero, name a recognizable
+    // category, and never create a receipt. This exercises `main()`'s terminal
+    // stderr sink; the case-receipt sink itself is covered by the test above.
+    const root = boundaryRootDir()
+    const receiptPath = join(root, 'receipt.json')
+    let status = 0
+    let stdout = ''
+    let stderr = ''
+    try {
+      execFileSync(process.execPath, ['scripts/blackbox-user-mvp.mjs', '--case', 'BB99', '--receipt', receiptPath], {
+        cwd: resolve(import.meta.dirname, '..'),
+        encoding: 'utf8',
+      })
+    } catch (error) {
+      const failure = error as { status?: number, stdout?: string, stderr?: string }
+      status = failure.status ?? 0
+      stdout = failure.stdout ?? ''
+      stderr = failure.stderr ?? ''
+    }
+    expect(status).not.toBe(0)
+    expect(stdout).not.toContain('evidence boundary')
+    expect(stderr).toContain('unknown case')
+    expect(existsSync(receiptPath)).toBe(false)
   })
 })
