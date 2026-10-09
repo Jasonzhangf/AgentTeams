@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { createServer, type Server as HttpsServer } from 'node:https'
 import type { IncomingMessage } from 'node:http'
+import type { Duplex } from 'node:stream'
 import WebSocket, { WebSocketServer } from 'ws'
 import { assertEnvelopeKeys } from '../control-protocol/json-value.ts'
 import { parseAgentDeclaration } from '../control-protocol/relay-codec.ts'
@@ -222,6 +223,7 @@ function safeCloseReason(reason: string): string {
 
 class RelayServerImpl implements RelayServer {
   private readonly sockets = new Set<RelaySocketState>()
+  private readonly connections = new Set<Duplex>()
   private readonly controls = new Map<string, RelaySocketState>()
   private readonly activeByIdentity = new Map<string, RelaySocketState>()
   private readonly generations = new Map<string, number>()
@@ -240,6 +242,10 @@ class RelayServerImpl implements RelayServer {
   ) {
     this.now = options.now ?? (() => new Date())
     this.idFactory = options.idFactory ?? randomUUID
+    this.httpsServer.on('connection', (connection) => {
+      this.connections.add(connection)
+      connection.on('close', () => this.connections.delete(connection))
+    })
   }
 
   get port(): number {
@@ -308,6 +314,16 @@ class RelayServerImpl implements RelayServer {
       await new Promise<void>((resolve) => {
         this.wsServer.close(() => resolve())
       })
+      // `server.close()` stops accepting and waits for existing connections to end
+      // on their own; it never destroys them. A TCP/TLS connection can reach the
+      // listener and never complete the WebSocket upgrade, so it is held by the
+      // listener but absent from `this.sockets`. Both an idle connection that sent
+      // no bytes and one that sent only a partial request survive
+      // `closeIdleConnections()` and `closeAllConnections()`. Destroying the
+      // tracked listener connections is what makes `close()` deterministic, and
+      // without it `close()` hangs and the relay never exits after SIGTERM.
+      for (const connection of [...this.connections]) connection.destroy()
+      this.connections.clear()
       await new Promise<void>((resolve, reject) => {
         this.httpsServer.close((error) => {
           if (error && (error as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING') reject(error)

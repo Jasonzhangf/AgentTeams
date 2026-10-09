@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process'
+import { once } from 'node:events'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { connect as tlsConnect, type TLSSocket } from 'node:tls'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import type { AuthenticatedAgent, AgentDeclaration, RelayClientControl, RelayServerControl } from '../control-protocol/agent-services.ts'
@@ -844,4 +846,87 @@ describe('N1 relay server', () => {
     const observer = await openSocket(peer('agent-b').token)
     await expect(login(observer, peer('agent-b'))).resolves.toMatchObject({ kind: 'relay.admitted', generation: 1 })
   })
+})
+
+describe('N1 relay shutdown determinism', () => {
+  // A TLS connection can reach the HTTPS listener and never complete the
+  // WebSocket upgrade. The listener holds that connection, but the relay's own
+  // socket set only tracks completed upgrades, so its disconnect loop cannot end
+  // it. Before the fix, `httpsServer.close()` waited forever for such a
+  // connection to end on its own, the relay process never exited after SIGTERM,
+  // and installed lifecycle teardown reported `local daemon exit remains
+  // unconfirmed`.
+  const stalledTls = async (send?: string): Promise<{ ended: Promise<unknown> }> => {
+    const socket = tlsConnect({ host: '127.0.0.1', port: relay.port, rejectUnauthorized: false })
+    const ended = once(socket, 'close')
+    await once(socket, 'secureConnect')
+    if (send !== undefined) socket.write(send)
+    await new Promise(resolve => setTimeout(resolve, 200))
+    return { ended }
+  }
+
+  // Complete the WebSocket upgrade by hand, then stay silent forever. A real
+  // client answers a close frame; this one never does.
+  const silentUpgrade = async (port: number): Promise<TLSSocket> => {
+    const socket = tlsConnect({ host: '127.0.0.1', port, rejectUnauthorized: false })
+    await once(socket, 'secureConnect')
+    const key = Buffer.from('0123456789abcdef0123456789abcdef').toString('base64')
+    socket.write([
+      'GET / HTTP/1.1',
+      `Host: 127.0.0.1:${port}`,
+      'Upgrade: websocket',
+      'Connection: Upgrade',
+      `Sec-WebSocket-Key: ${key}`,
+      'Sec-WebSocket-Version: 13',
+      '',
+      '',
+    ].join('\r\n'))
+    await new Promise<void>((resolve) => {
+      let buffered = ''
+      const onData = (chunk: Buffer): void => {
+        buffered += chunk.toString('latin1')
+        if (buffered.includes('\r\n\r\n')) {
+          socket.off('data', onData)
+          resolve()
+        }
+      }
+      socket.on('data', onData)
+    })
+    return socket
+  }
+
+  it('closes while a TLS connection that never upgraded stays open without sending a request', async () => {
+    const { ended } = await stalledTls()
+    await relay.close()
+    await ended
+  }, 20_000)
+
+  it('closes while a TLS connection that sent only part of an upgrade request stays open', async () => {
+    const { ended } = await stalledTls('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n')
+    await relay.close()
+    await ended
+  }, 20_000)
+
+  it('closes while a capacity-rejected socket never answers the close frame', async () => {
+    const limited = await createRelayServer({
+      host: '127.0.0.1',
+      port: 0,
+      key: certificate.key,
+      cert: certificate.cert,
+      maxPayload: 1024 * 1024,
+      maxConnections: 1,
+      maxGrants: 1,
+      maxBufferedAmount: 4 * 1024,
+      maxPendingMessages: 8,
+      maxPendingBytes: 16 * 1024,
+      grantTtlMs: 60_000,
+      authenticate: () => null,
+    })
+    await silentUpgrade(limited.port)
+    const rejected = await silentUpgrade(limited.port)
+    const ended = once(rejected, 'close')
+    await new Promise(resolve => setTimeout(resolve, 200))
+    await limited.close()
+    await ended
+  }, 20_000)
 })
