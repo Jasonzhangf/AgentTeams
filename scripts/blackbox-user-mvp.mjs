@@ -119,6 +119,39 @@ function runChecked(command, args, options = {}) {
   return run(command, args, { ...options, expectStatus: 0 })
 }
 
+/**
+ * Start one public command without blocking the driver. The BB07 fault
+ * sub-scenario must inject a provider failure while the installed CLI request
+ * is still in flight, so this runner only records the exact command result.
+ */
+function runAsync(command, args, options = {}) {
+  const child = spawn(command, args, {
+    cwd: options.cwd ?? root,
+    env: options.env ?? process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let stdout = ''
+  let stderr = ''
+  let settled = false
+  const result = new Promise(resolve => {
+    child.stdout?.on('data', chunk => { stdout += chunk.toString() })
+    child.stderr?.on('data', chunk => { stderr += chunk.toString() })
+    child.once('error', error => {
+      settled = true
+      const output = { command, args, status: null, signal: null, stdout, stderr, error: error.message }
+      if (options.logPath !== undefined) writeJson(options.logPath, output)
+      resolve(output)
+    })
+    child.once('close', (status, signal) => {
+      settled = true
+      const output = { command, args, status, signal, stdout, stderr }
+      if (options.logPath !== undefined) writeJson(options.logPath, output)
+      resolve(output)
+    })
+  })
+  return { child, result, isSettled: () => settled }
+}
+
 function processAlive(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false
   try {
@@ -127,6 +160,72 @@ function processAlive(pid) {
   } catch (error) {
     return error?.code === 'EPERM'
   }
+}
+
+function processState(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+  const result = spawnSync('ps', ['-p', String(pid), '-o', 'state='], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+  })
+  return result.status === 0 ? result.stdout.trim() : undefined
+}
+
+function processCommandLine(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+  const result = spawnSync('ps', ['-p', String(pid), '-o', 'command='], {
+    encoding: 'utf8',
+    maxBuffer: 4 * 1024 * 1024,
+  })
+  const command = result.status === 0 ? result.stdout.trim() : ''
+  return command.length === 0 ? undefined : command
+}
+
+function processParentPid(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+  const result = spawnSync('ps', ['-p', String(pid), '-o', 'ppid='], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+  })
+  const parent = Number(result.status === 0 ? result.stdout.trim() : '')
+  return Number.isSafeInteger(parent) && parent > 0 ? parent : undefined
+}
+
+/** Split one `ps` command line without invoking a shell. */
+function splitProcessCommand(command) {
+  const args = []
+  let current = ''
+  let quote
+  let escaped = false
+  for (const character of command.trim()) {
+    if (escaped) {
+      current += character
+      escaped = false
+    } else if (character === '\\' && quote !== "'") {
+      escaped = true
+    } else if (quote !== undefined) {
+      if (character === quote) quote = undefined
+      else current += character
+    } else if (character === '"' || character === "'") {
+      quote = character
+    } else if (/\s/u.test(character)) {
+      if (current.length > 0) args.push(current)
+      current = ''
+    } else {
+      current += character
+    }
+  }
+  if (escaped) current += '\\'
+  if (current.length > 0) args.push(current)
+  return args
+}
+
+function commandOwnsInstalledEntry(command, entryPath, configPath, startToken) {
+  if (command === undefined) return false
+  const args = splitProcessCommand(command)
+  const entryIndex = args.findIndex(argument => resolve(argument) === resolve(entryPath))
+  return entryIndex >= 0 && args[entryIndex + 1] === '--config' && args[entryIndex + 2] === resolve(configPath) &&
+    args[entryIndex + 3] === '--launcher-start-token' && args[entryIndex + 4] === startToken
 }
 
 async function waitForProcessesGone(pids, timeoutMs = 5_000) {
@@ -187,7 +286,14 @@ function parseInternal(path, agentIds = defaultAgentIds) {
     assert(record?.pid > 0 && Number.isSafeInteger(record.pid), `internal ${id} pid is missing`)
     assert(typeof record.entryPath === 'string' && record.entryPath.length > 0, `internal ${id} entryPath is missing`)
     assert(record.generation === launcher.generation, `internal ${id} generation does not match launcher`)
-    return { id, pid: record.pid, entryPath: record.entryPath, generation: record.generation, startToken: record.startToken }
+    return {
+      id,
+      pid: record.pid,
+      entryPath: record.entryPath,
+      projectionPath: record.projectionPath,
+      generation: record.generation,
+      startToken: record.startToken,
+    }
   })
   const relayProjection = JSON.parse(internal.relay?.config ?? '')
   const daemonConfigs = Object.fromEntries(agentIds.map(id => {
@@ -744,6 +850,98 @@ function runWork(fixture, evidenceDir, name, args, options = {}) {
   })
 }
 
+/**
+ * Install a transparent search executable. It records every launch, waits for a
+ * driver-owned release marker, then starts the real `rg` with the same argv and
+ * forwards its real exit, stdout and stderr. It never synthesizes a search result.
+ */
+function installSearchBarrier(fixture, evidenceDir, realSearchExecutable, label) {
+  const controlRoot = join(fixture.temporaryRoot, `search-barrier-${label}`)
+  const executable = join(controlRoot, 'search-wrapper.mjs')
+  const binary = join(controlRoot, 'search-wrapper')
+  const recordPath = join(controlRoot, 'launch.json')
+  const releasePath = join(controlRoot, 'release')
+  mkdirSync(controlRoot, { recursive: true })
+  writeFileSync(executable, `#!/usr/bin/env node
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+
+const recordPath = process.env.BB07_BARRIER_RECORD
+const releasePath = process.env.BB07_BARRIER_RELEASE
+const realExecutable = process.env.BB07_REAL_SEARCH
+const argv = process.argv.slice(2)
+const startedAt = new Date().toISOString()
+const record = {
+  at: startedAt,
+  wrapper_pid: process.pid,
+  real_executable: realExecutable,
+  argv,
+}
+appendFileSync(recordPath, JSON.stringify(record) + '\\n')
+
+let released = existsSync(releasePath)
+while (!released) {
+  await new Promise(resolve => setTimeout(resolve, 10))
+  released = existsSync(releasePath)
+}
+
+const child = spawn(realExecutable, argv, {
+  cwd: process.cwd(),
+  env: process.env,
+  shell: false,
+  stdio: ['pipe', 'pipe', 'pipe'],
+})
+process.kill(child.pid, 'SIGSTOP')
+appendFileSync(recordPath, JSON.stringify({
+  ...record,
+  real_pid: child.pid,
+  real_started_at: new Date().toISOString(),
+  real_held_state: 'SIGSTOP',
+}) + '\\n')
+child.stdin.end()
+child.stdout.pipe(process.stdout)
+child.stderr.pipe(process.stderr)
+child.once('error', error => {
+  console.error(JSON.stringify({ code: 'SEARCH_WRAPPER_SPAWN_FAILED', message: error.message }))
+  process.exitCode = 127
+})
+child.once('close', (code, signal) => {
+  appendFileSync(recordPath, JSON.stringify({
+    ...record,
+    real_pid: child.pid,
+    real_exit: code,
+    real_signal: signal,
+    at: new Date().toISOString(),
+  }) + '\\n')
+  if (signal !== null) process.kill(process.pid, signal)
+  else process.exitCode = code ?? 1
+})
+`, { encoding: 'utf8', mode: 0o700 })
+  symlinkSync(executable, binary)
+  const wrapperEnv = {
+    ...fixture.env,
+    BB07_BARRIER_RECORD: recordPath,
+    BB07_BARRIER_RELEASE: releasePath,
+    BB07_REAL_SEARCH: realSearchExecutable,
+  }
+  return {
+    executable: binary,
+    recordPath,
+    releasePath,
+    env: wrapperEnv,
+    release() { writeFileSync(releasePath, `${new Date().toISOString()}\n`, { encoding: 'utf8' }) },
+    launches() {
+      if (!existsSync(recordPath)) return []
+      return readFileSync(recordPath, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+    },
+    executionCount() {
+      return new Set(this.launches()
+        .map(record => record.real_pid)
+        .filter(pid => Number.isSafeInteger(pid) && pid > 0)).size
+    },
+  }
+}
+
 function completedWorkReceipt(output) {
   const text = output.stdout.trim()
   assert(text.length > 0, `work command produced no stdout: ${output.stderr.trim()}`)
@@ -948,6 +1146,7 @@ async function runBB07(context) {
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb07-final')
     const allPids = lifecyclePids(lifecycle.internal)
     fixture.cleanup()
+    const executionFailure = await runBB07ExecutionFailure(context)
     result = {
       status: 'passed',
       public_input: {
@@ -976,6 +1175,7 @@ async function runBB07(context) {
         owned_pids_after_stop: allPids,
         owned_pids_alive_after_stop: allPids.filter(processAlive),
         temporary_root_removed: !existsSync(fixture.temporaryRoot),
+        execution_failure: executionFailure,
       },
       evidence_path: evidenceDir,
     }
@@ -988,6 +1188,281 @@ async function runBB07(context) {
     }
   }
   return result
+}
+
+async function stopFaultLifecycle(fixture, lifecycle, evidenceDir, prefix) {
+  const pids = lifecyclePids(lifecycle.internal)
+  // The injected provider fault can make the supervisor report that failure from
+  // the stop command. Tolerate a nonzero stop only when the persisted launcher
+  // still reaches a terminal state and every owned process/port is gone.
+  const stop = run(fixture.cli, ['stop', '--config', fixture.configPath, '--generation', String(lifecycle.parsed.generation)], {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
+    logPath: join(evidenceDir, `${prefix}-stop.json`),
+  })
+  await waitForProcessesGone(pids)
+  const status = runChecked(fixture.cli, ['status', '--config', fixture.configPath], {
+    cwd: fixture.temporaryRoot,
+    env: fixture.env,
+    logPath: join(evidenceDir, `${prefix}-stopped-status.json`),
+  })
+  const parsed = parseCliStatus(status.stdout)
+  assert(parsed.state === 'stopped' || parsed.state === 'failed',
+    `the fault fixture did not reach a terminal launcher state: ${status.stdout.trim()}`)
+  assertPortsClosed(lifecycle.internal.ports)
+  return { stop, status, parsed, pids }
+}
+
+async function waitForAsyncResult(run, timeoutMs, label) {
+  return await waitForAsync(() => run.isSettled() ? run.result : undefined, timeoutMs, label)
+}
+
+// The provider drain and its failed-state ledger write follow the consumer-side
+// link break, so the driver must wait for the real terminal state. 20 s is a
+// bounded margin above the drain (the in-flight execution is already
+// terminated); a longer absence means the provider genuinely never persisted.
+const bb07ProviderTerminalWaitMs = 20_000
+
+/**
+ * BB07's execution-interruption sub-scenario. The installed provider's search
+ * executable is a transparent wrapper around real `rg`. The wrapper records the
+ * exact launch and waits behind a driver-controlled barrier. The driver then
+ * stops only the provider PID, proves the real search child ownership, explicitly
+ * terminates that child, and verifies the provider owner persists a real failed
+ * result before the public restart query reads it back.
+ */
+async function runBB07ExecutionFailure(context) {
+  const evidenceDir = join(context.caseEvidenceRoot, 'BB07-execution-failure')
+  mkdirSync(evidenceDir, { recursive: true })
+  const realSearchExecutable = resolveExecutable('rg', evidenceDir)
+  const fixture = installPackage(context.packRoot, evidenceDir, 'bb07-failure')
+  let lifecycle
+  let restarted
+  let barrier
+  let openRun
+  try {
+    barrier = installSearchBarrier(fixture, evidenceDir, realSearchExecutable, 'bb07')
+    fixture.env = barrier.env
+    const config = ensureUserConfig(fixture, evidenceDir, {
+      buildConfigText: () => configFixtureText(barrier.executable),
+    })
+    writeWorkFixture(fixture)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb07-failure')
+    const provider = lifecycle.internal.processes.find(process => process.id === workProviderId)
+    assert(provider !== undefined, 'the fault fixture did not publish the provider process record')
+    const providerCommand = processCommandLine(provider.pid)
+    assert(typeof provider.projectionPath === 'string' && provider.projectionPath.length > 0,
+      `the provider process record has no projectionPath: pid=${provider.pid}`)
+    assert(commandOwnsInstalledEntry(providerCommand, provider.entryPath, provider.projectionPath, provider.startToken),
+      `the provider PID does not match its installed lifecycle record: pid=${provider.pid} command=${providerCommand ?? 'missing'}`)
+
+    const binding = ['--provider', workProviderId, '--provider-generation', String(provider.generation),
+      '--capability-id', 'file-search', '--capability-version', '1', '--operation', 'search']
+    openRun = runAsync(fixture.cli, ['work', 'open', '--config', fixture.configPath,
+      '--receiver', workReceiverId, ...binding, '--demands', workDemands,
+      '--payload', '{"query":"marker-alpha"}'], {
+      cwd: fixture.temporaryRoot,
+      env: fixture.env,
+      logPath: join(evidenceDir, 'bb07-fault-open.json'),
+    })
+
+    const launch = await waitForAsync(() => {
+      const records = barrier.launches()
+      return records.find(record => record.real_pid === undefined)
+    }, 10_000, 'the BB07 search wrapper launch record')
+    assert(openRun.isSettled() === false, 'the BB07 CLI finished before the wrapper barrier was established')
+    assert(Number.isSafeInteger(launch.wrapper_pid) && processAlive(launch.wrapper_pid),
+      `the BB07 wrapper PID is not active: ${JSON.stringify(launch)}`)
+
+    barrier.release()
+    const real = await waitForAsync(() => {
+      const records = barrier.launches()
+      return records.find(record => Number.isSafeInteger(record.real_pid) && record.real_pid > 0)
+    }, 10_000, 'the BB07 real search process record')
+    assert(openRun.isSettled() === false, 'the BB07 CLI finished before the real search process was active')
+    assert(processAlive(real.real_pid), `the BB07 real search PID is not active: ${JSON.stringify(real)}`)
+    assert(processAlive(launch.wrapper_pid), 'the BB07 search wrapper exited before fault injection')
+
+    const wrapperCommand = processCommandLine(launch.wrapper_pid)
+    const realCommand = processCommandLine(real.real_pid)
+    assert(wrapperCommand?.includes(barrier.executable) === true,
+      `the BB07 wrapper PID does not own the installed search wrapper: ${wrapperCommand ?? 'missing'}`)
+    assert(realCommand?.includes(realSearchExecutable) === true,
+      `the BB07 real search PID does not own real rg: ${realCommand ?? 'missing'}`)
+    assert(processParentPid(launch.wrapper_pid) === provider.pid,
+      `the BB07 wrapper is not a direct child of the provider: wrapper=${launch.wrapper_pid} parent=${processParentPid(launch.wrapper_pid)} provider=${provider.pid}`)
+    assert(processParentPid(real.real_pid) === launch.wrapper_pid,
+      `the BB07 real search process is not a direct child of the wrapper: real=${real.real_pid} parent=${processParentPid(real.real_pid)} wrapper=${launch.wrapper_pid}`)
+    const externalStateBefore = processState(real.real_pid)
+    assert(externalStateBefore !== undefined && externalStateBefore.startsWith('T'),
+      `the BB07 real search process is not held active: pid=${real.real_pid} state=${externalStateBefore ?? 'missing'}`)
+    const launchCountBefore = barrier.executionCount()
+
+    const providerFault = {
+      pid: provider.pid,
+      generation: provider.generation,
+      start_token: provider.startToken,
+      entry_path: provider.entryPath,
+      projection_path: provider.projectionPath,
+      command: providerCommand,
+      signal: 'SIGTERM',
+      at: now(),
+    }
+    process.kill(provider.pid, 'SIGTERM')
+    const externalExecution = {
+      pid: real.real_pid,
+      wrapper_pid: launch.wrapper_pid,
+      provider_pid: provider.pid,
+      owner: 'provider Work owner (bb-provider)',
+      fixture_owner: 'driver BB07 execution-failure fixture',
+      state_before_release: externalStateBefore,
+      responsibility: 'driver must explicitly terminate this still-active external execution and retain the provider ledger failure',
+      release_action: 'SIGTERM to the exact real rg PID after provider stop admission',
+    }
+    assert(openRun.isSettled() === false, 'the BB07 CLI finished before the provider fault was injected')
+    assert(processAlive(real.real_pid), 'the BB07 real search process exited during provider drain')
+    process.kill(real.real_pid, 'SIGTERM')
+    process.kill(real.real_pid, 'SIGCONT')
+    await waitForProcessesGone([real.real_pid, launch.wrapper_pid])
+
+    const openOutput = await waitForAsyncResult(openRun, 30_000, 'the BB07 original CLI terminal result')
+    const originalReceipt = workReceipt(openOutput)
+    assert(originalReceipt.control.workId !== undefined && originalReceipt.control.requestId !== undefined,
+      `the original BB07 CLI result lost its Work identity: ${JSON.stringify(originalReceipt.control)}`)
+    assert(originalReceipt.control.targetGeneration === provider.generation,
+      `the original BB07 CLI result lost its target generation: ${JSON.stringify(originalReceipt.control)}`)
+    assert(originalReceipt.status === 'failed' || originalReceipt.control.requestState === 'failed' || originalReceipt.control.deliveryState === 'unconfirmed',
+      `the original BB07 CLI result did not record failure or unconfirmed delivery: ${JSON.stringify(originalReceipt)}`)
+
+    // The consumer CLI settles the request as soon as the link breaks, which can
+    // happen before the provider's drain finishes persisting the failed terminal
+    // state. Wait (bounded) for that real terminal state instead of sampling the
+    // ledger once. A timeout keeps the last observation and fails: an
+    // unpersisted failure is a real product/orchestration divergence.
+    let lastFaultLedger
+    const faultLedger = await waitForAsync(() => {
+      const current = providerLedger(fixture)
+      lastFaultLedger = current
+      if (current.snapshot === undefined) return undefined
+      const request = current.snapshot.requests.find(candidate => candidate.control.workId === originalReceipt.control.workId &&
+        candidate.control.requestId === originalReceipt.control.requestId)
+      if (request?.state !== 'failed') return undefined
+      // `search-slot` is a request-scoped resource, so the provider ledger must
+      // hold exactly this request's allocation and it must be released on failure.
+      const allocations = current.snapshot.allocations
+        .filter(allocation => allocation.requestId === originalReceipt.control.requestId)
+      if (allocations.length === 0 || allocations.some(allocation => allocation.state !== 'released')) return undefined
+      return { path: current.path, failedRequest: request, failedRequestAllocations: allocations }
+    }, bb07ProviderTerminalWaitMs, 'the provider to persist the real failed request and release its allocation')
+      .catch(error => {
+        if (error?.absentObservation === true) {
+          fail(`the provider owner did not persist the real failed request within ${bb07ProviderTerminalWaitMs} ms: ${JSON.stringify(lastFaultLedger ?? null)}`)
+        }
+        throw error
+      })
+    const providerLedgerAfterFault = { path: faultLedger.path }
+    const failedRequest = faultLedger.failedRequest
+    const failedRequestAllocations = faultLedger.failedRequestAllocations
+
+    const faultStop = await stopFaultLifecycle(fixture, lifecycle, evidenceDir, 'bb07-failure')
+    lifecycle = undefined
+    const generationBeforeRestart = faultStop.parsed.generation
+    restarted = startAndReadLifecycle(fixture, evidenceDir, 'bb07-failure-restart')
+    assert(restarted.parsed.generation > generationBeforeRestart,
+      `the fault restart did not advance the launcher generation: ${generationBeforeRestart} -> ${restarted.parsed.generation}`)
+
+    const queryArgs = ['work', 'query', '--config', fixture.configPath, '--receiver', workReceiverId,
+      '--service-selection', 'capability', '--work-id', originalReceipt.control.workId,
+      '--request-id', originalReceipt.control.requestId, ...binding]
+    const recoveredOutput = runWork(fixture, evidenceDir, 'bb07-fault-query', queryArgs)
+    // A failed request readback can arrive as a completed graph receipt that
+    // carries `control.requestState: 'failed'`, so parse the general receipt and
+    // then require the failed request state explicitly.
+    const recovered = workReceipt(recoveredOutput)
+    assert(recovered.control.workId === originalReceipt.control.workId && recovered.control.requestId === originalReceipt.control.requestId,
+      'the BB07 fault recovery query did not preserve the original Work/request identity')
+    assert(recovered.control.targetGeneration === provider.generation,
+      `the BB07 fault recovery query lost the original target generation: ${JSON.stringify(recovered.control)}`)
+    assert(recovered.control.requestState === 'failed' || recovered.status === 'failed',
+      `the BB07 fault recovery query did not read a failed request: ${JSON.stringify(recovered)}`)
+    assert(recovered.control.error?.code !== undefined && recovered.control.error.code.length > 0,
+      `the BB07 fault recovery query did not expose a typed error: ${JSON.stringify(recovered.control.error)}`)
+    assert(recovered.evidence?.hostOperations?.includes('agentWork.get') === true,
+      `the BB07 fault recovery query did not read the provider ledger: ${JSON.stringify(recovered.evidence?.hostOperations)}`)
+    assert(!recovered.evidence.hostOperations.includes('agentWork.request') && !recovered.evidence.hostOperations.includes('agentWork.propose'),
+      `the BB07 fault recovery query re-executed business work: ${JSON.stringify(recovered.evidence.hostOperations)}`)
+    const launchCountAfterQuery = barrier.executionCount()
+    assert(launchCountAfterQuery === launchCountBefore,
+      `the BB07 recovery query started external search work: before=${launchCountBefore} after=${launchCountAfterQuery}`)
+
+    const final = await stopAndAssertClean(fixture, restarted, evidenceDir, 'bb07-failure-final')
+    const allPids = lifecyclePids(restarted.internal)
+    const restartedGeneration = restarted.parsed.generation
+    restarted = undefined
+    const finalWrapperRecords = barrier.launches()
+    const finalRealRecord = finalWrapperRecords.at(-1)
+    fixture.cleanup()
+    return {
+      status: 'passed',
+      public_input: {
+        package: context.packRoot,
+        receiver: workReceiverId,
+        commands: [
+          'agentteams work open --provider bb-provider --provider-generation <g> --operation search ...',
+          'SIGTERM to the exact provider PID from internal.toml',
+          'SIGTERM to the exact still-active real rg PID from the wrapper record',
+          'agentteams stop --generation <g>',
+          'agentteams start',
+          'agentteams work query --service-selection capability --work-id <W> --request-id <R> ...',
+          'agentteams stop --generation <g2>',
+        ],
+      },
+      external_observation: {
+        installed_content_sha256: fixture.installedContentSha256,
+        config_sha256: config.configSha256,
+        search_wrapper: {
+          executable: barrier.executable,
+          real_executable: realSearchExecutable,
+          launch_count_before_query: launchCountBefore,
+          launch_count_after_query: launchCountAfterQuery,
+          final_record: finalRealRecord,
+        },
+        provider_fault: providerFault,
+        external_execution: {
+          ...externalExecution,
+          exit_confirmed: !processAlive(real.real_pid) && !processAlive(launch.wrapper_pid),
+          wrapper_exit_observed: !processAlive(launch.wrapper_pid),
+          real_exit_observed: !processAlive(real.real_pid),
+        },
+        original_cli: { status: openOutput.status, signal: openOutput.signal, stdout: openOutput.stdout.trim(), stderr: openOutput.stderr.trim(), receipt: originalReceipt },
+        provider_ledger_after_fault: { path: providerLedgerAfterFault.path, failed_request: failedRequest },
+        fault_stop: { stdout: faultStop.stop.stdout, stopped_stdout: faultStop.status.stdout, pids: faultStop.pids },
+        restart_generation: { from: generationBeforeRestart, to: restartedGeneration },
+        recovered,
+        final_stop_stdout: final.stop.stdout,
+        final_stopped_stdout: final.status.stdout,
+        owned_pids_after_stop: allPids,
+        owned_pids_alive_after_stop: allPids.filter(processAlive),
+        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      },
+      evidence_path: evidenceDir,
+    }
+  } finally {
+    stopFixtureIfNeeded(fixture, restarted?.parsed.generation ?? lifecycle?.parsed.generation)
+    // Release the barrier so a still-waiting wrapper cannot hang, then close the
+    // driver-owned async CLI handle if a pre-injection assertion failed.
+    if (barrier !== undefined) {
+      try { barrier.release() } catch { /* release marker may already exist */ }
+    }
+    if (openRun !== undefined && !openRun.isSettled()) {
+      openRun.child.kill('SIGTERM')
+    }
+    try {
+      fixture.cleanup()
+    } catch {
+      // The case result records the primary observation.
+    }
+  }
 }
 
 async function runBB08(context) {
@@ -2497,19 +2972,19 @@ async function createAndOpenSession(client, title, evidenceDir, prefix) {
 
 /**
  * Combine only the accepted-side facts available before config.apply. The
+ * accepted binding and revision come from the same public config row; the
  * public effective slice and running Agent fields do not exist until apply.
- * The accepted-revision check still prevents mismatched evidence from being
- * joined.
  */
-function boundaryAcceptedBindingSnapshot(projection, agentId, acceptedBinding) {
+function boundaryAcceptedBindingSnapshot(projection, agentId) {
   const config = projection.configs.find(row => row.agentId === agentId)
   assert(config !== undefined, `the installed projection published no config row for ${agentId}`)
   assert(typeof config.acceptedRevision === 'number' && Number.isSafeInteger(config.acceptedRevision),
     `the installed config row for ${agentId} has no acceptedRevision`)
-  assert(acceptedBinding?.primary?.providerInstanceId !== undefined && acceptedBinding?.primary?.modelId !== undefined,
-    `the durable accepted binding for ${agentId} has no primary provider/model`)
-  assert(acceptedBinding.accepted_revision === config.acceptedRevision,
-    `the durable accepted revision ${acceptedBinding.accepted_revision} does not match the public config revision ${config.acceptedRevision} for ${agentId}`)
+  const acceptedBinding = config.acceptedBinding
+  assert(acceptedBinding !== null && typeof acceptedBinding === 'object'
+    && typeof acceptedBinding.primary?.providerInstanceId === 'string'
+    && typeof acceptedBinding.primary?.modelId === 'string',
+  `the public config row for ${agentId} has no accepted primary provider/model`)
   return {
     config: {
       acceptedRevision: config.acceptedRevision,
@@ -2521,24 +2996,24 @@ function boundaryAcceptedBindingSnapshot(projection, agentId, acceptedBinding) {
 }
 
 /**
- * Combine the installed Console projection with the durable accepted binding
- * the caller already resolved. The two reads are sequential, not atomic; the
- * accepted-revision check below prevents mismatched evidence from being joined.
- * Provider catalog observations are deliberately omitted because a rejected
- * catalog refresh may update them while accepted/effective/binding stay fixed.
+ * Combine the accepted binding, effective revision and running Agent row from
+ * one installed Console projection response. Provider catalog observations are
+ * deliberately omitted because a rejected catalog refresh may update them while
+ * accepted/effective/binding stay fixed.
  */
-function boundaryBindingSnapshot(projection, agentId, acceptedBinding) {
+function boundaryBindingSnapshot(projection, agentId) {
   const config = projection.configs.find(row => row.agentId === agentId)
   assert(config !== undefined, `the installed projection published no config row for ${agentId}`)
   assert(typeof config.acceptedRevision === 'number' && Number.isSafeInteger(config.acceptedRevision),
     `the installed config row for ${agentId} has no acceptedRevision`)
   assert(config.effectiveRevision !== undefined, `the installed config row for ${agentId} has no effectiveRevision`)
+  const acceptedBinding = config.acceptedBinding
+  assert(acceptedBinding !== null && typeof acceptedBinding === 'object'
+    && typeof acceptedBinding.primary?.providerInstanceId === 'string'
+    && typeof acceptedBinding.primary?.modelId === 'string',
+  `the public config row for ${agentId} has no accepted primary provider/model`)
   const agent = projection.agents.find(row => row.agentId === agentId)
   assert(agent !== undefined, `the installed projection published no runtime row for ${agentId}`)
-  assert(acceptedBinding?.primary?.providerInstanceId !== undefined && acceptedBinding?.primary?.modelId !== undefined,
-    `the durable accepted binding for ${agentId} has no primary provider/model`)
-  assert(acceptedBinding.accepted_revision === config.acceptedRevision,
-    `the durable accepted revision ${acceptedBinding.accepted_revision} does not match the public config revision ${config.acceptedRevision} for ${agentId}`)
   return {
     config: {
       acceptedRevision: config.acceptedRevision,
@@ -2554,9 +3029,9 @@ function boundaryBindingSnapshot(projection, agentId, acceptedBinding) {
   }
 }
 
-/** Read the durable accepted binding and combine it with the public projection. */
-function installedBindingSnapshot(projection, internalPath, agentId) {
-  return boundaryBindingSnapshot(projection, agentId, readAcceptedBinding(internalPath, agentId))
+/** Read the public binding snapshot; private durable snapshots remain diagnostics only. */
+function installedBindingSnapshot(projection, agentId) {
+  return boundaryBindingSnapshot(projection, agentId)
 }
 
 /** A turn passes only when the public final completed and carried assistant text. */
@@ -2684,7 +3159,7 @@ function bb10BaselinePass(baseline) {
     || bind.request.expectedRevision !== 0 || bind.request.providerId !== sessionPrimaryProviderId
     || bind.request.modelId !== sessionPrimaryModel || bind.reply?.ok !== true) return false
   const accepted = baseline.accepted_after_bind
-  if (accepted?.public?.acceptedRevision !== 1 || accepted.durable_accepted_revision !== 1) return false
+  if (accepted?.public?.acceptedRevision !== 1) return false
   if (accepted.binding?.primary?.providerInstanceId !== sessionPrimaryProviderId
     || accepted.binding.primary.modelId !== sessionPrimaryModel
     || accepted.binding.backup?.providerInstanceId !== sessionBackupProviderId
@@ -2771,12 +3246,12 @@ async function runBB10Boundary(context, evidenceDir) {
   let cleanupEvidence
   const results = {}
   const snapshotSources = {
-    binding: 'target daemon durable internal store accepted snapshot',
+    binding: 'installed Console /api/v1/projection config row acceptedBinding',
     config: 'installed Console /api/v1/projection config row',
     agent: 'installed Console /api/v1/projection Agent row',
     provider_requests: 'boundary provider stub external request records',
     session_terminal: 'installed Console /api/v1/projection Session events',
-    combination: 'sequential reads cross-checked by accepted revision; not an atomic cross-source snapshot',
+    combination: 'config acceptedBinding and effective revision from one projection response; Agent row validated under the same public read',
   }
   try {
     const primaryUrl = await listenProviderStub(primary)
@@ -2822,21 +3297,24 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(baselineBind.body.ok === true,
       `the boundary baseline accept failed: ${JSON.stringify(baselineBind.body)}`)
     // Before apply there is no effective slice, so step 3 checks only the
-    // accepted projection and durable accepted binding.
+    // accepted binding from the public config row.
     const afterBaselineBind = await readInstalledProjection(client, boundaryRoot, 'boundary-baseline-bind')
     const acceptedAfterBind = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
-    const baselineBinding = boundaryAcceptedBindingSnapshot(afterBaselineBind, sessionAgentId, acceptedAfterBind)
+    writeJson(join(boundaryRoot, 'baseline-durable-diagnostic.json'), acceptedAfterBind)
+    const baselineBinding = boundaryAcceptedBindingSnapshot(afterBaselineBind, sessionAgentId)
     baselineReceipt.accepted_after_bind = {
       public: baselineBinding.config,
       binding: baselineBinding.binding,
-      durable_accepted_revision: acceptedAfterBind.accepted_revision,
+      durable_accepted_revision_diagnostic: acceptedAfterBind.accepted_revision,
       effective_revision_reason: baselineBinding.config.effectiveRevision === null
         ? 'the public effective revision is not published before config.apply'
         : null,
     }
     writeJson(join(boundaryRoot, 'baseline.json'), baselineReceipt)
-    assert(acceptedAfterBind.accepted_revision === 1 && baselineBinding.config.acceptedRevision === 1,
-      `the boundary baseline bind did not create accepted revision 1: ${JSON.stringify({
+    assert(baselineBinding.config.acceptedRevision === 1,
+      `the boundary baseline bind did not create public accepted revision 1: ${JSON.stringify(baselineBinding.config)}`)
+    assert(acceptedAfterBind.accepted_revision === baselineBinding.config.acceptedRevision,
+      `the private baseline diagnostic disagrees with the public accepted revision: ${JSON.stringify({
         durable: acceptedAfterBind.accepted_revision, public: baselineBinding.config.acceptedRevision,
       })}`)
     assert(baselineBinding.binding.primary.providerInstanceId === sessionPrimaryProviderId
@@ -2854,7 +3332,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(firstApply.agent.providerId === sessionPrimaryProviderId && firstApply.agent.modelId === sessionPrimaryModel,
       `the boundary initial primary binding was not effective: ${JSON.stringify(firstApply.agent)}`)
     const baselineProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-baseline')
-    const baseline = installedBindingSnapshot(baselineProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const baseline = installedBindingSnapshot(baselineProjection, sessionAgentId)
     assert(baseline.config.acceptedRevision === 1 && baseline.config.effectiveRevision === 1
       && baseline.config.applyState === 'clean' && baseline.agent.sessionEffectiveRevision === 1,
       `the boundary baseline is not settled: ${JSON.stringify(baseline.config)}`)
@@ -2890,7 +3368,7 @@ async function runBB10Boundary(context, evidenceDir) {
     const putRow = afterPut.configs.find(row => row.agentId === sessionAgentId)
     assert(putRow.acceptedRevision === baseline.config.acceptedRevision + 1,
       `the boundary manual model put did not advance accepted by one: ${JSON.stringify(putRow)}`)
-    const beforeSelection = installedBindingSnapshot(afterPut, lifecycle.internal.internalPath, sessionAgentId)
+    const beforeSelection = installedBindingSnapshot(afterPut, sessionAgentId)
     assert(beforeSelection.config.acceptedRevision === baseline.config.acceptedRevision + 1
       && beforeSelection.config.effectiveRevision === baseline.config.effectiveRevision
       && beforeSelection.agent.providerId === sessionPrimaryProviderId
@@ -2910,7 +3388,7 @@ async function runBB10Boundary(context, evidenceDir) {
     const bindRow = afterBind.configs.find(row => row.agentId === sessionAgentId)
     assert(bindRow.acceptedRevision === baseline.config.acceptedRevision + 2,
       `the boundary manual model bind did not advance accepted by one: ${JSON.stringify(bindRow)}`)
-    const beforeRestart = installedBindingSnapshot(afterBind, lifecycle.internal.internalPath, sessionAgentId)
+    const beforeRestart = installedBindingSnapshot(afterBind, sessionAgentId)
     assert(beforeRestart.config.acceptedRevision === baseline.config.acceptedRevision + 2
       && beforeRestart.config.effectiveRevision === baseline.config.effectiveRevision
       && beforeRestart.agent.providerId === sessionPrimaryProviderId
@@ -2993,7 +3471,7 @@ async function runBB10Boundary(context, evidenceDir) {
     // (2) A stale Console revision is refused without moving accepted,
     // effective, binding, or the running Agent.
     const staleBeforeProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-stale-before')
-    const staleBefore = installedBindingSnapshot(staleBeforeProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const staleBefore = installedBindingSnapshot(staleBeforeProjection, sessionAgentId)
     const staleRevision = baseline.config.acceptedRevision
     assert(staleRevision === baseline.config.acceptedRevision
       && staleBefore.config.acceptedRevision === baseline.config.acceptedRevision + 2
@@ -3009,7 +3487,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(staleReply.body.ok === false && staleReply.body.error?.code === 'REVISION_CONFLICT',
       `the boundary stale revision was not refused as REVISION_CONFLICT: ${JSON.stringify(staleReply.body)}`)
     const staleAfterProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-stale-after')
-    const staleAfter = installedBindingSnapshot(staleAfterProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const staleAfter = installedBindingSnapshot(staleAfterProjection, sessionAgentId)
     assert(JSON.stringify(staleAfter) === JSON.stringify(staleBefore),
       `the boundary stale refusal mutated the accepted/effective binding: ${JSON.stringify({ before: staleBefore, after: staleAfter })}`)
     const staleCas = { stale_revision: staleRevision, current_revision: staleBefore.config.acceptedRevision,
@@ -3020,7 +3498,7 @@ async function runBB10Boundary(context, evidenceDir) {
     // (3) A synthetic bearer credential whose provider answers 401 maps to
     // UNAUTHENTICATED while the configured binding stays unchanged.
     const invalidBeforeProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-invalid-before')
-    const invalidBefore = installedBindingSnapshot(invalidBeforeProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const invalidBefore = installedBindingSnapshot(invalidBeforeProjection, sessionAgentId)
     assert(invalidBefore.config.acceptedRevision === 3 && invalidBefore.config.effectiveRevision === 3,
       `the boundary invalid-credential precondition was not settled at revision 3: ${JSON.stringify(invalidBefore.config)}`)
     const invalidCatalogRequestsBefore = invalidCredentialStub.catalogRequests.length
@@ -3052,7 +3530,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(invalidApply.agent.providerId === sessionManualProviderId && invalidApply.agent.modelId === sessionManualModel,
       `the boundary invalid-credential restart changed the effective manual binding: ${JSON.stringify(invalidApply.agent)}`)
     const invalidAppliedProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-invalid-applied')
-    const invalidApplied = installedBindingSnapshot(invalidAppliedProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const invalidApplied = installedBindingSnapshot(invalidAppliedProjection, sessionAgentId)
     assert(invalidApplied.config.acceptedRevision === invalidBefore.config.acceptedRevision + 1
       && invalidApplied.config.effectiveRevision === invalidBefore.config.acceptedRevision + 1
       && invalidApplied.config.applyState === 'clean',
@@ -3066,7 +3544,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(refreshInvalid.body.error?.providerInstanceId === sessionPrimaryProviderId,
       `the boundary invalid credential refusal did not identify the probed provider: ${JSON.stringify(refreshInvalid.body)}`)
     const invalidAfterProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-invalid-after')
-    const invalidAfter = installedBindingSnapshot(invalidAfterProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const invalidAfter = installedBindingSnapshot(invalidAfterProjection, sessionAgentId)
     assert(JSON.stringify(invalidAfter) === JSON.stringify(invalidApplied),
       `the boundary invalid-credential refusal mutated accepted/effective/binding: ${JSON.stringify({ before: invalidApplied, after: invalidAfter })}`)
     assert(invalidCredentialStub.catalogRequests.length >= invalidCatalogRequestsBefore + 1
@@ -3108,7 +3586,7 @@ async function runBB10Boundary(context, evidenceDir) {
       .find(request => JSON.stringify(request.messages ?? '').includes(warmupPrompt)), 120_000,
     'the boundary manual provider to receive the warm-up prompt')
     const noFailoverBeforeProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-no-failover-before')
-    const noFailoverBefore = installedBindingSnapshot(noFailoverBeforeProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const noFailoverBefore = installedBindingSnapshot(noFailoverBeforeProjection, sessionAgentId)
     assert(noFailoverBefore.config.acceptedRevision === 4 && noFailoverBefore.config.effectiveRevision === 4
       && noFailoverBefore.agent.sessionEffectiveRevision === 4
       && noFailoverBefore.binding.primary.providerInstanceId === sessionManualProviderId
@@ -3141,7 +3619,7 @@ async function runBB10Boundary(context, evidenceDir) {
     assert(failedFinal.messageId !== undefined && failedFinal.sessionId === noFailoverSession.sessionId,
       `the boundary failed final did not preserve Session/message identity: ${JSON.stringify(failedFinal)}`)
     const noFailoverAfterProjection = await readInstalledProjection(client, boundaryRoot, 'boundary-no-failover-after')
-    const noFailoverAfter = installedBindingSnapshot(noFailoverAfterProjection, lifecycle.internal.internalPath, sessionAgentId)
+    const noFailoverAfter = installedBindingSnapshot(noFailoverAfterProjection, sessionAgentId)
     const failedFinalsAfter = readSessionEvents(noFailoverAfterProjection, sessionAgentId, noFailoverSession.sessionId)
       .filter(event => event.kind === 'final' && event.state === 'failed').length
     assert(JSON.stringify(noFailoverAfter) === JSON.stringify(noFailoverBefore),
@@ -3500,11 +3978,16 @@ async function resolveBb10Preconditions(evidenceDir) {
  * persisted; the value itself is never written to any user or derived config.
  */
 function canonicalSessionConfigText(spec, searchExecutable) {
-  // Teams joins `/models` and `/chat/completions` onto `apiBaseUrl`, so the
-  // declared source base URL (which already ends in `/v1`) is persisted as-is.
-  const provider = (id, label, baseUrl, credentialEnv) => `
+  const protocolFor = (protocol, label) => {
+    if (protocol === 'openai-chat' || protocol === 'openai-responses') return protocol
+    fail(`${label} protocol is missing or unsupported: ${JSON.stringify(protocol)}`)
+  }
+  // Teams joins `/models` and the endpoint selected by this declared protocol
+  // onto `apiBaseUrl`, so the source base URL (already ending in `/v1`) is
+  // persisted as-is and every provider keeps its own protocol.
+  const provider = (id, label, baseUrl, protocol, credentialEnv) => `
 [providers.${id}]
-protocol = "openai-chat"
+protocol = ${JSON.stringify(protocolFor(protocol, `${label} provider`))}
 apiBaseUrl = ${JSON.stringify(baseUrl.replace(/\/+$/u, ''))}
 label = ${JSON.stringify(label)}
 enabled = true${credentialEnv === undefined ? '' : `\ncredentialEnv = ${JSON.stringify(credentialEnv)}`}`
@@ -3557,8 +4040,8 @@ enabled = true
 username = ${JSON.stringify(consoleUsername)}
 passwordEnv = ${JSON.stringify(consolePasswordEnv)}
 agentIds = ["${sessionAgentId}", "${passiveAgentId}"]
-${provider(rccProviderId, 'RCC 4444', spec.rccBaseUrl)}
-${provider(canonicalProviderId, 'GoAIChat OpenAI', spec.canonicalBaseUrl, canonicalCredentialEnv)}
+${provider(rccProviderId, 'RCC 4444', spec.rccBaseUrl, spec.rccProtocol)}
+${provider(canonicalProviderId, 'GoAIChat OpenAI', spec.canonicalBaseUrl, spec.canonicalProtocol, canonicalCredentialEnv)}
 
 [[models]]
 provider = "${rccProviderId}"
@@ -3657,7 +4140,9 @@ async function runBB10(context) {
     const config = ensureUserConfig(fixture, evidenceDir, {
       buildConfigText: searchExecutable => canonicalSessionConfigText({
         rccBaseUrl: preconditions.rcc.baseUrl,
+        rccProtocol: preconditions.rcc.protocol,
         canonicalBaseUrl: preconditions.canonical.baseUrl,
+        canonicalProtocol: preconditions.canonical.protocol,
         canonicalModel: preconditions.canonical.defaultModel,
       }, searchExecutable),
     })
@@ -3757,16 +4242,21 @@ async function runBB10(context) {
       .configs.find(row => row.agentId === sessionAgentId)
     assert(acceptedSelection.acceptedRevision === selectionRevision + 2,
       `the accepted revision did not advance with the explicit selection: ${JSON.stringify(acceptedSelection)}`)
-    const acceptedBinding = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
-    writeJson(join(evidenceDir, 'bb10-selection-binding.json'), acceptedBinding)
-    assert(acceptedBinding.accepted_revision === selectionRevision + 2,
-      `the durable accepted binding did not retain the explicit selection revision: ${JSON.stringify(acceptedBinding)}`)
+    const acceptedBinding = acceptedSelection.acceptedBinding
+    assert(acceptedBinding !== null && typeof acceptedBinding === 'object',
+      `the public config row did not publish an accepted binding: ${JSON.stringify(acceptedSelection)}`)
     assert(acceptedBinding.primary.providerInstanceId === canonicalProviderId
       && acceptedBinding.primary.modelId === preconditions.canonical.defaultModel,
-    `the durable accepted binding did not make canonical primary: ${JSON.stringify(acceptedBinding)}`)
+    `the public accepted binding did not make canonical primary: ${JSON.stringify(acceptedBinding)}`)
     assert(acceptedBinding.backup?.providerInstanceId === rccProviderId
       && acceptedBinding.backup.modelId === rccSelectedModelToken,
-    `the durable accepted binding did not retain RCC as backup: ${JSON.stringify(acceptedBinding)}`)
+    `the public accepted binding did not retain RCC as backup: ${JSON.stringify(acceptedBinding)}`)
+    const acceptedBindingDiagnostic = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
+    writeJson(join(evidenceDir, 'bb10-selection-binding-diagnostic.json'), acceptedBindingDiagnostic)
+    assert(acceptedBindingDiagnostic.accepted_revision === acceptedSelection.acceptedRevision,
+      `the private accepted binding diagnostic disagrees with the public accepted revision: ${JSON.stringify({
+        durable: acceptedBindingDiagnostic.accepted_revision, public: acceptedSelection.acceptedRevision,
+      })}`)
 
     const generationBefore = lifecycle.parsed.generation
     const switchStop = await stopSessionFixture(fixture, lifecycle, evidenceDir, 'bb10-switch')
@@ -3779,14 +4269,19 @@ async function runBB10(context) {
       .configs.find(row => row.agentId === sessionAgentId)
     assert(restartedRow.acceptedRevision === selectionRevision + 2,
       `the accepted explicit selection did not survive the installed restart: ${JSON.stringify(restartedRow)}`)
-    const restartedBinding = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
-    writeJson(join(evidenceDir, 'bb10-switch-binding.json'), restartedBinding)
-    assert(restartedBinding.accepted_revision === selectionRevision + 2
+    const restartedBinding = restartedRow.acceptedBinding
+    assert(restartedBinding !== null && typeof restartedBinding === 'object'
       && restartedBinding.primary.providerInstanceId === canonicalProviderId
       && restartedBinding.primary.modelId === preconditions.canonical.defaultModel
       && restartedBinding.backup?.providerInstanceId === rccProviderId
       && restartedBinding.backup.modelId === rccSelectedModelToken,
-    `the durable accepted primary/backup selection did not survive restart: ${JSON.stringify(restartedBinding)}`)
+    `the public accepted primary/backup selection did not survive restart: ${JSON.stringify(restartedBinding)}`)
+    const restartedBindingDiagnostic = readAcceptedBinding(lifecycle.internal.internalPath, sessionAgentId)
+    writeJson(join(evidenceDir, 'bb10-switch-binding-diagnostic.json'), restartedBindingDiagnostic)
+    assert(restartedBindingDiagnostic.accepted_revision === restartedRow.acceptedRevision,
+      `the private accepted binding diagnostic disagrees with the public accepted revision after restart: ${JSON.stringify({
+        durable: restartedBindingDiagnostic.accepted_revision, public: restartedRow.acceptedRevision,
+      })}`)
     const switchedApply = await applySessionConfigAndWait(switchedClient, sessionAgentId, evidenceDir, 'bb10-switch')
     assert(switchedApply.agent.providerId === canonicalProviderId
       && switchedApply.agent.modelId === preconditions.canonical.defaultModel,
@@ -4426,6 +4921,66 @@ function latestSmokeReceipt(state) {
   return { path: receiptPath, receipt: readJson(receiptPath) }
 }
 
+/**
+ * A legal, input-preserving reorder of the real Work graph: node IDs, operators,
+ * versions, ARCs, selectors and the edge list stay identical; only the node array
+ * order changes. The real graph parser and the real lifecycle compile/gate still
+ * consume it, so the change is a genuine graph input rather than an arbitrary
+ * documentation field.
+ */
+function reorderWorkGraphNodes(sourceText) {
+  const graph = JSON.parse(sourceText)
+  assert(Array.isArray(graph.nodes) && graph.nodes.length > 1,
+    'the BB13 graph fixture has no node array to reorder')
+  const before = graph.nodes.map(node => ({
+    id: node.id, operator: node.operator, operator_version: node.operator_version,
+    inputs: node.inputs, output: node.output, iterator: node.iterator,
+  }))
+  graph.nodes = [graph.nodes.at(-1), ...graph.nodes.slice(0, -1)]
+  const after = graph.nodes.map(node => ({
+    id: node.id, operator: node.operator, operator_version: node.operator_version,
+    inputs: node.inputs, output: node.output, iterator: node.iterator,
+  }))
+  const signature = nodes => JSON.stringify([...nodes].sort((left, right) => left.id.localeCompare(right.id)))
+  assert(signature(before) === signature(after),
+    'the BB13 graph reorder changed node identity, operator, version or ARC')
+  return JSON.stringify(graph, null, 2) + '\n'
+}
+
+/** The two governed stages this matrix observes, reduced to their execution identity. */
+function stageExecutionSummary(state) {
+  return Object.fromEntries(['pnpm-verify', 'pnpm-smoke-installed'].map(stageId => {
+    const stage = state?.stages?.[stageId]
+    return [stageId, stage === undefined ? null : {
+      status: stage.status ?? null,
+      fingerprint: stage.fingerprint ?? null,
+      receiptId: stage.receiptId ?? null,
+      receiptPath: stage.receiptPath ?? null,
+      reuseReceiptId: stage.reuseReceiptId ?? null,
+      invalidationReason: stage.invalidationReason ?? null,
+      evidenceIds: Array.isArray(stage.evidenceIds) ? stage.evidenceIds : [],
+      logPath: stage.logPath ?? null,
+    }]
+  }))
+}
+
+/**
+ * Reduce one lifecycle invocation to the increment since its `before` capture.
+ * Only `history.slice(historyStart)` and the new reuse receipts are inspected, so
+ * a record left by an earlier phase can never satisfy this phase's assertion.
+ */
+function bb13PhaseDelta(before, after) {
+  return {
+    history: after.state.invalidationHistory.slice(before.historyLength),
+    newReuseReceipts: after.state.reuseReceipts.slice(before.reuseLength),
+    counts: {
+      verify: after.counts.verify - before.counts.verify,
+      smokeInstalled: after.counts.smokeInstalled - before.counts.smokeInstalled,
+    },
+    stages: stageExecutionSummary(after.state),
+  }
+}
+
 async function runBB13(context) {
   const evidenceDir = join(context.caseEvidenceRoot, 'BB13')
   mkdirSync(evidenceDir, { recursive: true })
@@ -4456,117 +5011,239 @@ async function runBB13(context) {
     const excludePath = join(fixtureRoot, '.git', 'info', 'exclude')
     writeFileSync(excludePath, `${readFileSync(excludePath, 'utf8')}node_modules\n`, { encoding: 'utf8' })
 
+    // Uniform capture/assert vocabulary: every phase snapshots candidate identity,
+    // input hashes, history/reuse lengths, invocation counts and both stage
+    // fingerprints before running the real adapter once, then asserts on the
+    // increment after that invocation only.
+    const capture = (label, inputHashes) => {
+      const store = readLifecycleState(fixtureRoot)
+      return {
+        label,
+        candidate: currentCandidateIdentity(fixtureRoot),
+        input_hashes: inputHashes,
+        historyLength: store.state.invalidationHistory.length,
+        reuseLength: store.state.reuseReceipts.length,
+        counts: pnpmInvocationCounts(proofDir),
+        stages: stageExecutionSummary(store.state),
+        storePath: store.path,
+      }
+    }
+    const inputHashes = paths => Object.fromEntries(paths.map(path => [path, sha256File(join(fixtureRoot, path))]))
+    const runPhase = (name, before) => {
+      const run = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, `${name}.json`))
+      assert(run.status === 0, `BB13 ${name} invocation did not pass: ${run.stdout}${run.stderr}`)
+      store = readLifecycleState(fixtureRoot)
+      const after = { state: store.state, counts: pnpmInvocationCounts(proofDir) }
+      const delta = bb13PhaseDelta(before, { state: store.state, counts: after.counts })
+      observations.push({
+        phase: name,
+        before: { candidate: before.candidate, input_hashes: before.input_hashes,
+          history_length: before.historyLength, reuse_length: before.reuseLength,
+          counts: before.counts, stages: before.stages },
+        invocation: { exit: run.status, stdout: run.stdout.trim(), stderr: run.stderr.trim() },
+        delta,
+        after: { stages: delta.stages, counts: after.counts },
+      })
+      return { run, store, delta }
+    }
+    const expectDelta = (phase, delta, expected) => {
+      assert(delta.counts.verify === expected.verify,
+        `BB13 ${phase} verify increment was ${delta.counts.verify}, expected ${expected.verify}`)
+      assert(delta.counts.smokeInstalled === expected.smoke,
+        `BB13 ${phase} smoke increment was ${delta.counts.smokeInstalled}, expected ${expected.smoke}`)
+    }
+    const expectInvalidated = (phase, delta, stageId, reason) => {
+      const entry = delta.history.find(item => item.stage_id === stageId)
+      assert(entry !== undefined, `BB13 ${phase} recorded no invalidation for ${stageId}`)
+      assert(entry.reason === reason,
+        `BB13 ${phase} ${stageId} invalidation reason was ${entry.reason}, expected ${reason}`)
+      return entry
+    }
+    const expectExecuted = (phase, delta, stageId, requireInvalidation = true) => {
+      const stage = delta.stages[stageId]
+      assert(stage.status === 'passed', `BB13 ${phase} ${stageId} did not settle passed: ${stage.status}`)
+      // A stage recovering from a blocked failure has no prior passed/reused
+      // fingerprint to invalidate, so this invocation records no invalidation.
+      if (requireInvalidation) {
+        assert(delta.history.some(entry => entry.stage_id === stageId),
+          `BB13 ${phase} ${stageId} has no invalidation in this invocation`)
+      }
+      assert(stage.receiptId !== null && stage.receiptPath !== null && existsSync(stage.receiptPath),
+        `BB13 ${phase} ${stageId} has no fresh receipt`)
+      assert(delta.newReuseReceipts.every(receipt => receipt.stage_id !== stageId),
+        `BB13 ${phase} ${stageId} reused instead of executing`)
+      return stage
+    }
+    const expectReused = (phase, delta, stageId) => {
+      const stage = delta.stages[stageId]
+      assert(stage.status === 'reused', `BB13 ${phase} ${stageId} was not reused: ${stage.status}`)
+      const reuse = delta.newReuseReceipts.find(receipt => receipt.stage_id === stageId)
+      assert(reuse !== undefined, `BB13 ${phase} ${stageId} recorded no new reuse receipt`)
+      assert(reuse.original_receipt?.receipt_id !== undefined && existsSync(reuse.original_receipt.path),
+        `BB13 ${phase} ${stageId} reuse does not reference an existing valid receipt`)
+      assert(reuse.original_receipt.receipt_id === stage.receiptId,
+        `BB13 ${phase} ${stageId} reuse references ${reuse.original_receipt.receipt_id}, not ${stage.receiptId}`)
+      return stage
+    }
+
+    const graphRelPath = 'docs/design/dagpipe/graphs/work-request.graph.json'
+    const graphPath = join(fixtureRoot, graphRelPath)
+    assert(existsSync(graphPath), `BB13 real Work graph is missing: ${graphPath}`)
+    const graphOriginal = readFileSync(graphPath, 'utf8')
+
     const failure = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'failure.json'))
     assert(failure.status !== 0, 'BB13 injected smoke failure unexpectedly succeeded')
     let store = readLifecycleState(fixtureRoot)
     assert(store.state.stages['pnpm-verify']?.status === 'passed', 'verify stage did not persist before smoke failure')
     assert(store.state.stages['pnpm-smoke-installed']?.status === 'blocked', 'smoke stage did not record the deterministic failure')
-    observations.push({ phase: 'failure', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    observations.push({ phase: 'failure', counts: pnpmInvocationCounts(proofDir),
+      stages: stageExecutionSummary(store.state), failure_exit: failure.status,
+      smoke_error: readJson(join(evidenceDir, 'failure.json')).stderr.trim().split('\n').at(-1) })
 
-    const recovery = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'recovery.json'))
-    assert(recovery.status === 0, 'BB13 recovery did not pass')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.stages['pnpm-verify']?.status === 'reused', 'verify stage was not reused after recovery')
-    assert(store.state.stages['pnpm-smoke-installed']?.status === 'passed', 'smoke stage did not recover to passed')
-    const countsAfterRecovery = pnpmInvocationCounts(proofDir)
-    observations.push({ phase: 'recovery', state: store.state, counts: countsAfterRecovery })
+    // (1) Deterministic smoke failure recovery: verify reuses, only the first
+    // failing node's dependent smoke stage re-executes.
+    {
+      const before = capture('recovery', inputHashes([graphRelPath]))
+      const { delta } = runPhase('recovery', before)
+      expectDelta('recovery', delta, { verify: 0, smoke: 1 })
+      expectReused('recovery', delta, 'pnpm-verify')
+      expectExecuted('recovery', delta, 'pnpm-smoke-installed', false)
+    }
 
-    // Unchanged-input re-entry with the completed validation record intact must
-    // be idempotent: the adapter returns the existing validation without touching
-    // the stages or re-executing a command.
-    const idempotent = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'idempotent-entry.json'))
-    assert(idempotent.status === 0, 'BB13 idempotent re-entry did not pass')
-    assert(/"idempotent":true/u.test(idempotent.stdout),
-      `BB13 idempotent re-entry did not return the completed validation: ${idempotent.stdout.trim()}`)
-    const countsAfterIdempotent = pnpmInvocationCounts(proofDir)
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.stages['pnpm-verify']?.status === 'reused' && store.state.stages['pnpm-smoke-installed']?.status === 'passed',
-      'BB13 idempotent re-entry mutated the completed stages')
-    assert(countsAfterIdempotent.verify === countsAfterRecovery.verify && countsAfterIdempotent.smokeInstalled === countsAfterRecovery.smokeInstalled,
-      'BB13 idempotent re-entry re-executed a completed stage')
-    observations.push({ phase: 'idempotent-entry', state: store.state, counts: countsAfterIdempotent })
+    // (2) Unchanged input re-entry with the completed validation record intact is
+    // idempotent and executes nothing.
+    {
+      const before = capture('idempotent-entry', inputHashes([graphRelPath]))
+      const run = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'idempotent-entry.json'))
+      assert(run.status === 0, 'BB13 idempotent re-entry did not pass')
+      assert(/"idempotent":true/u.test(run.stdout),
+        `BB13 idempotent re-entry did not return the completed validation: ${run.stdout.trim()}`)
+      const storeNow = readLifecycleState(fixtureRoot)
+      const delta = bb13PhaseDelta(before, { state: storeNow.state, counts: pnpmInvocationCounts(proofDir) })
+      expectDelta('idempotent-entry', delta, { verify: 0, smoke: 0 })
+      assert(delta.history.length === 0 && delta.newReuseReceipts.length === 0,
+        'BB13 idempotent re-entry mutated the completed stages')
+      observations.push({
+        phase: 'idempotent-entry',
+        before: { candidate: before.candidate, input_hashes: before.input_hashes,
+          history_length: before.historyLength, reuse_length: before.reuseLength, counts: before.counts, stages: before.stages },
+        invocation: { exit: run.status, stdout: run.stdout.trim(), stderr: run.stderr.trim() },
+        delta, after: { stages: delta.stages, counts: pnpmInvocationCounts(proofDir) },
+      })
+    }
 
-    // Interrupted-recovery re-entry: the validation record is gone while stage
-    // state and receipts survive, so the adapter re-enters the stage loop and
-    // reuses both unchanged stages instead of re-executing them.
-    const removedValidationRecords = removeValidationRecords(fixtureRoot)
-    assert(removedValidationRecords.length > 0, 'BB13 interrupted-recovery step found no validation record to remove')
-    const reentry = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'reentry.json'))
-    assert(reentry.status === 0, 'BB13 re-entry did not pass')
-    const countsAfterReentry = pnpmInvocationCounts(proofDir)
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.stages['pnpm-verify']?.status === 'reused' && store.state.stages['pnpm-smoke-installed']?.status === 'reused',
-      'BB13 re-entry did not reuse both completed stages')
-    assert(countsAfterReentry.verify === countsAfterRecovery.verify && countsAfterReentry.smokeInstalled === countsAfterRecovery.smokeInstalled,
-      'BB13 re-entry re-executed a completed stage')
-    observations.push({ phase: 'reentry', state: store.state, counts: countsAfterReentry })
+    // (3) Interrupted recovery re-entry: the validation record is gone while stage
+    // state and receipts survive, so both unchanged stages reuse their original
+    // valid receipts instead of re-executing.
+    {
+      const before = capture('reentry', inputHashes([graphRelPath]))
+      const removedValidationRecords = removeValidationRecords(fixtureRoot)
+      assert(removedValidationRecords.length > 0, 'BB13 interrupted-recovery step found no validation record to remove')
+      const { delta } = runPhase('reentry', before)
+      expectDelta('reentry', delta, { verify: 0, smoke: 0 })
+      const verifyReuse = expectReused('reentry', delta, 'pnpm-verify')
+      expectReused('reentry', delta, 'pnpm-smoke-installed')
+      observations.at(-1).removed_validation_records = removedValidationRecords
+      observations.at(-1).reused_receipts = delta.newReuseReceipts.map(receipt => ({
+        stage_id: receipt.stage_id, original_receipt_id: receipt.original_receipt?.receipt_id,
+      }))
+      assert(verifyReuse.receiptId !== null, 'BB13 reentry verify lost its original receipt id')
+    }
 
-    const sourcePath = join(fixtureRoot, 'network', 'relay-client.ts')
-    writeFileSync(sourcePath, `${readFileSync(sourcePath, 'utf8')}\n// BB13 source invalidation fixture\n`)
-    commitFixtureChange(fixtureRoot, 'bb13 source change')
-    const sourceRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'source-change.json'))
-    assert(sourceRun.status === 0, 'BB13 source change did not recover')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-verify' && entry.reason === 'fingerprint_changed'),
-      'BB13 source change did not invalidate the verify stage')
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-smoke-installed' && entry.reason === 'fingerprint_changed'),
-      'BB13 source change did not invalidate the dependent smoke stage')
-    observations.push({ phase: 'source-change', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    // (4) Source change: both stages invalidate on this invocation's fingerprint
+    // change and both execute; the reuse path is not taken.
+    {
+      const sourcePath = 'network/relay-client.ts'
+      writeFileSync(join(fixtureRoot, sourcePath), `${readFileSync(join(fixtureRoot, sourcePath), 'utf8')}\n// BB13 source invalidation fixture\n`)
+      commitFixtureChange(fixtureRoot, 'bb13 source change')
+      const before = capture('source-change', inputHashes([sourcePath, graphRelPath]))
+      const { delta } = runPhase('source-change', before)
+      expectDelta('source-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('source-change', delta, 'pnpm-verify', 'fingerprint_changed')
+      expectInvalidated('source-change', delta, 'pnpm-smoke-installed', 'fingerprint_changed')
+      expectExecuted('source-change', delta, 'pnpm-verify')
+      expectExecuted('source-change', delta, 'pnpm-smoke-installed')
+    }
 
-    const graphPath = join(fixtureRoot, 'docs', 'architecture', 'verification-map.json')
-    const graph = readJson(graphPath)
-    graph.bb13_graph_registry_probe = 'changed for the BB13 invalidation matrix'
-    writeJson(graphPath, graph)
-    commitFixtureChange(fixtureRoot, 'bb13 graph registry change')
-    const graphRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'graph-registry-change.json'))
-    assert(graphRun.status === 0, 'BB13 graph/registry change did not recover')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-verify' && entry.reason === 'fingerprint_changed'),
-      'BB13 graph/registry change did not invalidate the verify stage')
-    observations.push({ phase: 'graph-registry-change', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    // (5) Graph input change: the real Work graph nodes are legally reordered
+    // (identity, operator, version, ARC and edges unchanged), so the real parser
+    // and compile/gates consume a changed graph and both stages re-execute.
+    {
+      writeFileSync(graphPath, reorderWorkGraphNodes(graphOriginal))
+      commitFixtureChange(fixtureRoot, 'bb13 graph change')
+      const before = capture('graph-change', inputHashes([graphRelPath]))
+      const { delta } = runPhase('graph-change', before)
+      expectDelta('graph-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('graph-change', delta, 'pnpm-verify', 'fingerprint_changed')
+      expectInvalidated('graph-change', delta, 'pnpm-smoke-installed', 'fingerprint_changed')
+      expectExecuted('graph-change', delta, 'pnpm-verify')
+      expectExecuted('graph-change', delta, 'pnpm-smoke-installed')
+      observations.at(-1).graph_reorder = {
+        path: graphRelPath,
+        node_ids: JSON.parse(graphOriginal).nodes.map(node => node.id),
+        reordered_node_ids: JSON.parse(readFileSync(graphPath, 'utf8')).nodes.map(node => node.id),
+      }
+    }
 
-    const configPath = join(fixtureRoot, 'pnpm-workspace.yaml')
-    writeFileSync(configPath, `${readFileSync(configPath, 'utf8')}\n# BB13 config invalidation fixture\n`)
-    commitFixtureChange(fixtureRoot, 'bb13 config change')
-    const configRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'config-change.json'))
-    assert(configRun.status === 0, 'BB13 config change did not recover')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-verify' && entry.reason === 'fingerprint_changed'),
-      'BB13 config change did not invalidate the verify stage')
-    observations.push({ phase: 'config-change', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    // (6) Config change: both stages invalidate on this invocation's fingerprint
+    // change and both execute.
+    {
+      const configPath = 'pnpm-workspace.yaml'
+      writeFileSync(join(fixtureRoot, configPath), `${readFileSync(join(fixtureRoot, configPath), 'utf8')}\n# BB13 config invalidation fixture\n`)
+      commitFixtureChange(fixtureRoot, 'bb13 config change')
+      const before = capture('config-change', inputHashes([configPath, graphRelPath]))
+      const { delta } = runPhase('config-change', before)
+      expectDelta('config-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('config-change', delta, 'pnpm-verify', 'fingerprint_changed')
+      expectInvalidated('config-change', delta, 'pnpm-smoke-installed', 'fingerprint_changed')
+      expectExecuted('config-change', delta, 'pnpm-verify')
+      expectExecuted('config-change', delta, 'pnpm-smoke-installed')
+    }
 
-    const artifactPath = join(fixtureRoot, 'generated', 'modules', 'teams-source', 'module.compiled.json')
-    writeFileSync(artifactPath, `${readFileSync(artifactPath, 'utf8')}\n`)
-    const artifactRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'artifact-change.json'))
-    assert(artifactRun.status === 0, 'BB13 artifact change did not recover')
-    store = readLifecycleState(fixtureRoot)
-    assert(store.state.invalidationHistory.some(entry => entry.stage_id === 'pnpm-verify' && entry.reason === 'receipt_or_required_input_invalid'),
-      'BB13 artifact change did not invalidate the verify stage')
-    observations.push({ phase: 'artifact-change', state: store.state, counts: pnpmInvocationCounts(proofDir) })
+    // (7) Artifact change: the verify-required compiled artifact input is
+    // invalidated, so verify re-executes and the dependent smoke re-executes; the
+    // smoke reason is read from this invocation's own fingerprint comparison.
+    {
+      const artifactPath = 'generated/modules/teams-source/module.compiled.json'
+      writeFileSync(join(fixtureRoot, artifactPath), `${readFileSync(join(fixtureRoot, artifactPath), 'utf8')}\n`)
+      const before = capture('artifact-change', inputHashes([artifactPath, graphRelPath]))
+      const { delta } = runPhase('artifact-change', before)
+      expectDelta('artifact-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('artifact-change', delta, 'pnpm-verify', 'receipt_or_required_input_invalid')
+      const smokeEntry = expectInvalidated('artifact-change', delta, 'pnpm-smoke-installed', 'fingerprint_changed')
+      observations.at(-1).smoke_reason_fingerprint_change =
+        smokeEntry.previous_fingerprint !== delta.stages['pnpm-smoke-installed'].fingerprint
+      expectExecuted('artifact-change', delta, 'pnpm-verify')
+      expectExecuted('artifact-change', delta, 'pnpm-smoke-installed')
+    }
 
-    const smoke = latestSmokeReceipt(store.state)
-    const evidenceId = smoke.receipt.evidence_ids[0]
-    const evidencePath = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source', `${evidenceId}.json`)
-    assert(existsSync(evidencePath), `BB13 evidence file is missing: ${evidencePath}`)
-    rmSync(evidencePath)
-    const beforeMissingCounts = pnpmInvocationCounts(proofDir)
-    const missingRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'evidence-delete.json'))
-    assert(missingRun.status === 0, 'BB13 evidence deletion did not recover')
-    store = readLifecycleState(fixtureRoot)
-    const afterMissingCounts = pnpmInvocationCounts(proofDir)
-    assert(afterMissingCounts.verify === beforeMissingCounts.verify, 'BB13 evidence deletion re-executed the independent verify stage')
-    assert(afterMissingCounts.smokeInstalled === beforeMissingCounts.smokeInstalled + 1, 'BB13 evidence deletion did not re-execute the dependent smoke stage')
-    // A stage re-execution mints a new attempt-scoped receipt and evidence ids, so
-    // the deleted file is superseded rather than rewritten at the same path. The
-    // honest observable is a fresh receipt whose referenced evidence records all exist.
-    const regeneratedSmoke = latestSmokeReceipt(store.state)
-    assert(regeneratedSmoke.receipt.receipt_id !== smoke.receipt.receipt_id,
-      'BB13 evidence deletion reused the stale smoke receipt instead of re-executing')
-    const evidenceRoot = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source')
-    assert(regeneratedSmoke.receipt.evidence_ids.length > 0 &&
-      regeneratedSmoke.receipt.evidence_ids.every(id => existsSync(join(evidenceRoot, `${id}.json`))),
-      'BB13 deleted required evidence was not regenerated as fresh present records')
-    observations.push({ phase: 'evidence-delete', state: store.state, counts: afterMissingCounts })
+    // (8) Deleted smoke-required evidence: the independent verify stage reuses,
+    // and only the dependent smoke stage re-executes with a fresh receipt and
+    // freshly present evidence. This and the failure-recovery phase prove "first
+    // invalidated node and dependent successors" without a second lifecycle stage.
+    {
+      const smoke = latestSmokeReceipt(store.state)
+      const evidenceId = smoke.receipt.evidence_ids[0]
+      const evidenceRelPath = `.appsdk/records/evidence/teams-source/${evidenceId}.json`
+      const evidencePath = join(fixtureRoot, evidenceRelPath)
+      assert(existsSync(evidencePath), `BB13 evidence file is missing: ${evidencePath}`)
+      const before = capture('evidence-delete', inputHashes([graphRelPath]))
+      rmSync(evidencePath)
+      const { delta } = runPhase('evidence-delete', before)
+      expectDelta('evidence-delete', delta, { verify: 0, smoke: 1 })
+      expectReused('evidence-delete', delta, 'pnpm-verify')
+      const smokeStage = expectExecuted('evidence-delete', delta, 'pnpm-smoke-installed')
+      const regenerated = latestSmokeReceipt(store.state)
+      assert(regenerated.receipt.receipt_id !== smoke.receipt.receipt_id,
+        'BB13 evidence deletion reused the stale smoke receipt instead of re-executing')
+      assert(smokeStage.receiptId === regenerated.receipt.receipt_id,
+        'BB13 evidence deletion did not publish the regenerated smoke receipt as the stage receipt')
+      const evidenceRoot = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source')
+      assert(regenerated.receipt.evidence_ids.length > 0 &&
+        regenerated.receipt.evidence_ids.every(id => existsSync(join(evidenceRoot, `${id}.json`))),
+        'BB13 deleted required evidence was not regenerated as fresh present records')
+      observations.at(-1).deleted_evidence = evidenceId
+    }
 
     result = {
       status: 'passed',
@@ -4574,7 +5251,8 @@ async function runBB13(context) {
         lifecycle_adapter: 'node scripts/lifecycle-adapter.mjs',
         store: '.appsdk-control/lifecycle-adapter/stages/teams-lifecycle-admission.json',
         fault: 'one-shot smoke:installed exit 86',
-        mutations: ['source', 'graph/registry', 'config', 'artifact', 'required evidence file deletion'],
+        mutations: ['source', 'real Work graph node reorder', 'config', 'artifact', 'required evidence file deletion'],
+        graph_input: graphRelPath,
       },
       external_observation: {
         fixture_root: fixtureRoot,
@@ -4583,15 +5261,18 @@ async function runBB13(context) {
         store_path: store.path,
         phases: observations.map(observation => ({
           phase: observation.phase,
-          counts: observation.counts,
-          stages: Object.fromEntries(Object.entries(observation.state.stages).map(([id, stage]) => [id, {
-            status: stage.status,
-            receiptId: stage.receiptId,
-            reuseReceiptId: stage.reuseReceiptId,
-            evidenceIds: stage.evidenceIds,
-          }])),
-          reuseReceipts: observation.state.reuseReceipts.length,
-          invalidationHistory: observation.state.invalidationHistory.slice(-4),
+          counts: observation.counts ?? observation.after?.counts ?? undefined,
+          before: observation.before,
+          invocation: observation.invocation,
+          delta: observation.delta,
+          after: observation.after,
+          failure_exit: observation.failure_exit,
+          smoke_error: observation.smoke_error,
+          removed_validation_records: observation.removed_validation_records,
+          reused_receipts: observation.reused_receipts,
+          graph_reorder: observation.graph_reorder,
+          smoke_reason_fingerprint_change: observation.smoke_reason_fingerprint_change,
+          deleted_evidence: observation.deleted_evidence,
         })),
         final_counts: pnpmInvocationCounts(proofDir),
       },

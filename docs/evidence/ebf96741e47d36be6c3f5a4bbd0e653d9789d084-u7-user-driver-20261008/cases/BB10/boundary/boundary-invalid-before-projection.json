@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB-Session",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "current",
+      "sessionObservation": {
+        "state": "degraded",
+        "reason": "projection-loss",
+        "detail": "unsupported OpenCode event catalog.updated",
+        "droppedEvents": 50
+      },
+      "sessionEffectiveRevision": 3,
+      "currentSessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+      "providerId": "bb-manual",
+      "modelId": "bb-manual-model"
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB-Passive",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [
+    {
+      "agentId": "bb-provider",
+      "sessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+      "title": "BB10 boundary manual selection"
+    }
+  ],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 3,
+      "applyState": "clean",
+      "acceptedBinding": {
+        "primary": {
+          "providerInstanceId": "bb-manual",
+          "modelId": "bb-manual-model"
+        },
+        "backup": {
+          "providerInstanceId": "bb-backup",
+          "modelId": "bb-backup-model"
+        }
+      },
+      "effectiveRevision": 3,
+      "providers": [
+        {
+          "id": "bb-primary",
+          "label": "BB Primary",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:61089/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-primary-model",
+              "label": "BB Primary Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-backup",
+          "label": "BB Backup",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:61090/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-backup-model",
+              "label": "BB Backup Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-manual",
+          "label": "BB Manual",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:61091/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "empty",
+          "models": [
+            {
+              "id": "bb-manual-model",
+              "label": "BB Boundary Manual Model"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": [],
+  "sessionEvents": [
+    {
+      "eventId": "message.updated:ses_ee156138effe7JDZKfZsD1XWrn:msg_9eDzihI502mGwHxno6BAl0XT6k",
+      "sessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_9eDzihI502mGwHxno6BAl0XT6k",
+      "role": "user"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee156138effe7JDZKfZsD1XWrn:msg_9eDzihI502mGwHxno6BAl0XT6k",
+      "sessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "pending",
+      "messageId": "msg_9eDzihI502mGwHxno6BAl0XT6k",
+      "partId": "prt_11ea9eccf001gtyahvjF1as53u",
+      "partType": "text",
+      "text": "bb10 boundary manual selection probe"
+    },
+    {
+      "eventId": "message.updated:ses_ee156138effe7JDZKfZsD1XWrn:msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "sessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "role": "assistant"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee156138effe7JDZKfZsD1XWrn:msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "sessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "partId": "prt_11ea9ef77001JL1iYC7N4jI4Le",
+      "partType": "step-start",
+      "sourcePart": {
+        "id": "prt_11ea9ef77001JL1iYC7N4jI4Le",
+        "messageID": "msg_11ea9edb6001FR3rWKmkUGeqp5",
+        "sessionID": "ses_ee156138effe7JDZKfZsD1XWrn",
+        "type": "step-start"
+      }
+    },
+    {
+      "eventId": "message.part.updated:ses_ee156138effe7JDZKfZsD1XWrn:msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "sessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "partId": "prt_11ea9ef79001IlTrDwhRj5YSny",
+      "partType": "text",
+      "text": "bb-session-provider-ok"
+    },
+    {
+      "eventId": "message.part.updated:ses_ee156138effe7JDZKfZsD1XWrn:msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "sessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "partId": "prt_11ea9ef7d001fGmbALAK9unzgc",
+      "partType": "step-finish",
+      "sourcePart": {
+        "id": "prt_11ea9ef7d001fGmbALAK9unzgc",
+        "reason": "stop",
+        "messageID": "msg_11ea9edb6001FR3rWKmkUGeqp5",
+        "sessionID": "ses_ee156138effe7JDZKfZsD1XWrn",
+        "type": "step-finish",
+        "tokens": {
+          "total": 2,
+          "input": 1,
+          "output": 1,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0
+      }
+    },
+    {
+      "eventId": "message.updated:ses_ee156138effe7JDZKfZsD1XWrn:msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "sessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+      "agentId": "bb-provider",
+      "kind": "final",
+      "state": "completed",
+      "messageId": "msg_11ea9edb6001FR3rWKmkUGeqp5",
+      "finish": "stop"
+    }
+  ]
+}

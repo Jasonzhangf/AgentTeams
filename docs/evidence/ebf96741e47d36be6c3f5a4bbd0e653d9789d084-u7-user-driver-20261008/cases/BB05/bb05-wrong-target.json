@@ -1,0 +1,31 @@
+{
+  "command": "/tmp/agentteams-u7-bb05-yEagEv/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "open",
+    "--config",
+    "/tmp/agentteams-u7-bb05-yEagEv/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--provider",
+    "bb-provider",
+    "--provider-generation",
+    "1",
+    "--capability-id",
+    "file-search",
+    "--capability-version",
+    "1",
+    "--operation",
+    "search",
+    "--provider",
+    "bb-ghost",
+    "--demands",
+    "[{\"resourceId\":\"search-slot\",\"amount\":1}]",
+    "--payload",
+    "{\"query\":\"marker-alpha\"}"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"3d442fb8-d030-411d-add1-ad7988210478\",\"attemptId\":\"7d09966a-b9de-492c-bac9-39b777d9c657\",\"workId\":\"d8786960-f324-4e84-9251-10bd8752d27c\",\"requestId\":\"d027476c-eb90-4a97-ba17-20a133e997ad\",\"providerAgentId\":\"bb-ghost\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Provider bb-ghost was not found\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
+}

@@ -428,6 +428,40 @@ readonly capabilityDetails?: readonly {
 权限、聚合、freshness 与重启语义，超出本轮最小补链。UI 必须标「声明容量」，不得标为
 「剩余容量」。
 
+### 6.6 配置投影行与封闭 wire 校验（round 15，提案）
+
+Console 配置投影行（`ConsoleProjectionV1.configs[]`）在既有字段上增加一个**可选**
+已接受 binding 字段。canonical owner 仍是 `control-protocol/console-api.ts`；producer
+是 U2 config owner（`runtime/console-config.ts`），U5 只透传与解析。字段与语义见
+`teams-provider-config.md` §4.1（首次 accept 前 `null`、与 `acceptedRevision` 同源、
+`backup` 不自动 dispatch）。本轮**不新增 UI 产品流程**；该字段只用于公开读回，UI 不
+据此发起第二次 dispatch。
+
+配置行字段（冻结）：
+
+```ts
+readonly agentId: string
+readonly acceptedRevision: number
+readonly effectiveRevision?: number
+readonly applyState?: 'clean' | 'uncertain'
+readonly acceptedBinding?: {
+  readonly primary: { readonly providerInstanceId: string; readonly modelId: string }
+  readonly backup?: { readonly providerInstanceId: string; readonly modelId: string }
+} | null
+readonly providers: readonly ConsoleProviderView[]
+readonly error?: ConsoleServiceError
+```
+
+封闭 wire 校验（`control-protocol/console-wire.ts` `parseConsoleWireReply`）：
+
+- `configs[]` 与 `acceptedBinding`/`primary`/`backup` 逐层用 `assertEnvelopeKeys`
+  关闭字段集；未声明的嵌套字段（如 `credential`/`endpoint`/`revision`）显式拒绝，
+  绝不 strip。
+- `acceptedBinding` 允许缺失（既有 v1 行）、允许显式 `null`（首次 accept 前），
+  或为 `{ primary, backup? }`；`primary` 必需，`providerInstanceId`/`modelId` 必须为
+  非空字符串；`backup` 可选且同样校验。
+- 空对象、缺 `modelId`、空字符串或多余嵌套键都显式拒绝。解析后不做形状改写。
+
 ---
 
 ## 7. 安全

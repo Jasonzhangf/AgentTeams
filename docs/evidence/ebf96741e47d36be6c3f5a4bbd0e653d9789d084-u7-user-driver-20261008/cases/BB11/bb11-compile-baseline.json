@@ -1,0 +1,14 @@
+{
+  "command": "/private/tmp/agentteams-u7-bb11-LQPzBw/prefix/node_modules/agentteams/runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner",
+  "args": [
+    "compile",
+    "--graph",
+    "/private/tmp/agentteams-u7-bb11-LQPzBw/prefix/node_modules/agentteams/runtime/dagpipe/graphs/agent-work.graph.json",
+    "--capabilities",
+    "[\"agent.work.close\",\"agent.work.get\",\"agent.work.propose\",\"agent.work.request\",\"directory.read\",\"network.close\",\"network.connect\"]"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\"capabilities\":[\"agent.work.close\",\"agent.work.get\",\"agent.work.propose\",\"agent.work.request\",\"directory.read\",\"network.close\",\"network.connect\"],\"graph_id\":\"agentteams.agent-work\",\"graph_version\":\"2\",\"node_ids\":[\"resolve-service\",\"open-link\",\"admit-work\",\"request-work\",\"settle-work\"],\"type\":\"compile.result\"}\n",
+  "stderr": ""
+}

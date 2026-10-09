@@ -1,0 +1,12 @@
+{
+  "command": "/tmp/agentteams-u7-bb09-refusal-Yunuee/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "status",
+    "--config",
+    "/tmp/agentteams-u7-bb09-refusal-Yunuee/home/.agentteams/config.toml"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "status state=stopped generation=1 config=/tmp/agentteams-u7-bb09-refusal-Yunuee/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-refusal-Yunuee/home/.agentteams/internal.toml pid=29367 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB09-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB09-Receiver role=receiver presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=1 consoleCredential=configured\n",
+  "stderr": ""
+}

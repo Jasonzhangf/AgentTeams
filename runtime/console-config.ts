@@ -50,8 +50,15 @@ export function createConsoleConfigBinding(options: {
   return {
     readProjection: async (): Promise<ConsoleProjectionV1['configs'][number]> => {
       const config = await store.read()
+      const acceptedBinding = config.acceptedRevision === 0
+        ? null
+        : config.agents[agentId]
+      if (acceptedBinding === undefined) {
+        throw new RuntimeConfigError({ code: 'UNAVAILABLE', message: `config: accepted binding for ${agentId} is missing` })
+      }
       return {
         agentId, acceptedRevision: config.acceptedRevision, applyState: config.applyState,
+        acceptedBinding,
         ...(config.effectiveRevision === undefined ? {} : { effectiveRevision: config.effectiveRevision }),
         ...(config.lastApplyError === undefined ? {} : { error: config.lastApplyError }),
         providers: Object.values(config.providers).map(provider => {

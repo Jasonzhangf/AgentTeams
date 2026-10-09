@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-main-7253",
+    "--script",
+    "JSON.stringify({ catalog: document.querySelector('article.teams-provider-card .teams-catalog-state')?.textContent ?? null, models: [...document.querySelectorAll('article.teams-provider-card select.teams-select option')].map(option => option.value) })"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-7253\",\n  \"target\": \"t_117af7262e14\",\n  \"result\": \"{\\\"catalog\\\":\\\"已加载\\\",\\\"models\\\":[\\\"\\\",\\\"bb-console-model\\\"]}\",\n  \"issuedAt\": \"2026-10-09T03:15:17.952Z\",\n  \"traceId\": \"cli-1791515717915\"\n}\n",
+  "stderr": ""
+}

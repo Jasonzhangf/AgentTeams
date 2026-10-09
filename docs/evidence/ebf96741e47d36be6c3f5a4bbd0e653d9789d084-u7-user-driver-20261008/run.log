@@ -1,0 +1,6 @@
+start 20:13:28 HEAD=3bb440df74e5cf61d95b95de01eb633bf0854b34
+pack 5442d61ac6eb6d44658067ba946bb7d569c6b9c6ee508fc77d46bac5866596a2 191 final
+{"receipt":"/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/r20/full.receipt.json","cases":[{"case_id":"BB01","status":"passed"},{"case_id":"BB02","status":"passed"},{"case_id":"BB03","status":"passed"},{"case_id":"BB04","status":"passed"},{"case_id":"BB05","status":"passed"},{"case_id":"BB06","status":"passed"},{"case_id":"BB07","status":"passed"},{"case_id":"BB08","status":"passed"},{"case_id":"BB09","status":"passed"},{"case_id":"BB10","status":"passed"},{"case_id":"BB11","status":"passed"},{"case_id":"BB12","status":"passed"},{"case_id":"BB13","status":"passed"},{"case_id":"BB14","status":"passed"}],"exit_code":0}
+full exit=0
+end 20:27:43
+?? .appsdk/records/

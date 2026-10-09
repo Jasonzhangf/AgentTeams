@@ -1,0 +1,658 @@
+{
+  "status": "passed",
+  "baseline": {
+    "discovery": {
+      "acceptedRevision": 0,
+      "manual_catalog_state": "empty",
+      "manual_model_count": 0
+    },
+    "bind_model": {
+      "request": {
+        "kind": "config.bindModel",
+        "agentId": "bb-provider",
+        "expectedRevision": 0,
+        "providerId": "bb-primary",
+        "modelId": "bb-primary-model"
+      },
+      "reply": {
+        "ok": true
+      }
+    },
+    "accepted_after_bind": {
+      "public": {
+        "acceptedRevision": 1,
+        "effectiveRevision": null,
+        "applyState": "clean"
+      },
+      "binding": {
+        "primary": {
+          "providerInstanceId": "bb-primary",
+          "modelId": "bb-primary-model"
+        },
+        "backup": {
+          "providerInstanceId": "bb-backup",
+          "modelId": "bb-backup-model"
+        }
+      },
+      "durable_accepted_revision_diagnostic": 1,
+      "effective_revision_reason": "the public effective revision is not published before config.apply"
+    },
+    "apply": {
+      "request": {
+        "kind": "config.apply",
+        "agentId": "bb-provider"
+      },
+      "reply": {
+        "ok": true
+      },
+      "agent": {
+        "kind": "runtime",
+        "agentId": "bb-provider",
+        "machineId": "bb-machine",
+        "label": "BB-Session",
+        "presence": "online",
+        "capabilities": [],
+        "capabilityDetails": [],
+        "generation": 1,
+        "sessionCapable": true,
+        "sessionAvailability": "current",
+        "sessionObservation": {
+          "state": "live"
+        },
+        "sessionEffectiveRevision": 1,
+        "providerId": "bb-primary",
+        "modelId": "bb-primary-model"
+      }
+    },
+    "settled": {
+      "config": {
+        "acceptedRevision": 1,
+        "effectiveRevision": 1,
+        "applyState": "clean"
+      },
+      "agent": {
+        "providerId": "bb-primary",
+        "modelId": "bb-primary-model",
+        "sessionEffectiveRevision": 1
+      },
+      "binding": {
+        "primary": {
+          "providerInstanceId": "bb-primary",
+          "modelId": "bb-primary-model"
+        },
+        "backup": {
+          "providerInstanceId": "bb-backup",
+          "modelId": "bb-backup-model"
+        }
+      }
+    }
+  },
+  "sources": {
+    "binding": "installed Console /api/v1/projection config row acceptedBinding",
+    "config": "installed Console /api/v1/projection config row",
+    "agent": "installed Console /api/v1/projection Agent row",
+    "provider_requests": "boundary provider stub external request records",
+    "session_terminal": "installed Console /api/v1/projection Session events",
+    "combination": "config acceptedBinding and effective revision from one projection response; Agent row validated under the same public read"
+  },
+  "installed_identity": {
+    "installed_content_sha256": "5442d61ac6eb6d44658067ba946bb7d569c6b9c6ee508fc77d46bac5866596a2",
+    "installed_tarball_sha256": "de43230c1a242324ddc8699a6ccdefa97932ab08d9e1c4d2f5319b6d2aa0c99d",
+    "cli_realpath": "/private/tmp/agentteams-u7-bb10-boundary-nFi459/prefix/node_modules/agentteams/cli/agentteams.mjs",
+    "expected_content_sha256": "5442d61ac6eb6d44658067ba946bb7d569c6b9c6ee508fc77d46bac5866596a2"
+  },
+  "results": {
+    "baseline": {
+      "discovery": {
+        "acceptedRevision": 0,
+        "manual_catalog_state": "empty",
+        "manual_model_count": 0
+      },
+      "bind_model": {
+        "request": {
+          "kind": "config.bindModel",
+          "agentId": "bb-provider",
+          "expectedRevision": 0,
+          "providerId": "bb-primary",
+          "modelId": "bb-primary-model"
+        },
+        "reply": {
+          "ok": true
+        }
+      },
+      "accepted_after_bind": {
+        "public": {
+          "acceptedRevision": 1,
+          "effectiveRevision": null,
+          "applyState": "clean"
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-primary",
+            "modelId": "bb-primary-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        },
+        "durable_accepted_revision_diagnostic": 1,
+        "effective_revision_reason": "the public effective revision is not published before config.apply"
+      },
+      "apply": {
+        "request": {
+          "kind": "config.apply",
+          "agentId": "bb-provider"
+        },
+        "reply": {
+          "ok": true
+        },
+        "agent": {
+          "kind": "runtime",
+          "agentId": "bb-provider",
+          "machineId": "bb-machine",
+          "label": "BB-Session",
+          "presence": "online",
+          "capabilities": [],
+          "capabilityDetails": [],
+          "generation": 1,
+          "sessionCapable": true,
+          "sessionAvailability": "current",
+          "sessionObservation": {
+            "state": "live"
+          },
+          "sessionEffectiveRevision": 1,
+          "providerId": "bb-primary",
+          "modelId": "bb-primary-model"
+        }
+      },
+      "settled": {
+        "config": {
+          "acceptedRevision": 1,
+          "effectiveRevision": 1,
+          "applyState": "clean"
+        },
+        "agent": {
+          "providerId": "bb-primary",
+          "modelId": "bb-primary-model",
+          "sessionEffectiveRevision": 1
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-primary",
+            "modelId": "bb-primary-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        }
+      }
+    },
+    "manual_selection": {
+      "refresh": {
+        "ok": true
+      },
+      "catalog_state": "empty",
+      "model_count": 0,
+      "accepted_revision_before": 1,
+      "put_model": {
+        "ok": true
+      },
+      "bind_model": {
+        "ok": true
+      },
+      "accepted_revision_after": 3,
+      "effective_before_restart": {
+        "config": {
+          "acceptedRevision": 2,
+          "effectiveRevision": 1,
+          "applyState": "clean"
+        },
+        "agent": {
+          "providerId": "bb-primary",
+          "modelId": "bb-primary-model",
+          "sessionEffectiveRevision": 1
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-primary",
+            "modelId": "bb-primary-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        }
+      },
+      "effective_before_apply": {
+        "config": {
+          "acceptedRevision": 3,
+          "effectiveRevision": 1,
+          "applyState": "clean"
+        },
+        "agent": {
+          "providerId": "bb-primary",
+          "modelId": "bb-primary-model",
+          "sessionEffectiveRevision": 1
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-manual",
+            "modelId": "bb-manual-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        }
+      },
+      "sampling_stages": {
+        "effective_before_restart": {
+          "after": "config.model.put",
+          "before": "manual config.bindModel",
+          "accepted_revision": 2,
+          "effective_revision": 1
+        },
+        "effective_before_apply": {
+          "after": "manual config.bindModel",
+          "before": "installed restart and explicit config.apply",
+          "accepted_revision": 3,
+          "effective_revision": 1
+        }
+      },
+      "restarted_accepted_revision": 3,
+      "effective_after_apply": {
+        "kind": "runtime",
+        "agentId": "bb-provider",
+        "machineId": "bb-machine",
+        "label": "BB-Session",
+        "presence": "online",
+        "capabilities": [],
+        "capabilityDetails": [],
+        "generation": 1,
+        "sessionCapable": true,
+        "sessionAvailability": "current",
+        "sessionObservation": {
+          "state": "live"
+        },
+        "sessionEffectiveRevision": 3,
+        "providerId": "bb-manual",
+        "modelId": "bb-manual-model"
+      },
+      "turn": {
+        "dispatch": {
+          "ok": true
+        },
+        "final": {
+          "eventId": "message.updated:ses_ee156138effe7JDZKfZsD1XWrn:msg_11ea9edb6001FR3rWKmkUGeqp5",
+          "sessionId": "ses_ee156138effe7JDZKfZsD1XWrn",
+          "agentId": "bb-provider",
+          "kind": "final",
+          "state": "completed",
+          "messageId": "msg_11ea9edb6001FR3rWKmkUGeqp5",
+          "finish": "stop"
+        },
+        "text": "bb-session-provider-ok"
+      },
+      "provider_request_model": "bb-manual-model",
+      "primary_requests_before": 0,
+      "backup_requests_before": 0,
+      "primary_requests": 0,
+      "backup_requests": 0,
+      "manual_requests": 1
+    },
+    "stale_cas": {
+      "stale_revision": 1,
+      "current_revision": 3,
+      "request": {
+        "kind": "config.bindModel",
+        "agentId": "bb-provider",
+        "expectedRevision": 1,
+        "providerId": "bb-primary",
+        "modelId": "bb-primary-model"
+      },
+      "reply": {
+        "ok": false,
+        "error": {
+          "code": "REVISION_CONFLICT",
+          "message": "config: revision conflict expected=1 current=3"
+        }
+      },
+      "before": {
+        "config": {
+          "acceptedRevision": 3,
+          "effectiveRevision": 3,
+          "applyState": "clean"
+        },
+        "agent": {
+          "providerId": "bb-manual",
+          "modelId": "bb-manual-model",
+          "sessionEffectiveRevision": 3
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-manual",
+            "modelId": "bb-manual-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        }
+      },
+      "after": {
+        "config": {
+          "acceptedRevision": 3,
+          "effectiveRevision": 3,
+          "applyState": "clean"
+        },
+        "agent": {
+          "providerId": "bb-manual",
+          "modelId": "bb-manual-model",
+          "sessionEffectiveRevision": 3
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-manual",
+            "modelId": "bb-manual-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        }
+      }
+    },
+    "invalid_credential": {
+      "synthetic_credential_env": "AGENTTEAMS_BB10_BOUNDARY_SYNTHETIC_KEY",
+      "credential_length": 50,
+      "put_provider": {
+        "ok": true
+      },
+      "restarted": {
+        "agentId": "bb-provider",
+        "acceptedRevision": 4,
+        "applyState": "clean",
+        "acceptedBinding": {
+          "primary": {
+            "providerInstanceId": "bb-manual",
+            "modelId": "bb-manual-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        },
+        "effectiveRevision": 3,
+        "providers": [
+          {
+            "id": "bb-primary",
+            "label": "BB Boundary Invalid Credential",
+            "protocol": "openai-chat",
+            "apiBaseUrl": "http://127.0.0.1:61092/v1",
+            "enabled": true,
+            "authKind": "bearer",
+            "catalogState": "ready",
+            "models": [
+              {
+                "id": "bb-primary-model",
+                "label": "BB Primary Model"
+              }
+            ]
+          },
+          {
+            "id": "bb-backup",
+            "label": "BB Backup",
+            "protocol": "openai-chat",
+            "apiBaseUrl": "http://127.0.0.1:61090/v1",
+            "enabled": true,
+            "authKind": "none",
+            "catalogState": "ready",
+            "models": [
+              {
+                "id": "bb-backup-model",
+                "label": "BB Backup Model"
+              }
+            ]
+          },
+          {
+            "id": "bb-manual",
+            "label": "BB Manual",
+            "protocol": "openai-chat",
+            "apiBaseUrl": "http://127.0.0.1:61091/v1",
+            "enabled": true,
+            "authKind": "none",
+            "catalogState": "empty",
+            "models": [
+              {
+                "id": "bb-manual-model",
+                "label": "BB Boundary Manual Model"
+              }
+            ]
+          }
+        ]
+      },
+      "apply": {
+        "kind": "runtime",
+        "agentId": "bb-provider",
+        "machineId": "bb-machine",
+        "label": "BB-Session",
+        "presence": "online",
+        "capabilities": [],
+        "capabilityDetails": [],
+        "generation": 1,
+        "sessionCapable": true,
+        "sessionAvailability": "current",
+        "sessionObservation": {
+          "state": "live"
+        },
+        "sessionEffectiveRevision": 4,
+        "providerId": "bb-manual",
+        "modelId": "bb-manual-model"
+      },
+      "refresh": {
+        "ok": false,
+        "error": {
+          "code": "UNAUTHENTICATED",
+          "message": "config: model catalog request returned HTTP 401",
+          "status": 401,
+          "providerInstanceId": "bb-primary"
+        }
+      },
+      "catalog_requests": [
+        {
+          "method": "GET",
+          "path": "/v1/models",
+          "status": 401
+        }
+      ],
+      "manual_inference_requests_before": 1,
+      "manual_inference_requests_after": 1,
+      "backup_inference_requests_before": 0,
+      "backup_inference_requests_after": 0,
+      "before": {
+        "config": {
+          "acceptedRevision": 4,
+          "effectiveRevision": 4,
+          "applyState": "clean"
+        },
+        "agent": {
+          "providerId": "bb-manual",
+          "modelId": "bb-manual-model",
+          "sessionEffectiveRevision": 4
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-manual",
+            "modelId": "bb-manual-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        }
+      },
+      "after": {
+        "config": {
+          "acceptedRevision": 4,
+          "effectiveRevision": 4,
+          "applyState": "clean"
+        },
+        "agent": {
+          "providerId": "bb-manual",
+          "modelId": "bb-manual-model",
+          "sessionEffectiveRevision": 4
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-manual",
+            "modelId": "bb-manual-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        }
+      }
+    },
+    "no_implicit_failover": {
+      "prompt": "bb10 boundary no implicit failover probe",
+      "session": {
+        "ok": true,
+        "result": {
+          "kind": "session.create",
+          "agentId": "bb-provider",
+          "sessionId": "ses_ee1560600ffeiuImqVOSxwTmFs",
+          "title": "BB10 boundary no implicit failover",
+          "directory": "/private/tmp/agentteams-u7-bb10-boundary-nFi459/home/.agentteams/data/bb-provider",
+          "time": {
+            "created": 1791515818495,
+            "updated": 1791515818495
+          }
+        }
+      },
+      "warmup": {
+        "dispatch": {
+          "ok": true
+        },
+        "final": {
+          "eventId": "message.updated:ses_ee1560600ffeiuImqVOSxwTmFs:msg_11ea9fb490017nZXMQRsDrTjPA",
+          "sessionId": "ses_ee1560600ffeiuImqVOSxwTmFs",
+          "agentId": "bb-provider",
+          "kind": "final",
+          "state": "completed",
+          "messageId": "msg_11ea9fb490017nZXMQRsDrTjPA",
+          "finish": "stop"
+        },
+        "text": "bb-session-provider-ok"
+      },
+      "dispatch": {
+        "ok": true
+      },
+      "bound_provider_request": {
+        "model": "bb-manual-model",
+        "prompt": "bb10 boundary no implicit failover probe",
+        "status": 500
+      },
+      "failed_final": {
+        "eventId": "message.updated:ses_ee1560600ffeiuImqVOSxwTmFs:msg_11ea9fd84001qDCUmZdPA1G8Sz",
+        "sessionId": "ses_ee1560600ffeiuImqVOSxwTmFs",
+        "agentId": "bb-provider",
+        "kind": "final",
+        "state": "failed",
+        "messageId": "msg_11ea9fd84001qDCUmZdPA1G8Sz",
+        "error": {
+          "name": "APIError",
+          "data": {
+            "message": "bb session provider stub failure",
+            "statusCode": 500,
+            "isRetryable": true,
+            "responseHeaders": {
+              "connection": "keep-alive",
+              "content-type": "application/json",
+              "date": "Fri, 09 Oct 2026 03:18:07 GMT",
+              "keep-alive": "timeout=5",
+              "transfer-encoding": "chunked"
+            },
+            "responseBody": "{\"error\":{\"message\":\"bb session provider stub failure\",\"type\":\"api_error\"}}",
+            "metadata": {
+              "url": "http://127.0.0.1:61091/v1/chat/completions"
+            }
+          }
+        }
+      },
+      "failed_finals_before": 0,
+      "failed_finals_after": 1,
+      "accepted_revision_before": 4,
+      "effective_revision_before": 4,
+      "accepted_revision_after": 4,
+      "effective_revision_after": 4,
+      "snapshot_before": {
+        "config": {
+          "acceptedRevision": 4,
+          "effectiveRevision": 4,
+          "applyState": "clean"
+        },
+        "agent": {
+          "providerId": "bb-manual",
+          "modelId": "bb-manual-model",
+          "sessionEffectiveRevision": 4
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-manual",
+            "modelId": "bb-manual-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        }
+      },
+      "snapshot_after": {
+        "config": {
+          "acceptedRevision": 4,
+          "effectiveRevision": 4,
+          "applyState": "clean"
+        },
+        "agent": {
+          "providerId": "bb-manual",
+          "modelId": "bb-manual-model",
+          "sessionEffectiveRevision": 4
+        },
+        "binding": {
+          "primary": {
+            "providerInstanceId": "bb-manual",
+            "modelId": "bb-manual-model"
+          },
+          "backup": {
+            "providerInstanceId": "bb-backup",
+            "modelId": "bb-backup-model"
+          }
+        }
+      },
+      "primary_inference_requests_before": 0,
+      "primary_inference_requests_after": 0,
+      "backup_inference_requests_before": 0,
+      "backup_inference_requests_after": 0,
+      "manual_inference_requests_before": 2,
+      "manual_inference_requests_after": 8
+    }
+  },
+  "cleanup": {
+    "stopped": true,
+    "stop_stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-nFi459/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-nFi459/home/.agentteams/internal.toml pid=44495\n",
+    "stopped_stdout": "status state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-nFi459/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-nFi459/home/.agentteams/internal.toml pid=44495 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB-Session role=provider presence=offline generation=1 capabilities=- endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB-Passive role=provider presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=3 consoleCredential=configured\n",
+    "console_listener_gone": true,
+    "owned_pids_after_stop": [
+      44495,
+      44544,
+      44590,
+      44591
+    ],
+    "owned_pids_alive_after_stop": [],
+    "temporary_root_removed": true
+  },
+  "evidence_path": "/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/r20/full/cases/BB10/boundary"
+}

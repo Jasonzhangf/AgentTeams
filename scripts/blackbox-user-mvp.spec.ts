@@ -81,7 +81,14 @@ function projectionFixture(agentId: string) {
     agents: [],
     sessions: [],
     notifications: [],
-    configs: [],
+    configs: [{
+      agentId,
+      acceptedRevision: 2,
+      effectiveRevision: 2,
+      applyState: 'clean' as const,
+      acceptedBinding: { primary: { providerInstanceId: 'provider-1', modelId: 'model-1' } },
+      providers: [],
+    }],
     works: [{
       agentId,
       workId: `work-${agentId}`,
@@ -416,7 +423,9 @@ describe('BB10 isolated config and launch environment', () => {
   it('persists only the credential env name and the exact catalog model spellings', () => {
     const text = canonicalSessionConfigText({
       rccBaseUrl: 'http://127.0.0.1:4444/v1',
+      rccProtocol: 'openai-chat',
       canonicalBaseUrl: 'https://example.invalid/v1/',
+      canonicalProtocol: 'openai-chat',
       canonicalModel: 'sample-max',
     }, '/usr/bin/rg')
     expect(text).toContain('credentialEnv = "TEAMS_BB10_CANONICAL_API_KEY"')
@@ -429,6 +438,24 @@ describe('BB10 isolated config and launch environment', () => {
     // The exact catalog token is persisted: no `/` <-> `.` rewrite.
     expect(text).not.toContain('goaichat_openai/qwen3.8-max')
     expect(text).not.toContain('goaichat.openai.qwen3.8-max')
+  })
+
+  it('projects each caller-declared protocol without cross-provider inference', () => {
+    const text = (rccProtocol: string, canonicalProtocol: string) => canonicalSessionConfigText({
+      rccBaseUrl: 'http://127.0.0.1:4444/v1',
+      rccProtocol,
+      canonicalBaseUrl: 'https://example.invalid/v1',
+      canonicalProtocol,
+      canonicalModel: 'sample-max',
+    }, '/usr/bin/rg')
+    const chat = text('openai-chat', 'openai-chat')
+    expect(chat.match(/protocol = "openai-chat"/gu)).toHaveLength(2)
+    const mixed = text('openai-responses', 'openai-chat')
+    expect(mixed.match(/protocol = "openai-chat"/gu)).toHaveLength(1)
+    expect(mixed.match(/protocol = "openai-responses"/gu)).toHaveLength(1)
+    expect(() => text('openai_responses', 'openai-chat')).toThrow(/protocol is missing or unsupported/)
+    expect(() => text(undefined as unknown as string, 'openai-chat')).toThrow(/protocol is missing or unsupported/)
+    expect(() => text('openai-chat', undefined as unknown as string)).toThrow(/protocol is missing or unsupported/)
   })
 
   it('passes the credential through one dedicated child env without mutating the fixture env', () => {
@@ -554,6 +581,12 @@ describe('BB09 HTTP projection admission', () => {
     expect(agentIds).toEqual(['peer-1', 'peer-2'])
     expect(agentIds).not.toContain('console')
     expect(response.body.works.map((row: any) => row.workId).sort()).toEqual(['work-peer-1', 'work-peer-2'])
+    // The public HTTP entrypoint republishes the accepted binding from the same
+    // config view without rewriting it.
+    expect(response.body.configs.map((row: any) => row.acceptedBinding)).toEqual([
+      { primary: { providerInstanceId: 'provider-1', modelId: 'model-1' } },
+      { primary: { providerInstanceId: 'provider-1', modelId: 'model-1' } },
+    ])
   })
 })
 
@@ -831,12 +864,12 @@ function passingBoundary(): any {
     sessionEffectiveRevision: 3,
   }
   const snapshot = (acceptedRevision: number, effectiveRevision: number, binding: any, agent: any = manualAgent) => ({
-    config: { acceptedRevision, effectiveRevision, applyState: 'clean' },
+    config: { acceptedRevision, effectiveRevision, applyState: 'clean', acceptedBinding: binding },
     agent,
     binding,
   })
   const invalidApplied = {
-    config: { acceptedRevision: 4, effectiveRevision: 4, applyState: 'clean' },
+    config: { acceptedRevision: 4, effectiveRevision: 4, applyState: 'clean', acceptedBinding: manualBinding },
     agent: { ...manualAgent, sessionEffectiveRevision: 4 },
     binding: manualBinding,
   }
@@ -851,17 +884,17 @@ function passingBoundary(): any {
           providerId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
         reply: { ok: true },
       },
-      accepted_after_bind: { public: { acceptedRevision: 1 }, durable_accepted_revision: 1, binding: originalBinding },
+      accepted_after_bind: { public: { acceptedRevision: 1 }, binding: originalBinding },
       apply: { request: { kind: 'config.apply', agentId: 'bb-provider' }, reply: { ok: true }, agent: baselineAgent },
       settled: snapshot(1, 1, originalBinding, baselineAgent),
     },
     sources: {
-      binding: 'target daemon durable internal store accepted snapshot',
+      binding: 'installed Console /api/v1/projection config row acceptedBinding',
       config: 'installed Console /api/v1/projection config row',
       agent: 'installed Console /api/v1/projection Agent row',
       provider_requests: 'boundary provider stub external request records',
       session_terminal: 'installed Console /api/v1/projection Session events',
-      combination: 'sequential reads cross-checked by accepted revision; not an atomic cross-source snapshot',
+      combination: 'config acceptedBinding and effective revision from one projection response; Agent row validated under the same public read',
     },
     installed_identity: { installed_content_sha256: 'sha-1', expected_content_sha256: 'sha-1' },
     cleanup: { stopped: true, console_listener_gone: true, owned_pids_alive_after_stop: [], temporary_root_removed: true },
@@ -1074,36 +1107,37 @@ describe('BB10 boundary sub-scenario verdicts', () => {
 
 describe('BB10 boundary binding snapshot', () => {
   it('accepts the apply-before projection shape only for the accepted-side baseline snapshot', () => {
-    const config = {
-      agentId: 'bb-provider', acceptedRevision: 1, applyState: 'clean', providers: [],
-    }
-    const agent = { agentId: 'bb-provider', sessionAvailability: 'no-current' }
-    const binding = {
-      accepted_revision: 1,
+    const acceptedBinding = {
       primary: { providerInstanceId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
       backup: { providerInstanceId: sessionBackupProviderId, modelId: sessionBackupModel },
     }
+    const config = {
+      agentId: 'bb-provider', acceptedRevision: 1, applyState: 'clean', acceptedBinding, providers: [],
+    }
+    const agent = { agentId: 'bb-provider', sessionAvailability: 'no-current' }
     const projection = { configs: [config], agents: [agent] }
 
-    expect(boundaryAcceptedBindingSnapshot(projection, 'bb-provider', binding)).toEqual({
+    expect(boundaryAcceptedBindingSnapshot(projection, 'bb-provider')).toEqual({
       config: { acceptedRevision: 1, effectiveRevision: null, applyState: 'clean' },
-      binding: {
-        primary: { providerInstanceId: sessionPrimaryProviderId, modelId: sessionPrimaryModel },
-        backup: { providerInstanceId: sessionBackupProviderId, modelId: sessionBackupModel },
-      },
+      binding: acceptedBinding,
     })
-    expect(() => boundaryAcceptedBindingSnapshot(projection, 'bb-provider', { ...binding, accepted_revision: 0 }))
-      .toThrow(/the durable accepted revision 0 does not match the public config revision 1/)
-    expect(() => boundaryBindingSnapshot(projection, 'bb-provider', binding))
+    expect(() => boundaryAcceptedBindingSnapshot({ configs: [{ ...config, acceptedBinding: null }], agents: [agent] }, 'bb-provider'))
+      .toThrow(/has no accepted primary provider\/model/)
+    expect(() => boundaryBindingSnapshot(projection, 'bb-provider'))
       .toThrow(/the installed config row for bb-provider has no effectiveRevision/)
   })
 
   it('combines cross-checked sources and ignores catalog observation changes', () => {
+    const acceptedBinding = {
+      primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
+      backup: null,
+    }
     const configRow = (catalogState: string) => ({
       agentId: 'bb-provider',
       acceptedRevision: 4,
       effectiveRevision: 4,
       applyState: 'clean',
+      acceptedBinding,
       providers: [{ id: sessionPrimaryProviderId, catalogState, models: [] }],
     })
     const agentRow = {
@@ -1112,25 +1146,17 @@ describe('BB10 boundary binding snapshot', () => {
       modelId: sessionManualModel,
       sessionEffectiveRevision: 4,
     }
-    const binding = {
-      accepted_revision: 4,
-      primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
-      backup: null,
-    }
-    const ready = boundaryBindingSnapshot({ configs: [configRow('ready')], agents: [agentRow] }, 'bb-provider', binding)
-    const errored = boundaryBindingSnapshot({ configs: [configRow('error')], agents: [agentRow] }, 'bb-provider', binding)
+    const ready = boundaryBindingSnapshot({ configs: [configRow('ready')], agents: [agentRow] }, 'bb-provider')
+    const errored = boundaryBindingSnapshot({ configs: [configRow('error')], agents: [agentRow] }, 'bb-provider')
     expect(ready).toEqual(errored)
     expect(ready.config).toEqual({ acceptedRevision: 4, effectiveRevision: 4, applyState: 'clean' })
     expect(ready.agent).toEqual({
       providerId: sessionManualProviderId, modelId: sessionManualModel, sessionEffectiveRevision: 4,
     })
-    expect(ready.binding).toEqual({
-      primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
-      backup: null,
-    })
+    expect(ready.binding).toEqual(acceptedBinding)
   })
 
-  it('fails explicitly when the durable and public accepted revisions disagree', () => {
+  it('fails explicitly when the public config row omits the accepted primary binding', () => {
     const config = {
       agentId: 'bb-provider', acceptedRevision: 4, effectiveRevision: 4, applyState: 'clean', providers: [],
     }
@@ -1138,13 +1164,10 @@ describe('BB10 boundary binding snapshot', () => {
       agentId: 'bb-provider', providerId: sessionManualProviderId, modelId: sessionManualModel,
       sessionEffectiveRevision: 4,
     }
-    const binding = {
-      accepted_revision: 3,
-      primary: { providerInstanceId: sessionManualProviderId, modelId: sessionManualModel },
-      backup: null,
-    }
-    expect(() => boundaryBindingSnapshot({ configs: [config], agents: [agent] }, 'bb-provider', binding))
-      .toThrow(/durable accepted revision 3 does not match the public config revision 4/)
+    expect(() => boundaryBindingSnapshot({ configs: [config], agents: [agent] }, 'bb-provider'))
+      .toThrow(/has no accepted primary provider\/model/)
+    expect(() => boundaryBindingSnapshot({ configs: [config], agents: [agent] }, 'bb-provider'))
+      .toThrow(/bb-provider/)
   })
 })
 

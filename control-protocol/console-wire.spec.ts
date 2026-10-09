@@ -36,6 +36,28 @@ it('validates replies and rejects undeclared or malformed projection fields', ()
   ]) expect(() => parseConsoleWireReply(JSON.stringify(invalid))).toThrow()
 })
 
+it('validates the accepted binding shape and rejects undeclared nested fields', () => {
+  const projection = { version: 1, agents: [], sessions: [], notifications: [],
+    configs: [{ agentId: 'a', acceptedRevision: 1, acceptedBinding: {
+      primary: { providerInstanceId: 'p', modelId: 'm' },
+      backup: { providerInstanceId: 'b', modelId: 'mb' },
+    }, providers: [] }] }
+  const frame = { kind: 'console.projection.result', correlationId: 'r', projection }
+  expect(parseConsoleWireReply(JSON.stringify(frame))).toEqual(frame)
+  expect(parseConsoleWireReply(JSON.stringify({ ...frame, projection: { ...projection,
+    configs: [{ ...projection.configs[0], acceptedBinding: null }] } }))).toMatchObject({ projection: { configs: [{ acceptedBinding: null }] } })
+  expect(parseConsoleWireReply(JSON.stringify({ ...frame, projection: { ...projection,
+    configs: [{ agentId: 'a', acceptedRevision: 1, providers: [] }] } }))).toMatchObject({ projection: { configs: [{ agentId: 'a' }] } })
+  for (const invalid of [
+    { ...projection.configs[0], acceptedBinding: {} },
+    { ...projection.configs[0], acceptedBinding: { primary: { providerInstanceId: 'p' } } },
+    { ...projection.configs[0], acceptedBinding: { primary: { providerInstanceId: '', modelId: 'm' } } },
+    { ...projection.configs[0], acceptedBinding: { primary: { providerInstanceId: 'p', modelId: 'm', credential: 'secret' } } },
+    { ...projection.configs[0], acceptedBinding: { primary: { providerInstanceId: 'p', modelId: 'm' }, backup: { providerInstanceId: 'b', modelId: 'mb', endpoint: 'private' } } },
+    { ...projection.configs[0], acceptedBinding: { primary: { providerInstanceId: 'p', modelId: 'm' }, revision: 1 } },
+  ]) expect(() => parseConsoleWireReply(JSON.stringify({ ...frame, projection: { ...projection, configs: [invalid] } }))).toThrow()
+})
+
 it('closes the Agent observation union and keeps observation decoupled from readiness', () => {
   const base = { version: 1, sessions: [], notifications: [], configs: [] }
   const runtimeCurrent = { kind: 'runtime', agentId: 'a', machineId: 'm', label: 'A', presence: 'online', capabilities: [], sessionCapable: true, sessionAvailability: 'current', sessionEffectiveRevision: 3 }

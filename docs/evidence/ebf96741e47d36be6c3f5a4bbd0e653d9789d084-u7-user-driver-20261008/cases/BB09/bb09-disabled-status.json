@@ -1,0 +1,12 @@
+{
+  "command": "/tmp/agentteams-u7-bb09-oQD4nf/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "status",
+    "--config",
+    "/tmp/agentteams-u7-bb09-oQD4nf/home/.agentteams/config.toml"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "status state=running generation=2 config=/tmp/agentteams-u7-bb09-oQD4nf/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-oQD4nf/home/.agentteams/internal.toml pid=33983 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB09-Provider role=provider presence=online generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB09-Receiver role=receiver presence=online generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=2 consoleCredential=missing\n",
+  "stderr": ""
+}

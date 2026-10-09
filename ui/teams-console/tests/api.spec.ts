@@ -25,6 +25,20 @@ describe('Console HTTP v1 adapter', () => {
     expect(requests).toEqual(['http://localhost:7788/api/v1/projection'])
   })
 
+  it('admits the public accepted binding through the real consumer parser', async () => {
+    const observed = {
+      ...projection,
+      configs: [{
+        agentId: 'planner', acceptedRevision: 2,
+        acceptedBinding: { primary: { providerInstanceId: 'rcc', modelId: 'gpt-5.5' },
+          backup: { providerInstanceId: 'backup', modelId: 'qwen3.8-max' } },
+        providers: [],
+      }],
+    }
+    const client = createConsoleHttpClient({ fetchImpl: async () => new Response(JSON.stringify(observed), { status: 200 }) })
+    await expect(client.readProjection()).resolves.toEqual(observed)
+  })
+
   it('posts only a control command to the command endpoint', async () => {
     let body = ''
     let url = ''

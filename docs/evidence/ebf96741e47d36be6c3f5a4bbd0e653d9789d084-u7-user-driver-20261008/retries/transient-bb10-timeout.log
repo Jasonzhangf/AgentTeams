@@ -1,0 +1,19 @@
+### r19/final.log — lifecycle admission that produced the final pack, then the acceptance run that hit a transient BB10 provider timeout
+
+start 19:47:06 HEAD=3bb440df74e5cf61d95b95de01eb633bf0854b34
+=== pnpm lifecycle:admission (rebuilds the final pack) ===
+
+> agentteams@0.1.0 lifecycle:admission /Volumes/Intel/playground/agentteams/u7-user-driver-20261006
+> node scripts/lifecycle-adapter.mjs
+
+{"ok":true,"idempotent":true,"validation_id":"validation-attempt-1791513055195-2e60c83d-6027-4869-8bb4-114b8d71dd5f"}
+lifecycle:admission exit=0
+=== pack identity ===
+{"mode": "final", "content_sha256": "5442d61ac6eb6d44658067ba946bb7d569c6b9c6ee508fc77d46bac5866596a2", "files": 191, "candidate": {"head_commit": "3bb440df74e5cf61d95b95de01eb633bf0854b34", "base_commit": "ef37e52d6b54c2f1c08c3387aa5fe4f7b2280837", "tree_hash": "ebf96741e47d36be6c3f5a4bbd0e653d9789d084", "indexed_tree_hash": "ebf96741e47d36be6c3f5a4bbd0e653d9789d084", "source_state": "committed"}}
+=== full 14-case acceptance on that pack ===
+{"receipt":"/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/r19/full.receipt.json","cases":[{"case_id":"BB01","status":"passed"},{"case_id":"BB02","status":"passed"},{"case_id":"BB03","status":"passed"},{"case_id":"BB04","status":"passed"},{"case_id":"BB05","status":"passed"},{"case_id":"BB06","status":"passed"},{"case_id":"BB07","status":"passed"},{"case_id":"BB08","status":"passed"},{"case_id":"BB09","status":"passed"},{"case_id":"BB10","status":"failed"},{"case_id":"BB11","status":"passed"},{"case_id":"BB12","status":"passed"},{"case_id":"BB13","status":"passed"},{"case_id":"BB14","status":"passed"}],"exit_code":1}
+full exit=1
+=== pack identity after acceptance (must be unchanged) ===
+5442d61ac6eb6d44658067ba946bb7d569c6b9c6ee508fc77d46bac5866596a2
+end 20:01:34
+?? .appsdk/records/

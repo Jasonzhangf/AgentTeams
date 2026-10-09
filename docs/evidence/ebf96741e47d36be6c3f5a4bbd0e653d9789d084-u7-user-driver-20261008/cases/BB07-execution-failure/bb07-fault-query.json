@@ -1,0 +1,31 @@
+{
+  "command": "/tmp/agentteams-u7-bb07-failure-Z1Yvak/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "query",
+    "--config",
+    "/tmp/agentteams-u7-bb07-failure-Z1Yvak/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--service-selection",
+    "capability",
+    "--work-id",
+    "9c899e0d-27d8-40c6-a59f-029e9e1bf786",
+    "--request-id",
+    "13acfec4-1c2d-4c79-8ceb-c8d83622c5b3",
+    "--provider",
+    "bb-provider",
+    "--provider-generation",
+    "1",
+    "--capability-id",
+    "file-search",
+    "--capability-version",
+    "1",
+    "--operation",
+    "search"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\"status\":\"completed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"executionId\":\"f9d2f4a4-7d7a-4189-9538-542a30335dbb\",\"attemptId\":\"cd94ff69-57f5-45f4-be04-873e3146f5c4\",\"workId\":\"9c899e0d-27d8-40c6-a59f-029e9e1bf786\",\"requestId\":\"13acfec4-1c2d-4c79-8ceb-c8d83622c5b3\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"linkGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"requestState\":\"failed\",\"observed\":true,\"error\":{\"code\":\"UPSTREAM_ERROR\",\"execution\":{\"code\":\"PROCESS_ERROR\",\"exitCode\":null,\"kind\":\"cli\",\"message\":\"/tmp/agentteams-u7-bb07-failure-Z1Yvak/search-barrier-bb07/search-wrapper exited unsuccessfully\",\"signal\":\"SIGTERM\",\"stderr\":\"\",\"stdout\":\"\"},\"message\":\"PROCESS_ERROR: /tmp/agentteams-u7-bb07-failure-Z1Yvak/search-barrier-bb07/search-wrapper exited unsuccessfully\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"completed\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"]}}\n",
+  "stderr": ""
+}

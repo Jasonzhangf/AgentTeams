@@ -1,0 +1,13 @@
+{
+  "liveRegion": "Bind model: accepted by Agent",
+  "drawer": "服务配置服务与模型展开关闭服务配置选择智能体选择智能体BB09-ProviderBB09-Receiver新增服务已接受版本: 1生效版本: 尚未应用BB09 Console Stubbb-console-stub · openai-chat · http://127.0.0.1:59886/v1已加载编辑服务刷新模型选择模型选择模型BB09 Stub Model绑定模型应用配置",
+  "errorPanel": null,
+  "fieldHints": [
+    "能力: file-search",
+    "操作: search",
+    "能力: —",
+    "该智能体未声明任何服务。"
+  ],
+  "bindDisabled": true,
+  "selectValue": ""
+}

@@ -105,10 +105,19 @@ function projection(value: unknown): void {
     optionalString(notice.sessionId); optionalString(notice.permissionId)
   })
   array(input.configs, item => {
-    const config = record(item, ['agentId', 'acceptedRevision', 'effectiveRevision', 'applyState', 'providers', 'error'])
+    const config = record(item, ['agentId', 'acceptedRevision', 'effectiveRevision', 'applyState', 'acceptedBinding', 'providers', 'error'])
     string(config.agentId); revision(config.acceptedRevision)
     if (config.effectiveRevision !== undefined) revision(config.effectiveRevision)
     if (config.applyState !== undefined) choice(config.applyState, ['clean', 'uncertain'])
+    if (config.acceptedBinding !== undefined && config.acceptedBinding !== null) {
+      const binding = record(config.acceptedBinding, ['primary', 'backup'])
+      const bindingRef = (value: unknown): void => {
+        const ref = record(value, ['providerInstanceId', 'modelId'])
+        string(ref.providerInstanceId); string(ref.modelId)
+      }
+      bindingRef(binding.primary)
+      if (binding.backup !== undefined) bindingRef(binding.backup)
+    }
     if (config.error !== undefined) error(config.error)
     array(config.providers, item => {
       const provider = record(item, ['id', 'label', 'protocol', 'apiBaseUrl', 'enabled', 'authKind', 'catalogState', 'models', 'error'])

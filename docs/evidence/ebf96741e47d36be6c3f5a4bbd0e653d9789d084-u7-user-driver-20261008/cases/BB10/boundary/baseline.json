@@ -1,0 +1,87 @@
+{
+  "discovery": {
+    "acceptedRevision": 0,
+    "manual_catalog_state": "empty",
+    "manual_model_count": 0
+  },
+  "bind_model": {
+    "request": {
+      "kind": "config.bindModel",
+      "agentId": "bb-provider",
+      "expectedRevision": 0,
+      "providerId": "bb-primary",
+      "modelId": "bb-primary-model"
+    },
+    "reply": {
+      "ok": true
+    }
+  },
+  "accepted_after_bind": {
+    "public": {
+      "acceptedRevision": 1,
+      "effectiveRevision": null,
+      "applyState": "clean"
+    },
+    "binding": {
+      "primary": {
+        "providerInstanceId": "bb-primary",
+        "modelId": "bb-primary-model"
+      },
+      "backup": {
+        "providerInstanceId": "bb-backup",
+        "modelId": "bb-backup-model"
+      }
+    },
+    "durable_accepted_revision_diagnostic": 1,
+    "effective_revision_reason": "the public effective revision is not published before config.apply"
+  },
+  "apply": {
+    "request": {
+      "kind": "config.apply",
+      "agentId": "bb-provider"
+    },
+    "reply": {
+      "ok": true
+    },
+    "agent": {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB-Session",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "current",
+      "sessionObservation": {
+        "state": "live"
+      },
+      "sessionEffectiveRevision": 1,
+      "providerId": "bb-primary",
+      "modelId": "bb-primary-model"
+    }
+  },
+  "settled": {
+    "config": {
+      "acceptedRevision": 1,
+      "effectiveRevision": 1,
+      "applyState": "clean"
+    },
+    "agent": {
+      "providerId": "bb-primary",
+      "modelId": "bb-primary-model",
+      "sessionEffectiveRevision": 1
+    },
+    "binding": {
+      "primary": {
+        "providerInstanceId": "bb-primary",
+        "modelId": "bb-primary-model"
+      },
+      "backup": {
+        "providerInstanceId": "bb-backup",
+        "modelId": "bb-backup-model"
+      }
+    }
+  }
+}

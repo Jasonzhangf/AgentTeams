@@ -1,0 +1,29 @@
+{
+  "command": "/tmp/agentteams-u7-bb03-yEhUwk/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "open",
+    "--config",
+    "/tmp/agentteams-u7-bb03-yEhUwk/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--provider",
+    "bb-provider",
+    "--provider-generation",
+    "1",
+    "--capability-id",
+    "browser",
+    "--capability-version",
+    "1",
+    "--operation",
+    "context.create",
+    "--demands",
+    "[{\"resourceId\":\"browser-context\",\"amount\":1},{\"resourceId\":\"browser-slot\",\"amount\":1}]",
+    "--payload",
+    "{\"initialUrl\":\"http://127.0.0.1:59252/\"}"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"ecd91985-53d0-4801-a4a4-c67d2caa1fb1\",\"attemptId\":\"cb375344-ea55-4dd6-8b27-5d8a129796f4\",\"workId\":\"6e7722e0-1cfc-42a3-ab0a-a7d898821d27\",\"requestId\":\"1ce98f1b-405b-4bcf-8483-36b3df4444da\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"browser\",\"capabilityVersion\":\"1\",\"operation\":\"context.create\",\"deliveryState\":\"unconfirmed\",\"error\":{\"code\":\"RESULT_UNKNOWN\",\"message\":\"Work reply deadline elapsed; do not replay\",\"deliveryState\":\"unconfirmed\",\"operation\":\"agentWork.request\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"admit-work\",\"request-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"admit-work\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.propose\",\"agentWork.request\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
+}
