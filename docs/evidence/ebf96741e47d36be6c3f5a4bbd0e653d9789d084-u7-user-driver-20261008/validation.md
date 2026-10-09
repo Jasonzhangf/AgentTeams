@@ -133,15 +133,16 @@ binary, whose embedded build directory changes on every rebuild, so a rebuild
 would change the hash without changing product source; the acceptance run was
 therefore performed after the last build.
 
-## Transient provider timeout and retry
+## BB10 dispatch timeout with unresolved root cause
 
-The first acceptance attempt on this package (19:47 → 20:01) failed BB10 with
-`The operation was aborted due to timeout` after `session.create` and the session
-open succeeded. The RCC endpoint answered `/v1/models` with HTTP 200 in 2.8 ms at
-that moment, and the same single case passed alone at 20:07:49 → 20:10:40. The
-120 s dispatch boundary is the contract value and was not changed. The full
-`--case all` run was then repeated on the same package and candidate and passed
-all 14 cases. Raw records: `retries/`.
+The first BB10 dispatch timed out within the contract's 120 s boundary. At that
+point `session.create` and the session open had already succeeded; at the same
+moment the RCC endpoint answered `/v1/models` with HTTP 200 in 2.8 ms, and the
+same single case later passed alone (20:07:49 → 20:10:40) and again inside the
+full `--case all` run on the same package. These facts **cannot distinguish**
+provider, Console, Agent, managed child or transport causes; the root cause is
+**unconfirmed**. The 120 s boundary is the contract value and was not changed.
+Raw records: `retries/`.
 
 ## Companion records
 
