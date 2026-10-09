@@ -5009,7 +5009,7 @@ async function runBB13(context) {
     const runPhase = (name, before) => {
       const run = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, `${name}.json`))
       assert(run.status === 0, `BB13 ${name} invocation did not pass: ${run.stdout}${run.stderr}`)
-      const store = readLifecycleState(fixtureRoot)
+      store = readLifecycleState(fixtureRoot)
       const after = { state: store.state, counts: pnpmInvocationCounts(proofDir) }
       const delta = bb13PhaseDelta(before, { state: store.state, counts: after.counts })
       observations.push({
