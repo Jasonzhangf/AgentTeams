@@ -35,6 +35,8 @@ import {
   createSessionProviderStub,
   exitCode,
   listenProviderStub,
+  listenerProbe,
+  listenerSocketsByPid,
   parseArgs,
   parseCanonicalProviderSource,
   parseFlatSecretKey,
@@ -365,6 +367,41 @@ describe('blackbox user MVP driver interface', () => {
       .toEqual({ state: 'gone', pids: [], reason: 'no-match' })
     expect(summarizeListenerProbe({ state: 'unknown', pids: [], reason: 'query-failed' }))
       .toEqual({ state: 'unknown', pids: [], reason: 'query-failed' })
+  })
+
+  it('reads lsof exit 1 with no output as a known empty listener set, not as unknown', async () => {
+    // lsof exits 1 with empty stdout and empty stderr when it matched no files.
+    // For a specific PID that is the real "this PID holds no listening socket"
+    // answer. A subject that is alive with no listener, and one that is gone,
+    // must both land on a known result so a released resource is not reported as
+    // unconfirmed. A missing tool / failed spawn stays unknown.
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    await new Promise<void>(resolveSpawn => child.once('spawn', () => resolveSpawn()))
+    const livePid = child.pid as number
+    try {
+      const live = listenerSocketsByPid(livePid)
+      expect(live.state).toBe('known')
+      expect(live.sockets).toEqual([])
+
+      child.kill('SIGKILL')
+      await new Promise<void>(resolveExit => child.once('exit', () => resolveExit()))
+      const gone = listenerSocketsByPid(livePid)
+      expect(gone.state).toBe('known')
+      expect(gone.sockets).toEqual([])
+
+      const unknown = listenerSocketsByPid(-1)
+      expect(unknown.state).toBe('unknown')
+      expect(unknown.reason).toBe('invalid-pid')
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+    }
+  })
+
+  it('reads a closed port as gone while a query failure stays unknown', () => {
+    // A port with no listener is a known release (no-match), not an unknown.
+    const closed = listenerProbe(1)
+    expect(closed.state).toBe('gone')
+    expect(closed.reason).toBe('no-match')
   })
 })
 

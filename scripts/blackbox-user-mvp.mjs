@@ -432,7 +432,6 @@ function listenerSocketsByPid(pid) {
     maxBuffer: 4 * 1024 * 1024,
   })
   if (result.error !== undefined) return { state: 'unknown', sockets: [], reason: 'query-failed' }
-  if (result.status !== 0) return { state: 'unknown', sockets: [], reason: 'query-failed' }
   const sockets = []
   for (const line of result.stdout.split('\n')) {
     if (line.startsWith('n')) {
@@ -440,7 +439,14 @@ function listenerSocketsByPid(pid) {
       if (address !== '') sockets.push(address)
     }
   }
-  return { state: 'known', sockets, reason: 'lsof-pid' }
+  if (result.status === 0) return { state: 'known', sockets, reason: 'lsof-pid' }
+  // `lsof` exits 1 with empty stdout and empty stderr when it matched no files,
+  // which for one specific PID is the real "this PID holds no listening socket"
+  // answer. Any other non-zero exit is a genuine query failure and stays unknown.
+  if (result.status === 1 && sockets.length === 0 && result.stderr.trim() === '') {
+    return { state: 'known', sockets: [], reason: 'no-match' }
+  }
+  return { state: 'unknown', sockets, reason: 'query-failed' }
 }
 
 /** Split one `ps` command line without invoking a shell. */
@@ -544,7 +550,9 @@ function listenerProbe(port) {
   if (result.status === 0 && text !== '') {
     return { state: 'listening', pids: text.split(/\s+/u).map(Number).filter(Number.isSafeInteger), reason: 'lsof' }
   }
-  if ((result.status === 0 && text === '') || (result.status === 1 && text === '')) {
+  // Exit 1 with empty stdout and empty stderr is lsof's "no matching files"
+  // answer; exit 1 with a diagnostic on stderr is a failed query, not a closure.
+  if ((result.status === 0 || result.status === 1) && text === '' && result.stderr.trim() === '') {
     return { state: 'gone', pids: [], reason: 'no-match' }
   }
   return { state: 'unknown', pids: [], reason: 'query-failed' }
@@ -7368,6 +7376,8 @@ export {
   findEvidenceViolation,
   createSessionProviderStub,
   listenProviderStub,
+  listenerProbe,
+  listenerSocketsByPid,
   parseArgs,
   parseCanonicalProviderSource,
   parseFlatSecretKey,
