@@ -1,0 +1,10 @@
+{
+  "command": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node",
+  "args": [
+    "scripts/lifecycle-adapter.mjs"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\"ok\":true,\"idempotent\":true,\"validation_id\":\"validation-attempt-1791516004963-dce897a4-5142-4176-9e58-5ad2750c9adf\"}\n",
+  "stderr": ""
+}

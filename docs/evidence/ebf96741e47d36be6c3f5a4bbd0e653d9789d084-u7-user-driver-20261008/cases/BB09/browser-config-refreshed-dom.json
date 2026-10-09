@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-main-7253",
+    "--script",
+    "JSON.stringify({ catalog: document.querySelector('article.teams-provider-card .teams-catalog-state')?.textContent ?? null, models: [...document.querySelectorAll('article.teams-provider-card select.teams-select option')].map(option => option.value), selectedAgent: document.querySelector('div.teams-config-toolbar select.teams-select')?.value ?? null, liveRegion: document.querySelector('.teams-live-region')?.textContent ?? null, liveRegionIsError: document.querySelector('.teams-live-region')?.classList.contains('is-error') ?? false, refreshDisabled: document.querySelector('article.teams-provider-card .teams-provider-actions button:nth-of-type(2)')?.disabled ?? null })"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-7253\",\n  \"target\": \"t_117af7262e14\",\n  \"result\": \"{\\\"catalog\\\":\\\"已加载\\\",\\\"models\\\":[\\\"\\\",\\\"bb-console-model\\\"],\\\"selectedAgent\\\":\\\"bb-provider\\\",\\\"liveRegion\\\":\\\"Refresh models: accepted by Agent\\\",\\\"liveRegionIsError\\\":false,\\\"refreshDisabled\\\":false}\",\n  \"issuedAt\": \"2026-10-09T03:15:15.102Z\",\n  \"traceId\": \"cli-1791515715063\"\n}\n",
+  "stderr": ""
+}

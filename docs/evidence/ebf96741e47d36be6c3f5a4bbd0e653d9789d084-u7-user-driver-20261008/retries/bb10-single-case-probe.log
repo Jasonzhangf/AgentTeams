@@ -1,0 +1,4 @@
+start 20:07:49
+{"receipt":"/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/r19/bb10probe.receipt.json","cases":[{"case_id":"BB10","status":"passed"}],"exit_code":0}
+bb10 exit=0
+end 20:10:40

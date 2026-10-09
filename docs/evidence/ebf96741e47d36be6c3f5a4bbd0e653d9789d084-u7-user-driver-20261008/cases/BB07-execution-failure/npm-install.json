@@ -1,0 +1,17 @@
+{
+  "command": "npm",
+  "args": [
+    "install",
+    "--prefix",
+    "/tmp/agentteams-u7-bb07-failure-Z1Yvak/prefix",
+    "--no-audit",
+    "--no-fund",
+    "--no-package-lock",
+    "--no-save",
+    "/tmp/agentteams-u7-bb07-failure-Z1Yvak/pack/agentteams-0.1.0.tgz"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "\nadded 10 packages in 4s\n",
+  "stderr": ""
+}

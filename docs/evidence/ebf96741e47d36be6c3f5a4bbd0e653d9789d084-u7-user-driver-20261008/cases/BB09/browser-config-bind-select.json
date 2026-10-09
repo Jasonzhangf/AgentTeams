@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-main-7253",
+    "--script",
+    "JSON.stringify((() => { const select = document.querySelector('article.teams-provider-card select.teams-select'); if (select === null) return { selectValue: null, bindDisabled: null, liveRegion: null, liveRegionIsError: null }; select.value = \"bb-console-model\"; select.dispatchEvent(new Event('change', { bubbles: true })); return { selectValue: select.value, bindDisabled: document.querySelector('article.teams-provider-card .teams-model-row .teams-button-primary')?.disabled ?? null, liveRegion: document.querySelector('.teams-live-region')?.textContent ?? null, liveRegionIsError: document.querySelector('.teams-live-region')?.classList.contains('is-error') ?? null } })())"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-7253\",\n  \"target\": \"t_117af7262e14\",\n  \"result\": \"{\\\"selectValue\\\":\\\"bb-console-model\\\",\\\"bindDisabled\\\":false,\\\"liveRegion\\\":\\\"Refresh models: accepted by Agent\\\",\\\"liveRegionIsError\\\":false}\",\n  \"issuedAt\": \"2026-10-09T03:15:16.054Z\",\n  \"traceId\": \"cli-1791515716018\"\n}\n",
+  "stderr": ""
+}

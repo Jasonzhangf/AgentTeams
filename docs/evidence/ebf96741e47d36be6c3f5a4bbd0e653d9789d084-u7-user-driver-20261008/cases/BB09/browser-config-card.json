@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-main-7253",
+    "--script",
+    "JSON.stringify({ selected: document.querySelector('div.teams-config-toolbar select.teams-select')?.value ?? null, providers: [...document.querySelectorAll('article.teams-provider-card')].map(card => ({ text: card.textContent ?? '', catalog: card.querySelector('.teams-catalog-state')?.textContent ?? null })) })"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-7253\",\n  \"target\": \"t_117af7262e14\",\n  \"result\": \"{\\\"selected\\\":\\\"bb-provider\\\",\\\"providers\\\":[{\\\"text\\\":\\\"BB09 Console Stubbb-console-stub · openai-chat · http://127.0.0.1:59886/v1已加载编辑服务刷新模型选择模型选择模型BB09 Stub Model绑定模型\\\",\\\"catalog\\\":\\\"已加载\\\"}]}\",\n  \"issuedAt\": \"2026-10-09T03:15:13.409Z\",\n  \"traceId\": \"cli-1791515713372\"\n}\n",
+  "stderr": ""
+}

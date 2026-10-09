@@ -1,0 +1,123 @@
+{
+  "prompt": "bb10 boundary no implicit failover probe",
+  "session": {
+    "ok": true,
+    "result": {
+      "kind": "session.create",
+      "agentId": "bb-provider",
+      "sessionId": "ses_ee1560600ffeiuImqVOSxwTmFs",
+      "title": "BB10 boundary no implicit failover",
+      "directory": "/private/tmp/agentteams-u7-bb10-boundary-nFi459/home/.agentteams/data/bb-provider",
+      "time": {
+        "created": 1791515818495,
+        "updated": 1791515818495
+      }
+    }
+  },
+  "warmup": {
+    "dispatch": {
+      "ok": true
+    },
+    "final": {
+      "eventId": "message.updated:ses_ee1560600ffeiuImqVOSxwTmFs:msg_11ea9fb490017nZXMQRsDrTjPA",
+      "sessionId": "ses_ee1560600ffeiuImqVOSxwTmFs",
+      "agentId": "bb-provider",
+      "kind": "final",
+      "state": "completed",
+      "messageId": "msg_11ea9fb490017nZXMQRsDrTjPA",
+      "finish": "stop"
+    },
+    "text": "bb-session-provider-ok"
+  },
+  "dispatch": {
+    "ok": true
+  },
+  "bound_provider_request": {
+    "model": "bb-manual-model",
+    "prompt": "bb10 boundary no implicit failover probe",
+    "status": 500
+  },
+  "failed_final": {
+    "eventId": "message.updated:ses_ee1560600ffeiuImqVOSxwTmFs:msg_11ea9fd84001qDCUmZdPA1G8Sz",
+    "sessionId": "ses_ee1560600ffeiuImqVOSxwTmFs",
+    "agentId": "bb-provider",
+    "kind": "final",
+    "state": "failed",
+    "messageId": "msg_11ea9fd84001qDCUmZdPA1G8Sz",
+    "error": {
+      "name": "APIError",
+      "data": {
+        "message": "bb session provider stub failure",
+        "statusCode": 500,
+        "isRetryable": true,
+        "responseHeaders": {
+          "connection": "keep-alive",
+          "content-type": "application/json",
+          "date": "Fri, 09 Oct 2026 03:18:07 GMT",
+          "keep-alive": "timeout=5",
+          "transfer-encoding": "chunked"
+        },
+        "responseBody": "{\"error\":{\"message\":\"bb session provider stub failure\",\"type\":\"api_error\"}}",
+        "metadata": {
+          "url": "http://127.0.0.1:61091/v1/chat/completions"
+        }
+      }
+    }
+  },
+  "failed_finals_before": 0,
+  "failed_finals_after": 1,
+  "accepted_revision_before": 4,
+  "effective_revision_before": 4,
+  "accepted_revision_after": 4,
+  "effective_revision_after": 4,
+  "snapshot_before": {
+    "config": {
+      "acceptedRevision": 4,
+      "effectiveRevision": 4,
+      "applyState": "clean"
+    },
+    "agent": {
+      "providerId": "bb-manual",
+      "modelId": "bb-manual-model",
+      "sessionEffectiveRevision": 4
+    },
+    "binding": {
+      "primary": {
+        "providerInstanceId": "bb-manual",
+        "modelId": "bb-manual-model"
+      },
+      "backup": {
+        "providerInstanceId": "bb-backup",
+        "modelId": "bb-backup-model"
+      }
+    }
+  },
+  "snapshot_after": {
+    "config": {
+      "acceptedRevision": 4,
+      "effectiveRevision": 4,
+      "applyState": "clean"
+    },
+    "agent": {
+      "providerId": "bb-manual",
+      "modelId": "bb-manual-model",
+      "sessionEffectiveRevision": 4
+    },
+    "binding": {
+      "primary": {
+        "providerInstanceId": "bb-manual",
+        "modelId": "bb-manual-model"
+      },
+      "backup": {
+        "providerInstanceId": "bb-backup",
+        "modelId": "bb-backup-model"
+      }
+    }
+  },
+  "primary_inference_requests_before": 0,
+  "primary_inference_requests_after": 0,
+  "backup_inference_requests_before": 0,
+  "backup_inference_requests_after": 0,
+  "manual_inference_requests_before": 2,
+  "manual_inference_requests_after": 8
+}

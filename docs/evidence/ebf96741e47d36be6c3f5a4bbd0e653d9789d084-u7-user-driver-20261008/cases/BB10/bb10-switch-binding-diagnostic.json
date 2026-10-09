@@ -1,0 +1,11 @@
+{
+  "accepted_revision": 2,
+  "primary": {
+    "providerInstanceId": "goaichat-openai",
+    "modelId": "qwen3.8-max"
+  },
+  "backup": {
+    "providerInstanceId": "rcc-4444",
+    "modelId": "goaichat_openai.qwen3.8-max"
+  }
+}
