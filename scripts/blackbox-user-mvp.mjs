@@ -28,6 +28,8 @@ export const exitCode = Object.freeze({ passed: 0, failed: 1, unverified: 2 })
 
 // The BB09 installed Console fixture owns one credential reference. The value
 // only exists in this process environment and in the isolated installed HOME.
+// The password value is registered with the evidence boundary so no evidence
+// sink can persist it; only the user name, env name and length stay recordable.
 const consoleUsername = 'bb-console'
 const consolePasswordEnv = 'AGENTTEAMS_BB_CONSOLE_PASSWORD'
 const consolePassword = 'bb-console-pass'
@@ -62,7 +64,10 @@ Exit codes: 0 passed, 1 failed, 2 unverified`
 }
 
 function fail(message) {
-  throw new Error(`blackbox-user-mvp: ${message}`)
+  // Every thrown driver error passes through here, so any subprocess text a
+  // caller embedded is replaced by the safe substitute before it becomes an
+  // `Error.message`. A clean message is returned unchanged.
+  throw new Error(`blackbox-user-mvp: ${safeSubprocessText(String(message), 'thrown-error')}`)
 }
 
 function assert(condition, message) {
@@ -81,7 +86,197 @@ function sha256File(path) {
   return sha256(readFileSync(path))
 }
 
+// ---------------------------------------------------------------------------
+// Single evidence boundary. One run-level, in-memory registry of the sensitive
+// values this run provisioned, plus one detection/rejection implementation that
+// every evidence sink funnels through. The registry is never serialized and the
+// values are only ever used for exact containment checks.
+// ---------------------------------------------------------------------------
+
+const EVIDENCE_BOUNDARY_PREFIX = 'blackbox-user-mvp: evidence boundary rejected'
+
+// Auth-field JSON keys are matched case-insensitively with `_`/`-`/space
+// variants collapsed. These name a material value; public references such as
+// `auth.kind`, `credentialRef`, `auth_alias`, `secret_key`, `secret_file` and
+// `credential_env` are deliberately absent and stay recordable.
+const evidenceAuthFieldKeys = new Set([
+  'authorization',
+  'proxyauthorization',
+  'xapikey',
+  'apikey',
+  'accesstoken',
+  'refreshtoken',
+  'bearertoken',
+  'password',
+  'clientsecret',
+  'credentialvalue',
+  'authorizationheader',
+])
+
+// `Basic`/`Bearer` followed by a token-shaped literal of at least 12 characters
+// that contains at least one digit or symbol. Real tokens (JWT, base64, API key)
+// carry a `-`/`_`/`.`/`+`/`/`/`=` or a digit; an English word such as
+// `authentication` or a bare challenge phrase such as `Basic realm="..."` does
+// not, so neither is mistaken for authentication material.
+const evidenceAuthValuePattern = /(?:\bBasic[ \t\r\n]+|\bBearer[ \t\r\n]+)([A-Za-z0-9\-._~+/=]{12,})/gu
+const evidenceAuthValueShapePattern = /[0-9\-._~+/=]/u
+// A quoted JSON scalar (`:"value"`) or a bare unquoted scalar (`:value`) where
+// `value` starts with an alphanumeric or a `$`/`_`/`.`. Unquoted matches stop at
+// whitespace or a structural character, so an auth-kind string is not a value.
+const evidenceJsonAuthFieldPattern = /"([^"\\]*)"[ \t\r\n]*:[ \t\r\n]*(?:"((?:[^"\\]|\\.)*)"|([A-Za-z0-9$_.][A-Za-z0-9$_.\-+/=]*))/gu
+
+const evidenceSecretRegistry = new Set()
+
+/** Register one provisioned sensitive value. Only non-empty strings count, and a registered value can never be withdrawn. */
+function registerEvidenceSecret(value) {
+  if (typeof value === 'string' && value.length > 0) evidenceSecretRegistry.add(value)
+}
+
+function normalizeEvidenceAuthKey(key) {
+  return key.toLowerCase().replace(/[_\-\s]/gu, '')
+}
+
+function evidenceAuthFieldViolation(text) {
+  for (const match of text.matchAll(evidenceJsonAuthFieldPattern)) {
+    if (!evidenceAuthFieldKeys.has(normalizeEvidenceAuthKey(match[1]))) continue
+    const value = match[2] !== undefined ? match[2] : match[3]
+    if (value !== undefined && value !== '') return 'auth-field'
+  }
+  return undefined
+}
+
+function evidenceAuthValueViolation(text) {
+  for (const match of text.matchAll(evidenceAuthValuePattern)) {
+    if (match[1].length >= 12 && evidenceAuthValueShapePattern.test(match[1])) return 'auth-value'
+  }
+  return undefined
+}
+
+/**
+ * Return a safe violation category for one text blob, or `undefined` when the
+ * text is clean. Only the category is ever returned: never the offending value.
+ */
+function findEvidenceViolation(text) {
+  if (typeof text !== 'string' || text.length === 0) return undefined
+  for (const secret of evidenceSecretRegistry) {
+    if (text.includes(secret)) return 'registered-credential'
+  }
+  return evidenceAuthFieldViolation(text) ?? evidenceAuthValueViolation(text)
+}
+
+/** Recursively collect the string form of every key and value, so nested arrays/objects are covered. */
+function collectEvidenceStrings(value, sink) {
+  if (typeof value === 'string') {
+    sink.push(value)
+    return
+  }
+  if (value === null || value === undefined || typeof value !== 'object') return
+  if (Array.isArray(value)) {
+    for (const item of value) collectEvidenceStrings(item, sink)
+    return
+  }
+  for (const [key, item] of Object.entries(value)) {
+    sink.push(key)
+    collectEvidenceStrings(item, sink)
+  }
+}
+
+function evidenceBoundaryRejection(sink, caseId, category) {
+  const suffix = [category, sink, caseId].filter(part => typeof part === 'string' && part.length > 0).join(' ')
+  const error = new Error(`${EVIDENCE_BOUNDARY_PREFIX}: ${suffix}`)
+  error.evidenceBoundaryRejected = true
+  error.evidenceCategory = category
+  error.evidenceSink = sink
+  if (typeof caseId === 'string') error.evidenceCaseId = caseId
+  return error
+}
+
+function activeEvidenceCaseId() {
+  return evidenceBoundaryContext?.caseId
+}
+
+/** Reject a JSON value that carries a registered value or auth material before any file is created or replaced. */
+function ensureEvidenceWritability(_path, value, options = {}) {
+  const sink = options.sink ?? 'writeJson'
+  const caseId = options.caseId ?? activeEvidenceCaseId()
+  // Scan the serialized structure so object/array keys and values are covered in
+  // their real JSON shape (`"authorization": "..."`, nested `Bearer <token>`).
+  let serialized
+  try {
+    serialized = JSON.stringify(value)
+  } catch {
+    serialized = undefined
+  }
+  if (typeof serialized === 'string') {
+    const category = findEvidenceViolation(serialized)
+    if (category !== undefined) throw evidenceBoundaryRejection(sink, caseId, category)
+  }
+  // Scan each raw string too, so a registered value carrying JSON-special
+  // characters (which serialization escapes) is still an exact containment hit.
+  const strings = []
+  collectEvidenceStrings(value, strings)
+  for (const text of strings) {
+    const category = findEvidenceViolation(text)
+    if (category !== undefined) throw evidenceBoundaryRejection(sink, caseId, category)
+  }
+}
+
+/**
+ * Guard text that would otherwise be embedded in an up-thrown error message or
+ * passed upward. On a hit the caller keeps its own control flow; the offending
+ * text is replaced by a fixed, safe substitute that names only sink/case/category.
+ */
+function safeSubprocessText(text, sink, caseId = activeEvidenceCaseId()) {
+  const category = findEvidenceViolation(text)
+  if (category === undefined) return text
+  return `<evidence boundary rejected ${[category, sink, caseId].filter(Boolean).join(' ')}>`
+}
+
+/**
+ * Fail a runner path with a fixed, safe boundary error when the candidate text
+ * carries sensitive material; otherwise fail with the given message. The
+ * original text never reaches the thrown Error.
+ */
+function failGuarded(message, text, sink) {
+  const category = findEvidenceViolation(text)
+  if (category !== undefined) throw evidenceBoundaryRejection(sink, activeEvidenceCaseId(), category)
+  fail(message)
+}
+
+/**
+ * Which evidence sink/case currently owns writes. `runCases` sets the case
+ * before invoking a case runner; nothing here inspects or mutates case state.
+ */
+let evidenceBoundaryContext
+
+async function withEvidenceCase(caseId, run) {
+  const previous = evidenceBoundaryContext
+  evidenceBoundaryContext = caseId === undefined ? undefined : { caseId }
+  try {
+    return await run()
+  } finally {
+    evidenceBoundaryContext = previous
+  }
+}
+
+/**
+ * Reduce any thrown value to a safe message string. A message that carries a
+ * registered value or auth material is replaced by the fixed boundary text so
+ * the original content can never reach a receipt, terminal or log.
+ */
+function safeErrorMessage(value, sink = 'propagated-error', caseId = activeEvidenceCaseId()) {
+  const text = value instanceof Error ? value.message : String(value)
+  const category = findEvidenceViolation(text)
+  if (category === undefined) return text
+  return `${EVIDENCE_BOUNDARY_PREFIX}: ${[category, sink, caseId].filter(Boolean).join(' ')}`
+}
+
+// The driver's own generated Console Basic password is registered once, before
+// any BB09/BB10/BB12 fixture starts, and stays registered for the run.
+registerEvidenceSecret(consolePassword)
+
 function writeJson(path, value) {
+  ensureEvidenceWritability(path, value)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
 }
@@ -107,10 +302,12 @@ function run(command, args, options = {}) {
   }
   if (options.logPath !== undefined) writeJson(options.logPath, output)
   if (options.expectStatus !== undefined && result.status !== options.expectStatus) {
-    fail(`${command} ${args.join(' ')} exited ${result.status}; expected ${options.expectStatus}\n${output.stderr || output.stdout}`)
+    failGuarded(`${command} ${args.join(' ')} exited ${result.status}; expected ${options.expectStatus}\n${result.stderr || result.stdout || ''}`,
+      result.stderr || result.stdout || '', 'run-failure-detail')
   }
   if (options.expectNonZero === true && (result.status === 0 || result.status === null)) {
-    fail(`${command} ${args.join(' ')} unexpectedly succeeded\n${output.stdout}${output.stderr}`)
+    failGuarded(`${command} ${args.join(' ')} unexpectedly succeeded\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      `${result.stdout ?? ''}${result.stderr ?? ''}`, 'run-failure-detail')
   }
   return output
 }
@@ -153,22 +350,36 @@ function runAsync(command, args, options = {}) {
 }
 
 function processAlive(pid) {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return false
+  return processProbe(pid).state !== 'gone'
+}
+
+function processProbe(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return { state: 'unknown', reason: 'invalid-pid' }
   try {
     process.kill(pid, 0)
-    return true
+    return { state: 'alive', reason: 'signal-0' }
   } catch (error) {
-    return error?.code === 'EPERM'
+    if (error?.code === 'ESRCH') return { state: 'gone', reason: 'not-found' }
+    return { state: 'unknown', reason: error?.code ?? 'query-failed' }
   }
 }
 
-function processState(pid) {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+function processStateProbe(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return { state: 'unknown', reason: 'invalid-pid' }
   const result = spawnSync('ps', ['-p', String(pid), '-o', 'state='], {
     encoding: 'utf8',
     maxBuffer: 1024 * 1024,
   })
-  return result.status === 0 ? result.stdout.trim() : undefined
+  if (result.error !== undefined) return { state: 'unknown', reason: 'query-failed' }
+  const state = result.stdout.trim()
+  if (result.status === 0 && state !== '') return { state: 'present', reason: 'ps', value: state }
+  if (result.status === 1 && state === '') return { state: 'gone', reason: 'not-found' }
+  return { state: 'unknown', reason: 'query-failed' }
+}
+
+function processState(pid) {
+  const probe = processStateProbe(pid)
+  return probe.state === 'present' ? probe.value : undefined
 }
 
 function processCommandLine(pid) {
@@ -189,6 +400,53 @@ function processParentPid(pid) {
   })
   const parent = Number(result.status === 0 ? result.stdout.trim() : '')
   return Number.isSafeInteger(parent) && parent > 0 ? parent : undefined
+}
+
+/**
+ * Direct children of one PID. A missing tool or a failed `pgrep` spawn is
+ * `unknown`; for a live parent an empty result is the real "no child" answer,
+ * which is only evidence for a PID we could actually reach.
+ */
+function directChildren(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return { state: 'unknown', pids: [], reason: 'invalid-pid' }
+  if (processProbe(pid).state === 'unknown') return { state: 'unknown', pids: [], reason: 'parent-not-observable' }
+  const result = spawnSync('pgrep', ['-P', String(pid)], {
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+  })
+  if (result.error !== undefined) return { state: 'unknown', pids: [], reason: 'query-failed' }
+  if (result.status !== 0) return { state: 'known', pids: [], reason: 'pgrep-no-match' }
+  const pids = result.stdout.split(/\s+/u).map(Number).filter(candidate => Number.isSafeInteger(candidate) && candidate > 0)
+  return { state: 'known', pids, reason: 'pgrep-parent' }
+}
+
+/**
+ * Listening sockets owned by one PID, found by proving the socket belongs to the
+ * PID rather than by guessing a port number. `unknown` means the query could not
+ * answer, which is not the same as "no listener".
+ */
+function listenerSocketsByPid(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return { state: 'unknown', sockets: [], reason: 'invalid-pid' }
+  const result = spawnSync('lsof', ['-a', '-p', String(pid), '-iTCP', '-sTCP:LISTEN', '-nP', '-F', 'pn'], {
+    encoding: 'utf8',
+    maxBuffer: 4 * 1024 * 1024,
+  })
+  if (result.error !== undefined) return { state: 'unknown', sockets: [], reason: 'query-failed' }
+  const sockets = []
+  for (const line of result.stdout.split('\n')) {
+    if (line.startsWith('n')) {
+      const address = line.slice(1).trim()
+      if (address !== '') sockets.push(address)
+    }
+  }
+  if (result.status === 0) return { state: 'known', sockets, reason: 'lsof-pid' }
+  // `lsof` exits 1 with empty stdout and empty stderr when it matched no files,
+  // which for one specific PID is the real "this PID holds no listening socket"
+  // answer. Any other non-zero exit is a genuine query failure and stays unknown.
+  if (result.status === 1 && sockets.length === 0 && result.stderr.trim() === '') {
+    return { state: 'known', sockets: [], reason: 'no-match' }
+  }
+  return { state: 'unknown', sockets, reason: 'query-failed' }
 }
 
 /** Split one `ps` command line without invoking a shell. */
@@ -228,14 +486,38 @@ function commandOwnsInstalledEntry(command, entryPath, configPath, startToken) {
     args[entryIndex + 3] === '--launcher-start-token' && args[entryIndex + 4] === startToken
 }
 
+/**
+ * Bounded, non-throwing settle: the installed stop returns once the launcher
+ * reaches its terminal state, but the Relay/Agent children can take a moment
+ * longer to be reaped. The shared stop observation reads the settled state, so
+ * a slow reap is not recorded as a phantom leak. `unknown` stops the wait and
+ * is left for the outcome classifier to treat as unconfirmed.
+ */
+async function settleProcessesGone(pids, timeoutMs = 5_000) {
+  if (pids.length === 0) return
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const probes = pids.map(pid => processProbe(pid))
+    if (probes.some(probe => probe.state === 'unknown')) return
+    if (probes.every(probe => probe.state === 'gone')) return
+    await new Promise(resolveDelay => setTimeout(resolveDelay, 25))
+  }
+}
+
 async function waitForProcessesGone(pids, timeoutMs = 5_000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    if (pids.every(pid => !processAlive(pid))) return
+    const probes = pids.map(pid => ({ pid, probe: processProbe(pid) }))
+    const unknown = probes.filter(item => item.probe.state === 'unknown')
+    if (unknown.length > 0) {
+      fail(`owned process cleanup is unconfirmed: ${unknown.map(item => `${item.pid}:${item.probe.reason}`).join(', ')}`)
+    }
+    if (probes.every(item => item.probe.state === 'gone')) return
     await new Promise(resolveDelay => setTimeout(resolveDelay, 25))
   }
-  const alive = pids.filter(pid => processAlive(pid))
-  fail(`owned process cleanup is unconfirmed: ${alive.join(', ')}`)
+  const probes = pids.map(pid => ({ pid, probe: processProbe(pid) }))
+  const unresolved = probes.filter(item => item.probe.state !== 'gone')
+  fail(`owned process cleanup is unconfirmed: ${unresolved.map(item => `${item.pid}:${item.probe.state}${item.probe.reason === undefined ? '' : `:${item.probe.reason}`}`).join(', ')}`)
 }
 
 function parseCliStatus(stdout) {
@@ -258,20 +540,298 @@ function parseCliStatus(stdout) {
   }
 }
 
-function listeningPids(port) {
+function listenerProbe(port) {
   const result = spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], {
     encoding: 'utf8',
     maxBuffer: 4 * 1024 * 1024,
   })
-  if (result.status !== 0 || result.stdout.trim() === '') return []
-  return result.stdout.trim().split(/\s+/u).map(Number).filter(Number.isSafeInteger)
+  if (result.error !== undefined) return { state: 'unknown', pids: [], reason: 'query-failed' }
+  const text = result.stdout.trim()
+  if (result.status === 0 && text !== '') {
+    return { state: 'listening', pids: text.split(/\s+/u).map(Number).filter(Number.isSafeInteger), reason: 'lsof' }
+  }
+  // Exit 1 with empty stdout and empty stderr is lsof's "no matching files"
+  // answer; exit 1 with a diagnostic on stderr is a failed query, not a closure.
+  if ((result.status === 0 || result.status === 1) && text === '' && result.stderr.trim() === '') {
+    return { state: 'gone', pids: [], reason: 'no-match' }
+  }
+  return { state: 'unknown', pids: [], reason: 'query-failed' }
+}
+
+function listeningPids(port) {
+  return listenerProbe(port).pids
+}
+
+/** Probe one already-observed listener address, optionally requiring a PID match. */
+function listenerSocketProbeByAddress(address, expectedPid) {
+  if (!Number.isSafeInteger(expectedPid) || expectedPid <= 0) {
+    return { state: 'unknown', pids: [], reason: 'no-expected-pid' }
+  }
+  const sockets = listenerSocketsByPid(expectedPid)
+  if (sockets.state !== 'known') {
+    return { state: 'unknown', pids: [], reason: sockets.reason }
+  }
+  const present = sockets.sockets.some(socket => socket === address)
+  return present
+    ? { state: 'listening', pids: [expectedPid], reason: 'lsof-pid' }
+    : { state: 'gone', pids: [], reason: 'pid-listener-gone' }
 }
 
 function assertPortsClosed(ports) {
   const open = Object.entries(ports)
-    .map(([id, port]) => ({ id, port, pids: listeningPids(port) }))
-    .filter(item => item.pids.length > 0)
+    .map(([id, port]) => ({ id, port, probe: listenerProbe(port) }))
+    .filter(item => item.probe.state !== 'gone')
   assert(open.length === 0, `owned listeners remain: ${JSON.stringify(open)}`)
+}
+
+function summarizeProcessProbe(probe) {
+  return { state: probe.state, reason: probe.reason }
+}
+
+function summarizeListenerProbe(probe) {
+  return { state: probe.state, pids: probe.pids, reason: probe.reason }
+}
+
+function cleanupOutcome(input) {
+  if (input.processState === 'alive' || input.listenerState === 'listening') return 'retained'
+  if (input.processState === 'unknown' || input.listenerState === 'unknown' || input.terminalState === 'unknown' ||
+    input.observationsKnown !== true) return 'unconfirmed'
+  const released = (input.processState === 'gone' || input.processState === 'not-started') &&
+    (input.listenerState === 'gone' || input.listenerState === 'not-started')
+  if (!released) return 'unconfirmed'
+  // `not-started` means the identity list was empty. That is only closed
+  // evidence when the fixture is explicitly known to have never started; a
+  // fixture that started has to show every captured resource as `gone`.
+  if (input.processState === 'not-started' && input.started !== false) return 'unconfirmed'
+  const terminalOk = input.terminalState === 'stopped' || input.terminalState === 'failed' ||
+    input.terminalState === 'not-started'
+  return terminalOk ? 'cleaned' : 'unconfirmed'
+}
+
+/**
+ * Capture the fixture's owned resource identity into fixture memory before any
+ * stop runs. The launcher and its Relay/Agent children come from the internal
+ * state; the Console child from `[consoleRuntime]`; managed OpenCode children
+ * from proved Agent parent-child links plus their own command line. Every entry
+ * records the attribution that made it owned, so a later observation can say
+ * exactly which resources were known and where each PID came from.
+ */
+function captureOwnedResources(fixture, lifecycle) {
+  // Prefer the path recorded by the last successful start, because a stop rewrites
+  // the internal state file and a re-read after the stop would lose the PIDs.
+  const internalPath = lifecycle?.internal?.internalPath
+    ?? (fixture.lifecycle?.internal?.internalPath ?? join(dirname(fixture.configPath), 'internal.toml'))
+  const toml = (() => {
+    try {
+      return parseToml(readFileSync(internalPath, 'utf8'))
+    } catch {
+      return undefined
+    }
+  })()
+  const processes = []
+  const listeners = []
+  const captureErrors = []
+  const addProcess = (entry) => {
+    if (!Number.isSafeInteger(entry.pid) || entry.pid <= 0) return
+    const seen = processes.find(item => item.pid === entry.pid)
+    if (seen === undefined) processes.push({
+      owner: entry.owner,
+      role: entry.role,
+      pid: entry.pid,
+      attribution: entry.attribution,
+      provenance: entry.provenance,
+    })
+  }
+  const rows = toml === undefined ? [] : [['launcher', toml.launcher, 'launcher'], ...Object.entries(toml.daemon ?? {}).map(([id, record]) => [id, record, id])]
+  const liveRows = rows.filter(([id, record]) => Number.isSafeInteger(record?.pid) && record.pid > 0)
+  for (const [id, record] of liveRows) {
+    const label = id === 'launcher' ? 'launcher' : `daemon ${id}`
+    addProcess({ owner: id === 'launcher' ? 'launcher' : 'lifecycle', role: id, pid: record.pid,
+      attribution: `internal.toml ${label} row, generation ${record.generation}`,
+      provenance: 'internal-toml' })
+  }
+  const consoleRuntime = (() => {
+    try {
+      const value = toml?.consoleRuntime
+      return value === undefined || value === null ? undefined : value
+    } catch {
+      return undefined
+    }
+  })()
+  if (Number.isSafeInteger(consoleRuntime?.pid) && consoleRuntime.pid > 0) {
+    addProcess({ owner: 'console', role: 'console', pid: consoleRuntime.pid,
+      attribution: 'internal.toml [consoleRuntime] row',
+      provenance: 'internal-toml' })
+  }
+  for (const [id, record] of liveRows.filter(([key]) => key !== 'relay' && key !== 'launcher')) {
+    const children = directChildren(record.pid)
+    if (children.state !== 'known') {
+      captureErrors.push(`direct children of Agent ${id} (pid ${record.pid}) could not be queried`)
+      continue
+    }
+    for (const childPid of children.pids) {
+      const command = processCommandLine(childPid)
+      if (command === undefined || !/opencode[\s/]|opencode\s+serve/u.test(command)) continue
+      addProcess({ owner: 'managed', role: `managed-opencode:${id}`, pid: childPid,
+        attribution: `direct child of Agent ${id} (pid ${record.pid}); command line runs the managed OpenCode substrate`,
+        provenance: 'proved-agent-child' })
+    }
+  }
+  const configs = {}
+  for (const [id, record] of liveRows.filter(([key]) => key !== 'launcher')) {
+    try {
+      configs[id] = JSON.parse(record.config ?? '')
+    } catch {
+      configs[id] = undefined
+    }
+  }
+  const relayPort = (() => {
+    try { return JSON.parse(toml?.relay?.config ?? '').listen?.port } catch { return undefined }
+  })()
+  if (Number.isSafeInteger(relayPort) && relayPort > 0) {
+    listeners.push({ owner: 'lifecycle', role: 'relay', kind: 'port', address: String(relayPort),
+      attribution: 'internal.toml relay projection listen port', provenance: 'internal-toml' })
+  }
+  for (const [id, record] of Object.entries(configs)) {
+    const port = record?.leasePort
+    if (Number.isSafeInteger(port) && port > 0) {
+      listeners.push({ owner: 'lifecycle', role: id, kind: 'port', address: String(port),
+        attribution: `internal.toml daemon ${id} lease port`, provenance: 'internal-toml' })
+    }
+  }
+  for (const entry of processes) {
+    if (entry.provenance !== 'internal-toml') continue
+    if (processProbe(entry.pid).state !== 'alive') continue
+    const sockets = listenerSocketsByPid(entry.pid)
+    if (sockets.state !== 'known') {
+      captureErrors.push(`listeners of pid ${entry.pid} could not be queried`)
+      continue
+    }
+    for (const address of sockets.sockets) {
+      listeners.push({ owner: entry.owner, role: entry.role, kind: 'socket', address,
+        expected_pid: entry.pid,
+        attribution: `socket owned by pid ${entry.pid}`, provenance: 'proved-pid-listener' })
+    }
+  }
+  return {
+    processes,
+    listeners,
+    capture_errors: captureErrors,
+  }
+}
+
+function notStartedCleanupObservation(fixture, options = {}) {
+  return cleanupFixtureObservation(fixture, undefined, {
+    caseId: options.caseId,
+    owner: options.owner,
+    stop: { attempted: false, generation: null, exit_code: null, error: null },
+    terminal: { query_exit_code: null, state: 'not-started' },
+    terminalState: 'not-started',
+    observationsKnown: true,
+    started: false,
+    evidencePath: options.evidencePath,
+  })
+}
+
+function cleanupFixtureObservation(fixture, lifecycle, input = {}) {
+  const generation = input.generation ?? lifecycle?.parsed?.generation
+  const internalPath = lifecycle?.internal?.internalPath ?? join(dirname(fixture.configPath), 'internal.toml')
+  const resourceCapture = input.resources ?? captureOwnedResources(fixture, lifecycle)
+  const captureErrors = [...resourceCapture.capture_errors, ...(input.captureErrors ?? [])]
+  const statesByPid = input.beforeStopStates ?? Object.fromEntries(
+    resourceCapture.processes.map(entry => [entry.pid, processProbe(entry.pid).state]))
+  const statesByListener = input.beforeStopListenerStates ?? {}
+  const probeOne = (entry) => {
+    if (input.testProbe !== undefined) return input.testProbe(entry)
+    if (entry.kind === 'port') return listenerProbe(Number(entry.address))
+    return listenerSocketProbeByAddress(entry.address, entry.expected_pid)
+  }
+  const processEntries = resourceCapture.processes.map(entry => ({
+    owner: entry.owner,
+    role: entry.role,
+    pid: entry.pid,
+    attribution: entry.attribution,
+    provenance: entry.provenance,
+    before_stop: statesByPid[entry.pid],
+    probe: input.testProcessProbe === undefined ? processProbe(entry.pid) : input.testProcessProbe(entry),
+  }))
+  const listenerEntries = resourceCapture.listeners.map(entry => ({
+    owner: entry.owner,
+    role: entry.role,
+    kind: entry.kind,
+    address: entry.address,
+    attribution: entry.attribution,
+    provenance: entry.provenance,
+    before_stop: statesByListener[entry.address],
+    probe: probeOne(entry),
+  }))
+  const stateOf = entries => {
+    const states = entries.map(entry => entry.probe.state)
+    if (states.some(state => state === 'alive' || state === 'listening')) return 'alive'
+    if (states.some(state => state === 'unknown')) return 'unknown'
+    return entries.length === 0 ? 'not-started' : 'gone'
+  }
+  const processState = stateOf(processEntries)
+  const listenerState = stateOf(listenerEntries)
+  const terminalState = input.terminalState ?? 'unknown'
+  const outcome = cleanupOutcome({
+    processState,
+    listenerState,
+    terminalState,
+    observationsKnown: input.observationsKnown === true && captureErrors.length === 0,
+    started: input.started,
+  })
+  const retainedObligations = input.retainedObligations ?? (outcome === 'cleaned'
+    ? []
+    : [{
+        owner: input.owner ?? 'U7 driver',
+        reason: `cleanup outcome is ${outcome}`,
+        recovery_action: 'inspect the retained fixture root, use the public stop entrypoint with the recorded generation, then re-run the case',
+        release_condition: 'a subsequent observation confirms processes, listeners and terminal state are all released',
+      }])
+  return {
+    case: input.caseId,
+    fixture: fixture.label,
+    owner: input.owner,
+    observed_at: now(),
+    generation: generation ?? null,
+    paths: {
+      temporary_root: fixture.temporaryRoot,
+      installed_cli: fixture.cli,
+      config: fixture.configPath,
+      internal_state: internalPath,
+    },
+    stop: input.stop,
+    terminal: input.terminal,
+    processes: processEntries.map(entry => ({
+      owner: entry.owner,
+      role: entry.role,
+      pid: entry.pid,
+      attribution: entry.attribution,
+      provenance: entry.provenance,
+      before_stop: entry.before_stop,
+      probe: summarizeProcessProbe(entry.probe),
+    })),
+    listeners: listenerEntries.map(entry => ({
+      owner: entry.owner,
+      role: entry.role,
+      kind: entry.kind,
+      address: entry.address,
+      expected_pid: entry.expected_pid,
+      attribution: entry.attribution,
+      provenance: entry.provenance,
+      before_stop: entry.before_stop,
+      probe: entry.probe,
+    })),
+    capture_errors: captureErrors,
+    process_state: processState,
+    listener_state: listenerState,
+    terminal_state: terminalState,
+    outcome,
+    deleted: false,
+    retained_obligations: retainedObligations,
+    evidence: input.evidencePath,
+  }
 }
 
 const defaultAgentIds = Object.freeze(['bb-provider', 'bb-receiver'])
@@ -395,6 +955,27 @@ function temporaryRootBase() {
   return existsSync('/tmp') ? '/tmp' : tmpdir()
 }
 
+/**
+ * Delete a temporary install root only when the cleanup observation confirms
+ * every owned resource was released. A missing or non-`cleaned` observation
+ * refuses the delete and returns the fact; the temporary root is left intact so
+ * the identity needed to recover can be re-read.
+ */
+function fixtureDeletionConfirmation(temporaryRoot, observation) {
+  const outcome = observation?.outcome
+  if (outcome === undefined) return { deleted: false, outcome: 'unconfirmed', reason: 'cleanup confirmation is required' }
+  if (outcome !== 'cleaned') {
+    return {
+      deleted: false,
+      outcome,
+      reason: 'cleanup did not confirm every owned resource was released',
+      paths: observation.paths,
+    }
+  }
+  rmSync(temporaryRoot, { recursive: true, force: true })
+  return { deleted: !existsSync(temporaryRoot), outcome: 'cleaned' }
+}
+
 function installPackage(packRoot, evidenceDir, label, extraEnv = {}) {
   const temporaryRoot = mkdtempSync(join(temporaryRootBase(), `agentteams-u7-${label}-`))
   const prefix = join(temporaryRoot, 'prefix')
@@ -448,9 +1029,13 @@ function installPackage(packRoot, evidenceDir, label, extraEnv = {}) {
     installedContentSha256,
     env,
     configPath: join(home, '.agentteams', 'config.toml'),
-    cleanup() {
-      rmSync(temporaryRoot, { recursive: true, force: true })
-      assert(!existsSync(temporaryRoot), `temporary install root was not removed: ${temporaryRoot}`)
+    // The lifecycle read at start, refreshed after every restart so the owned
+    // resource list never depends on a PID file that a stop already rewrote.
+    lifecycle: undefined,
+    cleanup(observation) {
+      const deletion = fixtureDeletionConfirmation(temporaryRoot, observation)
+      if (deletion.deleted) observation.deleted = true
+      return deletion
     },
   }
 }
@@ -614,37 +1199,152 @@ function startAndReadLifecycle(fixture, evidenceDir, prefix, agentIds = defaultA
   assert(internal.launcher.generation === parsed.generation, 'status generation does not match internal launcher generation')
   assert(internal.launcher.pid === parsed.pid, 'status pid does not match internal launcher pid')
   assertInstalledEntries(fixture, internal)
-  return { start, status, parsed, internal }
+  const lifecycle = { start, status, parsed, internal }
+  // The fixture keeps the freshest lifecycle identity so the cleanup snapshot
+  // never has to re-read a PID file that a stop may already have rewritten.
+  fixture.lifecycle = lifecycle
+  return lifecycle
 }
 
-function stopFixtureIfNeeded(fixture, generation) {
-  if (generation === undefined) return
-  try {
-    runChecked(fixture.cli, ['stop', '--config', fixture.configPath, '--generation', String(generation)], {
+/**
+ * The one installed stop execution and cleanup observation. Strict wrappers are
+ * the only callers that may turn a non-clean observation into a thrown error;
+ * the failure-terminal wrapper returns the same shape and keeps the primary
+ * business error untouched.
+ */
+async function stopFixtureAndObserve(fixture, lifecycle, evidenceDir, prefix, options = {}) {
+  const effectiveLifecycle = lifecycle ?? fixture.lifecycle
+  const generation = options.generation ?? effectiveLifecycle?.parsed?.generation
+  // Snapshot owned resources and their live state before any stop runs. The
+  // identity list can never be recovered from a PID file that stop has rewritten.
+  const resources = captureOwnedResources(fixture, effectiveLifecycle)
+  for (const extra of options.extraProcesses ?? []) {
+    if (!Number.isSafeInteger(extra.pid) || extra.pid <= 0) continue
+    if (resources.processes.some(entry => entry.pid === extra.pid)) continue
+    resources.processes.push({
+      owner: extra.owner ?? 'driver',
+      role: extra.role ?? 'driver-child',
+      pid: extra.pid,
+      attribution: extra.attribution ?? 'driver-recorded owned child',
+      provenance: extra.provenance ?? 'driver-declared',
+    })
+  }
+  for (const extra of options.extraListeners ?? []) {
+    resources.listeners.push({
+      owner: extra.owner ?? 'driver',
+      role: extra.role ?? 'driver-listener',
+      kind: 'port',
+      address: String(extra.port),
+      attribution: extra.attribution ?? 'driver-recorded owned listener',
+      provenance: extra.provenance ?? 'driver-declared',
+    })
+  }
+  const beforeStopStates = Object.fromEntries(resources.processes.map(entry => [entry.pid, processProbe(entry.pid).state]))
+  const beforeStopListenerStates = Object.fromEntries(resources.listeners.map(entry => [
+    entry.address,
+    entry.kind === 'port' ? listenerProbe(Number(entry.address)).state
+      : listenerSocketProbeByAddress(entry.address, entry.expected_pid).state,
+  ]))
+  const command = generation === undefined
+    ? undefined
+    : [fixture.cli, 'stop', '--config', fixture.configPath, '--generation', String(generation)]
+  let stop
+  if (options.skipStop === true) {
+    // The caller already issued the one real stop (for example a deliberately
+    // stale one) and only needs the shared observation of the resulting state.
+    // No second stop is issued and no PID guess is made.
+    stop = options.stop ?? { attempted: false, generation: generation ?? null, command: null, exit_code: null, signal: null, error: null }
+  } else if (command !== undefined) {
+    const output = run(command[0], command.slice(1), {
+      cwd: fixture.temporaryRoot,
+      env: options.launchEnv ?? fixture.env,
+      ...(evidenceDir === undefined ? {} : { logPath: join(evidenceDir, `${prefix}-stop.json`) }),
+    })
+    stop = {
+      attempted: true,
+      generation,
+      command,
+      exit_code: output.status,
+      signal: output.signal,
+      error: output.status === 0 ? null : safeErrorMessage(output.stderr || output.stdout, `${prefix}-stop`),
+      stdout: output.status === 0 ? output.stdout : '',
+      stderr: output.status === 0 ? '' : '',
+    }
+  } else {
+    stop = { attempted: false, generation: null, command: null, exit_code: null, signal: null, error: null }
+  }
+  // Give a successful stop a bounded moment to reap its children before the
+  // observation reads the settled state. A rejected stop leaves its processes
+  // alive on purpose, so it is never waited on. A live or unqueryable process is
+  // left for `cleanupOutcome` to classify; this wait never throws.
+  if (stop.attempted && stop.exit_code === 0) {
+    await settleProcessesGone(resources.processes.map(entry => entry.pid))
+  }
+  let terminal
+  if (effectiveLifecycle !== undefined) {
+    const status = run(fixture.cli, ['status', '--config', fixture.configPath], {
       cwd: fixture.temporaryRoot,
       env: fixture.env,
+      ...(evidenceDir === undefined ? {} : { logPath: join(evidenceDir, `${prefix}-stopped-status.json`) }),
     })
-  } catch {
-    // Preserve the primary failure. The case receipt records cleanup state.
+    const parsed = status.status === 0 ? parseCliStatus(status.stdout) : {}
+    terminal = {
+      query_exit_code: status.status,
+      state: parsed.state ?? null,
+      stdout: status.stdout,
+      stderr: status.status === 0 ? '' : status.stderr,
+    }
+  } else {
+    terminal = { query_exit_code: null, state: 'not-started' }
   }
+  const observation = cleanupFixtureObservation(fixture, effectiveLifecycle, {
+    caseId: options.caseId,
+    owner: options.owner,
+    stop,
+    terminal,
+    terminalState: terminal.state === 'not-started' ? 'not-started'
+      : terminal.query_exit_code === 0 && (terminal.state === 'stopped' || terminal.state === 'failed')
+        ? terminal.state
+        : 'unknown',
+    observationsKnown: effectiveLifecycle === undefined || terminal.query_exit_code === 0,
+    started: effectiveLifecycle !== undefined,
+    generation,
+    resources,
+    beforeStopStates,
+    beforeStopListenerStates,
+    evidencePath: evidenceDir === undefined ? undefined : join(evidenceDir, `${prefix}-cleanup.json`),
+  })
+  // A non-zero stop command is recorded in `stop`; whether resources actually
+  // released is decided only by `outcome`. The strict wrappers decide case
+  // success from both facts independently. `cleanupFixtureObservation` already
+  // attached the retained obligation for any non-`cleaned` outcome.
+  if (options.persist !== false && evidenceDir !== undefined) {
+    writeJson(join(evidenceDir, `${prefix}-cleanup.json`), publicJson(observation))
+  }
+  // Remember the one stop this fixture actually ran, so the case finalizer can
+  // supplement observation instead of issuing a second stop.
+  if (stop.attempted) {
+    observation.stopped = stop.exit_code === 0 &&
+      (observation.terminal.state === 'stopped' || observation.terminal.state === 'failed')
+    fixture.lastCleanupObservation = observation
+  }
+  return observation
 }
 
-async function stopAndAssertClean(fixture, lifecycle, evidenceDir, prefix) {
-  const pids = lifecyclePids(lifecycle.internal)
-  const stop = runChecked(fixture.cli, ['stop', '--config', fixture.configPath, '--generation', String(lifecycle.parsed.generation)], {
-    cwd: fixture.temporaryRoot,
-    env: fixture.env,
-    logPath: join(evidenceDir, `${prefix}-stop.json`),
-  })
-  await waitForProcessesGone(pids)
-  const status = runChecked(fixture.cli, ['status', '--config', fixture.configPath], {
-    cwd: fixture.temporaryRoot,
-    env: fixture.env,
-    logPath: join(evidenceDir, `${prefix}-stopped-status.json`),
-  })
-  assert(status.stdout.includes('state=stopped'), `installed lifecycle did not stop: ${status.stdout.trim()}`)
-  assertPortsClosed(lifecycle.internal.ports)
-  return { stop, status, pids }
+async function stopAndAssertClean(fixture, lifecycle, evidenceDir, prefix, options = {}) {
+  const observation = await stopFixtureAndObserve(fixture, lifecycle, evidenceDir, prefix, options)
+  assert(observation.outcome === 'cleaned',
+    `installed lifecycle cleanup was not confirmed: ${JSON.stringify(observation)}`)
+  assert(observation.stop.exit_code === 0,
+    `installed lifecycle stop failed: status=${observation.stop.exit_code} ${observation.stop.error ?? ''}`)
+  assert(observation.terminal.state === 'stopped',
+    `installed lifecycle did not stop: ${JSON.stringify(observation.terminal)}`)
+  return {
+    stop: { stdout: observation.stop.stdout },
+    status: { stdout: observation.terminal.stdout },
+    pids: observation.processes.filter(entry => entry.role !== 'launcher').map(entry => entry.pid),
+    cleanup: observation,
+  }
 }
 
 /**
@@ -657,27 +1357,130 @@ async function stopAndAssertClean(fixture, lifecycle, evidenceDir, prefix) {
  * a terminal launcher state.
  */
 async function stopSessionFixture(fixture, lifecycle, evidenceDir, prefix, options = {}) {
-  const pids = lifecyclePids(lifecycle.internal)
-  const stop = run(fixture.cli, ['stop', '--config', fixture.configPath, '--generation', String(lifecycle.parsed.generation)], {
-    cwd: fixture.temporaryRoot,
-    env: options.launchEnv ?? fixture.env,
-    logPath: join(evidenceDir, `${prefix}-stop.json`),
-  })
-  const relayAnomaly = stop.status !== 0 && /local relay exited unexpectedly/.test(String(stop.stderr))
-  assert(stop.status === 0 || relayAnomaly,
-    `installed lifecycle stop failed: status=${stop.status} stderr=${String(stop.stderr).trim()}`)
-  await waitForProcessesGone(pids)
-  const status = runChecked(fixture.cli, ['status', '--config', fixture.configPath], {
-    cwd: fixture.temporaryRoot,
-    env: fixture.env,
-    logPath: join(evidenceDir, `${prefix}-stopped-status.json`),
-  })
-  assert(relayAnomaly || status.stdout.includes('state=stopped'),
-    `installed lifecycle did not stop: ${status.stdout.trim()}`)
-  assert(!relayAnomaly || /state=(stopped|failed)/.test(status.stdout),
-    `installed lifecycle did not reach a terminal state: ${status.stdout.trim()}`)
-  assertPortsClosed(lifecycle.internal.ports)
-  return { stop, status, pids, relay_anomaly: relayAnomaly }
+  const observation = await stopFixtureAndObserve(fixture, lifecycle, evidenceDir, prefix, options)
+  const relayAnomaly = observation.stop.exit_code !== 0 &&
+    /local relay exited unexpectedly/.test(`${observation.stop.error ?? ''}`)
+  if (observation.stop.exit_code !== 0 && !relayAnomaly) {
+    fail(`installed lifecycle stop failed: status=${observation.stop.exit_code} stderr=${observation.stop.error ?? ''}`)
+  }
+  assert(observation.outcome === 'cleaned',
+    `installed lifecycle cleanup was not confirmed: ${JSON.stringify(observation)}`)
+  assert(observation.terminal.state === 'stopped' || relayAnomaly && observation.terminal.state === 'failed',
+    `installed lifecycle did not stop: ${JSON.stringify(observation.terminal)}`)
+  return {
+    stop: { stdout: observation.stop.stdout, stderr: observation.stop.error ?? '' },
+    status: { stdout: observation.terminal.stdout },
+    pids: observation.processes.filter(entry => entry.role !== 'launcher').map(entry => entry.pid),
+    relay_anomaly: relayAnomaly,
+    cleanup: observation,
+  }
+}
+
+async function stopFixtureIfNeeded(fixture, lifecycle, evidenceDir, prefix, options = {}) {
+  // Fail-terminal wrapper: never throw, never delete; it only returns the
+  // observed cleanup result for case receipt and root-retention decisions.
+  try {
+    return await stopFixtureAndObserve(fixture, lifecycle, evidenceDir, prefix, options)
+  } catch (error) {
+    const safeError = safeErrorMessage(error, 'cleanup')
+    const observation = cleanupFixtureObservation(fixture, lifecycle, {
+      ...options,
+      stop: { attempted: false, generation: options.generation ?? lifecycle?.parsed?.generation ?? null, error: safeError },
+      terminal: { state: 'unknown' },
+      observationsKnown: false,
+      evidencePath: evidenceDir === undefined ? undefined : join(evidenceDir, `${prefix}-cleanup.json`),
+      retainedObligations: [{
+        owner: options.owner ?? 'U7 driver',
+        reason: `cleanup observation could not be completed: ${safeError}`,
+        recovery_action: 'inspect the retained fixture root and use the public stop entrypoint with the recorded generation',
+        release_condition: 'a later observation confirms resources and terminal state are released',
+      }],
+    })
+    observation.outcome = 'unconfirmed'
+    if (evidenceDir !== undefined) writeJson(join(evidenceDir, `${prefix}-cleanup.json`), publicJson(observation))
+    return observation
+  }
+}
+
+async function finalizeCaseCleanup(fixture, lifecycle, evidenceDir, prefix, options = {}) {
+  // A normal stop already ran in the case body (the strict wrappers). The
+  // finalizer must not repeat it; it consumes that observation and decides
+  // deletion from it. A stale observation from an earlier generation must never
+  // stand in for a restarted lifecycle, so reuse is generation-bound.
+  const prior = fixture.lastCleanupObservation
+  const reuse = prior !== undefined &&
+    (lifecycle === undefined || lifecycle.parsed?.generation === prior.generation)
+  const observation = reuse ? prior : await stopFixtureIfNeeded(fixture, lifecycle, evidenceDir, prefix, options)
+  if (reuse) {
+    observation.finalized_by = `${prefix}-final`
+  }
+  const deletion = fixture.cleanup(observation)
+  if (!deletion.deleted) observation.outcome = deletion.outcome
+  observation.deletion = deletion
+  if (evidenceDir !== undefined) {
+    try {
+      writeJson(join(evidenceDir, `${prefix}-cleanup.json`), publicJson(observation))
+    } catch (error) {
+      observation.cleanup_persistence_error = safeErrorMessage(error, 'cleanup', options.caseId)
+      observation.outcome = 'unconfirmed'
+    }
+  }
+  recordCaseCleanup(options.caseId, observation)
+  return observation
+}
+
+function attachCleanupObservation(result, observation) {
+  if (result === undefined || typeof result !== 'object') return result
+  result.cleanup = publicJson(observation)
+  if (observation.outcome !== 'cleaned') result.cleanup_blocked = true
+  if (result.external_observation !== undefined && observation.deletion !== undefined &&
+    Object.hasOwn(result.external_observation, 'temporary_root_removed')) {
+    result.external_observation.temporary_root_removed = observation.deletion.deleted === true
+  }
+  return result
+}
+
+// The latest cleanup observation per case, so a case that throws before it can
+// attach the result still hands the resource facts to the run-level receipt.
+const caseCleanupRegistry = new Map()
+
+function recordCaseCleanup(caseId, observation) {
+  if (caseId === undefined) return
+  caseCleanupRegistry.set(caseId, publicJson(observation))
+}
+
+function takeCaseCleanup(caseId) {
+  const observation = caseCleanupRegistry.get(caseId)
+  caseCleanupRegistry.delete(caseId)
+  return observation
+}
+
+/**
+ * Replace a promised cleanup string on an early-exit evidence document with the
+ * observed cleanup result. The original promise is kept under
+ * `promised_cleanup_replaced` so the change is auditable; the observed object is
+ * what later readers must trust.
+ */
+function supersedePromisedCleanup(evidenceDir, fileName, observation) {
+  const path = join(evidenceDir, fileName)
+  if (!existsSync(path)) return
+  let document
+  try {
+    document = readJson(path)
+  } catch {
+    return
+  }
+  const observed = publicJson(observation)
+  const mark = entry => {
+    if (entry === undefined || typeof entry !== 'object' || entry === null) return
+    if (entry.cleanup !== undefined && (typeof entry.cleanup === 'string' || entry.cleanup.promised === true)) {
+      entry.promised_cleanup_replaced = entry.cleanup
+    }
+    entry.cleanup = observed
+  }
+  mark(document)
+  mark(document.real_acceptance)
+  writeJson(path, document)
 }
 
 async function runBB01(context) {
@@ -697,7 +1500,7 @@ async function runBB01(context) {
     const allPids = lifecyclePids(lifecycle.internal)
     assert(allPids.every(pid => !processAlive(pid)), 'owned lifecycle processes remain after stop')
     const listenerState = Object.fromEntries(Object.entries(lifecycle.internal.ports).map(([id, port]) => [id, listeningPids(port)]))
-    fixture.cleanup()
+    // The finalizer consumes the confirmed stop above; deletion happens there.
     result = {
       status: 'passed',
       public_input: {
@@ -734,12 +1537,9 @@ async function runBB01(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    attachCleanupObservation(result,
+      await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb01-final',
+        { caseId: 'BB01', owner: 'U1+U5+U7' }))
   }
   return result
 }
@@ -776,7 +1576,6 @@ async function runBB02(context) {
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb02')
     const listenerState = Object.fromEntries(Object.entries(lifecycle.internal.ports).map(([id, port]) => [id, listeningPids(port)]))
     const configSha256AfterStart = sha256File(fixture.configPath)
-    fixture.cleanup()
     result = {
       status: 'passed',
       public_input: {
@@ -804,12 +1603,9 @@ async function runBB02(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    attachCleanupObservation(result,
+      await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb02-final',
+        { caseId: 'BB02', owner: 'U2+U7' }))
   }
   return result
 }
@@ -1030,7 +1826,6 @@ async function runBB04(context) {
 
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb04')
     const allPids = lifecyclePids(lifecycle.internal)
-    fixture.cleanup()
     result = {
       status: 'passed',
       public_input: {
@@ -1065,12 +1860,9 @@ async function runBB04(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    attachCleanupObservation(result,
+      await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb04-final',
+        { caseId: 'BB04', owner: 'D3/U4' }))
   }
   return result
 }
@@ -1145,7 +1937,6 @@ async function runBB07(context) {
 
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb07-final')
     const allPids = lifecyclePids(lifecycle.internal)
-    fixture.cleanup()
     const executionFailure = await runBB07ExecutionFailure(context)
     result = {
       status: 'passed',
@@ -1180,37 +1971,32 @@ async function runBB07(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    attachCleanupObservation(result,
+      await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb07-final',
+        { caseId: 'BB07', owner: 'D3/U4' }))
   }
   return result
 }
 
 async function stopFaultLifecycle(fixture, lifecycle, evidenceDir, prefix) {
-  const pids = lifecyclePids(lifecycle.internal)
   // The injected provider fault can make the supervisor report that failure from
-  // the stop command. Tolerate a nonzero stop only when the persisted launcher
-  // still reaches a terminal state and every owned process/port is gone.
-  const stop = run(fixture.cli, ['stop', '--config', fixture.configPath, '--generation', String(lifecycle.parsed.generation)], {
-    cwd: fixture.temporaryRoot,
-    env: fixture.env,
-    logPath: join(evidenceDir, `${prefix}-stop.json`),
-  })
-  await waitForProcessesGone(pids)
-  const status = runChecked(fixture.cli, ['status', '--config', fixture.configPath], {
-    cwd: fixture.temporaryRoot,
-    env: fixture.env,
-    logPath: join(evidenceDir, `${prefix}-stopped-status.json`),
-  })
-  const parsed = parseCliStatus(status.stdout)
-  assert(parsed.state === 'stopped' || parsed.state === 'failed',
-    `the fault fixture did not reach a terminal launcher state: ${status.stdout.trim()}`)
-  assertPortsClosed(lifecycle.internal.ports)
-  return { stop, status, parsed, pids }
+  // the stop command. The unified observation tolerates a nonzero stop only when
+  // every owned process/listener is gone and the launcher reached a terminal
+  // state; the resource facts stay independent of the command exit code.
+  const observation = await stopFixtureAndObserve(fixture, lifecycle, evidenceDir, prefix,
+    { caseId: 'BB07', owner: 'D3/U4' })
+  assert(observation.outcome === 'cleaned',
+    `the fault fixture cleanup was not confirmed: ${JSON.stringify(observation)}`)
+  assert(observation.terminal.state === 'stopped' || observation.terminal.state === 'failed',
+    `the fault fixture did not reach a terminal launcher state: ${JSON.stringify(observation.terminal)}`)
+  const parsed = parseCliStatus(observation.terminal.stdout)
+  return {
+    stop: { stdout: observation.stop.stdout },
+    status: { stdout: observation.terminal.stdout },
+    parsed,
+    pids: observation.processes.filter(entry => entry.role !== 'launcher').map(entry => entry.pid),
+    cleanup: observation,
+  }
 }
 
 async function waitForAsyncResult(run, timeoutMs, label) {
@@ -1401,7 +2187,6 @@ async function runBB07ExecutionFailure(context) {
     restarted = undefined
     const finalWrapperRecords = barrier.launches()
     const finalRealRecord = finalWrapperRecords.at(-1)
-    fixture.cleanup()
     return {
       status: 'passed',
       public_input: {
@@ -1448,20 +2233,18 @@ async function runBB07ExecutionFailure(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, restarted?.parsed.generation ?? lifecycle?.parsed.generation)
     // Release the barrier so a still-waiting wrapper cannot hang, then close the
-    // driver-owned async CLI handle if a pre-injection assertion failed.
+    // driver-owned async CLI handle if a pre-injection assertion failed. Both
+    // run before the shared finalizer so the stop is observed against released
+    // driver-owned children.
     if (barrier !== undefined) {
       try { barrier.release() } catch { /* release marker may already exist */ }
     }
     if (openRun !== undefined && !openRun.isSettled()) {
       openRun.child.kill('SIGTERM')
     }
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    await finalizeCaseCleanup(fixture, restarted ?? lifecycle, evidenceDir, 'bb07-failure-final',
+      { caseId: 'BB07', owner: 'D3/U4' })
   }
 }
 
@@ -1544,7 +2327,6 @@ async function runBB08(context) {
 
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb08-final')
     const allPids = lifecyclePids(lifecycle.internal)
-    fixture.cleanup()
     result = {
       status: 'passed',
       public_input: {
@@ -1586,12 +2368,9 @@ async function runBB08(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    attachCleanupObservation(result,
+      await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb08-final',
+        { caseId: 'BB08', owner: 'U2+U4' }))
   }
   return result
 }
@@ -1912,8 +2691,12 @@ function camoTeardown(fixture, camo, evidenceDir, profiles, label) {
   return records
 }
 
-/** Fail the case if any recorded evidence file contains a provisioned secret. */
-/** Refuse to keep any evidence artifact that captured a provisioned credential value. */
+/**
+ * The post-hoc audit that complements the pre-write boundary: fail the case if
+ * any recorded evidence file carries a registered credential value or any
+ * auth-field/auth-value material. The explicit `secrets` list is checked in
+ * addition to the run-level registry, so a caller can name values it owns.
+ */
 function assertNoSecretInEvidence(directory, secrets) {
   for (const entry of readdirSync(directory)) {
     const path = join(directory, entry)
@@ -1921,11 +2704,13 @@ function assertNoSecretInEvidence(directory, secrets) {
       assertNoSecretInEvidence(path, secrets)
       continue
     }
-    const text = readFileSync(path)
+    const text = readFileSync(path, 'utf8')
     for (const secret of secrets) {
       if (typeof secret !== 'string' || secret.length === 0) continue
       assert(!text.includes(secret), `evidence ${path} contains a provisioned credential value`)
     }
+    const category = findEvidenceViolation(text)
+    assert(category === undefined, `evidence ${path} carries ${category} material`)
   }
 }
 
@@ -2263,12 +3048,8 @@ async function bb09AgentPolicyRefusal(context, evidenceDir) {
       accepted_revision_observation_source: 'target Agent durable internal store',
       stop_stdout: stopped.stop.stdout }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The refusal observation is the primary record.
-    }
+    await finalizeCaseCleanup(fixture, lifecycle, refusalDir, 'bb09-refusal-final',
+      { caseId: 'BB09', owner: 'U5' })
   }
 }
 
@@ -2371,8 +3152,6 @@ async function bb09StaticBindingScenario(context) {
     profiles.clear()
     cleanup.browser_profiles = browserCleanup
     writeJson(join(evidenceDir, 'browser-cleanup.json'), { profiles: browserCleanup })
-    fixture.cleanup()
-    cleaned = true
     recordCleanup()
     const observation = {
       explicit_agent_ids: explicitAgentIds,
@@ -2387,7 +3166,6 @@ async function bb09StaticBindingScenario(context) {
     failure = error
     throw error
   } finally {
-    try { if (lifecycle !== undefined) stopFixtureIfNeeded(fixture, lifecycle.parsed.generation) } catch { /* preserve the primary failure */ }
     try {
       if (profiles.size > 0) {
         const browserCleanup = camoTeardown(fixture, camo, evidenceDir, profiles, 'browser-cleanup')
@@ -2397,7 +3175,8 @@ async function bb09StaticBindingScenario(context) {
       }
     } catch { /* preserve the primary failure */ }
     try { await closeProviderStub(stub) } catch { /* preserve the primary failure */ }
-    try { if (!cleaned && existsSync(fixture.temporaryRoot)) fixture.cleanup() } catch { /* preserve the primary failure */ }
+    await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb09-static-final',
+      { caseId: 'BB09', owner: 'U5' })
     recordCleanup()
     if (failure !== undefined) {
       writeJson(join(evidenceDir, 'static-binding.json'), {
@@ -2527,7 +3306,6 @@ async function runBB09(context) {
     profiles.clear()
     writeJson(join(evidenceDir, 'browser-cleanup.json'), { profiles: browserCleanup })
     assertNoSecretInEvidence(evidenceDir, [consolePassword])
-    fixture.cleanup()
     result = {
       status: 'passed',
       public_input: {
@@ -2588,18 +3366,18 @@ async function runBB09(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    await stopFixtureIfNeeded(fixture, lifecycle, evidenceDir, 'bb09-final',
+      { caseId: 'BB09', owner: 'U5' })
     try {
       if (existsSync(fixture.temporaryRoot)) camoTeardown(fixture, camo, evidenceDir, profiles, 'browser-final')
     } catch {
       // Browser teardown is best-effort; the cleanup record carries the outcome.
     }
     await closeProviderStub(stub)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    // The finalizer reuses the observation above (same generation) and only
+    // deletes the temporary root once every owned resource is confirmed gone.
+    await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb09-final',
+      { caseId: 'BB09', owner: 'U5' })
   }
   return result
 }
@@ -2786,9 +3564,11 @@ function createSessionProviderStub(options = {}) {
       const newest = messages[messages.length - 1]
       const promptText = typeof newest?.content === 'string' ? newest.content : JSON.stringify(newest?.content ?? '')
       if (state.fail) {
+        const failureBody = state.failBody ?? options.failBody
+          ?? { error: { message: 'bb session provider stub failure', type: 'api_error' } }
         inferenceResponses.push({ model: requestModel, prompt: promptText, status: 500 })
         response.writeHead(500, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ error: { message: 'bb session provider stub failure', type: 'api_error' } }))
+        response.end(JSON.stringify(failureBody))
         return
       }
       if (options.holdMarker !== undefined && promptText.includes(options.holdMarker)) {
@@ -3233,6 +4013,10 @@ async function boundarySuccessfulTurn(client, sessionId, prompt, label) {
  * stopped and removed before this section starts.
  */
 async function runBB10Boundary(context, evidenceDir) {
+  // The boundary's own synthetic credential is registered before the fixture
+  // starts so no boundary evidence sink can persist it, including the polluted
+  // provider-error object this section deliberately constructs.
+  registerEvidenceSecret(bb10BoundarySyntheticCredentialValue)
   const boundaryRoot = join(evidenceDir, 'boundary')
   mkdirSync(boundaryRoot, { recursive: true })
   const fixture = installPackage(context.packRoot, boundaryRoot, 'bb10-boundary')
@@ -3624,12 +4408,6 @@ async function runBB10Boundary(context, evidenceDir) {
       .filter(event => event.kind === 'final' && event.state === 'failed').length
     assert(JSON.stringify(noFailoverAfter) === JSON.stringify(noFailoverBefore),
       `the boundary failed turn mutated accepted/effective/binding: ${JSON.stringify({ before: noFailoverBefore, after: noFailoverAfter })}`)
-    const finalStop = await stopSessionFixture(fixture, lifecycle, boundaryRoot, 'bb10-boundary')
-    const finalPids = lifecyclePids(lifecycle.internal)
-    const consoleGone = consoleListenerGone(console.url)
-    assert(consoleGone, `the boundary Console endpoint survived stop: ${console.url}`)
-    assert(finalPids.every(pid => !processAlive(pid)),
-      `the boundary owned processes remain after stop: ${finalPids.filter(processAlive).join(', ')}`)
     assert(primary.requests.length === primaryInferenceBeforeFailover
       && backup.requests.length === backupInferenceBeforeFailover,
     `the boundary failed manual turn silently failed over: ${JSON.stringify({
@@ -3660,16 +4438,76 @@ async function runBB10Boundary(context, evidenceDir) {
     results.no_implicit_failover = noImplicitFailover
     writeJson(join(boundaryRoot, 'no-failover.json'), noImplicitFailover)
 
+    // (5) Provider error-body echo: the bound provider's HTTP 500 body carries
+    // the boundary's own synthetic credential and an auth field. Only this
+    // boundary env supplies the value. The original observation assertions above
+    // are already complete; this named sub-scenario reuses the same live Session
+    // (so it allocates no new managed child) and records the EXPECTED boundary
+    // rejection. The raw provider error is never persisted.
+    const echoPrompt = 'bb10 boundary credential echo probe'
+    manual.state.failBody = { error: { message: `upstream rejected ${bb10BoundarySyntheticCredentialValue}`,
+      authorization: `Bearer ${bb10BoundarySyntheticCredentialValue}` } }
+    const echoDispatch = await client.sessionMessage(sessionAgentId, noFailoverSession.sessionId,
+      { text: echoPrompt }, bb10DispatchTimeoutMs).then(
+      response => ({ ok: true, response }), error => ({ ok: false, error }))
+    const echoFailedFinal = await waitForAsync(async () => {
+      const failures = readSessionEvents(await readInstalledProjection(client, undefined, 'boundary-echo-events'),
+        sessionAgentId, noFailoverSession.sessionId)
+        .filter(event => event.kind === 'final' && event.state === 'failed')
+      const newest = failures.at(-1)
+      return newest !== undefined && newest.messageId !== failedFinal.messageId ? newest : undefined
+    }, 120_000, 'the boundary credential-echo failed Session final')
+    // Prove the substrate really propagated the polluted body to a public face.
+    const propagated = JSON.stringify(echoFailedFinal).includes(bb10BoundarySyntheticCredentialValue)
+    manual.state.failBody = undefined
+    let echoRejection
+    try {
+      writeJson(join(boundaryRoot, 'credential-echo.json'), {
+        provider_error: publicJson(echoFailedFinal),
+        dispatch: echoDispatch.ok ? publicJson(echoDispatch.response.body) : null,
+      })
+    } catch (error) {
+      echoRejection = error
+    }
+    if (propagated) {
+      assert(echoRejection?.evidenceBoundaryRejected === true,
+        `the boundary did not reject a provider error that echoed the synthetic credential: ${String(echoRejection)}`)
+    }
+    const credentialEcho = {
+      status: propagated ? 'propagated_and_rejected' : 'not_propagated',
+      synthetic_credential_env: bb10BoundarySyntheticCredentialEnv,
+      synthetic_credential_length: bb10BoundarySyntheticCredentialValue.length,
+      session_id: noFailoverSession.sessionId,
+      dispatch_ok: echoDispatch.ok,
+      failed_final_observed: echoFailedFinal !== undefined,
+      failed_final_error_name: echoFailedFinal.error?.name ?? null,
+      failed_final_status_code: echoFailedFinal.error?.data?.statusCode ?? null,
+      provider_error_stored: false,
+      expected_rejection: propagated
+        ? { required: true, observed: echoRejection?.evidenceBoundaryRejected === true,
+            category: echoRejection?.evidenceCategory ?? null, sink: echoRejection?.evidenceSink ?? null }
+        : { required: false, observed: false, reason: 'the substrate did not propagate the synthetic value to a public Session final' },
+    }
+    results.credential_echo = credentialEcho
+    writeJson(join(boundaryRoot, 'credential-echo-observation.json'), credentialEcho)
+
+    const finalStop = await stopSessionFixture(fixture, lifecycle, boundaryRoot, 'bb10-boundary')
+    const finalPids = lifecyclePids(lifecycle.internal)
+    const consoleGone = consoleListenerGone(console.url)
+    assert(consoleGone, `the boundary Console endpoint survived stop: ${console.url}`)
+    assert(finalPids.every(pid => !processAlive(pid)),
+      `the boundary owned processes remain after stop: ${finalPids.filter(processAlive).join(', ')}`)
     lifecycle = undefined
-    fixture.cleanup()
+    const deletion = fixture.cleanup(finalStop.cleanup)
     cleanupEvidence = {
-      stopped: true,
+      stopped: finalStop.cleanup.outcome === 'cleaned',
+      cleanup: publicJson(finalStop.cleanup),
       stop_stdout: finalStop.stop.stdout,
       stopped_stdout: finalStop.status.stdout,
       console_listener_gone: consoleGone,
       owned_pids_after_stop: finalPids,
       owned_pids_alive_after_stop: finalPids.filter(processAlive),
-      temporary_root_removed: !existsSync(fixture.temporaryRoot),
+      temporary_root_removed: deletion.deleted === true,
     }
     writeJson(join(boundaryRoot, 'cleanup.json'), cleanupEvidence)
     const boundaryResult = {
@@ -3690,6 +4528,10 @@ async function runBB10Boundary(context, evidenceDir) {
       === boundaryResult.installed_identity.expected_content_sha256,
     `the boundary fixture installed content does not match the frozen package hash: ${JSON.stringify(boundaryResult.installed_identity)}`)
     writeJson(join(boundaryRoot, 'boundary-result.json'), boundaryResult)
+    // Post-hoc audit of the whole boundary tree, covering both the real and the
+    // synthetic credential. This complements the pre-write boundary.
+    assertNoSecretInEvidence(evidenceDir,
+      [bb10BoundarySyntheticCredentialValue, consolePassword])
     return boundaryResult
   } catch (error) {
     const partial = {
@@ -3702,37 +4544,29 @@ async function runBB10Boundary(context, evidenceDir) {
       evidence_path: boundaryRoot,
     }
     writeJson(join(boundaryRoot, 'boundary-result.json'), partial)
-    try {
-      const stopped = lifecycle === undefined
-        ? undefined
-        : await stopSessionFixture(fixture, lifecycle, boundaryRoot, 'bb10-boundary-failure')
-      lifecycle = undefined
-      const pids = stopped?.pids ?? []
-      const consoleGone = console === undefined ? true : consoleListenerGone(console.url)
-      fixture.cleanup()
-      cleanupEvidence = {
-        stopped: stopped !== undefined,
-        console_listener_gone: consoleGone,
-        owned_pids_after_stop: pids,
-        owned_pids_alive_after_stop: pids.filter(processAlive),
-        temporary_root_removed: !existsSync(fixture.temporaryRoot),
-      }
-    } catch (cleanupError) {
-      cleanupEvidence = { stopped: false, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) }
-    }
-    writeJson(join(boundaryRoot, 'cleanup.json'), cleanupEvidence)
+    // The single finalizer below owns stop, observation, retention and deletion.
+    // The failure terminal only records the primary error; it never issues a
+    // second stop or an unconditional delete.
+    cleanupEvidence = { stopped: false, failure: true }
     throw error
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
+    const cleanupObservation = await finalizeCaseCleanup(fixture, lifecycle, boundaryRoot, 'bb10-boundary-final',
+      { caseId: 'BB10', owner: 'U2+U6' })
     await closeProviderStub(primary)
     await closeProviderStub(backup)
     await closeProviderStub(manual)
     await closeProviderStub(invalidCredentialStub)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The boundary result records the primary observation.
+    const consoleGone = console === undefined ? true : consoleListenerGone(console.url)
+    cleanupEvidence = {
+      ...cleanupEvidence,
+      stopped: cleanupObservation.outcome === 'cleaned',
+      cleanup: publicJson(cleanupObservation),
+      console_listener_gone: consoleGone,
+      owned_pids_after_stop: cleanupObservation.processes.filter(entry => entry.role !== 'launcher').map(entry => entry.pid),
+      owned_pids_alive_after_stop: cleanupObservation.processes.filter(entry => entry.probe.state === 'alive').map(entry => entry.pid),
+      temporary_root_removed: cleanupObservation.deletion?.deleted === true,
     }
+    writeJson(join(boundaryRoot, 'cleanup.json'), cleanupEvidence)
   }
 }
 
@@ -3958,6 +4792,9 @@ async function resolveBb10Preconditions(evidenceDir) {
       { url: canonicalCatalog.url })
   }
   const credentialValue = readDeclaredSecretKey(canonical.secretFile, canonical.secretKey)
+  // Register the real canonical credential with the run-level evidence boundary
+  // before any BB10 evidence is written and before the launcher is started.
+  registerEvidenceSecret(credentialValue)
   writeJson(join(evidenceDir, 'bb10-sources.json'), {
     opencode_executable: openCodeExecutable,
     rcc: { source: rccConfigSourcePath, server_id: rcc.serverId, base_url: rcc.baseUrl, protocol: rcc.protocol,
@@ -4305,7 +5142,11 @@ async function runBB10(context) {
     const allPids = lifecyclePids(lifecycle.internal)
     const consoleGone = consoleListenerGone(switchedConsole.url)
     assert(consoleGone, `the installed Console endpoint survived the launcher stop: ${switchedConsole.url}`)
-    fixture.cleanup()
+    // The real segment asserts its own cleanup before the boundary section runs,
+    // so its success-path deletion consumes the stop's confirmed observation
+    // here. `finalizeCaseCleanup` in the finally still owns the last write and
+    // reuses this observation rather than issuing a second stop.
+    const realDeletion = fixture.cleanup(final.cleanup)
     const realAcceptance = {
       status: 'passed',
       installed_identity: {
@@ -4333,7 +5174,7 @@ async function runBB10(context) {
         console_listener_gone: consoleGone,
         owned_pids_after_stop: allPids,
         owned_pids_alive_after_stop: allPids.filter(processAlive),
-        temporary_root_removed: !existsSync(fixture.temporaryRoot),
+        temporary_root_removed: realDeletion.deleted === true,
       },
       evidence_path: evidenceDir,
     }
@@ -4343,6 +5184,11 @@ async function runBB10(context) {
     assert(realAcceptance.cleanup.console_listener_gone && realAcceptance.cleanup.owned_pids_alive_after_stop.length === 0
       && realAcceptance.cleanup.temporary_root_removed,
     `the real fixture cleanup was not confirmed before the boundary section: ${JSON.stringify(realAcceptance.cleanup)}`)
+    // Post-hoc audit of the real segment: no file under BB10 (including any
+    // boundary directory written later) may carry a registered value or auth
+    // material. This complements, and never replaces, the pre-write boundary.
+    assertNoSecretInEvidence(evidenceDir,
+      [preconditions.credentialValue, bb10BoundarySyntheticCredentialValue, consolePassword])
     const boundary = await runBB10Boundary(context, evidenceDir)
     assert(bb10PassVerdict(realAcceptance, boundary),
       `the BB10 two-section conjunction did not pass: ${JSON.stringify({
@@ -4422,11 +5268,15 @@ async function runBB10(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture?.cleanup()
-    } catch {
-      // The case result records the primary observation.
+    const finalCleanup = await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb10-final',
+      { caseId: 'BB10', owner: 'U2+U6' })
+    // An early unverified return carries a promised cleanup string; supersede it
+    // with the observed cleanup so no terminal ever advertises an action it did
+    // not take.
+    if (result !== undefined) {
+      attachCleanupObservation(result, finalCleanup)
+    } else {
+      supersedePromisedCleanup(evidenceDir, 'bb10-unverified.json', finalCleanup)
     }
   }
   return result
@@ -4640,7 +5490,6 @@ async function runBB12(context) {
     const allPids = lifecyclePids(lifecycle.internal)
     const consoleGone = consoleListenerGone(console.url)
     assert(consoleGone, `the installed Console endpoint survived the launcher stop: ${console.url}`)
-    fixture.cleanup()
     result = {
       status: 'passed',
       public_input: {
@@ -4700,13 +5549,9 @@ async function runBB12(context) {
     }
     throw error
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
     await closeProviderStub(provider)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb12-final',
+      { caseId: 'BB12', owner: 'U6' })
   }
   return result
 }
@@ -4801,7 +5646,6 @@ async function runBB11(context) {
 
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb11')
     const allPids = lifecyclePids(lifecycle.internal)
-    fixture.cleanup()
     result = {
       status: 'passed',
       public_input: {
@@ -4840,12 +5684,8 @@ async function runBB11(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb11-final',
+      { caseId: 'BB11', owner: 'D3/U4' })
   }
   return result
 }
@@ -5316,6 +6156,164 @@ function stopSentinel(sentinel) {
   sentinel.child.kill('SIGTERM')
 }
 
+/**
+ * BB14 isolated negative sub-scenario: a deterministic stop failure terminal.
+ * A dedicated fixture is started normally, then a deliberately stale
+ * `--generation` is passed to the *real* installed stop entrypoint. The stop is
+ * rejected with `STALE_GENERATION`; the shared cleanup observation then proves
+ * the owned resources are still alive and records `retained` without deleting
+ * the temporary root. The failure flows through the real `executeImplementedCase`
+ * catch/receipt path, so the original business error and the independent cleanup
+ * result both survive. The saved correct generation then reuses the *same* public
+ * stop entrypoint to recover, after which the retained resource is removed.
+ */
+async function bb14StaleGenerationSubScenario(context, parentEvidenceDir, parentFixtureRoot) {
+  const subEvidenceDir = join(parentEvidenceDir, 'stale-generation')
+  mkdirSync(subEvidenceDir, { recursive: true })
+  const fixture = installPackage(context.packRoot, subEvidenceDir, 'bb14-stale-generation')
+  const evidenceDir = subEvidenceDir
+  let lifecycle
+  let retainedObservation
+  let recoveryObservation
+  try {
+    ensureUserConfig(fixture, evidenceDir)
+    lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb14-stale-generation')
+    const realGeneration = lifecycle.parsed.generation
+    const staleGeneration = realGeneration + 1_000_000
+    assert(staleGeneration !== realGeneration, 'the stale generation collided with the real launcher generation')
+    const ownedPorts = lifecycle.internal.ports
+    const businessFailureText = 'BB14 stale-generation negative business failure'
+    writeJson(join(evidenceDir, 'business-failure.json'), { owner: 'U1+U7', marker: businessFailureText,
+      real_generation: realGeneration, attempted_generation: staleGeneration, evidence_dir: evidenceDir })
+
+    // The one real installed stop is issued with the stale generation. It is
+    // expected to be refused by the product, not mocked.
+    const staleStop = run(fixture.cli,
+      ['stop', '--config', fixture.configPath, '--generation', String(staleGeneration)],
+      { cwd: fixture.temporaryRoot, env: fixture.env, logPath: join(evidenceDir, 'stale-stop.json') })
+    assert(staleStop.status !== 0, `the stale-generation stop unexpectedly succeeded: ${staleStop.stdout}`)
+    assert(/STALE_GENERATION|stale/u.test(`${staleStop.stdout}\n${staleStop.stderr}`),
+      `the stale-generation stop was not a STALE_GENERATION refusal: ${staleStop.stdout}${staleStop.stderr}`)
+
+    // The shared observation reuses the recorded real identity list, adds the
+    // explicit driver-owned async children, and never issues a second stop.
+    retainedObservation = await stopFixtureAndObserve(fixture, lifecycle, evidenceDir, 'bb14-stale-retained', {
+      caseId: 'BB14', owner: 'U1+U7', generation: realGeneration, skipStop: true,
+      stop: { attempted: true, generation: staleGeneration, exit_code: staleStop.status,
+        command: [fixture.cli, 'stop', '--config', fixture.configPath, '--generation', String(staleGeneration)],
+        error: safeErrorMessage(staleStop.stderr || staleStop.stdout, 'bb14-stale-retained') },
+    })
+    assert(retainedObservation.stop.exit_code !== 0, 'the recorded retained stop did not carry the refusal fact')
+    assert(retainedObservation.outcome === 'retained',
+      `the stale-generation cleanup did not retain the live resource: ${JSON.stringify(retainedObservation)}`)
+    const deletion = fixture.cleanup(retainedObservation)
+    assert(deletion.deleted === false && existsSync(fixture.temporaryRoot),
+      'the unconfirmed cleanup deleted the temporary install root')
+    // The parent must prove the recovery inputs are still on disk: install,
+    // config and the internal state that identifies the owned PIDs.
+    assert(existsSync(fixture.installedRoot) && existsSync(fixture.prefix) && existsSync(fixture.configPath)
+      && existsSync(lifecycle.internal.internalPath),
+    'the retained fixture lost its installation, config or internal state')
+    retainedObservation.deletion = deletion
+    writeJson(join(evidenceDir, 'retained-cleanup.json'), publicJson(retainedObservation))
+    // Register the retained observation under the sub-scenario case id, exactly
+    // as a real case's finalizer does, so the failure terminal below can pick it
+    // up from the shared registry.
+    recordCaseCleanup('BB14.stale-generation', retainedObservation)
+
+    // The failure terminal the sub-scenario produces is the real product stop
+    // refusal; the marker below is the fixed business failure the case body
+    // would otherwise have reported. Both must survive independently.
+    const failureDefinition = {
+      id: 'BB14.stale-generation',
+      owner: 'U1+U7',
+      gate: 'failed start stop and owned resource cleanup (isolated stale-generation negative)',
+      implemented: true,
+      run: () => { throw new Error(businessFailureText) },
+    }
+    const failureReceipt = await executeImplementedCase('BB14.stale-generation', failureDefinition,
+      { candidate: context.candidate, packRoot: context.packRoot, caseEvidenceRoot: subEvidenceDir }, subEvidenceDir)
+    assert(failureReceipt.status === 'failed', `the isolated failure terminal did not fail: ${JSON.stringify(failureReceipt)}`)
+    const receiptCleanup = failureReceipt.cleanup
+    assert(receiptCleanup !== undefined && receiptCleanup.outcome === 'retained',
+      `the failure receipt did not carry the retained cleanup: ${JSON.stringify(failureReceipt)}`)
+    assert(failureReceipt.external_observation?.error === businessFailureText,
+      `the primary business error was replaced: ${JSON.stringify(failureReceipt.external_observation)}`)
+
+    // Recovery: the same public stop entrypoint with the saved correct
+    // generation must confirm the process, listener and terminal release.
+    const recovery = await stopFixtureAndObserve(fixture, lifecycle, evidenceDir, 'bb14-stale-recovery',
+      { caseId: 'BB14', owner: 'U1+U7', generation: realGeneration })
+    recoveryObservation = recovery
+    assert(recovery.outcome === 'cleaned',
+      `the correct-generation recovery did not confirm the release: ${JSON.stringify(recovery)}`)
+    assert(recovery.stop.exit_code === 0, `the correct-generation recovery stop failed: ${recovery.stop.exit_code}`)
+    assert(recovery.terminal.state === 'stopped',
+      `the correct-generation recovery did not reach stopped: ${JSON.stringify(recovery.terminal)}`)
+    const recoveredPids = recovery.processes.map(entry => entry.pid)
+    assert(recoveredPids.every(pid => processProbe(pid).state === 'gone'),
+      `the correct-generation recovery left a live owned process: ${JSON.stringify(recoveredPids)}`)
+    const recoveredListeners = Object.fromEntries(Object.entries(ownedPorts).map(([id, port]) => [id, listeningPids(port)]))
+    assert(Object.values(recoveredListeners).every(pids => pids.length === 0),
+      `the correct-generation recovery left an owned listener: ${JSON.stringify(recoveredListeners)}`)
+    const recoveryDeletion = fixture.cleanup(recovery)
+    assert(recoveryDeletion.deleted === true && !existsSync(fixture.temporaryRoot),
+      'the confirmed recovery cleanup did not remove the temporary install root')
+    recovery.deletion = recoveryDeletion
+    writeJson(join(evidenceDir, 'recovery-cleanup.json'), publicJson(recovery))
+    lifecycle = undefined
+    return {
+      sub_scenario: 'stale-generation-negative',
+      real_generation: realGeneration,
+      attempted_generation: staleGeneration,
+      expected_refusal: {
+        semantic: 'STALE_GENERATION',
+        exit_code: staleStop.status,
+        observed: /STALE_GENERATION|stale/u.test(`${staleStop.stdout}\n${staleStop.stderr}`),
+        stderr: staleStop.stderr.trim(),
+      },
+      retained: {
+        outcome: retainedObservation.outcome,
+        stop_exit_code: retainedObservation.stop.exit_code,
+        processes_alive: retainedObservation.processes.filter(entry => entry.probe.state === 'alive').map(entry => entry.pid),
+        listeners_open: retainedObservation.listeners.filter(entry => entry.probe.state === 'listening').map(entry => entry.address),
+        temporary_root: fixture.temporaryRoot,
+        temporary_root_retained: existsSync(join(evidenceDir, 'retained-cleanup.json')),
+        evidence: join(evidenceDir, 'retained-cleanup.json'),
+        recovery_action: `agentteams stop --config ${fixture.configPath} --generation ${realGeneration}`,
+        release_condition: 'a correct-generation stop confirms every owned process, listener and the terminal state are released',
+      },
+      business_error: { preserved: true, text: failureReceipt.external_observation.error },
+      failure_receipt_cleanup_outcome: receiptCleanup.outcome,
+      recovery: {
+        outcome: recovery.outcome,
+        stop_exit_code: recovery.stop.exit_code,
+        terminal_state: recovery.terminal.state,
+        processes_gone: recoveredPids,
+        listeners_closed: recoveredListeners,
+        temporary_root_removed: recoveryDeletion.deleted === true,
+        evidence: join(evidenceDir, 'recovery-cleanup.json'),
+      },
+      parent_fixture_untouched: existsSync(parentFixtureRoot),
+      evidence_dir: evidenceDir,
+    }
+  } catch (error) {
+    // A recovery failure must retain the resource and stop the verification.
+    // The temporary install root is deliberately NOT deleted; the retained
+    // observation carries the identity needed to recover by hand.
+    if (retainedObservation !== undefined && recoveryObservation === undefined) {
+      retainedObservation.retained_obligations.push({
+        owner: 'U1+U7',
+        reason: 'the correct-generation recovery stop did not complete',
+        recovery_action: `agentteams stop --config ${fixture.configPath} --generation ${lifecycle?.parsed?.generation ?? 'unknown'}`,
+        release_condition: 'a later correct-generation stop confirms the resource release',
+      })
+      writeJson(join(evidenceDir, 'retained-cleanup.json'), publicJson(retainedObservation))
+    }
+    throw error
+  }
+}
+
 async function runBB14(context) {
   const evidenceDir = join(context.caseEvidenceRoot, 'BB14')
   mkdirSync(evidenceDir, { recursive: true })
@@ -5347,7 +6345,7 @@ async function runBB14(context) {
     assert(processAlive(sentinel.pid), 'unrelated sentinel process was stopped by lifecycle cleanup')
     assert(listeningPids(sentinel.port).includes(sentinel.pid), 'unrelated sentinel listener was stopped by lifecycle cleanup')
     const listenerState = Object.fromEntries(Object.entries(lifecycle.internal.ports).map(([id, port]) => [id, listeningPids(port)]))
-    fixture.cleanup()
+    const staleGeneration = await bb14StaleGenerationSubScenario(context, evidenceDir, fixture.temporaryRoot)
     const dirty = runChecked('git', ['status', '--porcelain'], { cwd: root, logPath: join(evidenceDir, 'worktree-status.json') }).stdout.trim()
     const retained = []
     const lifecycleStatePath = join(root, '.appsdk-control', 'lifecycle-adapter', 'stages', 'teams-lifecycle-admission.json')
@@ -5386,18 +6384,16 @@ async function runBB14(context) {
         temporary_root_removed: !existsSync(fixture.temporaryRoot),
         evidence_dir: evidenceDir,
         sentinel: { pid: sentinel.pid, port: sentinel.port, alive_after_stop: processAlive(sentinel.pid) },
+        stale_generation: staleGeneration,
         retained,
       },
       evidence_path: evidenceDir,
     }
   } finally {
     stopSentinel(sentinel)
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    attachCleanupObservation(result,
+      await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb14-final',
+        { caseId: 'BB14', owner: 'U1+U7' }))
   }
   return result
 }
@@ -5762,7 +6758,6 @@ async function runBB03(context) {
     assert(browserProfilesUnder(fixture).size === 0,
       `real browser processes remain after confirmed destruction: ${JSON.stringify([...browserProfilesUnder(fixture).keys()])}`)
     await page.close()
-    fixture.cleanup()
 
     result = {
       status: 'passed',
@@ -5797,14 +6792,10 @@ async function runBB03(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
     cleanupBrowserProfiles(fixture, camo.executable, profiles, evidenceDir)
     await page.close()
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb03-final',
+      { caseId: 'BB03', owner: 'U3' })
   }
   return result
 }
@@ -5910,7 +6901,6 @@ async function runBB05(context) {
 
     await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb05')
     lifecycle = undefined
-    fixture.cleanup()
     result = {
       status: 'passed',
       public_input: {
@@ -5938,12 +6928,8 @@ async function runBB05(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb05-final',
+      { caseId: 'BB05', owner: 'U3+U4' })
   }
   return result
 }
@@ -6097,7 +7083,6 @@ async function runBB06(context) {
     assert(browserProfilesUnder(fixture).size === 0,
       `real browser processes remain after confirmed release: ${JSON.stringify([...browserProfilesUnder(fixture).keys()])}`)
     await page.close()
-    fixture.cleanup()
 
     result = {
       status: 'passed',
@@ -6137,14 +7122,10 @@ async function runBB06(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    stopFixtureIfNeeded(fixture, lifecycle?.parsed.generation)
     cleanupBrowserProfiles(fixture, camo.executable, profiles, evidenceDir)
     await page.close()
-    try {
-      fixture.cleanup()
-    } catch {
-      // The case result records the primary observation.
-    }
+    await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb06-final',
+      { caseId: 'BB06', owner: 'U3+U4' })
   }
   return result
 }
@@ -6225,6 +7206,42 @@ function ensurePackRoot(packRoot, evidenceDir) {
   }
 }
 
+/**
+ * Run one implemented case through the real success/failure terminal. The
+ * success path returns the case result; the failure path records the primary
+ * business error and, independently, the cleanup observation the case registered
+ * before it threw, so a failed stop is never hidden behind the primary error.
+ * Used by `runCases` and by the BB14 isolated failure-terminal sub-scenario.
+ */
+async function executeImplementedCase(id, definition, context, caseEvidenceDir) {
+  try {
+    const result = await withEvidenceCase(id, () => definition.run(context))
+    const entry = { case_id: id, owner: definition.owner, capability_gate: definition.gate, ...result }
+    // A passed body whose cleanup could not be confirmed must never read as a
+    // final PASS; the resource responsibility is reported as its own failure.
+    if (entry.status === 'passed' && entry.cleanup_blocked === true) {
+      entry.status = 'failed'
+      entry.cleanup_blocked = true
+    }
+    return entry
+  } catch (error) {
+    const cleanup = takeCaseCleanup(id)
+    return {
+      case_id: id,
+      owner: definition.owner,
+      capability_gate: definition.gate,
+      status: 'failed',
+      public_input: { case: id },
+      external_observation: {
+        error: safeErrorMessage(error, 'case-receipt', id),
+        ...(cleanup === undefined ? {} : { cleanup }),
+      },
+      ...(cleanup === undefined ? {} : { cleanup }),
+      evidence_path: caseEvidenceDir,
+    }
+  }
+}
+
 async function runCases(parsed) {
   const evidenceRoot = parsed.evidenceRoot ?? join(dirname(parsed.receiptPath), `${Date.now()}-${process.pid}`)
   mkdirSync(evidenceRoot, { recursive: true })
@@ -6255,58 +7272,43 @@ async function runCases(parsed) {
     const caseEvidenceDir = join(caseEvidenceRoot, id)
     mkdirSync(caseEvidenceDir, { recursive: true })
     if (definition.implemented === true) {
-      try {
-        const result = await definition.run({ candidate, packRoot: staged.packRoot, caseEvidenceRoot })
-        receipt.cases.push({ case_id: id, owner: definition.owner, capability_gate: definition.gate, ...result })
-      } catch (error) {
-        receipt.cases.push({
-          case_id: id,
-          owner: definition.owner,
-          capability_gate: definition.gate,
-          status: 'failed',
-          public_input: { case: id },
-          external_observation: { error: error instanceof Error ? error.message : String(error) },
-          evidence_path: caseEvidenceDir,
-        })
-      }
+      receipt.cases.push(await executeImplementedCase(id, definition,
+        { candidate, packRoot: staged.packRoot, caseEvidenceRoot }, caseEvidenceDir))
     } else {
       const fixture = installPackage(staged.packRoot, caseEvidenceDir, id.toLowerCase())
+      // Installation-only probe: it never starts a launcher, Console, managed
+      // child or listener, so the shared cleanup entry gets an explicit
+      // "not-started" observation instead of a guessed empty list. The
+      // observation is persisted before deletion and deletion is decided from it.
+      const cleanup = notStartedCleanupObservation(fixture, { caseId: id, owner: definition.owner,
+        evidencePath: join(caseEvidenceDir, 'probe-cleanup.json') })
+      let primary
       try {
         runChecked(fixture.cli, ['init'], {
           cwd: fixture.temporaryRoot,
           env: fixture.env,
           logPath: join(caseEvidenceDir, 'init.json'),
         })
-        const observation = unverifiedProbe(fixture, definition, caseEvidenceDir)
-        receipt.cases.push({
-          case_id: id,
-          owner: definition.owner,
-          capability_gate: definition.gate,
-          status: 'unverified',
-          public_input: observation.command,
-          external_observation: {
-            missing_capability: definition.missingCapability,
-            probe: observation,
-          },
-          evidence_path: caseEvidenceDir,
-        })
+        primary = { status: 'unverified', probe: unverifiedProbe(fixture, definition, caseEvidenceDir) }
       } catch (error) {
-        receipt.cases.push({
-          case_id: id,
-          owner: definition.owner,
-          capability_gate: definition.gate,
-          status: 'failed',
-          public_input: { case: id },
-          external_observation: { error: error instanceof Error ? error.message : String(error) },
-          evidence_path: caseEvidenceDir,
-        })
-      } finally {
-        try {
-          fixture.cleanup()
-        } catch {
-          // BB14 records cleanup obligations. Other cases preserve their primary observation.
-        }
+        primary = { status: 'failed', error: safeErrorMessage(error, 'case-receipt', id) }
       }
+      const deletion = fixture.cleanup(cleanup)
+      cleanup.deletion = deletion
+      if (!deletion.deleted) cleanup.outcome = deletion.outcome
+      writeJson(join(caseEvidenceDir, 'probe-cleanup.json'), publicJson(cleanup))
+      receipt.cases.push({
+        case_id: id,
+        owner: definition.owner,
+        capability_gate: definition.gate,
+        ...(primary.status === 'unverified'
+          ? { status: 'unverified', public_input: primary.probe.command,
+              external_observation: { missing_capability: definition.missingCapability, probe: primary.probe, cleanup: publicJson(cleanup) } }
+          : { status: 'failed', public_input: { case: id },
+              external_observation: { error: primary.error, cleanup: publicJson(cleanup) } }),
+        cleanup: publicJson(cleanup),
+        evidence_path: caseEvidenceDir,
+      })
     }
   }
   const failed = receipt.cases.some(item => item.status === 'failed')
@@ -6344,7 +7346,7 @@ async function main() {
     })}\n`)
     process.exitCode = receipt.exit.code
   } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    process.stderr.write(`${safeErrorMessage(error, 'terminal-stderr')}\n`)
     process.exitCode = exitCode.failed
   }
 }
@@ -6355,6 +7357,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.
 
 export {
   Bb10SourceError,
+  EVIDENCE_BOUNDARY_PREFIX,
   agentPolicyRefusalExpectedRevision,
   bb10BoundaryResultPass,
   bb10BaselinePass,
@@ -6371,8 +7374,15 @@ export {
   canonicalSessionConfigText,
   cases,
   closeProviderStub,
+  cleanupFixtureObservation,
+  cleanupOutcome,
+  executeImplementedCase,
+  fixtureDeletionConfirmation,
+  findEvidenceViolation,
   createSessionProviderStub,
   listenProviderStub,
+  listenerProbe,
+  listenerSocketsByPid,
   parseArgs,
   parseCanonicalProviderSource,
   parseFlatSecretKey,
@@ -6382,10 +7392,18 @@ export {
   readAcceptedConfigRevision,
   readDeclaredSecretKey,
   redactCredential,
+  recordCaseCleanup,
+  registerEvidenceSecret,
+  run,
+  safeErrorMessage,
   sessionBackupModel,
   sessionBackupProviderId,
   sessionManualModel,
   sessionManualProviderId,
   sessionPrimaryModel,
   sessionPrimaryProviderId,
+  stopFixtureIfNeeded,
+  summarizeProcessProbe,
+  summarizeListenerProbe,
+  writeJson,
 }

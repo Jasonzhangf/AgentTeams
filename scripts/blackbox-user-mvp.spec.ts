@@ -1,5 +1,6 @@
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { get as httpsGet } from 'node:https'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -14,6 +15,7 @@ import { createConsoleConfigBinding } from '../runtime/console-config.ts'
 import { createRelayServer } from '../server/relay.ts'
 import {
   Bb10SourceError,
+  EVIDENCE_BOUNDARY_PREFIX,
   agentPolicyRefusalExpectedRevision,
   bb10BaselinePass,
   bb10BoundarySourcesPass,
@@ -33,21 +35,36 @@ import {
   createSessionProviderStub,
   exitCode,
   listenProviderStub,
+  listenerProbe,
+  listenerSocketsByPid,
   parseArgs,
   parseCanonicalProviderSource,
   parseFlatSecretKey,
   parseRccServerSource,
   boundaryAcceptedBindingSnapshot,
   boundaryBindingSnapshot,
+  cleanupOutcome,
+  cleanupFixtureObservation,
+  executeImplementedCase,
+  fixtureDeletionConfirmation,
+  findEvidenceViolation,
   readAcceptedConfigRevision,
   readDeclaredSecretKey,
   redactCredential,
+  recordCaseCleanup,
+  registerEvidenceSecret,
+  run,
+  safeErrorMessage,
   sessionBackupModel,
   sessionBackupProviderId,
   sessionManualModel,
   sessionManualProviderId,
   sessionPrimaryModel,
   sessionPrimaryProviderId,
+  stopFixtureIfNeeded,
+  summarizeProcessProbe,
+  summarizeListenerProbe,
+  writeJson,
 } from './blackbox-user-mvp.mjs'
 
 const temporaryRoots: string[] = []
@@ -301,6 +318,285 @@ describe('blackbox user MVP driver interface', () => {
     expect(exitCode.failed).toBe(1)
     expect(exitCode.unverified).toBe(2)
     expect(exitCode.unverified).not.toBe(exitCode.failed)
+  })
+
+  it('classifies fully observed cleanup as cleaned', () => {
+    expect(cleanupOutcome({
+      processState: 'gone',
+      listenerState: 'gone',
+      terminalState: 'stopped',
+      observationsKnown: true,
+    })).toBe('cleaned')
+  })
+
+  it('retains a live owned process even when every query is known', () => {
+    expect(cleanupOutcome({
+      processState: 'alive',
+      listenerState: 'gone',
+      terminalState: 'stopped',
+      observationsKnown: true,
+    })).toBe('retained')
+  })
+
+  it('never reports cleaned when a listener query is unknown', () => {
+    expect(cleanupOutcome({
+      processState: 'gone',
+      listenerState: 'unknown',
+      terminalState: 'stopped',
+      observationsKnown: true,
+    })).toBe('unconfirmed')
+    expect(cleanupOutcome({
+      processState: 'gone',
+      listenerState: 'gone',
+      terminalState: 'unknown',
+      observationsKnown: true,
+    })).toBe('unconfirmed')
+  })
+
+  it('distinguishes a confirmed process exit from an unqueryable process', () => {
+    expect(summarizeProcessProbe({ state: 'gone', reason: 'not-found' }))
+      .toEqual({ state: 'gone', reason: 'not-found' })
+    expect(summarizeProcessProbe({ state: 'unknown', reason: 'invalid-pid' }))
+      .toEqual({ state: 'unknown', reason: 'invalid-pid' })
+    expect(summarizeProcessProbe({ state: 'unknown', reason: 'query-failed' }))
+      .toEqual({ state: 'unknown', reason: 'query-failed' })
+  })
+
+  it('distinguishes an empty listening set from an unqueryable listener set', () => {
+    expect(summarizeListenerProbe({ state: 'gone', pids: [], reason: 'no-match' }))
+      .toEqual({ state: 'gone', pids: [], reason: 'no-match' })
+    expect(summarizeListenerProbe({ state: 'unknown', pids: [], reason: 'query-failed' }))
+      .toEqual({ state: 'unknown', pids: [], reason: 'query-failed' })
+  })
+
+  it('reads lsof exit 1 with no output as a known empty listener set, not as unknown', { timeout: 20_000 }, async () => {
+    // lsof exits 1 with empty stdout and empty stderr when it matched no files.
+    // For a specific PID that is the real "this PID holds no listening socket"
+    // answer. A subject that is alive with no listener, and one that is gone,
+    // must both land on a known result so a released resource is not reported as
+    // unconfirmed. A missing tool / failed spawn stays unknown.
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    await new Promise<void>(resolveSpawn => child.once('spawn', () => resolveSpawn()))
+    const livePid = child.pid as number
+    try {
+      const live = listenerSocketsByPid(livePid)
+      expect(live.state).toBe('known')
+      expect(live.sockets).toEqual([])
+
+      child.kill('SIGKILL')
+      await new Promise<void>(resolveExit => child.once('exit', () => resolveExit()))
+      const gone = listenerSocketsByPid(livePid)
+      expect(gone.state).toBe('known')
+      expect(gone.sockets).toEqual([])
+
+      const unknown = listenerSocketsByPid(-1)
+      expect(unknown.state).toBe('unknown')
+      expect(unknown.reason).toBe('invalid-pid')
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+    }
+  })
+
+  it('reads a closed port as gone while a query failure stays unknown', () => {
+    // A port with no listener is a known release (no-match), not an unknown.
+    const closed = listenerProbe(1)
+    expect(closed.state).toBe('gone')
+    expect(closed.reason).toBe('no-match')
+  })
+})
+
+const cleanupProbeFixture = {
+  label: 'spec-probe',
+  temporaryRoot: '/spec/does-not-exist/fixture-root',
+  cli: '/spec/does-not-exist/fixture-bin/agentteams',
+  configPath: '/spec/does-not-exist/fixture-home/.agentteams/config.toml',
+  lifecycle: undefined,
+} as unknown as Parameters<typeof cleanupFixtureObservation>[0]
+
+function probeCleanupObservation(options: {
+  processState: 'alive' | 'gone' | 'unknown'
+  listenerState: 'listening' | 'gone' | 'unknown'
+  terminalState: 'stopped' | 'failed' | 'unknown' | 'not-started'
+  observationsKnown?: boolean
+  started?: boolean
+  stopExitCode?: number | null
+  captureErrors?: string[]
+}) {
+  return cleanupFixtureObservation(cleanupProbeFixture, undefined, {
+    caseId: 'BB14',
+    owner: 'U1+U7',
+    stop: {
+      attempted: options.stopExitCode !== null,
+      generation: 3,
+      exit_code: options.stopExitCode ?? null,
+      command: null,
+      error: options.stopExitCode === 0 || options.stopExitCode === null ? null : 'stale generation refusal',
+    },
+    terminal: { query_exit_code: 0, state: options.terminalState },
+    terminalState: options.terminalState,
+    observationsKnown: options.observationsKnown,
+    started: options.started,
+    captureErrors: options.captureErrors,
+    resources: {
+      processes: [{ owner: 'lifecycle', role: 'launcher', pid: 4242,
+        attribution: 'spec probe row', provenance: 'spec-internal' }],
+      listeners: [{ owner: 'lifecycle', role: 'relay', kind: 'port', address: '8484',
+        attribution: 'spec probe row', provenance: 'spec-internal' }],
+      capture_errors: [],
+    },
+    testProcessProbe: () => ({ state: options.processState, reason: 'spec-probe' }),
+    testProbe: () => ({ state: options.listenerState, pids: [], reason: 'spec-probe' }),
+  })
+}
+
+interface CleanupObservationShape {
+  readonly outcome: string
+  readonly process_state: string
+  readonly listener_state: string
+  readonly terminal_state: string
+  readonly capture_errors: readonly string[]
+  readonly stop: { readonly exit_code: number | null; readonly error: string | null }
+  readonly retained_obligations: readonly unknown[]
+  readonly deletion?: { readonly deleted: boolean }
+}
+
+describe('owned-resource cleanup observation', () => {
+  it('classifies a fully observed release as cleaned with no obligations', () => {
+    const observation = probeCleanupObservation({
+      processState: 'gone', listenerState: 'gone', terminalState: 'stopped',
+      observationsKnown: true, started: true, stopExitCode: 0,
+    }) as unknown as CleanupObservationShape
+    expect(observation.outcome).toBe('cleaned')
+    expect(observation.process_state).toBe('gone')
+    expect(observation.listener_state).toBe('gone')
+    expect(observation.retained_obligations.length).toBe(0)
+  })
+
+  it('retains a live owned process and keeps the stop failure fact separate from the outcome', () => {
+    const observation = probeCleanupObservation({
+      processState: 'alive', listenerState: 'gone', terminalState: 'failed',
+      observationsKnown: true, started: true, stopExitCode: 1,
+    }) as unknown as CleanupObservationShape
+    expect(observation.outcome).toBe('retained')
+    expect(observation.stop.exit_code).toBe(1)
+    expect(observation.stop.error).toBe('stale generation refusal')
+    expect(observation.retained_obligations.length).toBeGreaterThan(0)
+  })
+
+  it('never reports cleaned when any resource query or terminal read is unknown', () => {
+    const cases = [
+      { processState: 'unknown', listenerState: 'gone', terminalState: 'stopped' },
+      { processState: 'gone', listenerState: 'unknown', terminalState: 'stopped' },
+      { processState: 'gone', listenerState: 'gone', terminalState: 'unknown' },
+    ] as const
+    for (const input of cases) {
+      const observation = probeCleanupObservation({
+        ...input, observationsKnown: true, started: true, stopExitCode: 0,
+      }) as unknown as CleanupObservationShape
+      expect(observation.outcome).toBe('unconfirmed')
+      expect(observation.outcome).not.toBe('cleaned')
+    }
+  })
+
+  it('treats an incomplete observation set as unconfirmed even when every probe says gone', () => {
+    const observation = probeCleanupObservation({
+      processState: 'gone', listenerState: 'gone', terminalState: 'stopped',
+      observationsKnown: false, started: true, stopExitCode: 0,
+    }) as unknown as CleanupObservationShape
+    expect(observation.outcome).toBe('unconfirmed')
+  })
+
+  it('records a failed observation query as a capture error and never as released', () => {
+    const observation = probeCleanupObservation({
+      processState: 'gone', listenerState: 'gone', terminalState: 'stopped',
+      observationsKnown: true, started: true, stopExitCode: 0,
+      captureErrors: ['lsof exited 3 for the Relay lease port'],
+    }) as unknown as CleanupObservationShape
+    expect(observation.capture_errors).toEqual(['lsof exited 3 for the Relay lease port'])
+    expect(observation.outcome).toBe('unconfirmed')
+  })
+})
+
+describe('cleanup gate before deleting an install root', () => {
+  it('refuses to delete when no cleanup confirmation was produced', () => {
+    const root = temporaryRoot()
+    const result = fixtureDeletionConfirmation(root, null)
+    expect(result).toEqual({ deleted: false, outcome: 'unconfirmed', reason: 'cleanup confirmation is required' })
+    expect(existsSync(root)).toBe(true)
+  })
+
+  it('refuses to delete and returns the fact when the cleanup outcome is not cleaned', () => {
+    const root = temporaryRoot()
+    const result = fixtureDeletionConfirmation(root, { outcome: 'retained', paths: { temporary_root: root } })
+    expect(result.deleted).toBe(false)
+    expect(result.outcome).toBe('retained')
+    expect(String(result.reason)).toContain('did not confirm')
+    expect(existsSync(root)).toBe(true)
+  })
+
+  it('deletes only after a cleaned observation and records the deletion', () => {
+    const root = temporaryRoot()
+    const result = fixtureDeletionConfirmation(root, { outcome: 'cleaned' })
+    expect(result).toEqual({ deleted: true, outcome: 'cleaned' })
+    expect(existsSync(root)).toBe(false)
+  })
+})
+
+describe('failure-terminal stop wrapper', () => {
+  it('returns an observation with the failure fact instead of throwing when the stop fails', { timeout: 20_000 }, async () => {
+    // A real child process stands in for the launcher; a fake installed CLI that
+    // always exits non-zero stands in for a failing stop. The wrapper must
+    // return the observed failure (live resource plus non-zero stop) rather than
+    // throw, and it must not delete the fixture root.
+    const root = temporaryRoot()
+    const evidenceDir = join(root, 'evidence')
+    const fixtureHome = join(root, 'home')
+    const internalPath = join(fixtureHome, '.agentteams', 'internal.toml')
+    mkdirSync(join(fixtureHome, '.agentteams'), { recursive: true })
+    mkdirSync(evidenceDir, { recursive: true })
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    await new Promise<void>(resolveSpawn => child.once('spawn', () => resolveSpawn()))
+    try {
+      writeFileSync(internalPath, [
+        '[launcher]',
+        'state = "running"',
+        `pid = ${child.pid}`,
+        'generation = 1',
+        '',
+        '[daemon.relay]',
+        `pid = ${child.pid}`,
+        'entryPath = "/spec/relay.js"',
+        'generation = 1',
+        'config = "{\\"listen\\":{\\"port\\":9}}"',
+        '',
+      ].join('\n'))
+      const cliPath = join(root, 'failing-agentteams')
+      writeFileSync(cliPath, '#!/bin/sh\necho "STALE_GENERATION: stop refused" >&2\nexit 1\n', { mode: 0o755 })
+      const fixture = {
+        label: 'spec-failing-fixture',
+        temporaryRoot: root,
+        cli: cliPath,
+        configPath: join(fixtureHome, '.agentteams', 'config.toml'),
+        env: {},
+        lifecycle: undefined,
+      } as unknown as Parameters<typeof stopFixtureIfNeeded>[0]
+      const lifecycle = {
+        parsed: { generation: 1 },
+        internal: { internalPath },
+      } as unknown as Parameters<typeof stopFixtureIfNeeded>[1]
+      const observation = await stopFixtureIfNeeded(fixture, lifecycle, evidenceDir, 'spec-final',
+        { caseId: 'BB14', owner: 'U1+U7' })
+      expect(observation.stop.exit_code).toBe(1)
+      expect(String(observation.stop.error)).toContain('STALE_GENERATION')
+      expect(observation.outcome).toBe('retained')
+      expect(observation.process_state).toBe('alive')
+      expect(existsSync(root)).toBe(true)
+      const deletion = fixtureDeletionConfirmation(root, observation)
+      expect(deletion.deleted).toBe(false)
+      expect(existsSync(root)).toBe(true)
+    } finally {
+      child.kill('SIGTERM')
+    }
   })
 })
 
@@ -1195,5 +1491,274 @@ describe('BB10 session provider stub catalog modes', () => {
       await closeProviderStub(normal)
       await closeProviderStub(rejected)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P1-A evidence boundary. Every test calls the same production sink helpers the
+// driver uses, so a regression that stops guarding a sink fails here.
+// ---------------------------------------------------------------------------
+
+const boundarySpecRoots: string[] = []
+
+function boundaryRootDir(): string {
+  const root = mkdtempSync(join(tmpdir(), 'bb10-boundary-'))
+  boundarySpecRoots.push(root)
+  return root
+}
+
+afterEach(() => {
+  for (const root of boundarySpecRoots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
+
+function syntheticCredential(label: string): string {
+  return `bb10-boundary-${label}-${randomUUID()}`
+}
+
+describe('BB10 evidence boundary: registered credential values', () => {
+  it('rejects a registered value without creating the target file', () => {
+    const secret = syntheticCredential('create')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const target = join(root, 'nested', 'evidence.json')
+    let thrown: unknown
+    try {
+      writeJson(target, { nested: { note: `prefix ${secret} suffix` }, list: [secret] })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).toContain(EVIDENCE_BOUNDARY_PREFIX)
+    expect((thrown as Error).message).toContain('registered-credential')
+    expect((thrown as Error).message).not.toContain(secret)
+    expect(existsSync(target)).toBe(false)
+  })
+
+  it('rejects a registered value without overwriting an existing safe file', () => {
+    const secret = syntheticCredential('overwrite')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const target = join(root, 'existing.json')
+    const safe = { status: 'passed', credential_env: 'TEAMS_BB10_CANONICAL_API_KEY' }
+    writeJson(target, safe)
+    const before = readFileSync(target, 'utf8')
+    expect(() => writeJson(target, { status: 'passed', echo: secret })).toThrow(/evidence boundary rejected/u)
+    expect(readFileSync(target, 'utf8')).toBe(before)
+  })
+})
+
+describe('BB10 evidence boundary: auth-field and auth-value rules', () => {
+  it('rejects nested auth fields even when the value was never registered', () => {
+    const root = boundaryRootDir()
+    const nested = join(root, 'nested.json')
+    expect(() => writeJson(nested, { error: { detail: { authorization: 'Basic YWJjZGVmZ2hpamtsbW5vcA==' } } }))
+      .toThrow(new RegExp(`evidence boundary rejected: (auth-field|auth-value)`, 'u'))
+    expect(existsSync(nested)).toBe(false)
+
+    const plain = join(root, 'plain.json')
+    expect(() => writeJson(plain, { upstream: { 'x-api-key': 'abcdef123456' } }))
+      .toThrow(/evidence boundary rejected: auth-field/u)
+    expect(existsSync(plain)).toBe(false)
+  })
+
+  it('rejects a Bearer/Basic token literal inside a plain string', () => {
+    expect(findEvidenceViolation('Authorization: Bearer abcdef123456ghi789')).toBe('auth-value')
+    expect(findEvidenceViolation('failed with Basic YmFzZTY0dG9rZW52YWx1ZQ==')).toBe('auth-value')
+  })
+
+  it('does not reject public auth reference fields or the Console challenge', () => {
+    const samples: readonly unknown[] = [
+      { auth: { kind: 'bearer' } },
+      { auth: { kind: 'bearer', credentialRef: 'TEAMS_BB10_CANONICAL_API_KEY' } },
+      { auth_alias: 'key1' },
+      { secret_key: 'sample.key1' },
+      { secret_file: '/Volumes/extension/.rcc/secrets/v3/provider-auth.conf' },
+      { credential_env: 'TEAMS_BB10_CANONICAL_API_KEY' },
+      { credential_length: 64 },
+      { authenticationChallenge: 'Basic realm="AgentTeams", charset="UTF-8"' },
+      { passwordEnv: 'AGENTTEAMS_BB_CONSOLE_PASSWORD' },
+    ]
+    const root = boundaryRootDir()
+    for (const [index, sample] of samples.entries()) {
+      const target = join(root, `public-${index}.json`)
+      expect(() => writeJson(target, sample)).not.toThrow()
+      expect(existsSync(target)).toBe(true)
+      expect(findEvidenceViolation(JSON.stringify(sample))).toBeUndefined()
+    }
+    // A `Bearer` word with no token literal is prose, not material.
+    expect(findEvidenceViolation('the provider uses Bearer authentication')).toBeUndefined()
+  })
+})
+
+describe('BB10 evidence boundary: subprocess logPath and error text', () => {
+  it('refuses the logPath and the up-thrown error when a child echoes the credential', () => {
+    const secret = syntheticCredential('child')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const logPath = join(root, 'child-output.json')
+    const script = 'process.stdout.write(process.env.LEAK); process.stderr.write("authorization: Bearer " + process.env.LEAK)'
+    let thrown: unknown
+    try {
+      run(process.execPath, ['-e', script], {
+        env: { ...process.env, LEAK: secret },
+        logPath,
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).not.toContain(secret)
+    expect((thrown as Error).message).toMatch(new RegExp(`${EVIDENCE_BOUNDARY_PREFIX}: `, 'u'))
+    if (existsSync(logPath)) expect(readFileSync(logPath, 'utf8')).not.toContain(secret)
+  })
+
+  it('keeps the expectStatus failure path free of the credential value', () => {
+    const secret = syntheticCredential('status')
+    registerEvidenceSecret(secret)
+    let thrown: unknown
+    try {
+      run(process.execPath, ['-e', 'process.stderr.write(process.env.LEAK); process.exit(3)'], {
+        env: { ...process.env, LEAK: secret },
+        expectStatus: 0,
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).not.toContain(secret)
+    expect((thrown as Error).message).toContain(EVIDENCE_BOUNDARY_PREFIX)
+  })
+
+  it('keeps the expectNonZero failure path free of the credential value', () => {
+    const secret = syntheticCredential('nonzero')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const logPath = join(root, 'nonzero-output.json')
+    let thrown: unknown
+    try {
+      run(process.execPath, ['-e', 'process.stdout.write(process.env.LEAK)'], {
+        env: { ...process.env, LEAK: secret },
+        logPath,
+        expectNonZero: true,
+      })
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).not.toContain(secret)
+    expect((thrown as Error).message).toContain(EVIDENCE_BOUNDARY_PREFIX)
+  })
+})
+
+describe('BB10 evidence boundary: case receipt and terminal propagation', () => {
+  it('writes a safe case receipt and rejects a raw credential-bearing receipt', () => {
+    const secret = syntheticCredential('receipt')
+    registerEvidenceSecret(secret)
+    const root = boundaryRootDir()
+    const receiptPath = join(root, 'receipt.json')
+    const primaryError = new Error(`provider dispatch failed with Authorization: Bearer ${secret}`)
+    const safeError = safeErrorMessage(primaryError, 'case-receipt', 'BB10')
+    expect(safeError).not.toContain(secret)
+    expect(safeError.startsWith(EVIDENCE_BOUNDARY_PREFIX)).toBe(true)
+    expect(safeError).toMatch(/registered-credential|auth-value|auth-field/u)
+
+    const receipt = {
+      case_id: 'BB10',
+      status: 'failed',
+      public_input: { case: 'BB10' },
+      external_observation: { error: safeError },
+    }
+    writeJson(receiptPath, receipt)
+    expect(readFileSync(receiptPath, 'utf8')).not.toContain(secret)
+
+    // Even if a caller forgets to sanitize, the same receipt sink refuses it.
+    const rawPath = join(root, 'raw-receipt.json')
+    expect(() => writeJson(rawPath, { external_observation: { error: primaryError.message } }))
+      .toThrow(/evidence boundary rejected/u)
+    expect(existsSync(rawPath)).toBe(false)
+  })
+
+  it('keeps the real driver terminal path non-zero and free of a synthetic value', () => {
+    // The real CLI over a failing input must exit non-zero, name a recognizable
+    // category, and never create a receipt. This exercises `main()`'s terminal
+    // stderr sink; the case-receipt sink itself is covered by the test above.
+    const root = boundaryRootDir()
+    const receiptPath = join(root, 'receipt.json')
+    let status = 0
+    let stdout = ''
+    let stderr = ''
+    try {
+      execFileSync(process.execPath, ['scripts/blackbox-user-mvp.mjs', '--case', 'BB99', '--receipt', receiptPath], {
+        cwd: resolve(import.meta.dirname, '..'),
+        encoding: 'utf8',
+      })
+    } catch (error) {
+      const failure = error as { status?: number, stdout?: string, stderr?: string }
+      status = failure.status ?? 0
+      stdout = failure.stdout ?? ''
+      stderr = failure.stderr ?? ''
+    }
+    expect(status).not.toBe(0)
+    expect(stdout).not.toContain('evidence boundary')
+    expect(stderr).toContain('unknown case')
+    expect(existsSync(receiptPath)).toBe(false)
+  })
+})
+
+describe('cleanup migration completeness', () => {
+  it('has no unconditional fixture deletion immediately after a stop helper', () => {
+    // The failure-terminal bug was an unconditional `fixture.cleanup()` right
+    // after a swallow-everything `stopFixtureIfNeeded()`. Every deletion must now
+    // consume a confirmed observation instead. Scan the real source so a future
+    // caller that reintroduces the legacy pattern fails here.
+    const source = readFileSync(resolve(import.meta.dirname, 'blackbox-user-mvp.mjs'), 'utf8')
+    expect(source).not.toMatch(/stopFixtureIfNeeded\([^\n]*\)\s*\n[^\n]*fixture\.cleanup\(\)/u)
+    expect(source).not.toMatch(/try\s*\{\s*fixture\.cleanup\(\)\s*\}\s*catch/u)
+    // Every deletion site must be guarded by an observation argument or the
+    // shared confirmation helper.
+    const deletions = [...source.matchAll(/(?:fixture\.cleanup\(|fixtureDeletionConfirmation\()([^\n]*)/gu)]
+    for (const match of deletions) {
+      const argument = match[1].trim()
+      expect(argument.length).toBeGreaterThan(0)
+      expect(argument).not.toBe(')')
+    }
+  })
+
+  it('keeps the primary business error intact and carries cleanup independently', async () => {
+    // A synthetic case that throws the business error after registering a
+    // retained cleanup must produce a failed receipt whose error is the original
+    // text and whose cleanup is the independent retained observation.
+    const root = temporaryRoot()
+    const evidenceDir = join(root, 'case-evidence')
+    mkdirSync(evidenceDir, { recursive: true })
+    const observation = cleanupFixtureObservation(cleanupProbeFixture, undefined, {
+      caseId: 'BB99', owner: 'U1+U7',
+      stop: { attempted: true, generation: 3, exit_code: 1, command: null, error: 'stale generation refusal' },
+      terminal: { query_exit_code: 0, state: 'running' },
+      terminalState: 'running', observationsKnown: true, started: true,
+      resources: {
+        processes: [{ owner: 'lifecycle', role: 'launcher', pid: 4242,
+          attribution: 'spec probe row', provenance: 'spec-internal' }],
+        listeners: [], capture_errors: [],
+      },
+      testProcessProbe: () => ({ state: 'alive', reason: 'spec-probe' }),
+      testProbe: () => ({ state: 'gone', pids: [], reason: 'spec-probe' }),
+    })
+    expect(observation.outcome).toBe('retained')
+    const businessText = 'blackbox-user-mvp: the installed Session entry refused the request'
+    const definition = {
+      id: 'BB99', owner: 'U1+U7', gate: 'synthetic negative', implemented: true,
+      run: () => {
+        recordCaseCleanup('BB99', observation)
+        throw new Error(businessText)
+      },
+    }
+    const receipt = await executeImplementedCase('BB99', definition,
+      { candidate: {}, packRoot: '/unused', caseEvidenceRoot: evidenceDir }, evidenceDir)
+    expect(receipt.status).toBe('failed')
+    expect(receipt.external_observation.error).toBe(businessText)
+    expect(receipt.cleanup.outcome).toBe('retained')
+    expect(receipt.cleanup.stop.exit_code).toBe(1)
+    expect(receipt.cleanup.retained_obligations.length).toBeGreaterThan(0)
   })
 })

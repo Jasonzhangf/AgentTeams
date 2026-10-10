@@ -251,6 +251,74 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
+it('keeps the cleanup failure instead of reporting a later child exit as unexpected', async () => {
+  // Keep the temporary root short: the Work control socket must stay inside the
+  // macOS 104-byte sun_path limit or listen silently truncates and lstat fails.
+  const root = await mkdtemp(join(tmpdir(), 'teams-attrib-'))
+  const relay = join(root, 'relay.mjs')
+  const agent = join(root, 'agent.mjs')
+  let internalPath: string | undefined
+  try {
+    // The relay answers SIGTERM at once; the daemon ignores SIGTERM past the
+    // stop window. The daemon is torn down first, so the relay exits while the
+    // launcher is still waiting on the daemon that missed its window.
+    await writeFile(relay, "console.log('relay listening wss://127.0.0.1:1'); setInterval(() => {}, 1000); process.once('SIGTERM', () => process.exit(0))\n")
+    await writeFile(agent, `const generation = 1
+process.send?.({ kind: 'daemon.status', agentId: 'browser', generation,
+  endpoint: { agentId: 'browser', identity: { hostId: 'browser-host', machineId: 'machine', agentId: 'browser', accountId: 'account', agentKind: 'custom', label: 'Browser' },
+    role: 'provider', presence: 'online', state: 'online', generation, capabilities: [] } })
+process.send?.({ kind: 'daemon.registered', agentId: 'browser', generation })
+process.once('SIGTERM', () => {})
+setInterval(() => {}, 1000)
+`)
+    await writeFile(join(root, 'relay.json'), JSON.stringify({ version: 1, listen: { host: '127.0.0.1', port: 48022 } }))
+    await writeLocalConfig(join(root, 'config.toml'), `version = 2
+
+[relay]
+config = "relay.json"
+
+[endpoints.browser]
+role = "provider"
+identity = { hostId = "browser-host", machineId = "machine", agentId = "browser", accountId = "account", agentKind = "custom", label = "Browser" }
+scopeId = "scope"
+dataDirectory = "data/browser"
+leasePort = 48122
+presenceIntervalMs = 100
+policy = { revision = 1, allowedConsumers = [], allowedManagers = [] }
+cli = { camoExecutable = "/missing/camo", searchExecutable = "/usr/bin/rg", searchRoot = ".", profilePrefix = "teams-browser" }
+relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeoutMs = 1, admissionTimeoutMs = 1, requestTimeoutMs = 1, maxMessageBytes = 1, maxBufferedBytes = 1, maxPendingFrames = 1, maxPendingRequests = 1, maxDataConnections = 1 }
+`)
+    const config = await loadLocalConfig(join(root, 'config.toml'))
+    internalPath = config.internalPath
+    const startToken = 'stop-attribution-token'
+    await writeLocalInternalLauncherState(config.internalPath!, { pid: 0, generation: 1, startToken, state: 'starting' })
+    const supervisor = createLocalSupervisor(config, { relayEntry: relay, agentEntry: agent, startupTimeoutMs: 2000, stopTimeoutMs: 500, startToken })
+    await supervisor.start()
+    expect(supervisor.state()).toBe('running')
+
+    await expect(supervisor.stop()).rejects.toThrow(/cleanup remains unconfirmed/)
+    expect(supervisor.state()).toBe('failed')
+    const internal = await readLocalInternalConfig(config.internalPath!)
+    expect(internal.launcher?.state).toBe('failed')
+    // The daemon that missed its window is the real cause. The relay's clean
+    // exit 0 during teardown must not replace it with a misleading message.
+    expect(internal.launcher?.error).toContain('exit remains unconfirmed')
+    expect(internal.launcher?.error).not.toContain('exited unexpectedly')
+  } finally {
+    if (internalPath !== undefined) {
+      try {
+        const internal = await readLocalInternalConfig(internalPath)
+        for (const daemon of Object.values(internal.daemons ?? {})) {
+          if (daemon.pid !== undefined && daemon.pid > 0) {
+            try { process.kill(daemon.pid, 'SIGKILL') } catch { /* already reaped */ }
+          }
+        }
+      } catch { /* the internal record may already be absent */ }
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+}, 15000)
+
 it('does not report online for a non-owned process or a closed Console listener', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-console-ownership-'))
   const childPath = join(root, 'console.mjs')
