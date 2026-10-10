@@ -4,9 +4,11 @@ import { createHash, randomUUID } from 'node:crypto'
 import { spawn, spawnSync } from 'node:child_process'
 import {
   symlinkSync,
+  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -285,31 +287,46 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
 }
 
+// A child that writes more than 64 KiB and then exits abnormally loses everything past the
+// pipe buffer, and the stderr of a failed case is exactly the evidence this driver exists to
+// keep. Route both streams through files so a failure terminal records the complete output.
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: options.cwd ?? root,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-    env: options.env ?? process.env,
-  })
-  const output = {
-    command,
-    args,
-    status: result.status,
-    signal: result.signal,
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
+  const captureRoot = mkdtempSync(join(tmpdir(), 'agentteams-bb-run-'))
+  const stdoutPath = join(captureRoot, 'stdout.log')
+  const stderrPath = join(captureRoot, 'stderr.log')
+  let stdoutFd
+  let stderrFd
+  try {
+    stdoutFd = openSync(stdoutPath, 'w')
+    stderrFd = openSync(stderrPath, 'w')
+    const result = spawnSync(command, args, {
+      cwd: options.cwd ?? root,
+      stdio: ['ignore', stdoutFd, stderrFd],
+      env: options.env ?? process.env,
+    })
+    const output = {
+      command,
+      args,
+      status: result.status,
+      signal: result.signal,
+      stdout: readFileSync(stdoutPath, 'utf8'),
+      stderr: readFileSync(stderrPath, 'utf8'),
+    }
+    if (options.logPath !== undefined) writeJson(options.logPath, output)
+    if (options.expectStatus !== undefined && result.status !== options.expectStatus) {
+      failGuarded(`${command} ${args.join(' ')} exited ${result.status}; expected ${options.expectStatus}\n${output.stderr || output.stdout || ''}`,
+        output.stderr || output.stdout || '', 'run-failure-detail')
+    }
+    if (options.expectNonZero === true && (result.status === 0 || result.status === null)) {
+      failGuarded(`${command} ${args.join(' ')} unexpectedly succeeded\n${output.stdout}${output.stderr}`,
+        `${output.stdout}${output.stderr}`, 'run-failure-detail')
+    }
+    return output
+  } finally {
+    if (stdoutFd !== undefined) closeSync(stdoutFd)
+    if (stderrFd !== undefined) closeSync(stderrFd)
+    rmSync(captureRoot, { recursive: true, force: true })
   }
-  if (options.logPath !== undefined) writeJson(options.logPath, output)
-  if (options.expectStatus !== undefined && result.status !== options.expectStatus) {
-    failGuarded(`${command} ${args.join(' ')} exited ${result.status}; expected ${options.expectStatus}\n${result.stderr || result.stdout || ''}`,
-      result.stderr || result.stdout || '', 'run-failure-detail')
-  }
-  if (options.expectNonZero === true && (result.status === 0 || result.status === null)) {
-    failGuarded(`${command} ${args.join(' ')} unexpectedly succeeded\n${result.stdout ?? ''}${result.stderr ?? ''}`,
-      `${result.stdout ?? ''}${result.stderr ?? ''}`, 'run-failure-detail')
-  }
-  return output
 }
 
 function runChecked(command, args, options = {}) {

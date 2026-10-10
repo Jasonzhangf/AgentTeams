@@ -1,6 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { assertCandidateIdentity, currentCandidateIdentity, validateCandidateIdentity } from './receipt-identity.mjs'
@@ -23,25 +34,40 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
 }
 
+// A failing gate writes far more than the 64 KiB pipe buffer, and Node drops the remainder when
+// the child exits abnormally. The stage log is the primary record of a failed admission, so
+// route both streams through files and keep every byte.
 function run(program, args, logPath, cwd = root, extraEnv = {}) {
-  const result = spawnSync(program, args, {
-    cwd,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-    env: {
-      ...process.env,
-      ...extraEnv,
-      CI: 'true',
-      npm_config_fetch_timeout: '30000',
-      npm_config_prefer_offline: 'true',
-    },
-  })
-  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
-  writeFileSync(logPath, output)
-  if (result.status !== 0) {
-    throw new Error(`${program} ${args.join(' ')} failed with status ${result.status}\n${output.trim()}`)
+  const captureRoot = mkdtempSync(join(tmpdir(), 'agentteams-stage-run-'))
+  const stdoutPath = join(captureRoot, 'stdout.log')
+  const stderrPath = join(captureRoot, 'stderr.log')
+  let stdoutFd
+  let stderrFd
+  try {
+    stdoutFd = openSync(stdoutPath, 'w')
+    stderrFd = openSync(stderrPath, 'w')
+    const result = spawnSync(program, args, {
+      cwd,
+      stdio: ['ignore', stdoutFd, stderrFd],
+      env: {
+        ...process.env,
+        ...extraEnv,
+        CI: 'true',
+        npm_config_fetch_timeout: '30000',
+        npm_config_prefer_offline: 'true',
+      },
+    })
+    const output = `${readFileSync(stdoutPath, 'utf8')}${readFileSync(stderrPath, 'utf8')}`
+    writeFileSync(logPath, output)
+    if (result.status !== 0) {
+      throw new Error(`${program} ${args.join(' ')} failed with status ${result.status}\n${output.trim()}`)
+    }
+    return output
+  } finally {
+    if (stdoutFd !== undefined) closeSync(stdoutFd)
+    if (stderrFd !== undefined) closeSync(stderrFd)
+    rmSync(captureRoot, { recursive: true, force: true })
   }
-  return output
 }
 
 function stageFingerprint(candidateInfo, stageId, command, extra = {}) {
