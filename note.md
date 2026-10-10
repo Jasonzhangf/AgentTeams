@@ -177,3 +177,42 @@
   （BB06/BB09/BB10 行）；`docs/goals/teams-agent-handoff-20261005.md`。
 - 本轮 review 边界：**编码前设计准入**（需求 → 设计 → 验收路径），不是实现后的架构 review，
   也不代表产品功能 PASS。实现后的 U7 review 与 milestone review 仍是独立门禁。
+
+## 2026-10-09 U7 round 25 BB10 stop 修复（已合并 main）
+
+- 交付：merge `d57ebeb`（候选 `49caaab`；修复提交 `6816fc0`，父 `df6228a`）。集成后 tree
+  `6d7f5697ba2f7eeed2b80bb004b3a21db0664792` 与已验候选 tree **逐字节相同**；`origin/main` 已确认
+  `d57ebeb`。
+- 根因两个，都在各自 owner 修复：
+  1. `runtime/managed-opencode.ts`：`stop()` 只发 SIGTERM 后等待。托管 `opencode serve --pure`
+     子进程若忽略 SIGTERM，其 `ChildProcess` handle 常驻，Agent 无法退出，launcher 在 5s 窗口内
+     无法确认。现改为 SIGTERM → 在 `stopTimeoutMs/2` 内确认 → SIGKILL → 用剩余预算确认 → 否则
+     throw；整个过程仍在调用方 `stopTimeoutMs` 之内。原生 spawn 原因（ENOENT）仍原样抛出。
+  2. `runtime/local-supervisor.ts`：teardown 循环一旦有子进程超窗就把 launcher 标记 failed，
+     于是只读 `lifecycle` 的退出守卫不再匹配；下一个子进程的干净退出覆盖 `lastFailure`，把
+     `local relay exited unexpectedly code=0 signal=null` 发布为公开错误。新增 `tearingDown`
+     覆盖整个 teardown，`onExit`/`onError` 在该标志为真时一并返回。
+- 关键证据（证明是孙进程扣住两者）：agent 54909 的活跃 handle 只有 1 个 `ChildProcess`
+  （opencode 55283，`killed:true`、`exitCode:null`）加 1 个 stdio Socket，timer 为 0；
+  `kill -KILL 55283` 后 54909 与 launcher 54900 在约 0.5s 内消失。经 Node inspector 采集。
+  历史公开症状已留档：`r23/obs/failure-fixtures/agentteams-u7-bb10-c6gMED-internal.toml`。
+- 回归测试各覆盖一个缺陷，**回退对应半边即失败**：
+  `runtime/managed-opencode.spec.ts` 的 SIGTERM 免疫基座用例；
+  `runtime/local-supervisor.spec.ts` 的「子进程超窗 + relay 干净退出」用例。
+- 验收：定向 490 tests / 53 files PASS；`scripts/regression.mjs` 776 tests / 83 files PASS；
+  `build:runtime`、`typecheck`、`lifecycle:admission`（candidate `49caaab`，ok:true）、
+  `appsdk guide compile`、`appsdk compile`、`pnpm smoke` 均 exit 0。安装包黑盒：BB10 在空闲机器
+  通过且 stop exit_code 0、`lifecycle_anomaly` 全 false、`owned_pids_alive_after_stop` 为空；
+  BB01–BB14 全扫 14/14 PASS。
+- 一次独立 review PASS，无缺陷；两条收尾建议已并入 `49caaab`（补 await 并断言 SIGKILL 信号；
+  注明 teardown 之后归因窗口的边界）。
+- 两次 flake 均为负载所致、非本缺陷，且都复现为通过：BB13 在全扫中失败但单跑通过；BB10 的
+  boundary `credential_echo` 超时一次，当时 stop 段仍 exit_code 0，空闲机器复跑通过。
+- 资源回收：仅用显式字面 PID 释放并逐一确认消失（launcher 49328、agent 49362、opencode 49931、
+  孤儿 stub 71127，以及更早的 54900/54909/55283、19545 与 r23 批次）；核对真实路径与前缀且确认
+  无存活进程后，删除 11 个 `/private/tmp/agentteams-u7-bb10*` 任务临时 fixture。无关的既有
+  PID 1694（端口 4096）未触碰。
+- 证据目录：`/Volumes/Intel/playground/agentteams/.worker-runs/u7-user-driver-20261006/lead-r12/r25/`
+  （`MILESTONE.md`、`all/`、`bb13/`）与 `r23/obs/ROOT-CAUSE.md`。
+- 剩余主线：交接文档 §6 A（`40d320f` 消融候选独立交付）、B（U4 安装后公开 Work）、C（U5/U6 与最终收口）。
+  MVP 尚未全部完成。
