@@ -1,7 +1,7 @@
 {
   "binary_ref": "project-sdk",
-  "bundle_digest": "sha256:51b5490d407aaa502fb6c223449e94c3ca3b641f4428bd7a0dbbcb399d5ffd23",
-  "bundle_manifest_digest": "sha256:6d5f2638eca06d0398bb24f20afb36687e49dcfe840a7b0e42fded381139fd00",
+  "bundle_digest": "sha256:868fe60e645e4215c87a511c04f940589d7d1096e1835e8d444da44357a85bd4",
+  "bundle_manifest_digest": "sha256:098e3fc2b0b82006bf064402927b0548aed7bd0231117a8b9b4c8755c736d918",
   "bundle_resources": {
     "contracts": [
       "contracts/sdk-bundle.manifest.json",
@@ -27,6 +27,16 @@
       "contracts/migrations/sdk-0.1.0009-to-0.1.0010.json",
       "contracts/migrations/sdk-0.1.0010-to-0.1.0011.json",
       "contracts/migrations/sdk-0.1.0011-to-0.1.0012.json",
+      "contracts/migrations/sdk-0.1.0012-to-0.1.0013.json",
+      "contracts/migrations/sdk-0.1.0013-to-0.1.0014.json",
+      "contracts/migrations/0.1.0013/governance-maps/resource-map.json",
+      "contracts/migrations/0.1.0013/governance-maps/function-map.json",
+      "contracts/migrations/0.1.0013/governance-maps/mainline-call-map.json",
+      "contracts/migrations/0.1.0013/governance-maps/verification-map.json",
+      "contracts/migrations/0.1.0012/governance-maps/resource-map.json",
+      "contracts/migrations/0.1.0012/governance-maps/function-map.json",
+      "contracts/migrations/0.1.0012/governance-maps/mainline-call-map.json",
+      "contracts/migrations/0.1.0012/governance-maps/verification-map.json",
       "contracts/migrations/0.1.0011/governance-maps/resource-map.json",
       "contracts/migrations/0.1.0011/governance-maps/function-map.json",
       "contracts/migrations/0.1.0011/governance-maps/mainline-call-map.json",
@@ -118,15 +128,16 @@
       "skills/project-memory/SKILL.md"
     ]
   },
-  "compiler_digest": "sha256:d8470cd7ddf6ca0833b6d7a780781c9a1c0f5ec2c9809702929c9f31a7023fbb",
+  "compiler_digest": "sha256:01c21fee86003acb8676f3672128f0fed328966319ee60dc677bd9685a3ab275",
   "contract_schema": 1,
-  "digest": "sha256:d8470cd7ddf6ca0833b6d7a780781c9a1c0f5ec2c9809702929c9f31a7023fbb",
+  "digest": "sha256:01c21fee86003acb8676f3672128f0fed328966319ee60dc677bd9685a3ab275",
   "previous_bundle_digest": "sha256:e9a816589ce03740b30bf847be4fbb6c4203c70d39b11ada2b723dc966d0a091",
   "previous_bundle_digests": [
     "sha256:e9a816589ce03740b30bf847be4fbb6c4203c70d39b11ada2b723dc966d0a091",
     "sha256:a51c01a3a2bbe4158d358db672b7e9683bfb8c714c97fed0600a413fe03b2aa1",
-    "sha256:54e6ba9f8a0ff5b6816d7dbb68506a2144f60a7b322d9fc930ec5806853b4d0d"
+    "sha256:54e6ba9f8a0ff5b6816d7dbb68506a2144f60a7b322d9fc930ec5806853b4d0d",
+    "sha256:51b5490d407aaa502fb6c223449e94c3ca3b641f4428bd7a0dbbcb399d5ffd23"
   ],
   "sdk": "appsdk",
-  "version": "0.1.0012"
+  "version": "0.1.0014"
 }
