@@ -216,3 +216,22 @@
   （`MILESTONE.md`、`all/`、`bb13/`）与 `r23/obs/ROOT-CAUSE.md`。
 - 剩余主线：交接文档 §6 A（`40d320f` 消融候选独立交付）、B（U4 安装后公开 Work）、C（U5/U6 与最终收口）。
   MVP 尚未全部完成。
+
+## 2026-10-09 U7 round 26 最终产物全扫（BB01–BB14）
+
+- 目的：在合并后的同一安装包上做一次单次调用的黑盒全扫，替代 r25 里带 BB13 flake 的那次。
+- 产物身份：候选 `49caaab`，tree `6d7f5697ba2f7eeed2b80bb004b3a21db0664792`（与已验候选逐字节相同）。
+- 首次启动被拒：`staged package receipt belongs to another candidate`。原因仅为 receipt 的
+  `base_commit` 过期——它记录重建时的 `origin/main`，而合并推送已让 `origin/main` 前进。
+  `head_commit`/`tree_hash`/`indexed_tree_hash` 三项都与当前一致。重跑 `pnpm build:governance`
+  后 receipt 自洽，产物 `content_sha256 97993a6d…`。这是治理簿记，不是产品缺陷。
+- 全扫结果：BB01–BB14 共 14 例，12 通过、2 失败。
+  - BB12 失败：`CONFLICT: A prompt is already active for this session`（`runtime/agent-process.ts:471`
+    的并发准入守卫）。证据 `bb12-failure.json`：provider 收到 3 次请求，其中 tool 探测被重复投递两次，
+    事件流出现 3 个 final；权限探测请求从未到达 provider。该例单独运行通过，故在整轮负载下
+    暴露的是驱动/时序问题，不是守卫本身错误。
+  - BB13 失败：`pnpm verify` 内 `agent-host/cli-executor.spec.ts` 3 个用例失败（776 tests / 773 通过），
+    与 r25 同一签名，仍是 5 秒用例超时的负载族。
+- 结论：BB10 的 stop 缺陷已关闭且未复现；r26 剩余两例为负载相关不稳定，非本次修复引入。
+  最终「同一安装包 BB01–BB14 单次全绿」尚无证据，MVP 未收口。
+- 资源：全扫后无残留进程，临时根目录已全部移除。
