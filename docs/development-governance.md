@@ -55,6 +55,28 @@ candidate 与 integrated main 的相关输入等价时，复用已有有效 test
 
 增加功能时补测试并按真实基线更新门槛，不靠降低门槛消除回归。
 
+## 命令、证据与选择粒度
+
+| 阶段 | 入口 | 证据 | 选择条件 |
+| --- | --- | --- | --- |
+| 定向测试 | `pnpm exec vitest run --config vitest.config.ts <file>` | 命令输出 | 受影响文件或行为 |
+| 类型检查 | `pnpm typecheck` | 退出码 | 源码或类型入口变化 |
+| 构建 | `pnpm build` | 构建输出 | 构建入口或产物变化 |
+| 全量回归 | `node scripts/regression.mjs` | `generated/validation/regression.json` | 候选、依赖或契约漂移 |
+| 编译库 smoke | `pnpm smoke` | 命令输出 | 编译产物或 Console 静态资源变化 |
+| 安装副本 smoke | `pnpm smoke:installed` | 命令输出 | 安装、重启或公开入口变化 |
+| 生命周期准入 | `pnpm lifecycle:admission` | `.appsdk/records/`、`.appsdk-control/lifecycle-adapter/` | 正式阶段记录或发布准入 |
+| 全量门禁 | `pnpm verify` | 各阶段输出与 `generated/validation/regression.json` | 发布范围，或无法证明既有证据仍有效 |
+| 集成与回执 | `git push`，再核对远端 | `git ls-remote origin refs/heads/main` | 授权集成 |
+
+普通变更按风险选测；提交动作本身不触发整套测试。只有发布范围或证据失效才跑全量门禁。
+
+## 阻塞回报
+
+阻塞结论必须给出：第一个失败的 gate、保留的状态、重试策略、owner，以及一条可执行的
+下一步动作。来源验证、安装/live 验收、review、merge、远端回执与资源清理分别汇报，
+不用前一级推断后一级。
+
 类型检查覆盖核心源码、Console/OpenCode 与独立 UI workspace。独立 UI 测试文件进入
 全量回归，根 build 编译真实 UI，产物 smoke 从打包副本导入 UI 入口及其
 client 依赖。旧宿主 UI 与空壳准入文件已移除；浏览器 fixture 与真实 daemon/手机

@@ -32,6 +32,11 @@
   then connect. A later Relay service may own scoped directory, broadcast and
   connection assistance, but it does not own Agent Work policy or resource
   admission. Those remain at the provider Agent.
+- Compatibility boundary: the Phase 1 local-network MVP is the supported scope.
+  Public Relay, real NAT/STUN, direct internet transport, mobile entrypoints, the
+  removed legacy host UI, and empty admission scaffolding are out of scope and
+  are not restored. Each later phase binds its own gate. See
+  `docs/development-governance.md`.
 
 ## Semantic invariants
 
@@ -43,6 +48,30 @@
   Session business payload or metadata.
 - One feature, resource, and implementation has one owner. No fallback, silent
   strip, guessed repair, or duplicate path.
+
+## Ownership
+
+- Declare one owner for each module, resource, mutable truth, and cross-module
+  edge. Record allowed and forbidden paths at the narrowest stable boundary.
+- Derived output never becomes a second source of truth. OpenCode config, the
+  compiled library under `generated/`, and SDK-generated records are derived.
+- Before adding behavior, check whether it is needed and already owned. Reuse a
+  shared function for common semantics; keep separate implementations only for a
+  necessary difference.
+- A missing operator, hook, or gate fails or skips explicitly with a recorded
+  reason. It never produces mock success.
+- This project declares no fixed lifecycle skeleton; do not introduce one by
+  default.
+
+## Architecture truth
+
+- Keep only the maps the project needs for ownership, affected boundaries, and
+  verification. Do not duplicate the same fact across maps.
+- Missing or ambiguous ownership blocks the affected change, not unrelated
+  project work.
+- The five `docs/architecture/` maps are the semantic owners. Update the
+  affected map, tests, and declared gates in the same change when ownership,
+  paths, call edges, or regression coverage change.
 
 ## Development contract
 
@@ -68,8 +97,33 @@
   one semantic milestone. Keep main and other workers' dirty state untouched.
 - Append exploration, hypothesis, first divergence, intervention, root cause,
   and verification evidence to the current run notes.
-- Update maps and tests in the same change when ownership, paths, call edges, or
-  gates change.
+- Treat the mainline checkout as read-only. Develop in one clean owner worktree
+  created from the latest remote mainline, and preserve other workers' state.
+- The project's commit and push protection is procedural: the primary integrates
+  only after a passing candidate gate and one review. The project declares no
+  commit-time or push-time hook, because a commit does not run the full gate. A
+  merge, protection, or review result proves only its own boundary.
+- Remove the owned worktree and release its claim only after required delivery,
+  the remote receipt, and retention evidence exist.
+
+## Process control
+
+- AppSDK quality, safety, and evidence gates are mandatory when applicable.
+  Guidance and project memory are auxiliary: no plan or memory write is required
+  by default, and memory never overrides project AGENTS, Skills, or declared
+  contracts.
+- When Guidance is used, bind the plan to the current goal, task, module, owner,
+  scope, declared rule sources, source commit, and tree. Execute declared
+  transitions; an optional node uses its explicit bypass edge, never an
+  undeclared jump. Append observations and evidence to the active step.
+- Workflow close and lifecycle completion are separate results.
+- Review blocks concrete quality, safety, contract, and material structural
+  regressions. Optional simplification is advisory. Reuse valid evidence while
+  its inputs are unchanged, and rerun affected checks on drift.
+- Keep Collab automatic for multi-worker identity, communication, and task/file
+  ownership. Its failure blocks dependent collaboration, not independent
+  isolated work.
+- Notes are not promoted automatically to memory, Skills, or rules.
 
 ## Verification contract
 
@@ -87,6 +141,14 @@
 - Review is allowed only after the exact candidate has passed validation. A
   review result never substitutes for tests, build, install, restart, or replay.
 
+## Evidence boundary
+
+- Report source, test, build, installed artifact, restart, deployed-entrypoint
+  replay, review, merge, remote receipt, freeze, and cleanup separately. Never
+  infer a later evidence level from an earlier one.
+- A blocked result names the first failing gate, the preserved state, the retry
+  policy, the owner, and one executable next action.
+
 ## Canonical surfaces
 
 - Requirements and design: `docs/`
@@ -94,3 +156,8 @@
 - AppSDK maps and contracts: `.appsdk/`
 - Runtime source: `agent-host/`, `network/`, `server/`, `runtime/`,
   `control-protocol/`, `opencode-adapter/`, `console-host/`, `ui/`
+- Project facts and boundaries: this file. Reusable project procedure:
+  `docs/development-governance.md`. Machine workflow: the declared `.appsdk/`
+  guidance contracts. The project declares no project-local Skill.
+- Optional memory retrieval, level-3 writes, and evidence-backed promotion:
+  `.appsdk/skills/project-memory/SKILL.md`

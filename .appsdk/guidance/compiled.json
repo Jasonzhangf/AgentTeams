@@ -1,7 +1,7 @@
 {
   "enforcement": "advisory",
   "harness": "appsdk-development-process-control",
-  "manifest_hash": "sha256:783367eb173dfed864573655fade41a232c5038db8380597222c4f12cd929c69",
+  "manifest_hash": "sha256:7fb22f1296625d412863b172e7152ccb3e93f05da5d8b6399ca70c4763a247fd",
   "project_contract_digest": "sha256:1aa8ff05979f819874f2bf7b1515d7428bb49e1268da4d7e786f45384355dea9",
   "rules": [
     {
@@ -88,7 +88,7 @@
   "schema_version": 1,
   "sources": [
     {
-      "digest": "sha256:73e7e17ee694534065a3a288651535b4c3ae9235cf9800fac28b85c339c0bc56",
+      "digest": "sha256:f2cb9dc5ddd90531f0e280d64258b5ccc4ad13470c1b8a76227f1c9d6217ec5b",
       "kind": "agents",
       "path": "AGENTS.md",
       "precedence": 100,
