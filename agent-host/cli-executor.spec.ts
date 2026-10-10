@@ -116,7 +116,10 @@ it('does not turn a post-restart parse failure into a no-resource fact', async (
   await expect(executor.destroy(browserWork, [heldBrowserContext])).rejects.toMatchObject({ error: { code: 'UNAVAILABLE' } })
 })
 
-it('keeps a successful local browser destruction fact for a repeated close', async () => {
+// This case runs the browser CLI twice, so it needs a declared budget. Under the
+// full regression the machine also runs the real-Chrome Console suites, and this
+// case measured 2050 ms there against the 5000 ms default.
+it('keeps a successful local browser destruction fact for a repeated close', { timeout: 30_000 }, async () => {
   const { root, executable } = browserFixture()
   const executor = createCliWorkExecutor({ camoExecutable: executable, searchExecutable: '/missing/rg',
     searchRoot: root, profilePrefix: 'teams-test-executor', services: [browserIntent] })
@@ -128,7 +131,10 @@ it('keeps a successful local browser destruction fact for a repeated close', asy
   await expect(executor.destroy(browserWork, [heldBrowserContext])).resolves.toEqual({ destroyed: true })
 })
 
-it('preserves real CLI failure output through durable Work state and the wire error chain', async () => {
+// This case runs a real failing CLI process, so it needs a declared budget. Under
+// the full regression the machine also runs the real-Chrome Console suites, and
+// this case measured 1751 ms there against the 5000 ms default.
+it('preserves real CLI failure output through durable Work state and the wire error chain', { timeout: 30_000 }, async () => {
   const root = fixture()
   const executable = join(root, 'failing-search')
   writeFileSync(executable, '#!/bin/sh\nprintf "partial output\\n"\nprintf "failure detail\\n" >&2\nexit 7\n', { mode: 0o700 })
