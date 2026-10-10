@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-10-10T07:34:09.690700+00:00","id":"af5c167-bb01-bb14-final-acceptance-20261010","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["acceptance","agentteams","bb01-bb14","blackbox","mvp"],"updated_at":"2026-10-10T07:34:09.690700+00:00"} -->
+
+# 最终安装包 BB01-BB14 单次全绿（候选 50efe13）
+
+从最终安装包执行 scripts/blackbox-user-mvp.mjs --case all 得到 exit 0、14/14 passed、failed 空、unverified 空。receipt 在 /Volumes/Intel/playground/agentteams/.worker-runs/sdk-refresh-0.1.0013-20261009/r1/all.receipt.json，逐 case 证据在同目录 all/cases/<BBnn>/。安装包由 pnpm build:governance 从候选 50efe13 构建，package receipt 记录 head_commit == base_commit == 50efe13d0b5dd479cc489ee8ef5595767b52f03f、tree 0a32ef44eee03f3652f968792bc69556507c9c55、source_state committed、content_sha256 b972993c162c2fcf76cbb6bc1bd4ece0a4c083ee0dc3991b9f161d8a7548d355。14 个 case 覆盖 U1-U7 与 D3/D4；BB01-BB12、BB14 走安装副本的真实入口（npm pack/install 到源码树外、真实 Camo 浏览器、真实 installed Console、真实 RCC provider、真实 managed OpenCode 的 message/tool/permission/cancel），BB13 是治理重入与失效矩阵 case，它在候选克隆里跑真实 lifecycle adapter 并依次改动 source/graph/config/artifact/evidence 输入，不是外层未变包的一次调用。此前 r28/r29 的失败是门禁预算与 SDK pin 外部漂移，不是产品缺陷。
+<!-- project-memory:end -->

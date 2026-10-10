@@ -47,6 +47,10 @@ _Empty._
 - tags: `N3`, `ai-reviewed`, `human-unreviewed`, `network`, `runtime`
 - details: [L2/8ea5f7c-n3-runtime-assembly-20260910.md](L2/8ea5f7c-n3-runtime-assembly-20260910.md)
 
+### AppSDK 0.1.0014 升级与规则/Skill 升级审计
+- tags: `agentteams`, `ai-reviewed`, `appsdk`, `governance`, `human-unreviewed`, `rule-audit`, `sdk-upgrade`
+- details: [L2/92e96dc-appsdk-0014-rule-upgrade-audit.md](L2/92e96dc-appsdk-0014-rule-upgrade-audit.md)
+
 ### U3 declared service source delivery and installed BASE proof
 - tags: `agentteams`, `ai-reviewed`, `human-unreviewed`, `local-mvp`, `services`, `u3`
 - details: [L2/9b84aaa-source-services-delivery-20261005.md](L2/9b84aaa-source-services-delivery-20261005.md)
@@ -54,6 +58,10 @@ _Empty._
 ### U3 service-intent design delivered at be4541c
 - tags: `agentteams`, `ai-reviewed`, `design-only`, `human-unreviewed`, `local-mvp`, `u3`
 - details: [L2/9b84aaa-u3-service-design-20261004.md](L2/9b84aaa-u3-service-design-20261004.md)
+
+### 最终安装包 BB01-BB14 单次全绿（候选 50efe13）
+- tags: `acceptance`, `agentteams`, `ai-reviewed`, `bb01-bb14`, `blackbox`, `human-unreviewed`, `mvp`
+- details: [L2/af5c167-bb01-bb14-final-acceptance-20261010.md](L2/af5c167-bb01-bb14-final-acceptance-20261010.md)
 
 ### Local MVP scheduler re-entry 2026-09-13
 - tags: `ai-reviewed`, `human-unreviewed`, `local-mvp`, `scheduler`
@@ -318,6 +326,10 @@ _Empty._
 ### N3 D4-B direct peer admission contract
 - tags: `D4-B`, `N3`, `ai-reviewed`, `direct`, `human-unreviewed`, `network`
 - details: [L2/n3-d4b-direct-admission-contract-20260911.md](L2/n3-d4b-direct-admission-contract-20260911.md)
+
+### Node spawnSync 管道在子进程异常退出时截断捕获输出
+- tags: `agentteams`, `ai-reviewed`, `debugging`, `evidence`, `human-unreviewed`, `node`
+- details: [L2/node-spawnsync-pipe-truncation-20261009.md](L2/node-spawnsync-pipe-truncation-20261009.md)
 
 ### P0业务JSON保真与外层控制边界
 - tags: `ai-reviewed`, `human-unreviewed`, `protocol`
