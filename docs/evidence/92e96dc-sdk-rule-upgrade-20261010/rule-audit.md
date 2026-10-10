@@ -37,6 +37,7 @@
 | D8 | 模板 setup 占位符（`[describe]` 等） | 项目 AGENTS 已是具体事实 | project | decline | 占位符是模板初始化脚手架，不适用于已建立的契约 | 无 | 无 |
 | D9 | 模板 “If this project declares a fixed lifecycle skeleton” | 项目未声明固定生命周期骨架 | project | decline | 条件不成立；不为假设需求引入骨架 | 现有 `teams-source` 生命周期模块与 `.appsdk/` 契约不变 | 无 |
 | D10 | SDK 0.1.0014 新增可选 `test_governance`（scoped tests） | `.appsdk/project.json` 未声明 `test_governance`，`appsdk verify` 报 `mode:off, status:not_selected` | project | decline（保持 off） | SDK 明确其为可选：普通 `verify` 只报状态，不要求测试通过。项目已声明自己的全量测试真源（`scripts/regression.mjs`，强制 `minimum_test_count`，拒绝 skip/TODO/`.only`）与安装生命周期 gate；再选 SDK 测试治理会形成第二个重叠的测试真源 | `pnpm verify` 与 `pnpm lifecycle:admission` 不变 | 无 |
+| D11 | SDK 0.1.0014 自身用路径选择的 GitHub workflow 做 CI，release 只在 dispatch/tag 上跑 | 项目没有任何 CI 或 hook | project | decline（保持本地门禁） | 项目没有可复现的托管运行环境：门禁需要本机 `appsdk` 二进制、OpenCode 运行时与已安装依赖。加一个跑不起来的 workflow 会产生假的保护证据，违反 “passing protection check proves only the Git boundary”。日常选择由 `docs/development-governance.md` 的命令/证据表声明，全量门禁在发布范围执行 | 本地 `pnpm verify` 与远端回执核对保留 | 无 |
 
 ## 应用结果
 
