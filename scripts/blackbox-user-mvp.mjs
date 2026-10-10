@@ -3722,10 +3722,20 @@ async function applySessionConfigAndWait(client, agentId, evidenceDir, prefix, o
   return { applied: reply, agent: publicJson(agent) }
 }
 
+/**
+ * A tool-calling round projects one `final` per assistant message: the message
+ * that requests the tool completes with `finish: "tool-calls"`, and the round
+ * ends only when a later message reports a terminal finish. Returning on any new
+ * `final` would hand back that intermediate one, and the next prompt would be
+ * dispatched while the round still owns the session — which the agent correctly
+ * refuses with CONFLICT. The wait therefore skips intermediate finals.
+ */
 function waitForSessionTurn(sessionEvents, previousFinals, label) {
   return waitForAsync(async () => {
     const finals = (await sessionEvents()).filter(event => event.kind === 'final')
-    return finals.length > previousFinals ? finals.at(-1) : undefined
+    if (finals.length <= previousFinals) return undefined
+    return finals.slice(previousFinals)
+      .filter(event => !(event.state === 'completed' && event.finish === 'tool-calls')).at(-1)
   }, 180_000, label)
 }
 
