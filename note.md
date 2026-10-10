@@ -361,3 +361,55 @@
   已快进合并并推送，`main == origin/main == 08551e2`，主树干净。issue `92e96dc` 已开。
 - 未收口：最终安装包上的 BB01–BB14 全量验收仍待本轮之后执行；§6 A 消融候选、阶段记忆晋升
   与自有资源回收仍在清单上。
+
+## 2026-10-10 U7 round 32：最终安装包 BB01–BB14 验收、阶段记忆晋升与自有资源回收
+
+- 事实（最终验收）：安装包由 `pnpm build:governance` 从候选 `060002d` 构建，package receipt 记录
+  `head_commit == base_commit == 060002d0b51a0e9ec8e994bc654973d0a4aac1df`、`tree 5b95dc76cf64ed2acf0e3a5767b4529d0a227099`、
+  `source_state=committed`、`content_sha256 a5c11c3a77d457ea3ea7376f4912b372a7c039bada893f620a41a86d6fef2c3b`。
+  从该安装包执行 `node scripts/blackbox-user-mvp.mjs --case all`：exit 0、14/14 passed、`failed` 与
+  `unverified` 均为空。receipt 与逐 case 证据在
+  `/Volumes/Intel/playground/agentteams/.worker-runs/sdk-refresh-0.1.0013-20261009/r3/all.receipt.json`
+  与同目录 `all/cases/<BBnn>/`。14 个 case 覆盖 U1–U7 与 D3/D4；BB01–BB12、BB14 走安装副本的真实入口，
+  BB13 是治理重入与失效矩阵 case，在候选克隆里跑真实 lifecycle adapter 并依次改动
+  source/graph/config/artifact/evidence 输入，不是外层未变包的一次调用。
+- 事实（r2 抖动，已定位）：在 `68c7fbe` 上重跑同一命令时 BB13 失败。其 `config-change` 阶段在克隆里跑
+  `pnpm verify`，776 例中 1 例失败：`runtime/managed-opencode-session.spec.ts` 的
+  “sends one real OpenCode Session request through the selected managed provider”，
+  `TimeoutError: The operation was aborted due to timeout`，实测 11.92s，超过该用例第 48 行的
+  `AbortSignal.timeout(10000)`。同一用例单独运行三次为 1.95s/1.99s/1.95s；同一用例在 r1 的 BB13
+  （8 次 `pnpm verify`）全部通过。r2 时刻宿主 load 12.7，r3 的 BB13 期间另有其它 session 的 appsdk Rust
+  测试把 load 推到 38.78，r3 仍 14/14。结论：这是真实 OpenCode 往返在满负荷下超过 10s 预算的时序敏感
+  抖动，不是产品缺陷；对应既有 open issue `5abd96e`。未扩大该超时，也未改断言。
+- 事实（包内容不可复现，已定位）：在同一提交上连续三次 `pnpm build:governance` 得到三个不同的
+  `content_sha256`（`37bbf4aa…`、`62eb1ff1…`、`2dbb3ab2…`）。逐文件哈希比对定位到只有
+  `runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner` 与其
+  `runtime/dagpipe/manifest.json` 每次不同，原因是本地 Rust 链接产物非确定（macOS ld 的 LC_UUID）。
+  因此“同一安装包”只能由验收 receipt 绑定的那一次产物加候选提交界定，不能用跨构建哈希比较；
+  该问题未在本轮修复。
+- 事实（阶段记忆 L2）：用官方 `project-memory` 命令新建并 `promote --level 2` 四条记录，均带
+  `review_evidence`、`memory_level 2`、`review_status reviewed` 与 `ai-reviewed`/`human-unreviewed` 标签：
+  `92e96dc-appsdk-0014-rule-upgrade-audit`（SDK 升级与规则审计）、
+  `af5c167-bb01-bb14-final-acceptance-20261010`（最终验收）、
+  `node-spawnsync-pipe-truncation-20261009`（证据捕获根因）、
+  `83a8bd1-u6-installed-session-delivery-20261007`（U6/U7 交付）。项目不声明 project-local Skill，
+  故 `memory/index.md` 的 Skill description candidates 没有落地载体，保持只读检索。
+- 事实（独立 milestone review）：`openai-codex/gpt-6.1-sol` 对最终验收证据与 §1 完成条件做一次整体审计，
+  verdict **PASS**、`acceptance_evidence_sound=true`；两条 P3 advisory（receipt 的
+  `temporary_root_removed` 字段记录的是 finalizer 之前的状态；不要把 14 个 case 都说成同一个未变包的一次调用）。
+  该审计同时纠正两项判断：设计准入已记录（delivery plan 的 D1/D2 设计 PASS 加 `memory/L2/d1-*`、`d2-*`），
+  行为图覆盖分类已记录（`docs/design/teams-behavior-contracts.md` 与 delivery plan），两者都不得报缺失。
+- 事实（自有资源回收）：`git worktree remove` 移除 9 个已交付 worktree（`u6-session-design-20261003`、
+  `u6-session-implementation-20261006`、`u7-gate-budget-20261009`、`u7-r12-i1-host`、`u7-r12-i2-console`、
+  `u7-r12-i3-driver`、`u7-r13-i5-config`、`u7-r13-i6-driver`、`u7-user-driver-20261006`），分支保留以保
+  留历史；`u6-session-design` 的三条提交未并入 main，但其正文已由 main 上更新的修订取代，证据 notes 逐字节相同。
+  删除 5 个自有临时目录（`agentteams-bb-run-T1dcgP`、`agentteams-stage-run-FOGQNF`、
+  `agentteams-u7-bb13-TB1iB8`、`agentteams-u7-bb13-proof-40564-…`、`agentteams-u7-bb13-repro-CIEJXl`，
+  前四个来自 00:00 被终止的那次 sweep）与 `u7-user-driver-20261006/.appsdk/records`（派生生命周期记录）。
+  `/var/folders/.../T/agentteams-*` 计数为 0，无遗留自有进程。仅保留
+  `sdk-refresh-0.1.0013-20261009`（最终包与证据所在）与 `.worker-runs` 证据。
+- 交付与回执：本轮提交 `68c7fbe`（阶段记忆 L2）、`060002d`（U6/U7 阶段记忆 L2）；均已推送，
+  `main == origin/main == 060002d0b51a0e9ec8e994bc654973d0a4aac1df`，主树干净。
+- 未收口：本 note 的提交会再次推进 main；`5abd96e`（managed OpenCode readiness 时序敏感）仍开；
+  `c520894` 等 issue 引用的仓库外 receipt 根目录已被回收，仓库内只剩 primary receipt；
+  `runtime/darwin-arm64` 链接产物的不可复现性未修复。
