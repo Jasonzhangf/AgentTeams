@@ -257,3 +257,71 @@
   已两轮独立诊断并结论无源码缺陷，故**不新增补丁、不加超时、不改断言**。该 flake 仍阻塞
   「同一安装包 BB01–BB14 单次全绿」，MVP 未收口。
 - 交付：候选 `0c90380` → merge `48073f0`，main 与 origin/main/远端一致（`48073f0`）。
+
+## 2026-10-09 U7 round 28 BB13 归因更正：不是产品缺陷，是缺测试预算（已合并 main）
+
+- r27 的 BB13 失败此前记为「门禁 liveness / flake」。本轮把证据链补全，结论要**更正为可定位的具体缺陷**：
+  失败用例缺**自己声明的超时预算**。
+- 事实（r27 BB13 `config-change.json` 原始 stderr）：两个失败用例的 duration 精确等于默认值——
+  `keeps a successful local browser destruction fact for a repeated close` = **5007.01ms**，
+  `preserves real CLI failure output through durable Work state and the wire error chain` = **5002.02ms**；
+  vitest 4.1.11 默认每用例 5000ms，仓库 `vitest.config.ts` 与 `package.json` 均未声明 `testTimeout`。
+- 对照事实：同一 `agent-host/cli-executor.spec.ts` 在**全量门禁里通过**时这两个用例是
+  **1827ms / 1632ms**（修复后实测；r27 基线报 2049.9ms / 1751.0ms），单跑约 316ms。
+  即它们平时只用掉默认预算的 1/3，一旦与真 Chrome 套件并发就顶到 5000ms 被切断。
+- 事实（本轮新发现，推翻此前「只有这一个文件」的判断）：仓库**所有**较慢用例都显式声明预算，
+  且大量使用下划线字面量（`300_000`、`30_000`、`60_000`、`15_000`、`18_000`）。
+  例如 `cli/package-install.spec.ts` 有 8 处（含 39260ms 那个用例的 `}, 300_000)`）。
+  我早前的检测正则漏掉下划线写法，因而误判。唯一例外的真实进程用例就是 `cli-executor.spec.ts` 这两个。
+- 根因（唯一 owner = `agent-host/cli-executor.spec.ts`）：这两个用例是本文件里唯一真实 spawn 外部进程的，
+  却没有声明预算。产品侧无缺陷——`agent-host/cli-executor.ts` 不含 spawn/超时逻辑，真实 spawn 在
+  `cli-adapter/fixed-process.ts`（`defaultTimeoutMs = 30_000`）。
+- 修复（commit `1f0cae4`）：给这两个用例加 `{ timeout: 30_000 }`，沿用仓库既有写法
+  （`ui/teams-console/tests/render.spec.ts:81` 同形）。**未改产品代码，未放宽任何断言，未加宽任何既有超时常量。**
+- 修复（commit `c602b4c`，本轮新发现的第二处自身缺陷）：`runtime/managed-opencode.spec.ts` 的 SIGTERM 升级用例
+  从 `startManagedOpenCode` **之前**开始计时，把启动就绪等待一起算进「停机预算」，负载下报
+  `expected 4318 to be less than 4000`。改为只计 `handle.stop()` 的窗口（符合该断言注释「the whole stop」
+  的原意，以及 `runtime/managed-opencode.ts:79` 的 `stopTimeoutMs` 语义），并补 `{ timeout: 30_000 }`。
+  `SIGKILL` 断言保留不变。
+- 证据（同负载，全量门禁单次调用）：`node scripts/regression.mjs` →
+  **776/776 tests 通过、164 suites、failed 0、pending 0、`success: true`**（load 7.56–12.49）。
+  对照：修复前同一命令得到 `success: false`（先是 `package-install` 23 skipped，再是 managed-opencode 1 failed）。
+  `pnpm typecheck` 退出码 0。
+- 交付：`744ac79` → `1f0cae4` → `c602b4c`；已快进合并并推送，`main == origin/main == c602b4c`，工作树干净。
+  该 4 次回归的失败集合每轮不同（artifact-change → config-change，1→3→5 个用例）与「同一 load 相关的预算缺口」
+  一致，与「产品功能损坏」不一致。
+- 未收口：BB13 仍需在最终安装包上重跑全量确认；MVP 的「同一安装包 BB01–BB14 单次全绿」待本轮（r28）结果。
+
+## 2026-10-09 U7 round 29–30：门禁预算落地、验收证据截断修复，以及新的 SDK pin 外部阻塞
+
+- r28 结论落地：`vitest.config.ts` 声明 `testTimeout: 90_000` 与 `hookTimeout: 90_000`（commit `e6645c6`，已合并推送）。
+  依据：16 个 include glob 覆盖的 83 个 spec 共 743 个 `it|test`，其中 637 个不声明预算；只有真实进程/真 DOM 的
+  慢用例显式声明。U6 已归档的整轮回归实践本身就是 `--testTimeout=90000`。未改任何断言，未放宽任何既有常量。
+- 门禁复核（`e6645c6`）：`node scripts/regression.mjs` → `success: true`、164 suites、failed 0、776/776、pending 0。
+- 事实（新发现的自身缺陷）：`scripts/blackbox-user-mvp.mjs` 的 `run()` 用 pipe 捕获子进程输出。Node 的
+  `spawnSync` 在子进程异常退出时丢弃管道缓冲区（约 64 KiB）之后的内容，所以 BB13 失败时 `failure.json`
+  只有 65504 字节，776 个用例里失败的 2 个套件名不可恢复，连续两轮（r28、r29）无法归因。同一模式也在
+  `scripts/lifecycle-adapter.mjs` 的 `run()`——它既是该输出的生产者，也是 stage log 的写者。
+- 修复（commit `ac0766f`，已合并推送）：两处 `run()` 改为经临时文件捕获 stdout/stderr；fd 获取、spawn、
+  读取、stage log 写入与失败路径同处一个 try，`finally` 关闭已获取的 fd 并删除捕获目录。未改断言、
+  阶段命令、错误文本和 stdout-再-stderr 拼接顺序。独立 review 首轮 FAIL（两处 cleanup 作用域不完整，P2），
+  修复后针对性复核 PASS。
+- 事实（r30 全量 sweep，13/14）：BB01–BB12 与 BB14 全部通过；BB13 在**第 7 阶段 artifact-change** 失败，
+  证据 `.worker-runs/u7-user-driver-20261006/lead-r12/r30/all/cases/BB13/artifact-change.json`。前 6 阶段
+  （recovery、reentry、idempotent-entry、source-change、config-change、graph-change）全部通过，说明本轮
+  **内层 `pnpm verify` 已通过**（r28、r29 都卡在第 1 阶段）。
+- 根因（r30 的 BB13，不是产品缺陷，也不是本次改动）：`appsdk verify` 报
+  `PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0012:required_binary=appsdk-0.1.0012` 并退出 1。
+  事实：`.appsdk/project.json` 的 `sdk.version` 是 `0.1.0012`；共享二进制 `/Users/fanzhang/.cargo/bin/appsdk`
+  的 mtime 是 **2026-10-09 21:45**，`appsdk version` 报 **0.1.0013**。SDK 源码
+  `rust/src/main/project.rs:86-93` 对 `sdk.version != SDK_VERSION` 直接 fail。
+- 时序事实：r30 第 1 阶段在 21:38 仍通过 `pnpm verify`（含 `appsdk verify`）→ 当时二进制还是 0.1.0012；
+  21:45 二进制被替换；21:46 的 artifact-change 阶段 `pnpm verify` 因该检查失败。在保留的复现 fixture
+  `/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-u7-bb13-repro-CIEJXl` 上**不改任何文件**，
+  `appsdk verify` 同样退出 1 并报同一 pin 消息，因此与 artifact-change 追加的换行无关。
+- 影响：在当前共享二进制下，`appsdk verify`、`pnpm verify`、`pnpm lifecycle:admission` 与 BB13 都无法通过。
+  把 `.appsdk/project.json` 的 pin 试改为 `0.1.0013` 后 `appsdk verify` 报 `INVALID_SDK_LOCK`，
+  即还需要官方 SDK 治理刷新（`appsdk pin-lock` / bundle 重装）才能闭合；该动作属于迁移，未获授权前不执行。
+- 未收口：BB13 的第 7、8 阶段仍未在最终安装包上验证；「同一安装包 BB01–BB14 单次全绿」未达成。
+  r29 的内层 2 个失败套件在 90 秒预算下仍出现、r30 又未复现，其身份仍未确定；本轮已具备完整捕获能力，
+  下次出现即可定位。
