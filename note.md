@@ -325,3 +325,39 @@
 - 未收口：BB13 的第 7、8 阶段仍未在最终安装包上验证；「同一安装包 BB01–BB14 单次全绿」未达成。
   r29 的内层 2 个失败套件在 90 秒预算下仍出现、r30 又未复现，其身份仍未确定；本轮已具备完整捕获能力，
   下次出现即可定位。
+
+## 2026-10-10 U7 round 31：升级到 AppSDK 0.1.0014，并完成规则/Skill 升级审计
+
+- 用户指令：「你先升级到appsdk最新版本,开始治理改造」。据此把 SDK pin 从 0.1.0012 升到当前
+  共享二进制版本 0.1.0014，并执行 0.1.0014 要求的规则/Skill 升级审计。
+- 事实（升级）：官方入口 `appsdk pin-lock . --binary /Users/fanzhang/.cargo/bin/appsdk` 退出 0，
+  按记录的 `0.1.0012-to-0.1.0013`、`0.1.0013-to-0.1.0014` 步骤重写 SDK-owned bundle
+  （contracts、sdk.lock、sdk-resources、docs、rules、skills）并物化两份迁移记录。
+  产品源码、测试与 `.appsdk/` 之外的 map 未变。`appsdk guide compile` 重写了受跟踪的
+  `.appsdk/guidance/compiled.json`；不先提交它会让 `appsdk compile` 报
+  `receipt identity: staged product does not match the recorded index`。
+- 事实（二进制两次变动）：21:45 二进制从 0.1.0012 变为 0.1.0013，00:00 重建为 0.1.0014。
+  重建后 `sdk-witness` 报 `SDK_WITNESS_BINARY_MISMATCH`，重新 `pin-lock` 后退出 0；
+  bundle digest 未变（`sha256:868fe60e...`），只有 `compiler_digest`/`digest` 变化。
+  这解释了 r30 BB13 的失败：升级前的 pin 与二进制不匹配，与候选代码无关。
+- 事实（治理改造）：`appsdk guide init --task guidance-upgrade --mode bootstrap --module teams-source`
+  返回 `setup_kind=template_upgrade_review`、`writes_state=false`，要求读生效上层规则、本地
+  `AGENTS.md`/Skill、实际测试命令与 CI/hook，再与 advisory 模板
+  `.appsdk/templates/minimal/AGENTS.md`（0.1.0014）比对，并逐差异记录
+  path/owner/action/basis/保留保障/受影响入口。
+- 审计结果：11 条差异（`docs/evidence/92e96dc-sdk-rule-upgrade-20261010/rule-audit.md`）。
+  D1–D7 为合并/补齐：`AGENTS.md` 新增 `## Ownership`、`## Architecture truth`、`## Process control`、
+  `## Evidence boundary`，Project truth 补兼容边界，Development contract 补 Git 边界与 worktree
+  回收条件，并删除与 Architecture truth 重复的 map 同变更条目；Canonical surfaces 补
+  事实/过程/机器流程归属与 memory 入口。`docs/development-governance.md` 新增命令/证据/选择粒度
+  表与阻塞回报契约。D8–D11 为记录在案的拒绝项：模板占位符、固定生命周期骨架、
+  commit/push 钩子、CI workflow、SDK 可选 `test_governance`（项目已有自己的全量测试真源）。
+- 事实（验证）：`appsdk guide compile`、`appsdk verify`、`pnpm verify` 在提交 `dd6b0e1` 上全部退出 0；
+  `node scripts/regression.mjs` 报 `success=true`、164 suites、failed 0、776/776、pending 0、todo 0。
+  之后 `08551e2` 只增审计文档，不改变 rule source 或 gate 输入，故复用该门禁证据，
+  只重跑 `appsdk guide compile` 与 `appsdk verify`（均退出 0）。
+- 交付：`20d4081` → `bb19418` → `5393424` → `dd6b0e1` → `08551e2`；独立 milestone review
+  （`openai-codex/gpt-6.1-sol`，覆盖候选 `08551e2`）返回 **PASS**，无 finding。
+  已快进合并并推送，`main == origin/main == 08551e2`，主树干净。issue `92e96dc` 已开。
+- 未收口：最终安装包上的 BB01–BB14 全量验收仍待本轮之后执行；§6 A 消融候选、阶段记忆晋升
+  与自有资源回收仍在清单上。
