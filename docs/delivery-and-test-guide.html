@@ -198,9 +198,28 @@ node scripts/blackbox-user-mvp.mjs --case BB04 \
     </div>
   </div>
 
-  <h2>每个 case 做什么</h2>
-  <p>BB01–BB12、BB14 走安装副本的真实入口：npm pack/install 到源码树外、真实 Camo 浏览器、真实 installed Console、真实 provider、真实 managed OpenCode 的 message/tool/permission/cancel。
-     BB13 是治理 case：它在候选克隆里跑真实 lifecycle adapter，再依次改动 source/graph/config/artifact/evidence 输入，验证恢复与失效边界。</p>
+  <h2>每个 case 做什么：功能、样例、通过条件</h2>
+  <p>下面不是标签汇总，而是每个功能的真实用户样例、主要动作和必须看到的结果。每个 case 都会在证据目录写出命令、stdout、stderr、退出码和业务回执。</p>
+  <table class="examples">
+    <thead><tr><th style="width:8%">case</th><th style="width:20%">功能样例</th><th>测试动作</th><th>通过条件</th></tr></thead>
+    <tbody>
+      <tr><td><b>BB01</b></td><td>安装包 / Console 静态资源</td><td>npm pack/install 到源码树外；执行 init、start、status、Console 资产与认证检查。</td><td>安装目录可运行；静态页、entry、icon 返回正确；未授权请求 401；自有进程可清理。</td></tr>
+      <tr><td><b>BB02</b></td><td>两 daemon 本地 bridge</td><td>只用 <code>~/.agentteams/config.toml</code> 启动 provider/receiver；检查 register、discover、generation、restart。</td><td>两 daemon 发现对端；generation 正确；restart 后旧 generation 被拒绝；没有 Console 也可工作。</td></tr>
+      <tr><td><b>BB03</b></td><td>浏览器能力与容量</td><td>真实 Camo 浏览器启动；发布 <code>file-search@1</code> 与 <code>search-slot</code>；执行真实 search。</td><td>browser lifecycle 成功；service/resource/capacity 对外一致；结果包含匹配文件；容量耗尽时显式失败。</td></tr>
+      <tr><td><b>BB04</b></td><td>新 Work submit/query</td><td>提交 <code>marker-alpha</code> 与 <code>marker-beta</code> 两个请求；随后 query 原请求。</td><td>两次得到不同 work/request identity 和不同真实结果；query 返回原业务结果，但不重新执行 Work。</td></tr>
+      <tr><td><b>BB05</b></td><td>Work 拒绝矩阵</td><td>使用未知 capability、错误 binding、无效 payload 等输入提交 Work。</td><td>返回 typed error；不创建错误 Work；不偷偷 fallback、重放或吞掉错误。</td></tr>
+      <tr><td><b>BB06</b></td><td>持久浏览器 Work</td><td>保持真实浏览器上下文，连续执行需要容量的 Work，并检查 provider ledger。</td><td>容量内请求成功；超过容量显式拒绝；close/dispose 后容量归还，不能泄漏 channel。</td></tr>
+      <tr><td><b>BB07</b></td><td>未知请求与恢复查询</td><td>先创建并打开 Work，再 query 不存在的 request/work identity。</td><td>返回 typed unknown；查询不重新执行 agentWork.request/propose；ledger 数量不增加。</td></tr>
+      <tr><td><b>BB08</b></td><td>配置 generation / stale</td><td>提交当前 generation；再用旧 launcher/provider generation 提交；最后提交新 generation。</td><td>旧 generation 明确拒绝且无副作用；新 generation 成功；错误包含 typed code。</td></tr>
+      <tr><td><b>BB09</b></td><td>Console 生命周期与离线 Work</td><td>启动真实 installed Console；访问浏览器 UI；stop Console；关闭后提交新 Work；再 restart。</td><td>UI/auth 正常；Console listener 真正消失；Console 停止不影响新 Work；禁用 Console 时 start 明确拒绝。</td></tr>
+      <tr><td><b>BB10</b></td><td>显式 provider/model Session</td><td>通过 Console/Session 入口选择明确 provider、model；检查 projection、CAS 与 owner。</td><td>provider/model 绑定准确；stale revision 返回 <code>REVISION_CONFLICT</code> 且状态不变；资源归属不串线。</td></tr>
+      <tr><td><b>BB11</b></td><td>SDK Work 与 compile 负例</td><td>通过安装后的 SDK/DAGpipe Work 入口执行；再提交非法 graph/operator 输入。</td><td>合法 Work 经过 Operators → compile → immutable graph → Runtime；非法输入在 compile 边界失败。</td></tr>
+      <tr><td><b>BB12</b></td><td>Session message/tool/permission/cancel</td><td>真实 managed OpenCode 发送 message；触发 tool；发起 permission approve/reject；执行 cancel/restart。</td><td>message、tool、permission、cancel 状态真实投影；未确认取消保持 unknown；restart 后旧 owner 不可写。</td></tr>
+      <tr><td><b>BB13</b></td><td>治理失败恢复与失效</td><td>先注入一次 exit 86；再运行 recovery、re-entry、idempotent、source/graph/config/artifact/evidence 变更。</td><td>有效前置阶段复用；后继正确失效；真实 verify/smoke 失败保留；恢复不能伪造 PASS。</td></tr>
+      <tr><td><b>BB14</b></td><td>失败启动 / stop / 资源回收</td><td>重复 start、错误 generation stop、stale generation recovery；检查 daemon、Console、OpenCode 子进程。</td><td>重复 start 明确失败；正确 generation 可 stop；stale 不误杀；owned process、socket、临时目录最终清零。</td></tr>
+    </tbody>
+  </table>
+  <div class="note info"><b>推荐阅读顺序：</b>先运行 BB01 验证安装，接着 BB02/BB03 验证 daemon 与 provider，再运行 BB04–BB08 验证 Work/config，BB09–BB12 验证 Console/Session，最后运行 BB13/BB14 验证恢复、失败和资源终点。</div>
 </section>
 
 <!-- ================= 验收矩阵 ================= -->
