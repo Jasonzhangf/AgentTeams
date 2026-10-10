@@ -39,6 +39,10 @@ _Empty._
 - tags: `ai-reviewed`, `config`, `human-unreviewed`, `local-mvp`
 - details: [L2/776fcad-u2-v3-delivery-20261004.md](L2/776fcad-u2-v3-delivery-20261004.md)
 
+### U6 安装后 Session 与 U7 分阶段门禁交付
+- tags: `agentteams`, `ai-reviewed`, `governance`, `human-unreviewed`, `session`, `u6`, `u7`
+- details: [L2/83a8bd1-u6-installed-session-delivery-20261007.md](L2/83a8bd1-u6-installed-session-delivery-20261007.md)
+
 ### N3 peer route contract delivery
 - tags: `N3`, `ai-reviewed`, `human-unreviewed`, `network`
 - details: [L2/8ea5f7c-n3-peer-route-contract-20260910.md](L2/8ea5f7c-n3-peer-route-contract-20260910.md)
@@ -451,6 +455,6 @@ Base budget: 8 lines. Copy the compact lines into the project Skill `description
 - L2: Stage-reentrant lifecycle gates (knowledge) [ai-reviewed,human-unreviewed] -> L2/3fd009a-governance-reentrant.md
 - L2: AgentTeams Local Network MVP governance profile pushed (knowledge) [agentteams,ai-reviewed,governance,human-unreviewed,mvp] -> L2/56baa57-local-network-goal-20260912.md
 - L2: U2 v3 configuration delivered with durable per-daemon recovery (knowledge) [ai-reviewed,config,human-unreviewed,local-mvp] -> L2/776fcad-u2-v3-delivery-20261004.md
+- L2: U6 安装后 Session 与 U7 分阶段门禁交付 (knowledge) [agentteams,ai-reviewed,governance,human-unreviewed,session,u6,u7] -> L2/83a8bd1-u6-installed-session-delivery-20261007.md
 - L2: N3 peer route contract delivery (knowledge) [N3,ai-reviewed,human-unreviewed,network] -> L2/8ea5f7c-n3-peer-route-contract-20260910.md
-- L2: N3 typed runtime peer-route assembly (knowledge) [N3,ai-reviewed,human-unreviewed,network,runtime] -> L2/8ea5f7c-n3-runtime-assembly-20260910.md
 
