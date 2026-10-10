@@ -227,11 +227,33 @@
   后 receipt 自洽，产物 `content_sha256 97993a6d…`。这是治理簿记，不是产品缺陷。
 - 全扫结果：BB01–BB14 共 14 例，12 通过、2 失败。
   - BB12 失败：`CONFLICT: A prompt is already active for this session`（`runtime/agent-process.ts:471`
-    的并发准入守卫）。证据 `bb12-failure.json`：provider 收到 3 次请求，其中 tool 探测被重复投递两次，
-    事件流出现 3 个 final；权限探测请求从未到达 provider。该例单独运行通过，故在整轮负载下
-    暴露的是驱动/时序问题，不是守卫本身错误。
+    的并发准入守卫）。**r27 已更正此处判断**：当时写成「tool 探测被重复投递两次」是误读，
+    provider 的 3 次请求其实是两次完整回合加上工具回合的续召，不是重复投递。真因见下节。
   - BB13 失败：`pnpm verify` 内 `agent-host/cli-executor.spec.ts` 3 个用例失败（776 tests / 773 通过），
     与 r25 同一签名，仍是 5 秒用例超时的负载族。
 - 结论：BB10 的 stop 缺陷已关闭且未复现；r26 剩余两例为负载相关不稳定，非本次修复引入。
   最终「同一安装包 BB01–BB14 单次全绿」尚无证据，MVP 未收口。
 - 资源：全扫后无残留进程，临时根目录已全部移除。
+
+## 2026-10-09 U7 round 27 BB12 回合结束判据修复（已合并 main）
+
+- 症状：r26 全扫里 BB12 在权限探测处被 `CONFLICT: A prompt is already active for this session`
+  拒绝（`runtime/agent-process.ts:471` 的并发准入守卫）。
+- 根因（在驱动，不在产品）：一次工具回合会投影**两个** `final`——发出工具请求的那条 assistant
+  消息以 `finish: "tool-calls"` 完成（中间态），回合只有在这之后出现终结性 finish 时才算结束
+  （失败证据里对应 `[13] tool-calls` 与 `[14] stop`）。旧 `waitForSessionTurn` 的判据只是
+  `finals.length > previousFinals`，因此在中间态就返回，驱动立即下发下一个 prompt，而该回合
+  仍持有 session，守卫于是正确拒绝。产品侧无缺陷：`opencode-adapter/src/index.ts:667-670` 按上游
+  原样投影 `finish`，`runtime/agent-process.ts:303` 在回合终态正确释放记录。
+- 修复：`scripts/blackbox-user-mvp.mjs` 的 `waitForSessionTurn` 仍要求 `state === 'completed'`，
+  仅额外跳过 `finish === 'tool-calls'` 的 intermediate final。这是**加强**判据：未放宽断言，
+  未加宽任何超时。
+- 证据（同负载 A/B，决定性）：r26 在 `49caaab` 上 BB12 失败；r27 在 `0c90380` 上同一全量流程
+  BB12 通过，13/14。变更区定向测试 `scripts` + `control-protocol` 145/145 通过；
+  `scripts/regression.mjs` 776/776、83 files 通过。
+- BB13 仍失败，两次失败精确停在 **5002ms / 5007ms**，而同一用例单跑仅 **165ms**；失败点每轮不同
+  （artifact-change → config-change），且 `recovery.json` 恢复链本身 `ok:true`。判定为真实回归门禁
+  在 776 用例并发跑真 Chrome 时的 5 秒默认超时 liveness 问题，非产品缺陷。既有 issue `43cb0af`
+  已两轮独立诊断并结论无源码缺陷，故**不新增补丁、不加超时、不改断言**。该 flake 仍阻塞
+  「同一安装包 BB01–BB14 单次全绿」，MVP 未收口。
+- 交付：候选 `0c90380` → merge `48073f0`，main 与 origin/main/远端一致（`48073f0`）。
