@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentTeams 本地 MVP：如何交付、如何测试</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171b21; --panel2:#1d222a; --line:#2a3039;
+    --fg:#e6e9ee; --muted:#98a2b3; --accent:#4c9ffe; --ok:#2ecc71; --warn:#f5a623; --bad:#ef5350;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+  a{color:var(--accent)}
+  header{padding:28px 32px 20px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#171c24,#0f1216)}
+  h1{margin:0 0 6px;font-size:22px;letter-spacing:.2px}
+  header p{margin:0;color:var(--muted);font-size:13.5px}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .badge{border:1px solid var(--line);background:var(--panel2);border-radius:999px;
+    padding:5px 12px;font-size:12.5px;color:var(--muted)}
+  .badge b{color:var(--fg);font-weight:600}
+  .badge.ok{border-color:#245c3d;color:#9fe3bd}
+  .badge.ok b{color:#c8f7dd}
+  main{padding:22px 32px 60px;max-width:1180px}
+  nav.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:22px;flex-wrap:wrap}
+  nav.tabs button{appearance:none;background:transparent;border:0;border-bottom:2px solid transparent;
+    color:var(--muted);padding:10px 14px;font-size:14px;cursor:pointer;font-family:inherit}
+  nav.tabs button:hover{color:var(--fg)}
+  nav.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+  section[hidden]{display:none}
+  h2{font-size:17px;margin:26px 0 10px}
+  h2:first-child{margin-top:0}
+  h3{font-size:14.5px;margin:20px 0 8px;color:#cbd3de}
+  p{color:#cbd3de}
+  .muted{color:var(--muted)}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px}
+  .card .step{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+  .card h4{margin:6px 0 8px;font-size:15px}
+  .card p{margin:0 0 10px;font-size:13.5px;color:var(--muted)}
+  .cmd{position:relative;background:#0b0e12;border:1px solid var(--line);border-radius:9px;
+    padding:11px 12px;margin:0 0 10px;overflow:auto}
+  .cmd pre{margin:0;font-family:var(--mono);font-size:12.5px;line-height:1.6;white-space:pre;color:#d7dee8}
+  .cmd .copy{position:absolute;top:7px;right:7px;background:#20262f;border:1px solid var(--line);
+    color:var(--muted);border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;font-family:inherit}
+  .cmd .copy:hover{color:var(--fg);border-color:#3a424e}
+  .cmd .copy.done{color:#9fe3bd;border-color:#245c3d}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0 4px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12.5px;letter-spacing:.03em;background:#141821}
+  tbody tr:hover{background:#1a1f27}
+  code{font-family:var(--mono);font-size:12.5px;background:#12161c;border:1px solid var(--line);
+    border-radius:5px;padding:1px 5px;color:#d7dee8}
+  .pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11.5px;border:1px solid var(--line)}
+  .pill.ok{color:#9fe3bd;border-color:#245c3d;background:#14231b}
+  .pill.warn{color:#f7d79b;border-color:#5c4a1e;background:#241f12}
+  .pill.info{color:#a9cdfb;border-color:#1e3c5c;background:#121c26}
+  .filterbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 6px}
+  .filterbar input{background:var(--panel2);border:1px solid var(--line);color:var(--fg);
+    border-radius:8px;padding:7px 10px;font-family:inherit;font-size:13px;min-width:190px}
+  .filterbar button{background:var(--panel2);border:1px solid var(--line);color:var(--muted);
+    border-radius:999px;padding:6px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .filterbar button[aria-pressed="true"]{color:var(--fg);border-color:var(--accent);background:#16233a}
+  .note{border-left:3px solid var(--warn);background:#1d1a12;border-radius:0 9px 9px 0;
+    padding:11px 14px;margin:12px 0;font-size:13.5px;color:#e7d9bd}
+  .note.info{border-left-color:var(--accent);background:#121a24;color:#cfe0f5}
+  .note.ok{border-left-color:var(--ok);background:#12201a;color:#c9ecd9}
+  footer{border-top:1px solid var(--line);padding:18px 32px;color:var(--muted);font-size:12.5px}
+  .kbd{font-family:var(--mono);font-size:12px;color:#cbd3de}
+  ul{margin:8px 0 8px 18px;padding:0}li{margin:4px 0;color:#cbd3de;font-size:13.5px}
+  .two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+</style>
+</head>
+<body>
+<header>
+  <h1>AgentTeams 本地 MVP：如何交付、如何测试</h1>
+  <p>这份页面给出可执行的交付路径、分层测试入口，以及最终验收矩阵。所有命令都可在仓库根直接运行。</p>
+  <div class="badges">
+    <span class="badge ok">main 回执 <b>e3f9f79</b></span>
+    <span class="badge ok">最终验收 <b>BB01–BB14 14/14</b></span>
+    <span class="badge ok">独立 milestone <b>PASS</b></span>
+    <span class="badge">被验收候选 <b>060002d</b></span>
+    <span class="badge">安装包 <b>a5c11c3a…</b></span>
+  </div>
+</header>
+
+<main>
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true"  data-tab="deliver">① 如何交付</button>
+  <button role="tab" aria-selected="false" data-tab="test">② 如何测试</button>
+  <button role="tab" aria-selected="false" data-tab="accept">③ 验收矩阵</button>
+  <button role="tab" aria-selected="false" data-tab="evidence">④ 证据与边界</button>
+</nav>
+
+<!-- ================= 交付 ================= -->
+<section id="deliver">
+  <h2>交付形态</h2>
+  <p>一个 npm 安装包。它包含 <code>agentteams</code> CLI、Console 静态资源、编译后的 runtime 库和 DAGpipe runner。
+     用户从源码树外安装，只编辑 <code>~/.agentteams/config.toml</code>。</p>
+  <p class="muted">交付 = 代码进入 <code>origin/main</code>，并给出远端回执。安装包是构建产物，不提交。</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="step">第 1 步</div>
+      <h4>构建可安装包</h4>
+      <p>安装依赖，再生成 final 模式的包与它的身份 receipt。</p>
+      <div class="cmd"><button class="copy">复制</button><pre>pnpm install --frozen-lockfile
+pnpm build:governance</pre></div>
+      <p>产物：<code>generated/modules/teams-source/lib</code><br>
+         身份：<code>generated/modules/teams-source/package-receipt.json</code> 里的
+         <code>head_commit</code> / <code>base_commit</code> / <code>content_sha256</code>。</p>
+    </div>
+
+    <div class="card">
+      <div class="step">第 2 步</div>
+      <h4>打包并安装到源码树外</h4>
+      <p>用真实 tarball 安装。这一步证明包可以离开源码树运行。</p>
+      <div class="cmd"><button class="copy">复制</button><pre>npm pack generated/modules/teams-source/lib \
+  --pack-destination /tmp/at-pack --json
+
+npm install --prefix /tmp/at-prefix --no-audit --no-fund \
+  --no-package-lock --no-save /tmp/at-pack/agentteams-0.1.0.tgz</pre></div>
+      <p>可执行文件：<code>/tmp/at-prefix/node_modules/.bin/agentteams</code></p>
+    </div>
+
+    <div class="card">
+      <div class="step">第 3 步</div>
+      <h4>首次运行</h4>
+      <p>用户只写一份可编辑配置。系统状态放在 <code>internal.toml</code>，用户不改。</p>
+      <div class="cmd"><button class="copy">复制</button><pre>agentteams init   --config ~/.agentteams/config.toml
+agentteams start  --config ~/.agentteams/config.toml
+agentteams status --config ~/.agentteams/config.toml
+agentteams console start --config ~/.agentteams/config.toml
+agentteams stop   --config ~/.agentteams/config.toml --generation &lt;n&gt;</pre></div>
+      <p>Console 是可选的观察面。关闭 Console 后，新的 Agent Work 仍然成功。</p>
+    </div>
+  </div>
+
+  <h2>集成与回执</h2>
+  <div class="cmd"><button class="copy">复制</button><pre>git push origin main
+git ls-remote origin refs/heads/main</pre></div>
+  <p class="muted">远端返回的 SHA 必须等于本地 <code>git rev-parse HEAD</code>。本地干净检查用 <code>git status --short</code>，输出为空才算干净。</p>
+</section>
+
+<!-- ================= 测试 ================= -->
+<section id="test" hidden>
+  <h2>分层测试阶梯</h2>
+  <p>按风险选层，不逐次跑全套。提交动作本身不触发整套测试。</p>
+  <table>
+    <thead><tr><th style="width:15%">阶段</th><th style="width:40%">入口</th><th style="width:24%">证据</th><th>何时选它</th></tr></thead>
+    <tbody>
+      <tr><td>定向测试</td><td><code>pnpm exec vitest run --config vitest.config.ts &lt;file&gt;</code></td><td>命令输出</td><td>只改了受影响文件或行为</td></tr>
+      <tr><td>类型检查</td><td><code>pnpm typecheck</code></td><td>退出码</td><td>源码或类型入口变化</td></tr>
+      <tr><td>构建</td><td><code>pnpm build</code></td><td>构建输出</td><td>构建入口或产物变化</td></tr>
+      <tr><td>全量回归</td><td><code>node scripts/regression.mjs</code></td><td><code>generated/validation/regression.json</code></td><td>候选、依赖或契约漂移</td></tr>
+      <tr><td>编译库 smoke</td><td><code>pnpm smoke</code></td><td>命令输出</td><td>编译产物或 Console 静态资源变化</td></tr>
+      <tr><td>安装副本 smoke</td><td><code>pnpm smoke:installed</code></td><td>命令输出</td><td>安装、重启或公开入口变化</td></tr>
+      <tr><td>生命周期准入</td><td><code>pnpm lifecycle:admission</code></td><td><code>.appsdk/records/</code>、<code>.appsdk-control/lifecycle-adapter/</code></td><td>正式阶段记录或发布准入</td></tr>
+      <tr><td>全量门禁</td><td><code>pnpm verify</code></td><td>各阶段输出与回归 JSON</td><td>发布范围，或无法证明既有证据仍有效</td></tr>
+      <tr><td>集成与回执</td><td><code>git push</code>，再核对远端</td><td><code>git ls-remote origin refs/heads/main</code></td><td>授权集成</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note info">
+    <b>pnpm verify 展开是什么</b><br>
+    <span class="kbd">pnpm test &amp;&amp; pnpm typecheck &amp;&amp; appsdk guide compile &amp;&amp; appsdk compile &amp;&amp; pnpm smoke &amp;&amp; appsdk verify</span><br>
+    其中 <span class="kbd">pnpm test</span> = <span class="kbd">pnpm build:runtime &amp;&amp; pnpm --dir opencode-adapter build &amp;&amp; node scripts/regression.mjs</span>。
+  </div>
+
+  <h2>跑最终验收</h2>
+  <p>这是「安装后的真实业务入口」验收。它从一个安装包跑完 14 个 case，覆盖 U1–U7 与 D3/D4。</p>
+  <div class="cmd"><button class="copy">复制</button><pre>pnpm build:governance
+
+node scripts/blackbox-user-mvp.mjs --case all \
+  --package generated/modules/teams-source/lib \
+  --evidence-dir /tmp/at-evidence/all \
+  --receipt /tmp/at-evidence/all.receipt.json</pre></div>
+  <div class="two">
+    <div class="card">
+      <h4>退出码怎么读</h4>
+      <ul>
+        <li><span class="pill ok">0</span> 全部通过</li>
+        <li><span class="pill warn">1</span> 有 case 失败</li>
+        <li><span class="pill info">2</span> 有 case 未验证（环境缺前置）</li>
+      </ul>
+      <p class="muted">receipt 里的 <code>exit.failed</code> 与 <code>exit.unverified</code> 分别列出失败和未验证的 case。</p>
+    </div>
+    <div class="card">
+      <h4>只看一个 case</h4>
+      <div class="cmd"><button class="copy">复制</button><pre>node scripts/blackbox-user-mvp.mjs --list
+node scripts/blackbox-user-mvp.mjs --case BB04 \
+  --package generated/modules/teams-source/lib \
+  --receipt /tmp/at-evidence/bb04.receipt.json</pre></div>
+      <p class="muted">先 <code>--list</code> 看 case 编号，再用 <code>--case</code> 单选或多选（逗号分隔）。</p>
+    </div>
+  </div>
+
+  <h2>每个 case 做什么</h2>
+  <p>BB01–BB12、BB14 走安装副本的真实入口：npm pack/install 到源码树外、真实 Camo 浏览器、真实 installed Console、真实 provider、真实 managed OpenCode 的 message/tool/permission/cancel。
+     BB13 是治理 case：它在候选克隆里跑真实 lifecycle adapter，再依次改动 source/graph/config/artifact/evidence 输入，验证恢复与失效边界。</p>
+</section>
+
+<!-- ================= 验收矩阵 ================= -->
+<section id="accept" hidden>
+  <h2>BB01–BB14 验收矩阵</h2>
+  <p class="muted">状态来自 2026-10-10 在候选 <code>060002d</code> 上、从同一个安装包执行的一次完整运行（exit 0）。</p>
+  <div class="filterbar">
+    <input id="q" type="search" placeholder="过滤：BB04、U6、Console…">
+    <button data-f="all" aria-pressed="true">全部</button>
+    <button data-f="U1" aria-pressed="false">U1</button>
+    <button data-f="U3" aria-pressed="false">U3</button>
+    <button data-f="U4" aria-pressed="false">U4</button>
+    <button data-f="U5" aria-pressed="false">U5</button>
+    <button data-f="U6" aria-pressed="false">U6</button>
+    <button data-f="U7" aria-pressed="false">U7</button>
+  </div>
+  <table id="bb">
+    <thead><tr><th style="width:8%">ID</th><th style="width:16%">owner</th><th>门禁（该 case 证明什么）</th><th style="width:12%">状态</th></tr></thead>
+    <tbody>
+      <tr data-u="U1 U5 U7"><td><b>BB01</b></td><td>U1+U5+U7</td><td>安装包生命周期与 Console 静态资源</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U2 U7"><td><b>BB02</b></td><td>U2+U7</td><td>只靠 config.toml 的两 daemon bridge 发现</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U3"><td><b>BB03</b></td><td>U3</td><td>真实浏览器服务的生命周期与容量</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U4"><td><b>BB04</b></td><td>D3/U4</td><td>安装后公开 Work 的 submit 与 query（两次新请求结果不同；get-only 不重跑）</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U3 U4"><td><b>BB05</b></td><td>U3+U4</td><td>安装后 Work 的拒绝矩阵</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U3 U4"><td><b>BB06</b></td><td>U3+U4</td><td>常驻浏览器 Work 的容量</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U4"><td><b>BB07</b></td><td>D3/U4</td><td>安装后 Work 的未知请求与恢复查询</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U2 U4"><td><b>BB08</b></td><td>U2+U4</td><td>安装后的配置 generation 与 stale 拒绝</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U5"><td><b>BB09</b></td><td>U5</td><td>安装后 Console 生命周期与 Console 离线时的新 Work</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U2 U6"><td><b>BB10</b></td><td>U2+U6</td><td>安装后显式 provider/model 的 Session</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U4"><td><b>BB11</b></td><td>D3/U4</td><td>安装后 SDK Work 与 compile 负例</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U6"><td><b>BB12</b></td><td>U6</td><td>安装后 Session 的 message / tool / permission / cancel</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U7"><td><b>BB13</b></td><td>D4/U7</td><td>治理门禁的失败恢复与失效矩阵</td><td><span class="pill ok">通过</span></td></tr>
+      <tr data-u="U1 U7"><td><b>BB14</b></td><td>U1+U7</td><td>启动失败、停止与自有资源回收</td><td><span class="pill ok">通过</span></td></tr>
+    </tbody>
+  </table>
+  <p class="muted" id="count"></p>
+</section>
+
+<!-- ================= 证据 ================= -->
+<section id="evidence" hidden>
+  <h2>证据在哪里</h2>
+  <table>
+    <thead><tr><th style="width:32%">内容</th><th>路径</th></tr></thead>
+    <tbody>
+      <tr><td>最终验收 receipt</td><td><code>/Volumes/Intel/playground/agentteams/.worker-runs/sdk-refresh-0.1.0013-20261009/r3/all.receipt.json</code></td></tr>
+      <tr><td>逐 case 证据</td><td><code>…/r3/all/cases/&lt;BBnn&gt;/</code>（每个阶段的命令、退出码、stdout/stderr）</td></tr>
+      <tr><td>安装包身份</td><td><code>generated/modules/teams-source/package-receipt.json</code></td></tr>
+      <tr><td>全量回归结果</td><td><code>generated/validation/regression.json</code></td></tr>
+      <tr><td>开发命令与证据适用性</td><td><code>docs/development-governance.md</code></td></tr>
+      <tr><td>项目契约与边界</td><td><code>AGENTS.md</code></td></tr>
+      <tr><td>本轮过程记录</td><td><code>note.md</code> 的 round-32 段</td></tr>
+    </tbody>
+  </table>
+
+  <h2>这次验收记录了什么</h2>
+  <div class="cmd"><pre>candidate head_commit = base_commit = 060002d
+tree_hash                         = 5b95dc76…
+installed package content_sha256  = a5c11c3a…
+cases passed                      = 14 / 14
+exit.code                         = 0
+exit.failed                       = []
+exit.unverified                   = []</pre></div>
+  <p class="muted">同一份代码在更早的候选 <code>50efe13</code> 上也跑过一次 14/14。两次都由同一个安装包跑完 14 个 case。</p>
+
+  <h2>三条已知边界</h2>
+  <div class="note">
+    <b>1. BB13 内部门禁有一次负荷抖动。</b>
+    在 <code>68c7fbe</code> 的重跑里，BB13 克隆内的 <code>pnpm verify</code> 有 1/776 例失败：
+    <code>runtime/managed-opencode-session.spec.ts</code> 的真实 OpenCode 往返用例实测 11.92 s，超过它自己的 10 s 预算。
+    该用例单独跑三次是 1.95 / 1.99 / 1.95 s，且在更早的 BB13（8 次 verify）里全通过。
+    这是满负荷下的时序敏感，不是产品缺陷。超时与断言都未放宽；既有 issue <code>5abd96e</code> 继续跟踪。
+  </div>
+  <div class="note">
+    <b>2. 包内容哈希跨构建不可复现。</b>
+    同一提交连续三次 <code>pnpm build:governance</code> 得到三个不同的 <code>content_sha256</code>。
+    逐文件比对定位到只有 <code>runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner</code>
+    与其 manifest 每次不同，原因是本地 Rust 链接产物非确定（macOS 链接 UUID）。
+    所以「同一个安装包」由验收 receipt 绑定的那次产物加候选提交界定，不能用跨构建哈希比较。
+  </div>
+  <div class="note">
+    <b>3. Relay 路径仍有一个 open P1。</b>
+    issue <code>4e04166</code>（Relay admission grant 到期会终止进行中的浏览器 Work）未收口。
+    它属于 Relay 路径；已交付的本地 Phase 1 路径由 BB03/BB06 的真实浏览器 Work 覆盖并通过。
+  </div>
+</section>
+</main>
+
+<footer>
+  数据来源：仓库 <code>main</code> 的 <code>e3f9f79</code>、最终验收 receipt、以及 <code>docs/development-governance.md</code>。
+  本页只展示已记录的事实；没有实时探测结果。
+</footer>
+
+<script>
+  // Tabs
+  const tabs = [...document.querySelectorAll('nav.tabs button')];
+  const panels = { deliver: document.getElementById('deliver'), test: document.getElementById('test'),
+                   accept: document.getElementById('accept'), evidence: document.getElementById('evidence') };
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.setAttribute('aria-selected', String(x === t)));
+    Object.entries(panels).forEach(([k, el]) => { el.hidden = k !== t.dataset.tab; });
+  }));
+
+  // Copy buttons
+  document.querySelectorAll('.cmd .copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const text = btn.parentElement.querySelector('pre').textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = '已复制'; btn.classList.add('done');
+        setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('done'); }, 1400);
+      } catch { btn.textContent = '请手动选择'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+    });
+  });
+
+  // Acceptance matrix filter
+  const rows = [...document.querySelectorAll('#bb tbody tr')];
+  const q = document.getElementById('q');
+  const count = document.getElementById('count');
+  const filterButtons = [...document.querySelectorAll('.filterbar button')];
+  let activeOwner = 'all';
+  function apply() {
+    const needle = q.value.trim().toLowerCase();
+    let shown = 0;
+    rows.forEach(r => {
+      const owners = (r.dataset.u || '').split(' ');
+      const okOwner = activeOwner === 'all' || owners.includes(activeOwner);
+      const okText = !needle || r.textContent.toLowerCase().includes(needle);
+      const show = okOwner && okText;
+      r.hidden = !show;
+      if (show) shown++;
+    });
+    count.textContent = `显示 ${shown} / ${rows.length} 个 case。`;
+  }
+  q.addEventListener('input', apply);
+  filterButtons.forEach(b => b.addEventListener('click', () => {
+    activeOwner = b.dataset.f;
+    filterButtons.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    apply();
+  }));
+  apply();
+</script>
+</body>
+</html>
