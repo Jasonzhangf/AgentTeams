@@ -6,7 +6,14 @@
   "base_ref": "origin/main",
   "worktree": "/Volumes/Intel/playground/agentteams/acp-d07-webui-20261011",
   "branch": "codex/acp-d07-webui-20261011",
-  "committed": false,
+  "committed": true,
+  "candidate_commits": [
+    "9c50a80",
+    "533f75d"
+  ],
+  "integration_commit": "95016d078c1969bf031b3462a3a4fa7024e9ad1d",
+  "remote_receipt": "origin/main == 95016d0 after the merge; verified by re-fetching and by reading the D07 blobs out of the remote-tracking ref",
+  "review": "independent focused re-review PASS: all three findings fixed; two follow-up coverage gaps closed in 533f75d",
   "gate_id": "teams-acp-d07-webui",
   "gate_status": "partial",
   "verification": [
