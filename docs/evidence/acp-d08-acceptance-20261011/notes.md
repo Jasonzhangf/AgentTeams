@@ -28,10 +28,11 @@ D08 acceptance PASS: 44 checks (gaps: 4, findings: 1) in 124s
 cleanup: removed owned root /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-XXXXXX
 ```
 
-Three further full runs reached the same `44 checks / 4 gaps / 0 findings` result
-(`134s`, `133s`, `132s`). Ports, pids and sessions differ per run because every run
-creates its own temp root; the check, gap and finding counts are deterministic. The pids
-quoted in this file are the canonical run's.
+Three further full runs reached the same `44 checks / 4 gaps` result (`134s`, `133s`, `132s`).
+Those runs predate the generation observation, so they printed `findings: 0`; every run from
+the one that added it onward prints `findings: 1`. Ports, pids and sessions differ per run
+because every run creates its own temp root; the check, gap and finding counts are
+deterministic. The pids quoted in this file are the canonical run's.
 
 Two recorded values are *not* stable identities, and are quoted with that caveat:
 `content_sha256` changes whenever the staged candidate tree changes (the driver's own
@@ -41,8 +42,9 @@ its tar header carries the build time. The stable facts are `mode=final`,
 
 The driver prints one `PASS <name> — <detail>` per check, `GAP <name> — <reason>` for a
 coverage boundary that the candidate cannot prove, and `FINDING <name> — <detail>` for an
-observed product defect that falsifies no check. Both product defects this driver found are
-now fixed (§6), so no open defect remains. The final run reports `findings: 1` for one
+observation that falsifies no check. A `FINDING` is usually a product defect, but it can also
+be a behaviour worth a decision that no requirement covers. Both product defects this driver
+found are now fixed (§6), so no open defect remains. The final run reports `findings: 1` for one
 **observation, not a defect**: a graceful `control stop` removes the persisted lifecycle
 record, so the restarted owner reuses generation `1` and a stale `--generation` value can
 collide with the new lifecycle. The project declares no monotonicity requirement across a

@@ -339,7 +339,7 @@ allowed = ["master", "peer"]
   assert.equal(field(afterStop.stdout, 'state'), 'stopped')
   check('CLI stop removes the pid, the listener and the runtime state record', `${stop.stdout}; listener closed; durable data directory kept`)
 
-  // 10. A taken port is a typed failure at the real CLI, and it leaves no owned state.
+  // 10. A taken port is a typed failure at the real CLI, and it leaves no runtime state record.
   const takenPort = await freePort()
   const occupant = createServer()
   await new Promise(resolveListen => occupant.listen(takenPort, '127.0.0.1', resolveListen))
@@ -357,7 +357,7 @@ allowed = ["master", "peer"]
     // the same reason a stop keeps it (146824a).
     assert.equal(existsSync(join(takenData, 'control-state.json')), false, 'a failed start kept its runtime state record')
     assert.equal(runCli(['control', 'status', '--config', takenConfig]).stdout.includes('state=running'), false)
-    check('a taken webui port fails with the typed PORT_OCCUPIED code and no owned state', taken.stderr)
+    check('a taken webui port fails with the typed PORT_OCCUPIED code and no runtime state record', taken.stderr)
   } finally {
     await new Promise(resolveClose => occupant.close(() => resolveClose()))
   }

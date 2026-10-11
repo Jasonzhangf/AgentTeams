@@ -132,8 +132,10 @@ function gap(name, reason) {
 }
 
 /**
- * An observed product defect that does not falsify any acceptance check. It is reported
- * separately from `GAP` so a coverage boundary is never confused with a product fault.
+ * An observation that does not falsify any acceptance check. It is usually a product defect,
+ * but it can also be a behaviour worth a decision that no requirement covers. It is reported
+ * separately from `GAP` so a coverage boundary is never confused with a product fault, and it
+ * never changes the exit code.
  */
 function finding(name, detail) {
   findings.push({ name, detail })
