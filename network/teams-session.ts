@@ -286,8 +286,11 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
       }
     } finally {
       clearInterval(pump)
+      // Release every host channel and the transport on every exit path,
+      // including a malformed or unexpected inbound frame that throws out of
+      // `receive`. `close` never throws, so it cannot mask that error.
+      await close()
     }
-    await close()
   }
 
   return {

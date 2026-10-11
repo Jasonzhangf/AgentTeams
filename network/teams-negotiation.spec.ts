@@ -150,10 +150,22 @@ describe('Teams negotiation state machine', () => {
 
   it('refuses an illegal role pair and a subordinate role', () => {
     const state = startTeamsNegotiation(responder()).state
+    // This inbound propose is rejected by the frozen parser's own role-pair
+    // guard (control-protocol/teams-connection.ts), not by this module's guard.
     expect(() => receiveTeamsNegotiationFrame(state, proposeFrame({ requestedRole: 'master', requestedPeerRole: 'master' })))
       .toThrow(/master\/master relation is not allowed/)
     expect(() => receiveTeamsNegotiationFrame(state, proposeFrame({ requestedRole: 'subordinate', requestedPeerRole: 'peer' })))
       .toThrow(/must be master or peer/)
+  })
+
+  it('refuses an outbound master/master role pair at the initiator start boundary', () => {
+    // This path builds the outbound propose locally and never parses a frame, so
+    // it pins this module's own `assertRolePair` guard (teams-negotiation.ts:244).
+    expect(() => startTeamsNegotiation(initiator({ requestedRole: 'master', requestedPeerRole: 'master' })))
+      .toThrow(/master\/master relation is not allowed/)
+    // A bilateral pair still starts, so the guard is not refusing every pair.
+    expect(startTeamsNegotiation(initiator({ requestedRole: 'peer', requestedPeerRole: 'peer' })).state.state)
+      .toBe('awaiting-context')
   })
 
   it('refuses a stale target generation and answers with a typed reject instead of an agreement', () => {

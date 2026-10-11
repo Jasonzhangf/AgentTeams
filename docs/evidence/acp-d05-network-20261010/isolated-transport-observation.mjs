@@ -181,7 +181,7 @@ async function main() {
   })
   const duplex = new ScriptedDuplex()
   const history = memoryHistory()
-  const host = createAcpHost({
+  const innerHost = createAcpHost({
     handle: {
       engineInstanceId: ENGINE_INSTANCE,
       pid: process.pid,
@@ -194,6 +194,15 @@ async function main() {
     history,
     assertAllowed: assertAcpAllowed,
   })
+  // Records the exact ref the listener hands to its own AcpHost, so the
+  // open_ack ref can be compared against the local ref instead of the wire ref.
+  const openedRefs = []
+  const host = {
+    open: async input => { openedRefs.push(input.ref); return await innerHost.open(input) },
+    receive: ingress => innerHost.receive(ingress),
+    read: (ref, after, limit) => innerHost.read(ref, after, limit),
+    close: ref => innerHost.close(ref),
+  }
 
   let promptEngineId
   void (async () => {
@@ -368,8 +377,9 @@ async function main() {
   assert(ack.kind === 'acp.open_ack', 'the listener answered acp.open with acp.open_ack')
   assert(ack.ref.channelId !== clientRef.channelId && ack.ref.connectionId !== clientRef.connectionId,
     'the listener allocated its own transport-scoped connectionId/channelId (R2)')
-  assert(ack.ref.targetGeneration === TARGET_GENERATION && ack.ref.engineInstanceId === ENGINE_INSTANCE,
-    'the ack ref was rebuilt from the local generation and engine instance, not echoed from the wire (R2)')
+  assert(openedRefs.length === 1 && ack.ref.connectionId === openedRefs[0].connectionId &&
+    ack.ref.channelId === openedRefs[0].channelId,
+    "the ack ref is the listener's own locally allocated host-open ref, not the peer wire ref (R2)")
 
   async function readUntil(predicate, label, timeoutMs = 6_000) {
     const deadline = Date.now() + timeoutMs

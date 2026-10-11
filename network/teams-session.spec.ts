@@ -78,6 +78,8 @@ class FakeTransport implements TeamsSessionTransport {
   readonly peer: AuthenticatedAgent
   readonly sent: TeamsConnectionFrame[] = []
   readonly closed: Promise<unknown>
+  /** How many times the session released this transport by handle. */
+  closeCount = 0
   private readonly queue: unknown[] = []
   private readonly waiters: Array<(value: unknown) => void> = []
   private readonly resolveClosed: (value: unknown) => void
@@ -99,6 +101,7 @@ class FakeTransport implements TeamsSessionTransport {
   }
 
   async close(): Promise<void> {
+    this.closeCount += 1
     this.resolveClosed(undefined)
   }
 
@@ -168,6 +171,8 @@ function makePolicy() {
 interface RecordingHost extends AcpHost {
   readonly opens: Array<{ readonly ref: AcpChannelRef; readonly principal: AuthenticatedAgent }>
   readonly ingresses: AcpIngress[]
+  /** Every host channel this session released by handle. */
+  readonly closes: AcpChannelRef[]
 }
 
 function makeHost(policy: ReturnType<typeof makePolicy>): { readonly host: RecordingHost; readonly duplex: ScriptedDuplex } {
@@ -188,13 +193,15 @@ function makeHost(policy: ReturnType<typeof makePolicy>): { readonly host: Recor
   })
   const opens: RecordingHost['opens'] = []
   const ingresses: AcpIngress[] = []
+  const closes: AcpChannelRef[] = []
   const host: RecordingHost = {
     opens,
     ingresses,
+    closes,
     open: async input => { opens.push({ ref: input.ref, principal: input.principal }); await inner.open(input) },
     receive: async ingress => { ingresses.push(ingress); await inner.receive(ingress) },
     read: (ref, after, limit) => inner.read(ref, after, limit),
-    close: ref => inner.close(ref),
+    close: async ref => { closes.push(ref); await inner.close(ref) },
   }
   return { host, duplex }
 }
@@ -292,6 +299,31 @@ describe('Teams authenticated ACP session', () => {
     await forgedEngine.session.receive(openFrame('peer-ch-1', { engineInstanceId: 'engine-other' }))
     expect(forgedEngine.host.opens).toHaveLength(0)
     expect(forgedEngine.transport.sent[0]).toMatchObject({ kind: 'acp.error', error: { code: 'STALE_GENERATION' } })
+  })
+
+  it('re-checks generation and engine instance on every acp.frame and refuses a stale ref before host.receive', async () => {
+    const { session, transport, host } = fixture()
+    await session.receive(openFrame('peer-ch-1'))
+    expect(host.opens).toHaveLength(1)
+    expect(host.ingresses).toHaveLength(0)
+
+    // The channel is already open; the peer reuses its wire key but names a
+    // stale target generation. The R2 re-check must refuse it before the host.
+    await session.receive(frameFrame('peer-ch-1', initializeRequest, peerRef('peer-ch-1', { targetGeneration: GENERATION - 1 })))
+    expect(host.ingresses).toHaveLength(0)
+    expect(transport.sent.at(-1)).toMatchObject({ kind: 'acp.error', error: { code: 'STALE_GENERATION' } })
+
+    // Same open channel, but the peer names a forged engine instance.
+    await session.receive(frameFrame('peer-ch-1', initializeRequest, peerRef('peer-ch-1', { engineInstanceId: 'engine-forged' })))
+    expect(host.ingresses).toHaveLength(0)
+    expect(transport.sent.at(-1)).toMatchObject({ kind: 'acp.error', error: { code: 'STALE_GENERATION' } })
+
+    // The genuine ref on the same open channel still reaches the host, and the
+    // ingress carries only local generation/engine values.
+    await session.receive(frameFrame('peer-ch-1', initializeRequest))
+    expect(host.ingresses).toHaveLength(1)
+    expect(host.ingresses[0].targetGeneration).toBe(GENERATION)
+    expect(host.ingresses[0].engineInstanceId).toBe(ENGINE)
   })
 
   it('injects an inbound frame into host.receive with the payload preserved byte-for-byte', async () => {
@@ -440,6 +472,20 @@ describe('Teams authenticated ACP session', () => {
     await replaced.session.receive(openFrame('peer-ch-1', { targetGeneration: GENERATION + 1 }))
     expect(replaced.host.opens).toHaveLength(0)
     expect(replaced.transport.sent.at(-1)).toMatchObject({ kind: 'acp.error', error: { code: 'STALE_GENERATION' } })
+  })
+
+  it('closes the host channel and the transport when an unexpected inbound frame aborts the read loop', async () => {
+    const { session, transport, host } = fixture()
+    await session.receive(openFrame('peer-ch-1'))
+    expect(host.opens).toHaveLength(1)
+    // A well-formed Teams frame that is not one of the five ACP channel kinds:
+    // `receive` throws out of the run loop instead of returning a value.
+    transport.push({ version: 1, kind: 'teams.connection.context', connectionId: 'conn-a', targetGeneration: GENERATION, capabilitiesRevision: 'cap-b' })
+    await expect(session.run()).rejects.toThrow(/unexpected teams\.connection\.context/)
+    // The error propagates, but the release must still happen on that exit path.
+    expect(session.channels).toHaveLength(0)
+    expect(host.closes).toEqual([host.opens[0].ref])
+    expect(transport.closeCount).toBe(1)
   })
 
   it('carries no network diagnostics or permission injection in a Session payload', async () => {
