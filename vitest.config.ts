@@ -19,6 +19,7 @@ export default {
       'server/**/*.spec.ts',
       'network/**/*.spec.ts',
       'control-protocol/*.spec.ts',
+      'dsh-adapter/**/*.spec.ts',
       'console-host/tests/**/*.spec.ts',
       'agent/**/*.spec.ts',
       'config/**/*.spec.ts',
