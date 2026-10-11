@@ -1,0 +1,32 @@
+# D00 example: one registry (LAN registration directory) daemon.
+# The public kind is `registry`; the implementation reuses the existing
+# server/Relay directory, so no second directory store is created.
+# Start: agentteams registry start --config config/examples/registry.toml
+# Placeholder credential references only; never commit a real secret.
+version = 4
+
+[daemon]
+kind = "registry"
+id = "lan-registry"
+hostId = "registry-host"
+accountId = "local"
+scopeId = "local"
+dataDirectory = "./state/lan-registry"
+
+[listen]
+ip = "127.0.0.1"
+port = 7444
+
+[[admissions]]
+admissionRef = "reasoner-a-registration"
+agentId = "reasoner-a"
+accountId = "local"
+scopeId = "local"
+credentialRef = "env:EXAMPLE_REASONER_REGISTRATION"
+
+[[admissions]]
+admissionRef = "control-a-registration"
+agentId = "control-a"
+accountId = "local"
+scopeId = "local"
+credentialRef = "env:EXAMPLE_CONTROL_REGISTRATION"

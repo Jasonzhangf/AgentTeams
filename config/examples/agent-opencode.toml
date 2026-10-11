@@ -1,0 +1,63 @@
+# D00 example: one OpenCode agent daemon.
+# Start: agentteams --serve opencode --config config/examples/agent-opencode.toml
+# Explicit CLI values (--serve/--ip/--port) win over this file.
+# Placeholder credential references only; never commit a real secret.
+version = 4
+
+[daemon]
+kind = "agent"
+id = "reasoner-a"
+hostId = "host-a"
+accountId = "local"
+scopeId = "local"
+dataDirectory = "./state/reasoner-a"
+
+[engine]
+kind = "opencode"
+executable = "/opt/homebrew/bin/opencode"
+workspace = "./workspace"
+
+[listen]
+ip = "127.0.0.1"
+port = 7443
+
+[acp]
+enabled = true
+required = ["method:session/prompt"]
+blacklist = []
+clientCapabilities = []
+callbackExecutor = "controller"
+
+[relations]
+allowed = ["master", "peer"]
+
+[providers.openai]
+protocol = "openai-chat"
+apiBaseUrl = "https://api.example.test/v1"
+label = "Example OpenAI-compatible provider"
+enabled = true
+credentialEnv = "EXAMPLE_OPENAI_API_KEY"
+
+[[models]]
+provider = "openai"
+id = "example-large"
+label = "Example large model"
+contextWindow = 128000
+maxOutputTokens = 16384
+tools = true
+streaming = true
+inputModalities = ["text", "image"]
+outputModalities = ["text"]
+
+[[models]]
+provider = "openai"
+id = "example-small"
+label = "Example small model"
+
+[model.primary]
+provider = "openai"
+model = "example-large"
+
+[model.backup]
+provider = "openai"
+model = "example-small"

@@ -1,0 +1,39 @@
+# D00 example: one control daemon (WebUI backend). No engine, no ACP.
+# Start: agentteams control start --config config/examples/control.toml
+# Placeholder credential references only; never commit a real secret.
+version = 4
+
+[daemon]
+kind = "control"
+id = "control-a"
+hostId = "control-host"
+accountId = "local"
+scopeId = "local"
+dataDirectory = "./state/control-a"
+
+[webui]
+ip = "127.0.0.1"
+port = 7331
+allowedOrigin = "http://127.0.0.1:7331"
+
+[webui.auth]
+username = "teams"
+passwordEnv = "TEAMS_CONSOLE_PASSWORD"
+
+[relations]
+allowed = ["master", "peer"]
+
+[discovery]
+serverId = "lan-registry"
+endpoint = "wss://192.168.1.10:7444"
+credentialRef = "env:EXAMPLE_DISCOVERY_CREDENTIAL"
+tlsTrustRef = "file:./certs/registry-ca.pem"
+
+[peers.reasoner-a]
+agentId = "reasoner-a"
+hostId = "host-a"
+accountId = "local"
+scopeId = "local"
+endpoint = "wss://192.168.1.21:7443"
+credentialRef = "env:EXAMPLE_CONTROL_TO_REASONER"
+tlsTrustRef = "file:./certs/agent-ca.pem"

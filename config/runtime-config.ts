@@ -348,7 +348,11 @@ function clone<T>(value: T): T {
   return structuredClone(value)
 }
 
-function validateProvider(provider: ProviderInstance): void {
+/**
+ * Canonical provider-instance validation. The v4 file intent parser reuses this
+ * function so provider semantics have one implementation and one error owner.
+ */
+export function validateProvider(provider: ProviderInstance): void {
   requireNonEmpty(provider.id, 'provider id')
   requireNonEmpty(provider.label, 'provider label')
   if (provider.protocol !== 'openai-chat' && provider.protocol !== 'openai-responses') {
@@ -383,9 +387,18 @@ function validateMetadata(metadata: ModelMetadata, label: string): void {
       throw error('INVALID_INPUT', `config: ${label}.${key} must contain strings`)
     }
   }
+  if (metadata.label !== undefined && (typeof metadata.label !== 'string' || metadata.label.length === 0)) {
+    throw error('INVALID_INPUT', `config: ${label}.label must be a non-empty string`)
+  }
+  for (const [key, value] of [['tools', metadata.tools], ['streaming', metadata.streaming], ['reasoning', metadata.reasoning]] as const) {
+    if (value !== undefined && typeof value !== 'boolean') {
+      throw error('INVALID_INPUT', `config: ${label}.${key} must be boolean`)
+    }
+  }
 }
 
-function validateModelEntry(entry: ModelEntry): void {
+/** Canonical manual model-entry validation, reused by the v4 intent parser. */
+export function validateModelEntry(entry: ModelEntry): void {
   requireNonEmpty(entry.ref.providerInstanceId, 'model providerInstanceId')
   requireNonEmpty(entry.ref.modelId, 'model modelId')
   if (entry.origin !== 'discovered' && entry.origin !== 'manual') throw error('INVALID_INPUT', 'config: invalid model origin')
@@ -396,7 +409,8 @@ function validateModelEntry(entry: ModelEntry): void {
   }
 }
 
-function validateBinding(binding: AgentModelBinding, label = 'binding'): void {
+/** Canonical Agent model-binding validation, reused by the v4 intent parser. */
+export function validateBinding(binding: AgentModelBinding, label = 'binding'): void {
   requireNonEmpty(binding.primary.providerInstanceId, `${label}.primary.providerInstanceId`)
   requireNonEmpty(binding.primary.modelId, `${label}.primary.modelId`)
   if (binding.backup !== undefined) {
@@ -426,7 +440,12 @@ function entryFor(config: VersionedRuntimeConfig, ref: ModelRef): ModelEntry | u
   return catalogFor(config, ref.providerInstanceId).entries.find(entry => modelKey(entry.ref) === modelKey(ref))
 }
 
-function assertBindingTargets(config: VersionedRuntimeConfig, binding: AgentModelBinding): void {
+/**
+ * Canonical binding-target closure check (provider/model existence, enabled and
+ * availability). The v4 intent compiler reuses it after building the accepted
+ * snapshot, so an unresolved file reference fails with the same rule.
+ */
+export function assertBindingTargets(config: VersionedRuntimeConfig, binding: AgentModelBinding): void {
   validateBinding(binding)
   for (const ref of [binding.primary, ...(binding.backup === undefined ? [] : [binding.backup])]) {
     const provider = config.providers[ref.providerInstanceId]

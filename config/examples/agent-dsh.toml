@@ -1,0 +1,50 @@
+# D00 example: one DSH agent daemon.
+# Start: agentteams --serve dsh --config config/examples/agent-dsh.toml
+# Explicit CLI values (--serve/--ip/--port) win over this file.
+# Placeholder credential references only; never commit a real secret.
+version = 4
+
+[daemon]
+kind = "agent"
+id = "reasoner-b"
+hostId = "host-b"
+accountId = "local"
+scopeId = "local"
+dataDirectory = "./state/reasoner-b"
+
+[engine]
+kind = "dsh"
+workspace = "./workspace-dsh"
+
+[listen]
+ip = "127.0.0.1"
+port = 7445
+
+[acp]
+enabled = true
+required = []
+blacklist = []
+clientCapabilities = []
+callbackExecutor = "controller"
+
+[relations]
+allowed = ["peer"]
+
+[providers.example]
+protocol = "openai-responses"
+apiBaseUrl = "https://responses.example.test/v1"
+label = "Example responses provider"
+enabled = true
+credentialEnv = "EXAMPLE_RESPONSES_API_KEY"
+
+[[models]]
+provider = "example"
+id = "example-reasoning"
+label = "Example reasoning model"
+contextWindow = 200000
+reasoning = true
+streaming = true
+
+[model.primary]
+provider = "example"
+model = "example-reasoning"
