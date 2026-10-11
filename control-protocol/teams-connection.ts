@@ -3,6 +3,19 @@ import type { AcpChannelRef, AcpFrame, AcpFault } from './acp.ts'
 import { AcpError, parseAcpFault, parseAcpFrame } from './acp.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
 
+/**
+ * D00 amendment A1 (effective 2026-10-11): the two negotiation frames that carry
+ * this side's own facts also carry the integer accepted config policy revision
+ * (`TeamsConnectionContext.policyRevision` and
+ * `TeamsConnectionPropose.sourcePolicyRevision`), so the responder no longer
+ * needs an unauthenticated caller-supplied `peerPolicyRevision`.
+ *
+ * The frame `version` stays 1. The key set is wire-visible, so a pre-A1 peer
+ * that omits the key is refused `INVALID_ACP_FRAME` by the positive-integer
+ * check below. A version bump would be required only if a v1 peer had shipped,
+ * and none has: D05 was unclosed and no LAN peer was deployed.
+ */
+
 /** A relation is bilateral: master/peer or peer/peer. No subordinate alias exists. */
 export type RelationRole = 'master' | 'peer'
 
@@ -33,6 +46,11 @@ export interface TeamsConnectionPropose {
   readonly targetGeneration: number
   readonly sourceCapabilitiesRevision: string
   readonly targetCapabilitiesRevision: string
+  /**
+   * D00 amendment A1: the proposer's own integer accepted config policy
+   * revision. Never defaulted and never coerced.
+   */
+  readonly sourcePolicyRevision: number
   /** The proposer's own role for the relation. */
   readonly requestedRole: RelationRole
   /** The role the proposer intends the responder to take; peer is not a guess. */
@@ -51,6 +69,11 @@ export interface TeamsConnectionContext {
   readonly connectionId: string
   readonly targetGeneration: number
   readonly capabilitiesRevision: string
+  /**
+   * D00 amendment A1: the responder's own integer accepted config policy
+   * revision, authenticated by this frame. Never defaulted and never coerced.
+   */
+  readonly policyRevision: number
 }
 
 export interface TeamsConnectionAccept {
@@ -244,10 +267,12 @@ function parseTeamsConnectionFrameValue(value: unknown): TeamsConnectionFrame {
         'connectionId',
         'targetGeneration',
         'capabilitiesRevision',
+        'policyRevision',
       ], 'Teams connection context')
       assertText(value.connectionId, 'context.connectionId')
       assertPositiveInteger(value.targetGeneration, 'context.targetGeneration')
       assertText(value.capabilitiesRevision, 'context.capabilitiesRevision')
+      assertPositiveInteger(value.policyRevision, 'context.policyRevision')
       break
     }
     case 'teams.connection.propose': {
@@ -259,6 +284,7 @@ function parseTeamsConnectionFrameValue(value: unknown): TeamsConnectionFrame {
         'targetGeneration',
         'sourceCapabilitiesRevision',
         'targetCapabilitiesRevision',
+        'sourcePolicyRevision',
         'requestedRole',
         'requestedPeerRole',
         'requestedCapabilities',
@@ -269,6 +295,7 @@ function parseTeamsConnectionFrameValue(value: unknown): TeamsConnectionFrame {
       assertPositiveInteger(value.targetGeneration, 'propose.targetGeneration')
       assertText(value.sourceCapabilitiesRevision, 'propose.sourceCapabilitiesRevision')
       assertText(value.targetCapabilitiesRevision, 'propose.targetCapabilitiesRevision')
+      assertPositiveInteger(value.sourcePolicyRevision, 'propose.sourcePolicyRevision')
       assertRole(value.requestedRole, 'propose.requestedRole')
       assertRole(value.requestedPeerRole, 'propose.requestedPeerRole')
       assertRolePair(value.requestedRole, value.requestedPeerRole)

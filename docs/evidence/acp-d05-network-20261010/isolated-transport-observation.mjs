@@ -271,7 +271,6 @@ async function main() {
           selfPolicyRevision: 7,
           allowedRoles: ['master', 'peer'],
           admittedCapabilities: ACP_CAPABILITIES,
-          peerPolicyRevision: 3,
         },
         port: transport,
         timeoutMs: 5_000,

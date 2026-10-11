@@ -28,10 +28,15 @@ import { parseTeamsConnectionFrame } from '../control-protocol/teams-connection.
  * role, generation, capability revision or capability outside this daemon's
  * accepted facts is refused with a typed `AcpFault`, never downgraded.
  *
- * R3: `sourcePolicyRevision`/`targetPolicyRevision` are the integer accepted
- * config revision (`config/runtime-config.ts` `acceptedRevision`). They are NOT
- * `AcpPolicySnapshot.revision`, which is a sha256 string; nothing is hashed or
- * truncated here, and a non-integer value is refused as an invalid input.
+ * R3 (D00 amendment A1): `sourcePolicyRevision`/`targetPolicyRevision` are the
+ * integer accepted config revision (`config/runtime-config.ts`
+ * `acceptedRevision`). They are NOT `AcpPolicySnapshot.revision`, which is a
+ * sha256 string; nothing is hashed or truncated here, and a non-integer value is
+ * refused as an invalid input. The responder no longer takes the peer revision
+ * as an unauthenticated caller input: the initiator's own revision arrives in
+ * `propose.sourcePolicyRevision` and the responder's own revision arrives in
+ * `context.policyRevision`. The initiator records the context revision as
+ * `state.targetPolicyRevision` and requires the accept agreement to echo it.
  */
 
 export type TeamsNegotiationSide = 'initiator' | 'responder'
@@ -79,12 +84,6 @@ export interface TeamsResponderOptions {
   readonly allowedRoles: readonly RelationRole[]
   /** Capabilities this daemon admits for one connection. */
   readonly admittedCapabilities: readonly string[]
-  /**
-   * The peer's integer accepted config revision, supplied by the authenticated
-   * caller (registration declaration / authenticated context). It is never
-   * guessed and never defaulted.
-   */
-  readonly peerPolicyRevision: number
 }
 
 export type TeamsNegotiationOptions = TeamsInitiatorOptions | TeamsResponderOptions
@@ -102,6 +101,11 @@ export interface TeamsNegotiationState {
   readonly targetConnectionId?: string
   readonly targetGeneration?: number
   readonly targetCapabilitiesRevision?: string
+  /**
+   * The responder's integer accepted config revision, learned from
+   * `context.policyRevision`. The accept agreement must echo it.
+   */
+  readonly targetPolicyRevision?: number
   readonly agreement?: TeamsAgreement
   readonly fault?: AcpFault
 }
@@ -215,7 +219,6 @@ function assertCommonOptions(options: TeamsNegotiationOptions): void {
 export function startTeamsNegotiation(options: TeamsNegotiationOptions): TeamsNegotiationStep {
   assertCommonOptions(options)
   if (options.side === 'responder') {
-    positiveInteger(options.peerPolicyRevision, 'peerPolicyRevision')
     capabilityList(options.admittedCapabilities, 'admittedCapabilities')
     const state: TeamsNegotiationState = {
       side: 'responder',
@@ -232,6 +235,8 @@ export function startTeamsNegotiation(options: TeamsNegotiationOptions): TeamsNe
       connectionId: options.connectionId,
       targetGeneration: options.selfGeneration,
       capabilitiesRevision: options.selfCapabilitiesRevision,
+      // D00 amendment A1: this responder's own authenticated revision.
+      policyRevision: options.selfPolicyRevision,
     }
     return step(state, context)
   }
@@ -308,8 +313,9 @@ function acceptPropose(state: TeamsNegotiationState, propose: TeamsConnectionPro
     targetGeneration: propose.targetGeneration,
     sourceCapabilitiesRevision: propose.sourceCapabilitiesRevision,
     targetCapabilitiesRevision: propose.targetCapabilitiesRevision,
-    // R3: integer accepted config revisions, never the sha256 policy snapshot revision.
-    sourcePolicyRevision: options.peerPolicyRevision,
+    // R3 (A1): integer accepted config revisions, never the sha256 policy
+    // snapshot revision. Both come from the frames, not from caller options.
+    sourcePolicyRevision: propose.sourcePolicyRevision,
     targetPolicyRevision: options.selfPolicyRevision,
     capabilities: [...propose.requestedCapabilities],
   }
@@ -342,6 +348,8 @@ function acceptContext(state: TeamsNegotiationState, context: TeamsConnectionCon
     targetGeneration: context.targetGeneration,
     sourceCapabilitiesRevision: options.selfCapabilitiesRevision,
     targetCapabilitiesRevision: context.capabilitiesRevision,
+    // D00 amendment A1: this initiator's own authenticated revision.
+    sourcePolicyRevision: options.selfPolicyRevision,
     requestedRole: options.requestedRole,
     requestedPeerRole: options.requestedPeerRole,
     requestedCapabilities: [...options.requestedCapabilities],
@@ -352,6 +360,7 @@ function acceptContext(state: TeamsNegotiationState, context: TeamsConnectionCon
     targetConnectionId: context.connectionId,
     targetGeneration: context.targetGeneration,
     targetCapabilitiesRevision: context.capabilitiesRevision,
+    targetPolicyRevision: context.policyRevision,
   }, propose)
 }
 
@@ -367,6 +376,7 @@ function assertAgreementEcho(state: TeamsNegotiationState, options: TeamsInitiat
     && agreement.sourceCapabilitiesRevision === options.selfCapabilitiesRevision
     && agreement.targetCapabilitiesRevision === state.targetCapabilitiesRevision
     && agreement.sourcePolicyRevision === options.selfPolicyRevision
+    && agreement.targetPolicyRevision === state.targetPolicyRevision
     && sameCapabilities(agreement.capabilities, options.requestedCapabilities)
   if (!echoed) fail('CONFLICT', 'teams-negotiation: accept agreement does not echo the proposal')
 }

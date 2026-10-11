@@ -49,12 +49,11 @@ function responder(overrides: Partial<TeamsResponderOptions> = {}): TeamsRespond
     selfPolicyRevision: 7,
     allowedRoles: ['master', 'peer'],
     admittedCapabilities: ['method:session/prompt', 'method:session/new'],
-    peerPolicyRevision: 3,
     ...overrides,
   }
 }
 
-function proposeFrame(overrides: Record<string, unknown> = {}): unknown {
+function proposeFrame(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     version: 1,
     kind: 'teams.connection.propose',
@@ -64,11 +63,21 @@ function proposeFrame(overrides: Record<string, unknown> = {}): unknown {
     targetGeneration: 22,
     sourceCapabilitiesRevision: 'cap-a',
     targetCapabilitiesRevision: 'cap-b',
+    sourcePolicyRevision: 3,
     requestedRole: 'master',
     requestedPeerRole: 'peer',
     requestedCapabilities: [],
     ...overrides,
   }
+}
+
+function thrownCode(run: () => unknown): string | undefined {
+  try {
+    run()
+  } catch (error) {
+    return error instanceof AcpError ? error.code : undefined
+  }
+  return undefined
 }
 
 interface Handshake {
@@ -130,10 +139,27 @@ describe('Teams negotiation state machine', () => {
     expect(agreement.sourcePolicyRevision).toBe(3)
     expect(agreement.targetPolicyRevision).toBe(7)
     // A sha256 AcpPolicySnapshot.revision is a string and is refused, never truncated.
-    expect(() => startTeamsNegotiation(responder({ peerPolicyRevision: 'a'.repeat(64) as unknown as number })))
-      .toThrow(/peerPolicyRevision/)
     expect(() => startTeamsNegotiation(initiator({ selfPolicyRevision: 0 })))
       .toThrow(/selfPolicyRevision/)
+  })
+
+  it('refuses a non-integer or absent sourcePolicyRevision on the propose frame instead of defaulting it', () => {
+    const state = startTeamsNegotiation(responder()).state
+    for (const invalid of ['a'.repeat(64), 0, -1, 1.5, null]) {
+      expect(() => receiveTeamsNegotiationFrame(state, proposeFrame({ sourcePolicyRevision: invalid })))
+        .toThrow(/sourcePolicyRevision/)
+    }
+    const absent = proposeFrame()
+    delete absent.sourcePolicyRevision
+    expect(() => receiveTeamsNegotiationFrame(state, absent)).toThrow(/sourcePolicyRevision/)
+  })
+
+  it('refuses a context frame without an authenticated integer policy revision', () => {
+    const state = startTeamsNegotiation(initiator()).state
+    const context = { version: 1, kind: 'teams.connection.context', connectionId: 'conn-b', targetGeneration: 22, capabilitiesRevision: 'cap-b' }
+    expect(thrownCode(() => receiveTeamsNegotiationFrame(state, context))).toBe('INVALID_ACP_FRAME')
+    expect(thrownCode(() => receiveTeamsNegotiationFrame(state, { ...context, policyRevision: 0 }))).toBe('INVALID_ACP_FRAME')
+    expect(thrownCode(() => receiveTeamsNegotiationFrame(state, { ...context, policyRevision: '7' }))).toBe('INVALID_ACP_FRAME')
   })
 
   it('refuses an unknown protocol version instead of downgrading', () => {
@@ -208,6 +234,7 @@ describe('Teams negotiation state machine', () => {
       connectionId: 'conn-b',
       targetGeneration: 21,
       capabilitiesRevision: 'cap-b',
+      policyRevision: 7,
     })).toThrow(/stale target generation/)
     expect(() => receiveTeamsNegotiationFrame(state, {
       version: 1,
@@ -215,6 +242,7 @@ describe('Teams negotiation state machine', () => {
       connectionId: 'conn-b',
       targetGeneration: 22,
       capabilitiesRevision: 'cap-other',
+      policyRevision: 7,
     })).toThrow(/target capability revision/)
   })
 
@@ -247,6 +275,25 @@ describe('Teams negotiation state machine', () => {
       requestId: 'req-other',
       agreement: genuine,
     })).toThrow(/correlation/)
+  })
+
+  it('refuses a tampered target policy revision in the accept agreement with CONFLICT', () => {
+    const { accept } = handshake()
+    const genuine = (accept as { agreement: TeamsAgreement }).agreement
+    // The responder authenticated `context.policyRevision` (7) as its own fact.
+    // An accept that echoes a different target revision is a conflict, not trust.
+    const tampered: TeamsAgreement = { ...genuine, targetPolicyRevision: genuine.targetPolicyRevision + 1 }
+    const state = receiveTeamsNegotiationFrame(
+      startTeamsNegotiation(initiator()).state,
+      startTeamsNegotiation(responder()).outbound!,
+    ).state
+    expect(state.targetPolicyRevision).toBe(7)
+    expect(thrownCode(() => receiveTeamsNegotiationFrame(state, {
+      version: 1,
+      kind: 'teams.connection.accept',
+      requestId: 'req-1',
+      agreement: tampered,
+    }))).toBe('CONFLICT')
   })
 
   it('produces a typed fault on timeout or a one-sided handshake and never an agreement', () => {

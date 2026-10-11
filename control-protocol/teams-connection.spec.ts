@@ -33,6 +33,7 @@ const frames: readonly TeamsConnectionFrame[] = [
     targetGeneration: 4,
     sourceCapabilitiesRevision: 'caps-a',
     targetCapabilitiesRevision: 'caps-b',
+    sourcePolicyRevision: 3,
     requestedRole: 'master',
     requestedPeerRole: 'peer',
     requestedCapabilities: ['acp'],
@@ -46,7 +47,7 @@ const frames: readonly TeamsConnectionFrame[] = [
   { version: 1, kind: 'acp.frame', ref, frame: { jsonrpc: '2.0', id: 1, method: 'session/prompt', params: { prompt: [] }, extension: { keep: true } } },
   { version: 1, kind: 'acp.close', ref },
   { version: 1, kind: 'acp.error', ref, error: { code: 'CONFLICT', message: 'session owned' } },
-  { version: 1, kind: 'teams.connection.context', connectionId: 'connection-1', targetGeneration: 4, capabilitiesRevision: 'caps-b' },
+  { version: 1, kind: 'teams.connection.context', connectionId: 'connection-1', targetGeneration: 4, capabilitiesRevision: 'caps-b', policyRevision: 5 },
 ]
 
 function failure(run: () => unknown): unknown {
@@ -72,10 +73,30 @@ describe('Teams connection frames', () => {
   })
 
   it('carries the responder transport-owner context before proposal', () => {
-    const context = { version: 1 as const, kind: 'teams.connection.context' as const, connectionId: 'connection-1', targetGeneration: 4, capabilitiesRevision: 'caps-b' }
+    const context = { version: 1 as const, kind: 'teams.connection.context' as const, connectionId: 'connection-1', targetGeneration: 4, capabilitiesRevision: 'caps-b', policyRevision: 5 }
     expect(parseTeamsConnectionFrame(context)).toBe(context)
     expect(failure(() => parseTeamsConnectionFrame({ ...context, targetGeneration: 0 }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
     expect(failure(() => parseTeamsConnectionFrame({ ...context, extra: true }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
+  })
+
+  it('requires an authenticated integer policy revision on the context frame (D00 amendment A1)', () => {
+    const context = frames[10] as { policyRevision: number }
+    expect(parseTeamsConnectionFrame(context)).toBe(context)
+    // Absence must be caught by the positive-integer check, because
+    // assertEnvelopeKeys only rejects unknown keys.
+    for (const invalid of [undefined, 0, -1, 1.5, NaN, Infinity, '5', null]) {
+      expect(failure(() => parseTeamsConnectionFrame({ ...context, policyRevision: invalid }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
+    }
+    expect(failure(() => parseTeamsConnectionFrame({ ...context, policyRevision: undefined }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
+  })
+
+  it('requires an authenticated integer source policy revision on the propose frame (D00 amendment A1)', () => {
+    const propose = frames[0] as { sourcePolicyRevision: number }
+    expect(parseTeamsConnectionFrame(propose)).toBe(propose)
+    for (const invalid of [undefined, 0, -1, 1.5, NaN, Infinity, '5', null]) {
+      expect(failure(() => parseTeamsConnectionFrame({ ...propose, sourcePolicyRevision: invalid }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
+    }
+    expect(failure(() => parseTeamsConnectionFrame({ ...propose, sourcePolicyRevision: undefined }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
   })
 
   it('rejects invalid roles, identity, and generation values', () => {
