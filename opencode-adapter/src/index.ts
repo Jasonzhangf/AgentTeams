@@ -1061,6 +1061,14 @@ export const TeamsOpenCodePluginWithNotifications: OpenCodePlugin = async input 
 
 export const TeamsOpenCodePlugin = TeamsOpenCodePluginWithNotifications
 
+/**
+ * ACP engine adapter for the installed OpenCode ACP server. Declared here as
+ * the package entry point; the implementation owns no second Session path and
+ * reuses `compileOpenCodeConfig`/`createOpenCodeLaunchConfig` from this module.
+ */
+export { openCodeAcpAdapter, assertOpenCodeNativePolicy } from './acp-engine.ts'
+export type { OpenCodeEngineAdapter } from './acp-engine.ts'
+
 export default {
   id: 'teams-opencode-adapter',
   server: TeamsOpenCodePlugin,

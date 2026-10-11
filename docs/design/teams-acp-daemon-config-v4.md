@@ -183,4 +183,4 @@ D00 不实现：stdio ACP adapter（D01）、CLI 与 runtime 接线、引擎启�
 
 主集成单 writer 已在同一增量补上根 `AGENTS.md`、`docs/development-governance.md`、长程交付合同和五张 `docs/architecture/` map 的 planned 绑定。绑定只声明 D00 的契约事实与待接线路径，`planned/design` gate 不标 implemented/passed。
 
-`agentteams --serve <opencode|dsh> --ip --port` 保持未接线：该用户入口的真实启动依赖 D01 的 stdio ACP adapter 与 D02/D03 的引擎 adapter；配置指向注册服务器时还依赖 D04。依赖未交付前不新增只编译不启动的占位入口，也不把 `teams-acp-serve-entry` 记为通过。
+`agentteams --serve opencode --ip --port` 已接线：`runtime/acp-serve.ts` 读取一份 v4 agent intent，经 `startAcpAgentDaemon`（D01 stdio ACP）与 OpenCode 引擎 adapter（D02）启动一个 daemon 加一个引擎子进程，真实 CLI 黑盒证据见 `docs/evidence/acp-d02-integration-20261010/`。`--serve dsh` 仍未接线：DSH 引擎 adapter 已在源码层存在（`dsh-adapter/**`，D03），但本增量未交付组合它的 serve 接线，因此该路径以 typed `UNSUPPORTED_CONFIGURATION` 拒绝，由后续增量接线；配置指向注册服务器时还依赖 D04。`teams-acp-serve-entry` 记为 partial，未标 passed/implemented；不新增只编译不启动的占位入口。
