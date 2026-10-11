@@ -1,7 +1,10 @@
 import type { CapabilityDeclaration, JsonValue, ServiceError, ServiceErrorCode, WorkState } from './agent-services.ts'
 import type { EndpointCapabilitySummary, EndpointResourceSummary } from './endpoint-ref.ts'
 import { assertEnvelopeKeys, assertJsonValue } from './json-value.ts'
+import type { RelationRole } from './teams-connection.ts'
+import type { TeamsConnectionStatus } from './teams-state.ts'
 export type { JsonValue } from './agent-services.ts'
+export type { RelationRole } from './teams-connection.ts'
 
 /** Console config errors retain their owning service's code and provider/status context. */
 export interface ConsoleServiceError extends Omit<ServiceError, 'code'> {
@@ -60,6 +63,18 @@ export type SessionObservationState =
       readonly droppedEvents: number
     }
   | { readonly state: 'lost'; readonly reason: 'stream-ended' | 'retry-exhausted'; readonly detail: string }
+
+/**
+ * One engine-provided permission choice. `kind` reuses the decision vocabulary the
+ * permission reply already carries; a daemon projects the option set verbatim from the
+ * engine callback and never mints an option the engine did not offer.
+ */
+export type ConsolePermissionOptionKind = 'once' | 'always' | 'reject'
+export interface ConsolePermissionOption {
+  readonly optionId: string
+  readonly name: string
+  readonly kind: ConsolePermissionOptionKind
+}
 
 /** The exact OpenCode structured error union retained on failed message/final/error events. */
 export interface OpenCodeStructuredError {
@@ -160,6 +175,8 @@ export type ConsoleSessionEventView =
       readonly callId?: string
       readonly title: string
       readonly metadata: JsonValue
+      /** Engine-provided choice set; absent when the engine callback offered none. */
+      readonly options?: readonly ConsolePermissionOption[]
     }
   | ConsoleSessionEventBase & {
       readonly kind: 'permission'
@@ -250,6 +267,19 @@ export interface SessionCreateResult {
   readonly time?: Readonly<Record<string, JsonValue>>
 }
 
+/**
+ * Confirmed permission reply. The engine choice is carried only when the engine callback
+ * offered options; the daemon never invents an optionId for a missing or expired callback.
+ */
+export interface PermissionReplyResult {
+  readonly kind: 'permission.reply'
+  readonly agentId: string
+  readonly sessionId: string
+  readonly permissionId: string
+  readonly decision: 'once' | 'always' | 'reject'
+  readonly optionId?: string
+}
+
 /** Typed cancel unknown detail retained by the owning Session runtime. */
 export interface SessionCancelUnknownDetail {
   readonly kind: 'session.cancel'
@@ -296,17 +326,28 @@ export interface ConsoleCapabilityDetail extends EndpointCapabilitySummary {
 /**
  * Agent management row. The runtime/directory discriminated union is not a Work capability and
  * is not a second source of config or runtime truth.
+ *
+ * `engine` and `lastSeenAt` are additive optional projections of existing owner sources: the
+ * engine kind the agent daemon published and the directory observation time. A row that has no
+ * owner value omits the field; a daemon never derives either from history or from UI state.
  */
+export interface ConsoleAgentObservationBaseV1 {
+  readonly kind: 'runtime' | 'directory'
+  readonly agentId: string
+  readonly label: string
+  readonly machineId: string
+  readonly generation?: number
+  readonly presence: 'online' | 'offline' | 'unknown'
+  readonly capabilities: readonly string[]
+  readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
+  /** Engine kind declared by the owning agent daemon; mirrors the frozen config EngineKind. */
+  readonly engine?: 'opencode' | 'dsh'
+  /** Directory observation time of the owning peer; never a UI-side heartbeat. */
+  readonly lastSeenAt?: string
+}
 export type ConsoleAgentObservationV1 =
-  | {
+  | (ConsoleAgentObservationBaseV1 & {
       readonly kind: 'runtime'
-      readonly agentId: string
-      readonly label: string
-      readonly machineId: string
-      readonly generation?: number
-      readonly presence: 'online' | 'offline' | 'unknown'
-      readonly capabilities: readonly string[]
-      readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
       readonly sessionCapable: true
       readonly sessionAvailability: 'changing' | 'stopped' | 'no-current' | 'uncertain' | 'current'
       readonly sessionObservation?: SessionObservationState
@@ -314,29 +355,25 @@ export type ConsoleAgentObservationV1 =
       readonly currentSessionId?: string
       readonly providerId?: string
       readonly modelId?: string
-    }
-  | {
+    })
+  | (ConsoleAgentObservationBaseV1 & {
       readonly kind: 'runtime'
-      readonly agentId: string
-      readonly label: string
-      readonly machineId: string
-      readonly generation?: number
-      readonly presence: 'online' | 'offline' | 'unknown'
-      readonly capabilities: readonly string[]
-      readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
       readonly sessionCapable: false
       readonly sessionAvailability: 'not-applicable'
-    }
-  | {
-      readonly kind: 'directory'
-      readonly agentId: string
-      readonly label: string
-      readonly machineId: string
-      readonly generation?: number
-      readonly presence: 'online' | 'offline' | 'unknown'
-      readonly capabilities: readonly string[]
-      readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
-    }
+    })
+  | (ConsoleAgentObservationBaseV1 & { readonly kind: 'directory' })
+
+/**
+ * One Teams connection row. It reuses the frozen `TeamsConnectionStatus` verbatim and only adds
+ * the two facts that status cannot carry: whether the handshake is still half-open, and this
+ * daemon's own relation role for the link. No synonym of the connection lifecycle is minted here.
+ */
+export interface ConsoleConnectionView {
+  readonly status: TeamsConnectionStatus
+  readonly halfOpen: boolean
+  readonly localRole?: RelationRole
+}
+
 export interface ConsoleProjectionV1 {
   readonly version: 1
   readonly agents: readonly ConsoleAgentObservationV1[]
@@ -358,6 +395,8 @@ export interface ConsoleProjectionV1 {
   readonly sessionEvents?: readonly ConsoleSessionEventView[]
   readonly works?: readonly ConsoleWorkView[]
   readonly relations?: readonly ConsoleRelationView[]
+  /** Additive Teams connection rows projected from the network status port; absent when unbound. */
+  readonly connections?: readonly ConsoleConnectionView[]
 }
 export interface ConsoleWorkView {
   readonly agentId: string
@@ -382,7 +421,9 @@ export type ConsoleCommandV1 =
   | { readonly kind: 'session.open'; readonly agentId: string; readonly sessionId: string }
   | { readonly kind: 'session.create'; readonly agentId: string; readonly title?: string }
   | { readonly kind: 'session.cancel'; readonly agentId: string; readonly sessionId: string }
-  | { readonly kind: 'permission.reply'; readonly agentId: string; readonly sessionId: string; readonly permissionId: string; readonly decision: 'once' | 'always' | 'reject' }
+  | { readonly kind: 'permission.reply'; readonly agentId: string; readonly sessionId: string; readonly permissionId: string; readonly decision: 'once' | 'always' | 'reject';
+      /** Engine option chosen from the pending event's option set; omitted when the engine offered none. */
+      readonly optionId?: string }
   | { readonly kind: 'notification.ack'; readonly agentId: string; readonly notificationId: string }
   | { readonly kind: 'config.refreshModels'; readonly agentId: string; readonly expectedRevision: number; readonly providerId: string }
   | { readonly kind: 'config.bindModel'; readonly agentId: string; readonly expectedRevision: number; readonly providerId: string; readonly modelId: string }
@@ -393,6 +434,10 @@ export type ConsoleCommandV1 =
   | { readonly kind: 'config.putProvider'; readonly agentId: string; readonly expectedRevision: number;
       readonly provider: { readonly id: string; readonly label: string; readonly protocol: ConsoleProviderView['protocol']; readonly apiBaseUrl: string; readonly enabled: boolean;
         readonly auth: { readonly kind: 'none' } | { readonly kind: 'bearer'; readonly credentialRef: string } } }
+  | { readonly kind: 'connection.connect'; readonly agentId: string }
+  | { readonly kind: 'connection.disconnect'; readonly agentId: string }
+  | { readonly kind: 'network.membership.apply'; readonly agentId: string; readonly expectedRevision: number;
+      readonly members: readonly { readonly agentId: string; readonly role: RelationRole }[] }
 export type ConsoleCommandResultV1 =
   | { readonly ok: true; readonly result?: JsonValue }
   | { readonly ok: false; readonly error: ConsoleServiceError }
@@ -458,11 +503,29 @@ export function parseConsoleCommand(value: unknown): ConsoleCommandV1 {
       break
     case 'session.cancel': fields = ['sessionId']; text(command.sessionId); break
     case 'permission.reply':
-      fields = ['sessionId', 'permissionId', 'decision']
+      fields = ['sessionId', 'permissionId', 'decision', 'optionId']
       text(command.sessionId); text(command.permissionId)
       if (!['once', 'always', 'reject'].includes(command.decision as string)) throw new Error('Invalid permission decision')
+      // The chosen engine option is optional, but when present it must name one real option.
+      if (command.optionId !== undefined) text(command.optionId)
       break
     case 'notification.ack': fields = ['notificationId']; text(command.notificationId); break
+    case 'connection.connect': fields = []; break
+    case 'connection.disconnect': fields = []; break
+    case 'network.membership.apply': {
+      fields = ['expectedRevision', 'members']; revision(command.expectedRevision)
+      if (!Array.isArray(command.members)) throw new Error('Console network membership must be an array')
+      const seen = new Set<string>()
+      for (const member of command.members) {
+        const entry = object(member)
+        assertEnvelopeKeys(entry, ['agentId', 'role'], 'Console network member')
+        text(entry.agentId)
+        if (entry.role !== 'master' && entry.role !== 'peer') throw new Error('Invalid Console network member role')
+        if (seen.has(entry.agentId as string)) throw new Error('Console network membership requires unique Agent identities')
+        seen.add(entry.agentId as string)
+      }
+      break
+    }
     case 'config.refreshModels':
       fields = ['expectedRevision', 'providerId']; revision(command.expectedRevision); text(command.providerId); break
     case 'config.bindModel':
@@ -523,6 +586,17 @@ const SESSION_AVAILABILITY = ['changing', 'stopped', 'no-current', 'uncertain', 
 const OBSERVED_PART_TYPES = ['file', 'step-start', 'step-finish', 'snapshot', 'patch', 'agent', 'retry', 'compaction', 'subtask'] as const
 const CANCEL_UNKNOWN_REASONS = ['abort-rejected', 'no-final', 'link-lost', 'uncorrelated-idle', 'ambiguous-owner', 'stale-generation', 'superseded'] as const
 const STRUCTURED_ERROR_NAMES = ['ProviderAuthError', 'UnknownError', 'MessageOutputLengthError', 'MessageAbortedError', 'APIError'] as const
+const ENGINE_KINDS = ['opencode', 'dsh'] as const
+const SERVICE_ERROR_CODES = ['INVALID_INPUT', 'UNAUTHENTICATED', 'FORBIDDEN', 'NOT_FOUND',
+  'UNSUPPORTED_VERSION', 'UNSUPPORTED_OPERATION', 'STALE_GENERATION', 'REVISION_CONFLICT',
+  'RESOURCE_EXHAUSTED', 'CONFLICT', 'RESULT_UNKNOWN', 'UNAVAILABLE', 'UPSTREAM_ERROR',
+  'CREDENTIAL_UNAVAILABLE', 'SOURCE_CHANGED', 'MIGRATION_CONFLICT', 'APPLY_TARGET_MISMATCH'] as const
+const SERVICE_ERROR_FIELDS = ['code', 'message', 'execution', 'status', 'providerInstanceId', 'detail'] as const
+const PROVIDER_FIELDS = ['id', 'label', 'protocol', 'apiBaseUrl', 'enabled', 'authKind', 'catalogState', 'models', 'error'] as const
+const PROJECTION_FIELDS = ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations', 'connections'] as const
+const CONNECTION_FIELDS = ['status', 'halfOpen', 'localRole'] as const
+const CONNECTION_STATUS_FIELDS = ['version', 'remoteAgentId', 'state', 'targetGeneration', 'observedAt', 'connectionId', 'role', 'error'] as const
+const CONNECTION_STATES = ['disconnected', 'connecting', 'authenticating', 'negotiating', 'ready', 'closed', 'failed'] as const
 
 function optionalText(value: unknown, label: string): void {
   if (value !== undefined && (typeof value !== 'string' || value.length === 0)) throw new Error(`${label} must be a non-empty string`)
@@ -536,6 +610,9 @@ function counter(value: unknown, label: string): void {
 function json(value: unknown, label: string): void {
   assertJsonValue(value, label)
 }
+function timestamp(value: unknown, label: string): void {
+  if (typeof value !== 'string' || value.length === 0 || Number.isNaN(Date.parse(value))) throw new Error(`${label} must be an ISO timestamp`)
+}
 function choiceOf(value: unknown, allowed: readonly unknown[], label: string): void {
   if (!allowed.includes(value)) throw new Error(`Invalid ${label}`)
 }
@@ -545,6 +622,21 @@ function parseStructuredError(value: unknown): void {
   assertEnvelopeKeys(error, ['name', 'data'], 'OpenCode structured error')
   choiceOf(error.name, STRUCTURED_ERROR_NAMES, 'OpenCode structured error name')
   json(error.data, 'OpenCode structured error data')
+}
+
+/** Closed validation of the engine-provided permission option set; no option is invented here. */
+export function parsePermissionOptions(value: unknown): readonly ConsolePermissionOption[] {
+  if (!Array.isArray(value) || value.length === 0) throw new Error('Console permission options must be a non-empty array')
+  const seen = new Set<string>()
+  for (const item of value) {
+    const option = object(item)
+    assertEnvelopeKeys(option, ['optionId', 'name', 'kind'], 'Console permission option')
+    text(option.optionId); text(option.name)
+    choiceOf(option.kind, ['once', 'always', 'reject'], 'Console permission option kind')
+    if (seen.has(option.optionId as string)) throw new Error('Console permission options require unique option IDs')
+    seen.add(option.optionId as string)
+  }
+  return value as unknown as readonly ConsolePermissionOption[]
 }
 
 export function parseSessionObservationState(value: unknown): SessionObservationState {
@@ -611,7 +703,7 @@ export function projectCapabilityDetails(capabilities: readonly CapabilityDeclar
 /** Closed validation of one Agent management row; rejects session/model fields on directory/false rows. */
 export function parseConsoleAgentObservation(value: unknown): ConsoleAgentObservationV1 {
   const agent = object(value)
-  const common = ['kind', 'agentId', 'label', 'machineId', 'generation', 'presence', 'capabilities', 'capabilityDetails']
+  const common = ['kind', 'agentId', 'label', 'machineId', 'generation', 'presence', 'capabilities', 'capabilityDetails', 'engine', 'lastSeenAt']
   text(agent.agentId); text(agent.label); text(agent.machineId)
   if (agent.generation !== undefined) {
     if (!Number.isSafeInteger(agent.generation) || (agent.generation as number) < 1) throw new Error('Console agent generation invalid')
@@ -620,6 +712,8 @@ export function parseConsoleAgentObservation(value: unknown): ConsoleAgentObserv
   if (!Array.isArray(agent.capabilities)) throw new Error('Console agent capabilities must be an array')
   for (const capability of agent.capabilities) text(capability)
   if (agent.capabilityDetails !== undefined) parseCapabilityDetails(agent.capabilityDetails)
+  if (agent.engine !== undefined) choiceOf(agent.engine, ENGINE_KINDS, 'Console agent engine')
+  if (agent.lastSeenAt !== undefined) timestamp(agent.lastSeenAt, 'Console agent lastSeenAt')
   if (agent.kind === 'directory') {
     assertEnvelopeKeys(agent, common, 'Console directory agent')
     return agent as unknown as ConsoleAgentObservationV1
@@ -704,8 +798,9 @@ export function parseConsoleSessionEvent(value: unknown): ConsoleSessionEventVie
     }
     case 'permission':
       if (event.state === 'pending') {
-        withState(['permissionId', 'messageId', 'callId', 'title', 'metadata'])
+        withState(['permissionId', 'messageId', 'callId', 'title', 'metadata', 'options'])
         text(event.permissionId); text(event.messageId); optionalText(event.callId, 'permission callId'); text(event.title); json(event.metadata, 'permission metadata')
+        if (event.options !== undefined) parsePermissionOptions(event.options)
       } else if (event.state === 'resolved') {
         withState(['permissionId', 'decision', 'rawResponse'])
         text(event.permissionId); choiceOf(event.decision, ['once', 'always', 'reject', 'unknown'], 'permission decision'); optionalText(event.rawResponse, 'permission rawResponse')
@@ -774,6 +869,17 @@ export function parseSessionCreateResult(value: unknown): SessionCreateResult {
   return result as unknown as SessionCreateResult
 }
 
+/** Closed validation of a confirmed permission reply; the engine option is never invented. */
+export function parsePermissionReplyResult(value: unknown): PermissionReplyResult {
+  const result = object(value)
+  assertEnvelopeKeys(result, ['kind', 'agentId', 'sessionId', 'permissionId', 'decision', 'optionId'], 'Permission reply result')
+  if (result.kind !== 'permission.reply') throw new Error('Permission reply result kind is invalid')
+  text(result.agentId); text(result.sessionId); text(result.permissionId)
+  choiceOf(result.decision, ['once', 'always', 'reject'], 'permission reply decision')
+  if (result.optionId !== undefined) text(result.optionId)
+  return result as unknown as PermissionReplyResult
+}
+
 /** Closed validation of a typed cancel unknown detail; baseAccepted stays three-state. */
 export function parseSessionCancelUnknownDetail(value: unknown): SessionCancelUnknownDetail {
   const detail = object(value)
@@ -804,4 +910,118 @@ export function parseSessionCancelConfirmed(value: unknown): SessionCancelConfir
   if (result.errorName !== 'MessageAbortedError') throw new Error('Session cancel result error name is invalid')
   if (result.causalEvidence !== 'unique-owned-message') throw new Error('Session cancel result causal evidence is invalid')
   return result as unknown as SessionCancelConfirmed
+}
+
+function parseServiceErrorValue(value: unknown, label: string): void {
+  const error = object(value)
+  assertEnvelopeKeys(error, SERVICE_ERROR_FIELDS, label)
+  choiceOf(error.code, SERVICE_ERROR_CODES, `${label} code`)
+  text(error.message)
+  if (error.status !== undefined && (!Number.isSafeInteger(error.status) || (error.status as number) < 100 || (error.status as number) > 599)) {
+    throw new Error(`${label} status is invalid`)
+  }
+  optionalText(error.providerInstanceId, `${label} providerInstanceId`)
+  if (error.detail !== undefined) parseSessionCancelUnknownDetail(error.detail)
+}
+
+function parseProviderView(value: unknown): void {
+  const provider = object(value)
+  assertEnvelopeKeys(provider, PROVIDER_FIELDS, 'Console provider')
+  text(provider.id); text(provider.label); text(provider.apiBaseUrl)
+  choiceOf(provider.protocol, ['openai-chat', 'openai-responses'], 'Console provider protocol')
+  boolean(provider.enabled, 'Console provider enabled')
+  choiceOf(provider.authKind, ['none', 'bearer'], 'Console provider authKind')
+  choiceOf(provider.catalogState, ['ready', 'empty', 'stale', 'error'], 'Console provider catalogState')
+  if (provider.error !== undefined) parseServiceErrorValue(provider.error, 'Console provider error')
+  if (!Array.isArray(provider.models)) throw new Error('Console provider models must be an array')
+  for (const item of provider.models) {
+    const model = object(item)
+    assertEnvelopeKeys(model, ['id', 'label'], 'Console provider model')
+    text(model.id); optionalText(model.label, 'Console provider model label')
+  }
+}
+
+function parseConnectionView(value: unknown): void {
+  const connection = object(value)
+  assertEnvelopeKeys(connection, CONNECTION_FIELDS, 'Console connection')
+  boolean(connection.halfOpen, 'Console connection halfOpen')
+  if (connection.localRole !== undefined) choiceOf(connection.localRole, ['master', 'peer'], 'Console connection localRole')
+  const status = object(connection.status)
+  assertEnvelopeKeys(status, CONNECTION_STATUS_FIELDS, 'Console connection status')
+  if (status.version !== 1) throw new Error('Console connection status version must be 1')
+  text(status.remoteAgentId)
+  choiceOf(status.state, CONNECTION_STATES, 'Console connection state')
+  if (!Number.isSafeInteger(status.targetGeneration) || (status.targetGeneration as number) < 1) {
+    throw new Error('Console connection status targetGeneration must be a positive integer')
+  }
+  timestamp(status.observedAt, 'Console connection observedAt')
+  optionalText(status.connectionId, 'Console connection connectionId')
+  if (status.role !== undefined) choiceOf(status.role, ['master', 'peer'], 'Console connection role')
+  if (status.state === 'failed') {
+    if (status.error === undefined) throw new Error('Console failed connection requires an error')
+    const fault = object(status.error)
+    assertEnvelopeKeys(fault, ['code', 'message', 'detail'], 'Console connection fault')
+    text(fault.code); text(fault.message)
+    if (fault.detail !== undefined) json(fault.detail, 'Console connection fault detail')
+  } else if (status.error !== undefined) throw new Error('Console connection carries an error only when failed')
+}
+
+/** Closed validation of the full owner projection, including the additive rows. */
+export function parseConsoleProjection(value: unknown): ConsoleProjectionV1 {
+  const projection = object(value)
+  assertEnvelopeKeys(projection, PROJECTION_FIELDS, 'Console projection')
+  if (projection.version !== 1) throw new Error('Console projection version must be 1')
+  if (!Array.isArray(projection.agents)) throw new Error('Console projection agents must be an array')
+  for (const agent of projection.agents) parseConsoleAgentObservation(agent)
+  if (!Array.isArray(projection.sessions)) throw new Error('Console projection sessions must be an array')
+  for (const item of projection.sessions) {
+    const session = object(item)
+    assertEnvelopeKeys(session, ['agentId', 'sessionId', 'title'], 'Console session row')
+    text(session.agentId); text(session.sessionId); optionalText(session.title, 'Console session title')
+  }
+  if (!Array.isArray(projection.notifications)) throw new Error('Console projection notifications must be an array')
+  for (const item of projection.notifications) {
+    const notice = object(item)
+    assertEnvelopeKeys(notice, ['agentId', 'notificationId', 'sessionId', 'kind', 'state', 'title', 'permissionId', 'priority', 'occurredAt', 'detail'], 'Console notification row')
+    text(notice.agentId); text(notice.notificationId); text(notice.title)
+    choiceOf(notice.kind, ['notice', 'permission'], 'Console notification kind')
+    choiceOf(notice.state, ['pending', 'resolved'], 'Console notification state')
+    optionalText(notice.sessionId, 'Console notification sessionId')
+    optionalText(notice.permissionId, 'Console notification permissionId')
+    if (notice.priority !== undefined) choiceOf(notice.priority, ['low', 'normal', 'high', 'critical'], 'Console notification priority')
+    if (notice.occurredAt !== undefined) timestamp(notice.occurredAt, 'Console notification occurredAt')
+    optionalText(notice.detail, 'Console notification detail')
+  }
+  if (!Array.isArray(projection.configs)) throw new Error('Console projection configs must be an array')
+  for (const item of projection.configs) {
+    const config = object(item)
+    assertEnvelopeKeys(config, ['agentId', 'acceptedRevision', 'effectiveRevision', 'applyState', 'acceptedBinding', 'providers', 'error'], 'Console config row')
+    text(config.agentId); revision(config.acceptedRevision)
+    if (config.effectiveRevision !== undefined) revision(config.effectiveRevision)
+    if (config.applyState !== undefined) choiceOf(config.applyState, ['clean', 'uncertain'], 'Console config applyState')
+    if (config.acceptedBinding !== undefined && config.acceptedBinding !== null) {
+      const binding = object(config.acceptedBinding)
+      assertEnvelopeKeys(binding, ['primary', 'backup'], 'Console accepted binding')
+      const bindingRef = (value: unknown): void => {
+        const ref = object(value)
+        assertEnvelopeKeys(ref, ['providerInstanceId', 'modelId'], 'Console binding reference')
+        text(ref.providerInstanceId); text(ref.modelId)
+      }
+      bindingRef(binding.primary)
+      if (binding.backup !== undefined) bindingRef(binding.backup)
+    }
+    if (config.error !== undefined) parseServiceErrorValue(config.error, 'Console config error')
+    if (!Array.isArray(config.providers)) throw new Error('Console config providers must be an array')
+    for (const provider of config.providers) parseProviderView(provider)
+  }
+  if (projection.sessionEvents !== undefined) {
+    if (!Array.isArray(projection.sessionEvents)) throw new Error('Console projection sessionEvents must be an array')
+    for (const event of projection.sessionEvents) parseConsoleSessionEvent(event)
+  }
+  if (projection.connections !== undefined) {
+    if (!Array.isArray(projection.connections)) throw new Error('Console projection connections must be an array')
+    for (const connection of projection.connections) parseConnectionView(connection)
+  }
+  if (projection.works !== undefined || projection.relations !== undefined) parseConsoleWorkRelationProjection(projection)
+  return projection as unknown as ConsoleProjectionV1
 }

@@ -1,6 +1,7 @@
 import { AcpError, parseAcpFault } from './acp.ts'
 import type { AcpFault, HistoryRecord } from './acp.ts'
 import type { JsonValue } from './agent-services.ts'
+import { parseConsoleProjection, type ConsoleProjectionV1, type SessionObservationState } from './console-api.ts'
 import type { RelationRole } from './teams-connection.ts'
 
 /**
@@ -73,6 +74,31 @@ export interface HistoryReadPort {
   query(query: HistoryQuery): Promise<HistoryPage>
 }
 
+/**
+ * One owner projection snapshot carried by the SSE stream. `seq` is the owner's own
+ * monotonic projection sequence; a consumer that sees a gap treats the projection as
+ * degraded instead of inventing the missing rows. The full projection is always carried,
+ * so the UI never keeps a delta store as a second source of truth.
+ */
+export interface ConsoleProjectionSnapshot {
+  readonly seq: number
+  readonly projection: ConsoleProjectionV1
+}
+
+/**
+ * Owner projection feed. The owner decides when a snapshot exists and when the owner is
+ * lost; a subscriber must never fabricate liveness after `onHealth` reports loss.
+ */
+export interface ConsoleProjectionSink {
+  onSnapshot(snapshot: ConsoleProjectionSnapshot): void
+  onHealth(state: SessionObservationState): void
+}
+
+export type ConsoleProjectionUnsubscribe = () => void
+
+/** SSE source. Returns the unsubscribe handle that the server calls when the stream ends. */
+export type ConsoleProjectionSubscriber = (sink: ConsoleProjectionSink) => ConsoleProjectionUnsubscribe
+
 function fail(message: string): never {
   // Malformed DTOs reuse the single fault carrier; this module declares no
   // second error class or code vocabulary.
@@ -144,4 +170,42 @@ export function parseHistoryQuery(value: unknown): HistoryQuery {
   if (value.agentId !== undefined) text(value.agentId, 'history query agentId')
   if (value.sessionId !== undefined) text(value.sessionId, 'history query sessionId')
   return value as unknown as HistoryQuery
+}
+
+/** Closed validation of one SSE projection frame; the sequence is the owner's own counter. */
+export function parseConsoleProjectionSnapshot(value: unknown): ConsoleProjectionSnapshot {
+  if (!isRecord(value)) fail('projection snapshot must be an object')
+  unknownKeys(value, ['seq', 'projection'], 'projection snapshot')
+  if (!Number.isSafeInteger(value.seq) || (value.seq as number) < 0) fail('projection snapshot seq must be a non-negative integer')
+  parseConsoleProjection(value.projection)
+  return value as unknown as ConsoleProjectionSnapshot
+}
+
+const HISTORY_QUERY_FIELDS = ['version', 'kind', 'agentId', 'sessionId', 'limit', 'beforeSequence'] as const
+
+/**
+ * The one HTTP query-string → `HistoryQuery` mapping. It refuses every parameter name
+ * outside the frozen query, and every duplicate, before the closed parser runs.
+ */
+export function historyQueryFromSearchParams(params: URLSearchParams): HistoryQuery {
+  for (const key of params.keys()) {
+    if (!HISTORY_QUERY_FIELDS.includes(key as typeof HISTORY_QUERY_FIELDS[number])) fail(`history query has unsupported fields: ${key}`)
+    if (params.getAll(key).length !== 1) fail(`history query has duplicate fields: ${key}`)
+  }
+  const query: Record<string, unknown> = {}
+  const version = params.get('version')
+  if (version === null || version.length === 0) fail('history query version is required')
+  query.version = Number(version)
+  const limit = params.get('limit')
+  if (limit === null || limit.length === 0) fail('history query limit is required')
+  query.limit = Number(limit)
+  const kind = params.get('kind')
+  if (kind !== null) query.kind = kind
+  const agentId = params.get('agentId')
+  if (agentId !== null) query.agentId = agentId
+  const sessionId = params.get('sessionId')
+  if (sessionId !== null) query.sessionId = sessionId
+  const beforeSequence = params.get('beforeSequence')
+  if (beforeSequence !== null) query.beforeSequence = Number(beforeSequence)
+  return parseHistoryQuery(query)
 }

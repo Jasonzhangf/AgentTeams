@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   parseConsoleAgentObservation,
   parseConsoleCommand,
+  parseConsoleProjection,
   parseConsoleSessionEvent,
   parseConsoleWorkRelationProjection,
+  parsePermissionOptions,
+  parsePermissionReplyResult,
   parseSessionCancelUnknownDetail,
   parseSessionCreateResult,
   projectCapabilityDetails,
@@ -174,5 +177,72 @@ describe('Console control ingress', () => {
     expect(projectCapabilityDetails(declaration)).toEqual([{ capabilityId: 'file-search', version: '3', operations: ['search'],
       resources: [{ resourceId: 'search-slot', capacity: 4, unit: 'context' }] }])
     expect(projectCapabilityDetails([])).toEqual([])
+  })
+
+  it('admits the additive connection and membership commands and keeps the union closed', () => {
+    const commands = [
+      { kind: 'connection.connect', agentId: 'a' },
+      { kind: 'connection.disconnect', agentId: 'a' },
+      { kind: 'network.membership.apply', agentId: 'a', expectedRevision: 3, members: [{ agentId: 'b', role: 'master' }, { agentId: 'c', role: 'peer' }] },
+      { kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'once', optionId: 'allow-once' },
+    ]
+    for (const command of commands) expect(parseConsoleCommand(command)).toEqual(command)
+    for (const invalid of [
+      { kind: 'connection.attach', agentId: 'a' },
+      { kind: 'connection.connect', agentId: 'a', role: 'master' },
+      { kind: 'network.membership.apply', agentId: 'a', expectedRevision: 1, members: [{ agentId: 'b', role: 'owner' }] },
+      { kind: 'network.membership.apply', agentId: 'a', expectedRevision: 1, members: [{ agentId: 'b', role: 'peer', extra: true }] },
+      { kind: 'network.membership.apply', agentId: 'a', expectedRevision: 1, members: [{ agentId: 'b', role: 'peer' }, { agentId: 'b', role: 'master' }] },
+      { kind: 'network.membership.apply', agentId: 'a', expectedRevision: -1, members: [] },
+      { kind: 'network.membership.apply', agentId: 'a', expectedRevision: 1, members: 'b' },
+      { kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'once', optionId: '' },
+    ]) expect(() => parseConsoleCommand(invalid)).toThrow()
+  })
+
+  it('closes the engine permission option set and the chosen option result', () => {
+    const options = [{ optionId: 'allow-once', name: 'Allow once', kind: 'once' },
+      { optionId: 'allow-always', name: 'Always allow', kind: 'always' },
+      { optionId: 'deny', name: 'Deny', kind: 'reject' }]
+    expect(parsePermissionOptions(options)).toEqual(options)
+    for (const invalid of [
+      [],
+      [{ optionId: 'a', name: 'A', kind: 'maybe' }],
+      [{ optionId: 'a', name: 'A', kind: 'once', engine: 'x' }],
+      [{ optionId: 'a', name: '', kind: 'once' }],
+      [{ optionId: 'a', name: 'A', kind: 'once' }, { optionId: 'a', name: 'B', kind: 'once' }],
+    ]) expect(() => parsePermissionOptions(invalid)).toThrow()
+    expect(parsePermissionReplyResult({ kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'once', optionId: 'allow-once' }))
+      .toMatchObject({ optionId: 'allow-once' })
+    expect(parsePermissionReplyResult({ kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'reject' }))
+      .toMatchObject({ decision: 'reject' })
+    expect(() => parsePermissionReplyResult({ kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'once', optionId: '' })).toThrow()
+    expect(() => parsePermissionReplyResult({ kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'once', invented: true })).toThrow()
+  })
+
+  it('accepts the additive agent fields and connection rows only from the frozen shapes', () => {
+    const agent = { kind: 'directory', agentId: 'a', label: 'A', machineId: 'm', presence: 'online', capabilities: [],
+      engine: 'opencode', lastSeenAt: '2026-10-11T00:00:00.000Z' }
+    expect(parseConsoleAgentObservation(agent)).toEqual(agent)
+    expect(() => parseConsoleAgentObservation({ ...agent, engine: 'dsh' })).not.toThrow()
+    for (const invalid of [
+      { ...agent, engine: 'claude' },
+      { ...agent, lastSeenAt: 'yesterday' },
+      { ...agent, engine: '' },
+    ]) expect(() => parseConsoleAgentObservation(invalid)).toThrow()
+
+    const connection = { status: { version: 1, remoteAgentId: 'b', state: 'ready', targetGeneration: 2,
+      observedAt: '2026-10-11T00:00:00.000Z', connectionId: 'c', role: 'peer' }, halfOpen: false, localRole: 'master' }
+    const projection = { version: 1, agents: [agent], sessions: [], notifications: [], configs: [], connections: [connection] }
+    expect(parseConsoleProjection(projection)).toEqual(projection)
+    for (const invalid of [
+      { ...projection, connections: [{ ...connection, halfOpen: 'no' }] },
+      { ...projection, connections: [{ ...connection, localRole: 'owner' }] },
+      { ...projection, connections: [{ ...connection, extra: true }] },
+      { ...projection, connections: [{ ...connection, status: { ...connection.status, state: 'ready', error: { code: 'UNAVAILABLE', message: 'x' } } }] },
+      { ...projection, connections: [{ ...connection, status: { ...connection.status, state: 'failed' } }] },
+      { ...projection, connections: [{ ...connection, status: { ...connection.status, state: 'ready', version: 2 } }] },
+    ]) expect(() => parseConsoleProjection(invalid)).toThrow()
+    expect(parseConsoleProjection({ ...projection, connections: [{ ...connection, status: { ...connection.status, state: 'failed',
+      error: { code: 'UNAVAILABLE', message: 'link failed' } } }] })).toMatchObject({ connections: [{ halfOpen: false }] })
   })
 })

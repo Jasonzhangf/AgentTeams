@@ -285,6 +285,71 @@ describe('agentteams CLI', () => {
       .rejects.toThrow(/only accepted by registry stop/i)
   })
 
+  it('routes control start/status/stop to the runtime control lifecycle owner', async () => {
+    const calls = []
+    const configPath = '/tmp/agentteams-cli-control.toml'
+    const controlStatus = {
+      configPath,
+      statePath: '/tmp/state/control-state.json',
+      daemonId: 'control-a',
+      state: 'running',
+      generation: 2,
+      pid: 42,
+      url: 'http://127.0.0.1:7331',
+      listener: { ip: '127.0.0.1', port: 7331 },
+      dataDirectory: '/tmp/state/control-a',
+    }
+    const runtime = {
+      startControlDaemon: async (path, options) => {
+        calls.push({ kind: 'start', path, options })
+        return controlStatus
+      },
+      statusControlDaemon: async path => {
+        calls.push({ kind: 'status', path })
+        return controlStatus
+      },
+      stopControlDaemon: async (path, generation) => {
+        calls.push({ kind: 'stop', path, generation })
+        return { ...controlStatus, state: 'stopped', pid: undefined }
+      },
+    }
+    const env = { TEAMS_CONSOLE_PASSWORD: 'secret' }
+    expect(await agentteamsCommand(['control', 'start', '--config', configPath], { runtime, env }))
+      .toBe(`started state=running generation=2 config=${configPath} daemon=control-a pid=42 url=http://127.0.0.1:7331 listener=127.0.0.1:7331 data=/tmp/state/control-a`)
+    expect(await agentteamsCommand(['control', 'status', '--config', configPath], { runtime })).toContain('state=running')
+    expect(await agentteamsCommand(['control', 'stop', '--config', configPath, '--generation', '2'], { runtime })).toContain('state=stopped')
+
+    expect(calls.map(call => [call.kind, call.path, call.generation])).toEqual([
+      ['start', configPath, undefined],
+      ['status', configPath, undefined],
+      ['stop', configPath, 2],
+    ])
+    // The control child inherits the operator environment so its declared password
+    // env var resolves; the CLI never reads or prints the value.
+    expect(calls[0].options.env).toBe(env)
+  })
+
+  it('surfaces the typed control lifecycle failure without flattening its code', async () => {
+    const runtime = {
+      startControlDaemon: async () => {
+        const error = new Error('control webui port 7331 is already in use')
+        error.name = 'ControlProcessError'
+        error.code = 'PORT_OCCUPIED'
+        throw error
+      },
+    }
+    await expect(agentteamsCommand(['control', 'start', '--config', '/tmp/x.toml'], { runtime }))
+      .rejects.toThrow(/^PORT_OCCUPIED: control webui port 7331 is already in use$/)
+  })
+
+  it('refuses an unknown control subcommand, a missing config and an unknown control flag', async () => {
+    await expect(agentteamsCommand(['control', 'restart', '--config', '/tmp/x.toml'])).rejects.toThrow(/unknown control subcommand/i)
+    await expect(agentteamsCommand(['control', 'status'])).rejects.toThrow(/--config requires/i)
+    await expect(agentteamsCommand(['control', 'status', '--bogus'], { runtime: {} })).rejects.toThrow(/unknown argument/i)
+    await expect(agentteamsCommand(['control', 'start', '--config', '/tmp/x.toml', '--generation', '1'], { runtime: {} }))
+      .rejects.toThrow(/only accepted by control stop/i)
+  })
+
   it('exposes only the Console lifecycle verbs and adds Console fields to status without printing credentials', async () => {
     const configPath = '/tmp/agentteams-cli-console.toml'
     const consoleStatus = {

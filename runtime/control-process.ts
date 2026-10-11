@@ -1,0 +1,750 @@
+import { spawn, type ChildProcess } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  parseDaemonConfigText,
+  readDaemonEffectiveConfig,
+  resolveDaemonIntent,
+  type ControlDaemonIntent,
+  type DaemonEffectiveConfig,
+  type DaemonIntentV4,
+} from '../config/daemon-intent.ts'
+import { createConsoleAuthorization } from '../console-host/src/auth.ts'
+import { createConsoleServer } from '../console-host/src/server.ts'
+import {
+  parseConsoleProjection,
+  type ConsoleCommandResultV1,
+  type ConsoleCommandV1,
+  type ConsoleClientV1,
+  type ConsoleProjectionV1,
+  type JsonValue,
+} from '../control-protocol/console-api.ts'
+import {
+  historyQueryFromSearchParams,
+  parseConsoleProjectionSnapshot,
+  parseHistoryQuery,
+  type ConsoleProjectionSink,
+  type ConsoleProjectionSnapshot,
+  type ConsoleProjectionSubscriber,
+  type ConsoleProjectionUnsubscribe,
+  type HistoryPage,
+  type HistoryQuery,
+  type HistoryReadPort,
+  type TeamsConnectionStatus,
+} from '../control-protocol/teams-state.ts'
+import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
+
+/**
+ * Runtime single writer for the control-kind daemon. It composes the frozen v4 control
+ * intent with the frozen Console wire surface and owns exactly one process: one PID, one
+ * state file, one WebUI listener. It never starts an engine child, a registry, an implicit
+ * master, or a second daemon.
+ *
+ * The Teams connection projection is a structural read of the frozen network status port.
+ * This part injects that port and fails with a typed error while it is absent; it never
+ * fabricates connection state and never infers online/execution state from history.
+ *
+ * This file is both the parent lifecycle entry and the detached child entry, exactly like
+ * `runtime/registry-process.ts`.
+ */
+const STATE_VERSION = 1
+const STATE_FILE_NAME = 'control-state.json'
+const TOKEN_FLAG = '--start-token'
+const AUTHENTICATION_CHALLENGE = 'Basic realm="AgentTeams", charset="UTF-8"'
+
+/**
+ * The frozen structural network status port: exactly the two read methods over the two
+ * frozen DTOs, with no extra member and no second implementation. This is a structural
+ * alias, not a second port: the network owner's `TeamsStatusPort`
+ * (`network/teams-status.ts`, D05) has this identical shape and is assignable to it
+ * without an adapter. Once this branch rebases onto the D05 closure, import that owner
+ * type directly and delete this alias.
+ */
+export interface ControlNetworkStatusPort {
+  history(query: HistoryQuery): Promise<HistoryPage>
+  connections(): readonly TeamsConnectionStatus[]
+}
+
+/** One bound Console owner: projection read plus the two mutation ingresses. */
+export interface ControlOwnerBinding {
+  readProjection(): Promise<ConsoleProjectionV1>
+  command(command: ConsoleCommandV1): Promise<ConsoleCommandResultV1>
+  sendSession(target: { readonly agentId: string; readonly sessionId: string }, payload: JsonValue): Promise<ConsoleCommandResultV1>
+}
+
+/** Owner projection feed. `watch` is absent when the owner cannot stream yet. */
+export interface ControlProjectionSource {
+  read(): Promise<ConsoleProjectionV1>
+  watch?: ConsoleProjectionSubscriber
+}
+
+export type ControlDaemonLifecycleState = 'starting' | 'running' | 'failed' | 'stopped'
+
+export interface ControlDaemonState {
+  readonly version: typeof STATE_VERSION
+  readonly configPath: string
+  readonly entryPath: string
+  readonly daemonId: string
+  readonly startToken: string
+  readonly generation: number
+  readonly pid: number
+  readonly state: ControlDaemonLifecycleState
+  readonly url?: string
+  /** The typed failure the child published, so the parent re-throws the real code. */
+  readonly errorCode?: ControlProcessErrorCode
+  readonly error?: string
+  readonly updatedAt: string
+}
+
+export interface ControlDaemonStatus {
+  readonly configPath: string
+  readonly statePath: string
+  readonly daemonId: string
+  readonly state: ControlDaemonLifecycleState
+  readonly generation: number
+  readonly pid?: number
+  readonly url?: string
+  readonly error?: string
+  /** Effective listener and owned paths; never a credential value. */
+  readonly listener?: { readonly ip: string; readonly port: number }
+  readonly dataDirectory?: string
+}
+
+export type ControlProcessErrorCode =
+  | 'INVALID_CONFIG'
+  | 'UNSUPPORTED_CONFIGURATION'
+  | 'ALREADY_RUNNING'
+  | 'START_TIMEOUT'
+  | 'STOP_TIMEOUT'
+  | 'STALE_GENERATION'
+  | 'STALE_OWNER'
+  | 'INVALID_STATUS'
+  | 'PORT_OCCUPIED'
+  | 'CREDENTIAL_UNAVAILABLE'
+  | 'HISTORY_UNAVAILABLE'
+  | 'STREAM_UNAVAILABLE'
+  | 'UNSUPPORTED_OPERATION'
+
+const CONTROL_PROCESS_ERROR_CODES: readonly ControlProcessErrorCode[] = [
+  'INVALID_CONFIG', 'UNSUPPORTED_CONFIGURATION', 'ALREADY_RUNNING', 'START_TIMEOUT', 'STOP_TIMEOUT',
+  'STALE_GENERATION', 'STALE_OWNER', 'INVALID_STATUS', 'PORT_OCCUPIED', 'CREDENTIAL_UNAVAILABLE',
+  'HISTORY_UNAVAILABLE', 'STREAM_UNAVAILABLE', 'UNSUPPORTED_OPERATION',
+]
+
+export class ControlProcessError extends Error {
+  constructor(readonly code: ControlProcessErrorCode, message: string, cause?: unknown) {
+    super(message, { cause })
+    this.name = 'ControlProcessError'
+  }
+}
+
+export interface ControlDaemonStartOptions {
+  readonly env?: NodeJS.ProcessEnv
+  readonly nodeExecutable?: string
+  readonly nodeArguments?: readonly string[]
+  readonly startupTimeoutMs?: number
+}
+
+export interface ControlProcessArgs {
+  readonly configPath: string
+  readonly startToken?: string
+}
+
+export function parseControlArgs(argv: readonly string[]): ControlProcessArgs {
+  let configPath: string | undefined
+  let startToken: string | undefined
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]
+    if (argument === '--config') {
+      configPath = argv[index + 1]
+      index += 1
+    } else if (argument.startsWith('--config=')) {
+      configPath = argument.slice('--config='.length)
+    } else if (argument === TOKEN_FLAG) {
+      startToken = argv[index + 1]
+      index += 1
+    } else if (argument.startsWith(`${TOKEN_FLAG}=`)) {
+      startToken = argument.slice(TOKEN_FLAG.length + 1)
+    } else {
+      throw new ControlProcessError('INVALID_CONFIG', `usage: control-process --config <file> [${TOKEN_FLAG} <token>]`)
+    }
+  }
+  if (configPath === undefined || configPath.trim() === '') {
+    throw new ControlProcessError('INVALID_CONFIG', `usage: control-process --config <file> [${TOKEN_FLAG} <token>]`)
+  }
+  if (startToken !== undefined && startToken.trim() === '') {
+    throw new ControlProcessError('INVALID_CONFIG', `${TOKEN_FLAG} requires a non-empty token`)
+  }
+  return { configPath: resolve(configPath), ...(startToken === undefined ? {} : { startToken }) }
+}
+
+/**
+ * Loads one v4 control config through the frozen config owner. A non-control config is a
+ * typed unsupported-configuration failure, never a silent reuse of another daemon kind.
+ */
+export async function loadControlIntent(configPath: string): Promise<ControlDaemonIntent> {
+  const absolute = resolve(configPath)
+  let text: string
+  try {
+    text = await readFile(absolute, 'utf8')
+  } catch (cause) {
+    throw new ControlProcessError('INVALID_CONFIG', `control config could not be read: ${absolute}`, cause)
+  }
+  let intent: DaemonIntentV4
+  try {
+    intent = parseDaemonConfigText(text)
+  } catch (cause) {
+    throw new ControlProcessError('INVALID_CONFIG', cause instanceof Error ? cause.message : String(cause), cause)
+  }
+  if (intent.daemon.kind !== 'control') {
+    throw new ControlProcessError('UNSUPPORTED_CONFIGURATION',
+      'control daemon config is required; start agent, registry, or console daemons with their own entry')
+  }
+  return resolveDaemonIntent(intent, { configDirectory: dirname(absolute) }) as ControlDaemonIntent
+}
+
+/** The effective listener the control daemon binds; one readback for status and start. */
+export function readControlEffectiveConfig(intent: ControlDaemonIntent): DaemonEffectiveConfig & { readonly listener: { readonly ip: string; readonly port: number } } {
+  const effective = readDaemonEffectiveConfig(intent)
+  if (effective.listener === undefined) throw new ControlProcessError('INVALID_CONFIG', 'control daemon requires a webui listener')
+  return { ...effective, listener: effective.listener }
+}
+
+export function controlStatePath(intent: ControlDaemonIntent): string {
+  return join(intent.daemon.dataDirectory, STATE_FILE_NAME)
+}
+
+export async function readControlState(statePath: string): Promise<ControlDaemonState | undefined> {
+  let text: string
+  try {
+    text = await readFile(statePath, 'utf8')
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw new ControlProcessError('INVALID_STATUS', `control state could not be read: ${statePath}`, cause)
+  }
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch (cause) {
+    throw new ControlProcessError('INVALID_STATUS', `control state is not valid JSON: ${statePath}`, cause)
+  }
+  const state = value as ControlDaemonState
+  if (state === null || typeof state !== 'object' || state.version !== STATE_VERSION
+    || typeof state.configPath !== 'string' || typeof state.entryPath !== 'string'
+    || typeof state.startToken !== 'string' || !Number.isSafeInteger(state.generation)
+    || !Number.isSafeInteger(state.pid) || !['starting', 'running', 'failed', 'stopped'].includes(state.state)
+    || (state.errorCode !== undefined && !CONTROL_PROCESS_ERROR_CODES.includes(state.errorCode))) {
+    throw new ControlProcessError('INVALID_STATUS', `control state is malformed: ${statePath}`)
+  }
+  return state
+}
+
+async function writeControlState(statePath: string, state: ControlDaemonState): Promise<void> {
+  await mkdir(dirname(statePath), { recursive: true })
+  const temporary = `${statePath}.${process.pid}.${randomUUID()}.tmp`
+  await writeFile(temporary, `${JSON.stringify(state)}\n`, 'utf8')
+  await rename(temporary, statePath)
+}
+
+function sourceNodeArguments(): readonly string[] {
+  return fileURLToPath(import.meta.url).endsWith('.ts') ? ['--experimental-transform-types'] : []
+}
+
+function statusFrom(intent: ControlDaemonIntent, statePath: string, configPath: string, state: ControlDaemonState | undefined): ControlDaemonStatus {
+  const effective = readControlEffectiveConfig(intent)
+  const base = {
+    configPath,
+    statePath,
+    daemonId: intent.daemon.id,
+    listener: effective.listener,
+    dataDirectory: intent.daemon.dataDirectory,
+  }
+  if (state === undefined) return { ...base, state: 'stopped', generation: 0 }
+  return {
+    ...base,
+    state: state.state,
+    generation: state.generation,
+    pid: state.pid,
+    ...(state.url === undefined ? {} : { url: state.url }),
+    ...(state.error === undefined ? {} : { error: state.error }),
+  }
+}
+
+async function ownsPersistedProcess(state: ControlDaemonState): Promise<boolean> {
+  if (state.pid <= 0 || !processAlive(state.pid)) return false
+  const command = await processCommand(state.pid)
+  return command !== undefined && processOwnsConfigCommand(command, state.configPath, state.entryPath, state.startToken, TOKEN_FLAG)
+}
+
+async function waitForProcessExit(pid: number, deadlineMs: number): Promise<void> {
+  const deadline = Date.now() + deadlineMs
+  while (Date.now() < deadline) {
+    if (!processAlive(pid)) return
+    await new Promise(resolveDelay => setTimeout(resolveDelay, 25))
+  }
+  throw new ControlProcessError('STOP_TIMEOUT', `control pid=${pid} did not exit after SIGTERM`)
+}
+
+async function waitForState(statePath: string, expected: readonly ControlDaemonLifecycleState[], timeoutMs: number): Promise<ControlDaemonState> {
+  const deadline = Date.now() + timeoutMs
+  let last: ControlDaemonState | undefined
+  while (Date.now() < deadline) {
+    last = await readControlState(statePath)
+    if (last !== undefined && expected.includes(last.state)) return last
+    await new Promise(resolveDelay => setTimeout(resolveDelay, 25))
+  }
+  if (last?.state === 'failed' && last.error !== undefined) {
+    // The child published its typed code, so the parent re-throws the real failure.
+    throw new ControlProcessError(last.errorCode ?? 'START_TIMEOUT', `control process failed to start: ${last.error}`)
+  }
+  throw new ControlProcessError('START_TIMEOUT', `control did not report ${expected.join('/')} within ${timeoutMs}ms`)
+}
+
+/** Removes the owned directory and pid record after a stop or a failed start. */
+async function removeOwnedState(statePath: string, dataDirectory: string): Promise<void> {
+  try { await rm(dataDirectory, { recursive: true, force: true }) } catch { /* keep the recorded state */ }
+  try { await rm(statePath, { force: true }) } catch { /* keep the recorded state */ }
+}
+
+export async function startControlDaemon(configPath: string, options: ControlDaemonStartOptions = {}): Promise<ControlDaemonStatus> {
+  const intent = await loadControlIntent(configPath)
+  // The parent validates the declared listener before spawning, like the registry plan.
+  readControlEffectiveConfig(intent)
+  const childEnv = { ...process.env, ...options.env }
+  const declaredPasswordEnv = intent.webui.auth?.passwordEnv
+  if (declaredPasswordEnv !== undefined && (childEnv[declaredPasswordEnv] ?? '') === '') {
+    // Resolve the declared credential reference before spawning, like the registry plan:
+    // a listener that cannot authenticate never starts and never leaves a pid record.
+    throw new ControlProcessError('CREDENTIAL_UNAVAILABLE',
+      `webui.auth.passwordEnv ${declaredPasswordEnv} is not set in the operator environment`)
+  }
+  const statePath = controlStatePath(intent)
+  const resolvedConfigPath = resolve(configPath)
+  const entryPath = fileURLToPath(import.meta.url)
+  const previous = await readControlState(statePath)
+  if (previous !== undefined && previous.configPath !== resolvedConfigPath) {
+    throw new ControlProcessError('STALE_OWNER', `control state belongs to another config: ${previous.configPath}`)
+  }
+  if (previous !== undefined && previous.state !== 'stopped' && previous.pid > 0 && processAlive(previous.pid)) {
+    if (!(await ownsPersistedProcess(previous))) {
+      throw new ControlProcessError('STALE_OWNER', `control pid=${previous.pid} does not match its persisted start token`)
+    }
+    throw new ControlProcessError('ALREADY_RUNNING', `control is already running pid=${previous.pid} generation=${previous.generation}`)
+  }
+  const generation = (previous?.generation ?? 0) + 1
+  const startToken = randomUUID()
+  await writeControlState(statePath, {
+    version: STATE_VERSION, configPath: resolvedConfigPath, entryPath, daemonId: intent.daemon.id,
+    startToken, generation, pid: 0, state: 'starting', updatedAt: new Date().toISOString(),
+  })
+  let child: ChildProcess | undefined
+  try {
+    child = spawn(options.nodeExecutable ?? process.execPath, [...(options.nodeArguments ?? sourceNodeArguments()), entryPath, '--config', resolvedConfigPath, TOKEN_FLAG, startToken], {
+      detached: true,
+      env: childEnv,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    })
+    child.unref()
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause)
+    await writeControlState(statePath, {
+      version: STATE_VERSION, configPath: resolvedConfigPath, entryPath, daemonId: intent.daemon.id,
+      startToken, generation, pid: 0, state: 'failed', error: message, updatedAt: new Date().toISOString(),
+    })
+    throw new ControlProcessError('INVALID_CONFIG', `control process could not be spawned: ${message}`, cause)
+  }
+  if (child.pid === undefined) {
+    const message = 'detached control process did not return a pid'
+    await writeControlState(statePath, {
+      version: STATE_VERSION, configPath: resolvedConfigPath, entryPath, daemonId: intent.daemon.id,
+      startToken, generation, pid: 0, state: 'failed', error: message, updatedAt: new Date().toISOString(),
+    })
+    throw new ControlProcessError('INVALID_CONFIG', message)
+  }
+  const pid = child.pid
+  await writeControlState(statePath, {
+    version: STATE_VERSION, configPath: resolvedConfigPath, entryPath, daemonId: intent.daemon.id,
+    startToken, generation, pid, state: 'starting', updatedAt: new Date().toISOString(),
+  })
+  try {
+    const running = await waitForState(statePath, ['running'], options.startupTimeoutMs ?? 10_000)
+    return statusFrom(intent, statePath, resolvedConfigPath, running)
+  } catch (error) {
+    // A failed child leaves its own error in the state file; keep it and only reclaim the
+    // process this parent started. A failed start removes its owned directory and pid record.
+    const latest = await readControlState(statePath)
+    const failure = latest?.error ?? (error instanceof Error ? error.message : String(error))
+    const failureCode = latest?.errorCode ?? (error instanceof ControlProcessError ? error.code : undefined)
+    if (latest === undefined || (latest.generation === generation && latest.startToken === startToken)) {
+      await writeControlState(statePath, {
+        version: STATE_VERSION, configPath: resolvedConfigPath, entryPath, daemonId: intent.daemon.id,
+        startToken, generation, pid, state: 'failed',
+        ...(failureCode === undefined ? {} : { errorCode: failureCode }), error: failure, updatedAt: new Date().toISOString(),
+      })
+    }
+    if (processAlive(pid)) {
+      try { process.kill(pid, 'SIGTERM') } catch { /* preserve the startup failure */ }
+      try { await waitForProcessExit(pid, 2_000) } catch { /* preserve the startup failure */ }
+    }
+    await removeOwnedState(statePath, intent.daemon.dataDirectory)
+    throw error
+  }
+}
+
+export async function statusControlDaemon(configPath: string): Promise<ControlDaemonStatus> {
+  const intent = await loadControlIntent(configPath)
+  const statePath = controlStatePath(intent)
+  const resolvedConfigPath = resolve(configPath)
+  const state = await readControlState(statePath)
+  if (state === undefined) return statusFrom(intent, statePath, resolvedConfigPath, undefined)
+  if (state.state === 'running' || state.state === 'starting') {
+    if (state.pid <= 0 || !processAlive(state.pid)) {
+      return statusFrom(intent, statePath, resolvedConfigPath, { ...state, state: 'failed', error: 'control process pid is not alive' })
+    }
+    if (!(await ownsPersistedProcess(state))) {
+      return statusFrom(intent, statePath, resolvedConfigPath, { ...state, state: 'failed', error: 'control process does not match persisted ownership' })
+    }
+  }
+  return statusFrom(intent, statePath, resolvedConfigPath, state)
+}
+
+export async function stopControlDaemon(configPath: string, expectedGeneration?: number): Promise<ControlDaemonStatus> {
+  const intent = await loadControlIntent(configPath)
+  const statePath = controlStatePath(intent)
+  const resolvedConfigPath = resolve(configPath)
+  const state = await readControlState(statePath)
+  if (state === undefined || state.state === 'stopped') {
+    await removeOwnedState(statePath, intent.daemon.dataDirectory)
+    return statusFrom(intent, statePath, resolvedConfigPath, undefined)
+  }
+  if (expectedGeneration !== undefined && expectedGeneration !== state.generation) {
+    throw new ControlProcessError('STALE_GENERATION', `stale control generation expected=${expectedGeneration} current=${state.generation}`)
+  }
+  if (state.pid <= 0 || !processAlive(state.pid)) {
+    await removeOwnedState(statePath, intent.daemon.dataDirectory)
+    return statusFrom(intent, statePath, resolvedConfigPath, undefined)
+  }
+  if (!(await ownsPersistedProcess(state))) {
+    throw new ControlProcessError('STALE_OWNER', `control pid=${state.pid} does not match its persisted start token`)
+  }
+  process.kill(state.pid, 'SIGTERM')
+  await waitForProcessExit(state.pid, 5_000)
+  await removeOwnedState(statePath, intent.daemon.dataDirectory)
+  return statusFrom(intent, statePath, resolvedConfigPath, undefined)
+}
+
+/* ---------------------------------------------------------------------------------------
+ * Owner projection, commands and the SSE source.
+ * ------------------------------------------------------------------------------------- */
+
+function unavailable(message: string, code: ControlProcessErrorCode): never {
+  throw new ControlProcessError(code, message)
+}
+
+/** Closed validation of an owner projection; a malformed owner view never reaches the wire. */
+function validatedProjection(value: unknown): ConsoleProjectionV1 {
+  return parseConsoleProjection(value)
+}
+
+/** Structural history read: the frozen port or a typed absence, never a fabricated page. */
+export function createControlHistoryReader(port: ControlNetworkStatusPort | undefined): HistoryReadPort {
+  return {
+    async query(query: HistoryQuery): Promise<HistoryPage> {
+      // Re-validate through the frozen parser so the runtime never forwards a widened query.
+      const closed = parseHistoryQuery(query)
+      if (port === undefined) unavailable('network status port is not bound to this control daemon; history is unavailable', 'HISTORY_UNAVAILABLE')
+      return await port.history(closed)
+    },
+  }
+}
+
+function projectionWithConnections(projection: ConsoleProjectionV1, port: ControlNetworkStatusPort | undefined): ConsoleProjectionV1 {
+  if (port === undefined) return projection
+  // The additive connection rows reuse the frozen status verbatim. `halfOpen` is true while
+  // the transport/negotiation lifecycle has not reached a terminal state.
+  const connections = port.connections().map(status => ({
+    status,
+    halfOpen: !['ready', 'closed', 'failed', 'disconnected'].includes(status.state),
+  }))
+  return { ...projection, connections }
+}
+
+export interface CreateControlOwnerOptions {
+  readonly network?: ControlNetworkStatusPort
+  readonly owner?: ControlOwnerBinding
+}
+
+/**
+ * The control owner client. Without a network status port the connection projection stays
+ * absent and connection/membership commands fail with the typed absence; nothing is faked.
+ */
+export function createControlOwner(options: CreateControlOwnerOptions): ConsoleClientV1 {
+  const { network, owner } = options
+  const read = async (): Promise<ConsoleProjectionV1> => {
+    const base = owner === undefined
+      ? { version: 1 as const, agents: [], sessions: [], notifications: [], configs: [] }
+      : validatedProjection(await owner.readProjection())
+    return projectionWithConnections(base, network)
+  }
+  const connectionCommand = (command: ConsoleCommandV1): ConsoleCommandResultV1 => {
+    if (network === undefined) {
+      return { ok: false, error: { code: 'UNAVAILABLE', message: 'network status port is not bound to this control daemon; connection state is unavailable' } }
+    }
+    // The read port cannot carry a mutation. This part never guesses a connection outcome.
+    return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: `${command.kind} requires a network command channel that the frozen read port does not declare` } }
+  }
+  return {
+    readProjection: read,
+    async command(command: ConsoleCommandV1): Promise<ConsoleCommandResultV1> {
+      if (command.kind === 'connection.connect' || command.kind === 'connection.disconnect' || command.kind === 'network.membership.apply') {
+        return connectionCommand(command)
+      }
+      if (owner === undefined) {
+        return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: `no owner is bound for ${command.kind}` } }
+      }
+      return await owner.command(command)
+    },
+    async sendSession(target, payload) {
+      if (owner === undefined) {
+        return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'no Session owner is bound to this control daemon' } }
+      }
+      return await owner.sendSession(target, payload)
+    },
+  }
+}
+
+/** Polling owner feed. It emits a full snapshot only when the owner projection changes. */
+export function createPollingProjectionSubscriber(read: () => Promise<ConsoleProjectionV1>, intervalMs = 250): ConsoleProjectionSubscriber {
+  if (!Number.isSafeInteger(intervalMs) || intervalMs < 1) throw new ControlProcessError('INVALID_CONFIG', 'projection poll interval is invalid')
+  return sink => {
+    let seq = 0
+    let last: string | undefined
+    let stopped = false
+    let running = false
+    const tick = async () => {
+      if (stopped || running) return
+      running = true
+      try {
+        const projection = await read()
+        const encoded = JSON.stringify(projection)
+        if (encoded !== last) {
+          last = encoded
+          seq += 1
+          sink.onSnapshot({ seq, projection })
+        }
+      } catch (error) {
+        if (!stopped) {
+          stopped = true
+          sink.onHealth({ state: 'lost', reason: 'stream-ended', detail: error instanceof Error ? error.message : 'owner projection read failed' })
+        }
+      } finally {
+        running = false
+      }
+    }
+    void tick()
+    const timer = setInterval(() => { void tick() }, intervalMs)
+    timer.unref?.()
+    return () => { stopped = true; clearInterval(timer) }
+  }
+}
+
+interface ControlProjectionFixture {
+  readonly snapshots: readonly { readonly delayMs: number; readonly seq: number; readonly projection: ConsoleProjectionV1 }[]
+  readonly closeAfter?: { readonly delayMs: number; readonly reason: 'stream-ended' | 'retry-exhausted'; readonly detail: string }
+}
+
+/**
+ * Deterministic projection feed for the black-box entry. It is reachable only through an
+ * explicit environment variable and never participates in a normal daemon start.
+ */
+export function createFixtureProjectionSubscriber(fixture: ControlProjectionFixture): ConsoleProjectionSubscriber {
+  return sink => {
+    const timers: NodeJS.Timeout[] = []
+    let closed = false
+    for (const snapshot of fixture.snapshots) {
+      timers.push(setTimeout(() => {
+        if (closed) return
+        const validated = parseConsoleProjectionSnapshot({ seq: snapshot.seq, projection: snapshot.projection })
+        sink.onSnapshot(validated)
+      }, snapshot.delayMs))
+    }
+    if (fixture.closeAfter !== undefined) {
+      timers.push(setTimeout(() => {
+        if (closed) return
+        closed = true
+        sink.onHealth({ state: 'lost', reason: fixture.closeAfter!.reason, detail: fixture.closeAfter!.detail })
+      }, fixture.closeAfter.delayMs))
+    }
+    for (const timer of timers) timer.unref?.()
+    return () => { closed = true; for (const timer of timers) clearTimeout(timer) }
+  }
+}
+
+async function readProjectionFixture(path: string): Promise<ControlProjectionFixture> {
+  let value: unknown
+  try {
+    value = JSON.parse(await readFile(path, 'utf8'))
+  } catch (cause) {
+    throw new ControlProcessError('INVALID_CONFIG', `control projection fixture could not be read: ${path}`, cause)
+  }
+  const fixture = value as ControlProjectionFixture
+  if (fixture === null || typeof fixture !== 'object' || !Array.isArray(fixture.snapshots)) {
+    throw new ControlProcessError('INVALID_CONFIG', `control projection fixture is malformed: ${path}`)
+  }
+  for (const snapshot of fixture.snapshots) {
+    if (!Number.isSafeInteger(snapshot.delayMs) || snapshot.delayMs < 0) {
+      throw new ControlProcessError('INVALID_CONFIG', `control projection fixture delay is invalid: ${path}`)
+    }
+    parseConsoleProjectionSnapshot({ seq: snapshot.seq, projection: snapshot.projection })
+  }
+  return fixture
+}
+
+/* ---------------------------------------------------------------------------------------
+ * Child entry.
+ * ------------------------------------------------------------------------------------- */
+
+/**
+ * Resolves the frozen presentation roots that ship beside the runtime entry. The entry
+ * lives at `<root>/runtime/` from source and at `<root>/generated/runtime-lib/runtime/`
+ * after `build:runtime`, so the owning package root is found by its real static entry.
+ * The UI package serves `/ui/browser.js`, which is `ui/teams-console/lib/browser.js` from
+ * source and `ui/teams-console/browser.js` in the staged package.
+ */
+function presentationRoots(entryPath: string): { readonly staticRoot: string; readonly uiRoot: string } {
+  let candidate = dirname(entryPath)
+  for (let depth = 0; depth < 6; depth += 1) {
+    const staticRoot = join(candidate, 'console-host', 'static')
+    const uiBase = join(candidate, 'ui', 'teams-console')
+    const uiRoot = existsSync(join(uiBase, 'browser.js')) ? uiBase
+      : existsSync(join(uiBase, 'lib', 'browser.js')) ? join(uiBase, 'lib') : undefined
+    if (uiRoot !== undefined && existsSync(join(staticRoot, 'console.html'))) return { staticRoot, uiRoot }
+    const parent = dirname(candidate)
+    if (parent === candidate) break
+    candidate = parent
+  }
+  throw new ControlProcessError('INVALID_CONFIG',
+    `console-host static assets and the compiled UI are missing beside the control entry: ${entryPath}; run pnpm build first`)
+}
+
+async function loadCredentials(intent: ControlDaemonIntent, env: NodeJS.ProcessEnv): Promise<{ readonly username: string; readonly password: string; readonly origin: string }> {
+  const auth = intent.webui.auth
+  if (auth === undefined) {
+    throw new ControlProcessError('CREDENTIAL_UNAVAILABLE', 'control webui requires webui.auth before it can bind a listener')
+  }
+  const password = env[auth.passwordEnv]
+  if (password === undefined || password.length === 0) {
+    throw new ControlProcessError('CREDENTIAL_UNAVAILABLE', `webui.auth.passwordEnv ${auth.passwordEnv} is not set in the operator environment`)
+  }
+  const host = intent.webui.ip.includes(':') ? `[${intent.webui.ip}]` : intent.webui.ip
+  const origin = intent.webui.allowedOrigin ?? `http://${host}:${intent.webui.port}`
+  return { username: auth.username, password, origin }
+}
+
+/**
+ * Detached child entry. It publishes its own readiness into the one state file after the
+ * WebUI listener is bound, so `control status` never reports a fabricated `running` state.
+ */
+export async function runControlProcess(argv: readonly string[] = process.argv.slice(2), env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const args = parseControlArgs(argv)
+  const intent = await loadControlIntent(args.configPath)
+  const effective = readControlEffectiveConfig(intent)
+  const statePath = controlStatePath(intent)
+  const previous = await readControlState(statePath)
+  const base = {
+    version: STATE_VERSION,
+    configPath: resolve(args.configPath),
+    entryPath: fileURLToPath(import.meta.url),
+    daemonId: intent.daemon.id,
+    startToken: args.startToken ?? previous?.startToken ?? randomUUID(),
+    generation: previous?.generation ?? 1,
+  } as const
+  const { staticRoot, uiRoot } = presentationRoots(base.entryPath)
+  let server: ReturnType<typeof createConsoleServer> | undefined
+  try {
+    const { username, password, origin } = await loadCredentials(intent, env)
+    // The one injection point for the frozen network status port. Until D05 binds it the
+    // port is absent, so the connection projection stays absent and every dependent surface
+    // fails with a typed absence instead of a guess.
+    const network: ControlNetworkStatusPort | undefined = undefined
+    const client = createControlOwner({ network })
+    const authorize = createConsoleAuthorization({ username, password, origin, client })
+    const history = createControlHistoryReader(network)
+    const projectionRead = async () => await client.readProjection()
+    const fixturePath = env.AGENTTEAMS_CONTROL_PROJECTION_FIXTURE
+    const events: ConsoleProjectionSubscriber = fixturePath === undefined
+      ? createPollingProjectionSubscriber(projectionRead)
+      : createFixtureProjectionSubscriber(await readProjectionFixture(fixturePath))
+    server = createConsoleServer({
+      staticRoot,
+      uiRoot,
+      authorize,
+      history,
+      events,
+      authenticationChallenge: AUTHENTICATION_CHALLENGE,
+      ...(intent.webui.tlsCertRef === undefined || intent.webui.tlsKeyRef === undefined ? {} : {
+        tls: { cert: await readFile(intent.webui.tlsCertRef), key: await readFile(intent.webui.tlsKeyRef) },
+      }),
+    })
+    await new Promise<void>((resolveListen, rejectListen) => {
+      const onError = (error: Error) => { server?.off('listening', onListening); rejectListen(error) }
+      const onListening = () => { server?.off('error', onError); resolveListen() }
+      server!.once('error', onError)
+      server!.once('listening', onListening)
+      server!.listen(effective.listener.port, effective.listener.ip)
+    })
+  } catch (error) {
+    // The typed code travels in `errorCode`; `error` stays the plain message so a caller
+    // that prefixes the code never prints it twice.
+    const errorCode = error instanceof ControlProcessError ? error.code
+      : (error as NodeJS.ErrnoException).code === 'EADDRINUSE' ? 'PORT_OCCUPIED' as const : undefined
+    const failure = error instanceof ControlProcessError
+      ? error.message
+      : errorCode === 'PORT_OCCUPIED'
+        ? `control webui port ${effective.listener.port} is already in use`
+        : error instanceof Error ? error.message : String(error)
+    await writeControlState(statePath, { ...base, pid: process.pid, state: 'failed',
+      ...(errorCode === undefined ? {} : { errorCode }), error: failure, updatedAt: new Date().toISOString() })
+    throw error
+  }
+  const scheme = intent.webui.tlsCertRef === undefined ? 'http' : 'https'
+  const host = effective.listener.ip.includes(':') ? `[${effective.listener.ip}]` : effective.listener.ip
+  const url = `${scheme}://${host}:${effective.listener.port}`
+  await writeControlState(statePath, { ...base, pid: process.pid, state: 'running', url, updatedAt: new Date().toISOString() })
+  console.log(`control listening ${url} config=${base.configPath} pid=${process.pid}`)
+  let stopping: Promise<void> | undefined
+  const stop = (signal: NodeJS.Signals) => {
+    if (stopping) return
+    stopping = new Promise<void>(resolveClose => { server.close(() => resolveClose()) })
+      .then(async () => {
+        await writeControlState(statePath, { ...base, pid: process.pid, state: 'stopped', url, updatedAt: new Date().toISOString() })
+      })
+      .catch((error: unknown) => {
+        process.exitCode = 1
+        console.error(`control shutdown failed after ${signal}: ${error instanceof Error ? error.message : String(error)}`)
+      })
+  }
+  process.once('SIGINT', stop)
+  process.once('SIGTERM', stop)
+  try {
+    await new Promise<void>(resolveStopped => {
+      const poll = () => { if (stopping) void stopping.finally(resolveStopped); else setTimeout(poll, 50) }
+      poll()
+    })
+  } finally {
+    process.removeListener('SIGINT', stop)
+    process.removeListener('SIGTERM', stop)
+  }
+}
+
+const invokedPath = process.argv[1] === undefined ? undefined : resolve(process.argv[1])
+if (invokedPath === fileURLToPath(import.meta.url)) {
+  void runControlProcess().catch(error => {
+    const code = error instanceof ControlProcessError ? error.code : 'UNAVAILABLE'
+    console.error('control process failed:', code, error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}

@@ -1,6 +1,7 @@
 import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleCommandV1, ConsoleProjectionV1, JsonValue } from './protocol.ts'
 import { assertJsonValue } from '../../../../control-protocol/json-value.ts'
-import { isServiceError, parseConsoleAgentObservation, parseConsoleSessionEvent, parseSessionCancelConfirmed, parseSessionCancelUnknownDetail, parseSessionCreateResult } from './protocol.ts'
+import { parseTeamsConnectionStatus } from '../../../../control-protocol/teams-state.ts'
+import { isServiceError, parseConsoleAgentObservation, parseConsoleSessionEvent, parsePermissionReplyResult, parseSessionCancelConfirmed, parseSessionCancelUnknownDetail, parseSessionCreateResult } from './protocol.ts'
 
 export interface ConsoleHttpClientOptions {
   readonly baseUrl?: string
@@ -26,7 +27,7 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): b
   return Object.keys(value).every(key => allowed.has(key))
 }
 
-const PROJECTION_KEYS = ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations'] as const
+const PROJECTION_KEYS = ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations', 'connections'] as const
 const WORK_KEYS = ['agentId', 'workId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'policyRevision', 'state'] as const
 const RELATION_KEYS = ['agentId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'relationPermission', 'workId'] as const
 
@@ -36,6 +37,16 @@ function isKeyClosedArray(value: unknown, keys: readonly string[]): boolean {
 
 function parses(validate: (value: unknown) => unknown, value: unknown): boolean {
   try { validate(value); return true } catch { return false }
+}
+
+const CONNECTION_KEYS = ['status', 'halfOpen', 'localRole'] as const
+
+/** Additive connection rows stay closed: the frozen status parser owns the nested shape. */
+function isConnectionRow(value: unknown): boolean {
+  if (!isRecord(value) || !hasOnlyKeys(value, CONNECTION_KEYS)) return false
+  if (typeof value.halfOpen !== 'boolean') return false
+  if (value.localRole !== undefined && value.localRole !== 'master' && value.localRole !== 'peer') return false
+  return parses(parseTeamsConnectionStatus, value.status)
 }
 
 function isProjection(value: unknown): value is ConsoleProjectionV1 {
@@ -50,6 +61,7 @@ function isProjection(value: unknown): value is ConsoleProjectionV1 {
     && (value.sessionEvents === undefined || (Array.isArray(value.sessionEvents) && value.sessionEvents.every(item => parses(parseConsoleSessionEvent, item))))
     && (value.works === undefined || isKeyClosedArray(value.works, WORK_KEYS))
     && (value.relations === undefined || isKeyClosedArray(value.relations, RELATION_KEYS))
+    && (value.connections === undefined || (Array.isArray(value.connections) && value.connections.every(isConnectionRow)))
 }
 
 function isValidCommandSuccess(kind: string, result: unknown): boolean {
@@ -57,6 +69,7 @@ function isValidCommandSuccess(kind: string, result: unknown): boolean {
   // accepted command carries no structured result at the HTTP boundary.
   if (kind === 'session.create') return parses(parseSessionCreateResult, result)
   if (kind === 'session.cancel') return parses(parseSessionCancelConfirmed, result) || parses(parseSessionCancelUnknownDetail, result)
+  if (kind === 'permission.reply') return parses(parsePermissionReplyResult, result)
   if (result === undefined) return true
   try { assertJsonValue(result, 'console command result'); return true } catch { return false }
 }

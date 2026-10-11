@@ -23,6 +23,7 @@ const RUNTIME_ARTIFACTS = {
   localWorkControl: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-work-control.js'),
   consoleProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'console-process.js'),
   registryProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'registry-process.js'),
+  controlProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'control-process.js'),
   relay: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'server', 'relay-process.js'),
   agent: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'agent-process.js'),
   acpServe: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'acp-serve.js'),
@@ -101,7 +102,7 @@ export class AgentTeamsCliError extends Error {
 }
 
 function usage() {
-  return `usage: ${CLI_NAME} init|start|status|work|stop|console status|start|stop|registry start|status|stop [--config <path>] [--generation <n>]
+  return `usage: ${CLI_NAME} init|start|status|work|stop|console status|start|stop|registry start|status|stop|control start|status|stop [--config <path>] [--generation <n>]
        ${CLI_NAME} --serve <opencode|dsh> --ip <ip> --port <port> [--config <v4 agent config>]`
 }
 
@@ -121,6 +122,10 @@ function registryUsage() {
   return `usage: ${CLI_NAME} registry start|status|stop --config <file>`
 }
 
+function controlUsage() {
+  return `usage: ${CLI_NAME} control start|status|stop --config <file>`
+}
+
 function valueAfter(argv, index, flag) {
   const value = argv[index + 1]
   if (value === undefined || value.startsWith('--')) throw new AgentTeamsCliError(`${flag} requires a value`)
@@ -135,6 +140,7 @@ function parseArgs(argv, options) {
   if (command === 'work') return parseWorkArgs(argv.slice(1), options)
   if (command === 'console') return parseConsoleArgs(argv.slice(1), options)
   if (command === 'registry') return parseRegistryArgs(argv.slice(1), options)
+  if (command === 'control') return parseControlArgs(argv.slice(1), options)
   if (command === '--serve' || command.startsWith('--serve=')) return parseServeArgs(argv, options)
   if (!['init', 'start', 'status', 'stop'].includes(command)) {
     throw new AgentTeamsCliError(`unknown command: ${command}\n${usage()}`)
@@ -232,6 +238,57 @@ function parseServeArgs(argv, options) {
 const CONSOLE_SUBCOMMANDS = ['status', 'start', 'stop']
 
 const REGISTRY_SUBCOMMANDS = ['start', 'status', 'stop']
+
+const CONTROL_SUBCOMMANDS = ['start', 'status', 'stop']
+
+/**
+ * The control daemon is its own v4 daemon with its own config file, so it follows the
+ * registry argument contract exactly: no default config path, the same strict flag set,
+ * and `--generation` accepted only by `stop`.
+ */
+function parseControlArgs(argv, options) {
+  const subcommand = argv[0]
+  if (subcommand === undefined || subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    throw new AgentTeamsCliError(controlUsage())
+  }
+  if (!CONTROL_SUBCOMMANDS.includes(subcommand)) throw new AgentTeamsCliError(`unknown control subcommand: ${subcommand}\n${controlUsage()}`)
+  const parsed = {
+    command: 'control',
+    subcommand,
+    configPath: options.config === undefined ? undefined : resolve(options.config),
+    generation: undefined,
+  }
+  for (let index = 1; index < argv.length; index += 1) {
+    const argument = argv[index]
+    const equals = argument.indexOf('=')
+    const name = equals > 0 ? argument.slice(0, equals) : argument
+    const inline = equals > 0 ? argument.slice(equals + 1) : undefined
+    const take = flag => {
+      if (inline !== undefined) {
+        if (inline.length === 0) throw new AgentTeamsCliError(`${flag} requires a value`)
+        return inline
+      }
+      const value = valueAfter(argv, index, flag)
+      index += 1
+      return value
+    }
+    if (name === '--config') {
+      parsed.configPath = resolve(take(argument))
+    } else if (name === '--generation') {
+      // Only stop consumes an expected generation; refusing it elsewhere keeps a
+      // flag from being accepted and silently ignored.
+      if (subcommand !== 'stop') throw new AgentTeamsCliError(`--generation is only accepted by control stop\n${controlUsage()}`)
+      const generation = Number(take(argument))
+      if (!Number.isSafeInteger(generation) || generation < 0) throw new AgentTeamsCliError('--generation must be a non-negative integer')
+      parsed.generation = generation
+    } else {
+      throw new AgentTeamsCliError(`unknown argument: ${argument}\n${controlUsage()}`)
+    }
+  }
+  // The control daemon is its own daemon with its own config; there is no default path.
+  if (parsed.configPath === undefined) throw new AgentTeamsCliError(`--config requires a value\n${controlUsage()}`)
+  return parsed
+}
 
 function parseRegistryArgs(argv, options) {
   const subcommand = argv[0]
@@ -727,6 +784,22 @@ function formatRegistryStatus(prefix, status) {
   return pieces.join(' ')
 }
 
+function formatControlStatus(prefix, status) {
+  const pieces = [
+    prefix,
+    `state=${status.state}`,
+    `generation=${status.generation}`,
+    `config=${status.configPath}`,
+    `daemon=${status.daemonId}`,
+  ]
+  if (status.pid !== undefined) pieces.push(`pid=${status.pid}`)
+  if (status.url !== undefined) pieces.push(`url=${status.url}`)
+  if (status.listener !== undefined) pieces.push(`listener=${status.listener.ip}:${status.listener.port}`)
+  if (status.dataDirectory !== undefined) pieces.push(`data=${status.dataDirectory}`)
+  if (status.error !== undefined) pieces.push(`error=${status.error}`)
+  return pieces.join(' ')
+}
+
 async function pathExists(path) {
   try {
     await access(path)
@@ -749,14 +822,15 @@ async function defaultRuntime() {
         throw new AgentTeamsCliError(`cli runtime artifacts are missing (${missing.join(', ')}); run pnpm build:runtime first`)
       }
       try {
-        const [localConfig, localProcess, localWorkControl, acpServe, registryProcess] = await Promise.all([
+        const [localConfig, localProcess, localWorkControl, acpServe, registryProcess, controlProcess] = await Promise.all([
           import(RUNTIME_ARTIFACTS.localConfig),
           import(RUNTIME_ARTIFACTS.localProcess),
           import(RUNTIME_ARTIFACTS.localWorkControl),
           import(RUNTIME_ARTIFACTS.acpServe),
           import(RUNTIME_ARTIFACTS.registryProcess),
+          import(RUNTIME_ARTIFACTS.controlProcess),
         ])
-        return { localConfig, localWorkControl, ...acpServe, ...localProcess, ...registryProcess }
+        return { localConfig, localWorkControl, ...acpServe, ...localProcess, ...registryProcess, ...controlProcess }
       } catch (error) {
         throw new AgentTeamsCliError(`cli runtime artifacts could not be loaded; run pnpm build:runtime first: ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -850,6 +924,25 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
     if (parsed.subcommand === 'status') return formatRegistryStatus('status', await runtime.statusRegistryDaemon(configPath))
     if (parsed.subcommand === 'stop') return formatRegistryStatus('stopped', await runtime.stopRegistryDaemon(configPath, parsed.generation))
     throw new AgentTeamsCliError(`unsupported registry subcommand: ${parsed.subcommand}`)
+  }
+  if (parsed.command === 'control') {
+    const runtime = options.runtime ?? await defaultRuntime()
+    // The control child inherits the operator environment so the declared
+    // webui.auth.passwordEnv resolves; the CLI never reads or prints the value.
+    const controlOptions = options.env === undefined ? {} : { env: options.env }
+    try {
+      if (parsed.subcommand === 'start') return formatControlStatus('started', await runtime.startControlDaemon(configPath, controlOptions))
+      if (parsed.subcommand === 'status') return formatControlStatus('status', await runtime.statusControlDaemon(configPath))
+      if (parsed.subcommand === 'stop') return formatControlStatus('stopped', await runtime.stopControlDaemon(configPath, parsed.generation))
+    } catch (error) {
+      // The runtime throws a typed lifecycle failure; surface its code with the
+      // message instead of flattening the failure into a bare string.
+      if (error !== null && typeof error === 'object' && error.name === 'ControlProcessError' && typeof error.code === 'string') {
+        throw new AgentTeamsCliError(`${error.code}: ${error.message}`)
+      }
+      throw error
+    }
+    throw new AgentTeamsCliError(`unsupported control subcommand: ${parsed.subcommand}`)
   }
   if (parsed.command === 'stop') {
     const runtime = options.runtime ?? await defaultRuntime()
