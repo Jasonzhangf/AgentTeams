@@ -146,6 +146,7 @@ CLI 实际入口）；配置指向注册服务器时还依赖 D04。opencode 与
 | `teams-acp-d04-registry` | runtime | partial | `pnpm exec vitest run --no-file-parallelism server/relay.spec.ts network/relay-client.spec.ts network/registration-client.spec.ts server/registry-intent.spec.ts runtime/registry-process.spec.ts runtime/registry-registration.spec.ts` | D04 已合并候选 953d952 的 registry daemon 生命周期、TLS-only intent 映射、presence 租约与客户端注册/心跳/重连（已按当前候选复验 75/75 通过；候选黑盒 14/14 经 review 独立复现）；无安装副本/live `--serve` 证据、AppSDK 仍阻塞 |
 | `teams-acp-d05-network` | network | partial | `pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts control-protocol/teams-connection.spec.ts` | D05 连接层与入口组合：冻结 frame 上的协商执行（唯一 agreement 来源、typed 拒绝、R3 整数 acceptedRevision）、认证 ACP session（本地分配 ref、收包边界重写 generation/engineInstanceId、payload 原样透传）、ingress/status 端口、kind=connection 历史、membership 视图与 R4 增量发布面（73/73 通过）；隔离传输观测脚本在真实 TLS 回环 direct-WSS listener 上跑通真实准入、hello 握手与 ACP 帧往返（23 项）；D05 closure driver 覆盖两真实引擎 LAN、registry outage 存活、降级报告与无 control 进程；仍无 installed-copy/restart/deployed/cross-device 证据 |
 | `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环无 discovery 的 typed 拒绝、`engineAdapterFor` 单点分发 opencode 与 dsh、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult、stop 与失败路径清理自有 engine home、只接受 adapter 自己声明的 `enforceablePolicies`（缺失即 typed 失败，不回退 `declaredMethods`）；D04 注册与 D05 LAN negotiation 已接入该入口；两条真实 CLI 黑盒：opencode 见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`，dsh 见 `docs/evidence/acp-d03-serve-20261010/black-box-serve-dsh.mjs`；仍无 DSH installed-copy 回放、restart、deployed-entrypoint 与 cross-device 回执 |
+| `teams-acp-d06-control` | runtime | partial | `pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts` | D06 控制守护进程：唯一控制进程生命周期（单 PID、单 WebUI listener、自有 state/data 目录、显式 PID 停止、typed `ALREADY_RUNNING`/`STALE_GENERATION`/`STALE_OWNER`/`PORT_OCCUPIED`/`CREDENTIAL_UNAVAILABLE`/`INVALID_STATUS`）、CLI `control start\|status\|stop`、D00 amendment A2 增量线面（闭合 history 路由与真实 SSE 快照、新增闭合命令种类、permission options 与 reply `optionId`）、A2.7 真实 D05 网络状态端口绑定（`createTeamsStatusPort` 唯一注入点、真实 `connections` 投影、真实 `kind=connection` 持久历史与分页、未注入时 typed 缺席）、A2.6 引擎侧 permission option 投影与回复裁决（optionId 必须来自引擎真实集合，缺失/过期回调不自动批准）；两条真实黑盒：`docs/evidence/acp-d06-control-20261011/black-box-control.mjs`（PART 1，10/10）与 `docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs`（PART 2 真实端口绑定与真实历史行，7/7）。仍为 partial：无 installed-copy 回放、无 restart、无 deployed-entrypoint、无 cross-device 回执、无浏览器证据；`GET /api/v1/history?kind=request` 由 D05 连接历史 owner 拒绝（非第二历史源），`kind=connection` 之外的请求分页未交付 |
 
 D02 交付 OpenCode 引擎 adapter（`opencode-adapter/src/acp-engine.ts`）与 `--serve`
 用户入口（`runtime/acp-serve.ts` + `cli/agentteams.mjs` 的 flag/dispatch）。
@@ -219,6 +220,28 @@ frame 上执行协商，身份只来自已认证的传输事实，`negotiatedAgr
 文件与 `runtime/registry-registration.ts` 的加性改动已由 `teams-source` 的 owned/regression
 路径覆盖（`network/**`、`runtime/**`、`docs/**`），`.appsdk/project.json` 无需改动，
 `minimum_test_count` 保持 304。
+
+D06 交付控制守护进程：`runtime/control-process.ts` 是唯一控制运行时（一个 PID、一个
+WebUI listener、自有 state/data 目录，从不启动引擎子进程、registry 或第二个 daemon），
+`cli/agentteams.mjs` 新增 `control start|status|stop`，`control-protocol/console-api.ts` 与
+`console-host/src/http-api.ts` 承载 D00 amendment A2 的增量线面（闭合 history 路由、真实 SSE
+快照流、新增闭合命令种类、permission `options`/`optionId`）。PART 2 把 A2.7 的真实 D05
+网络状态端口接到唯一注入点：`createTeamsStatusPort`（`network/teams-status.ts`）由控制进程
+自己的真实事实组合（真实 ledger、真实持久连接历史、真实 D04 注册状态、诚实的未确认本地目录
+快照），`connections` 投影与 `kind=connection` 历史因此是真实 owner 读；依赖未注入时
+`createControlOwner`/`createControlHistoryReader` 仍以 typed 缺席失败，绝不伪造连接状态，
+也绝不从 history 推断在线或执行状态。A2.6 的引擎侧投影与回复裁决落在 permission 语义 owner
+`agent-host/acp-host.ts`：引擎真实 `session/request_permission` 的 `options` 在 owner 边界
+投影为冻结 `ConsolePermissionOption`（畸形集合显式拒绝），回复只能选择引擎真实提供的
+`optionId`，缺失或过期回调一律不自动批准。`teams-acp-d06-control` 绑定上述 spec 与两条真实
+黑盒（`docs/evidence/acp-d06-control-20261011/black-box-control.mjs` 10/10、
+`docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs` 7/7）。它保持 partial，
+不升级为 passed/implemented：没有 installed-copy 回放、restart、deployed-entrypoint、
+cross-device 回执或浏览器证据；控制守护进程当前只服务 `kind=connection` 的连接历史，
+`kind=request` 由同一 owner 显式拒绝而不是引入第二个历史源。D06 的改动文件
+（`runtime/**`、`agent-host/**`、`control-protocol/**`、`console-host/**`、`cli/**`、
+`network/teams-status.ts` 的消费）已由 `teams-source` 的 owned/regression 路径覆盖，
+`.appsdk/project.json` 无需改动，`minimum_test_count` 保持 304。
 
 planned/design gate 不标 implemented/passed，也不因声明测试通过而升级。AppSDK 绑定只
 声明真实输入：`.appsdk/project.json` 的 `teams-source` owned/regression 路径现在含

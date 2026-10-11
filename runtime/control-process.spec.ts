@@ -7,6 +7,7 @@ import { processAlive } from './local-ownership.ts'
 import {
   ControlProcessError,
   createControlHistoryReader,
+  createControlNetworkStatus,
   createControlOwner,
   createPollingProjectionSubscriber,
   loadControlIntent,
@@ -17,6 +18,8 @@ import {
   stopControlDaemon,
   type ControlDaemonStatus,
 } from './control-process.ts'
+import { createAcpHistoryStore } from './acp-history-store.ts'
+import { createTeamsConnectionHistory } from '../network/teams-connection-history.ts'
 import type { HistoryQuery, TeamsConnectionStatus } from '../control-protocol/teams-state.ts'
 
 let directory: string
@@ -149,10 +152,12 @@ it('starts the production control entry, serves the authenticated WebUI and stop
   expect((await browser.text()).length).toBeGreaterThan(0)
   expect(browser.headers.get('content-security-policy')).toContain("default-src 'self'")
 
-  // The projection is a real v1 payload from the owner binding.
+  // The projection is a real v1 payload from the owner binding, plus the real D05
+  // connection projection: the daemon has no established channel, so the list is honestly
+  // empty and never a fabricated row.
   const projection = await fetch(origin + '/api/v1/projection', { headers: { authorization: basic } })
   expect(projection.status).toBe(200)
-  expect(await projection.json()).toMatchObject({ version: 1, agents: [], sessions: [], notifications: [], configs: [] })
+  expect(await projection.json()).toMatchObject({ version: 1, agents: [], sessions: [], notifications: [], configs: [], connections: [] })
 
   // The new command kinds are closed at the wire boundary.
   const badCommand = await fetch(origin + '/api/v1/command', { method: 'POST', headers: { authorization: basic, 'content-type': 'application/json' },
@@ -161,12 +166,14 @@ it('starts the production control entry, serves the authenticated WebUI and stop
   const acceptedShape = await fetch(origin + '/api/v1/command', { method: 'POST', headers: { authorization: basic, 'content-type': 'application/json' },
     body: JSON.stringify({ kind: 'connection.connect', agentId: 'control-a' }) })
   expect(acceptedShape.status).toBe(200)
-  expect(await acceptedShape.json()).toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+  // The real D05 read port is bound, so the command reaches it and is refused with the typed
+  // "the frozen read port declares no mutation" outcome instead of a fabricated result.
+  expect(await acceptedShape.json()).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
 
-  // History stays a typed absence while the network status port is unbound.
+  // History is the real D05 connection-history owner's page: a real (empty) read, not an absence.
   const history = await fetch(origin + '/api/v1/history?version=1&limit=5', { headers: { authorization: basic } })
-  expect(history.status).toBe(503)
-  expect(await history.json()).toMatchObject({ code: 'HISTORY_UNAVAILABLE' })
+  expect(history.status).toBe(200)
+  expect(await history.json()).toEqual({ records: [] })
   const malformed = await fetch(origin + '/api/v1/history?version=1&limit=5&kind=work', { headers: { authorization: basic } })
   expect(malformed.status).toBe(400)
 
@@ -329,4 +336,66 @@ it('emits a full snapshot only when the polling projection changes and reports l
   })
   await new Promise(resolveDelay => setTimeout(resolveDelay, 30))
   expect(failed).toEqual(['lost'])
+})
+
+it('binds the real D05 status port from the daemon own owners and stops it explicitly', async () => {
+  const configPath = track(await controlConfig())
+  const intent = await loadControlIntent(configPath)
+  const binding = await createControlNetworkStatus(intent, {})
+  // The real owner read, never a fabricated or inferred connection state.
+  expect(binding.port.connections()).toEqual([])
+  expect(await binding.port.history({ version: 1, kind: 'connection', limit: 5 })).toEqual({ records: [] })
+  // The frozen owner still refuses a widened query instead of rewriting it.
+  await expect(binding.port.history({ version: 1, kind: 'request', limit: 5 }))
+    .rejects.toThrow(/connection records only/)
+  await expect(binding.stop()).resolves.toBeUndefined()
+})
+
+it('serves the real D05 connection projection and connection history over the wire', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-network-${port}`)
+  // One real connection-history record written through the real D05 owner, exactly the way
+  // the daemon itself writes it. The wire must return that real row unchanged.
+  const store = await createAcpHistoryStore({ directory: dataDirectory })
+  const written = await createTeamsConnectionHistory(store).record({
+    event: 'connection.negotiated',
+    agentId: 'peer-b',
+    occurredAt: '2026-10-11T00:00:00.000Z',
+    connectionId: 'connection-1',
+  })
+  expect(written).toMatchObject({ kind: 'connection', sequence: 1 })
+
+  const configPath = track(await controlConfig({ port, dataDirectory }))
+  const started = await startControlDaemon(configPath, { env })
+  const origin = started.url!
+
+  const projection = await fetch(origin + '/api/v1/projection', { headers: { authorization: basic } })
+  expect(projection.status).toBe(200)
+  expect((await projection.json() as { readonly connections?: unknown }).connections).toEqual([])
+
+  const page = await fetch(origin + '/api/v1/history?version=1&kind=connection&limit=5', { headers: { authorization: basic } })
+  expect(page.status).toBe(200)
+  expect(await page.json()).toMatchObject({
+    records: [{ kind: 'connection', event: 'connection.negotiated', agentId: 'peer-b', connectionId: 'connection-1', sequence: 1 }],
+  })
+
+  // The bound history surface is the D05 connection-history owner, so a request-kind query
+  // is refused by that owner instead of being rewritten into a connection page. The daemon
+  // declares no second history source; the console host reports the non-absence owner
+  // failure as "outcome not inferred" and never as a fabricated page.
+  const requestKind = await fetch(origin + '/api/v1/history?version=1&kind=request&limit=5', { headers: { authorization: basic } })
+  expect(requestKind.status).toBe(502)
+  expect(await requestKind.json()).toEqual({ message: 'Console owner request failed; outcome not inferred' })
+
+  // A connection mutation has no owner on the frozen read port: typed refusal, never faked.
+  const command = await fetch(origin + '/api/v1/command', {
+    method: 'POST',
+    headers: { authorization: basic, 'content-type': 'application/json' },
+    body: JSON.stringify({ kind: 'connection.connect', agentId: 'peer-b' }),
+  })
+  expect(command.status).toBe(200)
+  expect(await command.json()).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+
+  expect((await stopControlDaemon(configPath)).state).toBe('stopped')
+  expect(existsSync(dataDirectory)).toBe(false)
 })

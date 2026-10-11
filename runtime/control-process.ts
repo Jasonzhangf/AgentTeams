@@ -33,9 +33,15 @@ import {
   type HistoryPage,
   type HistoryQuery,
   type HistoryReadPort,
-  type TeamsConnectionStatus,
 } from '../control-protocol/teams-state.ts'
+import type { RegistrationStatus } from '../network/registration-client.ts'
+import { createTeamsConnectionHistory } from '../network/teams-connection-history.ts'
+import { createTeamsConnectionLedger } from '../network/teams-ingress.ts'
+import { membershipHistoryEvents, projectTeamsMembership, type TeamsMembershipView } from '../network/teams-membership.ts'
+import { createTeamsStatusPort, type TeamsStatusPort } from '../network/teams-status.ts'
+import { createAcpHistoryStore } from './acp-history-store.ts'
 import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
+import { RegistrationProcessError, startDaemonRegistration, type AgentRegistration } from './registry-registration.ts'
 
 /**
  * Runtime single writer for the control-kind daemon. It composes the frozen v4 control
@@ -43,9 +49,11 @@ import { processAlive, processCommand, processOwnsConfigCommand } from './local-
  * state file, one WebUI listener. It never starts an engine child, a registry, an implicit
  * master, or a second daemon.
  *
- * The Teams connection projection is a structural read of the frozen network status port.
- * This part injects that port and fails with a typed error while it is absent; it never
- * fabricates connection state and never infers online/execution state from history.
+ * The Teams connection projection is a structural read of the real network status port
+ * (`network/teams-status.ts`, D05). The child entry binds that owner from the daemon's own
+ * real network facts; the port stays structurally optional so a daemon without the
+ * dependency fails with a typed error instead of fabricating connection state. It never
+ * infers online or execution state from history.
  *
  * This file is both the parent lifecycle entry and the detached child entry, exactly like
  * `runtime/registry-process.ts`.
@@ -56,17 +64,9 @@ const TOKEN_FLAG = '--start-token'
 const AUTHENTICATION_CHALLENGE = 'Basic realm="AgentTeams", charset="UTF-8"'
 
 /**
- * The frozen structural network status port: exactly the two read methods over the two
- * frozen DTOs, with no extra member and no second implementation. This is a structural
- * alias, not a second port: the network owner's `TeamsStatusPort`
- * (`network/teams-status.ts`, D05) has this identical shape and is assignable to it
- * without an adapter. Once this branch rebases onto the D05 closure, import that owner
- * type directly and delete this alias.
+ * The network status port is the real D05 owner type. The control runtime consumes it
+ * structurally and declares no synonymous port of its own.
  */
-export interface ControlNetworkStatusPort {
-  history(query: HistoryQuery): Promise<HistoryPage>
-  connections(): readonly TeamsConnectionStatus[]
-}
 
 /** One bound Console owner: projection read plus the two mutation ingresses. */
 export interface ControlOwnerBinding {
@@ -450,7 +450,7 @@ function validatedProjection(value: unknown): ConsoleProjectionV1 {
 }
 
 /** Structural history read: the frozen port or a typed absence, never a fabricated page. */
-export function createControlHistoryReader(port: ControlNetworkStatusPort | undefined): HistoryReadPort {
+export function createControlHistoryReader(port: TeamsStatusPort | undefined): HistoryReadPort {
   return {
     async query(query: HistoryQuery): Promise<HistoryPage> {
       // Re-validate through the frozen parser so the runtime never forwards a widened query.
@@ -461,7 +461,7 @@ export function createControlHistoryReader(port: ControlNetworkStatusPort | unde
   }
 }
 
-function projectionWithConnections(projection: ConsoleProjectionV1, port: ControlNetworkStatusPort | undefined): ConsoleProjectionV1 {
+function projectionWithConnections(projection: ConsoleProjectionV1, port: TeamsStatusPort | undefined): ConsoleProjectionV1 {
   if (port === undefined) return projection
   // The additive connection rows reuse the frozen status verbatim. `halfOpen` is true while
   // the transport/negotiation lifecycle has not reached a terminal state.
@@ -473,7 +473,7 @@ function projectionWithConnections(projection: ConsoleProjectionV1, port: Contro
 }
 
 export interface CreateControlOwnerOptions {
-  readonly network?: ControlNetworkStatusPort
+  readonly network?: TeamsStatusPort
   readonly owner?: ControlOwnerBinding
 }
 
@@ -512,6 +512,88 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
         return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'no Session owner is bound to this control daemon' } }
       }
       return await owner.sendSession(target, payload)
+    },
+  }
+}
+
+/** One bound real network read chain: the D05 status port plus its owned stop path. */
+export interface ControlNetworkStatusBinding {
+  readonly port: TeamsStatusPort
+  readonly stop: () => Promise<void>
+}
+
+/** Maps the D04 registration failure vocabulary onto the closed control error vocabulary. */
+function controlCodeForRegistration(error: RegistrationProcessError): ControlProcessErrorCode {
+  switch (error.code) {
+    case 'INVALID_CONFIG': return 'INVALID_CONFIG'
+    case 'UNSUPPORTED_CONFIGURATION': return 'UNSUPPORTED_CONFIGURATION'
+    case 'UNAUTHENTICATED': return 'CREDENTIAL_UNAVAILABLE'
+    case 'NOT_FOUND': return 'INVALID_CONFIG'
+  }
+}
+
+/**
+ * The control daemon's real network read chain (A2.7).
+ *
+ * It composes only D05 owners: the live connection ledger, the durable connection history
+ * over the runtime's own store, the D04 registration client and the membership projector.
+ * The control daemon declares no Teams listener (A2.1), so the ledger stays empty and
+ * `connections()` reports exactly the real membership of a daemon with no established
+ * channel; nothing is fabricated. Real registration transitions are recorded through the
+ * owner's own `membershipHistoryEvents`, so the durable `kind: 'connection'` history is a
+ * record of observed transitions and never a source for online or execution state.
+ */
+export async function createControlNetworkStatus(intent: ControlDaemonIntent, env: NodeJS.ProcessEnv): Promise<ControlNetworkStatusBinding> {
+  const localAgentId = intent.daemon.id
+  let history: ReturnType<typeof createTeamsConnectionHistory>
+  try {
+    history = createTeamsConnectionHistory(await createAcpHistoryStore({ directory: intent.daemon.dataDirectory }))
+  } catch (cause) {
+    throw new ControlProcessError('HISTORY_UNAVAILABLE',
+      `control connection history store could not be opened: ${cause instanceof Error ? cause.message : String(cause)}`, cause)
+  }
+  const ledger = createTeamsConnectionLedger()
+  // The control daemon owns no directory readback: the honest unconfirmed local state, the
+  // same snapshot the serve entry publishes before a directory owner is wired.
+  const directory = { accountId: intent.daemon.accountId, scopeId: intent.daemon.scopeId, generation: 0, hosts: [], peerStates: [] }
+  let registration: AgentRegistration | undefined
+  let previous: TeamsMembershipView | undefined
+  const observe = async (status?: RegistrationStatus): Promise<void> => {
+    const observed = status ?? (registration === undefined ? undefined
+      : registration.state === 'enabled' ? registration.client.status() : registration.status)
+    if (observed === undefined) return
+    const view = projectTeamsMembership({ localAgentId, directory, registration: observed, channels: ledger.list(), observedAt: new Date().toISOString() })
+    for (const event of membershipHistoryEvents(previous, view)) await history.record(event)
+    previous = view
+  }
+  try {
+    registration = await startDaemonRegistration(intent, {
+      env,
+      // A registration transition is the one real membership event this daemon observes.
+      // A failed history write is diagnostic only: it must never break registration.
+      onStatus: status => {
+        void observe(status).catch((error: unknown) => {
+          console.error(`control connection history write failed: ${error instanceof Error ? error.message : String(error)}`)
+        })
+      },
+    })
+  } catch (cause) {
+    if (cause instanceof RegistrationProcessError) throw new ControlProcessError(controlCodeForRegistration(cause), cause.message, cause)
+    throw cause
+  }
+  // Seed the previous view so the next real registration transition is recorded once.
+  await observe()
+  const port = createTeamsStatusPort({
+    ledger,
+    localAgentId,
+    directory,
+    registration: registration.state === 'enabled' ? registration.client.status() : registration.status,
+    history,
+  })
+  return {
+    port,
+    stop: async () => {
+      if (registration !== undefined && registration.state === 'enabled') await registration.client.stop().catch(() => undefined)
     },
   }
 }
@@ -664,15 +746,16 @@ export async function runControlProcess(argv: readonly string[] = process.argv.s
   } as const
   const { staticRoot, uiRoot } = presentationRoots(base.entryPath)
   let server: ReturnType<typeof createConsoleServer> | undefined
+  let network: ControlNetworkStatusBinding | undefined
   try {
     const { username, password, origin } = await loadCredentials(intent, env)
-    // The one injection point for the frozen network status port. Until D05 binds it the
-    // port is absent, so the connection projection stays absent and every dependent surface
-    // fails with a typed absence instead of a guess.
-    const network: ControlNetworkStatusPort | undefined = undefined
-    const client = createControlOwner({ network })
+    // The one injection point for the real network status port (D05 owner). The daemon
+    // binds the owner from its own real network facts; `createControlOwner` and
+    // `createControlHistoryReader` keep the structurally unbound path as a typed absence.
+    network = await createControlNetworkStatus(intent, env)
+    const client = createControlOwner({ network: network.port })
     const authorize = createConsoleAuthorization({ username, password, origin, client })
-    const history = createControlHistoryReader(network)
+    const history = createControlHistoryReader(network.port)
     const projectionRead = async () => await client.readProjection()
     const fixturePath = env.AGENTTEAMS_CONTROL_PROJECTION_FIXTURE
     const events: ConsoleProjectionSubscriber = fixturePath === undefined
@@ -708,6 +791,8 @@ export async function runControlProcess(argv: readonly string[] = process.argv.s
         : error instanceof Error ? error.message : String(error)
     await writeControlState(statePath, { ...base, pid: process.pid, state: 'failed',
       ...(errorCode === undefined ? {} : { errorCode }), error: failure, updatedAt: new Date().toISOString() })
+    // A failed start releases the registration client it opened; it never leaves a socket.
+    await network?.stop().catch(() => undefined)
     throw error
   }
   const scheme = intent.webui.tlsCertRef === undefined ? 'http' : 'https'
@@ -720,6 +805,9 @@ export async function runControlProcess(argv: readonly string[] = process.argv.s
     if (stopping) return
     stopping = new Promise<void>(resolveClose => { server.close(() => resolveClose()) })
       .then(async () => {
+        // Order: the WebUI listener first, then the owned registration client, then the
+        // durable state record. The control daemon never stops a registry or an engine.
+        await network?.stop()
         await writeControlState(statePath, { ...base, pid: process.pid, state: 'stopped', url, updatedAt: new Date().toISOString() })
       })
       .catch((error: unknown) => {

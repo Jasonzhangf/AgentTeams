@@ -161,8 +161,8 @@ v3 文件不会被静默接受，也不会被自动改写。迁移按语义拆�
 | D02/D03 | `EngineAdapter`、`EngineLaunchInput/Spec`、`AcpPolicyIntent`、`resolveAcpPolicy`/`assertAcpAllowed` | 声明真实引擎支持集合，不把 adapter 未实现的能力写进公共声明。 |
 | D04 | `RegistryDaemonIntent`、`REGISTRY_IMPLEMENTATION`、`AdmissionIntent` | 声明注册/租约实现复用的 server/Relay 入口。 |
 | D05 | `teams-connection.ts` 全部 frame（v1）、`TeamsConnectionState`/`TeamsConnectionStatus` | 声明协商完成条件与角色对；不得新增同义 frame。 |
-| D06 | `HistoryQuery`/`HistoryPage`/`HistoryReadPort`、`parseHistoryQuery` | 声明 history 读取 API 的实际 owner 与分页语义。 |
-| D07 | 只消费 `console-api.ts` 的 Console DTO | 不从历史反推在线或执行状态。 |
+| D06 | `HistoryQuery`/`HistoryPage`/`HistoryReadPort`、`parseHistoryQuery`、`TeamsStatusPort`（D05） | 已交付：`kind=connection` 由 D05 `createTeamsStatusPort` 唯一拥有并返回冻结 `HistoryPage`（含 `nextBeforeSequence` 分页）；`kind=request` 由同一 owner 拒绝，不新增第二历史源；控制运行时只在该单点消费该 port，未注入时保持类型化缺席，不从 history 推断在线或执行状态。 |
+| D07 | 只消费 `console-api.ts` 的 Console DTO | 交接面：`control-protocol/console-api.ts` 的 Console DTO（含 `ConsolePermissionOption` 与 permission reply 形状）、认证后的 `GET /api/v1/projection`、`GET /api/v1/history` 与 `GET /api/v1/events` SSE；D07 只读消费这些 owner 投影，不从历史反推在线或执行状态，也不得自建第二历史源或第二个连接端口。 |
 
 ## 9. 示例配置
 
@@ -203,3 +203,67 @@ assigned a default.
 
 The negotiation agreement keeps integer accepted config revisions only. It never
 uses a hashed `AcpPolicySnapshot.revision` or coerces a non-integer value.
+
+## 12. D00 amendment A2 — control daemon wire increment and the status port (2026-10-11)
+
+D06 (PART 1 and PART 2) delivered D00 amendment A2. The version remains `1`;
+the amendment extends the control daemon wire surface additively and binds the
+control runtime to the D05 network status port. The clauses below are carried
+verbatim from `docs/evidence/acp-d06-control-20261011/notes.md` section 4.
+
+> **D00 amendment A2（生效 2026-10-11，由 D06 控制守护进程提出）**
+>
+> A2.1 控制守护进程的线面只作**增量扩展**，不提升 frame version。既有的 v1 payload
+> 继续有效，且未知键仍按闭合契约拒绝。控制守护进程不得为 Teams 连接声明第二个具名
+> 端口，也不得复制 network 模块。
+>
+> A2.2 `GET /api/v1/history?version=1&kind=request|connection&agentId&sessionId&limit&beforeSequence`
+> 返回冻结的 `HistoryPage`。这是唯一放宽"任何 query 参数即拒绝"的路由；其余路由的拒绝
+> 语义逐字不变。
+>
+> A2.3 `GET /api/v1/events` 是真实 SSE 流（`content-type: text/event-stream`、
+> `cache-control: no-store`）。每个事件携带完整 owner 投影快照 `{seq, projection}`，
+> 客户端不维护 delta 存储。同一端点另发一条健康事件，复用冻结的
+> `SessionObservationState` 词表（`live|degraded|lost`）。owner 丢失时服务端关闭流，
+> 且不得伪造存活状态。
+>
+> A2.4 新增闭合命令种类，沿用既有 `expectedRevision` CAS 模式：
+> `connection.connect{agentId}`、`connection.disconnect{agentId}`、
+> `network.membership.apply{expectedRevision, members:[{agentId, role}]}`，其中 `role`
+> 复用冻结的 `RelationRole`。未知种类仍失败。
+>
+> A2.5 增量可选投影字段只从既有 owner 真源投影：agent 行可带 `engine?` 与
+> `lastSeenAt?`；投影可带一个复用冻结 `TeamsMembershipView`（或冻结
+> `TeamsConnectionStatus` 列表 + `halfOpen` + 可选 `localRole`）的 connection 字段。
+> 不得铸造同义词。
+>
+> A2.6 pending permission 事件可带引擎提供的
+> `options: readonly {optionId, name, kind}[]`，回复可携带所选引擎 `optionId`。
+> 不得伪造 option 集合，也不得为缺失或过期的回调自动批准。
+>
+> A2.7 控制运行时**结构性地**消费网络状态端口，仅使用冻结类型
+> `{ history(query: HistoryQuery): Promise<HistoryPage>; connections(): readonly TeamsConnectionStatus[] }`。
+> 该依赖未注入时必须以类型化错误显式失败；不得伪造连接状态，也不得从 history 推断
+> 在线或执行状态。
+
+### 12.1 D06 PART 2 的实际落点
+
+- A2.7：唯一注入点是 `runtime/control-process.ts` 的 `createControlNetworkStatus(intent, env)`。
+  它组合真实 owner 后调用 D05 的 `createTeamsStatusPort`（`network/teams-status.ts`），
+  不声明本地 alias、不复制 network 模块。控制守护进程不声明 Teams listener，因此
+  `connections()` 在无真实 channel 时是诚实的空列表；`kind=connection` 读真实持久历史，
+  `kind=request` 由同一 owner 以非缺席失败拒绝（HTTP transport 报
+  `Console owner request failed; outcome not inferred`），不引入第二个历史源。
+  依赖未注入时 `createControlOwner`/`createControlHistoryReader` 仍以 `UNAVAILABLE` /
+  `HISTORY_UNAVAILABLE` 类型化缺席失败。
+- A2.6：owner 是 `agent-host/acp-host.ts`。`projectPermissionOptions` 把引擎真实
+  `session/request_permission` 的 `options` 逐字投影为冻结 `ConsolePermissionOption`
+  （`allow_once`/`allow_always` → `once`/`always`，`reject_once`/`reject_always` → `reject`），
+  引擎未提供或提供空集合时返回无 option 集，畸形或重复 option 集以 `INVALID_ACP_FRAME`
+  在投递前拒绝。`adjudicatePermissionReply` 只接受引擎真实提供的 `optionId`；未知
+  outcome、空集合下的 selected 与未提供过的 `optionId` 都以类型化错误拒绝，因此缺失或
+  过期回调永远不会变成批准。
+- A2.1–A2.5 的线面契约由 PART 1 交付，本增量不改变它们的语义；本节只记录 A2 的题面。
+
+`teams-acp-d06-control` 绑定本节的 spec 与真实黑盒证据，状态为 `partial`：没有
+installed-copy 回放、restart、deployed-entrypoint、跨设备回执或浏览器证据。

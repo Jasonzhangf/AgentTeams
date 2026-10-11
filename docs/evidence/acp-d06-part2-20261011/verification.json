@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "unit": "acp-d06-part2-20261011",
+  "task_id": "task-10",
+  "delivery": "D06 control daemon PART 2: real D05 status-port binding at the single injection point, engine-side permission optionId decision path, D00 amendment A2 verbatim governance/docs binding, D07 handoff surface",
+  "branch": "codex/acp-d06-part2-20261011",
+  "worktree": "/Volumes/Intel/playground/agentteams/acp-d06-part2-20261011",
+  "base_commit": "448813a",
+  "origin_main_merge_base": "cf551b1",
+  "recorded_at": "2026-10-11",
+  "commands": [
+    {
+      "id": "typecheck",
+      "command": "pnpm typecheck",
+      "exit_code": 0,
+      "observed": "root tsc --noEmit and ui/teams-console tsc -p tsconfig.json --noEmit both succeeded"
+    },
+    {
+      "id": "build",
+      "command": "pnpm build",
+      "exit_code": 0,
+      "observed": "full build: console-host assets, ui/teams-console build, build:runtime tsc -p tsconfig.runtime.json"
+    },
+    {
+      "id": "d06-spec-bundle",
+      "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts",
+      "exit_code": 0,
+      "test_files_passed": 6,
+      "test_files_total": 6,
+      "tests_passed": 115,
+      "tests_total": 115,
+      "per_file": {
+        "runtime/acp-serve.spec.ts": 26,
+        "runtime/control-process.spec.ts": 14,
+        "cli/agentteams.spec.ts": 33,
+        "agent-host/acp-host.spec.ts": 23,
+        "console-host/tests/http-api.spec.ts": 7,
+        "control-protocol/console-api.spec.ts": 12
+      }
+    },
+    {
+      "id": "d05-focused-gate",
+      "command": "pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts control-protocol/teams-connection.spec.ts",
+      "exit_code": 0,
+      "test_files_passed": 9,
+      "test_files_total": 9,
+      "tests_passed": 73,
+      "tests_total": 73
+    },
+    {
+      "id": "black-box-part1-control",
+      "command": "node docs/evidence/acp-d06-control-20261011/black-box-control.mjs",
+      "exit_code": 0,
+      "checks_passed": 10,
+      "checks_total": 10,
+      "observed": "PART 1 control lifecycle with the now-bound real D05 port: real connections array, UNSUPPORTED_OPERATION on a connection mutation, real empty kind=connection history page, typed PORT_OCCUPIED, explicit-PID stop"
+    },
+    {
+      "id": "black-box-part2-control",
+      "command": "node docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs",
+      "exit_code": 0,
+      "checks_passed": 7,
+      "checks_total": 7,
+      "observed": "real bound D05 port writes durable rows, real CLI start/status/stop, real projection and history pagination, typed refusal of a connection mutation, explicit-PID cleanup"
+    },
+    {
+      "id": "black-box-part2-permission-option",
+      "command": "node docs/evidence/acp-d06-part2-20261011/black-box-permission-option.mjs",
+      "exit_code": 0,
+      "checks_passed": 10,
+      "checks_total": 10,
+      "observed": "real `agentteams --serve opencode` entry, real installed OpenCode engine, real ACP client over the loopback listener: engine option set with real ACP kinds, verbatim frozen-vocabulary projection, foreign optionId refused with one durable callback.denied and no forwarded reply, the engine's own optionId then forwarded unchanged and the tool really runs, a fresh callback still arrives, a stale callback id approves nothing, explicit-PID stop"
+    }
+  ],
+  "red_green": [
+    {
+      "id": "a2.6-reply-adjudication-unit",
+      "behavior": "a permission reply selecting an optionId the engine never offered is refused instead of forwarded as an approval",
+      "red": {
+        "mutation": "receiveClientResponse delivered `frame` unchanged instead of `adjudicatePermissionReply(frame.result, pending.permissionOptions)`",
+        "command": "pnpm exec vitest run --no-file-parallelism agent-host/acp-host.spec.ts -t 'permission option decision path'",
+        "exit_code": 1,
+        "observed": "Tests 1 failed | 3 passed | 19 skipped; AssertionError: promise resolved \"undefined\" instead of rejecting"
+      },
+      "green": {
+        "mutation": "restored",
+        "command": "pnpm exec vitest run --no-file-parallelism agent-host/acp-host.spec.ts -t 'permission option decision path'",
+        "exit_code": 0,
+        "observed": "Tests 4 passed | 19 skipped"
+      }
+    },
+    {
+      "id": "a2.6-denial-durable-fact-boundary",
+      "behavior": "a refused permission reply is recorded as one durable callback.denied fact and never as a forwarded callback.reply",
+      "red": {
+        "mutation": "the durable callback.denied append in the refusal branch of receiveClientResponse was removed, then `pnpm build:runtime`",
+        "command": "node docs/evidence/acp-d06-part2-20261011/black-box-permission-option.mjs",
+        "exit_code": 1,
+        "observed": "the refusal left no durable callback.denied fact; printed real history events ended at callback.dispatched"
+      },
+      "green": {
+        "mutation": "restored, then `pnpm build:runtime`",
+        "command": "node docs/evidence/acp-d06-part2-20261011/black-box-permission-option.mjs",
+        "exit_code": 0,
+        "observed": "10/10 PASS"
+      }
+    },
+    {
+      "id": "a2.7-real-status-port-binding",
+      "behavior": "the control runtime consumes the real D05 TeamsStatusPort at its single injection point, and a missing port stays a typed absence",
+      "red": {
+        "mutation": "the injection point did not bind the real owner (the pre-PART-2 state returned a typed absence)",
+        "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts",
+        "exit_code": 1,
+        "observed": "the projection carried no connections array, a connection mutation was answered UNAVAILABLE, and a kind=connection history query was answered 503 HISTORY_UNAVAILABLE instead of the owner's real empty page"
+      },
+      "green": {
+        "mutation": "restored to `network = await createControlNetworkStatus(intent, env)` with `createTeamsStatusPort`",
+        "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts",
+        "exit_code": 0,
+        "observed": "14/14 passed, including the two added real-port tests"
+      }
+    }
+  ],
+  "artifacts": {
+    "notes": "docs/evidence/acp-d06-part2-20261011/notes.md",
+    "black_boxes": [
+      "docs/evidence/acp-d06-part2-20261011/black-box-permission-option.mjs",
+      "docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs",
+      "docs/evidence/acp-d06-control-20261011/black-box-control.mjs"
+    ],
+    "governance": [
+      "docs/design/teams-acp-daemon-config-v4.md",
+      "docs/development-governance.md",
+      "docs/architecture/function-map.json",
+      "docs/architecture/mainline-call-map.json",
+      "docs/architecture/module-registry.json",
+      "docs/architecture/verification-map.json"
+    ]
+  },
+  "gate": {
+    "gate_id": "teams-acp-d06-control",
+    "status": "partial",
+    "owner": "runtime",
+    "bound_in": "docs/architecture/verification-map.json",
+    "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts"
+  },
+  "non_claims": [
+    "no installed-copy replay",
+    "no restart",
+    "no deployed-entrypoint replay",
+    "no cross-device receipt",
+    "no browser evidence",
+    "no merge and no push in this round"
+  ]
+}

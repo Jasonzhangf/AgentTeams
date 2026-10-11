@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AcpFrame } from '../control-protocol/acp.ts'
 import type { AcpDuplex } from '../control-protocol/engine.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
+import { adjudicatePermissionReply, projectPermissionOptions } from '../agent-host/acp-host.ts'
 import { buildDirectWssRoutePlan } from '../network/route-plan.ts'
 import { connectDirectWssTarget } from '../network/direct-route.ts'
 import { negotiatedAgreement, runTeamsNegotiation } from '../network/teams-negotiation.ts'
@@ -877,7 +878,14 @@ describe.skipIf(!engineAvailable)('--serve opencode entry with the installed eng
     const callback = await client.awaitFrame(frame => frame.method === 'session/request_permission', 60_000)
     const options = (callback.params as Record<string, unknown>).options as readonly { optionId: string }[]
     expect(options.map(option => option.optionId)).toEqual(['once', 'always', 'reject'])
-    await client.send({ jsonrpc: '2.0', id: callback.id as string, result: { outcome: { outcome: 'selected', optionId: 'once' } } })
+    // A2.6: the real engine option set projects verbatim into the Console option vocabulary,
+    // and only an option the engine really offered can be selected back to it.
+    const projected = projectPermissionOptions(callback)
+    expect(projected?.map(option => option.optionId)).toEqual(['once', 'always', 'reject'])
+    expect(projected?.map(option => option.kind)).toEqual(['once', 'always', 'reject'])
+    expect(() => adjudicatePermissionReply({ outcome: { outcome: 'selected', optionId: 'never-offered' } }, projected))
+      .toThrowError(/not an option the engine offered/)
+    await client.send({ jsonrpc: '2.0', id: callback.id as string, result: adjudicatePermissionReply({ outcome: { outcome: 'selected', optionId: 'once' } }, projected) })
     const result = await client.awaitFrame(frame => frame.id === 'prompt-1')
     expect((result.result as Record<string, unknown>).stopReason).toBe('end_turn')
     expect(provider.calls.length).toBeGreaterThanOrEqual(3)

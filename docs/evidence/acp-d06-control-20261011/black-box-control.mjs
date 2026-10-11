@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * D06 control-daemon black box (PART 1).
+ * D06 control-daemon black box (PART 1 + PART 2).
  *
  * Real entrypoints only:
  *   - the real CLI `cli/agentteams.mjs control start|status|stop`
@@ -10,6 +10,12 @@
  * It proves: the exact Basic challenge, served frozen UI bytes, the closed history
  * parse, a real SSE stream that closes on owner loss, the closed validation of the new
  * command kinds, and a clean CLI stop that leaves neither pid nor listening port.
+ *
+ * PART 2 binds the real D05 network status port, so the additive `connections` field and
+ * the `kind: connection` history page are real owner reads instead of typed absences. The
+ * three assertions that encoded the PART 1 unbound-port limitation were updated here; the
+ * stronger PART 2 evidence (a real durable connection row returned over the wire) lives in
+ * `docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs`.
  *
  * Cleanup is explicit-PID only. It never uses pkill/killall/kill $(...).
  */
@@ -209,8 +215,12 @@ allowed = ["master", "peer"]
   assert.equal(projectionBody.version, 1)
   assert.deepEqual(projectionBody.agents, [])
   assert.deepEqual(projectionBody.sessions, [])
-  assert.equal('connections' in projectionBody, false, 'connection state must stay absent while the network port is unbound')
-  check('projection stays an honest empty v1 payload with no fabricated connections')
+  // PART 2 (A2.7): the real D05 network status port is bound, so the additive connection
+  // projection is a real owner read. This daemon has no established channel, so the list is
+  // honestly empty and is never an absent field or a fabricated row.
+  assert.ok(Array.isArray(projectionBody.connections), 'the bound network port must project a real connections array')
+  assert.deepEqual(projectionBody.connections, [], 'no connection exists, so none may be reported')
+  check('projection carries the real D05 connection projection and fabricates no connection')
 
   // 6. The new command kinds are closed at the wire boundary; the accepted shape fails typed.
   const rejected = [
@@ -240,11 +250,12 @@ allowed = ["master", "peer"]
     })
     assert.equal(response.status, 200, `expected 200 for ${JSON.stringify(body)}, got ${response.status}`)
     const result = await response.json()
-    // With no network status port the command is refused with a typed absence, never faked.
+    // PART 2 (A2.7): the frozen D05 read port declares no mutation, so a connection command
+    // is refused typed. The daemon never guesses or fakes a connection outcome.
     assert.equal(result.ok, false, `expected a typed refusal for ${JSON.stringify(body)}`)
-    assert.equal(result.error.code, 'UNAVAILABLE')
+    assert.equal(result.error.code, 'UNSUPPORTED_OPERATION')
   }
-  check('new command kinds are closed at the wire boundary and fail typed while the network port is unbound',
+  check('new command kinds are closed at the wire boundary and the bound read port refuses mutations typed',
     `${rejected.length} refused shapes, 3 typed refusals`)
 
   // 7. History: a closed query parse plus a typed owner absence.
@@ -263,15 +274,22 @@ allowed = ["master", "peer"]
     const response = await fetch(origin + path, { headers: { authorization: basic } })
     assert.equal(response.status, 400, `expected 400 for ${path}, got ${response.status}`)
   }
-  const historyAbsent = await fetch(`${origin}/api/v1/history?version=1&kind=request&limit=5`, { headers: { authorization: basic } })
-  assert.equal(historyAbsent.status, 503)
-  const absenceBody = await historyAbsent.json()
-  assert.equal(absenceBody.code, 'HISTORY_UNAVAILABLE')
+  // PART 2 (A2.7): the bound history surface is the real D05 connection-history owner, so a
+  // connection query returns a real (empty) HistoryPage from durable storage. A request-kind
+  // query is refused by that owner instead of being rewritten, and the control daemon
+  // declares no second history source; the transport reports the non-absence owner failure
+  // as "outcome not inferred" and never fabricates a page.
+  const historyPage = await fetch(`${origin}/api/v1/history?version=1&kind=connection&limit=5`, { headers: { authorization: basic } })
+  assert.equal(historyPage.status, 200)
+  assert.deepEqual(await historyPage.json(), { records: [] })
+  const historyRefused = await fetch(`${origin}/api/v1/history?version=1&kind=request&limit=5`, { headers: { authorization: basic } })
+  assert.equal(historyRefused.status, 502)
+  assert.deepEqual(await historyRefused.json(), { message: 'Console owner request failed; outcome not inferred' })
   // The relaxation is scoped: every other route keeps the blanket refusal.
   assert.equal((await fetch(`${origin}/api/v1/projection?agentId=a`, { headers: { authorization: basic } })).status, 400)
   assert.equal((await fetch(`${origin}/api/v1/events?agentId=a`, { headers: { authorization: basic } })).status, 400)
-  check('history keeps a closed query parse and a typed HISTORY_UNAVAILABLE absence',
-    `${historyClosed.length} refused queries, 1 typed absence`)
+  check('history reads the real D05 connection owner and keeps a closed query parse',
+    `${historyClosed.length} refused queries, 1 real empty page, 1 owner refusal`)
 
   // 8. SSE: a real stream with >= 2 projection frames that closes on owner loss.
   const stream = await fetch(`${origin}/api/v1/events`, { headers: { authorization: basic } })

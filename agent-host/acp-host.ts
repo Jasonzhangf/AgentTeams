@@ -9,6 +9,7 @@ import type {
   HistoryRecord,
 } from '../control-protocol/acp.ts'
 import { AcpError, parseAcpFrame } from '../control-protocol/acp.ts'
+import type { ConsolePermissionOption } from '../control-protocol/console-api.ts'
 import type { EngineHandle } from '../control-protocol/engine.ts'
 import type { AcpPolicySnapshot } from '../config/acp-policy.ts'
 import type { AcpHistoryPort } from './acp-history.ts'
@@ -87,6 +88,8 @@ interface PendingCallback {
   readonly sessionId?: string
   readonly method: string
   readonly recordId: string
+  /** The engine's real permission choice set; absent when the engine offered none. */
+  readonly permissionOptions?: readonly ConsolePermissionOption[]
 }
 
 interface ActivePrompt {
@@ -220,6 +223,79 @@ function faultData(fault: AcpFault): Record<string, JsonValue> {
  */
 export function rpcErrorFrame(id: AcpRpcId, fault: AcpFault): AcpFrame {
   return { jsonrpc: '2.0', id, error: { code: -32000, message: fault.message, data: faultData(fault) } }
+}
+
+/**
+ * The ACP `session/request_permission` option kinds, in the exact vocabulary the engine
+ * sends. Each maps onto the frozen Console decision vocabulary without inventing a value.
+ */
+const ACP_PERMISSION_OPTION_KINDS: Readonly<Record<string, ConsolePermissionOption['kind']>> = {
+  allow_once: 'once',
+  allow_always: 'always',
+  reject_once: 'reject',
+  reject_always: 'reject',
+}
+
+function permissionParams(frame: AcpFrame): Record<string, unknown> {
+  const params = frame.params
+  if (!isRecord(params)) throw new AcpError('INVALID_ACP_FRAME', 'session/request_permission requires object params')
+  return params
+}
+
+/**
+ * Engine-side projection of the real engine-supplied permission choice set (A2.6).
+ *
+ * The option set is read verbatim from the engine's own `session/request_permission`
+ * params: this function never mints an option the engine did not offer, and it returns
+ * `undefined` when the engine offered none (the field is additive and stays absent). A
+ * malformed option fails explicitly at this owning boundary instead of reaching a
+ * controller as an unactionable or ambiguous choice.
+ */
+export function projectPermissionOptions(frame: AcpFrame): readonly ConsolePermissionOption[] | undefined {
+  const raw = permissionParams(frame).options
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) throw new AcpError('INVALID_ACP_FRAME', 'session/request_permission options must be an array')
+  if (raw.length === 0) return undefined
+  const seen = new Set<string>()
+  return raw.map(entry => {
+    if (!isRecord(entry)) throw new AcpError('INVALID_ACP_FRAME', 'session/request_permission option must be an object')
+    const optionId = requireText(entry.optionId, 'permission option.optionId')
+    const name = requireText(entry.name, 'permission option.name')
+    const kind = typeof entry.kind === 'string' ? ACP_PERMISSION_OPTION_KINDS[entry.kind] : undefined
+    if (kind === undefined) {
+      throw new AcpError('INVALID_ACP_FRAME', `permission option.kind ${String(entry.kind)} is not an ACP permission option kind`)
+    }
+    if (seen.has(optionId)) throw new AcpError('INVALID_ACP_FRAME', `permission optionId ${optionId} is offered twice`)
+    seen.add(optionId)
+    return { optionId, name, kind }
+  })
+}
+
+/**
+ * Adjudicates one controller reply against the engine's real option set (A2.6).
+ *
+ * The engine is answered with a selection it really offered. A selection the engine never
+ * offered, a selection when the engine offered no options, or an unknown outcome fails
+ * typed; a missing or stale callback never becomes an approval and the host never supplies
+ * an `optionId` of its own.
+ */
+export function adjudicatePermissionReply(
+  result: unknown,
+  options: readonly ConsolePermissionOption[] | undefined,
+): { readonly outcome: { readonly outcome: 'selected'; readonly optionId: string } | { readonly outcome: 'cancelled' } } {
+  if (!isRecord(result)) throw new AcpError('INVALID_ACP_FRAME', 'permission reply result must be an object')
+  const outcome = result.outcome
+  if (!isRecord(outcome)) throw new AcpError('INVALID_ACP_FRAME', 'permission reply result requires an outcome object')
+  if (outcome.outcome === 'cancelled') return { outcome: { outcome: 'cancelled' } }
+  if (outcome.outcome !== 'selected') {
+    throw new AcpError('INVALID_ACP_FRAME', `permission reply outcome ${String(outcome.outcome)} is not selected or cancelled`)
+  }
+  const optionId = requireText(outcome.optionId, 'permission reply outcome.optionId')
+  if (options === undefined || !options.some(option => option.optionId === optionId)) {
+    throw new AcpError('INVALID_ACP_FRAME',
+      `permission reply optionId ${optionId} is not an option the engine offered for this callback`)
+  }
+  return { outcome: { outcome: 'selected', optionId } }
 }
 
 function assertRefShape(ref: unknown): asserts ref is AcpChannelRef {
@@ -636,6 +712,29 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     if (pending.channelKey !== channel.key) {
       throw new AcpError('SESSION_OWNERSHIP_CONFLICT', 'callback response belongs to another channel')
     }
+    // The engine's real option set adjudicates the controller's selection (A2.6). A reply
+    // that selects an option the engine never offered, or that selects anything while the
+    // engine offered no options, fails typed before the pending callback is consumed, so a
+    // rejected reply never becomes an approval and the callback stays answerable. The
+    // refusal is recorded as one durable callback.denied fact instead of being dropped.
+    let delivered = frame
+    if (pending.method === 'session/request_permission' && Object.hasOwn(frame, 'result')) {
+      try {
+        delivered = { ...frame, result: adjudicatePermissionReply(frame.result, pending.permissionOptions) as JsonValue }
+      } catch (cause) {
+        await safeAppend(historyEntry('callback.denied', {
+          connectionId: channel.ref.connectionId,
+          channelId: channel.ref.channelId,
+          engineInstanceId,
+          sessionId: pending.sessionId,
+          requestRecordId: pending.recordId,
+          frame,
+          outcome: 'denied',
+          error: faultFrom(cause, 'CALLBACK_UNAVAILABLE'),
+        }))
+        throw cause
+      }
+    }
     outwardCallbacks.delete(idKey)
     channel.pendingCallbacks.delete(idKey)
     await safeAppend(historyEntry('callback.reply', {
@@ -644,11 +743,11 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       engineInstanceId,
       sessionId: pending.sessionId,
       requestRecordId: pending.recordId,
-      frame,
+      frame: delivered,
     }))
     if (engineEnded) throw new AcpError('ENGINE_UNAVAILABLE', 'ACP engine is not available')
     try {
-      await input.handle.acp.send({ ...frame, id: pending.engineId })
+      await input.handle.acp.send({ ...delivered, id: pending.engineId })
     } catch (cause) {
       await safeAppend(historyEntry('callback.send.failed', {
         connectionId: channel.ref.connectionId,
@@ -656,7 +755,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
         engineInstanceId,
         sessionId: pending.sessionId,
         requestRecordId: pending.recordId,
-        frame,
+        frame: delivered,
         outcome: 'unknown',
         error: faultFrom(cause, 'ENGINE_UNAVAILABLE'),
       }))
@@ -723,6 +822,20 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     const method = methodOf(frame)
     if (method === undefined) throw new AcpError('INVALID_ACP_FRAME', 'engine callback requires a method')
     const engineId = frame.id as AcpRpcId
+    // The engine's real permission choice set is projected once, at the owning boundary,
+    // before the callback reaches a controller (A2.6). A malformed set is refused here and
+    // never forwarded as an unactionable permission request.
+    let permissionOptions: readonly ConsolePermissionOption[] | undefined
+    if (method === 'session/request_permission') {
+      try {
+        permissionOptions = projectPermissionOptions(frame)
+      } catch (cause) {
+        const fault = faultFrom(cause, 'CALLBACK_UNAVAILABLE')
+        await safeAppend(historyEntry('callback.denied', { engineInstanceId, frame, outcome: 'denied', error: fault }))
+        await respondCallbackError(engineId, fault)
+        return
+      }
+    }
     try {
       input.assertAllowed({ policy: input.policy, direction: 'from-engine', frame })
     } catch (cause) {
@@ -764,7 +877,8 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       await respondCallbackError(engineId, faultFrom(cause, 'HISTORY_UNAVAILABLE'))
       return
     }
-    const pending: PendingCallback = { engineId, outwardId, channelKey: target.key, sessionId, method, recordId: entry.recordId }
+    const pending: PendingCallback = { engineId, outwardId, channelKey: target.key, sessionId, method, recordId: entry.recordId,
+      ...(permissionOptions === undefined ? {} : { permissionOptions }) }
     outwardCallbacks.set(idKey, pending)
     target.pendingCallbacks.set(idKey, pending)
     if (!enqueue(target, { ...frame, id: outwardId })) {

@@ -5,7 +5,7 @@ import type { AcpDuplex, EngineHandle } from '../control-protocol/engine.ts'
 import { assertAcpAllowed, extractAcpCapabilities, resolveAcpPolicy } from '../config/acp-policy.ts'
 import type { AcpHistoryPort } from './acp-history.ts'
 import type { AcpPolicyAssert } from './acp-host.ts'
-import { createAcpHost } from './acp-host.ts'
+import { adjudicatePermissionReply, createAcpHost, projectPermissionOptions } from './acp-host.ts'
 
 type ClosedResult = { readonly kind: 'eof' } | { readonly kind: 'failed'; readonly error: AcpFault }
 
@@ -282,7 +282,7 @@ describe('createAcpHost', () => {
       jsonrpc: '2.0',
       id: 'engine-callback-1',
       method: 'session/request_permission',
-      params: { sessionId: 'session-1', options: [{ optionId: 'allow', name: 'Allow' }] },
+      params: { sessionId: 'session-1', options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }] },
     })
     await flush()
     const callback = (await readFrames(fixture, ref1))[0]
@@ -522,7 +522,7 @@ describe('createAcpHost', () => {
       jsonrpc: '2.0',
       id: 'engine-callback-overflow',
       method: 'session/request_permission',
-      params: { sessionId: 'session-1', options: [{ optionId: 'allow', name: 'Allow' }] },
+      params: { sessionId: 'session-1', options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }] },
     })
     await flush()
     const cancellation = fixture.duplex.sent[fixture.duplex.sent.length - 1]
@@ -572,5 +572,120 @@ describe('createAcpHost', () => {
       ...ref1,
       frame: { jsonrpc: '2.0', id: 4, method: 'session/new', params: {} },
     })).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+})
+
+describe('permission option decision path (A2.6)', () => {
+  const engineCallback: AcpFrame = {
+    jsonrpc: '2.0',
+    id: 'engine-permission',
+    method: 'session/request_permission',
+    params: {
+      sessionId: 'session-1',
+      toolCall: { toolCallId: 'call-1', title: 'read' },
+      options: [
+        { optionId: 'once', name: 'Allow once', kind: 'allow_once' },
+        { optionId: 'always', name: 'Allow always', kind: 'allow_always' },
+        { optionId: 'reject', name: 'Reject', kind: 'reject_once' },
+      ],
+    },
+  }
+
+  it('projects the engine-supplied option set verbatim and never mints an option', () => {
+    expect(projectPermissionOptions(engineCallback)).toEqual([
+      { optionId: 'once', name: 'Allow once', kind: 'once' },
+      { optionId: 'always', name: 'Allow always', kind: 'always' },
+      { optionId: 'reject', name: 'Reject', kind: 'reject' },
+    ])
+    // An engine that offers no options gets no fabricated set: the additive field stays absent.
+    expect(projectPermissionOptions({ jsonrpc: '2.0', id: 'x', method: 'session/request_permission', params: { sessionId: 's', options: [] } })).toBeUndefined()
+    expect(projectPermissionOptions({ jsonrpc: '2.0', id: 'x', method: 'session/request_permission', params: { sessionId: 's' } })).toBeUndefined()
+    // A malformed or ambiguous engine set fails at this owning boundary.
+    for (const params of [
+      { sessionId: 's', options: [{ optionId: 'a', name: 'A', kind: 'maybe' }] },
+      { sessionId: 's', options: [{ optionId: '', name: 'A', kind: 'allow_once' }] },
+      { sessionId: 's', options: [{ optionId: 'a', name: 'A', kind: 'allow_once' }, { optionId: 'a', name: 'B', kind: 'reject_once' }] },
+      { sessionId: 's', options: [{ optionId: 'a', name: 'A' }] },
+      { sessionId: 's', options: 'allow' },
+    ]) {
+      expect(() => projectPermissionOptions({ jsonrpc: '2.0', id: 'x', method: 'session/request_permission', params }))
+        .toThrowError(/INVALID_ACP_FRAME|permission option/)
+    }
+  })
+
+  it('adjudicates a reply against the real option set and never auto-approves', () => {
+    const options = projectPermissionOptions(engineCallback)!
+    expect(adjudicatePermissionReply({ outcome: { outcome: 'selected', optionId: 'always' } }, options))
+      .toEqual({ outcome: { outcome: 'selected', optionId: 'always' } })
+    expect(adjudicatePermissionReply({ outcome: { outcome: 'cancelled' } }, options))
+      .toEqual({ outcome: { outcome: 'cancelled' } })
+    // An option the engine never offered is refused; the host never invents a selection.
+    expect(() => adjudicatePermissionReply({ outcome: { outcome: 'selected', optionId: 'never-offered' } }, options))
+      .toThrowError(/not an option the engine offered/)
+    // Selecting anything while the engine offered no options is refused, not guessed.
+    expect(() => adjudicatePermissionReply({ outcome: { outcome: 'selected', optionId: 'once' } }, undefined))
+      .toThrowError(/not an option the engine offered/)
+    for (const result of [{ outcome: { outcome: 'selected' } }, { outcome: { outcome: 'approved' } }, { outcome: 'selected' }, 'selected']) {
+      expect(() => adjudicatePermissionReply(result, options)).toThrowError(/permission reply/)
+    }
+  })
+
+  it('delivers the engine optionId end to end and refuses a foreign selection', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    fixture.duplex.push(engineCallback)
+    await flush()
+    const callback = (await readFrames(fixture, ref1))[0]
+    expect(projectPermissionOptions(callback)).toEqual([
+      { optionId: 'once', name: 'Allow once', kind: 'once' },
+      { optionId: 'always', name: 'Allow always', kind: 'always' },
+      { optionId: 'reject', name: 'Reject', kind: 'reject' },
+    ])
+
+    // A selection the engine never offered is refused and the callback stays answerable.
+    await expect(fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: callback.id as string, result: { outcome: { outcome: 'selected', optionId: 'foreign' } } },
+    })).rejects.toMatchObject({ code: 'INVALID_ACP_FRAME' })
+    expect(fixture.duplex.sent.some(frame => frame.id === 'engine-permission')).toBe(false)
+
+    // The engine's own optionId reaches the engine unchanged.
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: callback.id as string, result: { outcome: { outcome: 'selected', optionId: 'always' } } },
+    })
+    const forwarded = fixture.duplex.sent[fixture.duplex.sent.length - 1]
+    expect(forwarded.id).toBe('engine-permission')
+    expect(forwarded.result).toEqual({ outcome: { outcome: 'selected', optionId: 'always' } })
+    expect(fixture.history.records.some(record => record.event === 'callback.reply')).toBe(true)
+  })
+
+  it('refuses a malformed engine option set instead of forwarding an unactionable callback', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      id: 'engine-permission-bad',
+      method: 'session/request_permission',
+      params: { sessionId: 'session-1', options: [{ optionId: 'a', name: 'A', kind: 'maybe' }] },
+    })
+    await flush()
+    expect(await readFrames(fixture, ref1)).toHaveLength(0)
+    const refusal = fixture.duplex.sent[fixture.duplex.sent.length - 1]
+    expect(refusal.id).toBe('engine-permission-bad')
+    expect(refusal.error).toBeDefined()
+    expect(fixture.history.records.some(record => record.event === 'callback.denied' && record.outcome === 'denied')).toBe(true)
   })
 })
