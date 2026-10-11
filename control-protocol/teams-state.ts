@@ -1,5 +1,5 @@
-import type { AcpFault } from './acp.ts'
-import type { HistoryRecord } from './acp.ts'
+import { AcpError, parseAcpFault } from './acp.ts'
+import type { AcpFault, HistoryRecord } from './acp.ts'
 import type { JsonValue } from './agent-services.ts'
 import type { RelationRole } from './teams-connection.ts'
 
@@ -74,7 +74,9 @@ export interface HistoryReadPort {
 }
 
 function fail(message: string): never {
-  throw new Error(message)
+  // Malformed DTOs reuse the single fault carrier; this module declares no
+  // second error class or code vocabulary.
+  throw new AcpError('INVALID_ACP_FRAME', message)
 }
 
 function isRecord(value: unknown): value is Record<string, JsonValue> {
@@ -115,10 +117,9 @@ export function parseTeamsConnectionStatus(value: unknown): TeamsConnectionStatu
     fail('Teams connection status role must be master or peer')
   }
   if (state === 'failed') {
-    if (!isRecord(value.error)) fail('Teams connection status requires an error when failed')
-    if (typeof value.error.code !== 'string' || typeof value.error.message !== 'string') {
-      fail('Teams connection status error must carry code and message')
-    }
+    if (value.error === undefined) fail('Teams connection status requires an error when failed')
+    // The fault shape has one owner; reuse its parser instead of re-checking fields.
+    parseAcpFault(value.error)
   } else if (value.error !== undefined) {
     fail('Teams connection status carries an error only when failed')
   }

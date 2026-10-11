@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyDaemonCliOverrides,
   compileDaemonIntent,
+  createDaemonIntentContext,
   DaemonIntentError,
   parseDaemonConfigText,
   parseDaemonIntent,
@@ -352,6 +353,101 @@ describe('daemon intent parser', () => {
     expect(parseDaemonConfigText(exampleFile('registry.toml')).daemon.kind).toBe('registry')
     expect(errorCode(() => parseDaemonConfigText('version = '))).toBe('INVALID_INPUT')
   })
+
+  it('rejects the config directory or its parent as a daemon data directory', () => {
+    expect(errorCode(() => parseDaemonIntent({
+      ...agentConfig,
+      daemon: { ...agentConfig.daemon, dataDirectory: '.' },
+    }))).toBe('INVALID_INPUT')
+    expect(errorCode(() => parseDaemonIntent({
+      ...agentConfig,
+      daemon: { ...agentConfig.daemon, dataDirectory: '..' },
+    }))).toBe('INVALID_INPUT')
+  })
+
+  it('rejects self-referencing identities and duplicate peer or admission identities', () => {
+    expect(errorCode(() => parseDaemonIntent({
+      ...controlConfig,
+      peers: {
+        ...controlConfig.peers,
+        self: {
+          agentId: 'control-a',
+          hostId: 'control-host',
+          accountId: 'local',
+          scopeId: 'local',
+          credentialRef: 'env:TEAMS_CONTROL_SELF',
+        },
+      },
+    }))).toBe('INVALID_INPUT')
+
+    expect(errorCode(() => parseDaemonIntent({
+      ...registryConfig,
+      admissions: [
+        ...registryConfig.admissions,
+        {
+          admissionRef: 'self-registration',
+          agentId: 'lan-registry',
+          accountId: 'local',
+          scopeId: 'local',
+          credentialRef: 'env:TEAMS_REGISTRY_SELF',
+        },
+      ],
+    }))).toBe('INVALID_INPUT')
+
+    expect(errorCode(() => parseDaemonIntent({
+      ...controlConfig,
+      peers: {
+        first: { ...controlConfig.peers.reasoner },
+        second: { ...controlConfig.peers.reasoner },
+      },
+    }))).toBe('INVALID_INPUT')
+
+    expect(errorCode(() => parseDaemonIntent({
+      ...registryConfig,
+      admissions: [
+        ...registryConfig.admissions,
+        { ...registryConfig.admissions[0], admissionRef: 'reasoner-registration-2' },
+      ],
+    }))).toBe('INVALID_INPUT')
+  })
+})
+
+describe('duplicate daemon ownership', () => {
+  it('rejects a second daemon that reuses an identity, ownership, or data directory', () => {
+    const context = createDaemonIntentContext()
+    parseDaemonIntent(agentConfig, context)
+
+    expect(errorCode(() => parseDaemonIntent(agentConfig, context))).toBe('CONFLICT')
+
+    // Same host/account/scope with another id: two daemons would claim one machine identity.
+    expect(errorCode(() => parseDaemonIntent({
+      ...agentConfig,
+      daemon: { ...agentConfig.daemon, id: 'reasoner-b', dataDirectory: './state/reasoner-b' },
+    }, context))).toBe('CONFLICT')
+
+    // Same identity tuple with another data directory is still the same daemon.
+    expect(errorCode(() => parseDaemonIntent({
+      ...agentConfig,
+      daemon: { ...agentConfig.daemon, dataDirectory: './state/elsewhere' },
+    }, context))).toBe('CONFLICT')
+
+    // Another identity must not reuse the same data directory.
+    expect(errorCode(() => parseDaemonIntent({
+      ...agentConfig,
+      daemon: { ...agentConfig.daemon, id: 'reasoner-c', scopeId: 'other' },
+    }, context))).toBe('CONFLICT')
+
+    // A fully distinct identity, ownership and storage still parses.
+    expect(() => parseDaemonIntent({
+      ...agentConfig,
+      daemon: { ...agentConfig.daemon, id: 'reasoner-d', scopeId: 'other', dataDirectory: './state/reasoner-d' },
+    }, context)).not.toThrow()
+  })
+
+  it('stays stateless when no shared context is given', () => {
+    expect(() => parseDaemonIntent(agentConfig)).not.toThrow()
+    expect(() => parseDaemonIntent(agentConfig)).not.toThrow()
+  })
 })
 
 describe('daemon intent compiler', () => {
@@ -515,7 +611,8 @@ describe('CLI precedence and effective readback', () => {
   it('lets explicit CLI values win over the file without mutating the input', () => {
     const intent = parseDaemonIntent(agentConfig) as AgentDaemonIntent
     const effective = applyDaemonCliOverrides(intent, { engine: 'dsh', ip: '127.0.0.1', port: 7551 }) as AgentDaemonIntent
-    expect(effective.engine).toEqual({ kind: 'dsh', executable: '/opt/homebrew/bin/opencode', workspace: './workspace' })
+    // Switching engine kind drops the OpenCode executable; the workspace directory survives.
+    expect(effective.engine).toEqual({ kind: 'dsh', workspace: './workspace' })
     expect(effective.listen).toEqual({ ip: '127.0.0.1', port: 7551 })
     expect(readDaemonEffectiveConfig(effective)).toEqual({
       kind: 'agent',
@@ -527,6 +624,20 @@ describe('CLI precedence and effective readback', () => {
     // The parsed config keeps its own values; readback can never show a stale file value.
     expect(intent.engine?.kind).toBe('opencode')
     expect(intent.listen?.port).toBe(7443)
+  })
+
+  it('keeps the configured executable only when --serve repeats the configured engine kind', () => {
+    const intent = parseDaemonIntent(agentConfig) as AgentDaemonIntent
+    const switched = applyDaemonCliOverrides(intent, { engine: 'dsh' }) as AgentDaemonIntent
+    expect(switched.engine).toEqual({ kind: 'dsh', workspace: './workspace' })
+    expect(switched.engine?.executable).toBeUndefined()
+
+    const sameKind = applyDaemonCliOverrides(intent, { engine: 'opencode' }) as AgentDaemonIntent
+    expect(sameKind.engine).toEqual({
+      kind: 'opencode',
+      executable: '/opt/homebrew/bin/opencode',
+      workspace: './workspace',
+    })
   })
 
   it('creates the listener for a quick-start override and re-checks listener policy', () => {

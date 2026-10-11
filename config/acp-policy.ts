@@ -19,15 +19,12 @@ export interface AcpPolicySnapshot {
   readonly denied: readonly string[]
 }
 
-export class AcpPolicyError extends Error {
-  readonly code: AcpFaultCode
-
-  constructor(code: AcpFaultCode, message: string) {
-    super(message)
-    this.name = 'AcpPolicyError'
-    this.code = code
-  }
-}
+/**
+ * Fault carrier for policy rejections. `AcpError` in control-protocol is the
+ * single owner of the fault type and code vocabulary; policy does not declare a
+ * second error class with the same code space.
+ */
+export { AcpError as AcpPolicyError } from '../control-protocol/acp.ts'
 
 const BASE_CAPABILITY = 'acp'
 const REQUIRED_METHODS = [
@@ -41,7 +38,7 @@ const REQUIRED_METHOD_KEYS = REQUIRED_METHODS.map(method => `method:${method}`)
 const KNOWN_PREFIXES = ['capability:', 'client-capability:', 'method:', 'callback:', 'internal-tool:'] as const
 
 function fail(code: AcpFaultCode, message: string): never {
-  throw new AcpPolicyError(code, message)
+  throw new AcpError(code, message)
 }
 
 function isRecord(value: unknown): value is Record<string, JsonValue> {

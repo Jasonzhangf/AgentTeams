@@ -2,6 +2,7 @@ import { isIP } from 'node:net'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
 import { parse as parseToml } from 'toml'
+import type { RelationRole } from '../control-protocol/teams-connection.ts'
 import type { AcpPolicyIntent } from './acp-policy.ts'
 import type {
   AgentModelBinding,
@@ -22,7 +23,11 @@ import {
 
 export type DaemonKind = 'agent' | 'control' | 'registry'
 export type EngineKind = 'opencode' | 'dsh'
-export type RelationRole = 'master' | 'peer'
+/**
+ * Re-export only: `RelationRole` is declared once in control-protocol
+ * (`teams-connection.ts`), which owns relation semantics.
+ */
+export type { RelationRole }
 
 /** The frozen single-daemon config schema version. One file declares one daemon. */
 export const DAEMON_INTENT_VERSION = 4
@@ -168,6 +173,64 @@ function isControlIntent(intent: DaemonIntentV4): intent is ControlDaemonIntent 
 
 function isRegistryIntent(intent: DaemonIntentV4): intent is RegistryDaemonIntent {
   return intent.daemon.kind === 'registry'
+}
+
+/**
+ * Shared parse context for a process that may read more than one config file.
+ * It rejects duplicate daemon identity, duplicate host/account/scope ownership
+ * and duplicate data directories before two daemons can claim the same state.
+ */
+export interface DaemonIntentContext {
+  readonly seen: Map<string, string>
+}
+
+export function createDaemonIntentContext(): DaemonIntentContext {
+  return { seen: new Map() }
+}
+
+function assertNoDuplicateDaemon(context: DaemonIntentContext | undefined, daemon: DaemonIdentity): void {
+  if (context === undefined) return
+  const label = `${daemon.kind}:${daemon.id}`
+  const claims: readonly (readonly [string, string])[] = [
+    [`identity\u0000${daemon.kind}\u0000${daemon.hostId}\u0000${daemon.accountId}\u0000${daemon.scopeId}\u0000${daemon.id}`, 'duplicate daemon identity'],
+    [`owner\u0000${daemon.hostId}\u0000${daemon.accountId}\u0000${daemon.scopeId}`, 'duplicate host/account/scope ownership'],
+    [`data\u0000${daemon.dataDirectory}`, 'duplicate dataDirectory'],
+  ]
+  for (const [key, reason] of claims) {
+    const previous = context.seen.get(key)
+    if (previous !== undefined) fail('CONFLICT', `${reason}: ${label} conflicts with ${previous}`)
+  }
+  for (const [key] of claims) context.seen.set(key, label)
+}
+
+/**
+ * Identity relations inside one file: a daemon cannot admit or connect to
+ * itself, and two peer/admission entries cannot claim the same agent identity.
+ */
+function assertIdentityRelations(input: {
+  readonly daemon: DaemonIdentity
+  readonly peers: Readonly<Record<string, PeerIntent>>
+  readonly admissions: readonly AdmissionIntent[]
+}): void {
+  const self = input.daemon.id
+  const peers = new Set<string>()
+  for (const [name, peer] of Object.entries(input.peers)) {
+    if (peer.agentId === self) {
+      fail('INVALID_INPUT', `peers.${name}.agentId must not be the daemon's own identity ${self}`)
+    }
+    if (peers.has(peer.agentId)) fail('INVALID_INPUT', `peers must not declare duplicate agentId ${peer.agentId}`)
+    peers.add(peer.agentId)
+  }
+  const admitted = new Set<string>()
+  for (const admission of input.admissions) {
+    if (admission.agentId === self) {
+      fail('INVALID_INPUT', `admissions must not admit the daemon's own identity ${self}`)
+    }
+    if (admitted.has(admission.agentId)) {
+      fail('INVALID_INPUT', `admissions must not declare duplicate agentId ${admission.agentId}`)
+    }
+    admitted.add(admission.agentId)
+  }
 }
 
 /** Explicit CLI values. A defined member always wins over the config file. */
@@ -339,13 +402,17 @@ function parseIdentity<K extends DaemonKind>(value: unknown, kind: K): DaemonIde
   if (input.kind !== kind) fail('INVALID_INPUT', `daemon.kind must be ${kind}`)
   const id = requiredString(input.id, 'daemon.id')
   if (!DAEMON_ID.test(id)) fail('INVALID_INPUT', 'daemon.id is not valid')
+  const dataDirectory = requiredString(input.dataDirectory, 'daemon.dataDirectory')
+  if (dataDirectory === '.' || dataDirectory === '..') {
+    fail('INVALID_INPUT', 'daemon.dataDirectory must name a daemon-owned directory, not the config directory')
+  }
   return {
     kind,
     id,
     hostId: requiredString(input.hostId, 'daemon.hostId'),
     accountId: requiredString(input.accountId, 'daemon.accountId'),
     scopeId: requiredString(input.scopeId, 'daemon.scopeId'),
-    dataDirectory: requiredString(input.dataDirectory, 'daemon.dataDirectory'),
+    dataDirectory,
   }
 }
 
@@ -613,7 +680,11 @@ function assertAgentIntentPolicy(intent: {
   assertNonLoopbackAdmission(intent.listen.ip, intent.listen, intent.admissions, 'listen')
 }
 
-function parseAgent(root: Record<string, unknown>, daemon: DaemonIdentity<'agent'>): AgentDaemonIntent {
+function parseAgent(
+  root: Record<string, unknown>,
+  daemon: DaemonIdentity<'agent'>,
+  context: DaemonIntentContext | undefined,
+): AgentDaemonIntent {
   fields(root, ['version', 'daemon', 'engine', 'listen', 'acp', 'relations', 'admissions', 'discovery', 'peers', 'providers', 'models', 'model'], 'agent daemon')
   const engine = root.engine === undefined ? undefined : parseEngine(root.engine)
   const listen = root.listen === undefined ? undefined : parseListen(root.listen, 'listen')
@@ -638,13 +709,19 @@ function parseAgent(root: Record<string, unknown>, daemon: DaemonIdentity<'agent
     ...(model === undefined ? {} : { model }),
   }
   assertAgentIntentPolicy(intent)
+  assertIdentityRelations({ daemon, peers: intent.peers, admissions: intent.admissions })
+  assertNoDuplicateDaemon(context, daemon)
   return intent
 }
 
-function parseControl(root: Record<string, unknown>, daemon: DaemonIdentity<'control'>): ControlDaemonIntent {
+function parseControl(
+  root: Record<string, unknown>,
+  daemon: DaemonIdentity<'control'>,
+  context: DaemonIntentContext | undefined,
+): ControlDaemonIntent {
   fields(root, ['version', 'daemon', 'webui', 'relations', 'admissions', 'discovery', 'peers'], 'control daemon')
   if (root.webui === undefined) fail('INVALID_INPUT', 'control daemon requires webui')
-  return {
+  const intent: ControlDaemonIntent = {
     version: DAEMON_INTENT_VERSION,
     daemon,
     webui: parseWebUi(root.webui),
@@ -653,15 +730,25 @@ function parseControl(root: Record<string, unknown>, daemon: DaemonIdentity<'con
     ...(root.discovery === undefined ? {} : { discovery: parseDiscovery(root.discovery) }),
     peers: parsePeers(root.peers),
   }
+  assertIdentityRelations({ daemon, peers: intent.peers, admissions: intent.admissions })
+  assertNoDuplicateDaemon(context, daemon)
+  return intent
 }
 
-function parseRegistry(root: Record<string, unknown>, daemon: DaemonIdentity<'registry'>): RegistryDaemonIntent {
+function parseRegistry(
+  root: Record<string, unknown>,
+  daemon: DaemonIdentity<'registry'>,
+  context: DaemonIntentContext | undefined,
+): RegistryDaemonIntent {
   fields(root, ['version', 'daemon', 'listen', 'admissions'], 'registry daemon')
   if (root.listen === undefined) fail('INVALID_INPUT', 'registry daemon requires listen')
   const listen = parseListen(root.listen, 'listen')
   const admissions = parseAdmissions(root.admissions)
   assertNonLoopbackAdmission(listen.ip, listen, admissions, 'listen')
-  return { version: DAEMON_INTENT_VERSION, daemon, listen, admissions }
+  const intent: RegistryDaemonIntent = { version: DAEMON_INTENT_VERSION, daemon, listen, admissions }
+  assertIdentityRelations({ daemon, peers: {}, admissions })
+  assertNoDuplicateDaemon(context, daemon)
+  return intent
 }
 
 /**
@@ -671,7 +758,7 @@ function parseRegistry(root: Record<string, unknown>, daemon: DaemonIdentity<'re
  * multi-agent `[agents.*]` shape, is rejected explicitly; the old
  * init/start/status/work/console entrypoints keep their own v3 handling.
  */
-export function parseDaemonIntent(value: unknown): DaemonIntentV4 {
+export function parseDaemonIntent(value: unknown, context?: DaemonIntentContext): DaemonIntentV4 {
   const root = record(value, 'daemon config')
   if (Array.isArray(root.daemon)) {
     fail('UNSUPPORTED_CONFIGURATION', 'one config declares exactly one daemon; start one daemon per config file')
@@ -690,13 +777,13 @@ export function parseDaemonIntent(value: unknown): DaemonIntentV4 {
   if (kind !== 'agent' && kind !== 'control' && kind !== 'registry') {
     fail('INVALID_INPUT', 'daemon.kind must be agent, control, or registry')
   }
-  if (kind === 'agent') return parseAgent(root, parseIdentity(root.daemon, 'agent'))
-  if (kind === 'control') return parseControl(root, parseIdentity(root.daemon, 'control'))
-  return parseRegistry(root, parseIdentity(root.daemon, 'registry'))
+  if (kind === 'agent') return parseAgent(root, parseIdentity(root.daemon, 'agent'), context)
+  if (kind === 'control') return parseControl(root, parseIdentity(root.daemon, 'control'), context)
+  return parseRegistry(root, parseIdentity(root.daemon, 'registry'), context)
 }
 
 /** Parse TOML text into the v4 intent. TOML syntax errors stay explicit. */
-export function parseDaemonConfigText(text: string): DaemonIntentV4 {
+export function parseDaemonConfigText(text: string, context?: DaemonIntentContext): DaemonIntentV4 {
   let parsed: unknown
   try {
     parsed = parseToml(text)
@@ -706,7 +793,7 @@ export function parseDaemonConfigText(text: string): DaemonIntentV4 {
       `daemon config is not valid TOML: ${cause instanceof Error ? cause.message : String(cause)}`,
     )
   }
-  return parseDaemonIntent(parsed)
+  return parseDaemonIntent(parsed, context)
 }
 
 function resolvePath(value: string, configDirectory: string): string {
@@ -838,10 +925,11 @@ export function compileDaemonIntent(
   intent: DaemonIntentV4,
   context: { readonly configDirectory: string },
 ): VersionedRuntimeConfig {
-  // Resolve launch paths before returning the accepted snapshot. The resolved
-  // value stays available through resolveDaemonIntent for runtime launch wiring.
-  resolveDaemonIntent(intent, context)
-  if (isAgentIntent(intent)) return compileAgentConfig(intent)
+  // Compile from the resolved intent: path resolution has one call site and its
+  // result is consumed, so the accepted snapshot never comes from an unresolved
+  // copy of the same config.
+  const resolved = resolveDaemonIntent(intent, context)
+  if (isAgentIntent(resolved)) return compileAgentConfig(resolved)
   return { revision: 1, acceptedRevision: 1, providers: {}, catalogs: {}, agents: {} }
 }
 
@@ -866,11 +954,15 @@ export function applyDaemonCliOverrides(intent: DaemonIntentV4, overrides: Daemo
   if (isAgentIntent(intent)) {
     const engine: EngineIntent | undefined = overrides.engine === undefined
       ? intent.engine
-      : {
-          kind: overrides.engine,
-          ...(intent.engine?.executable === undefined ? {} : { executable: intent.engine.executable }),
-          ...(intent.engine?.workspace === undefined ? {} : { workspace: intent.engine.workspace }),
-        }
+      : overrides.engine === intent.engine?.kind
+        ? intent.engine
+        : {
+            // A different engine kind drops the configured executable: an
+            // installed OpenCode binary is not a DSH binary. `workspace` is a
+            // directory chosen for this agent, so it survives the switch.
+            kind: overrides.engine,
+            ...(intent.engine?.workspace === undefined ? {} : { workspace: intent.engine.workspace }),
+          }
     const listen = ip === undefined || port === undefined
       ? intent.listen
       : overrideListen(intent.listen, ip, port)
