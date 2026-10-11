@@ -1375,7 +1375,7 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   const downCollection = await collectUntil(leg5.channel, frame => frame.kind === 'acp.frame' && frame.frame.id === 'registry-down', 'prompt result while the registry is down', 120_000)
   assert(downCollection.match.frame.result?.stopReason === 'end_turn',
     `the established LAN channel did not complete a prompt while the registry was down (${JSON.stringify(downCollection.match.frame.result ?? downCollection.match.frame.error ?? null).slice(0, 160)})`)
-  check('A05 — an established LAN channel survives the registry stopping',
+  check('A10 — an established LAN channel survives the registry stopping',
     `registry pid ${live.registry.pid} stopped; prompt on the pre-outage channel -> stopReason=${downCollection.match.frame.result.stopReason}`)
   const registryRestart = runCliLogged(['registry', 'start', '--config', registryPath], operatorEnv)
   const registryRestartFields = parseFields(registryRestart.output.trim().split('\n').filter(Boolean).at(-1) ?? '')
@@ -1522,7 +1522,7 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   const afterWebui = await readUntil(leg5.channel, frame => frame.kind === 'acp.frame' && frame.frame.id === 'after-webui', 'prompt result after the WebUI client closed', 120_000)
   assert(afterWebui.frame.result?.stopReason === 'end_turn',
     `the established LAN channel did not complete a prompt after the WebUI client closed (${JSON.stringify(afterWebui.frame.result ?? afterWebui.frame.error ?? null).slice(0, 160)})`)
-  check('A05 — communication continues after the WebUI client closes',
+  check('A10 — communication continues after the WebUI client closes',
     `every WebUI HTTP/SSE client connection this driver opened is closed; prompt on the established channel -> stopReason=${afterWebui.frame.result.stopReason}`)
   gap('A07 — animation driven by real events',
     'the shipped control daemon binds no Console owner (runtime/control-process.ts:756 calls createControlOwner({ network }) with no owner), so /api/v1/projection is a constant empty snapshot and no real event can advance the SSE stream; only the transport is proven here')
@@ -1608,50 +1608,64 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   check('A09 — history survives a UI refresh',
     `${beforeRefresh.length} records retained byte-identical across a fresh authenticated stream + history read (now ${afterRefresh.length})`)
 
-  step = 'A09 owner restart'
+  // A09's owner restart goes through the project's own stop and start entries, and the
+  // durable `kind: 'connection'` history must come back byte-identical. This is the receipt
+  // that exposed 146824a: `stopControlDaemon` used to remove the whole owned data directory
+  // (which holds the history store), and the earlier STOP_TIMEOUT defect masked it by
+  // throwing before the removal. The strict stop+start form is kept on purpose — a
+  // crash-only restart would have hidden that defect.
+  step = 'A10 control stop'
   const controlStop = runCliLogged(['control', 'stop', '--config', controlPath, '--generation', String(live.control.generation)], operatorEnv)
   const controlStopLine = controlStop.output.trim().split('\n').filter(Boolean).at(-1) ?? ''
-  let stopNote = `control stop reported ${controlStopLine.slice(0, 60)}`
   if (!/^stopped state=stopped /.test(controlStopLine)) {
-    // The project's own stop entry waits 5s for the daemon; the daemon's shutdown awaits
-    // `server.close()`, which waits for the WebUI client sockets a live SSE subscription
-    // leaves behind. The stop is still real, so wait for the explicit pid and report the
-    // exact observation as a finding instead of hiding it. See notes.md finding D08-F1.
+    // The project's own stop entry waits 5s for the daemon. If a WebUI client socket holds
+    // the shutdown past that wait, the stop is still real: wait for the explicit pid and
+    // report the exact observation as a finding instead of hiding it. This path was live
+    // before 44d82f7 ("fix(control): close the control listener sockets on stop"); it stays
+    // as a regression receipt and never turns an unproven stop into a pass.
     const exitedLate = await settle('the control daemon to exit after the stop wait elapsed', async () => !pidAlive(live.control.pid), 200, 30_000)
     assert(exitedLate, `control stop reported ${controlStopLine} and the daemon never exited (pid ${live.control.pid} still alive)`)
-    finding('A09 — control stop exceeds the CLI wait while a WebUI client socket is open',
+    finding('A10 — control stop exceeds the CLI wait while a WebUI client socket is open',
       `agentteams control stop --generation ${live.control.generation} exited ${controlStop.status} with "${controlStopLine}" (pid ${live.control.pid}); the daemon exited shortly after. Repro in notes.md (D08-F1)`)
-    stopNote = `stop wait elapsed, daemon exited afterwards (${controlStopLine.slice(0, 40)})`
   } else {
     assert(controlStop.status === 0, `control stop failed: ${controlStopLine}`)
   }
   live.control.stopped = true
   assert(!pidAlive(live.control.pid), `the control pid ${live.control.pid} is gone after the explicit stop`)
   assert(await settle('the control listener to close', async () => await portIsClosed('127.0.0.1', controlPort), 100, 10_000), `control listener ${controlPort} survived the stop`)
-  // The control daemon is the observation client, never a data path: the established LAN
-  // channel must keep completing real prompts while no control daemon is running.
-  step = 'A05 after the control daemon stops'
+  // The D08 §5 receipt: the established channel keeps working while no control daemon runs.
+  step = 'A10 after the control daemon stops'
   await leg5.channel.transport.send({ version: 1, kind: 'acp.frame', ref: ref5, frame: { jsonrpc: '2.0', id: 'after-control', method: 'session/prompt', params: { sessionId: sessionA5, prompt: [{ type: 'text', text: 'ECHO:AFTER-CONTROL' }] } } })
   const afterControl = await readUntil(leg5.channel, frame => frame.kind === 'acp.frame' && frame.frame.id === 'after-control', 'prompt result after the control daemon stopped', 120_000)
   assert(afterControl.frame.result?.stopReason === 'end_turn',
     `the established LAN channel did not complete a prompt after the control daemon stopped (${JSON.stringify(afterControl.frame.result ?? afterControl.frame.error ?? null).slice(0, 160)})`)
-  check('A05 — communication continues after the control daemon stops',
+  check('A10 — communication continues after the control daemon stops',
     `control pid ${live.control.pid} stopped and its listener ${controlPort} closed; prompt on the established channel -> stopReason=${afterControl.frame.result.stopReason}`)
+
+  step = 'A09 owner restart'
+  const stoppedPid = live.control.pid
+  const stoppedGeneration = live.control.generation
   const controlRestart = runCliLogged(['control', 'start', '--config', controlPath], operatorEnv)
   const controlRestartFields = parseFields(controlRestart.output.trim().split('\n').filter(Boolean).at(-1) ?? '')
   assert(controlRestart.status === 0 && controlRestartFields.state === 'running', `control restart failed: ${controlRestart.output.slice(-200)}`)
   live.control.pid = Number(controlRestartFields.pid)
   live.control.generation = Number(controlRestartFields.generation)
   live.control.stopped = false
-  assert(live.control.pid !== Number(controlStartFields.pid), 'the restarted control owner has a new explicit pid')
+  assert(live.control.pid !== stoppedPid, 'the restarted control owner has a new explicit pid')
+  // The generation is anchored to the persisted lifecycle record, and a graceful stop removes
+  // that record (removeOwnedState), so a stop+start begins a new lifecycle at generation 1
+  // instead of continuing the counter. A crash restart keeps the record and advances it. The
+  // driver asserts the observed rule, not the crash-only expectation.
+  assert(live.control.generation === 1 && stoppedGeneration === 1,
+    `a graceful stop+start begins a new lifecycle generation (${stoppedGeneration} -> ${live.control.generation})`)
   const afterRestartReady = await settle('the restarted control listener to accept', async () => (await fetch(controlOrigin).catch(() => null))?.status === 401, 200, 30_000)
   assert(afterRestartReady, 'the restarted control owner never bound its listener')
   const afterRestart = (await (await authFetch('/api/v1/history?version=1&limit=50&kind=connection')).json()).records
   const restartRetention = retention(beforeRefresh, afterRestart)
   assert(restartRetention.lost.length === 0 && restartRetention.changed.length === 0,
     `the history did not survive the control owner restart (lost=${restartRetention.lost.join(',')} changed=${restartRetention.changed.join(',')})`)
-  check('A09 — history survives a control-owner restart',
-    `pid ${controlStartFields.pid} -> ${live.control.pid}; ${beforeRefresh.length} records retained byte-identical (now ${afterRestart.length}); ${stopNote}`)
+  check('A09 — history survives a control-owner stop and restart',
+    `stop -> pid ${stoppedPid} generation ${stoppedGeneration}, start -> pid ${live.control.pid} generation ${live.control.generation}; ${beforeRefresh.length} records retained byte-identical (now ${afterRestart.length})`)
 
   step = 'A09 non-resumable session'
   const legResume = await negotiate({ agentId: AGENT_A.agentId, port: portA, cert: agentATls.cert, capabilitiesRevision: fieldsA2.capabilitiesRevision, requestedRole: 'master', requestedPeerRole: 'peer', label: 'resume' })
@@ -1674,7 +1688,24 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
     `pre-restart session ${sessionA1.slice(0, 12)}… after restart -> ${resumeOld.frame.error.data.code}; session/load -> ${loadRefused.frame.error.data.code}`)
 
   /* -------------------------------------------------------------------------------------
-   * Cross-device boundary (A11 is out of this driver's scope, recorded honestly)
+   * A11 — the LAN address is really connectable; only the cross-device receipt is missing
+   * ----------------------------------------------------------------------------------- */
+
+  assert(/^\d+\.\d+\.\d+\.\d+$/.test(lanIp) && !lanIp.startsWith('127.') && !lanIp.startsWith('169.254.'),
+    `the LAN address must be a real non-loopback IPv4 (${lanIp})`)
+  const lanConnected = await new Promise(resolveConnect => {
+    const socket = createConnection({ host: lanIp, port: portA })
+    const finish = ok => { socket.destroy(); resolveConnect(ok) }
+    socket.setTimeout(4_000, () => finish(false))
+    socket.once('connect', () => finish(true))
+    socket.once('error', () => finish(false))
+  })
+  assert(lanConnected, `the LAN listener ${lanIp}:${portA} is not connectable`)
+  check('A11 — the LAN address is a real, connectable non-loopback listener',
+    `${lanIp} is a non-loopback IPv4 and a raw TCP connect to the agent listener ${lanIp}:${portA} succeeded`)
+
+  /* -------------------------------------------------------------------------------------
+   * Cross-device boundary (recorded honestly; never inferred from the LAN result above)
    * ----------------------------------------------------------------------------------- */
 
   gap('A11 — cross-device receipt', `only one physical host is available (LAN ${lanIp}, tailscale 100.66.1.82); loopback and same-host non-loopback are never passed off as cross-device, so no cross-device receipt is claimed by this driver`)
