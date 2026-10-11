@@ -243,6 +243,23 @@ export function dshDeclaredPolicyKeys(): string[] {
   ]
 }
 
+/**
+ * The exact adapter-declared enforceable policy keys. This is what the runtime
+ * must pass as `enforceablePolicies`.
+ *
+ * The set is derived from the one enforcement-owner rule, applied to the whole
+ * declared DSH ACP surface, so the adapter's pre-launch blacklist assertion and
+ * the runtime's enforceable set can never drift. The D01 host enforces the base
+ * capability, method, engine-capability, client-capability and engine-callback
+ * classes before any engine write; a declared `feature:` label is not a policy
+ * key and a key outside those classes has no enforcement owner here, so neither
+ * becomes enforceable.
+ */
+export function dshEnforceablePolicyKeys(): string[] {
+  const declared = [...DSH_ADAPTER_CAPABILITIES, ...DSH_ENGINE_DECLARED_CAPABILITIES, ...DSH_UNSUPPORTED_FEATURES]
+  return [...new Set(declared.map(entry => entry.key).filter(dshHasPolicyEnforcementOwner))]
+}
+
 export interface DshEffectivenessProof {
   readonly effectiveRevision: number
   readonly modelTarget: ModelRef | null
@@ -258,6 +275,13 @@ export interface DshEngineAdapter extends EngineAdapter {
    * the frozen policy vocabulary.
    */
   readonly declaredMethods: readonly string[]
+  /**
+   * Adapter-declared policy keys for the frozen `enforceablePolicies` input: the
+   * declared DSH ACP surface restricted to the classes
+   * `dshHasPolicyEnforcementOwner` accepts. The adapter owns this answer; the
+   * runtime must not substitute `declaredMethods` or any other set.
+   */
+  readonly enforceablePolicies: readonly string[]
   /** The typed support/refusal list for the DSH ACP surface. */
   readonly capabilities: readonly DshCapability[]
   compileLaunch(input: EngineLaunchInput): Promise<EngineLaunchSpec>
@@ -408,6 +432,7 @@ export function createDshEngineAdapter(): DshEngineAdapter {
   return {
     kind: 'dsh',
     declaredMethods: dshDeclaredPolicyKeys(),
+    enforceablePolicies: dshEnforceablePolicyKeys(),
     capabilities: [...DSH_ADAPTER_CAPABILITIES, ...DSH_ENGINE_DECLARED_CAPABILITIES, ...DSH_UNSUPPORTED_FEATURES],
 
     async compileLaunch(input: EngineLaunchInput): Promise<EngineLaunchSpec> {

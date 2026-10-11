@@ -13,10 +13,12 @@ import {
   formatAcpServeReady,
   formatAcpServeStopped,
   readAcpServeIntent,
+  requireEnforceablePolicies,
   resolveDshExecutable,
   resolveOpenCodeExecutable,
   startAcpServe,
   type AcpServeHandle,
+  type ServeEngineAdapter,
 } from './acp-serve.ts'
 
 /**
@@ -280,6 +282,10 @@ process.stdin.on('data', chunk => {
     if (line.length === 0) continue
     const frame = JSON.parse(line)
     if (frame.method === 'initialize') {
+      if (control.failInitialize === true) {
+        send({ jsonrpc: '2.0', id: frame.id, error: { code: -32603, message: 'fake dsh: deliberate initialize failure' } })
+        continue
+      }
       send({ jsonrpc: '2.0', id: frame.id, result: {
         protocolVersion: 1,
         agentInfo: { name: 'deepseek-harness-acp', version: '0.0.1' },
@@ -338,7 +344,7 @@ async function writeFakeDshEngine(directory: string): Promise<string> {
 }
 
 /** One v4 agent config selecting the DSH engine kind. */
-function dshAgentConfig(input: { readonly executable: string; readonly port: number; readonly dataDirectory: string; readonly workspace: string; readonly baseUrl?: string; readonly binding?: boolean }): string {
+function dshAgentConfig(input: { readonly executable: string; readonly port: number; readonly dataDirectory: string; readonly workspace: string; readonly baseUrl?: string; readonly binding?: boolean; readonly blacklist?: readonly string[] }): string {
   const provider = input.baseUrl === undefined
     ? ''
     : `
@@ -382,13 +388,13 @@ port = ${input.port}
 [acp]
 enabled = true
 required = ["method:session/prompt"]
-blacklist = []
+blacklist = ${JSON.stringify(input.blacklist ?? [])}
 clientCapabilities = []
 callbackExecutor = "controller"
 ${provider}${binding}`
 }
 
-async function writeDshConfig(input: { readonly executable: string; readonly port: number; readonly directory: string; readonly binding?: boolean }): Promise<string> {
+async function writeDshConfig(input: { readonly executable: string; readonly port: number; readonly directory: string; readonly binding?: boolean; readonly blacklist?: readonly string[] }): Promise<string> {
   const configPath = join(input.directory, 'agent-dsh.toml')
   await writeFile(configPath, dshAgentConfig({
     executable: input.executable,
@@ -397,6 +403,7 @@ async function writeDshConfig(input: { readonly executable: string; readonly por
     workspace: join(input.directory, 'workspace'),
     baseUrl: 'http://127.0.0.1:1/v1',
     ...(input.binding === undefined ? {} : { binding: input.binding }),
+    ...(input.blacklist === undefined ? {} : { blacklist: input.blacklist }),
   }))
   return configPath
 }
@@ -574,6 +581,29 @@ port = 7331
     expect(resolveDshExecutable(undefined, { PATH: directory })).toBe(installed)
     expect(() => resolveDshExecutable('dsh', {})).toThrowError(/must be an absolute installed path/)
     expect(() => resolveDshExecutable(undefined, { PATH: '/nonexistent' })).toThrowError(/no DSH executable is configured/)
+  })
+
+  it('fails explicitly when an engine adapter declares no enforceable-policy set', () => {
+    // The adapter owns which policies it can enforce. The entry must never
+    // substitute `declaredMethods` (or any other set) for a missing declaration.
+    const declaredOnly: ServeEngineAdapter = {
+      kind: 'opencode',
+      declaredMethods: ['callback:session/request_permission'],
+      compileLaunch: () => Promise.reject(new Error('unused')),
+      verifyEffective: () => Promise.reject(new Error('unused')),
+    }
+    let fault: unknown
+    try {
+      requireEnforceablePolicies(declaredOnly)
+    } catch (cause) {
+      fault = cause
+    }
+    expect(fault).toMatchObject({ name: 'AcpError', code: 'UNSUPPORTED_CONFIGURATION' })
+    expect((fault as Error).message).toContain('opencode')
+    expect((fault as Error).message).toContain('no enforceable ACP policy set')
+    // Both delivered adapters declare their own set, so the entry always has one.
+    expect(engineAdapterFor('opencode').enforceablePolicies).toBeDefined()
+    expect(engineAdapterFor('dsh').enforceablePolicies).toBeDefined()
   })
 })
 
@@ -765,13 +795,14 @@ describe('--serve dsh entry with a local fake DSH ACP engine', () => {
     expect(existsSync(join(handle.dataDirectory, 'engine'))).toBe(false)
   })
 
-  it('removes the owned DSH home when the engine fails to start', { timeout: 60_000 }, async () => {
+  it('removes the owned DSH home when the readiness session/new fails', { timeout: 60_000 }, async () => {
     const directory = await temporaryDirectory()
     const fakeEngine = await writeFakeDshEngine(directory)
     const port = await availableLoopbackPort()
     const configPath = await writeDshConfig({ executable: fakeEngine, port, directory })
     // The engine reads its injected behavior from its own DSH_HOME, which is the
-    // directory the entry owns and the adapter isolates.
+    // directory the entry owns and the adapter isolates. This failure happens
+    // after the daemon started, so it exercises the outer catch path.
     const intent = await readAcpServeIntent({ engine: 'dsh', configPath })
     await mkdir(join(directory, 'state', 'engine'), { recursive: true, mode: 0o700 })
     await writeFile(join(directory, 'state', 'engine', 'fake-engine.control.json'), JSON.stringify({ failSessionNew: true }))
@@ -784,5 +815,88 @@ describe('--serve dsh entry with a local fake DSH ACP engine', () => {
     // directory and its durable history stay.
     expect(existsSync(join(directory, 'state', 'engine'))).toBe(false)
     expect(existsSync(join(directory, 'state', 'acp-history.json'))).toBe(true)
+  })
+
+  it('removes the owned DSH home when startAcpAgentDaemon returns a failed outcome', { timeout: 60_000 }, async () => {
+    const directory = await temporaryDirectory()
+    const fakeEngine = await writeFakeDshEngine(directory)
+    const port = await availableLoopbackPort()
+    const configPath = await writeDshConfig({ executable: fakeEngine, port, directory })
+    // An initialize error makes startAcpAgentDaemon itself return a failed
+    // outcome, so this exercises the `outcome.kind === 'failed'` cleanup branch
+    // directly; the readiness failure above exercises the outer catch path.
+    const intent = await readAcpServeIntent({ engine: 'dsh', configPath })
+    await mkdir(join(directory, 'state', 'engine'), { recursive: true, mode: 0o700 })
+    await writeFile(join(directory, 'state', 'engine', 'fake-engine.control.json'), JSON.stringify({ failInitialize: true }))
+    let fault: unknown
+    try {
+      await startAcpServe(intent, { env: dshEnv(), initializeTimeoutMs: 15_000, stopTimeoutMs: 5_000 })
+    } catch (cause) {
+      fault = cause
+    }
+    // The failed-outcome branch rethrows the daemon's own fault with its
+    // "engine start failed" prefix; the outer catch path cannot produce that.
+    expect(fault).toMatchObject({ name: 'AcpError', code: 'ENGINE_UNAVAILABLE' })
+    expect((fault as Error).message).toContain('engine start failed: engine initialize failed')
+    // The fake engine had already written its own record and pid file into
+    // DSH_HOME, so their removal proves this branch ran its own cleanup. The
+    // daemon data directory is retained; no history record exists yet because
+    // the failure happens before the first engine request.
+    expect(existsSync(join(directory, 'state', 'engine'))).toBe(false)
+    expect(existsSync(join(directory, 'state'))).toBe(true)
+  })
+
+  it('accepts a blacklist for the capability and client-capability classes the DSH adapter enforces', { timeout: 60_000 }, async () => {
+    const directory = await temporaryDirectory()
+    const fakeEngine = await writeFakeDshEngine(directory)
+    const port = await availableLoopbackPort()
+    const configPath = await writeDshConfig({
+      executable: fakeEngine,
+      port,
+      directory,
+      blacklist: [
+        'capability:/mcpCapabilities/http',
+        'capability:/promptCapabilities/image',
+        'client-capability:/fs/readTextFile',
+      ],
+    })
+    // The old `?? declaredMethods` substitution refused the capability and
+    // client-capability keys as UNSUPPORTED_POLICY before the entry could bind.
+    const handle = await startDshServe({ configPath })
+    expect(handle.engineKind).toBe('dsh')
+    // The accepted blacklist is really enforced: the key the engine advertised
+    // left the effective set, and the declared-but-unadvertised keys were
+    // accepted instead of being over-refused.
+    expect(handle.daemon.policy.denied).toEqual(['capability:/mcpCapabilities/http'])
+    expect(handle.daemon.policy.effective).not.toContain('capability:/mcpCapabilities/http')
+
+    const client = await connectClient(port)
+    clients.add(client)
+    await client.send({ jsonrpc: '2.0', id: 'init-1', method: 'initialize', params: { protocolVersion: 1, clientCapabilities: {} } })
+    await client.awaitFrame(frame => frame.id === 'init-1')
+
+    const receipt = await handle.stop()
+    handles.delete(handle)
+    expect(receipt.engine.kind).toBe('exited')
+  })
+
+  it('refuses a blacklist key with no enforcement owner before it spawns the engine', { timeout: 60_000 }, async () => {
+    const directory = await temporaryDirectory()
+    const fakeEngine = await writeFakeDshEngine(directory)
+    const port = await availableLoopbackPort()
+    const configPath = await writeDshConfig({
+      executable: fakeEngine,
+      port,
+      directory,
+      blacklist: ['internal-tool:dsh:bash'],
+    })
+    await expect(startDshServe({ configPath })).rejects.toMatchObject({
+      name: 'AcpError',
+      code: 'UNSUPPORTED_POLICY',
+      message: expect.stringContaining('no enforcement owner for blacklist key internal-tool:dsh:bash'),
+    })
+    // The refusal happened before the child started: the fake engine wrote no
+    // pid record, and no handle was registered for cleanup.
+    expect(existsSync(join(directory, 'state', 'engine', 'fake-engine.pid'))).toBe(false)
   })
 })

@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import type { AuthenticatedAgent, JsonValue } from '../control-protocol/agent-services.ts'
 import type { AcpChannelRef, AcpDelivery, AcpFrame, AcpRpcId } from '../control-protocol/acp.ts'
 import { AcpError } from '../control-protocol/acp.ts'
-import type { AcpDuplex, EngineAdapter, EngineHandle, EngineLaunchInput, EngineStopResult } from '../control-protocol/engine.ts'
+import type { AcpDuplex, EngineAdapter, EngineLaunchInput, EngineStopResult } from '../control-protocol/engine.ts'
 import type { AgentDaemonIntent, DaemonEffectiveConfig, EngineKind } from '../config/daemon-intent.ts'
 import {
   DaemonIntentError,
@@ -358,26 +358,28 @@ export function resolveDshExecutable(configured: string | undefined, env: NodeJS
 }
 
 /**
+ * The entry's dispatcher view of an engine adapter: the frozen
+ * `control-protocol/engine.ts` port plus the two policy sets the adapter
+ * declares and the entry passes through to the host. It is a type-only view,
+ * not a third adapter implementation: `OpenCodeEngineAdapter` and
+ * `DshEngineAdapter` each already extend `EngineAdapter`, so this adds only the
+ * members the one dispatch point needs and declares no `compileLaunch` or
+ * `verifyEffective` shape of its own.
+ *
+ * `enforceablePolicies` stays optional here so an adapter that omits it fails
+ * with an explicit typed fault instead of being silently repaired.
+ */
+export type ServeEngineAdapter = EngineAdapter & {
+  readonly declaredMethods: readonly string[]
+  readonly enforceablePolicies?: readonly string[]
+}
+
+/**
  * The one dispatch point from a configured engine kind to its adapter. D00
  * freezes the kinds as opencode|dsh and both adapters are delivered, so the
  * `never` binding makes the mapping exhaustive at compile time; the default
  * clause is unreachable for every value the config parser can produce.
  */
-export type ServeEngineAdapter = EngineAdapter & {
-  readonly declaredMethods: readonly string[]
-  readonly enforceablePolicies?: readonly string[]
-  verifyEffective(input: {
-    readonly handle: EngineHandle
-    readonly launch: EngineLaunchInput
-    readonly initializeResult: AcpFrame
-    readonly sessionConfigResult?: AcpFrame
-  }): Promise<{
-    readonly effectiveRevision: number
-    readonly modelTarget: ModelRef | null
-    readonly evidence: JsonValue
-  }>
-}
-
 export function engineAdapterFor(kind: EngineKind): ServeEngineAdapter {
   switch (kind) {
     case 'opencode':
@@ -389,6 +391,21 @@ export function engineAdapterFor(kind: EngineKind): ServeEngineAdapter {
       throw new AcpError('UNSUPPORTED_CONFIGURATION', `--serve has no engine adapter for kind ${String(unhandled)}`)
     }
   }
+}
+
+/**
+ * The adapter owns which policies it can enforce. An adapter that declares no
+ * enforceable set is a wiring fault, not a reason to fall back to a different
+ * set; the fault names the adapter that owes the declaration.
+ */
+export function requireEnforceablePolicies(adapter: ServeEngineAdapter): readonly string[] {
+  if (adapter.enforceablePolicies === undefined) {
+    throw new AcpError(
+      'UNSUPPORTED_CONFIGURATION',
+      `engine adapter ${adapter.kind} declares no enforceable ACP policy set; --serve does not substitute another set`,
+    )
+  }
+  return adapter.enforceablePolicies
 }
 
 /**
@@ -523,6 +540,9 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
   // every step below (executable resolution, compileLaunch, the daemon, the
   // stdio duplex, readiness and stop) is engine-independent.
   const adapter = engineAdapterFor(engine.kind)
+  // The adapter owns its enforceable-policy set. Resolve it before any
+  // directory, file write or spawn; the entry never substitutes a different set.
+  const enforceablePolicies = requireEnforceablePolicies(adapter)
   const executable = engine.kind === 'opencode'
     ? resolveOpenCodeExecutable(engine.executable, env)
     : resolveDshExecutable(engine.executable, env)
@@ -574,7 +594,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     policy: {
       intent: agent.acp,
       adapterMethods: adapter.declaredMethods,
-      enforceablePolicies: adapter.enforceablePolicies ?? adapter.declaredMethods,
+      enforceablePolicies,
     },
     history,
     initialize: { params: { protocolVersion: 1, clientCapabilities: {} }, timeoutMs: initializeTimeoutMs },
