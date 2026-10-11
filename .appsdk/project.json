@@ -166,8 +166,10 @@
       ],
       "module_id": "teams-source",
       "owned_paths": [
+        "acp-adapter/**",
         "agent/**",
         "agent-host/**",
+        "cli/**",
         "cli-adapter/**",
         "endpoint/**",
         "config/**",
@@ -218,8 +220,10 @@
           "working_directory": "."
         },
         "input_paths": [
+          "acp-adapter/**",
           "agent/**",
           "agent-host/**",
+          "cli/**",
           "endpoint/**",
           "config/**",
           "control-protocol/**",

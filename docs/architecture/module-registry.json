@@ -53,7 +53,7 @@
     {
       "module_id": "agent-host",
       "owner": "agent-host",
-      "status": "design",
+      "status": "partial",
       "owned_paths": [
         "agent-host/**"
       ],
@@ -62,7 +62,7 @@
         "network/**",
         "server/**"
       ],
-      "note": "Owns Session, RPC/callback correlation, execution admission and execution history semantics. D00 declares the frames and DTOs this module will consume; no host implementation exists yet, so ACP Session behavior is D01."
+      "note": "Owns Session, RPC/callback correlation, execution admission and execution history semantics. D01 (merged 7d0bca4, fixed 75a6cf4) implements `agent-host/acp-host.ts` and the append-only write port `agent-host/acp-history.ts`: per-channel id correlation, explicit Session ownership, D00 policy before any engine write, append-before-effect with separate history-fault reporting, cancel.requested versus the prompt's terminal result, RESULT_UNKNOWN on engine exit or channel close, and bounded delivery/notification records. Status is partial, not implemented: the engine adapters (D02/D03), the network channel (D05) and the user `--serve` entry do not exist, so the host has no real engine or installed/live evidence."
     },
     {
       "module_id": "master-host",
@@ -81,7 +81,7 @@
     {
       "module_id": "acp-adapter",
       "owner": "acp-adapter",
-      "status": "design",
+      "status": "partial",
       "owned_paths": [
         "acp-adapter/**"
       ],
@@ -89,7 +89,7 @@
         "ui/**",
         "opencode-adapter/**"
       ],
-      "note": "Planned owner of stdio ACP frame encoding/decoding between an engine handle and agent-host (D01). D00 declares the ACP frame contract and the engine adapter port that this module will implement; the directory does not exist yet."
+      "note": "Owner of the engine-independent stdio ACP transport between an engine child and agent-host. D01 (merged 7d0bca4, fixed 75a6cf4) implements `acp-adapter/stdio.ts` as the newline-delimited JSON `AcpDuplex` over the frozen `control-protocol/engine.ts` port, with CRLF tolerance, a maxFrameBytes bound, typed transport faults and clean-EOF settlement; `acp-adapter/test-peer.mjs` is a labeled test peer, not an engine. The directory exists now. Status is partial, not implemented: no OpenCode/DSH engine adapter compiles an `EngineLaunchSpec`, and no installed/live engine inference is proven. Gate: teams-acp-d01-host."
     },
     {
       "module_id": "config",

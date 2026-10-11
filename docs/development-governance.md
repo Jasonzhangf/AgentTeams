@@ -138,11 +138,21 @@ CLI 实际入口）；配置指向注册服务器时还依赖 D04。在依赖交
 | --- | --- | --- | --- | --- |
 | `teams-acp-daemon-intent` | config | partial | `pnpm exec vitest run --config vitest.config.ts config/daemon-intent.spec.ts config/acp-policy.spec.ts && pnpm exec tsc --noEmit && pnpm build:runtime` | 单 daemon 编译、CLI 覆盖与生效读回、v3 与多 daemon 拒绝；不含 runtime 启动 |
 | `teams-acp-public-contract` | control-protocol | partial | `pnpm exec vitest run --config vitest.config.ts control-protocol/acp.spec.ts control-protocol/teams-connection.spec.ts control-protocol/teams-state.spec.ts` | ACP frame/fault、engine adapter port、Teams 协商 frame 与连接状态 DTO 的形状与拒绝 |
+| `teams-acp-d01-host` | agent-host | partial | `pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts` | D01 已合并候选 75a6cf4 的引擎无关 stdio ACP 传输、host 的 Session/policy/history 语义与 runtime 子进程接线（标注 test peer，53/53 通过）；无真实引擎推理、无安装/live 证据 |
 | `teams-acp-serve-entry` | runtime | design | 未接线；planned_command `node cli/agentteams.mjs --serve opencode --ip <ip> --port <port> --config <agent.toml>` | 用户入口真实启动一个 daemon 并读回生效配置；等 D01/D02/D03 |
 
+D01 只交付引擎无关的 ACP 传输与 host/runtime 接线：`acp-adapter/stdio.ts`、
+`agent-host/{acp-host,acp-history}.ts`、`runtime/{acp-daemon,acp-history-store}.ts`。
+`teams-acp-d01-host` 在合并候选 `75a6cf4` 上可执行并通过（53/53），但它只证明标注
+test peer 下的传输与 host 语义，不证明真实引擎、安装副本或 live daemon，因此保持
+partial，不升级为 passed/implemented。`--serve` 用户入口仍等 D02/D03（引擎 adapter 与
+CLI 实际入口）。`.appsdk/project.json` 的 `teams-source` 现在声明 `acp-adapter/**` 与
+`cli/**` 为 owned/regression 输入，`minimum_test_count` 未改动。
+
 planned/design gate 不标 implemented/passed，也不因声明测试通过而升级。AppSDK 绑定只
-声明真实输入：`config/**`、`control-protocol/**`、
-`docs/design/teams-acp-daemon-config-v4.md` 与五张 map；`.appsdk` 状态不由本增量修改。
+声明真实输入：`.appsdk/project.json` 的 `teams-source` owned/regression 路径现在含
+`acp-adapter/**` 与 `cli/**`（此前 `teams-source` 未准入 `cli/**`），
+`minimum_test_count` 未改动；`.appsdk` 生命周期状态不由本增量修改。
 安装副本、restart、live 与浏览器证据由各交付在真实入口存在后收集。
 
 ## 历史重置溯源
