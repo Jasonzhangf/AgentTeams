@@ -1,0 +1,338 @@
+{
+  "unit": "D08",
+  "title": "installed final candidate: CLI/config -> registration/discovery -> Teams network -> ACP -> WebUI",
+  "date": "2026-10-11",
+  "base_commit": "d37d3b937c4239b8a4e8d301771a3270b97f8261",
+  "base_ref": "origin/main",
+  "worktree": "/Volumes/Intel/playground/agentteams/acp-d08-acceptance-20261011",
+  "branch": "codex/acp-d08-acceptance-20261011",
+  "committed": false,
+  "candidate_commits": [],
+  "integration_commit": null,
+  "remote_receipt": null,
+  "review": null,
+  "gate_id": "teams-acp-d08-acceptance",
+  "gate_status": "partial",
+  "driver": {
+    "path": "docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
+    "command": "node docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
+    "exit_code": 0,
+    "summary_line": "D08 acceptance PASS: 43 checks (gaps: 4, findings: 1) in 131s",
+    "summary_note": "the final line carries that run's own elapsed seconds; the check/gap/finding counts are deterministic across runs",
+    "checks": 43,
+    "gaps": 4,
+    "findings": 2,
+    "findings_reported_by_driver": 1,
+    "wall_clock_seconds": 131,
+    "runtime_under_test": "installed artifact: npm pack of the pnpm build:governance final package, installed into an isolated prefix with npm install --prefix",
+    "worktree_debug_binary_used_as_runtime_evidence": false
+  },
+  "verification": [
+    {
+      "kind": "build",
+      "label": "final package staged by the real producer",
+      "command": "pnpm build:governance",
+      "result": "pass",
+      "detail": "mode=final version=0.1.0 content_sha256=d22b43791c31d7e1... files=263; run by the driver before packing"
+    },
+    {
+      "kind": "install",
+      "label": "isolated tarball install",
+      "command": "npm pack <packRoot> --pack-destination <ownedRoot> && npm install --prefix <ownedRoot>/prefix agentteams-0.1.0.tgz",
+      "result": "pass",
+      "detail": "tarball 1516506 bytes; CLI realpath asserted inside the installed prefix and distinct from the worktree source entry"
+    },
+    {
+      "kind": "black-box",
+      "label": "installed-artifact acceptance, A01-A10",
+      "command": "node docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
+      "result": "pass",
+      "checks": 43
+    },
+    {
+      "kind": "typecheck",
+      "command": "pnpm typecheck",
+      "result": "pass",
+      "detail": "exit 0"
+    },
+    {
+      "kind": "regression-gate",
+      "label": "D06 control",
+      "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts",
+      "result": "pass",
+      "test_files": 6,
+      "tests": 115
+    },
+    {
+      "kind": "regression-gate",
+      "label": "D05 LAN and network",
+      "command": "pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts control-protocol/teams-connection.spec.ts",
+      "result": "pass",
+      "test_files": 9,
+      "tests": 73
+    },
+    {
+      "kind": "regression-gate",
+      "label": "D07 WebUI (real Chrome DOM)",
+      "command": "TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism <16 ui/teams-console/tests specs>",
+      "result": "pass",
+      "test_files": 16,
+      "tests": 71
+    },
+    {
+      "kind": "project-baseline",
+      "label": "pnpm verify",
+      "command": "pnpm verify",
+      "result": "fail",
+      "attempts": 2,
+      "first_failing_gate": "pnpm test -> scripts/regression.mjs (vitest status=1)",
+      "attempt_1_failures": [
+        "runtime/managed-opencode-session.spec.ts :: sends one real OpenCode Session request through the selected managed provider — TimeoutError: The operation was aborted due to timeout (13.4s)",
+        "opencode-adapter/tests/acp-engine.real.spec.ts :: cancels a real in-flight prompt through the notification form — TypeError: Cannot read properties of undefined (reading 'stopReason')"
+      ],
+      "attempt_2_failures": [
+        "runtime/agent-process.spec.ts :: executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state — STACK_TRACE_ERROR (15.0s)",
+        "runtime/managed-opencode-session.spec.ts :: sends one real OpenCode Session request through the selected managed provider — TimeoutError: The operation was aborted due to timeout (13.5s)",
+        "ui/teams-console/tests/focus-dom.spec.ts :: drawer keyboard focus in a real DOM moves outside focus into the drawer and wraps forward and backward Tab — spawnSync /Applications/Google Chrome.app/Contents/MacOS/Google Chrome ETIMEDOUT (16.7s)"
+      ],
+      "retry_evidence": "every failing test passed when its own file was re-run in isolation: runtime/agent-process.spec.ts 40/40 passed (41.6s), runtime/managed-opencode-session.spec.ts 1/1 passed (2.3s), opencode-adapter/tests/acp-engine.real.spec.ts 4/4 passed (10.6s), ui/teams-console/tests/focus-dom.spec.ts 1/1 passed",
+      "attribution": "not attributable to this change: the only tree difference is the added evidence directory (git diff shows no product file, and none of the failing specs reads docs/evidence). The failures are live-test resource flakes: real Chrome launch via execFileSync, real external-provider HTTP timeouts, and a 15s real-agent timeout, on a host that is concurrently running other worktrees' debug daemons. The failing set differs between attempts and every member passes in isolation.",
+      "preserved_state": "full vitest JSON report in /tmp/d08-verify.log and /tmp/d08-verify2.log",
+      "owner": "D02/D03/D07 live-test gate owners (environmental)",
+      "retry_condition": "re-run pnpm verify on an idle host with no concurrent Chrome or provider load"
+    }
+  ],
+  "acceptance_items": [
+    {
+      "id": "A01",
+      "requirement": "one config starts one daemon; independent identity/storage/IP/port; the CLI reads them back",
+      "status": "pass",
+      "checks": 6,
+      "evidence": "each config produced exactly one daemon and one engine child; four distinct identities, data directories and endpoints; registry/control status read back state=running with real pid and generation; a control config passed to --serve and a v3 config are both refused with UNSUPPORTED_CONFIGURATION"
+    },
+    {
+      "id": "A02",
+      "requirement": "OpenCode and DSH each complete a real prompt/process/reply through the installed CLI",
+      "status": "pass",
+      "checks": 3,
+      "evidence": "OpenCode: real `opencode acp --pure` child, session/new -> session/prompt -> real session/request_permission -> reply -> stopReason=end_turn; DSH: real `dsh` child, model=[teams-workbuddy, wb-deepseek-v4.1-flash], stopReason=end_turn through the real configured provider route"
+    },
+    {
+      "id": "A03",
+      "requirement": "the config names the server; automatic registration, heartbeat, lease offline, restart and reconnect",
+      "status": "pass",
+      "checks": 5,
+      "evidence": "automatic registration against wss://127.0.0.1:<port>; lastSeenAt advanced over a 15s heartbeat; the 90s server-owned lease published lease-probe presence=offline while its socket stayed online; explicit-pid stop -> entry retained offline -> restart -> online with a new pid; registry stop -> degraded registration -> restart -> online"
+    },
+    {
+      "id": "A04",
+      "requirement": "discover, authenticate, negotiate and connect; both sides know the role; a role grants no extra authority",
+      "status": "pass",
+      "checks": 5,
+      "evidence": "wrong credential refused at the transport with no connection.negotiated record; state=agreed policyRevisions=3/1 over the real LAN listener; identical master->peer agreement on both sides; master/peer and peer/master on the same daemon; both legs refused session/load with UNSUPPORTED_METHOD"
+    },
+    {
+      "id": "A05",
+      "requirement": "bidirectional ACP response/update/callback; cancel and unknown-outcome semantics are real",
+      "status": "pass",
+      "checks": 7,
+      "evidence": "real session/request_permission (once,always,reject) plus reply released the tool and completed the prompt with a real session/update over LAN; session/cancel -> stopReason=cancelled; channel closed mid-prompt -> durable result.unknown outcome=unknown and no replay; a pre-restart callback is refused with CALLBACK_UNAVAILABLE after the restart; an established LAN channel completed prompts while the registry was stopped, after the WebUI client closed, and while no control daemon ran"
+    },
+    {
+      "id": "A06",
+      "requirement": "a blacklist refuses before any side effect; an unexecutable native-tool policy refuses configuration",
+      "status": "pass",
+      "checks": 2,
+      "evidence": "blacklisted method:session/set_config_option -> CAPABILITY_DENIED with no request.dispatched record and an unchanged provider call count; native-tool blacklisting refused with UNSUPPORTED_POLICY for the opencode-unknown, foreign-engine and DSH cases"
+    },
+    {
+      "id": "A07",
+      "requirement": "WebUI discovery, networking, targeted interaction and history; real-event-driven animation",
+      "status": "partial",
+      "checks": 5,
+      "evidence": "PASS: authenticated /, /console-entry.js, /ui/browser.js; the barrel-reachable module graph carries 8 frozen DOM markers; /api/v1/projection, /api/v1/history (records=4, registry transitions=4) and /api/v1/events (SSE seq=1) answer with real data; all four page-*.js modules are served; every write command is a typed refusal and an out-of-vocabulary payload is HTTP 400. NOT MET: real-event-driven animation, because the shipped control daemon binds no Console/Session owner",
+      "unmet_requirement": "real-event-driven animation"
+    },
+    {
+      "id": "A08",
+      "requirement": "registered-online, connection state and execution availability are separate; offline objects and historical connections stay visible",
+      "status": "pass",
+      "checks": 4,
+      "evidence": "the directory lists five online and one offline peer at the same moment; live connections=0 while durable kind=connection history holds 4 rows; execution availability proven from a real engine (session/new configOptions) and an unavailable engine exits 1 with UNSUPPORTED_CONFIGURATION and no readiness line; the offline object and the historical connections remain visible"
+    },
+    {
+      "id": "A09",
+      "requirement": "history across a UI refresh and an owner restart; a non-resumable Session is never passed off as resumed",
+      "status": "pass",
+      "checks": 3,
+      "evidence": "a fresh authenticated stream plus history read returned the same 4 records byte-identical (recordId/sequence preserved, no loss or change); after a real control-owner restart (pid 41072 -> 65631) the records were retained byte-identical; a pre-restart Session is refused with SESSION_OWNERSHIP_CONFLICT and session/load with UNSUPPORTED_METHOD"
+    },
+    {
+      "id": "A10",
+      "requirement": "agent-to-agent communication continues after the browser closes and after control stops",
+      "status": "pass",
+      "checks": 2,
+      "evidence": "after every WebUI HTTP/SSE client connection the driver opened was closed, the established LAN channel completed a prompt with stopReason=end_turn; with the control daemon stopped and its listener port closed, the same established channel completed a prompt with stopReason=end_turn. The registry-stopped leg of the same family is counted under A05."
+    },
+    {
+      "id": "A11",
+      "requirement": "a real LAN address is reachable; a cross-device conclusion needs a cross-device receipt and loopback does not substitute",
+      "status": "gap",
+      "checks": 0,
+      "evidence": "LAN reachability over 192.168.0.3 is proven; only one physical host exists here (LAN 192.168.0.3, tailscale 100.66.1.82), so no cross-device receipt is claimed"
+    },
+    {
+      "id": "A12",
+      "requirement": "no Work/config/permission regression; install, restart, review and resource close-out complete",
+      "status": "partial",
+      "checks": 4,
+      "evidence": "this worker owns the installed-artifact receipt (3 checks), the restart receipt (A03/A09), pnpm typecheck (exit 0) and the mapped D05/D06/D07 regression gates (31 files, 259 tests, all pass). pnpm verify did NOT pass: two full-suite attempts failed in pnpm test on live-test resource flakes (real Chrome launch timeouts, real external-provider HTTP timeouts, one 15s real-agent timeout), and every failing test passed in isolation; the failing set differed between attempts and the tree differs from the base only by the added evidence directory. The independent review, merge, remote receipt, freeze and worktree close-out belong to the integration owner and are not claimed here"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "G1",
+      "item": "A07",
+      "name": "animation driven by real events",
+      "reason": "the shipped control daemon binds no Console owner (runtime/control-process.ts:756 calls createControlOwner({ network: network.port }) with no owner) and hardcodes an empty directory snapshot, so /api/v1/projection is permanently an empty v1 snapshot and no real event can advance the SSE stream; only the transport is proven",
+      "owner": "D06/D07",
+      "classification": "retained delivery obligation, not a driver limitation"
+    },
+    {
+      "id": "G2",
+      "item": "A07",
+      "name": "live-browser DOM and screenshots",
+      "reason": "headless Chrome cannot satisfy the origin's HTTP Basic challenge for a same-origin fetch/EventSource and a credentialed origin URL is rejected by fetch itself; the owner serves no credentials endpoint. The frozen DOM contract is owned by ui/teams-console/tests/render-d07.spec.ts (real Chrome)",
+      "owner": "D07",
+      "classification": "evidence-level boundary"
+    },
+    {
+      "id": "G3",
+      "item": "A07",
+      "name": "targeted interaction from the WebUI",
+      "reason": "the control daemon binds no Session owner, so every interaction write is a typed UNSUPPORTED_OPERATION refusal and no prompt can be targeted from the WebUI in this candidate",
+      "owner": "D06/D07",
+      "classification": "retained delivery obligation"
+    },
+    {
+      "id": "G4",
+      "item": "A11",
+      "name": "cross-device receipt",
+      "reason": "only one physical host is available; loopback and same-host non-loopback are never passed off as cross-device",
+      "owner": "D08 integration",
+      "classification": "missing device, explicitly not claimed"
+    }
+  ],
+  "findings": [
+    {
+      "id": "D08-F1",
+      "title": "agentteams control stop reports STOP_TIMEOUT while a WebUI client socket is open",
+      "owner": "runtime/control-process.ts (control daemon shutdown path, ~line 807)",
+      "observed": "agentteams control stop --generation 1 exited 1 with \"STOP_TIMEOUT: control pid=41072 did not exit after SIGTERM\"; the daemon exited ~0.25s later and the state was consistent (state=stopped, pid gone, listener port closed)",
+      "root_cause": "the shutdown promise is server.close(() => resolveClose()) with no server.closeIdleConnections()/server.closeAllConnections(); server.close() only stops accepting and waits for existing sockets, so a live keep-alive/SSE client socket holds the process past the CLI's bounded wait",
+      "minimal_repro": "start a registry and a control daemon, open /api/v1/events twice (read one frame, reader.cancel() each), then agentteams control stop --config control.toml --generation <n> -> exit 1, STOP_TIMEOUT after ~5.17s, pid gone ~0.25s later. Variants measured: one SSE subscription -> clean stop in 269ms; zero -> 251ms; 30 pooled plain requests -> 227ms; reader.cancel(), controller.abort() and 5 pooled requests + 1 SSE all still reproduce it",
+      "driver_reproduces_it": true,
+      "impact": "a correct shutdown is reported as a failure to the operator; no history is lost (A09 retention holds) and agent-to-agent traffic is unaffected (A10 passes while the control daemon is down)",
+      "fixed_by_this_worker": false
+    },
+    {
+      "id": "D08-F2",
+      "title": "the control daemon's projection can never carry real facts",
+      "owner": "runtime/control-process.ts:752-756 and ~:558",
+      "observed": "/api/v1/projection is permanently {version:1, agents:[], sessions:[], notifications:[], configs:[], connections:[]}",
+      "root_cause": "the comment at runtime/control-process.ts:752-754 claims the daemon binds the owner from its own real network facts, but createControlOwner({ network: network.port }) passes no owner and the directory snapshot is hardcoded empty",
+      "minimal_repro": "start a control daemon and read /api/v1/projection with valid HTTP Basic credentials while agent peers are registered online; agents/sessions/notifications/configs stay empty",
+      "driver_reproduces_it": true,
+      "impact": "the shipped WebUI can never show real agents, sessions or notifications, which is why A07 is PARTIAL and gaps G1 and G3 exist",
+      "fixed_by_this_worker": false
+    }
+  ],
+  "observed_values": {
+    "install_content_sha256_prefix": "d22b43791c31d7e1",
+    "install_content_sha256_note": "the staged-tree hash of the canonical run; it changes whenever the staged candidate tree changes, because the driver's own evidence files are part of that tree",
+    "install_files": 263,
+    "tarball_bytes_observed": 1516506,
+    "tarball_bytes_note": "1516505-1516507 across runs; the tar header carries the build time, so the tarball is not byte-deterministic",
+    "installed_runtime_modules": [
+      "negotiation",
+      "routePlan",
+      "directRoute",
+      "registration"
+    ],
+    "lan_interface": "192.168.0.3",
+    "negotiation": "state=agreed sourceRole=master targetRole=peer policyRevisions=3/1",
+    "dsh_model": [
+      "teams-workbuddy",
+      "wb-deepseek-v4.1-flash"
+    ],
+    "opencode_permission_options": [
+      "once",
+      "always",
+      "reject"
+    ],
+    "history_records_at_webui_read": 4,
+    "history_records_after_control_restart": 7,
+    "sse_first_frame_sequence": 1,
+    "projection_v1": "agents=0 connections=0 (always empty)",
+    "refused_commands": {
+      "connection.connect": "UNSUPPORTED_OPERATION",
+      "network.membership.apply": "UNSUPPORTED_OPERATION",
+      "permission.reply": "UNSUPPORTED_OPERATION (no Session owner bound to the control daemon)",
+      "out-of-vocabulary-command-payload": "HTTP 400 from the closed ConsoleCommandV1 parser",
+      "session/load after an owner restart": "UNSUPPORTED_METHOD",
+      "stale callback reply after an agent restart": "CALLBACK_UNAVAILABLE (transport acp.error)"
+    }
+  },
+  "engine_versions": {
+    "node": "v22.22.2",
+    "opencode": "1.18.23",
+    "dsh": "0.2.0-rc.2"
+  },
+  "non_claims": [
+    "cross-device receipt",
+    "live-browser DOM or screenshot evidence",
+    "real-event-driven WebUI animation",
+    "targeted interaction from the WebUI",
+    "commit, merge, remote receipt or freeze",
+    "independent review of the D08 candidate",
+    "memory promotion"
+  ],
+  "evidence_boundary": {
+    "source": "pnpm build:governance (runs pnpm build) staged a final package from this tree; exit 0",
+    "test": "pnpm typecheck plus the mapped D05/D06/D07 regression suites; see verification[]",
+    "build": "mode=final version=0.1.0 content=d22b43791c31d7e1... files=263",
+    "installed_artifact": "npm pack tarball 1516506 bytes installed with npm install --prefix into an isolated prefix; the CLI realpath is inside that prefix and the Teams network modules are imported from generated/runtime-lib",
+    "restart": "agent A explicit-pid stop -> restart -> reconnect; control owner restart; registry stop -> restart",
+    "live": "real LAN interface 192.168.0.3, real opencode and dsh engines, real configured provider route for DSH",
+    "browser": "not claimed; HTTP/SSE transport plus module graph plus frozen DOM markers only",
+    "review": "not claimed; owned by the integration owner",
+    "merge_remote_freeze": "not claimed; nothing is committed by this worker",
+    "cleanup": "every daemon/engine/provider process is stopped by explicit pid; the owned temp root is removed on PASS and retained with a printed path on FAIL"
+  },
+  "retained_objects": [],
+  "retained_obligations": [
+    {
+      "item": "pnpm verify is not reliably green on this host",
+      "owner": "D02/D03/D07 live-test gate owners",
+      "release_condition": "re-run pnpm verify on an idle host; every test that failed in the two full-suite attempts already passes in isolation"
+    },
+    {
+      "item": "A07 real-event-driven animation",
+      "owner": "D06/D07",
+      "release_condition": "bind a real Console/Session owner to the control daemon so /api/v1/projection reflects real network facts"
+    },
+    {
+      "item": "A11 cross-device receipt",
+      "owner": "D08 integration",
+      "release_condition": "two real LAN hosts, with the recorded addresses, candidate and commands"
+    },
+    {
+      "item": "A12 review, merge, remote receipt, freeze and worktree close-out",
+      "owner": "D08 integration",
+      "release_condition": "a passing candidate gate followed by one independent review of the whole result"
+    }
+  ],
+  "driver_side_effects": [
+    "the driver stages its own evidence directory (git add -- docs/evidence/acp-d08-acceptance-20261011/...) because the project producer refuses untracked product paths; it never commits, resets, checks out, stashes or passes --no-verify"
+  ]
+}

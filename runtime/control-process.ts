@@ -803,7 +803,16 @@ export async function runControlProcess(argv: readonly string[] = process.argv.s
   let stopping: Promise<void> | undefined
   const stop = (signal: NodeJS.Signals) => {
     if (stopping) return
-    stopping = new Promise<void>(resolveClose => { server.close(() => resolveClose()) })
+    stopping = new Promise<void>(resolveClose => {
+      server.close(() => resolveClose())
+      // `server.close()` only stops accepting new work and then waits for the sockets that
+      // are already open. A WebUI keep-alive or event-stream client would hold the daemon
+      // past the caller's bounded stop wait, so a correct shutdown reports STOP_TIMEOUT and
+      // looks like a failure. Closing the listener's own connections is what the stop
+      // actually means: the stream ends, the UI degrades to a lost owner, and the pid exits.
+      server.closeIdleConnections()
+      server.closeAllConnections()
+    })
       .then(async () => {
         // Order: the WebUI listener first, then the owned registration client, then the
         // durable state record. The control daemon never stops a registry or an engine.

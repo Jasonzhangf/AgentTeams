@@ -209,8 +209,28 @@ it('streams the SSE projection and closes the stream on owner loss', async () =>
   expect((await stopControlDaemon(configPath)).state).toBe('stopped')
 })
 
-it('refuses a second start while the control generation is alive', async () => {
+it('stops by explicit pid while a live WebUI event-stream client still holds its socket open', async () => {
   const configPath = track(await controlConfig())
+  const started = await startControlDaemon(configPath, { env })
+  // Open the real WebUI event stream, read one frame, and deliberately leave the socket
+  // open. `server.close()` only stops accepting new work; it still waits for open sockets,
+  // so a correct shutdown must close its own listener connections instead of letting a
+  // live keep-alive/SSE client push the daemon past the bounded stop wait.
+  const response = await fetch(started.url + '/api/v1/events', { headers: { authorization: basic } })
+  expect(response.status).toBe(200)
+  expect(response.headers.get('content-type')).toContain('text/event-stream')
+  const reader = response.body!.getReader()
+  const first = await reader.read()
+  expect(new TextDecoder().decode(first.value)).toContain('event: projection')
+
+  const stopped = await stopControlDaemon(configPath, started.generation)
+  expect(stopped.state).toBe('stopped')
+  expect(processAlive(started.pid!)).toBe(false)
+  expect((await statusControlDaemon(configPath)).state).toBe('stopped')
+  await reader.cancel().catch(() => undefined)
+})
+
+it('refuses a second start while the control generation is alive', async () => {  const configPath = track(await controlConfig())
   const started = await startControlDaemon(configPath, { env })
   await expectFault(startControlDaemon(configPath, { env }), 'ALREADY_RUNNING')
   expect((await statusControlDaemon(configPath)).generation).toBe(started.generation)
