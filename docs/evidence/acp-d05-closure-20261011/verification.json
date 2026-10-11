@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "evidence_id": "acp-d05-closure-20261011",
+  "recorded_at": "2026-10-11T08:18:00-07:00",
+  "base_commit": "cf551b11f274775ae12d759531043ddd696bf8b3",
+  "note": "Source-tree LAN evidence only. Not an installed-copy, restart, deployed-entrypoint, or cross-device receipt. All ACP gates remain partial.",
+  "driver_invocation": "node --experimental-transform-types docs/evidence/acp-d05-closure-20261011/black-box-lan-two-engines.mjs",
+  "driver_invocation_note": "Plain `node` is wrong for this script: it imports .ts sources and crashes with ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX on the TS parameter property in network/direct-route.ts.",
+  "lan_black_box": {
+    "state": "PASS",
+    "exit_code": 0,
+    "assertion_checks": 91,
+    "observations": 1,
+    "observations_detail": "the DSH leg delivered 3 session/update frame(s) over LAN",
+    "lan_ip": "192.168.0.3",
+    "engines": {
+      "agent_a": "opencode (/Users/fanzhang/.opencode/bin/opencode acp --pure)",
+      "agent_b": "dsh (node /opt/homebrew/bin/dsh --profile acp --patch <owned>/teams-dsh-acp.patch.json)"
+    },
+    "dsh_prompt_leg": { "state": "PASS", "first_failing_gate": null, "detail": "stopReason=end_turn" },
+    "provider_calls": 8,
+    "admitted_connections": 4,
+    "registry_degradation_seen": "registration state=stopped attempts=3 reconnects=0",
+    "covered": [
+      "real openssl TLS material for registry and both agents",
+      "registry reports a live explicit pid and running state",
+      "both daemons serve a real LAN listener and keep a loopback local channel",
+      "both publish the same capabilities revision as readiness",
+      "each daemon runs exactly one child, its engine; the DSH patch stays inside the owned home, never in ~/.dsh",
+      "the real registry directory lists both identities online with real LAN routes",
+      "a wrong credential is refused at HTTP admission and never reaches the connection handler",
+      "negotiation reaches agreed over the real LAN socket with a distinct master/peer role pair and integer accepted config revisions",
+      "real opencode initialize, session/new, session/update, permission callback (once,always,reject), callback reply, and a terminal prompt result over LAN",
+      "role visibility is non-degenerate on both channels",
+      "same RPC id is isolated across two channels; results never cross",
+      "a lost peer yields a durable result.unknown record and the unknown result is never replayed after reconnect",
+      "real DSH initialize and session/new over LAN, terminal prompt result with no opencode stub activity",
+      "a blacklisted method is refused before the engine with the typed JSON-RPC envelope (code -32000, data.code CAPABILITY_DENIED), never dispatched, and produces no provider call",
+      "the registry outage does not close the established channel: a second prompt completes while the registry is down and the daemon reports a non-online registration state",
+      "neither daemon ever spawned a control process",
+      "explicit-PID stop removes both engine pids, all local/LAN/registry ports, and the owned DSH home",
+      "the daemon recorded exactly the 4 admitted connections and its durable execution history"
+    ],
+    "removed_assertion": {
+      "text": "the daemon recorded the refusal as a durable policy denial",
+      "reason": "Impossible. agent-host/acp-host.ts dispatchToEngine calls input.assertAllowed before appendRecord(historyEntry('request.dispatched', ...)), so a refused method writes no history record at all. policy.denied exists only as a field of the AcpPolicySnapshot shape assertion, never as a history event. Replaced by asserting the refusal was never dispatched and that the durable initialize record is still present."
+    },
+    "driver_defects_fixed": [
+      "The overall deadline used setTimeout(...).unref() and only set process.exitCode, so the watchdog could never end the process: a run survived 16m48s past the 900s deadline with no children left, and the next run leaked a registry pid for 1h03m. The timer now reaps every recorded pid (SIGTERM then SIGKILL) and the registry through its own service entry, then process.exit(1); the timer is no longer unref'd.",
+      "A passing run also hung after printing PASS because the stopped daemons leave sockets and timers behind, so the event loop never drains. The driver now flushes stdout and process.exit's with its own verdict after reaping everything in the finally block."
+    ]
+  },
+  "commands": [
+    { "cmd": "pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts control-protocol/teams-connection.spec.ts", "result": "Test Files 9 passed (9); Tests 73 passed (73)", "exit_code": 0 },
+    { "cmd": "pnpm exec vitest run --no-file-parallelism runtime/acp-serve.spec.ts", "result": "Test Files 1 passed (1); Tests 26 passed (26)", "exit_code": 0 },
+    { "cmd": "pnpm exec vitest run --no-file-parallelism runtime/registry-process.spec.ts runtime/registry-registration.spec.ts network/registration-client.spec.ts", "result": "Test Files 3 passed (3); Tests 20 passed (20)", "exit_code": 0 },
+    { "cmd": "pnpm exec vitest run --no-file-parallelism cli/agentteams.spec.ts", "result": "Test Files 1 passed (1); Tests 30 passed (30)", "exit_code": 0 },
+    { "cmd": "node --experimental-transform-types docs/evidence/acp-d05-network-20261010/isolated-transport-observation.mjs", "result": "OBSERVATION PASSED: 23 checks", "exit_code": 0 },
+    { "cmd": "node docs/evidence/acp-d03-serve-20261010/black-box-serve-dsh.mjs", "result": "BLACK-BOX PASS: one daemon + one real DSH engine child, verified derived route, real prompt, real cancel, explicit-PID stop, owned DSH home removed", "exit_code": 0 },
+    { "cmd": "node docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs", "result": "BLACK-BOX PASS: one daemon + one engine child, verified model, prompt, permission callback, cancel, explicit-PID stop", "exit_code": 0 },
+    { "cmd": "pnpm typecheck", "result": "no errors", "exit_code": 0 },
+    { "cmd": "pnpm build:runtime", "result": "build ok", "exit_code": 0 },
+    { "cmd": "five-map validation (inline)", "result": "5 maps parse; 74 gates; no duplicate gate_id; no dangling required_gates", "exit_code": 0 }
+  ],
+  "not_claimed": [
+    "no installed-artifact replay",
+    "no restart evidence",
+    "no deployed-entrypoint evidence",
+    "no cross-device receipt (two real LAN devices remain with D08/A11)",
+    "no UI/browser evidence",
+    "AppSDK compile/verify BLOCKED by the pre-existing PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014 (required_binary=appsdk-0.1.0014, local 0.1.0015); exit 1 before it reads the maps",
+    "full `pnpm test` is not claimed: legacy Work suites are load-sensitive under parallel load"
+  ],
+  "resource_cleanup": {
+    "method": "explicit PIDs only; no pkill, killall, kill $(...) or xargs kill",
+    "temp_roots_removed": ["d05-lan-blackbox-9FnliL", "d05-lan-blackbox-GXzQSo", "d05-lan-blackbox-h9o9AV", "d05-lan-blackbox-sbfC3R", "d05-lan-blackbox-hc54el", "d05-lan-blackbox-mJnxwT", "d05-lan-blackbox-K3pZ6Z"],
+    "leaked_process_found_and_killed": "registry daemon pid 39905, alive 1h03m from an aborted run",
+    "verified_after_runs": "no d05 registry-process.js or runtime-lib acp-serve process left; all local, LAN and registry ports free; owned DSH home removed"
+  }
+}

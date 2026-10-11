@@ -143,18 +143,18 @@ CLI 实际入口）；配置指向注册服务器时还依赖 D04。opencode 与
 | `teams-acp-d01-host` | agent-host | partial | `pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts` | D01 已合并候选 75a6cf4 的引擎无关 stdio ACP 传输、host 的 Session/policy/history 语义与 runtime 子进程接线（标注 test peer，53/53 通过）；本命令本身无真实引擎推理、无安装/live 证据（真实引擎证据属于 `teams-acp-d02-opencode` 与 `teams-acp-d03-dsh`） |
 | `teams-acp-d02-opencode` | opencode-adapter | partial | `pnpm exec vitest run opencode-adapter --no-file-parallelism` | 已合并候选 1d4df3a（修复 1af8fe5/9436aae）的 OpenCode adapter：compileLaunch 唯一编译 launch spec、verifyEffective 只报引擎 session/new 返回的模型、真实 prompt/cancel/permission/黑名单（本地 stub provider + 已安装 opencode，65/65）；非安装副本证据，不含 D03 |
 | `teams-acp-d03-dsh` | dsh-adapter | partial | `pnpm exec vitest run dsh-adapter runtime/acp-serve.spec.ts --no-file-parallelism` | D03 冻结候选 60bf76b 的 DSH adapter：launch 编译、policy-before-side-effect、native config 派生与 effectiveness 读回，加上本候选的 `--serve dsh` 接线（`engineAdapterFor` 分发、`DSH_HOME` 隔离、stop/失败路径清理 engine home、adapter 自持 `enforceablePolicies` 且入口不替换为 `declaredMethods`）；dsh-adapter 31/31 通过；两个本地非 CI driver 覆盖真实 dsh 0.2.0-rc.2：adapter driver 18/18，`--serve dsh` 黑盒（真实 prompt/cancel/显式 PID stop）PASS；仍无安装副本证据、AppSDK 仍阻塞 |
-| `teams-acp-d04-registry` | runtime | partial | `pnpm exec vitest run --no-file-parallelism server/relay.spec.ts network/relay-client.spec.ts network/registration-client.spec.ts server/registry-intent.spec.ts runtime/registry-process.spec.ts runtime/registry-registration.spec.ts` | D04 已合并候选 953d952 的 registry daemon 生命周期、TLS-only intent 映射、presence 租约与客户端注册/心跳/重连（73/73 通过；候选黑盒 14/14 经 review 独立复现）；无引擎级断电集成、无安装副本/live `--serve` 证据、AppSDK 仍阻塞 |
-| `teams-acp-d05-network` | network | partial | `pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts` | D05 连接层：冻结 frame 上的协商执行（唯一 agreement 来源、typed 拒绝、R3 整数 acceptedRevision）、认证 ACP session（本地分配 ref、收包边界重写 generation/engineInstanceId、payload 原样透传）、kind=connection 历史、membership 视图与 R4 增量发布面（53/53 通过；含 R4 helper 所在的 runtime/registry-registration.spec.ts）；另有隔离传输观测脚本在真实 TLS 回环 direct-WSS listener 上跑通真实准入、hello 握手与 ACP 帧往返（23 项）；peer 引擎为进程内脚本 duplex，无两真实引擎 LAN 证据、无 `--serve` 接线 |
-| `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环的 typed 拒绝、`engineAdapterFor` 单点分发 opencode 与 dsh、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult、stop 与失败路径清理自有 engine home、只接受 adapter 自己声明的 `enforceablePolicies`（缺失即 typed 失败，不回退 `declaredMethods`）；两条真实 CLI 黑盒：opencode 见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`（源码树与本地 `npm pack` + `npm install` 的 `node_modules/.bin/agentteams` 两条路径均通过），dsh 见 `docs/evidence/acp-d03-serve-20261010/black-box-serve-dsh.mjs`（真实安装 dsh 0.2.0-rc.2、真实派生配置与 prompt、cancel、显式 PID stop）；仅 loopback；注册（D04，源码层已交付）与协商（D05，未交付）均未接入该入口 |
+| `teams-acp-d04-registry` | runtime | partial | `pnpm exec vitest run --no-file-parallelism server/relay.spec.ts network/relay-client.spec.ts network/registration-client.spec.ts server/registry-intent.spec.ts runtime/registry-process.spec.ts runtime/registry-registration.spec.ts` | D04 已合并候选 953d952 的 registry daemon 生命周期、TLS-only intent 映射、presence 租约与客户端注册/心跳/重连（已按当前候选复验 75/75 通过；候选黑盒 14/14 经 review 独立复现）；无安装副本/live `--serve` 证据、AppSDK 仍阻塞 |
+| `teams-acp-d05-network` | network | partial | `pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts control-protocol/teams-connection.spec.ts` | D05 连接层与入口组合：冻结 frame 上的协商执行（唯一 agreement 来源、typed 拒绝、R3 整数 acceptedRevision）、认证 ACP session（本地分配 ref、收包边界重写 generation/engineInstanceId、payload 原样透传）、ingress/status 端口、kind=connection 历史、membership 视图与 R4 增量发布面（73/73 通过）；隔离传输观测脚本在真实 TLS 回环 direct-WSS listener 上跑通真实准入、hello 握手与 ACP 帧往返（23 项）；D05 closure driver 覆盖两真实引擎 LAN、registry outage 存活、降级报告与无 control 进程；仍无 installed-copy/restart/deployed/cross-device 证据 |
+| `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环无 discovery 的 typed 拒绝、`engineAdapterFor` 单点分发 opencode 与 dsh、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult、stop 与失败路径清理自有 engine home、只接受 adapter 自己声明的 `enforceablePolicies`（缺失即 typed 失败，不回退 `declaredMethods`）；D04 注册与 D05 LAN negotiation 已接入该入口；两条真实 CLI 黑盒：opencode 见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`，dsh 见 `docs/evidence/acp-d03-serve-20261010/black-box-serve-dsh.mjs`；仍无 DSH installed-copy 回放、restart、deployed-entrypoint 与 cross-device 回执 |
 
 D02 交付 OpenCode 引擎 adapter（`opencode-adapter/src/acp-engine.ts`）与 `--serve`
 用户入口（`runtime/acp-serve.ts` + `cli/agentteams.mjs` 的 flag/dispatch）。
 `teams-acp-d02-opencode` 在合并候选 `1d4df3a` 上可执行并通过（65/65，含 4 个真实引擎
-用例）；`teams-acp-serve-entry` 在本候选上可执行并通过（runtime/acp-serve.spec.ts 16/16、
+用例）；`teams-acp-serve-entry` 在本候选上可执行并通过（runtime/acp-serve.spec.ts 26/26、
 CLI spec 30/30，另有两条真实 CLI 进程黑盒：opencode 与真实安装 DSH 0.2.0-rc.2；opencode
 黑盒在本地 `npm pack` + `npm install` 的安装副本 `node_modules/.bin/agentteams` 上重跑也
 通过），但它仍是 partial：DSH 黑盒是本地 live 运行、没有安装副本回放，监听仅 loopback，
-注册（D04）与连接协商（D05）未接入该入口；该安装副本是本地基础包安装，不是发布产物或
+注册（D04）与连接协商（D05）已由本 closure 接入该入口（真实 LAN 黑盒 PASS 前须外部 DSH provider 可用）；该安装副本是本地基础包安装，不是发布产物或
 AppSDK 生命周期回执。D03 的 `--serve dsh` 接线在 `runtime/acp-serve.ts` 的同一
 `engineAdapterFor` 分发点落地，daemon/host/stdio/readiness/stop 代码不重复。adapter 的
 库级语义未被本增量修改；`runtime/agent-process.ts` 仍是旧 Work 入口，未被 `--serve` 替换。
@@ -195,29 +195,22 @@ owned/regression 输入，`minimum_test_count` 保持 304。
 D04 只交付注册 daemon 与自动注册：`server/registry-intent.ts`、`server/relay.ts` 的
 presence 租约、`network/registration-client.ts`、`runtime/registry-process.ts` 与
 `runtime/registry-registration.ts`，以及 `agentteams registry start|status|stop` 入口。
-`teams-acp-d04-registry` 在合并候选 `953d952` 上可执行并通过（73/73），但它只证明源码层
-的 registry 生命周期、TLS-only intent 映射、租约与客户端注册/心跳/重连。它不证明引擎级
-断电集成（`runtime/agent-daemon.ts` 未改动）、不证明安装副本或 live `--serve` daemon
-（`--serve` 调用方与 D02 引擎 adapter 已合并，但注册路径未被 `--serve` 组合），AppSDK compile/verify 仍因既有
-0.1.0014 pin mismatch 阻塞，因此保持 partial，不升级为 passed/implemented。D04 的四个新
+`teams-acp-d04-registry` 在本候选上已复验并通过（75/75），它证明源码层
+的 registry 生命周期、TLS-only intent 映射、租约与客户端注册/心跳/重连。D05 closure 已把注册路径接入 `--serve` 组合，但 D04 gate 本身仍不证明安装副本、restart、deployed-entrypoint 或 cross-device 证据；AppSDK compile/verify 仍因既有 0.1.0014 pin mismatch 阻塞，因此保持 partial，不升级为 passed/implemented。D04 的四个新
 文件与 `cli/**` 已由 `teams-source` 的 owned/regression 路径覆盖，`.appsdk/project.json`
 无需改动，`minimum_test_count` 保持 304。
 
-D05 只交付网络连接层（协商、会话、连接历史、membership 与增量发布面），不接线 runtime
+D05 交付网络连接层（协商、会话、连接历史、membership、ingress/status 与增量发布面），并接线 runtime
 serve 入口：`network/teams-negotiation.ts` 在冻结的 context/propose/accept/reject/confirm/ready
 frame 上执行协商，身份只来自已认证的传输事实，`negotiatedAgreement` 是唯一 agreement
 来源；`network/teams-session.ts` 把一个已认证连接桥接到注入的 `AcpHost`，在收包边界分配
 本侧 connectionId/channelId 并把 targetGeneration/engineInstanceId 重写为本地值；
 `network/teams-connection-history.ts` 以 kind=connection 写入/读取冻结的 HistoryRecord；
 `network/teams-membership.ts` 从目录/路由/注册三个既有面组装 per-remote-agent
-`TeamsConnectionStatus`。`teams-acp-d05-network` 在本候选（base f5d53e4）上可执行并通过
-（53/53），另有隔离观测脚本
+`TeamsConnectionStatus`。`teams-acp-d05-network` 在本候选上可执行并通过（73/73，含新增 ingress/status/control-protocol parser specs），另有隔离观测脚本
 `docs/evidence/acp-d05-network-20261010/isolated-transport-observation.mjs` 在真实 TLS
 回环 direct-WSS listener 上跑通真实准入、真实 hello 握手与真实 ACP 帧往返（23 项）。
-它保持 partial，不升级为 passed/implemented：观测中的 peer 引擎是进程内脚本 duplex、
-peer agent 也在进程内，因此没有两真实引擎 LAN 证据；`runtime/acp-serve.ts` 与
-`cli/agentteams.mjs` 不在本变更范围，serve 入口尚未组合本链路，DSH serve 接线仍未交付。
-D05 只有在两真实引擎黑盒（`--serve opencode` 与 `--serve dsh`）跑通后才能收口。R4 的发布
+它保持 partial，不升级为 passed/implemented：隔离观测中的 peer 引擎仍是进程内脚本 duplex；closure driver 已覆盖两真实引擎 LAN（`--serve opencode` 与 `--serve dsh`）、真实 registry、真实 negotiation、method blacklist 无引擎调用/无 dispatch 记录、registry outage 存活、降级注册报告与无 control 进程，但没有 installed-copy、restart、deployed-entrypoint 或 cross-device 回执。R4 的发布
 面是加性的：`RegistrationClient.publish` 复用 D04 注册路径与同样的 online 守卫，
 `runtime/registry-registration.ts` 只新增两个纯函数（`listenerRouteCandidates`、
 `declarationWithPublishedSurfaces`），没有第二个 registry/directory/发布路径。R4 helper

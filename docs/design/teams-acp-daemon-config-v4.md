@@ -184,3 +184,22 @@ D00 不实现：stdio ACP adapter（D01）、CLI 与 runtime 接线、引擎启�
 主集成单 writer 已在同一增量补上根 `AGENTS.md`、`docs/development-governance.md`、长程交付合同和五张 `docs/architecture/` map 的 planned 绑定。绑定只声明 D00 的契约事实与待接线路径，`planned/design` gate 不标 implemented/passed。
 
 `agentteams --serve opencode --ip --port` 已接线：`runtime/acp-serve.ts` 读取一份 v4 agent intent，经 `startAcpAgentDaemon`（D01 stdio ACP）与 OpenCode 引擎 adapter（D02）启动一个 daemon 加一个引擎子进程，真实 CLI 黑盒证据见 `docs/evidence/acp-d02-integration-20261010/`。`--serve dsh` 也已接线：同一入口的 `engineAdapterFor` 按配置的 engine kind 选择 `createDshEngineAdapter()`（D03），复用同一 daemon/host/stdio/readiness/stop 代码，遵守 `DSH_HOME` 隔离、派生 profile patch、`DSH_PERMISSION_MODE` 与 telemetry 关闭，并在 stop 与启动失败路径删除自有 engine home；每个 adapter 自己声明 `enforceablePolicies`（DSH 按 `dshHasPolicyEnforcementOwner` 规则派生），入口只要求该声明、缺失即以指名 adapter 的 typed fault 失败，绝不回退到 `declaredMethods`；真实安装的 DSH 0.2.0-rc.2 黑盒证据（真实派生配置、真实 prompt、cancel、显式 PID stop、零泄漏 engine home）见 `docs/evidence/acp-d03-serve-20261010/`。配置指向注册服务器时还依赖 D04。`teams-acp-serve-entry` 与 `teams-acp-d03-dsh` 均记为 partial，未标 passed/implemented；不新增只编译不启动的占位入口。
+
+## 11. D00 amendment A1 — policy revision as v1 as amended (2026-10-11)
+
+D05 closure delivered D00 amendment A1. The version remains `1`; the
+amendment changes the Teams negotiation fields, not the frame version.
+
+| Field | Frame | Source of truth | Parser rule |
+| --- | --- | --- | --- |
+| `policyRevision` | `teams.connection.context` | The responder's own accepted config revision, exposed through `TeamsConnectionContext.policyRevision`. | Required strict positive integer. Missing, non-integer, zero or negative values fail `INVALID_ACP_FRAME`. No default is supplied. |
+| `sourcePolicyRevision` | `teams.connection.propose` | The initiator's own accepted config revision, carried as `TeamsConnectionPropose.sourcePolicyRevision`. | Required strict positive integer. Missing, non-integer, zero or negative values fail `INVALID_ACP_FRAME`. No default is supplied. |
+
+The pre-A1 caller-supplied `peerPolicyRevision` input is removed. The
+responder derives the peer revision from the propose frame and does not trust a
+caller-supplied peer revision. A pre-A1 peer that omits either required integer
+field is refused with `INVALID_ACP_FRAME`; it is not silently accepted or
+assigned a default.
+
+The negotiation agreement keeps integer accepted config revisions only. It never
+uses a hashed `AcpPolicySnapshot.revision` or coerces a non-integer value.

@@ -100,10 +100,11 @@ are the integer accepted config revision (`config/runtime-config.ts`
   truncation.
 - `:218` and `positiveInteger(options.selfPolicyRevision, ...)` refuse a
   non-integer revision as an invalid input instead of coercing it.
-- The responder's `peerPolicyRevision` is an explicit authenticated input
-  (`:83`-`:86`); it is never guessed and never defaulted. The Lead ruling below
-  records that its authenticated wire source is a D00-owner decision that is
-  still open.
+- The caller-supplied `peerPolicyRevision` input was removed by D00 amendment
+  A1 (2026-10-11). The responder now derives the peer policy revision from
+  `TeamsConnectionPropose.sourcePolicyRevision` and the responder's own
+  `TeamsConnectionContext.policyRevision`; it never trusts an unauthenticated
+  caller-supplied revision. The Lead ruling below records the amended rule.
 - Spec evidence: "carries the integer accepted config revision, never a hashed
   policy snapshot revision" asserts `Number.isSafeInteger` and refuses a
   64-character sha256 string.
@@ -258,9 +259,12 @@ counts 23 checks.
   2. **Serve composition.** `runtime/acp-serve.ts` and `cli/agentteams.mjs` are
      outside this change's scope, so the serve entry does not compose the D05
      chain; `--serve dsh` still has no serve wiring.
-  3. **`peerPolicyRevision` wire source.** `peerPolicyRevision` is a required
-     authenticated input; its authenticated wire source is a D00-owner decision
-     that is still open (Lead ruling below). Nothing here proves that source.
+  3. **`peerPolicyRevision` wire source.** SUPERSEDED by D00 amendment A1
+     (2026-10-11, closure receipt): the unauthenticated caller input no longer
+     exists. The responder now derives the peer revision from
+     `TeamsConnectionPropose.sourcePolicyRevision` and its own
+     `TeamsConnectionContext.policyRevision`. This change did not prove that
+     source; the closure change does.
   4. **R4 publication wiring.** `listenerRouteCandidates` and
      `declarationWithPublishedSurfaces` are pure helpers covered at source level;
      no live daemon caller composes them into a running publish loop.
@@ -282,10 +286,15 @@ counts 23 checks.
   real `AcpHost` peers on one ACP channel is semantically impossible and is
   rejected: a callback arriving at the peer host would be handled as a client
   request. One real host side is the honest maximum for this channel shape.
-- **Lead ruling (`peerPolicyRevision`):** `peerPolicyRevision` is a required
-  authenticated input that must never be guessed or defaulted. Its authenticated
-  wire source is a D00-owner decision that is still open; this change consumes
-  the value from the authenticated caller and does not invent a source.
+- **Lead ruling (`peerPolicyRevision`):** SUPERSEDED by D00 amendment A1
+  (2026-10-11). The ruling below kept the revision strict and unguessable, and
+  that part still holds; the part that required an authenticated caller-supplied
+  input is gone. A1 carries both revisions inside the frozen frames
+  (`TeamsConnectionContext.policyRevision`,
+  `TeamsConnectionPropose.sourcePolicyRevision`), so the responder no longer
+  consumes a caller-supplied value and invents no source. The historical
+  ruling: `peerPolicyRevision` was a required authenticated input that must
+  never be guessed or defaulted.
 
 ## 6. Part-2 review-fix round (A1-A8)
 

@@ -4,11 +4,12 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createServer, isIP, type Server, type Socket } from 'node:net'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { homedir } from 'node:os'
-import type { AuthenticatedAgent, JsonValue } from '../control-protocol/agent-services.ts'
-import type { AcpChannelRef, AcpDelivery, AcpFrame, AcpRpcId } from '../control-protocol/acp.ts'
+import type { AgentDeclaration, AuthenticatedAgent, CapabilityDeclaration, JsonValue } from '../control-protocol/agent-services.ts'
+import type { AcpChannelRef, AcpDelivery, AcpFault, AcpFrame, AcpRpcId } from '../control-protocol/acp.ts'
 import { AcpError } from '../control-protocol/acp.ts'
 import type { AcpDuplex, EngineAdapter, EngineLaunchInput, EngineStopResult } from '../control-protocol/engine.ts'
-import type { AgentDaemonIntent, DaemonEffectiveConfig, EngineKind } from '../config/daemon-intent.ts'
+import type { RelationRole } from '../control-protocol/teams-connection.ts'
+import type { AdmissionIntent, AgentDaemonIntent, DaemonEffectiveConfig, EngineKind, ListenIntent } from '../config/daemon-intent.ts'
 import {
   DaemonIntentError,
   applyDaemonCliOverrides,
@@ -21,14 +22,29 @@ import {
   resolveDaemonIntent,
   type DaemonIntentV4,
 } from '../config/daemon-intent.ts'
+import type { AcpPolicySnapshot } from '../config/acp-policy.ts'
 import type { AgentModelBinding, ConfigTargetIdentity, ModelRef, VersionedRuntimeConfig } from '../config/runtime-config.ts'
 import { providerIntentFingerprint } from '../config/runtime-config.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
 import { rpcErrorFrame, type AcpHost } from '../agent-host/acp-host.ts'
 import { openCodeAcpAdapter } from '../opencode-adapter/src/acp-engine.ts'
 import { createDshEngineAdapter } from '../dsh-adapter/index.ts'
+import { createDirectWssListener, type DirectWssAdmission, type DirectWssListener } from '../network/direct-listener.ts'
+import type { AccountDirectorySnapshot } from '../network/account-directory.ts'
+import type { RegistrationStatus } from '../network/registration-client.ts'
+import { createTeamsConnectionHistory, type TeamsConnectionHistory } from '../network/teams-connection-history.ts'
+import { createTeamsConnectionLedger, openTeamsIngress, type TeamsConnectionLedger } from '../network/teams-ingress.ts'
+import { createTeamsStatusPort, type TeamsStatusPort } from '../network/teams-status.ts'
 import { createAcpHistoryStore } from './acp-history-store.ts'
 import { startAcpAgentDaemon, type AcpAgentDaemon } from './acp-daemon.ts'
+import {
+  declarationForDaemon,
+  declarationWithPublishedSurfaces,
+  listenerRouteCandidates,
+  startDaemonRegistration,
+  type AgentRegistration,
+  type PublishedDaemonSurfaces,
+} from './registry-registration.ts'
 
 /**
  * `agentteams --serve <engine>` user entry (owner: runtime).
@@ -41,16 +57,27 @@ import { startAcpAgentDaemon, type AcpAgentDaemon } from './acp-daemon.ts'
  * ACP channels on the daemon's configured listener.
  *
  * This module declares no second Session path, no second ACP frame transport and
- * no second engine config compiler: the listener reuses the one
- * `createStdioAcpDuplex` codec over its socket, the host owns Session/RPC
+ * no second engine config compiler: the local channel reuses the one
+ * `createStdioAcpDuplex` codec over its socket, the LAN channel reuses the one
+ * `createDirectWssListener` + `openTeamsIngress` chain, the host owns Session/RPC
  * semantics, `engineAdapterFor` is the one dispatch point from the configured
  * engine kind to its adapter, and `runtime/agent-process.ts` stays the legacy
  * Work entry.
  *
- * The listener is a loopback ACP channel endpoint. Cross-agent admission and
- * negotiation (the frozen Teams connection frames) belong to the
- * network/registration increment; a non-loopback listener is refused here
- * instead of being served without the TLS/admission transport.
+ * `classifyServeListener` splits the configured listener by address, not by a
+ * second config key:
+ *   - `local` (a loopback address): the existing loopback plain newline-JSON ACP
+ *     channel, byte-compatible with D02, bound on `listen.ip`.
+ *   - `lan` (any other address): the authenticated direct-WSS Teams channel bound
+ *     on `listen.ip` with the configured TLS refs and resolved admissions; every
+ *     accepted connection runs the frozen Teams negotiation and one ACP session
+ *     into the same `daemon.host`.
+ * A non-loopback listener without `[discovery]` is refused with a typed
+ * `UNSUPPORTED_CONFIGURATION`: a manual peer carries no authenticated capability
+ * revision for the hello, and the entry never guesses one. A non-loopback
+ * listener with `[discovery]` publishes its real route and effective ACP
+ * capability through the existing D04 path once the listener is bound and the
+ * registration client is online.
  */
 
 const DEFAULT_INITIALIZE_TIMEOUT_MS = 20_000
@@ -58,6 +85,24 @@ const DEFAULT_STOP_TIMEOUT_MS = 5_000
 const CHANNEL_POLL_INTERVAL_MS = 5
 const DELIVERY_PAGE_LIMIT = 200
 const QUICK_START_AGENT_ID = 'agent'
+/** Local channel bind address when the configured listener is a LAN address. */
+const LOCAL_CHANNEL_BIND_IP = '127.0.0.1'
+/**
+ * The direct listener reuses the network owner's operational limits; the frozen
+ * v4 schema declares none of them, so this entry owns the values it passes.
+ */
+const LAN_LISTENER_LIMITS = {
+  maxPayload: 262_144,
+  maxConnections: 64,
+  maxMessageBytes: 262_144,
+  maxBufferedBytes: 262_144,
+  maxPendingFrames: 64,
+  helloTimeoutMs: 5_000,
+} as const
+const DEFAULT_NEGOTIATION_TIMEOUT_MS = 10_000
+/** The published ACP capability id; the version is the capability's own, not the frame version. */
+const ACP_CAPABILITY_ID = 'acp'
+const ACP_CAPABILITY_VERSION = '1'
 
 export interface AcpServeIntentInput {
   /** Omitted means the CLI quick-start base intent (no provider/model binding). */
@@ -84,6 +129,24 @@ export interface AcpServeRuntimeOptions {
   readonly env?: NodeJS.ProcessEnv
   readonly initializeTimeoutMs?: number
   readonly stopTimeoutMs?: number
+  /** Live registration status transitions; the readiness line reports the start state. */
+  readonly onRegistrationStatus?: (status: RegistrationStatus) => void
+}
+
+/** Which inbound channel the configured listener address selects. */
+export type ServeListenerClass = 'local' | 'lan'
+
+/** The real bound local ACP channel address. */
+export interface AcpServeLocalChannel {
+  readonly ip: string
+  readonly port: number
+}
+
+/** The real bound authenticated LAN channel, with the revision its hello advertises. */
+export interface AcpServeLanChannel {
+  readonly endpoint: string
+  readonly port: number
+  readonly capabilitiesRevision: string
 }
 
 export interface AcpServeReadiness {
@@ -113,6 +176,16 @@ export interface AcpServeHandle {
   readonly configPath: string | null
   readonly dataDirectory: string
   readonly listener: { readonly ip: string; readonly port: number }
+  /** The real bound local (plain newline-JSON) channel. */
+  readonly localChannel: AcpServeLocalChannel
+  /** The real bound authenticated LAN channel; null for a loopback-only listener. */
+  readonly lanChannel: AcpServeLanChannel | null
+  /** `String(declaration.revision)` of the declaration the LAN hello advertises. */
+  readonly capabilitiesRevision: string
+  /** Live registration status; `disabled` when the config declares no `[discovery]`. */
+  readonly registration: RegistrationStatus
+  /** Read-only D06 handoff over the live ledger and the durable history. */
+  readonly teamsStatus: TeamsStatusPort
   readonly readiness: AcpServeReadiness
   readonly daemon: AcpAgentDaemon
   stop(): Promise<AcpServeStopReceipt>
@@ -138,6 +211,40 @@ function configFault(cause: unknown): AcpError {
 function isLoopbackAddress(ip: string): boolean {
   if (isIP(ip) === 4) return ip.startsWith('127.')
   return ip === '::1'
+}
+
+/**
+ * Pure listener classification: the address, not a second config key, selects
+ * the channel. A loopback address is the local plain ACP channel; every other
+ * address is the authenticated LAN channel.
+ */
+export function classifyServeListener(listen: { readonly ip: string }): ServeListenerClass {
+  return isLoopbackAddress(listen.ip) ? 'local' : 'lan'
+}
+
+/**
+ * Pure projection of the effective ACP policy into the one published capability.
+ * Only the effective `method:` keys become operations, and cancellation is
+ * cooperative only when `method:session/cancel` is effective; the projection
+ * never declares a method the accepted policy denied.
+ */
+export function acpCapabilityDeclarations(policy: AcpPolicySnapshot): readonly CapabilityDeclaration[] {
+  const methods = policy.effective
+    .filter(key => key.startsWith('method:'))
+    .map(key => key.slice('method:'.length))
+    .sort()
+  const cooperative = methods.includes('session/cancel')
+  return [{
+    capabilityId: ACP_CAPABILITY_ID,
+    version: ACP_CAPABILITY_VERSION,
+    operations: methods.map(operation => ({
+      operation,
+      inputSchema: {},
+      outputSchema: {},
+      cancellation: cooperative ? 'cooperative' as const : 'unsupported' as const,
+    })),
+    resources: [],
+  }]
 }
 
 /**
@@ -177,8 +284,9 @@ export function buildQuickStartAgentIntent(input: {
  * Read one v4 agent config (or build the quick-start base intent), apply the
  * explicit `--serve/--ip/--port` overrides, resolve paths, compile the accepted
  * snapshot and enforce the entry's preconditions: an agent daemon, an enabled
- * ACP policy, a loopback listener, a delivered engine adapter and a real
- * provider/model binding. It starts nothing.
+ * ACP policy, a served listener (a non-loopback listener requires `[discovery]`),
+ * a delivered engine adapter and a real provider/model binding. It starts
+ * nothing.
  */
 export async function readAcpServeIntent(input: AcpServeIntentInput): Promise<AcpServeIntent> {
   if (input === null || typeof input !== 'object') {
@@ -253,10 +361,12 @@ export async function readAcpServeIntent(input: AcpServeIntentInput): Promise<Ac
   if (intent.listen === undefined) {
     throw new AcpError('UNSUPPORTED_CONFIGURATION', `agent ${intent.daemon.id} declares no listener; --serve requires [listen] or --ip/--port`)
   }
-  if (!isLoopbackAddress(intent.listen.ip)) {
+  if (classifyServeListener(intent.listen) === 'lan' && intent.discovery === undefined) {
     throw new AcpError(
       'UNSUPPORTED_CONFIGURATION',
-      `the --serve entry serves only a loopback ACP channel endpoint; ${intent.listen.ip} needs the TLS/admission transport owned by the network increment`,
+      `the --serve entry serves the LAN listener ${intent.listen.ip}:${intent.listen.port} only with a [discovery] server: `
+      + `a manual peer carries no authenticated capability revision for the hello, and ${source} declares none`,
+      { source: 'config', code: 'NOT_FOUND', listener: `${intent.listen.ip}:${intent.listen.port}`, missing: 'discovery' },
     )
   }
   const accepted = compileDaemonIntent(intent, { configDirectory })
@@ -437,10 +547,269 @@ async function resolveCredentialReference(reference: string, env: NodeJS.Process
 }
 
 function principalOf(intent: AgentDaemonIntent): AuthenticatedAgent {
-  // The loopback listener is the daemon's own local channel endpoint; the
-  // principal is the daemon's configured identity because cross-agent channel
-  // admission and negotiation are owned by the network/registration increment.
+  // The local channel is the daemon's own local endpoint; the LAN channel's
+  // principal is the transport-authenticated peer, never a payload value.
   return { accountId: intent.daemon.accountId, scopeId: intent.daemon.scopeId, agentId: intent.daemon.id }
+}
+
+/** The absolute path behind a resolved `file:` reference. */
+function fileRefPath(reference: string): string {
+  return resolve(reference.startsWith('file:') ? reference.slice('file:'.length) : reference)
+}
+
+/**
+ * Resolve every declared admission through the same credential reader the entry
+ * uses for engine credentials. The credential never enters a declaration or a
+ * log line; only the admission ref and the peer identity do.
+ */async function resolveAdmissions(admissions: readonly AdmissionIntent[], env: NodeJS.ProcessEnv): Promise<readonly DirectWssAdmission[]> {
+  const resolved: DirectWssAdmission[] = []
+  for (const admission of admissions) {
+    resolved.push({
+      admissionRef: admission.admissionRef,
+      peer: { accountId: admission.accountId, scopeId: admission.scopeId, agentId: admission.agentId },
+      credential: await resolveCredentialReference(admission.credentialRef, env),
+    })
+  }
+  return resolved
+}
+
+/**
+ * Publish the daemon's real surfaces through the existing D04 path. It publishes
+ * only when the config selected registration and the client is online; a
+ * disabled plan or a registry outage changes the registration status and never
+ * stops the engine. The caller owns `declarationForDaemon` +
+ * `declarationWithPublishedSurfaces`, so the published revision is the one the
+ * LAN target already advertised.
+ */
+export async function publishServeRegistration(input: {
+  readonly registration: AgentRegistration
+  readonly declaration: AgentDeclaration
+}): Promise<RegistrationStatus | null> {
+  if (input.registration.state !== 'enabled') return null
+  if (input.registration.client.status().state !== 'online') return null
+  await input.registration.client.publish(input.declaration)
+  return input.registration.client.status()
+}
+
+interface ServeLocalChannel {
+  readonly ip: string
+  readonly port: number
+  /** Destroy every live channel, then stop accepting; returns the destroyed count. */
+  close(): Promise<number>
+}
+
+/**
+ * Bind the plain newline-JSON ACP channel. A loopback listener binds the
+ * configured address and port (byte-compatible with D02); a LAN listener keeps
+ * the same local channel on `127.0.0.1:0` and reports the real port.
+ */
+async function buildLocalChannel(input: {
+  readonly daemon: AcpAgentDaemon
+  readonly principal: AuthenticatedAgent
+  readonly targetGeneration: number
+  readonly engineInstanceId: string
+  readonly listen: ListenIntent
+  readonly listenerClass: ServeListenerClass
+}): Promise<ServeLocalChannel> {
+  const { daemon, principal, targetGeneration, engineInstanceId } = input
+  const bindIp = input.listenerClass === 'local' ? input.listen.ip : LOCAL_CHANNEL_BIND_IP
+  const bindPort = input.listenerClass === 'local' ? input.listen.port : 0
+  const channels = new Map<string, { readonly ref: AcpChannelRef; readonly duplex: AcpDuplex; readonly socket: Socket }>()
+
+  const closeChannel = async (ref: AcpChannelRef): Promise<void> => {
+    const entry = channels.get(ref.connectionId)
+    if (entry === undefined) return
+    channels.delete(ref.connectionId)
+    await entry.duplex.close().catch(() => undefined)
+    await daemon.host.close(ref).catch(() => undefined)
+  }
+
+  const serveChannel = async (socket: Socket): Promise<void> => {
+    socket.setNoDelay(true)
+    const ref: AcpChannelRef = {
+      connectionId: `serve-${randomUUID()}`,
+      channelId: 'local-1',
+      targetGeneration,
+      engineInstanceId,
+    }
+    const duplex = createStdioAcpDuplex({ readable: socket, writable: socket })
+    try {
+      await daemon.host.open({ ref, principal, policy: daemon.policy })
+    } catch (cause) {
+      socket.destroy()
+      throw cause
+    }
+    channels.set(ref.connectionId, { ref, duplex, socket })
+    void (async () => {
+      for (;;) {
+        let frame: AcpFrame
+        try {
+          frame = await duplex.read()
+        } catch {
+          break
+        }
+        try {
+          await daemon.host.receive({ ...ref, frame })
+        } catch (cause) {
+          // The host owns ACP semantics and rejects a frame it cannot serve.
+          // The transport answers that request with the host's own error
+          // envelope and keeps the channel open for the next frame.
+          const fault = cause instanceof AcpError
+            ? cause.toFault()
+            : { code: 'INVALID_ACP_FRAME' as const, message: messageOf(cause, 'ACP frame was rejected') }
+          if (typeof frame.method === 'string' && Object.hasOwn(frame, 'id')) {
+            await duplex.send(rpcErrorFrame(frame.id as AcpRpcId, fault)).catch(() => undefined)
+          }
+        }
+      }
+      await closeChannel(ref)
+    })()
+    void (async () => {
+      let cursor = 0
+      for (;;) {
+        // The channel map is this entry's liveness record: the reader loop,
+        // the stop, and a transport failure all remove the channel here. The
+        // host keeps a closed channel record readable, so the loop must end
+        // on its own record instead of waiting for `read` to reject.
+        if (!channels.has(ref.connectionId)) return
+        let page: { readonly frames: readonly AcpDelivery[]; readonly nextSequence: number }
+        try {
+          page = await daemon.host.read(ref, cursor, DELIVERY_PAGE_LIMIT)
+        } catch {
+          await closeChannel(ref)
+          return
+        }
+        cursor = page.nextSequence
+        for (const delivery of page.frames) {
+          try {
+            await duplex.send(delivery.frame)
+          } catch {
+            await closeChannel(ref)
+            return
+          }
+        }
+        if (page.frames.length === 0) await delay(CHANNEL_POLL_INTERVAL_MS)
+      }
+    })()
+    void duplex.closed.then(() => closeChannel(ref), () => closeChannel(ref))
+    socket.on('error', () => { void closeChannel(ref) })
+  }
+
+  const server: Server = createServer(socket => { void serveChannel(socket) })
+  await new Promise<void>((resolveBind, reject) => {
+    const failed = (error: Error): void => { server.off('listening', ready); reject(error) }
+    const ready = (): void => { server.off('error', failed); resolveBind() }
+    server.once('error', failed)
+    server.once('listening', ready)
+    server.listen({ host: bindIp, port: bindPort, exclusive: true })
+  })
+  const address = server.address()
+  if (address === null || typeof address === 'string') {
+    await new Promise<void>(resolveClose => server.close(() => resolveClose()))
+    throw new AcpError('ENGINE_UNAVAILABLE', 'the ACP listener did not report a bound address')
+  }
+  return {
+    ip: bindIp,
+    port: address.port,
+    close: async () => {
+      const open = [...channels.values()]
+      const closing = new Promise<void>(resolveClose => { server.close(() => resolveClose()) })
+      // Close every live channel through the host as well as the transport: the
+      // host owns the channel record, and an open record would keep the delivery
+      // loop polling a channel nobody serves.
+      for (const entry of open) {
+        entry.socket.destroy()
+        await entry.duplex.close().catch(() => undefined)
+        await daemon.host.close(entry.ref).catch(() => undefined)
+      }
+      channels.clear()
+      await closing
+      return open.length
+    },
+  }
+}
+
+interface ServeLanChannel {
+  readonly endpoint: string
+  readonly port: number
+  readonly capabilitiesRevision: string
+  close(): Promise<void>
+}
+
+/**
+ * Bind the authenticated LAN channel and route every accepted connection
+ * through `openTeamsIngress` into the same `daemon.host`. The peer wire ref never
+ * reaches the host: the ingress allocates local refs before any host call.
+ */
+async function buildLanChannel(input: {
+  readonly daemon: AcpAgentDaemon
+  readonly intent: AgentDaemonIntent
+  readonly listen: ListenIntent
+  readonly env: NodeJS.ProcessEnv
+  readonly capabilitiesRevision: string
+  readonly targetGeneration: number
+  readonly selfPolicyRevision: number
+  readonly engineInstanceId: string
+  readonly admittedCapabilities: readonly string[]
+  readonly history: TeamsConnectionHistory
+  readonly ledger: TeamsConnectionLedger
+}): Promise<ServeLanChannel> {
+  const keyRef = input.listen.tlsKeyRef
+  const certRef = input.listen.tlsCertRef
+  if (keyRef === undefined || certRef === undefined) {
+    throw new AcpError(
+      'UNSUPPORTED_CONFIGURATION',
+      `the LAN listener ${input.listen.ip}:${input.listen.port} requires tlsCertRef and tlsKeyRef; the entry never serves a non-loopback address in plaintext`,
+    )
+  }
+  const [key, cert, admissions] = await Promise.all([
+    readFile(fileRefPath(keyRef)),
+    readFile(fileRefPath(certRef)),
+    resolveAdmissions(input.intent.admissions, input.env),
+  ])
+  const self = principalOf(input.intent)
+  const listener: DirectWssListener = await createDirectWssListener({
+    host: input.listen.ip,
+    port: input.listen.port,
+    key,
+    cert,
+    admissions,
+    target: {
+      hostId: input.intent.daemon.hostId,
+      agentId: input.intent.daemon.id,
+      targetGeneration: input.targetGeneration,
+      protocolVersion: 1,
+      capabilitiesRevision: input.capabilitiesRevision,
+    },
+    ...LAN_LISTENER_LIMITS,
+    onConnection: async connection => {
+      await openTeamsIngress({
+        connection: {
+          connectionId: connection.connectionId,
+          peer: connection.peer,
+          connection: connection.connection,
+        },
+        self,
+        selfGeneration: input.targetGeneration,
+        selfCapabilitiesRevision: input.capabilitiesRevision,
+        selfPolicyRevision: input.selfPolicyRevision,
+        allowedRoles: input.intent.relations.allowed,
+        admittedCapabilities: input.admittedCapabilities,
+        host: input.daemon.host,
+        policy: input.daemon.policy,
+        engineInstanceId: input.engineInstanceId,
+        history: input.history,
+        ledger: input.ledger,
+        timeoutMs: DEFAULT_NEGOTIATION_TIMEOUT_MS,
+      })
+    },
+  })
+  return {
+    endpoint: listener.url,
+    port: listener.port,
+    capabilitiesRevision: input.capabilitiesRevision,
+    close: () => listener.close(),
+  }
 }
 
 function delay(ms: number): Promise<void> {
@@ -596,7 +965,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     policy: agent.acp,
   }
   const launch = await guardOwnedDirectory(() => adapter.compileLaunch(launchInput))
-  const history = await guardOwnedDirectory(() => createAcpHistoryStore({ directory: dataDirectory }))
+  const historyStore = await guardOwnedDirectory(() => createAcpHistoryStore({ directory: dataDirectory }))
   const initializeTimeoutMs = options.initializeTimeoutMs ?? DEFAULT_INITIALIZE_TIMEOUT_MS
   const stopTimeoutMs = options.stopTimeoutMs ?? DEFAULT_STOP_TIMEOUT_MS
 
@@ -609,7 +978,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       adapterMethods: adapter.declaredMethods,
       enforceablePolicies,
     },
-    history,
+    history: historyStore,
     initialize: { params: { protocolVersion: 1, clientCapabilities: {} }, timeoutMs: initializeTimeoutMs },
     stopTimeoutMs,
     agentId: agent.daemon.id,
@@ -633,147 +1002,132 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     const principal = principalOf(agent)
     const verified = await verifyReadiness({ daemon, adapter, readinessRef, principal, launch: launchInput, workspace, initializeTimeoutMs })
 
-    const channels = new Map<string, { readonly ref: AcpChannelRef; readonly duplex: AcpDuplex; readonly socket: Socket }>()
-
-    const closeChannel = async (ref: AcpChannelRef): Promise<void> => {
-      const entry = channels.get(ref.connectionId)
-      if (entry === undefined) return
-      channels.delete(ref.connectionId)
-      await entry.duplex.close().catch(() => undefined)
-      await daemon.host.close(ref).catch(() => undefined)
-    }
-
-    const serveChannel = async (socket: Socket): Promise<void> => {
-      socket.setNoDelay(true)
-      const ref: AcpChannelRef = {
-        connectionId: `serve-${randomUUID()}`,
-        channelId: 'local-1',
-        targetGeneration,
-        engineInstanceId,
-      }
-      const duplex = createStdioAcpDuplex({ readable: socket, writable: socket })
-      try {
-        await daemon.host.open({ ref, principal, policy: daemon.policy })
-      } catch (cause) {
-        socket.destroy()
-        throw cause
-      }
-      channels.set(ref.connectionId, { ref, duplex, socket })
-      void (async () => {
-        for (;;) {
-          let frame: AcpFrame
-          try {
-            frame = await duplex.read()
-          } catch {
-            break
-          }
-          try {
-            await daemon.host.receive({ ...ref, frame })
-          } catch (cause) {
-            // The host owns ACP semantics and rejects a frame it cannot serve.
-            // The transport answers that request with the host's own error
-            // envelope and keeps the channel open for the next frame.
-            const fault = cause instanceof AcpError
-              ? cause.toFault()
-              : { code: 'INVALID_ACP_FRAME' as const, message: messageOf(cause, 'ACP frame was rejected') }
-            if (typeof frame.method === 'string' && Object.hasOwn(frame, 'id')) {
-              await duplex.send(rpcErrorFrame(frame.id as AcpRpcId, fault)).catch(() => undefined)
-            }
-          }
-        }
-        await closeChannel(ref)
-      })()
-      void (async () => {
-        let cursor = 0
-        for (;;) {
-          // The channel map is this entry's liveness record: the reader loop,
-          // the stop, and a transport failure all remove the channel here. The
-          // host keeps a closed channel record readable, so the loop must end
-          // on its own record instead of waiting for `read` to reject.
-          if (!channels.has(ref.connectionId)) return
-          let page: { readonly frames: readonly AcpDelivery[]; readonly nextSequence: number }
-          try {
-            page = await daemon.host.read(ref, cursor, DELIVERY_PAGE_LIMIT)
-          } catch {
-            await closeChannel(ref)
-            return
-          }
-          cursor = page.nextSequence
-          for (const delivery of page.frames) {
-            try {
-              await duplex.send(delivery.frame)
-            } catch {
-              await closeChannel(ref)
-              return
-            }
-          }
-          if (page.frames.length === 0) await delay(CHANNEL_POLL_INTERVAL_MS)
-        }
-      })()
-      void duplex.closed.then(() => closeChannel(ref), () => closeChannel(ref))
-      socket.on('error', () => { void closeChannel(ref) })
-    }
-
-    const server: Server = createServer(socket => { void serveChannel(socket) })
-    await new Promise<void>((resolveBind, reject) => {
-      const failed = (error: Error): void => { server.off('listening', ready); reject(error) }
-      const ready = (): void => { server.off('error', failed); resolveBind() }
-      server.once('error', failed)
-      server.once('listening', ready)
-      server.listen({ host: listen.ip, port: listen.port, exclusive: true })
+    // The published revision is known before the LAN listener binds: the D04
+    // helper advances the declaration by exactly one, and the real bound port
+    // changes only the route, never the revision. The LAN target, the ingress
+    // responder and the published declaration therefore carry one revision.
+    const listenerClass = classifyServeListener(listen)
+    const declaration = declarationForDaemon(agent)
+    const surfacesFor = (port: number): PublishedDaemonSurfaces => ({
+      capabilities: acpCapabilityDeclarations(daemon.policy),
+      routes: listenerRouteCandidates({ ...agent, listen: { ...listen, port } }, new Date().toISOString()),
     })
-    const address = server.address()
-    if (address === null || typeof address === 'string') {
-      await new Promise<void>(resolveClose => server.close(() => resolveClose()))
-      throw new AcpError('ENGINE_UNAVAILABLE', 'the ACP listener did not report a bound address')
-    }
+    const capabilitiesRevision = String(declarationWithPublishedSurfaces(declaration, surfacesFor(listen.port)).revision)
 
-    let stopping: Promise<AcpServeStopReceipt> | undefined
-    const stop = (): Promise<AcpServeStopReceipt> => {
-      if (stopping !== undefined) return stopping
-      stopping = (async (): Promise<AcpServeStopReceipt> => {
-        const open = [...channels.values()]
-        const closing = new Promise<void>(resolveClose => { server.close(() => resolveClose()) })
-        // Close every live channel through the host as well as the transport:
-        // the host owns the channel record, and an open record would keep the
-        // delivery loop polling a channel nobody serves.
-        for (const entry of open) {
-          entry.socket.destroy()
-          await entry.duplex.close().catch(() => undefined)
-          await daemon.host.close(entry.ref).catch(() => undefined)
-        }
-        channels.clear()
-        await closing
-        await daemon.host.close(readinessRef).catch(() => undefined)
-        const engineStop = await daemon.stop()
-        // The engine is gone, so its owned home (DSH_HOME and the derived patch
-        // file, or the OpenCode home) is released on this stop path too.
-        await removeOwnedDirectory().catch(() => undefined)
-        return { engine: engineStop, channels: open.length }
-      })()
-      return stopping
-    }
+    const local = await buildLocalChannel({ daemon, principal, targetGeneration, engineInstanceId, listen, listenerClass })
 
-    return {
-      agentId: agent.daemon.id,
-      engineKind: engine.kind,
-      engineInstanceId,
-      enginePid: daemon.handle.pid,
-      configPath: intent.configPath,
-      dataDirectory,
-      listener: { ip: listen.ip, port: address.port },
-      readiness: {
+    // Live connection truth and the durable connection history are one pair for
+    // both channels: the LAN ingress writes them, the status port reads them.
+    const ledger = createTeamsConnectionLedger()
+    const teamsHistory = createTeamsConnectionHistory(historyStore)
+
+    let lan: ServeLanChannel | undefined
+    let registration: AgentRegistration | undefined
+    try {
+      if (listenerClass === 'lan') {
+        lan = await buildLanChannel({
+          daemon,
+          intent: agent,
+          listen,
+          env,
+          capabilitiesRevision,
+          targetGeneration,
+          selfPolicyRevision: intent.accepted.acceptedRevision,
+          engineInstanceId,
+          admittedCapabilities: daemon.policy.effective,
+          history: teamsHistory,
+          ledger,
+        })
+      }
+
+      // The registration client is composed from the same config-selected
+      // discovery plan D04 owns. A disabled plan opens no socket; a failed first
+      // attempt reports the typed reconnecting status and retries in the
+      // background, so a registry outage never stops the engine.
+      registration = await startDaemonRegistration(agent, {
+        env,
+        ...(options.onRegistrationStatus === undefined ? {} : { onStatus: options.onRegistrationStatus }),
+      })
+      if (registration.state === 'enabled' && registration.status.state === 'online') {
+        // Publish only after the listener is bound and the client is online. The
+        // real bound LAN port (port 0 binds an ephemeral one) is the route.
+        const published = declarationWithPublishedSurfaces(declaration, surfacesFor(lan?.port ?? local.port))
+        await publishServeRegistration({ registration, declaration: published })
+      }
+
+      const teamsStatus = createTeamsStatusPort({
+        ledger,
+        localAgentId: agent.daemon.id,
+        // The ACP serve entry owns no directory projection. The snapshot is the
+        // unconfirmed local state (`generation: 0`, no hosts), so `connections()`
+        // reports the live ledger; D06 wires the live directory readback.
+        directory: { accountId: agent.daemon.accountId, scopeId: agent.daemon.scopeId, generation: 0, hosts: [], peerStates: [] },
+        registration: registration.status,
+        history: teamsHistory,
+      })
+
+      const listenerReadback = lan === undefined
+        ? { ip: local.ip, port: local.port }
+        : { ip: listen.ip, port: lan.port }
+
+      let stopping: Promise<AcpServeStopReceipt> | undefined
+      const stop = (): Promise<AcpServeStopReceipt> => {
+        if (stopping !== undefined) return stopping
+        stopping = (async (): Promise<AcpServeStopReceipt> => {
+          // Order: LAN listener, local server (which destroys its channels),
+          // registration client, then the daemon and the owned directory.
+          if (lan !== undefined) await lan.close().catch(() => undefined)
+          const channels = await local.close()
+          await daemon.host.close(readinessRef).catch(() => undefined)
+          if (registration !== undefined && registration.state === 'enabled') {
+            await registration.client.stop().catch(() => undefined)
+          }
+          const engineStop = await daemon.stop()
+          // The engine is gone, so its owned home (DSH_HOME and the derived patch
+          // file, or the OpenCode home) is released on this stop path too.
+          await removeOwnedDirectory().catch(() => undefined)
+          return { engine: engineStop, channels }
+        })()
+        return stopping
+      }
+
+      return {
         agentId: agent.daemon.id,
+        engineKind: engine.kind,
         engineInstanceId,
         enginePid: daemon.handle.pid,
-        listener: { ip: listen.ip, port: address.port },
-        modelTarget: verified.modelTarget,
-        modelVerification: verified.modelVerification,
-        effectiveRevision: verified.effectiveRevision,
-        evidence: verified.evidence,
-      },
-      daemon,
-      stop,
+        configPath: intent.configPath,
+        dataDirectory,
+        listener: listenerReadback,
+        localChannel: { ip: local.ip, port: local.port },
+        lanChannel: lan === undefined
+          ? null
+          : { endpoint: lan.endpoint, port: lan.port, capabilitiesRevision: lan.capabilitiesRevision },
+        capabilitiesRevision,
+        get registration(): RegistrationStatus {
+          return registration?.state === 'enabled' ? registration.client.status() : registration!.status
+        },
+        teamsStatus,
+        readiness: {
+          agentId: agent.daemon.id,
+          engineInstanceId,
+          enginePid: daemon.handle.pid,
+          listener: listenerReadback,
+          modelTarget: verified.modelTarget,
+          modelVerification: verified.modelVerification,
+          effectiveRevision: verified.effectiveRevision,
+          evidence: verified.evidence,
+        },
+        daemon,
+        stop,
+      }
+    } catch (cause) {
+      if (registration !== undefined && registration.state === 'enabled') {
+        await registration.client.stop().catch(() => undefined)
+      }
+      if (lan !== undefined) await lan.close().catch(() => undefined)
+      await local.close().catch(() => undefined)
+      throw cause
     }
   } catch (cause) {
     await daemon.stop().catch(() => undefined)
@@ -798,11 +1152,30 @@ export function formatAcpServeReady(handle: AcpServeHandle): string {
     `enginePid=${handle.enginePid}`,
     `daemonPid=${process.pid}`,
     `listener=${handle.listener.ip}:${handle.listener.port}`,
+    `localChannel=${handle.localChannel.ip}:${handle.localChannel.port}`,
+    `lanChannel=${handle.lanChannel === null ? 'none' : handle.lanChannel.endpoint}`,
+    `capabilitiesRevision=${handle.capabilitiesRevision}`,
+    `registration=${handle.registration.state}`,
     `dataDirectory=${handle.dataDirectory}`,
     `config=${handle.configPath ?? 'quick-start'}`,
     `model=${modelText(handle.readiness)}`,
     `modelVerification=${handle.readiness.modelVerification}`,
     `effectiveRevision=${handle.readiness.effectiveRevision}`,
+  ].join(' ')
+}
+
+/**
+ * The registration status line the entry prints on a live transition. The
+ * readiness line reports the start state; later lines report degradation and
+ * recovery while the engine keeps serving.
+ */
+export function formatAcpServeRegistration(status: RegistrationStatus): string {
+  return [
+    'registration',
+    `state=${status.state}`,
+    `attempts=${status.attempts}`,
+    `reconnects=${status.reconnects}`,
+    `endpoint=${status.endpoint ?? 'none'}`,
   ].join(' ')
 }
 
@@ -853,12 +1226,18 @@ function waitForStopSignal(signal: AbortSignal | undefined): Promise<void> {
 export async function runAcpServe(input: RunAcpServeInput): Promise<void> {
   const report = input.report ?? ((line: string) => { console.log(line) })
   const intent = await readAcpServeIntent(input)
+  // The readiness line reports the registration state at start; later live
+  // transitions are reported as their own line, so a registry outage is
+  // observable while the engine and its established channels keep working.
+  let ready = false
   const handle = await startAcpServe(intent, {
     ...(input.env === undefined ? {} : { env: input.env }),
     ...(input.initializeTimeoutMs === undefined ? {} : { initializeTimeoutMs: input.initializeTimeoutMs }),
     ...(input.stopTimeoutMs === undefined ? {} : { stopTimeoutMs: input.stopTimeoutMs }),
+    onRegistrationStatus: status => { if (ready) report(formatAcpServeRegistration(status)) },
   })
   report(formatAcpServeReady(handle))
+  ready = true
   try {
     await waitForStopSignal(input.signal)
   } finally {
