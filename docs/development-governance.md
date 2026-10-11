@@ -142,9 +142,9 @@ CLI 实际入口）；配置指向注册服务器时还依赖 D04。opencode 与
 | `teams-acp-public-contract` | control-protocol | partial | `pnpm exec vitest run --config vitest.config.ts control-protocol/acp.spec.ts control-protocol/teams-connection.spec.ts control-protocol/teams-state.spec.ts` | ACP frame/fault、engine adapter port、Teams 协商 frame 与连接状态 DTO 的形状与拒绝 |
 | `teams-acp-d01-host` | agent-host | partial | `pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts` | D01 已合并候选 75a6cf4 的引擎无关 stdio ACP 传输、host 的 Session/policy/history 语义与 runtime 子进程接线（标注 test peer，53/53 通过）；本命令本身无真实引擎推理、无安装/live 证据（真实引擎证据属于 `teams-acp-d02-opencode` 与 `teams-acp-d03-dsh`） |
 | `teams-acp-d02-opencode` | opencode-adapter | partial | `pnpm exec vitest run opencode-adapter --no-file-parallelism` | 已合并候选 1d4df3a（修复 1af8fe5/9436aae）的 OpenCode adapter：compileLaunch 唯一编译 launch spec、verifyEffective 只报引擎 session/new 返回的模型、真实 prompt/cancel/permission/黑名单（本地 stub provider + 已安装 opencode，65/65）；非安装副本证据，不含 D03 |
-| `teams-acp-d03-dsh` | dsh-adapter | partial | `pnpm exec vitest run dsh-adapter runtime/acp-serve.spec.ts --no-file-parallelism` | D03 冻结候选 60bf76b 的 DSH adapter：launch 编译、policy-before-side-effect、native config 派生与 effectiveness 读回，加上本候选的 `--serve dsh` 接线（`engineAdapterFor` 分发、`DSH_HOME` 隔离、stop/失败路径清理 engine home）；dsh-adapter 28/28 通过；两个本地非 CI driver 覆盖真实 dsh 0.2.0-rc.2：adapter driver 18/18，`--serve dsh` 黑盒（真实 prompt/cancel/显式 PID stop）PASS；仍无安装副本证据、AppSDK 仍阻塞 |
+| `teams-acp-d03-dsh` | dsh-adapter | partial | `pnpm exec vitest run dsh-adapter runtime/acp-serve.spec.ts --no-file-parallelism` | D03 冻结候选 60bf76b 的 DSH adapter：launch 编译、policy-before-side-effect、native config 派生与 effectiveness 读回，加上本候选的 `--serve dsh` 接线（`engineAdapterFor` 分发、`DSH_HOME` 隔离、stop/失败路径清理 engine home、adapter 自持 `enforceablePolicies` 且入口不替换为 `declaredMethods`）；dsh-adapter 31/31 通过；两个本地非 CI driver 覆盖真实 dsh 0.2.0-rc.2：adapter driver 18/18，`--serve dsh` 黑盒（真实 prompt/cancel/显式 PID stop）PASS；仍无安装副本证据、AppSDK 仍阻塞 |
 | `teams-acp-d04-registry` | runtime | partial | `pnpm exec vitest run --no-file-parallelism server/relay.spec.ts network/relay-client.spec.ts network/registration-client.spec.ts server/registry-intent.spec.ts runtime/registry-process.spec.ts runtime/registry-registration.spec.ts` | D04 已合并候选 953d952 的 registry daemon 生命周期、TLS-only intent 映射、presence 租约与客户端注册/心跳/重连（73/73 通过；候选黑盒 14/14 经 review 独立复现）；无引擎级断电集成、无安装副本/live `--serve` 证据、AppSDK 仍阻塞 |
-| `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环的 typed 拒绝、`engineAdapterFor` 单点分发 opencode 与 dsh、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult、stop 与失败路径清理自有 engine home；两条真实 CLI 黑盒：opencode 见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`（源码树与本地 `npm pack` + `npm install` 的 `node_modules/.bin/agentteams` 两条路径均通过），dsh 见 `docs/evidence/acp-d03-serve-20261010/black-box-serve-dsh.mjs`（真实安装 dsh 0.2.0-rc.2、真实派生配置与 prompt、cancel、显式 PID stop）；仅 loopback；注册（D04，源码层已交付）与协商（D05，未交付）均未接入该入口 |
+| `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环的 typed 拒绝、`engineAdapterFor` 单点分发 opencode 与 dsh、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult、stop 与失败路径清理自有 engine home、只接受 adapter 自己声明的 `enforceablePolicies`（缺失即 typed 失败，不回退 `declaredMethods`）；两条真实 CLI 黑盒：opencode 见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`（源码树与本地 `npm pack` + `npm install` 的 `node_modules/.bin/agentteams` 两条路径均通过），dsh 见 `docs/evidence/acp-d03-serve-20261010/black-box-serve-dsh.mjs`（真实安装 dsh 0.2.0-rc.2、真实派生配置与 prompt、cancel、显式 PID stop）；仅 loopback；注册（D04，源码层已交付）与协商（D05，未交付）均未接入该入口 |
 
 D02 交付 OpenCode 引擎 adapter（`opencode-adapter/src/acp-engine.ts`）与 `--serve`
 用户入口（`runtime/acp-serve.ts` + `cli/agentteams.mjs` 的 flag/dispatch）。
@@ -174,10 +174,13 @@ D03 只交付 DSH 引擎 adapter：`dsh-adapter/index.ts`、`dsh-adapter/native-
 DSH 原生 profile patch（`teams-<providerInstanceId>` pi-ai 路由 + `acp` provider/model 行），
 在写文件或 spawn 之前断言 policy，并只用真实 initialize 结果与真实 `session/new` 的 `model`
 选项读回证明 effectiveness；unsupported DSH 能力在 adapter 边界显式拒绝。`teams-acp-d03-dsh`
-在冻结候选 `60bf76b` 上可执行并通过（dsh-adapter 28/28）。本候选把 `--serve dsh` 接到
+在冻结候选 `60bf76b` 上可执行并通过（dsh-adapter 31/31）。本候选把 `--serve dsh` 接到
 `runtime/acp-serve.ts` 的唯一 `engineAdapterFor` 分发点，与 `--serve opencode` 共用
 daemon/host/stdio/readiness/stop 代码，遵守 `DSH_HOME` 隔离、派生 profile patch、
 `DSH_PERMISSION_MODE` 与 telemetry 关闭，并在 stop 与启动失败路径删除自有 engine home；
+adapter 同时按自己的 `dshHasPolicyEnforcementOwner` 规则声明 `enforceablePolicies`（覆盖
+`capability:`/`client-capability:` 等 D01 host 真正执行的类别），入口只要求该声明、缺失即以
+typed fault 指名 adapter 失败，绝不回退到 `declaredMethods`；
 真实安装 DSH 0.2.0-rc.2 的 `--serve dsh` 黑盒（真实派生配置、真实 prompt、cancel、显式 PID
 stop、零泄漏 engine home）见 `docs/evidence/acp-d03-serve-20261010/`。它仍保持 partial，
 不升级为 passed/implemented：DSH 黑盒是本地 live 运行、没有安装副本回放，

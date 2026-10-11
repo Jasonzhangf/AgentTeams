@@ -13,7 +13,9 @@
  *   4. a real cancel ends an in-flight prompt with stopReason cancelled;
  *   5. the entry stops by explicit PID, reaps the DSH engine child and removes
  *      its owned DSH_HOME (the derived patch file and the engine session store);
- *   6. the real ~/.dsh was never used as the engine home.
+ *   6. the live engine child's own `DSH_HOME` is the daemon-owned directory
+ *      (read back from the running process), so the real `~/.dsh` was never the
+ *      engine home.
  *
  * This driver is the DSH sibling of
  * `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs` and uses the
@@ -73,6 +75,24 @@ function childrenOf(pid) {
     const match = /^(\d+)\s+(\d+)\s+(.*)$/.exec(line)
     return match === null ? null : { pid: Number(match[1]), ppid: Number(match[2]), command: match[3] }
   }).filter(row => row !== null && row.ppid === pid)
+}
+
+/**
+ * The real environment of one live process, read back with `ps -E`.
+ *
+ * Only the named variables are returned, so no credential value from the
+ * environment is ever printed or stored.
+ */
+function environmentOf(pid, names) {
+  const output = execFileSync('ps', ['-E', '-o', 'command=', '-p', String(pid)], { encoding: 'utf8' })
+  const values = {}
+  for (const token of output.split(/\s+/)) {
+    const separator = token.indexOf('=')
+    if (separator <= 0) continue
+    const name = token.slice(0, separator)
+    if (names.includes(name)) values[name] = token.slice(separator + 1)
+  }
+  return values
 }
 
 async function availableLoopbackPort() {
@@ -265,9 +285,14 @@ try {
   assert(children.length === 1, `the daemon has exactly one child process (${children.map(row => `${row.pid}:${row.command.split(' ').slice(0, 3).join(' ')}`).join(' | ')})`)
   assert(children[0].pid === enginePid, 'the one child is the reported engine pid')
 
-  // The engine home is the daemon-owned directory, never the real ~/.dsh.
+  // The engine home is the daemon-owned directory, never the real ~/.dsh. The
+  // claim is checked against the live engine child's own environment, so it is
+  // discriminating instead of a path tautology (`ownedHome` is a fresh tmpdir).
   assert(fields.dataDirectory.startsWith(directory), 'the daemon data directory stays inside the driver work root')
-  assert(ownedHome !== REAL_DSH_HOME, 'the engine home is not the real ~/.dsh')
+  const engineEnvironment = environmentOf(enginePid, ['DSH_HOME'])
+  assert(engineEnvironment.DSH_HOME === ownedHome, `the live engine child's own DSH_HOME is the owned home (${engineEnvironment.DSH_HOME})`)
+  assert(engineEnvironment.DSH_HOME !== REAL_DSH_HOME, `the live engine child's DSH_HOME is not the real ~/.dsh (${REAL_DSH_HOME})`)
+  assert(!existsSync(join(REAL_DSH_HOME, 'teams-dsh-acp.patch.json')), 'the derived patch was never written into the real ~/.dsh')
   assert(existsSync(ownedHome), `the engine really created its owned DSH home (${ownedHome})`)
   const patchPath = join(ownedHome, 'teams-dsh-acp.patch.json')
   assert(existsSync(patchPath), 'the entry wrote the derived DSH profile patch into the owned home')
