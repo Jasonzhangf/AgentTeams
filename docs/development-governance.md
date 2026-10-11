@@ -139,8 +139,9 @@ CLI 实际入口）；配置指向注册服务器时还依赖 D04。在依赖交
 | `teams-acp-daemon-intent` | config | partial | `pnpm exec vitest run --config vitest.config.ts config/daemon-intent.spec.ts config/acp-policy.spec.ts && pnpm exec tsc --noEmit && pnpm build:runtime` | 单 daemon 编译、CLI 覆盖与生效读回、v3 与多 daemon 拒绝；不含 runtime 启动 |
 | `teams-acp-public-contract` | control-protocol | partial | `pnpm exec vitest run --config vitest.config.ts control-protocol/acp.spec.ts control-protocol/teams-connection.spec.ts control-protocol/teams-state.spec.ts` | ACP frame/fault、engine adapter port、Teams 协商 frame 与连接状态 DTO 的形状与拒绝 |
 | `teams-acp-d01-host` | agent-host | partial | `pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts` | D01 已合并候选 75a6cf4 的引擎无关 stdio ACP 传输、host 的 Session/policy/history 语义与 runtime 子进程接线（标注 test peer，53/53 通过）；无真实引擎推理、无安装/live 证据 |
+| `teams-acp-d03-dsh` | dsh-adapter | partial | `pnpm exec vitest run dsh-adapter --no-file-parallelism` | D03 冻结候选 60bf76b 的 DSH adapter：launch 编译、policy-before-side-effect、native config 派生与 effectiveness 读回（28/28 通过）；另有本地非 CI 证据 driver 在真实 dsh 0.2.0-rc.2 上记录 18/18；无 `--serve dsh` 入口、无安装/live 证据、AppSDK 仍阻塞 |
 | `teams-acp-d04-registry` | runtime | partial | `pnpm exec vitest run --no-file-parallelism server/relay.spec.ts network/relay-client.spec.ts network/registration-client.spec.ts server/registry-intent.spec.ts runtime/registry-process.spec.ts runtime/registry-registration.spec.ts` | D04 已合并候选 953d952 的 registry daemon 生命周期、TLS-only intent 映射、presence 租约与客户端注册/心跳/重连（73/73 通过；候选黑盒 14/14 经 review 独立复现）；无引擎级断电集成、无安装副本/live `--serve` 证据、AppSDK 仍阻塞 |
-| `teams-acp-serve-entry` | runtime | design | 未接线；planned_command `node cli/agentteams.mjs --serve opencode --ip <ip> --port <port> --config <agent.toml>` | 用户入口真实启动一个 daemon 并读回生效配置；等 D02/D03 引擎 adapter 与 `--serve` 调用方（D01 与 D04 已在源码层交付） |
+| `teams-acp-serve-entry` | runtime | design | 未接线；planned_command `node cli/agentteams.mjs --serve opencode --ip <ip> --port <port> --config <agent.toml>` | 用户入口真实启动一个 daemon 并读回生效配置；等 D02 引擎 adapter 与 `--serve` 调用方（D01、D03 与 D04 已在源码层交付） |
 
 D01 只交付引擎无关的 ACP 传输与 host/runtime 接线：`acp-adapter/stdio.ts`、
 `agent-host/{acp-host,acp-history}.ts`、`runtime/{acp-daemon,acp-history-store}.ts`。
@@ -150,21 +151,35 @@ partial，不升级为 passed/implemented。`--serve` 用户入口仍等 D02/D03
 CLI 实际入口）。`.appsdk/project.json` 的 `teams-source` 现在声明 `acp-adapter/**` 与
 `cli/**` 为 owned/regression 输入，`minimum_test_count` 未改动。
 
+D03 只交付 DSH 引擎 adapter：`dsh-adapter/index.ts`、`dsh-adapter/native-config.ts` 与
+已提交的证据 driver `dsh-adapter/real-engine-evidence.mjs`。它把已接受的 Teams 配置派生为
+DSH 原生 profile patch（`teams-<providerInstanceId>` pi-ai 路由 + `acp` provider/model 行），
+在写文件或 spawn 之前断言 policy，并只用真实 initialize 结果与真实 `session/new` 的 `model`
+选项读回证明 effectiveness；unsupported DSH 能力在 adapter 边界显式拒绝。`teams-acp-d03-dsh`
+在冻结候选 `60bf76b` 上可执行并通过（28/28）。它保持 partial，不升级为 passed/implemented：
+`--serve dsh` 入口不存在（由后续 worker 在并发 D02 serve 接线落地后拥有），没有安装副本或
+live 证据，AppSDK compile/verify 仍被既有 0.1.0014 pin mismatch 阻塞。两个真实行为带 owner
+保留：真实 DSH initialize 广告 `embeddedContext: false`，与冻结 policy 对 `resource_link`
+提示要求 `capability:/promptCapabilities/embeddedContext` 冲突（Lead 的 policy 决策）；
+`session/list` 在会话仍打开时返回 `[]`（DSH 引擎行为；D05/D06/D07 消费者不得把它当作
+live-session 目录）。`.appsdk/project.json` 的 `teams-source` 现在把 `dsh-adapter/**` 纳入
+owned/regression 输入，`minimum_test_count` 保持 304。
+
 D04 只交付注册 daemon 与自动注册：`server/registry-intent.ts`、`server/relay.ts` 的
 presence 租约、`network/registration-client.ts`、`runtime/registry-process.ts` 与
 `runtime/registry-registration.ts`，以及 `agentteams registry start|status|stop` 入口。
 `teams-acp-d04-registry` 在合并候选 `953d952` 上可执行并通过（73/73），但它只证明源码层
 的 registry 生命周期、TLS-only intent 映射、租约与客户端注册/心跳/重连。它不证明引擎级
 断电集成（`runtime/agent-daemon.ts` 未改动）、不证明安装副本或 live `--serve` daemon
-（`--serve` 调用方与 D02/D03 引擎 adapter 不存在），AppSDK compile/verify 仍因既有
+（`--serve` 调用方与 D02 引擎 adapter 不存在），AppSDK compile/verify 仍因既有
 0.1.0014 pin mismatch 阻塞，因此保持 partial，不升级为 passed/implemented。D04 的四个新
 文件与 `cli/**` 已由 `teams-source` 的 owned/regression 路径覆盖，`.appsdk/project.json`
 无需改动，`minimum_test_count` 保持 304。
 
 planned/design gate 不标 implemented/passed，也不因声明测试通过而升级。AppSDK 绑定只
 声明真实输入：`.appsdk/project.json` 的 `teams-source` owned/regression 路径现在含
-`acp-adapter/**` 与 `cli/**`（此前 `teams-source` 未准入 `cli/**`），
-`minimum_test_count` 未改动；`.appsdk` 生命周期状态不由本增量修改。
+`acp-adapter/**`、`cli/**` 与 `dsh-adapter/**`（此前 `teams-source` 未准入 `cli/**`，
+也未准入 `dsh-adapter/**`），`minimum_test_count` 未改动；`.appsdk` 生命周期状态不由本增量修改。
 安装副本、restart、live 与浏览器证据由各交付在真实入口存在后收集。
 
 ## 历史重置溯源
