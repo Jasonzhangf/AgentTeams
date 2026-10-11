@@ -100,6 +100,9 @@ const CREDENTIALS = {
 let step = 'startup'
 let logDirectory = null
 let cliRunCounter = 0
+// The owned temp root this driver created. It is removed by the outer `finally` once the
+// run is over, so a PASS leaves no resource behind; a failure keeps it for forensics.
+let ownedRoot = null
 
 /**
  * Run one CLI command synchronously.
@@ -474,6 +477,7 @@ async function main() {
   const lanIp = lanIpv4()
   if (lanIp === undefined) throw new Error('this host has no non-internal IPv4 interface; the LAN black box cannot run')
   const directory = await mkdtemp(join(tmpdir(), 'd05-lan-blackbox-'))
+  ownedRoot = directory
   console.log('# D05 closure black box: two real engines over the real LAN listener')
   console.log(`cli=${CLI}`)
   console.log(`root=${directory}`)
@@ -968,12 +972,30 @@ async function reapEverything(hard) {
   }
 }
 
+// The owned temp root is this driver's to remove. It is deleted only after the daemons it
+// created have been reaped; on a failure the root is kept so the daemon's own state can be
+// read, and the reason is printed rather than swallowed.
+async function removeOwnedRoot() {
+  if (ownedRoot === null) return
+  if (process.exitCode === 0) {
+    try {
+      await rm(ownedRoot, { recursive: true, force: true })
+      console.log(`cleanup: removed owned root ${ownedRoot}`)
+    } catch (cause) {
+      console.error(`cleanup: could not remove owned root ${ownedRoot}: ${cause}`)
+      process.exitCode = 1
+    }
+  } else {
+    console.error(`cleanup: keeping owned root ${ownedRoot} for failure forensics`)
+  }
+}
+
 try {
   const deadline = setTimeout(() => {
     console.error(`BLACK-BOX FAIL [${step}]: overall deadline ${OVERALL_DEADLINE_MS}ms elapsed`)
-    // `process.exit` skips the `finally`, so reap here before leaving. The timer
-    // must not be unref'd, otherwise a dead peer would hang the driver forever.
-    setTimeout(async () => { await reapEverything(true); process.exit(1) }, 0)
+    // `process.exit` skips the `finally`, so reap and clean the owned root here before
+    // leaving. The timer must not be unref'd, otherwise a dead peer would hang forever.
+    setTimeout(async () => { await reapEverything(true); await removeOwnedRoot(); process.exit(1) }, 0)
   }, OVERALL_DEADLINE_MS)
   await main()
 } catch (error) {
@@ -985,6 +1007,7 @@ try {
 } finally {
   // Normal paths: the cleanup promise can run because the process is still alive.
   await reapEverything(false)
+  await removeOwnedRoot()
 }
 
 // The stopped daemons leave sockets and timers behind, so the event loop never

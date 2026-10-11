@@ -133,3 +133,23 @@ One leaked registry daemon (pid 39905, alive 1h03m from an aborted run) was
 stopped by explicit PID. After the final run: no `registry-process.js` and no
 `runtime-lib` `acp-serve` process left, all ports free, owned DSH home removed.
 No `pkill`, `killall`, `kill $(...)` or `xargs kill` was used.
+
+### Driver self-cleanup (added on review)
+
+The original driver reaped its daemons but never removed its owned temp root, so
+every PASS left a `d05-lan-blackbox-*` root behind and the seven removals above
+were manual. `black-box-lan-two-engines.mjs` now tracks `ownedRoot` and removes
+it in `finally` once the daemons are reaped: a PASS prints
+`cleanup: removed owned root <path>` and leaves nothing behind, while a failure
+prints `cleanup: keeping owned root <path> for failure forensics` and retains it
+so the daemon's own state can be read. The deadline path reaps and cleans before
+`process.exit`, since `exit` skips `finally`. The same cleanup rule was already
+in force in the D06 PART 2 drivers.
+
+Two post-review runs of this driver failed at the `registry outage` step and were
+not a product regression. Both retained roots show agent A (OpenCode) completing
+every prompt while agent B (the DSH engine) failed every prompt with
+`teams-workbuddy API error (503) no_healthy_account` — the DSH gateway pool was
+unhealthy in this environment, so no prompt result could be produced with or
+without the registry. Those runs reached 69 `ok:` assertions before the failure
+and removed nothing; their roots were deleted by hand after confirming no live pid.

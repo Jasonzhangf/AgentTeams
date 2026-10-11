@@ -1060,7 +1060,8 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
         localAgentId: agent.daemon.id,
         // The ACP serve entry owns no directory projection. The snapshot is the
         // unconfirmed local state (`generation: 0`, no hosts), so `connections()`
-        // reports the live ledger; D06 wires the live directory readback.
+        // reports the live ledger. No delivery wires a live directory readback
+        // here: the control daemon composes this same honest snapshot.
         directory: { accountId: agent.daemon.accountId, scopeId: agent.daemon.scopeId, generation: 0, hosts: [], peerStates: [] },
         registration: registration.status,
         history: teamsHistory,

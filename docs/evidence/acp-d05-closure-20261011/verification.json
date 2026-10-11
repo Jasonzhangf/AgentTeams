@@ -75,6 +75,15 @@
     "method": "explicit PIDs only; no pkill, killall, kill $(...) or xargs kill",
     "temp_roots_removed": ["d05-lan-blackbox-9FnliL", "d05-lan-blackbox-GXzQSo", "d05-lan-blackbox-h9o9AV", "d05-lan-blackbox-sbfC3R", "d05-lan-blackbox-hc54el", "d05-lan-blackbox-mJnxwT", "d05-lan-blackbox-K3pZ6Z"],
     "leaked_process_found_and_killed": "registry daemon pid 39905, alive 1h03m from an aborted run",
-    "verified_after_runs": "no d05 registry-process.js or runtime-lib acp-serve process left; all local, LAN and registry ports free; owned DSH home removed"
+    "verified_after_runs": "no d05 registry-process.js or runtime-lib acp-serve process left; all local, LAN and registry ports free; owned DSH home removed",
+    "driver_self_cleans_owned_root": "black-box-lan-two-engines.mjs now removes its owned temp root in finally after the daemons are reaped (deadline path reaps and cleans before process.exit); a PASS prints 'cleanup: removed owned root <path>', a failure prints 'cleanup: keeping owned root <path> for failure forensics'",
+    "post_review_failures": {
+      "count": 2,
+      "step": "registry outage",
+      "assertion": "a second prompt succeeded on the established channel while the registry was down",
+      "cause": "environmental, not a product regression: the DSH engine answered every prompt with teams-workbuddy API error (503) no_healthy_account, so no prompt result was possible with or without the registry; agent A (OpenCode) completed all of its prompts in the same runs",
+      "retained_evidence": "the retained roots show agent-b/state/acp-history.json sequences 11-14 (session/prompt) failing with that 503; both roots were removed by hand after confirming no live pid",
+      "independent_reference": "the same driver returned BLACK-BOX PASS with 91 ok assertions in the independent review of commit a794533"
+    }
   }
 }
