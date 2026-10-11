@@ -356,7 +356,7 @@ describe.skipIf(!engineAvailable)('--serve opencode entry with the installed eng
     const directory = await temporaryDirectory()
     const provider = await startProvider(({ toolNames }) => (toolNames.length === 0
       ? { kind: 'text', text: 'title' }
-      : { kind: 'slow', text: 'PROBE-LATE', delayMs: 8_000 }))
+      : { kind: 'slow', text: 'PROBE-LATE', delayMs: 30_000 }))
     providers.add(provider)
     const port = await availableLoopbackPort()
     const configPath = await writeAgentConfig({ baseUrl: provider.baseUrl, port, executable: EXECUTABLE, directory })
@@ -385,9 +385,12 @@ describe.skipIf(!engineAvailable)('--serve opencode entry with the installed eng
     const sessionId = sessionIdOf(await client.awaitFrame(frame => frame.id === 'new-1'))
 
     await client.send({ jsonrpc: '2.0', id: 'prompt-1', method: 'session/prompt', params: { sessionId, prompt: [{ type: 'text', text: 'slow' }] } })
-    await client.awaitFrame(frame => frame.method === 'session/update')
+    // Wait until the provider call is really in flight. Cancelling on any
+    // session/update would race the request itself.
+    await client.awaitFrame(frame => frame.method === 'session/update' && JSON.stringify(frame.params).includes('PROBE-START'))
     await client.send({ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId } })
     const cancelled = await client.awaitFrame(frame => frame.id === 'prompt-1')
+    expect(cancelled.error, `cancel returned an error frame: ${JSON.stringify(cancelled)}`).toBeUndefined()
     expect((cancelled.result as Record<string, unknown>).stopReason).toBe('cancelled')
     // The accepted model really reached the local provider through the entry.
     expect(provider.calls.some(call => call.model === 'probe-model')).toBe(true)

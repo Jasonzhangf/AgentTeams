@@ -14,6 +14,8 @@
  *
  * Usage: node docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs
  * Env:   OPENCODE_EXECUTABLE (default /Users/fanzhang/.opencode/bin/opencode)
+ *        AGENTTEAMS_CLI     run another copy of the entry, e.g. an installed
+ *                           node_modules/agentteams/cli/agentteams.mjs
  */
 import { execFileSync, spawn } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -25,7 +27,9 @@ import { fileURLToPath } from 'node:url'
 import { createConnection, createServer as createNetServer } from 'node:net'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
-const CLI = join(repositoryRoot, 'cli', 'agentteams.mjs')
+const installedCli = process.env.AGENTTEAMS_CLI
+const CLI = installedCli ?? join(repositoryRoot, 'cli', 'agentteams.mjs')
+const CLI_ROOT = installedCli === undefined ? repositoryRoot : resolve(dirname(installedCli), '..')
 const EXECUTABLE = process.env.OPENCODE_EXECUTABLE ?? '/Users/fanzhang/.opencode/bin/opencode'
 const PROBE_CREDENTIAL = 'probe-secret-value'
 
@@ -96,7 +100,7 @@ function startStubProvider() {
       // Key the slow branch on the real prompt text so the cancel window is
       // deterministic and does not depend on how many provider calls happened.
       const plan = lastUserText(parsed).includes('SLOW-CANCEL')
-        ? { kind: 'slow', text: 'PROBE-LATE', delayMs: 15_000 }
+        ? { kind: 'slow', text: 'PROBE-LATE', delayMs: 30_000 }
         : (toolNames.length === 0
             ? { kind: 'text', text: 'title' }
             : (++toolCalls === 1 ? { kind: 'tool', tool: 'read', args: { filePath: '/etc/hosts' } } : { kind: 'text', text: 'PROBE-TOOL-DONE' }))
@@ -229,12 +233,13 @@ const dataDirectory = join(directory, 'state')
 await writeFile(configPath, agentConfig({ baseUrl: provider.baseUrl, port, dataDirectory, workspace: join(directory, 'workspace') }))
 
 console.log(`# D02 black-box serve entry`)
+console.log(`cli=${CLI}`)
 console.log(`config=${configPath}`)
 console.log(`provider=${provider.baseUrl}`)
 console.log(`listener=127.0.0.1:${port}`)
 
 const entry = spawn(process.execPath, [CLI, '--serve', 'opencode', '--ip', '127.0.0.1', '--port', String(port), '--config', configPath], {
-  cwd: repositoryRoot,
+  cwd: CLI_ROOT,
   env: { ...process.env, PROBE_API_KEY: PROBE_CREDENTIAL },
   stdio: ['ignore', 'pipe', 'pipe'],
 })
@@ -298,10 +303,10 @@ try {
   assert(provider.calls.some(call => call.model === 'probe-model'), 'the stub provider really received a request for the accepted model')
 
   await client.send({ jsonrpc: '2.0', id: 'prompt-2', method: 'session/prompt', params: { sessionId, prompt: [{ type: 'text', text: 'SLOW-CANCEL' }] } })
-  await client.awaitFrame(frame => frame.method === 'session/update', 60_000)
+  await client.awaitFrame(frame => frame.method === 'session/update' && JSON.stringify(frame.params).includes('PROBE-START'), 60_000)
   await client.send({ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId } })
   const cancelled = await client.awaitFrame(frame => frame.id === 'prompt-2')
-  assert(cancelled.result?.stopReason === 'cancelled', `the cancel notification ended the in-flight prompt (${cancelled.result?.stopReason})`)
+  assert(cancelled.result?.stopReason === 'cancelled', `the cancel notification ended the in-flight prompt (${cancelled.result?.stopReason ?? JSON.stringify(cancelled)})`)
 
   console.log(`\n## explicit-PID stop`)
   // Register the exit listener before the signal so the event cannot be missed.
