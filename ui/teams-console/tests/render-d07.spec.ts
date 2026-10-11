@@ -199,47 +199,80 @@ ${controllerScript}
 const notificationNegativeScript = `<!doctype html>
 <html><body>
   <div id="root-no-options"></div>
-  <div id="root-no-event"></div>
+  <div id="root-empty-options"></div>
   <div id="root-resolved"></div>
+  <div id="root-event-absent"></div>
+  <div id="root-no-permission-id"></div>
   <div id="root-offered"></div>
   <script>
 ${script}
 ${controllerScript}
     const projection = ${JSON.stringify(projection)}
     const baseNotification = ${JSON.stringify(state({ live: false, entry: 'notifications', projection }))}
-    // The matching pending engine event exists but offered no option set.
-    const absentOptions = JSON.parse(JSON.stringify(projection))
-    absentOptions.sessionEvents = absentOptions.sessionEvents.filter(event => event.eventId !== 'e2')
-    absentOptions.sessionEvents.push({ eventId: 'e2', agentId: 'planner', sessionId: 's1', kind: 'permission',
-      state: 'pending', permissionId: 'p1', messageId: 'm1', title: 'Approve the tool call', metadata: {} })
-    STATE = { ...baseNotification, projection: absentOptions }
-    renderConsole(document.getElementById('root-no-options'), controller)
-    const noOptions = document.getElementById('root-no-options').outerHTML
-    // The matching pending engine event exists but offered an empty option set.
-    const emptyOptions = JSON.parse(JSON.stringify(projection))
-    emptyOptions.sessionEvents = emptyOptions.sessionEvents.filter(event => event.eventId !== 'e2')
-    emptyOptions.sessionEvents.push({ eventId: 'e2', agentId: 'planner', sessionId: 's1', kind: 'permission',
-      state: 'pending', permissionId: 'p1', messageId: 'm1', title: 'Approve the tool call', metadata: {}, options: [] })
-    STATE = { ...baseNotification, projection: emptyOptions }
-    renderConsole(document.getElementById('root-no-event'), controller)
-    const emptySet = document.getElementById('root-no-event').outerHTML
-    // The matching engine event resolved after the notification was raised.
-    const resolvedEvent = JSON.parse(JSON.stringify(projection))
-    resolvedEvent.sessionEvents = resolvedEvent.sessionEvents.filter(event => event.eventId !== 'e2')
-    STATE = { ...baseNotification, projection: resolvedEvent }
-    renderConsole(document.getElementById('root-resolved'), controller)
-    const resolved = document.getElementById('root-resolved').outerHTML
-    // The control: the same notification against the option-bearing event does offer buttons.
-    STATE = { ...baseNotification, projection }
-    renderConsole(document.getElementById('root-offered'), controller)
-    const offered = document.getElementById('root-offered').outerHTML
+    // Each case replaces the matching pending engine event with one specific defect, so the
+    // notification itself never changes and only the engine option set varies.
+    const withEvent = (mutate) => {
+      const next = JSON.parse(JSON.stringify(projection))
+      next.sessionEvents = next.sessionEvents.filter(event => event.eventId !== 'e2')
+      const event = { eventId: 'e2', agentId: 'planner', sessionId: 's1', kind: 'permission',
+        state: 'pending', permissionId: 'p1', messageId: 'm1', title: 'Approve the tool call', metadata: {} }
+      mutate(event)
+      next.sessionEvents.push(event)
+      return next
+    }
+    const render = (id, nextProjection, notificationOverride) => {
+      const withNotifications = notificationOverride === undefined
+        ? nextProjection
+        : { ...nextProjection, notifications: notificationOverride }
+      STATE = { ...baseNotification, projection: withNotifications }
+      renderConsole(document.getElementById(id), controller)
+      return document.getElementById(id).outerHTML
+    }
+    // 1. The matching pending engine event exists but carried no option set at all.
+    const noOptions = render('root-no-options', withEvent(() => {}))
+    // 2. The matching pending engine event exists but offered an empty option set.
+    const emptySet = render('root-empty-options', withEvent(event => { event.options = [] }))
+    // 3. The matching engine event is genuinely resolved but the projection still carries the
+    //    engine's old option list. Only the pending-state check keeps that stale set from being
+    //    offered again, so this case fails if the check is dropped.
+    const resolved = render('root-resolved', withEvent(event => {
+      event.state = 'resolved'
+      event.decision = 'once'
+      event.options = [
+        { optionId: 'once', name: 'Allow once', kind: 'once' },
+        { optionId: 'always', name: 'Always allow', kind: 'always' },
+        { optionId: 'reject', name: 'Reject', kind: 'reject' },
+      ]
+    }))
+    // 4. No matching engine event exists at all.
+    const absent = render('root-event-absent', (() => {
+      const next = JSON.parse(JSON.stringify(projection))
+      next.sessionEvents = next.sessionEvents.filter(event => event.eventId !== 'e2')
+      return next
+    })())
+    // 5. The frozen notification DTO omitted permissionId, so no engine event can be matched.
+    const noPermissionId = render('root-no-permission-id', projection, [{
+      agentId: 'planner', notificationId: 'n1', sessionId: 's1', kind: 'permission', state: 'pending',
+      title: 'Approve the tool call', priority: 'high', occurredAt: '2026-10-01T00:00:00.000Z',
+    }])
+    // 6. The control: the untouched option-bearing event still offers exactly its own choices.
+    const offered = render('root-offered', projection)
     const approvalButtons = html => [...html.matchAll(/data-permission-option="/g)].length
+    const hasHint = html => html.includes('data-permission-options-unavailable="true"')
     document.body.dataset.noOptionsNoApproval = String(approvalButtons(noOptions) === 0)
-    document.body.dataset.noOptionsHint = String(noOptions.includes('data-permission-options-unavailable="true"'))
+    document.body.dataset.noOptionsHint = String(hasHint(noOptions))
     document.body.dataset.emptyOptionsNoApproval = String(approvalButtons(emptySet) === 0)
-    document.body.dataset.emptyOptionsHint = String(emptySet.includes('data-permission-options-unavailable="true"'))
+    document.body.dataset.emptyOptionsHint = String(hasHint(emptySet))
     document.body.dataset.resolvedEventNoApproval = String(approvalButtons(resolved) === 0)
+    document.body.dataset.resolvedEventHint = String(hasHint(resolved))
+    document.body.dataset.eventAbsentNoApproval = String(approvalButtons(absent) === 0)
+    document.body.dataset.eventAbsentHint = String(hasHint(absent))
+    document.body.dataset.noPermissionIdNoApproval = String(approvalButtons(noPermissionId) === 0)
+    document.body.dataset.noPermissionIdHint = String(hasHint(noPermissionId))
     document.body.dataset.controlOffersButtons = String(approvalButtons(offered) === 3)
+    document.body.dataset.controlOffersExactKinds = String(
+      offered.includes('data-permission-kind="once"') && offered.includes('data-permission-kind="always"')
+      && offered.includes('data-permission-kind="reject"'))
     document.body.dataset.notificationStillAcknowledgable = String(
       (noOptions.match(/Acknowledge|确认/g) ?? []).length > 0)
   </script>
@@ -332,7 +365,13 @@ describe('D07 four-page DOM contract in a real DOM', () => {
     expect(output).toContain('data-empty-options-no-approval="true"')
     expect(output).toContain('data-empty-options-hint="true"')
     expect(output).toContain('data-resolved-event-no-approval="true"')
+    expect(output).toContain('data-resolved-event-hint="true"')
+    expect(output).toContain('data-event-absent-no-approval="true"')
+    expect(output).toContain('data-event-absent-hint="true"')
+    expect(output).toContain('data-no-permission-id-no-approval="true"')
+    expect(output).toContain('data-no-permission-id-hint="true"')
     expect(output).toContain('data-control-offers-buttons="true"')
+    expect(output).toContain('data-control-offers-exact-kinds="true"')
     expect(output).toContain('data-notification-still-acknowledgable="true"')
   })
 })

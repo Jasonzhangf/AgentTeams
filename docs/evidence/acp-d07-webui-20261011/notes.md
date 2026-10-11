@@ -45,12 +45,28 @@ Chrome, asserting only DOM the modules built — never source text. It covers
 `data-team-role-accepted`, `data-history-prev`, `data-history-count`,
 `data-history-record` and `data-history-refused`, plus three negative cases: an engine
 permission event that offered no options gets no fabricated button, observation loss
-degrades the band to `stale`, and a pending permission **notification** whose matching
-`sessionEvents` entry is missing, offers an empty option set, or has already resolved gets
-no approval button at all — only `data-permission-options-unavailable` and the
-acknowledge action. The notification path is checked separately because the frozen
-notification DTO carries no choice set, so it must look the option set up on the owner
-event rather than assume once/always/reject.
+degrades the band to `stale`, and the notification surface is checked separately with a
+six-case matrix.
+
+The notification matrix matters because the frozen notification DTO carries no choice set,
+so the row must look the option set up on the matching owner event instead of assuming
+once/always/reject. The same pending permission notification is rendered against six engine
+projections, and each of the five no-choice projections must yield **zero** approval
+buttons **and** the `data-permission-options-unavailable` hint:
+
+| engine projection for the matching event | expected |
+| --- | --- |
+| pending, no `options` field | 0 buttons + hint |
+| pending, `options: []` | 0 buttons + hint |
+| `state: 'resolved'` but still carrying the engine's old option list | 0 buttons + hint |
+| no matching event at all | 0 buttons + hint |
+| notification DTO omits `permissionId` | 0 buttons + hint |
+| pending with the engine's real option set (control) | exactly 3 buttons, kinds once/always/reject |
+
+The resolved case deliberately keeps a stale option list, because a resolved event that has
+no options cannot discriminate the pending-state guard. Red-checked: dropping the
+pending-state guard on the event lookup makes `data-resolved-event-no-approval` fail, so the
+case really does cover the resolved state.
 
 ## Browser evidence boundary (deliberate non-claim)
 

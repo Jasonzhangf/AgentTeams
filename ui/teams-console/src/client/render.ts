@@ -382,29 +382,39 @@ function renderNotifications(controller: TeamsConsoleController, state: ConsoleS
     // The frozen notification DTO carries no choice set. A permission notification may only
     // offer choices the engine actually projected onto the matching pending `sessionEvents`
     // entry, so this path looks the option set up instead of assuming once/always/reject.
-    if (notification.kind === 'permission' && notification.state === 'pending' && sessionTargetExists && notification.permissionId !== undefined) {
-      const offered = permissionOptionsFor(projection, notification.agentId, notification.sessionId as string, notification.permissionId)
-      if (offered === undefined) {
+    // Every branch that cannot resolve a real engine option set renders an explicit hint and
+    // no approval button, so no path can fabricate a choice or auto-approve.
+    if (notification.kind === 'permission' && notification.state === 'pending') {
+      if (!sessionTargetExists) {
+        const error = element('span', 'teams-inline-error')
+        error.textContent = t.invalidNotificationTarget
+        append(actions, error)
+      } else if (notification.permissionId === undefined) {
+        // The DTO omits the permission id, so no engine event can be matched.
         const unavailable = element('span', 'teams-field-hint')
         unavailable.setAttribute('data-permission-options-unavailable', 'true')
         unavailable.textContent = t.permissionOptionsUnavailable
         append(actions, unavailable)
       } else {
-        for (const option of offered) {
-          const label = option.kind === 'once' ? t.allowOnce : option.kind === 'always' ? t.alwaysAllow : t.reject
-          const className = option.kind === 'once' ? 'teams-button-primary' : option.kind === 'always' ? 'teams-button-secondary' : 'teams-button-danger'
-          const reply = button(label, className, async () => {
-            await controller.replyPermission(notification.agentId, notification.sessionId as string, notification.permissionId as string, option.kind, option.optionId)
-          }, actionDisabled(state))
-          reply.setAttribute('data-permission-option', option.optionId)
-          reply.setAttribute('data-permission-kind', option.kind)
-          append(actions, reply)
+        const offered = permissionOptionsFor(projection, notification.agentId, notification.sessionId as string, notification.permissionId)
+        if (offered === undefined) {
+          const unavailable = element('span', 'teams-field-hint')
+          unavailable.setAttribute('data-permission-options-unavailable', 'true')
+          unavailable.textContent = t.permissionOptionsUnavailable
+          append(actions, unavailable)
+        } else {
+          for (const option of offered) {
+            const label = option.kind === 'once' ? t.allowOnce : option.kind === 'always' ? t.alwaysAllow : t.reject
+            const className = option.kind === 'once' ? 'teams-button-primary' : option.kind === 'always' ? 'teams-button-secondary' : 'teams-button-danger'
+            const reply = button(label, className, async () => {
+              await controller.replyPermission(notification.agentId, notification.sessionId as string, notification.permissionId as string, option.kind, option.optionId)
+            }, actionDisabled(state))
+            reply.setAttribute('data-permission-option', option.optionId)
+            reply.setAttribute('data-permission-kind', option.kind)
+            append(actions, reply)
+          }
         }
       }
-    } else if (notification.kind === 'permission' && notification.state === 'pending' && !sessionTargetExists) {
-      const error = element('span', 'teams-inline-error')
-      error.textContent = t.invalidNotificationTarget
-      append(actions, error)
     }
     if (notification.state === 'pending') {
       append(actions, button(t.acknowledge, 'teams-button-secondary', async () => { await controller.acknowledge(notification.notificationId, notification.agentId) }, actionDisabled(state)))
