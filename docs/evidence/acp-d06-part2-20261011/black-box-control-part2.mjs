@@ -216,8 +216,11 @@ allowed = ["master", "peer"]
   while (pidAlive(startedPid) && Date.now() < deadline) await new Promise(resolveDelay => setTimeout(resolveDelay, 25))
   assert.equal(pidAlive(startedPid), false, `control pid=${startedPid} is still alive after stop`)
   assert.equal(await portClosed(port), true, `listener 127.0.0.1:${port} is still accepting after stop`)
-  assert.equal(existsSync(dataDirectory), false, 'the owned data directory survived stop')
-  check('CLI stop removes the pid, the listener and the owned state', `${stop.stdout}; listener closed`)
+  // 146824a: the durable data directory holds this daemon's kind:'connection' history, so a
+  // stop removes the runtime state record and keeps the directory. See D08-F2.
+  assert.equal(existsSync(join(dataDirectory, 'control-state.json')), false, 'the runtime state record survived stop')
+  assert.equal(existsSync(dataDirectory), true, 'the durable data directory was removed by stop')
+  check('CLI stop removes the pid, the listener and the runtime state record', `${stop.stdout}; listener closed; durable data directory kept`)
 } catch (error) {
   process.stderr.write(`\nD06 PART 2 control black box FAIL: ${error?.stack ?? error}\n`)
   process.exitCode = 1

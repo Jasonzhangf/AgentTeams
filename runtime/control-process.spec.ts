@@ -230,7 +230,8 @@ it('stops by explicit pid while a live WebUI event-stream client still holds its
   await reader.cancel().catch(() => undefined)
 })
 
-it('refuses a second start while the control generation is alive', async () => {  const configPath = track(await controlConfig())
+it('refuses a second start while the control generation is alive', async () => {
+  const configPath = track(await controlConfig())
   const started = await startControlDaemon(configPath, { env })
   await expectFault(startControlDaemon(configPath, { env }), 'ALREADY_RUNNING')
   expect((await statusControlDaemon(configPath)).generation).toBe(started.generation)

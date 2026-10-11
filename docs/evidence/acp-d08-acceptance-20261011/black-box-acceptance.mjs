@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * D08 final-acceptance black-box driver (A01–A09).
+ * D08 final-acceptance black-box driver (A01–A11).
  *
  * It exercises the INSTALLED artifact, never the worktree debug binaries:
  *   1. the project's own producer `pnpm build:governance`
@@ -16,7 +16,7 @@
  *      (`node_modules/agentteams/generated/runtime-lib/network/*.js`), not the
  *      TypeScript sources.
  *
- * Coverage (A01–A09):
+ * Coverage (A01–A11):
  *   A01 one config starts one daemon; independent identity/storage/IP/port; the
  *       installed CLI reads each daemon back and refuses a non-agent config.
  *   A02 OpenCode and DSH each complete a real prompt/process/reply through the
@@ -43,7 +43,8 @@
  * HONEST BOUNDARIES (printed as `GAP` lines, never as PASS):
  *   - Cross-device receipt: only one physical host exists here, so a genuine
  *     cross-device result is NOT obtainable. Loopback and same-host non-loopback
- *     are never passed off as cross-device. (A11 is out of this driver's scope.)
+ *     are never passed off as cross-device. (A11's LAN half IS in scope and checked;
+ *     only the cross-device half is the boundary.)
  *   - Live-browser DOM: headless Chrome cannot satisfy this origin's HTTP Basic
  *     challenge for a same-origin fetch/EventSource, so no browser DOM/screenshot
  *     is claimed; the frozen DOM contract is owned by
@@ -1525,7 +1526,7 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   check('A10 — communication continues after the WebUI client closes',
     `every WebUI HTTP/SSE client connection this driver opened is closed; prompt on the established channel -> stopReason=${afterWebui.frame.result.stopReason}`)
   gap('A07 — animation driven by real events',
-    'the shipped control daemon binds no Console owner (runtime/control-process.ts:756 calls createControlOwner({ network }) with no owner), so /api/v1/projection is a constant empty snapshot and no real event can advance the SSE stream; only the transport is proven here')
+    'the shipped control daemon binds no Console owner (runtime/control-process.ts:761 calls createControlOwner({ network: network.port }) with no owner), so /api/v1/projection is a constant empty snapshot and no real event can advance the SSE stream; only the transport is proven here. D06 requires discovery query, connect/disconnect, membership projection and targeted ACP ingress, so this is an UNMET REQUIREMENT owned by D06, not an environment limit')
   gap('A07 — live-browser DOM and screenshots',
     "headless Chrome cannot satisfy the origin's HTTP Basic challenge for a same-origin fetch/EventSource and a credentialed origin URL is rejected by fetch itself; the frozen DOM contract is owned by ui/teams-console/tests/render-d07.spec.ts, not by this driver")
   gap('A07 — targeted interaction from the WebUI',
@@ -1617,19 +1618,12 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   step = 'A10 control stop'
   const controlStop = runCliLogged(['control', 'stop', '--config', controlPath, '--generation', String(live.control.generation)], operatorEnv)
   const controlStopLine = controlStop.output.trim().split('\n').filter(Boolean).at(-1) ?? ''
-  if (!/^stopped state=stopped /.test(controlStopLine)) {
-    // The project's own stop entry waits 5s for the daemon. If a WebUI client socket holds
-    // the shutdown past that wait, the stop is still real: wait for the explicit pid and
-    // report the exact observation as a finding instead of hiding it. This path was live
-    // before 44d82f7 ("fix(control): close the control listener sockets on stop"); it stays
-    // as a regression receipt and never turns an unproven stop into a pass.
-    const exitedLate = await settle('the control daemon to exit after the stop wait elapsed', async () => !pidAlive(live.control.pid), 200, 30_000)
-    assert(exitedLate, `control stop reported ${controlStopLine} and the daemon never exited (pid ${live.control.pid} still alive)`)
-    finding('A10 — control stop exceeds the CLI wait while a WebUI client socket is open',
-      `agentteams control stop --generation ${live.control.generation} exited ${controlStop.status} with "${controlStopLine}" (pid ${live.control.pid}); the daemon exited shortly after. Repro in notes.md (D08-F1)`)
-  } else {
-    assert(controlStop.status === 0, `control stop failed: ${controlStopLine}`)
-  }
+  // 44d82f7 fixed the false STOP_TIMEOUT this driver originally found (D08-F1): a live WebUI
+  // event-stream client used to hold the daemon past the CLI's bounded stop wait. That fix is
+  // part of this candidate, so a stop that reports anything other than a clean
+  // `stopped state=stopped` is now a regression and fails the run, not a non-fatal note.
+  assert(controlStop.status === 0 && /^stopped state=stopped /.test(controlStopLine),
+    `control stop did not report a clean stop: exit ${controlStop.status}, last line "${controlStopLine}"`)
   live.control.stopped = true
   assert(!pidAlive(live.control.pid), `the control pid ${live.control.pid} is gone after the explicit stop`)
   assert(await settle('the control listener to close', async () => await portIsClosed('127.0.0.1', controlPort), 100, 10_000), `control listener ${controlPort} survived the stop`)
@@ -1658,6 +1652,13 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   // driver asserts the observed rule, not the crash-only expectation.
   assert(live.control.generation === 1 && stoppedGeneration === 1,
     `a graceful stop+start begins a new lifecycle generation (${stoppedGeneration} -> ${live.control.generation})`)
+  // Observed, falsifies no check, but worth a decision: because a graceful stop removes the
+  // persisted lifecycle record, the generation restarts at 1. A stale `--generation` value
+  // from the previous lifecycle can therefore collide with the new one, where a crash restart
+  // would have advanced past it. The project declares no monotonicity requirement across a
+  // graceful stop, so this is recorded rather than asserted.
+  finding('A09 — a graceful stop+start reuses generation 1',
+    `stopped owner generation ${stoppedGeneration}, restarted owner generation ${live.control.generation}; a crash restart advances the counter instead, so a stale --generation can collide after a graceful stop`) 
   const afterRestartReady = await settle('the restarted control listener to accept', async () => (await fetch(controlOrigin).catch(() => null))?.status === 401, 200, 30_000)
   assert(afterRestartReady, 'the restarted control owner never bound its listener')
   const afterRestart = (await (await authFetch('/api/v1/history?version=1&limit=50&kind=connection')).json()).records

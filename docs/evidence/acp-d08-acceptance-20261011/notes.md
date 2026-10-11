@@ -144,27 +144,38 @@ driver never substitutes loopback for a LAN claim.
 
 The driver passes, but the overall goal stays **INCOMPLETE** while the four gaps in §5 remain.
 
-## 5. Gaps (real coverage boundaries, not defects)
+## 5. Gaps (unmet requirements and evidence boundaries)
 
-1. **A07 — animation driven by real events.** The shipped control daemon binds no Console
+Two of these are **unmet requirements**: the shipped control daemon does not provide a
+capability D06 requires, so the acceptance item cannot be met in this candidate. Two are
+**evidence boundaries**: the capability may exist, but this environment cannot prove it.
+Neither kind is a defect introduced by D08, and neither is ever inferred from a passing
+check.
+
+1. **A07 — animation driven by real events. UNMET REQUIREMENT, not an environment limit.**
+   D06 requires the control daemon to provide discovery query, connect/disconnect, membership
+   and role projection, and targeted ACP ingress with callback reply and cancel
+   (`D06-control.md`). The shipped daemon does not: it binds no Console
    owner: `runtime/control-process.ts:761` calls `createControlOwner({ network: network.port })`
    with no `owner`, and the same file hardcodes an empty directory snapshot, so
    `/api/v1/projection` is a constant empty snapshot
    (`{version:1, agents:[], sessions:[], notifications:[], configs:[], connections:[]}`).
    No real event can advance the SSE stream in this candidate, so only the SSE transport
-   is proven. This is a deliberate typed-absence path in the shipped D06 code, not an
-   accidental defect. It is a retained delivery obligation (owner D06/D07), and it is the
-   reason A07 is `PARTIAL`.
-2. **A07 — live-browser DOM and screenshots.** Headless Chrome cannot satisfy the origin's
+   is proven. The typed-absence path is deliberate in the shipped code, but the capability it
+   stands in for is still missing. This is a retained delivery obligation owned by D06/D07,
+   not a coverage boundary. It is the reason A07 is `PARTIAL`.
+2. **A07 — live-browser DOM and screenshots. EVIDENCE BOUNDARY.** Headless Chrome cannot satisfy the origin's
    HTTP Basic challenge for a same-origin `fetch`/`EventSource`, and a credentialed origin
    URL is rejected by `fetch` itself; the owner serves no credentials endpoint. The frozen
    DOM marker contract is owned by `ui/teams-console/tests/render-d07.spec.ts` (real
    Chrome), not by this driver. The driver proves the module graph and the HTTP contract.
-3. **A07 — targeted interaction from the WebUI.** Because no Session owner is bound, every
+3. **A07 — targeted interaction from the WebUI. UNMET REQUIREMENT, same missing owner as
+   gap 1.** Because no Session owner is bound, every
    interaction write is a typed `UNSUPPORTED_OPERATION` refusal, so no prompt can be
    targeted from the WebUI in this candidate. The driver proves the refusal is typed and
-   that no effect is fabricated; it does not prove a targeted interaction.
-4. **A11 — cross-device receipt.** Only one physical host is available. LAN reachability
+   that no effect is fabricated; it does not prove a targeted interaction. Retained delivery
+   obligation owned by D06.
+4. **A11 — cross-device receipt. EVIDENCE BOUNDARY.** Only one physical host is available. LAN reachability
    over `192.168.0.3` is proven and loopback is never substituted for it; a cross-device
    conclusion is explicitly not claimed.
 

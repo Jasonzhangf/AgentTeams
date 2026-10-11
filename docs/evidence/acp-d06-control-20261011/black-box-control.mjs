@@ -328,11 +328,16 @@ allowed = ["master", "peer"]
   while (pidAlive(startedPid) && Date.now() < deadline) await new Promise(resolveDelay => setTimeout(resolveDelay, 25))
   assert.equal(pidAlive(startedPid), false, `control pid=${startedPid} is still alive after stop`)
   assert.equal(await portClosed(port), true, `listener 127.0.0.1:${port} is still accepting after stop`)
-  assert.equal(existsSync(dataDirectory), false, 'the owned data directory survived stop')
+  // 146824a: the data directory is durable, because the daemon keeps its kind:'connection'
+  // history there and D06 requires that history to survive a restart. A stop therefore removes
+  // the runtime state record and keeps the directory. The D08 run found the old rm -rf here
+  // destroying the history; see docs/evidence/acp-d08-acceptance-20261011/notes.md (D08-F2).
+  assert.equal(existsSync(join(dataDirectory, 'control-state.json')), false, 'the runtime state record survived stop')
+  assert.equal(existsSync(dataDirectory), true, 'the durable data directory was removed by stop')
   const afterStop = runCli(['control', 'status', '--config', configPath])
   assert.equal(afterStop.status, 0)
   assert.equal(field(afterStop.stdout, 'state'), 'stopped')
-  check('CLI stop removes the pid, the listener and the owned state', `${stop.stdout}; listener closed`)
+  check('CLI stop removes the pid, the listener and the runtime state record', `${stop.stdout}; listener closed; durable data directory kept`)
 
   // 10. A taken port is a typed failure at the real CLI, and it leaves no owned state.
   const takenPort = await freePort()
@@ -348,7 +353,9 @@ allowed = ["master", "peer"]
     const taken = runCli(['control', 'start', '--config', takenConfig], { [PASSWORD_ENV]: PASSWORD })
     assert.equal(taken.status, 1, `expected exit 1 for a taken port, got ${taken.status}: ${taken.stdout}`)
     assert.match(taken.stderr, /^PORT_OCCUPIED: /, `expected a typed PORT_OCCUPIED failure, got: ${taken.stderr}`)
-    assert.equal(existsSync(takenData), false, 'a failed start kept its owned data directory')
+    // A failed start removes the runtime state record. The durable data directory stays, for
+    // the same reason a stop keeps it (146824a).
+    assert.equal(existsSync(join(takenData, 'control-state.json')), false, 'a failed start kept its runtime state record')
     assert.equal(runCli(['control', 'status', '--config', takenConfig]).stdout.includes('state=running'), false)
     check('a taken webui port fails with the typed PORT_OCCUPIED code and no owned state', taken.stderr)
   } finally {
