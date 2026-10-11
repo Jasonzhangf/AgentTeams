@@ -340,7 +340,7 @@ PY
 | 集成 base | `origin/main@dec2cbd`（D00 + D01 + D01 绑定 + D04 + D04 绑定 + D03 DSH adapter 核心 + D03 绑定） |
 | 被合并的已 review 候选 | `codex/acp-d02-serve-20261010@9436aae`（base `48ce0c9`；提交 `1d4df3a` adapter、`b470270` serve 入口 + 绑定、`a91af7f`/`1af8fe5`/`9436aae` 证据与 cancel 竞态修复） |
 | 合并方式 | 单一 merge commit（未 push、未合并 main、未改写历史） |
-| 集成 merge commit | `PENDING_MERGE_HASH`（由紧随其后的 docs-only 提交记录，原因同 §1：receipt 不能活在它所绑定的提交里） |
+| 集成 merge commit | `ed9a4a9`（parents `dec2cbd` + `9436aae`；由紧随其后的 docs-only 提交记录，原因同 §1：receipt 不能活在它所绑定的提交里） |
 | Run notes / 日志 | `/Volumes/Intel/playground/agentteams/.worker-runs/acp-d02-merge-20261010/`（`black-box-serve.log`、`five-map-validation.log`） |
 
 ### 11.2 review 历史（集成输入）
