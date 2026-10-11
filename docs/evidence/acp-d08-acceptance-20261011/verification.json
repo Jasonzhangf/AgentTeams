@@ -6,25 +6,31 @@
   "base_ref": "origin/main",
   "worktree": "/Volumes/Intel/playground/agentteams/acp-d08-acceptance-20261011",
   "branch": "codex/acp-d08-acceptance-20261011",
-  "committed": false,
-  "candidate_commits": [],
+  "committed": true,
+  "candidate_commits": [
+    "44d82f7 fix(control): close the control listener sockets on stop",
+    "146824a fix(control): keep the durable connection history across a stop",
+    "541f397 docs(acp): record the D08 final-acceptance receipts",
+    "18f4ffe fix(docs): repair the D06 evidence invalidated by the durable stop"
+  ],
+  "committed_note": "the candidate is committed on the branch; origin/main integration, the remote receipt and the freeze are separate and stay null until the integration owner records them",
   "integration_commit": null,
   "remote_receipt": null,
   "review": null,
   "gate_id": "teams-acp-d08-acceptance",
   "gate_status": "partial",
-  "gate_status_note": "the acceptance driver passes (44 checks, 4 gaps, 0 findings), but the overall goal stays INCOMPLETE while the four gaps below remain",
+  "gate_status_note": "the acceptance driver passes (44 checks, 4 gaps, 1 non-defect observation), but the overall goal stays INCOMPLETE while the four gaps below remain: two are unmet D06 requirements (A07 real-event animation, A07 targeted interaction) and two are evidence boundaries (A07 live-browser DOM, A11 cross-device)",
   "driver": {
     "path": "docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
     "command": "node docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
     "exit_code": 0,
-    "summary_line": "D08 acceptance PASS: 44 checks (gaps: 4, findings: 0) in 136s",
-    "summary_note": "the final line carries that run's own elapsed seconds; the check/gap/finding counts are deterministic across runs",
+    "summary_line": "D08 acceptance PASS: 44 checks (gaps: 4, findings: 1) in 124s",
+    "summary_note": "the final line carries that run's own elapsed seconds; the check/gap/finding counts are deterministic across runs. The single FINDING is an observation, not a defect: a graceful control stop removes the persisted lifecycle record, so the restarted owner reuses generation 1 and a stale --generation can collide. No requirement covers it, so the driver records it instead of asserting it, and a FINDING never changes the exit code.",
     "checks": 44,
     "gaps": 4,
-    "findings": 0,
+    "findings": 1,
     "resolved_defects": 2,
-    "wall_clock_seconds": 136,
+    "wall_clock_seconds": 124,
     "runtime_under_test": "installed artifact: npm pack of the pnpm build:governance final package, installed into an isolated prefix with npm install --prefix",
     "worktree_debug_binary_used_as_runtime_evidence": false
   },
@@ -71,6 +77,13 @@
       "test_files": 6,
       "tests": 117,
       "detail": "was 115; +2 new spec cases for the two fixed control defects"
+    },
+    {
+      "kind": "black-box",
+      "label": "D06 control black boxes, re-run after the durable-directory change",
+      "command": "node docs/evidence/acp-d06-control-20261011/black-box-control.mjs && node docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs",
+      "result": "pass",
+      "detail": "10 checks and 7 checks, exit 0 both. The independent D08 review found that 146824a invalidated these two declared drivers: both asserted that a stop removes the owned data directory, which is exactly the behaviour the fix changed, so both failed (exit 1 at black-box-control.mjs:331 and black-box-control-part2.mjs:219) while the maps still claimed they pass. The assertions were corrected to the behaviour D06 actually requires (the runtime state record goes, the durable data directory holding the kind:'connection' history stays) and both were re-run green on candidate 18f4ffe. Fixed in 18f4ffe."
     },
     {
       "kind": "regression-gate",
@@ -233,8 +246,17 @@
       "classification": "missing device, explicitly not claimed"
     }
   ],
-  "findings": [],
-  "findings_note": "the driver found two product defects (D08-F1, D08-F2); both are fixed, so no open finding remains and the final run reports findings: 0",
+  "findings": [
+    {
+      "id": "D08-O1",
+      "kind": "observation, not a defect",
+      "name": "a graceful control stop+start reuses generation 1",
+      "detail": "a graceful stop removes the persisted lifecycle record, so the restarted owner begins a new lifecycle at generation 1 instead of continuing the counter; a crash restart keeps the record and advances it. A stale --generation value from the previous lifecycle can therefore collide with the new one. The project declares no monotonicity requirement across a graceful stop, so the driver records this and asserts the observed rule rather than a requirement.",
+      "falsifies_a_check": false,
+      "affects_exit_code": false
+    }
+  ],
+  "findings_note": "the driver found two product defects (D08-F1, D08-F2); both are fixed, so no open defect remains. The canonical run reports findings: 1, and that one entry is the generation-reuse observation above: it falsifies no check, no requirement covers it, and it never changes the exit code.",
   "resolved_defects": [
     {
       "id": "D08-F1",

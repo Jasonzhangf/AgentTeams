@@ -3,7 +3,10 @@
 Owner: D08 acceptance driver.
 Worktree `/Volumes/Intel/playground/agentteams/acp-d08-acceptance-20261011`,
 branch `codex/acp-d08-acceptance-20261011`, base commit `d37d3b9` (`origin/main`).
-Nothing in this directory is committed by this worker.
+Candidate commits on this branch: `44d82f7` (fix D08-F1), `146824a` (fix D08-F2),
+`541f397` (this evidence), `18f4ffe` (D06 evidence repaired after review). The whole
+candidate is committed; `origin/main` integration and its remote receipt are separate and
+are recorded in `verification.json` (`integration_commit`, `remote_receipt`).
 
 | file | purpose |
 | --- | --- |
@@ -21,8 +24,8 @@ Canonical run (final artifact state, all three files in this directory present),
 code `0`, wall clock 136 s, empty stderr:
 
 ```
-D08 acceptance PASS: 44 checks (gaps: 4, findings: 0) in 136s
-cleanup: removed owned root /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-Xvr5qP
+D08 acceptance PASS: 44 checks (gaps: 4, findings: 1) in 124s
+cleanup: removed owned root /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-XXXXXX
 ```
 
 Three further full runs reached the same `44 checks / 4 gaps / 0 findings` result
@@ -39,7 +42,12 @@ its tar header carries the build time. The stable facts are `mode=final`,
 The driver prints one `PASS <name> — <detail>` per check, `GAP <name> — <reason>` for a
 coverage boundary that the candidate cannot prove, and `FINDING <name> — <detail>` for an
 observed product defect that falsifies no check. Both product defects this driver found are
-now fixed (§6), so the final run reports `findings: 0`. Exit `0` means every check passed; a
+now fixed (§6), so no open defect remains. The final run reports `findings: 1` for one
+**observation, not a defect**: a graceful `control stop` removes the persisted lifecycle
+record, so the restarted owner reuses generation `1` and a stale `--generation` value can
+collide with the new lifecycle. The project declares no monotonicity requirement across a
+graceful stop, so the driver records this instead of asserting it. A `FINDING` never affects
+the exit code. Exit `0` means every check passed; a
 failed assertion prints `D08 acceptance FAIL [<step>]: <reason>` on stderr, dumps the
 daemon logs, keeps the owned temp root, and exits `1`.
 
@@ -181,10 +189,12 @@ check.
 
 The overall goal stays **INCOMPLETE** while these four gaps remain.
 
-## 6. Findings (product defects found by this driver; both fixed)
+## 6. Defects found by this driver (both fixed), and the one open observation
 
 This driver found two product defects. Both were fixed before the canonical run, so neither
-is an open finding: the final run reports `findings: 0`.
+is an open finding. The canonical run reports `findings: 1`, and that single `FINDING` is the
+generation-reuse observation described in §1, not a defect: it falsifies no check and no
+requirement covers it.
 
 ### D08-F1 — `agentteams control stop` reported `STOP_TIMEOUT` while a WebUI client socket was open (FIXED in `44d82f7`)
 
@@ -316,13 +326,14 @@ stays **INCOMPLETE** while the four gaps in §5 remain.
 | --- | --- |
 | source | `pnpm build:governance` (which runs `pnpm build`) staged a final package from this tree; exit 0 |
 | test | `pnpm typecheck` exit 0; mapped D05/D06/D07 suites 31 files / 261 tests all pass; `pnpm verify` did **not** pass (live-test resource flakes, see §7) |
-| build | `mode=final version=0.1.0 files=263`; the recorded `content=d22b43791c31d7e1…` is that run's staged-tree hash |
+| build | `mode=final version=0.1.0 files=263`. `content_sha256` is **not** a tree identity: re-running the producer on the identical commit gives a different value, because the runner binary is rebuilt into a fresh build directory each run. `docs/evidence/` is not staged into the package at all. The stable identity is the candidate commit, not this hash |
 | installed artifact | `npm pack` tarball ≈1.5 MB → `npm install --prefix` isolated prefix; CLI `realpath` asserted inside the prefix; Teams network modules imported from `generated/runtime-lib` |
 | restart | agent A explicit-pid stop → restart → reconnect (A03); control owner `control stop` + `control start` (A09); registry stop → restart (A03) |
 | live | real LAN interface `192.168.0.3` for A04/A05/A10; real `opencode` and `dsh` engines; real configured provider route for DSH |
 | browser | **not claimed.** The WebUI is proven as HTTP/SSE transport + module graph + frozen DOM markers; no live-browser DOM or screenshot evidence is produced by this driver (gap 2) |
 | review | **not owned by this driver.** The D08 candidate review is the integration owner's |
-| merge / remote receipt / freeze | **not owned by this driver.** Nothing is committed by this worker |
+| merge / remote receipt / freeze | the candidate is committed on the branch (`44d82f7`, `146824a`, `541f397`, `18f4ffe`); `origin/main` integration, the remote receipt and the freeze are **not owned by this driver** and are recorded in `verification.json` |
+| AppSDK compile/verify | **not run by this driver.** D05 records this gate as blocked by `PROJECT_SDK_VERSION_PIN_MISMATCH`; the whole-project `pnpm verify` does not pass on this host (live-test resource flakes), so D08 claims no AppSDK receipt |
 | cleanup | every daemon/engine/provider process is stopped by explicit pid in `finally`; the owned temp root is removed on PASS (`cleanup: removed owned root …`); on FAIL the root is retained and its path printed on stderr |
 
 Never inferred: a passing HTTP/transport contract is not browser evidence; a passing
