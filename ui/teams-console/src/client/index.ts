@@ -2,12 +2,14 @@ import type { ConsoleClientV1 } from './protocol.ts'
 import { TeamsConsoleController } from './controller.ts'
 import { containDrawerTab } from './focus.ts'
 import { renderConsole } from './render.ts'
+import type { DraftPersistence } from './drafts.ts'
 import { teamsStyles } from './styles.ts'
 
 export interface MountTeamsConsoleOptions {
   readonly initialOpen?: boolean
   readonly locale?: 'en' | 'zh'
   readonly fixtureLabel?: string
+  readonly persistence?: DraftPersistence
 }
 
 export interface MountedTeamsConsole {
@@ -25,7 +27,7 @@ function installStyles(): void {
 
 export function mountTeamsConsole(root: HTMLElement, client: ConsoleClientV1, options: MountTeamsConsoleOptions = {}): MountedTeamsConsole {
   installStyles()
-  const controller = new TeamsConsoleController(client)
+  const controller = new TeamsConsoleController(client, { ...options })
   if (options.locale !== undefined) controller.setLocale(options.locale)
   let renderedState = controller.getSnapshot()
   let consoleFocusKey: string | undefined

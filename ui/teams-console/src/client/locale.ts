@@ -20,6 +20,10 @@ type MessageKey =
   | 'availabilityNotApplicable' | 'availabilityCurrent' | 'observationDegraded' | 'observationLost'
   | 'declaredServices' | 'capabilityDetailUnavailable' | 'capabilityDetailEmpty' | 'noDeclaredResources'
   | 'declaredCapacity' | 'operations'
+  | 'pageDiscovery' | 'pageNetworking' | 'pageInteraction' | 'pageHistory'
+  | 'connect' | 'draft' | 'accepted' | 'master' | 'peer' | 'applyMembership'
+  | 'historyPrev' | 'historyRequest' | 'historyUnavailable' | 'permissionOptionsUnavailable'
+  | 'cancelRequested' | 'cancelConfirmed' | 'cancelUnknown'
 
 const en: Record<MessageKey, string> = {
   brand: 'Teams Console', topology: 'Agents', conversations: 'Sessions', notifications: 'Notifications', search: 'Search', memory: 'Memory', settings: 'Provider configuration',
@@ -39,6 +43,10 @@ const en: Record<MessageKey, string> = {
   availabilityNotApplicable: 'No Session owner', availabilityCurrent: 'Session ready', observationDegraded: 'Session observation degraded', observationLost: 'Session observation lost',
   declaredServices: 'Declared services', capabilityDetailUnavailable: 'Service and resource detail is unavailable.', capabilityDetailEmpty: 'This Agent declares no services.',
   noDeclaredResources: 'No declared resources', declaredCapacity: 'Declared capacity', operations: 'Operations',
+  pageDiscovery: 'Discover', pageNetworking: 'Network', pageInteraction: 'Interact', pageHistory: 'History',
+  connect: 'Connect', draft: 'Draft', accepted: 'Accepted', master: 'Master', peer: 'Peer', applyMembership: 'Apply membership',
+  historyPrev: 'Previous page', historyRequest: 'Request history is refused by the owner.', historyUnavailable: 'History is unavailable.', permissionOptionsUnavailable: 'Permission choices are unavailable from the engine callback.',
+  cancelRequested: 'Cancel requested', cancelConfirmed: 'Cancel confirmed', cancelUnknown: 'Cancel outcome unknown',
 }
 
 const zh: Record<MessageKey, string> = {
@@ -59,6 +67,10 @@ const zh: Record<MessageKey, string> = {
   availabilityNotApplicable: '无会话所有者', availabilityCurrent: '会话就绪', observationDegraded: '会话观察降级', observationLost: '会话观察丢失',
   declaredServices: '已声明服务', capabilityDetailUnavailable: '服务与资源明细不可用。', capabilityDetailEmpty: '该智能体未声明任何服务。',
   noDeclaredResources: '未声明资源', declaredCapacity: '声明容量', operations: '操作',
+  pageDiscovery: '发现', pageNetworking: '组网', pageInteraction: '交互', pageHistory: '历史',
+  connect: '连接', draft: '草稿', accepted: '已接受', master: '主节点', peer: '对等节点', applyMembership: '提交组网草稿',
+  historyPrev: '上一页', historyRequest: '请求历史被所有者拒绝。', historyUnavailable: '历史不可用。', permissionOptionsUnavailable: '引擎回调未提供权限选择。',
+  cancelRequested: '已请求取消', cancelConfirmed: '取消已确认', cancelUnknown: '取消结果未知',
 }
 
 export function messages(locale: Locale): Record<MessageKey, string> {

@@ -203,8 +203,8 @@
     {
       "module_id": "ui",
       "owner": "ui",
-      "status": "design",
-      "note": "BB09 round 12 renders the declaration detail (capability id/version/operations, resource id/capacity/unit) with the existing safe text DOM and locale, reusing the canonical console-api type; declared capacity is labelled as declared, and absent detail shows an explicit unavailable label.",
+      "status": "partial",
+      "note": "BB09 round 12 renders the declaration detail (capability id/version/operations, resource id/capacity/unit) with the existing safe text DOM and locale, reusing the canonical console-api type; declared capacity is labelled as declared, and absent detail shows an explicit unavailable label. D07 binds the four ui/teams-console pages (discovery, networking, interaction, history) to the live control WebUI and real-Chrome DOM evidence through teams-acp-d07-webui; permission choices still come from engine options, refused writes surface typed errors, and no mobile claim is made.",
       "owned_paths": [
         "ui/**"
       ],

@@ -162,7 +162,7 @@ v3 文件不会被静默接受，也不会被自动改写。迁移按语义拆�
 | D04 | `RegistryDaemonIntent`、`REGISTRY_IMPLEMENTATION`、`AdmissionIntent` | 声明注册/租约实现复用的 server/Relay 入口。 |
 | D05 | `teams-connection.ts` 全部 frame（v1）、`TeamsConnectionState`/`TeamsConnectionStatus` | 声明协商完成条件与角色对；不得新增同义 frame。 |
 | D06 | `HistoryQuery`/`HistoryPage`/`HistoryReadPort`、`parseHistoryQuery`、`TeamsStatusPort`（D05） | 已交付：`kind=connection` 由 D05 `createTeamsStatusPort` 唯一拥有并返回冻结 `HistoryPage`（含 `nextBeforeSequence` 分页）；`kind=request` 由同一 owner 拒绝，不新增第二历史源；控制运行时只在该单点消费该 port，未注入时保持类型化缺席，不从 history 推断在线或执行状态。 |
-| D07 | 只消费 `console-api.ts` 的 Console DTO | 交接面：`control-protocol/console-api.ts` 的 Console DTO（含 `ConsolePermissionOption` 与 permission reply 形状）、认证后的 `GET /api/v1/projection`、`GET /api/v1/history` 与 `GET /api/v1/events` SSE；D07 只读消费这些 owner 投影，不从历史反推在线或执行状态，也不得自建第二历史源或第二个连接端口。 |
+| D07 | `console-api.ts` 的 Console DTO；`HistoryQuery`/`HistoryPage`/`ConsoleProjectionSnapshot`/`ConsoleProjectionSubscriber`（`teams-state.ts`） | 交付面：`ui/teams-console` 只读消费认证后的 `GET /api/v1/projection`、`GET /api/v1/history` 与 `GET /api/v1/events` SSE，并在 UI 侧声明 additive `TeamsConsoleClientV1`；D07 不从历史反推在线或执行状态，也不得自建第二历史源或第二个连接端口。partial：D07 只证明真实 WebUI owner 投影/typed refusal 绑定，不声称 installed-copy replay、restart、deployed-entrypoint、cross-device receipt、live registry composition through serve entry、或 mobile 证据。 |
 
 ## 9. 示例配置
 

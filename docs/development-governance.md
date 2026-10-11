@@ -147,6 +147,7 @@ CLI 实际入口）；配置指向注册服务器时还依赖 D04。opencode 与
 | `teams-acp-d05-network` | network | partial | `pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts control-protocol/teams-connection.spec.ts` | D05 连接层与入口组合：冻结 frame 上的协商执行（唯一 agreement 来源、typed 拒绝、R3 整数 acceptedRevision）、认证 ACP session（本地分配 ref、收包边界重写 generation/engineInstanceId、payload 原样透传）、ingress/status 端口、kind=connection 历史、membership 视图与 R4 增量发布面（73/73 通过）；隔离传输观测脚本在真实 TLS 回环 direct-WSS listener 上跑通真实准入、hello 握手与 ACP 帧往返（23 项）；D05 closure driver 覆盖两真实引擎 LAN、registry outage 存活、降级报告与无 control 进程；仍无 installed-copy/restart/deployed/cross-device 证据 |
 | `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环无 discovery 的 typed 拒绝、`engineAdapterFor` 单点分发 opencode 与 dsh、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult、stop 与失败路径清理自有 engine home、只接受 adapter 自己声明的 `enforceablePolicies`（缺失即 typed 失败，不回退 `declaredMethods`）；D04 注册与 D05 LAN negotiation 已接入该入口；两条真实 CLI 黑盒：opencode 见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`，dsh 见 `docs/evidence/acp-d03-serve-20261010/black-box-serve-dsh.mjs`；仍无 DSH installed-copy 回放、restart、deployed-entrypoint 与 cross-device 回执 |
 | `teams-acp-d06-control` | runtime | partial | `pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts` | D06 控制守护进程：唯一控制进程生命周期（单 PID、单 WebUI listener、自有 state/data 目录、显式 PID 停止、typed `ALREADY_RUNNING`/`STALE_GENERATION`/`STALE_OWNER`/`PORT_OCCUPIED`/`CREDENTIAL_UNAVAILABLE`/`INVALID_STATUS`）、CLI `control start\|status\|stop`、D00 amendment A2 增量线面（闭合 history 路由与真实 SSE 快照、新增闭合命令种类、permission options 与 reply `optionId`）、A2.7 真实 D05 网络状态端口绑定（`createTeamsStatusPort` 唯一注入点、真实 `connections` 投影、真实 `kind=connection` 持久历史与分页、未注入时 typed 缺席）、A2.6 引擎侧 permission option 投影与回复裁决（optionId 必须来自引擎真实集合，缺失/过期回调不自动批准）；两条真实黑盒：`docs/evidence/acp-d06-control-20261011/black-box-control.mjs`（PART 1，10/10）与 `docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs`（PART 2 真实端口绑定与真实历史行，7/7）。仍为 partial：无 installed-copy 回放、无 restart、无 deployed-entrypoint、无 cross-device 回执、无浏览器证据；`GET /api/v1/history?kind=request` 由 D05 连接历史 owner 拒绝（非第二历史源），`kind=connection` 之外的请求分页未交付 |
+| `teams-acp-d07-webui` | ui/teams-console | partial | `TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism ui/teams-console/tests/api.spec.ts ui/teams-console/tests/boundary.spec.ts ui/teams-console/tests/contract-compat.spec.ts ui/teams-console/tests/controller.spec.ts ui/teams-console/tests/drafts.spec.ts ui/teams-console/tests/focus-dom.spec.ts ui/teams-console/tests/live-client.spec.ts ui/teams-console/tests/locale.spec.ts ui/teams-console/tests/model.spec.ts ui/teams-console/tests/observation.spec.ts ui/teams-console/tests/page-discovery.spec.ts ui/teams-console/tests/page-networking.spec.ts ui/teams-console/tests/page-interaction.spec.ts ui/teams-console/tests/page-history.spec.ts ui/teams-console/tests/render.spec.ts ui/teams-console/tests/render-d07.spec.ts` | D07 WebUI：四个页面（发现、组网、交互、历史）只消费 owner 投影/历史/SSE 数据（UI 只声明 additive `TeamsConsoleClientV1` 扩展，不修改 `console-api.ts` DTO）；`render-d07.spec.ts` 在真实 Chrome DOM 中逐页验证冻结标记 `data-team-page`/`data-team-page-view`/`data-team-band`/`data-band-state`/`data-team-observation`/`data-team-cancel`/`data-permission-option`/`data-team-refused`/`data-team-error-code`/`data-team-draft`/`data-team-accepted`/`data-history-*`，并断言引擎未给 options 时不伪造任何权限按钮、owner 丢失时观察带进入 `stale`；`live-client.spec.ts` 覆盖 additive 历史分页、`kind=request` typed 拒绝与 SSE 快照订阅/取消；真实黑盒 `docs/evidence/acp-d07-webui-20261011/black-box-webui.mjs`（15/15）走真实 `control start\|status\|stop` 与认证 HTTP，逐一走到 served `/ui/` 模块图的 D07 标记、`/api/v1/history` 页面与拒绝、`/api/v1/events` 的 `{seq, projection}` 快照、三条写入命令的 typed 拒绝（`connection.connect`/`network.membership.apply` 为 `UNSUPPORTED_OPERATION`，`permission.reply` 因控制 daemon 无 Session owner 而拒绝）、冻结词汇之外 payload 的 400 parser 拒绝、匿名访问的 `401 Basic` challenge；仍为 partial：无 installed-copy replay、无 restart、无 deployed-entrypoint replay、无 cross-device receipt、无通过 serve entry 的 live registry composition、无 mobile claim；headless Chrome 无法向同源 `fetch`/`EventSource` 提供 HTTP Basic 凭据，故本 unit 不声称 live-browser DOM 证据，冻结 DOM 契约以真实 Chrome 渲染测试为准；三条 network/write command 仍被拒绝，因此 discovery→connect 与 master/peer apply 在本 unit 不能完成 |
 
 D02 交付 OpenCode 引擎 adapter（`opencode-adapter/src/acp-engine.ts`）与 `--serve`
 用户入口（`runtime/acp-serve.ts` + `cli/agentteams.mjs` 的 flag/dispatch）。
@@ -243,7 +244,33 @@ cross-device 回执或浏览器证据；控制守护进程当前只服务 `kind=
 `network/teams-status.ts` 的消费）已由 `teams-source` 的 owned/regression 路径覆盖，
 `.appsdk/project.json` 无需改动，`minimum_test_count` 保持 304。
 
-planned/design gate 不标 implemented/passed，也不因声明测试通过而升级。AppSDK 绑定只
+D07 交付 WebUI 的四页真实 owner 投影绑定：`ui/teams-console` 只读消费
+`control-protocol/console-api.ts` 的 Console DTO、认证后的 `GET /api/v1/projection`、
+`GET /api/v1/history` 与 `GET /api/v1/events`（UI 只声明 additive
+`TeamsConsoleClientV1` 扩展，不修改冻结 DTO），并在真实 Chrome 渲染测试
+`ui/teams-console/tests/render-d07.spec.ts` 中逐页验证
+`nav.teams-tabs`、四个 `[data-team-page]`、`[data-team-page-view]`、
+`[data-team-band]`/`[data-band-state]`、`[data-team-observation]`、
+`[data-team-cancel]`、`[data-permission-option]`、`[data-team-refused]` 与
+`[data-team-error-code]`，并断言引擎未给 options 时不伪造任何权限按钮、owner
+丢失时观察带进入 `stale`；通知列表单独复核，因为冻结通知 DTO 不含选项集，所以它必须
+按 owner 的 pending `sessionEvents` 事件查选项，缺事件、空选项或已 resolve 时只渲染
+`[data-permission-options-unavailable]`，绝不补出批准按钮。真实黑盒
+`docs/evidence/acp-d07-webui-20261011/black-box-webui.mjs`（15/15）走真实
+`control start|status|stop` 与认证 HTTP。浏览器证据边界必须如实记录：headless
+Chrome 无法向同源 `fetch`/`EventSource` 提供 HTTP Basic 凭据，凭据 URL 又被
+`fetch` 自身拒绝，owner 也不提供凭据端点，因此本 unit 不声称
+live-browser DOM 证据；冻结 DOM 契约以真实 Chrome 渲染测试为准，黑盒只到 served
+`/ui/` 模块图标记、匿名访问的 `401 Basic` challenge 与写入命令的 typed 拒绝。
+D07 明确不声明 installed-copy replay、restart、deployed-entrypoint replay、
+cross-device receipt、通过 serve entry 的 live registry composition 或 mobile claim；
+`connection.connect`、`network.membership.apply` 与 `permission.reply` 在本 unit 仍为
+真实 typed 拒绝（前两者为 `UNSUPPORTED_OPERATION`，`permission.reply` 因控制 daemon
+未绑定 Session owner 而拒绝，冻结词汇之外的 payload 由 parser 以 400 拒绝），因此
+discovery→connect 与 master/peer apply 不能完成。history `kind=request` 的拒绝按观测到的
+真实边界记录：D06 拥有的 history 路由只对 owner absence 保留 503 类型码，非 absence
+owner 失败落为无 code 的裸 502，所以黑盒断言该裸 502 与 `code` 缺失，并明确 UI 的
+typed-code 渲染只是单元级证据，不由黑盒证明。
 声明真实输入：`.appsdk/project.json` 的 `teams-source` owned/regression 路径现在含
 `acp-adapter/**`、`cli/**` 与 `dsh-adapter/**`（此前 `teams-source` 未准入 `cli/**`，
 也未准入 `dsh-adapter/**`），`minimum_test_count` 未改动；`.appsdk` 生命周期状态不由本增量修改。

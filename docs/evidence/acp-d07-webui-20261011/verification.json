@@ -1,0 +1,93 @@
+{
+  "unit": "D07",
+  "title": "WebUI",
+  "date": "2026-10-11",
+  "base_commit": "0296c938e0f344893dc41f1187b2d0f80bb72ff0",
+  "base_ref": "origin/main",
+  "worktree": "/Volumes/Intel/playground/agentteams/acp-d07-webui-20261011",
+  "branch": "codex/acp-d07-webui-20261011",
+  "committed": false,
+  "gate_id": "teams-acp-d07-webui",
+  "gate_status": "partial",
+  "verification": [
+    {
+      "kind": "typecheck",
+      "command": "pnpm typecheck",
+      "result": "pass",
+      "detail": "0 errors"
+    },
+    {
+      "kind": "build",
+      "command": "pnpm build",
+      "result": "pass",
+      "detail": "exit 0"
+    },
+    {
+      "kind": "unit-gate",
+      "command": "TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism ui/teams-console/tests/api.spec.ts ui/teams-console/tests/boundary.spec.ts ui/teams-console/tests/contract-compat.spec.ts ui/teams-console/tests/controller.spec.ts ui/teams-console/tests/drafts.spec.ts ui/teams-console/tests/focus-dom.spec.ts ui/teams-console/tests/live-client.spec.ts ui/teams-console/tests/locale.spec.ts ui/teams-console/tests/model.spec.ts ui/teams-console/tests/observation.spec.ts ui/teams-console/tests/page-discovery.spec.ts ui/teams-console/tests/page-networking.spec.ts ui/teams-console/tests/page-interaction.spec.ts ui/teams-console/tests/page-history.spec.ts ui/teams-console/tests/render.spec.ts ui/teams-console/tests/render-d07.spec.ts",
+      "result": "pass",
+      "test_files": 16,
+      "tests": 71
+    },
+    {
+      "kind": "black-box",
+      "command": "node docs/evidence/acp-d07-webui-20261011/black-box-webui.mjs",
+      "result": "pass",
+      "checks": 15
+    },
+    {
+      "kind": "regression-gate",
+      "label": "D06 control",
+      "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts",
+      "result": "pass",
+      "test_files": 6,
+      "tests": 115
+    },
+    {
+      "kind": "regression-gate",
+      "label": "D05 LAN and network",
+      "command": "pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts control-protocol/teams-connection.spec.ts",
+      "result": "pass",
+      "test_files": 9,
+      "tests": 73
+    }
+  ],
+  "frozen_dom_markers": [
+    "data-team-page",
+    "data-team-page-view",
+    "data-team-band",
+    "data-band-state",
+    "data-team-observation",
+    "data-team-cancel",
+    "data-permission-option",
+    "data-permission-kind",
+    "data-permission-options-unavailable",
+    "data-team-refused",
+    "data-team-error-code",
+    "data-team-draft",
+    "data-team-accepted",
+    "data-team-role-draft",
+    "data-team-role-accepted",
+    "data-history-prev",
+    "data-history-count",
+    "data-history-record",
+    "data-history-refused"
+  ],
+  "non_claims": [
+    "installed-copy replay",
+    "restart",
+    "deployed-entrypoint replay",
+    "cross-device receipt",
+    "live registry composition through the serve entry",
+    "mobile claim",
+    "live-browser DOM evidence"
+  ],
+  "browser_evidence_boundary": "Headless Chrome cannot supply HTTP Basic credentials to a same-origin fetch or EventSource, a credentialed origin URL is rejected by fetch itself, the owner serves no credentials endpoint, and Chrome --screenshot against an unauthenticated origin writes no file while still exiting 0. The frozen DOM marker contract is therefore proven by the real-Chrome render test ui/teams-console/tests/render-d07.spec.ts, not by a live dump of the authenticated console.",
+  "refused_commands": {
+    "connection.connect": "UNSUPPORTED_OPERATION",
+    "network.membership.apply": "UNSUPPORTED_OPERATION",
+    "permission.reply": "UNSUPPORTED_OPERATION (no Session owner bound to the control daemon)",
+    "permission.reply.out-of-vocabulary-payload": "HTTP 400 from the closed ConsoleCommandV1 parser",
+    "history.kind=request": "HTTP 502 with the owner's message and no typed code; the D06-owned history route drops a non-absence owner code, so the black box asserts the bare 502 and the absence of a code. The UI renders the refusal from the response message; typed-code rendering is a unit-level claim only."
+  }
+}

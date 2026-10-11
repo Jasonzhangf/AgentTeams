@@ -1,6 +1,8 @@
 import type { ConsoleCapabilityDetail, ConsoleProjectionV1, ConsoleProviderView, ConsoleSessionEventView } from './protocol.ts'
 
 export type ConsoleEntry = 'topology' | 'conversations' | 'notifications' | 'search' | 'memory'
+export type TeamPage = 'discovery' | 'networking' | 'interaction' | 'history'
+export const teamPages: readonly TeamPage[] = ['discovery', 'networking', 'interaction', 'history']
 export type UiStatus = 'online' | 'offline' | 'unknown'
 
 export interface AgentRow {
@@ -11,6 +13,10 @@ export interface AgentRow {
   readonly presence: UiStatus
   readonly capabilities: readonly string[]
   readonly capabilityDetails?: readonly ConsoleCapabilityDetail[]
+  /** Engine kind declared by the owning daemon; mirrors the frozen config EngineKind. */
+  readonly engine?: 'opencode' | 'dsh'
+  /** Directory observation time of the owning peer; never a UI-side heartbeat. */
+  readonly lastSeenAt?: string
   readonly kind: 'runtime' | 'directory'
   readonly sessionCapable?: boolean
   readonly sessionAvailability?: 'changing' | 'stopped' | 'no-current' | 'uncertain' | 'current' | 'not-applicable'

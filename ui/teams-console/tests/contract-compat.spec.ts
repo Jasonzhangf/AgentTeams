@@ -7,12 +7,19 @@ import type {
   ConsoleProviderView as CanonicalProvider,
 } from '../../../control-protocol/console-api.ts'
 import type {
+  ConsoleProjectionSink,
+  ConsoleProjectionUnsubscribe,
+  HistoryPage,
+  HistoryQuery,
+} from '../../../control-protocol/teams-state.ts'
+import type {
   ConsoleCapabilityDetail as UiCapabilityDetail,
   ConsoleClientV1 as UiClient,
   ConsoleCommandResultV1 as UiCommandResult,
   ConsoleCommandV1 as UiCommand,
   ConsoleProjectionV1 as UiProjection,
   ConsoleProviderView as UiProvider,
+  TeamsConsoleClientV1 as UiTeamsClient,
 } from '../src/client/protocol.ts'
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -20,18 +27,26 @@ import { join } from 'node:path'
 
 type Assert<T extends true> = T
 type Compatible<Left, Right> = [Left] extends [Right] ? ([Right] extends [Left] ? true : false) : false
-
+type AdditiveTeamsClient = CanonicalClient & {
+  readonly readHistory: (query: HistoryQuery) => Promise<HistoryPage>
+  readonly subscribeProjection: (sink: ConsoleProjectionSink) => ConsoleProjectionUnsubscribe
+}
 const _provider: Assert<Compatible<UiProvider, CanonicalProvider>> = true
 const _detail: Assert<Compatible<UiCapabilityDetail, CanonicalCapabilityDetail>> = true
 const _projection: Assert<Compatible<UiProjection, CanonicalProjection>> = true
 const _command: Assert<Compatible<UiCommand, CanonicalCommand>> = true
 const _result: Assert<Compatible<UiCommandResult, CanonicalCommandResult>> = true
 const _client: Assert<Compatible<UiClient, CanonicalClient>> = true
+const _teamsClient: Assert<Compatible<UiTeamsClient, AdditiveTeamsClient>> = true
 const _projectionKeys: Assert<Compatible<keyof UiProjection, keyof CanonicalProjection>> = true
 
 describe('contract compatibility', () => {
   it('keeps the UI adapter assignable to the frozen ConsoleClientV1 contract', () => {
     expect([_provider, _detail, _projection, _command, _result, _client, _projectionKeys]).toEqual([true, true, true, true, true, true, true])
+  })
+
+  it('keeps the additive D07 live client assignable to the canonical teams client', () => {
+    expect(_teamsClient).toBe(true)
   })
 
   it('re-exports the canonical projection instead of declaring a UI fork', () => {

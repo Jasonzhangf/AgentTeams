@@ -1,4 +1,7 @@
 export { createConsoleHttpClient, ConsoleTransportError } from './client/api.ts'
+export { createLiveConsoleHttpClient } from './client/live-client.ts'
+export { createSessionStorageDrafts } from './client/drafts.ts'
 export { mountTeamsConsole } from './client/index.ts'
 export type { ConsoleHttpClientOptions } from './client/api.ts'
+export type { LiveClientOptions } from './client/live-client.ts'
 export type { MountTeamsConsoleOptions, MountedTeamsConsole } from './client/index.ts'
