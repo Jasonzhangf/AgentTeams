@@ -3,6 +3,18 @@
 # server/Relay directory, so no second directory store is created.
 # Start: agentteams registry start --config config/examples/registry.toml
 # Placeholder credential references only; never commit a real secret.
+#
+# The registry reuses the TLS-only server/Relay, so a registry `listen` always
+# needs an explicit certificate and key, including this loopback address.
+# server/registry-intent.ts (owner of the check) rejects a missing pair with
+# TLS_REQUIRED and never generates a certificate silently. Create the pair this
+# file references, from this directory, before the first start:
+#
+#   mkdir -p certs
+#   openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=registry-host" -keyout certs/registry-key.pem -out certs/registry-cert.pem
+#
+# The two admissions also require their referenced environment values before
+# start: EXAMPLE_REASONER_REGISTRATION and EXAMPLE_CONTROL_REGISTRATION.
 version = 4
 
 [daemon]
@@ -16,6 +28,8 @@ dataDirectory = "./state/lan-registry"
 [listen]
 ip = "127.0.0.1"
 port = 7444
+tlsCertRef = "file:./certs/registry-cert.pem"
+tlsKeyRef = "file:./certs/registry-key.pem"
 
 [[admissions]]
 admissionRef = "reasoner-a-registration"

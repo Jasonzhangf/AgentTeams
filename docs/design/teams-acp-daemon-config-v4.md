@@ -64,6 +64,28 @@ ACP 策略意图：`AcpPolicyIntent`（`config/acp-policy.ts`）。
 `credentialRef` 只接受 `env:NAME` 或 `file:<path>`；不接受明文。
 `dataDirectory` 必须是 daemon 自有的目录路径，不接受 `.`/`..`。
 
+**loopback registry 的 TLS 规则分两层，按实际行为分别陈述：**
+
+- schema 层（`config/daemon-intent.ts` 的 `parseDaemonIntent`）：loopback 的 `listen`
+  允许省略 `tlsCertRef`/`tlsKeyRef`；只有非 loopback 才强制 TLS 引用与至少一条
+  `admissions`。因此一份 loopback registry 配置省略 TLS 引用仍能通过解析与编译。
+- registry 运行时层（owner：`server/registry-intent.ts` 的 `resolveRegistryServerPlan`）：
+  registry 复用仅支持 TLS 的 `server/Relay`，所以任何 `listen`（包括 loopback）都要求
+  显式 `tlsCertRef` + `tlsKeyRef`；缺失时以 `TLS_REQUIRED` 明确失败，并给出生成证书的
+  命令。运行时不会静默生成证书，也不会降级为明文 `ws`。
+
+因此 loopback 省略 TLS 引用是“schema 接受、registry 启动失败”，不是“可以启动”。
+`config/examples/registry.toml` 因而显式声明 `file:./certs/registry-cert.pem` 与
+`file:./certs/registry-key.pem`，并在注释中记录首次启动前要执行的命令：
+
+```
+mkdir -p certs
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=<registry-host>" -keyout certs/registry-key.pem -out certs/registry-cert.pem
+```
+
+openssl 命令与 `server/registry-intent.ts` 的 `REGISTRY_TLS_OPENSSL_COMMAND` 相同；
+`certs/` 目录必须先存在（上面的 `mkdir -p`），openssl 不会自动创建它。
+
 身份与存储约束（不传 `context` 时逐文件检查，传入共享 `context` 时跨文件检查）：
 
 - 同一 `kind` + `hostId` + `accountId` + `scopeId` + `id` 只能声明一次。
@@ -151,9 +173,9 @@ v3 文件不会被静默接受，也不会被自动改写。迁移按语义拆�
 | `agent-opencode.toml` | agent | OpenCode agent，含 provider、两个 manual model 与 primary/backup binding。 |
 | `agent-dsh.toml` | agent | DSH agent，含 `openai-responses` provider 与 reasoning model。 |
 | `control.toml` | control | 控制 daemon，loopback WebUI + auth、discovery、peer。 |
-| `registry.toml` | registry | 注册 daemon，loopback listen 与两条 admission。 |
+| `registry.toml` | registry | 注册 daemon，loopback listen + 显式 `tlsCertRef`/`tlsKeyRef` 与两条 admission。 |
 
-示例只使用占位凭据引用（`env:EXAMPLE_*`）与 `file:./certs/*` 路径，不含真实密钥；解析与编译不会读取这些文件。
+示例只使用占位凭据引用（`env:EXAMPLE_*`）与 `file:./certs/*` 路径，不含真实密钥；解析与编译不会读取这些文件。`agentteams registry start` 会读取 `registry.toml` 的 TLS 引用和 admission 凭据，因此首次启动前必须按第 3 节生成证书并设置 `EXAMPLE_*` 环境值。缺少时启动以 exit 1 明确失败并回显子进程的原始错误：缺少证书/密钥为 `registry process failed to start: ENOENT ... registry-key.pem`，缺少环境值为 `registry process failed to start: credential environment ... is missing or empty`；`listen` 缺少 TLS 引用时由父进程在 spawn 前直接以 `TLS_REQUIRED` 失败。三种情况都不伪造成功。
 
 ## 10. 非目标与集成边界
 

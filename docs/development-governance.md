@@ -139,7 +139,8 @@ CLI 实际入口）；配置指向注册服务器时还依赖 D04。在依赖交
 | `teams-acp-daemon-intent` | config | partial | `pnpm exec vitest run --config vitest.config.ts config/daemon-intent.spec.ts config/acp-policy.spec.ts && pnpm exec tsc --noEmit && pnpm build:runtime` | 单 daemon 编译、CLI 覆盖与生效读回、v3 与多 daemon 拒绝；不含 runtime 启动 |
 | `teams-acp-public-contract` | control-protocol | partial | `pnpm exec vitest run --config vitest.config.ts control-protocol/acp.spec.ts control-protocol/teams-connection.spec.ts control-protocol/teams-state.spec.ts` | ACP frame/fault、engine adapter port、Teams 协商 frame 与连接状态 DTO 的形状与拒绝 |
 | `teams-acp-d01-host` | agent-host | partial | `pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts` | D01 已合并候选 75a6cf4 的引擎无关 stdio ACP 传输、host 的 Session/policy/history 语义与 runtime 子进程接线（标注 test peer，53/53 通过）；无真实引擎推理、无安装/live 证据 |
-| `teams-acp-serve-entry` | runtime | design | 未接线；planned_command `node cli/agentteams.mjs --serve opencode --ip <ip> --port <port> --config <agent.toml>` | 用户入口真实启动一个 daemon 并读回生效配置；等 D01/D02/D03 |
+| `teams-acp-d04-registry` | runtime | partial | `pnpm exec vitest run --no-file-parallelism server/relay.spec.ts network/relay-client.spec.ts network/registration-client.spec.ts server/registry-intent.spec.ts runtime/registry-process.spec.ts runtime/registry-registration.spec.ts` | D04 已合并候选 953d952 的 registry daemon 生命周期、TLS-only intent 映射、presence 租约与客户端注册/心跳/重连（73/73 通过；候选黑盒 14/14 经 review 独立复现）；无引擎级断电集成、无安装副本/live `--serve` 证据、AppSDK 仍阻塞 |
+| `teams-acp-serve-entry` | runtime | design | 未接线；planned_command `node cli/agentteams.mjs --serve opencode --ip <ip> --port <port> --config <agent.toml>` | 用户入口真实启动一个 daemon 并读回生效配置；等 D02/D03 引擎 adapter 与 `--serve` 调用方（D01 与 D04 已在源码层交付） |
 
 D01 只交付引擎无关的 ACP 传输与 host/runtime 接线：`acp-adapter/stdio.ts`、
 `agent-host/{acp-host,acp-history}.ts`、`runtime/{acp-daemon,acp-history-store}.ts`。
@@ -148,6 +149,17 @@ test peer 下的传输与 host 语义，不证明真实引擎、安装副本或 
 partial，不升级为 passed/implemented。`--serve` 用户入口仍等 D02/D03（引擎 adapter 与
 CLI 实际入口）。`.appsdk/project.json` 的 `teams-source` 现在声明 `acp-adapter/**` 与
 `cli/**` 为 owned/regression 输入，`minimum_test_count` 未改动。
+
+D04 只交付注册 daemon 与自动注册：`server/registry-intent.ts`、`server/relay.ts` 的
+presence 租约、`network/registration-client.ts`、`runtime/registry-process.ts` 与
+`runtime/registry-registration.ts`，以及 `agentteams registry start|status|stop` 入口。
+`teams-acp-d04-registry` 在合并候选 `953d952` 上可执行并通过（73/73），但它只证明源码层
+的 registry 生命周期、TLS-only intent 映射、租约与客户端注册/心跳/重连。它不证明引擎级
+断电集成（`runtime/agent-daemon.ts` 未改动）、不证明安装副本或 live `--serve` daemon
+（`--serve` 调用方与 D02/D03 引擎 adapter 不存在），AppSDK compile/verify 仍因既有
+0.1.0014 pin mismatch 阻塞，因此保持 partial，不升级为 passed/implemented。D04 的四个新
+文件与 `cli/**` 已由 `teams-source` 的 owned/regression 路径覆盖，`.appsdk/project.json`
+无需改动，`minimum_test_count` 保持 304。
 
 planned/design gate 不标 implemented/passed，也不因声明测试通过而升级。AppSDK 绑定只
 声明真实输入：`.appsdk/project.json` 的 `teams-source` owned/regression 路径现在含
