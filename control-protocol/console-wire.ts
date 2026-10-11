@@ -1,9 +1,8 @@
 import type { JsonValue } from './agent-services.ts'
 import {
-  parseConsoleAgentObservation,
   parseConsoleCommand,
-  parseConsoleSessionEvent,
-  parseConsoleWorkRelationProjection,
+  parseConsoleProjection,
+  parsePermissionReplyResult,
   parseSessionCancelConfirmed,
   parseSessionCancelUnknownDetail,
   parseSessionCreateResult,
@@ -70,16 +69,6 @@ function string(value: unknown): void {
 function optionalString(value: unknown): void {
   if (value !== undefined && typeof value !== 'string') throw new Error('Console response string required')
 }
-function revision(value: unknown): void {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) throw new Error('Console response revision invalid')
-}
-function choice(value: unknown, values: readonly unknown[]): void {
-  if (!values.includes(value)) throw new Error('Console response enum invalid')
-}
-function array(value: unknown, validate: (item: unknown) => void): void {
-  if (!Array.isArray(value)) throw new Error('Console response array required')
-  value.forEach(validate)
-}
 function error(value: unknown): void {
   const input = record(value, ['code', 'message', 'execution', 'status', 'providerInstanceId', 'detail'])
   // Validate shared fields through their owner; the Console-only credential code is retained verbatim.
@@ -91,50 +80,13 @@ function error(value: unknown): void {
   if (input.detail !== undefined) parseSessionCancelUnknownDetail(input.detail)
 }
 function projection(value: unknown): void {
-  const input = record(value, ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations'])
-  choice(input.version, [1])
-  array(input.agents, item => { parseConsoleAgentObservation(item) })
-  array(input.sessions, item => {
-    const session = record(item, ['agentId', 'sessionId', 'title'])
-    string(session.agentId); string(session.sessionId); optionalString(session.title)
-  })
-  array(input.notifications, item => {
-    const notice = record(item, ['agentId', 'notificationId', 'sessionId', 'kind', 'state', 'title', 'permissionId'])
-    string(notice.agentId); string(notice.notificationId); string(notice.title)
-    choice(notice.kind, ['notice', 'permission']); choice(notice.state, ['pending', 'resolved'])
-    optionalString(notice.sessionId); optionalString(notice.permissionId)
-  })
-  array(input.configs, item => {
-    const config = record(item, ['agentId', 'acceptedRevision', 'effectiveRevision', 'applyState', 'acceptedBinding', 'providers', 'error'])
-    string(config.agentId); revision(config.acceptedRevision)
-    if (config.effectiveRevision !== undefined) revision(config.effectiveRevision)
-    if (config.applyState !== undefined) choice(config.applyState, ['clean', 'uncertain'])
-    if (config.acceptedBinding !== undefined && config.acceptedBinding !== null) {
-      const binding = record(config.acceptedBinding, ['primary', 'backup'])
-      const bindingRef = (value: unknown): void => {
-        const ref = record(value, ['providerInstanceId', 'modelId'])
-        string(ref.providerInstanceId); string(ref.modelId)
-      }
-      bindingRef(binding.primary)
-      if (binding.backup !== undefined) bindingRef(binding.backup)
-    }
-    if (config.error !== undefined) error(config.error)
-    array(config.providers, item => {
-      const provider = record(item, ['id', 'label', 'protocol', 'apiBaseUrl', 'enabled', 'authKind', 'catalogState', 'models', 'error'])
-      string(provider.id); string(provider.label); string(provider.apiBaseUrl)
-      choice(provider.protocol, ['openai-chat', 'openai-responses']); choice(provider.enabled, [true, false])
-      choice(provider.authKind, ['none', 'bearer']); choice(provider.catalogState, ['ready', 'empty', 'stale', 'error'])
-      if (provider.error !== undefined) error(provider.error)
-      array(provider.models, item => { const model = record(item, ['id', 'label']); string(model.id); optionalString(model.label) })
-    })
-  })
-  if (input.sessionEvents !== undefined) array(input.sessionEvents, item => { parseConsoleSessionEvent(item) })
-  if (input.works !== undefined || input.relations !== undefined) parseConsoleWorkRelationProjection(input)
+  // One closed projection parser owns the field set; the wire only decides the envelope.
+  parseConsoleProjection(value)
 }
 
 function commandResult(value: unknown): void {
   const result = record(value, ['ok', 'result', 'error'])
-  choice(result.ok, [true, false])
+  if (result.ok !== true && result.ok !== false) throw new Error('Console response enum invalid')
   if (result.ok === true) {
     assertEnvelopeKeys(result, ['ok', 'result'], 'Console success')
     if (result.result !== undefined) {
@@ -144,6 +96,7 @@ function commandResult(value: unknown): void {
         const kind = (payload as Record<string, unknown>).kind
         if (kind === 'session.create') parseSessionCreateResult(payload)
         else if (kind === 'session.cancel') parseSessionCancelConfirmed(payload)
+        else if (kind === 'permission.reply') parsePermissionReplyResult(payload)
       }
     }
   } else {
