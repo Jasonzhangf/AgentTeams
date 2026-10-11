@@ -1,10 +1,11 @@
 import type { ConsoleEntry, UiStatus } from './model.ts'
-import { canOperateSession, modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerById, providerLabel } from './model.ts'
+import { canOperateSession, modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerById, providerLabel, teamPages } from './model.ts'
 import type { ConsoleState, DrawerState, ProviderDraft, TeamsConsoleController } from './controller.ts'
 import { messages, type Locale, type MessageKey } from './locale.ts'
 import type { ConsoleProviderView, JsonValue } from './protocol.ts'
 
 const entries: readonly ConsoleEntry[] = ['topology', 'conversations', 'notifications', 'search', 'memory']
+const pageEntries: readonly ('discovery' | 'networking' | 'interaction' | 'history')[] = ['discovery', 'networking', 'interaction', 'history']
 const agentBrowserIcon = new URL('../../assets/agentbrowser-icon.jpg', import.meta.url).toString()
 
 type RenderOptions = { readonly fixtureLabel?: string }
@@ -108,7 +109,7 @@ function presenceLabel(presence: UiStatus, t: Record<MessageKey, string>): strin
   return presence === 'online' ? t.online : presence === 'offline' ? t.offline : t.unknown
 }
 
-function renderViewHeader(title: string, count: string | undefined): HTMLElement {
+function renderViewHeader(title: string, count?: string): HTMLElement {
   const value = element('div', 'teams-view-header')
   append(value, heading(title), count === undefined ? null : statusPill(count))
   return value
@@ -274,6 +275,28 @@ function renderDeclaredCapabilities(agent: import('./model.ts').AgentRow, t: Rec
   return section
 }
 
+/**
+ * The only source of a permission choice set is the engine's own projection on the matching
+ * pending `sessionEvents` entry. A notification, a resolved event or a missing event never
+ * mints a choice: the caller renders an explicit unavailable hint instead.
+ */
+function permissionOptionsFor(
+  projection: ConsoleState['projection'],
+  agentId: string,
+  sessionId: string,
+  permissionId: string,
+): readonly import('./protocol.ts').ConsolePermissionOption[] | undefined {
+  if (projection === null || projection.sessionEvents === undefined) return undefined
+  const event = projection.sessionEvents.find(candidate =>
+    candidate.agentId === agentId
+    && candidate.sessionId === sessionId
+    && candidate.kind === 'permission'
+    && candidate.state === 'pending'
+    && candidate.permissionId === permissionId)
+  if (event === undefined || event.kind !== 'permission' || event.state !== 'pending') return undefined
+  return event.options === undefined || event.options.length === 0 ? undefined : event.options
+}
+
 function sessionAvailabilityLabel(availability: string | undefined, t: Record<MessageKey, string>): string {
   switch (availability) {
     case 'changing': return t.availabilityChanging
@@ -356,16 +379,42 @@ function renderNotifications(controller: TeamsConsoleController, state: ConsoleS
         controller.openSession(notification.agentId, notification.sessionId as string)
       }, actionDisabled(state), `notification:${notification.notificationId}:session`))
     }
-    if (notification.kind === 'permission' && notification.state === 'pending' && sessionTargetExists && notification.permissionId !== undefined) {
-      append(actions,
-        button(t.allowOnce, 'teams-button-primary', async () => { await controller.replyPermission(notification.agentId, notification.sessionId as string, notification.permissionId as string, 'once') }, actionDisabled(state)),
-        button(t.alwaysAllow, 'teams-button-secondary', async () => { await controller.replyPermission(notification.agentId, notification.sessionId as string, notification.permissionId as string, 'always') }, actionDisabled(state)),
-        button(t.reject, 'teams-button-danger', async () => { await controller.replyPermission(notification.agentId, notification.sessionId as string, notification.permissionId as string, 'reject') }, actionDisabled(state)),
-      )
-    } else if (notification.kind === 'permission' && notification.state === 'pending' && !sessionTargetExists) {
-      const error = element('span', 'teams-inline-error')
-      error.textContent = t.invalidNotificationTarget
-      append(actions, error)
+    // The frozen notification DTO carries no choice set. A permission notification may only
+    // offer choices the engine actually projected onto the matching pending `sessionEvents`
+    // entry, so this path looks the option set up instead of assuming once/always/reject.
+    // Every branch that cannot resolve a real engine option set renders an explicit hint and
+    // no approval button, so no path can fabricate a choice or auto-approve.
+    if (notification.kind === 'permission' && notification.state === 'pending') {
+      if (!sessionTargetExists) {
+        const error = element('span', 'teams-inline-error')
+        error.textContent = t.invalidNotificationTarget
+        append(actions, error)
+      } else if (notification.permissionId === undefined) {
+        // The DTO omits the permission id, so no engine event can be matched.
+        const unavailable = element('span', 'teams-field-hint')
+        unavailable.setAttribute('data-permission-options-unavailable', 'true')
+        unavailable.textContent = t.permissionOptionsUnavailable
+        append(actions, unavailable)
+      } else {
+        const offered = permissionOptionsFor(projection, notification.agentId, notification.sessionId as string, notification.permissionId)
+        if (offered === undefined) {
+          const unavailable = element('span', 'teams-field-hint')
+          unavailable.setAttribute('data-permission-options-unavailable', 'true')
+          unavailable.textContent = t.permissionOptionsUnavailable
+          append(actions, unavailable)
+        } else {
+          for (const option of offered) {
+            const label = option.kind === 'once' ? t.allowOnce : option.kind === 'always' ? t.alwaysAllow : t.reject
+            const className = option.kind === 'once' ? 'teams-button-primary' : option.kind === 'always' ? 'teams-button-secondary' : 'teams-button-danger'
+            const reply = button(label, className, async () => {
+              await controller.replyPermission(notification.agentId, notification.sessionId as string, notification.permissionId as string, option.kind, option.optionId)
+            }, actionDisabled(state))
+            reply.setAttribute('data-permission-option', option.optionId)
+            reply.setAttribute('data-permission-kind', option.kind)
+            append(actions, reply)
+          }
+        }
+      }
     }
     if (notification.state === 'pending') {
       append(actions, button(t.acknowledge, 'teams-button-secondary', async () => { await controller.acknowledge(notification.notificationId, notification.agentId) }, actionDisabled(state)))
@@ -502,11 +551,21 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
         const eventActions = element('div', 'teams-button-row')
         if (event.kind === 'permission' && event.state === 'pending') {
           const permissionId = event.permissionId
-          append(eventActions,
-            button(t.allowOnce, 'teams-button-primary', async () => { await controller.replyPermission(agentId, sessionId, permissionId, 'once') }, actionDisabled(state)),
-            button(t.alwaysAllow, 'teams-button-secondary', async () => { await controller.replyPermission(agentId, sessionId, permissionId, 'always') }, actionDisabled(state)),
-            button(t.reject, 'teams-button-danger', async () => { await controller.replyPermission(agentId, sessionId, permissionId, 'reject') }, actionDisabled(state)),
-          )
+          if (event.options === undefined || event.options.length === 0) {
+            const unavailable = element('span', 'teams-field-hint')
+            unavailable.setAttribute('data-permission-options-unavailable', 'true')
+            unavailable.textContent = t.permissionOptionsUnavailable
+            append(eventActions, unavailable)
+          } else {
+            for (const option of event.options) {
+              const label = option.kind === 'once' ? t.allowOnce : option.kind === 'always' ? t.alwaysAllow : t.reject
+              const className = option.kind === 'once' ? 'teams-button-primary' : option.kind === 'always' ? 'teams-button-secondary' : 'teams-button-danger'
+              const reply = button(label, className, async () => { await controller.replyPermission(agentId, sessionId, permissionId, option.kind, option.optionId) }, actionDisabled(state))
+              reply.setAttribute('data-permission-option', option.optionId)
+              reply.setAttribute('data-permission-kind', option.kind)
+              append(eventActions, reply)
+            }
+          }
         }
         append(item, eventHeader, detail, eventActions.childElementCount === 0 ? null : eventActions)
         append(timeline, item)
@@ -527,7 +586,12 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
   // The frozen contract enables create/send/cancel only while the owner is current and online.
   const operable = agent !== undefined && canOperateSession(agent)
   if (operable) {
-    append(actions, button(t.cancelSession, 'teams-button-danger', async () => { await controller.cancelSession(agentId, sessionId) }, actionDisabled(state)))
+    // `data-team-cancel` separates a requested cancel from its real terminal state: the
+    // button is only enabled while the cancel is still `requested` or untouched.
+    const cancelLabel = state.cancelState === 'confirmed' ? t.cancelConfirmed : state.cancelState === 'unknown' ? t.cancelUnknown : t.cancelSession
+    const cancelButton = button(cancelLabel, 'teams-button-danger', async () => { await controller.cancelSession(agentId, sessionId) }, state.cancelState === 'requested')
+    cancelButton.setAttribute('data-team-cancel', state.cancelState)
+    append(actions, cancelButton)
   }
   append(actions, button(t.openSession, 'teams-button-secondary', async () => { await controller.openSessionCommand(agentId, sessionId) }, actionDisabled(state)))
   const sendMessage = async (): Promise<void> => {
@@ -818,6 +882,194 @@ function renderDrawer(controller: TeamsConsoleController, state: ConsoleState, t
   return layer
 }
 
+function pageLabel(page: 'discovery' | 'networking' | 'interaction' | 'history', t: Record<MessageKey, string>): string {
+  switch (page) {
+    case 'discovery': return t.pageDiscovery
+    case 'networking': return t.pageNetworking
+    case 'interaction': return t.pageInteraction
+    case 'history': return t.pageHistory
+  }
+}
+
+function band(label: string, token: string): HTMLElement {
+  const section = element('section')
+  section.setAttribute('data-team-band', label)
+  const span = element('span')
+  span.setAttribute('data-band-state', token)
+  span.textContent = token
+  append(section, span)
+  return section
+}
+
+/**
+ * The four state bands plus the observation health band. Every token comes from the
+ * owner projection; none is derived from UI animation. `data-team-observation` is the
+ * frozen marker the black box reads to decide whether any animation may remain.
+ */
+function teamsStateBands(agent?: import('./model.ts').AgentRow, connection?: import('./protocol.ts').ConsoleConnectionView, observation: 'unknown' | 'stale' | 'live' = 'unknown'): HTMLElement {
+  const value = element('div', 'teams-state-bands')
+  value.setAttribute('data-team-observation', observation)
+  append(value,
+    band('registration', agent?.presence ?? 'unknown'),
+    band('connection', connection?.status.state ?? 'disconnected'),
+    band('engine', agent?.kind === 'runtime' ? agent.sessionAvailability ?? 'not-applicable' : 'not-applicable'),
+    band('request', 'idle'),
+  )
+  return value
+}
+
+function refusal(code: string, message: string): HTMLElement {
+  const p = element('p')
+  p.setAttribute('data-team-refused', 'true')
+  p.setAttribute('data-team-error-code', code)
+  p.textContent = `${code}: ${message}`
+  return p
+}
+
+function renderDiscovery(controller: TeamsConsoleController, state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
+  if (state.refusedError !== null) {
+    const refused = refusal(state.refusedError.code, state.refusedError.message)
+    return refused
+  }
+  const value = element('section')
+  const projection = state.projection
+  if (projection === null) return value
+  const agents = projectAgents(projection)
+  append(value, renderViewHeader(t.pageDiscovery), teamsStateBands(undefined, undefined, state.observation.observation))
+  const list = element('ul', 'teams-team-list')
+  for (const agent of agents) {
+    const row = element('li')
+    row.setAttribute('data-agent-id', agent.agentId)
+    row.setAttribute('data-presence', agent.presence)
+    if (agent.engine !== undefined) row.setAttribute('data-engine', agent.engine)
+    if (agent.lastSeenAt !== undefined) row.setAttribute('data-last-seen', agent.lastSeenAt)
+    if (agent.generation !== undefined) row.setAttribute('data-generation', String(agent.generation))
+    const title = element('strong')
+    title.textContent = `${agent.label} (${agent.agentId})`
+    const meta = element('span')
+    meta.textContent = `${agent.kind} · ${agent.capabilities.join(', ') || t.capabilities}`
+    const actions = element('div')
+    append(actions, button(t.connect, 'teams-button-primary', async () => { await controller.connectAgent(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:connect`))
+    append(actions, button(t.details, 'teams-button-secondary', () => { controller.openAgent(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:details`))
+    if (projection.configs.some(config => config.agentId === agent.agentId)) append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state)))
+    append(row, title, meta, actions)
+    const connections = (projection.connections ?? []).filter(connection => connection.status.remoteAgentId === agent.agentId)
+    if (connections.length > 0) {
+      const connectionsList = element('ul', 'teams-connection-list')
+      for (const connection of connections) {
+        const item = element('li')
+        item.setAttribute('data-connection-id', connection.status.connectionId ?? connection.status.remoteAgentId)
+        item.setAttribute('data-connection-state', connection.status.state)
+        item.setAttribute('data-connection-role', connection.status.role ?? connection.localRole ?? '')
+        item.textContent = `${connection.status.state} ${connection.status.role ?? connection.localRole ?? ''}`
+        append(connectionsList, item)
+      }
+      append(row, connectionsList)
+    }
+    append(list, row)
+  }
+  append(value, list)
+  return value
+}
+
+function renderNetworking(controller: TeamsConsoleController, state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
+  if (state.refusedError !== null) {
+    const refused = refusal(state.refusedError.code, state.refusedError.message)
+    return refused
+  }
+  const value = element('section')
+  const projection = state.projection
+  if (projection === null) return value
+  const agents = projectAgents(projection)
+  append(value, renderViewHeader(t.pageNetworking))
+    const draft = element('section')
+  draft.setAttribute('data-team-draft', 'true')
+  const draftList = element('ul')
+  for (const member of state.membershipDraft) {
+    const item = element('li')
+    item.setAttribute('data-team-role-draft', member.role)
+    item.setAttribute('data-agent-id', member.agentId)
+    item.textContent = `${agentName(projection, member.agentId, t)} · ${member.role}`
+    append(draftList, item)
+  }
+  const roleControls = element('div')
+  for (const agent of agents) {
+    for (const role of ['master', 'peer'] as const) {
+      const current = state.membershipDraft.find(member => member.agentId === agent.agentId)?.role
+      const control = button(`${agent.label} · ${role}`, 'teams-button-secondary', () => { controller.selectNetworkMember(agent.agentId, role) }, actionDisabled(state) || current === role)
+      control.setAttribute('aria-pressed', String(current === role))
+      append(roleControls, control)
+    }
+  }
+  append(draft, roleControls, draftList, button(t.applyMembership, 'teams-button-primary', async () => { await controller.applyMembership(projection.agents[0]?.generation ?? 0, state.membershipDraft) }, actionDisabled(state)))
+  const accepted = element('section')
+  accepted.setAttribute('data-team-accepted', 'true')
+  const acceptedList = element('ul')
+  for (const relation of projection.relations ?? []) {
+    const item = element('li')
+    item.setAttribute('data-team-role-accepted', relation.relationPermission)
+    item.textContent = `${agentName(projection, relation.providerAgentId, t)} → ${agentName(projection, relation.consumerAgentId, t)} · ${relation.capabilityId}@${relation.capabilityVersion} · ${relation.relationPermission}`
+    append(acceptedList, item)
+  }
+  append(accepted, acceptedList)
+  append(value, draft, accepted)
+  return value
+}
+
+function renderInteraction(controller: TeamsConsoleController, state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
+  const value = element('section')
+  const projection = state.projection
+  if (projection === null) return value
+  append(value, renderViewHeader(t.pageInteraction))
+  const agent = projection.agents.find(candidate => candidate.agentId === state.selectedAgentId)
+  const selectedSession = projection.sessions.find(session => session.sessionId === state.selectedSessionId) ?? projection.sessions[0]
+  const list = element('ul')
+  for (const session of projection.sessions) {
+    const item = element('li')
+    item.textContent = `${agentName(projection, session.agentId, t)} · ${session.sessionId}`
+    append(list, item)
+  }
+  append(value, list)
+  if (selectedSession !== undefined) {
+    append(value, renderSessionDrawer(controller, { ...state, selectedSessionId: selectedSession.sessionId, selectedAgentId: selectedSession.agentId, cancelState: state.cancelState }, selectedSession.agentId, selectedSession.sessionId, t))
+  }
+  return value
+}
+
+function renderHistory(controller: TeamsConsoleController, state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
+  const value = element('section')
+  append(value, renderViewHeader(t.pageHistory))
+  if (state.historyStatus === 'refused') {
+    const p = element('p')
+    p.setAttribute('data-history-refused', 'true')
+    p.setAttribute('data-team-error-code', state.historyError?.code ?? 'HISTORY_UNAVAILABLE')
+    p.textContent = state.historyError?.message ?? t.historyUnavailable
+    append(value, p)
+    return value
+  }
+  const toolbar = element('div')
+  append(toolbar,
+    button(t.historyPrev, 'teams-button-secondary', () => { void controller.loadHistory({ beforeSequence: state.history?.nextBeforeSequence }) }, state.history?.nextBeforeSequence === undefined),
+  )
+  const prev = toolbar.querySelector('button') as HTMLButtonElement
+  prev.setAttribute('data-history-prev', 'true')
+  prev.setAttribute('data-enabled', String(state.history?.nextBeforeSequence !== undefined))
+  const count = element('span')
+  count.setAttribute('data-history-count', String(state.history?.records.length ?? 0))
+  count.textContent = String(state.history?.records.length ?? 0)
+  append(toolbar, count)
+  append(value, toolbar)
+  if (state.history !== null) {
+    for (const record of state.history.records) {
+      const article = element('article')
+      article.setAttribute('data-history-record', record.recordId)
+      article.textContent = `${record.kind} ${record.outcome ?? 'unknown'}`
+      append(value, article)
+    }
+  }
+  return value
+}
+
 function renderStatus(state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
   const status = element('div', `teams-live-region ${state.error === null ? '' : 'is-error'}`)
   status.setAttribute('role', 'status')
@@ -858,24 +1110,40 @@ export function renderConsole(root: HTMLElement, controller: TeamsConsoleControl
 
   const tabs = element('nav', 'teams-tabs')
   tabs.setAttribute('aria-label', t.brand)
-  for (const entry of entries) {
-    const tab = button(t[entry], `teams-tab ${state.entry === entry ? 'is-active' : ''}`, () => { controller.selectEntry(entry) }, actionDisabled(state))
-    tab.setAttribute('aria-current', state.entry === entry ? 'page' : 'false')
-    append(tabs, tab)
+  if (state.live) {
+    for (const page of pageEntries) {
+      const tab = button(pageLabel(page, t), `teams-tab ${state.page === page ? 'is-active' : ''}`, () => { controller.selectPage(page) }, false, `page:${page}`)
+      tab.dataset.teamPage = page
+      tab.setAttribute('aria-current', state.page === page ? 'page' : 'false')
+      append(tabs, tab)
+    }
+  } else {
+    for (const entry of entries) {
+      const tab = button(t[entry], `teams-tab ${state.entry === entry ? 'is-active' : ''}`, () => { controller.selectEntry(entry) }, actionDisabled(state))
+      tab.setAttribute('aria-current', state.entry === entry ? 'page' : 'false')
+      append(tabs, tab)
+    }
   }
-
   const content = element('main', 'teams-content')
+  if (state.live) content.setAttribute('data-team-page-view', state.page)
   if (state.status === 'loading' && state.projection === null) {
     append(content, element('div', 'teams-loading'))
     ;(content.firstChild as HTMLElement).textContent = t.loading
   } else if (state.projection === null && state.error !== null) {
     append(content, errorState(state.error, async () => { await controller.refresh() }, t))
   } else if (state.projection !== null) {
-    if (state.entry === 'topology') append(content, renderTopology(controller, state, t))
-    if (state.entry === 'conversations') append(content, renderConversations(controller, state, t))
-    if (state.entry === 'notifications') append(content, renderNotifications(controller, state, t))
-    if (state.entry === 'search') append(content, renderSearch(controller, state, t, root))
-    if (state.entry === 'memory') append(content, renderMemory(t))
+    if (state.live) {
+      if (state.page === 'discovery') append(content, renderDiscovery(controller, state, t))
+      if (state.page === 'networking') append(content, renderNetworking(controller, state, t))
+      if (state.page === 'interaction') append(content, renderInteraction(controller, state, t))
+      if (state.page === 'history') append(content, renderHistory(controller, state, t))
+    } else {
+      if (state.entry === 'topology') append(content, renderTopology(controller, state, t))
+      if (state.entry === 'conversations') append(content, renderConversations(controller, state, t))
+      if (state.entry === 'notifications') append(content, renderNotifications(controller, state, t))
+      if (state.entry === 'search') append(content, renderSearch(controller, state, t, root))
+      if (state.entry === 'memory') append(content, renderMemory(t))
+    }
   }
   const drawer = renderDrawer(controller, state, t)
   append(panel, header, tabs, content, renderStatus(state, t))

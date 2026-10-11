@@ -1,6 +1,11 @@
-import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleProviderView, JsonValue } from './protocol.ts'
+import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleProviderView, HistoryPage, HistoryQuery, JsonValue, TeamsConsoleLiveClientV1 } from './protocol.ts'
 import { commandFailureMessage, formatServiceError } from './protocol.ts'
-import type { ConsoleEntry } from './model.ts'
+import { readDraft, readFocus, readPage, writeDraft, writeFocus, writePage, type DraftPersistence } from './drafts.ts'
+import { ProjectionObservationController, type ObservationSession } from './observation.ts'
+import { canSubmitMembership, projectMembershipDraft, selectNetworkMembers } from './page-networking.ts'
+import type { NetworkMemberDraft } from './page-discovery.ts'
+import { teamPages } from './model.ts'
+import type { ConsoleEntry, TeamPage } from './model.ts'
 
 export type DrawerState =
   | { readonly kind: 'agent'; readonly agentId: string }
@@ -34,6 +39,19 @@ export interface ConsoleState {
   readonly providerFormOpen: boolean
   readonly editingProviderId: string | undefined
   readonly providerDraft: ProviderDraft
+  readonly live: boolean
+  readonly page: TeamPage
+  readonly observation: ObservationSession
+  readonly messageDraft: string
+  readonly selectedSessionId: string | undefined
+  readonly cancelState: 'idle' | 'requested' | 'confirmed' | 'unknown'
+  readonly membershipDraft: readonly NetworkMemberDraft[]
+  readonly historyStatus: 'idle' | 'loading' | 'ready' | 'refused' | 'error'
+  readonly history: HistoryPage | null
+  readonly historyError: { readonly code: string; readonly message: string } | null
+  readonly historyNextBeforeSequence: number | undefined
+  readonly refusedError: { readonly code: string; readonly message: string } | null
+  readonly lastFocusKey: string | undefined
 }
 
 export const emptyProviderDraft: ProviderDraft = {
@@ -63,7 +81,36 @@ export const initialConsoleState: ConsoleState = {
   providerFormOpen: false,
   editingProviderId: undefined,
   providerDraft: emptyProviderDraft,
+  live: false,
+  page: 'discovery',
+  observation: { projection: null, observation: 'unknown', health: { state: 'live' } },
+  messageDraft: '',
+  selectedSessionId: undefined,
+  cancelState: 'idle',
+  membershipDraft: [],
+  historyStatus: 'idle',
+  history: null,
+  historyError: null,
+  historyNextBeforeSequence: undefined,
+  refusedError: null,
+  lastFocusKey: undefined,
 }
+
+const liveDefaults = {
+  live: false,
+  page: 'discovery',
+  observation: { projection: null, observation: 'unknown', health: { state: 'live' } },
+  messageDraft: '',
+  selectedSessionId: undefined,
+  cancelState: 'idle',
+  membershipDraft: [],
+  historyStatus: 'idle',
+  history: null,
+  historyError: null,
+  historyNextBeforeSequence: undefined,
+  refusedError: null,
+  lastFocusKey: undefined,
+} satisfies Partial<ConsoleState>
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown host error'
@@ -71,6 +118,14 @@ function errorText(error: unknown): string {
 
 function cloneDraft(draft: ProviderDraft): ProviderDraft {
   return { ...draft }
+}
+
+function typedError(error: unknown): { readonly code: string; readonly message: string } {
+  if (error instanceof Error) {
+    const code = (error as { readonly code?: unknown }).code
+    return { code: typeof code === "string" ? code : "HISTORY_REFUSED", message: error.message }
+  }
+  return { code: "HISTORY_REFUSED", message: "Unknown history refusal" }
 }
 
 function actionResult(label: string, result: Extract<ConsoleCommandResultV1, { readonly ok: true }>): string {
@@ -81,7 +136,28 @@ export class TeamsConsoleController {
   private state: ConsoleState = initialConsoleState
   private readonly listeners = new Set<() => void>()
 
-  constructor(private readonly client: ConsoleClientV1) {}
+  private readonly client: ConsoleClientV1
+  private readonly liveClient?: TeamsConsoleLiveClientV1
+  private readonly persistence?: DraftPersistence
+
+  private observationController?: ProjectionObservationController
+  private readonly timers = new Set<ReturnType<typeof setTimeout>>()
+
+  constructor(client: ConsoleClientV1, options: { readonly persistence?: DraftPersistence; readonly initialPage?: TeamPage } = {}) {
+    this.client = client
+    if (this.isTeamsLiveClient(client)) this.liveClient = client
+    this.persistence = options.persistence
+    this.state = {
+      ...initialConsoleState,
+      ...liveDefaults,
+      live: this.liveClient !== undefined,
+      page: options.initialPage ?? (readPage(options.persistence, teamPages as readonly TeamPage[]) as TeamPage | undefined) ?? 'discovery',
+      messageDraft: readDraft(options.persistence, 'message') ?? '',
+      membershipDraft: readDraft<NetworkMemberDraft[]>(options.persistence, 'networking') ?? [],
+      lastFocusKey: readFocus(options.persistence),
+    }
+    if (this.liveClient !== undefined) this.observeLiveProjection()
+  }
 
   getSnapshot = (): ConsoleState => this.state
 
@@ -90,9 +166,49 @@ export class TeamsConsoleController {
     return () => { this.listeners.delete(listener) }
   }
 
+  startObservation(): void {
+    this.observationController?.start()
+  }
+
+  destroy(): void {
+    this.observationController?.stop()
+    for (const timer of this.timers) clearTimeout(timer)
+    this.timers.clear()
+    this.observationController = undefined
+  }
+
+  setFocusKey(focusKey: string | undefined): void {
+    this.update({ lastFocusKey: focusKey })
+    writeFocus(this.persistence, focusKey)
+  }
+
+  private observeLiveProjection(): void {
+    if (this.liveClient === undefined) return
+    const liveClient = this.liveClient
+    this.observationController = new ProjectionObservationController({
+      subscribe: () => liveClient.subscribeProjection({
+        onSnapshot: snapshot => { this.observationController?.onSnapshot(snapshot) },
+        onHealth: health => { this.observationController?.onHealth(health) },
+      }),
+      onSnapshot: projection => this.update({ projection, status: 'ready' }),
+      onObservation: observation => this.update({ observation }),
+      onError: error => this.update({ status: 'error', error: errorText(error) }),
+    })
+  }
+
   private update(patch: Partial<ConsoleState>): void {
     this.state = { ...this.state, ...patch }
     for (const listener of this.listeners) listener()
+  }
+
+  private isTeamsLiveClient(client: ConsoleClientV1): client is TeamsConsoleLiveClientV1 {
+    return typeof (client as TeamsConsoleLiveClientV1).readHistory === 'function'
+      && typeof (client as TeamsConsoleLiveClientV1).subscribeProjection === 'function'
+  }
+
+  private scheduleTimer(timer: ReturnType<typeof setTimeout>): void {
+    this.timers.add(timer)
+    void timer
   }
 
   private async loadProjection(showLoading: boolean): Promise<boolean> {
@@ -122,6 +238,105 @@ export class TeamsConsoleController {
 
   selectEntry(entry: ConsoleEntry): void {
     this.update({ entry, drawer: null, drawerStack: [], drawerExpanded: false, notice: null })
+  }
+
+  selectPage(page: TeamPage): void {
+    this.update({ page, notice: null, refusedError: null })
+    writePage(this.persistence, page)
+  }
+
+  setMessageDraft(message: string): void {
+    this.update({ messageDraft: message })
+    writeDraft(this.persistence, 'message', message)
+  }
+
+  selectSessionSessionId(sessionId: string | undefined): void {
+    this.update({ selectedSessionId: sessionId })
+  }
+
+  setMembershipDraft(draft: readonly NetworkMemberDraft[]): void {
+    this.update({ membershipDraft: draft })
+    writeDraft(this.persistence, 'networking', draft)
+  }
+
+  async connectAgent(agentId: string): Promise<boolean> {
+    return this.runRefusedAction('Connect', () => this.client.command({ kind: 'connection.connect', agentId }))
+  }
+
+  async applyMembership(expectedRevision: number, members: readonly NetworkMemberDraft[]): Promise<boolean> {
+    const projection = this.state.projection
+    const known = projection === null ? [] : projectMembershipDraft(projection, members)
+    if (known.length === 0) {
+      this.update({ refusedError: { code: 'INVALID_NETWORK_DRAFT', message: 'Select at least one participating Agent.' } })
+      return false
+    }
+    if (!canSubmitMembership(known, projection?.agents.find(agent => agent.agentId === 'control')?.agentId)) {
+      this.update({ refusedError: { code: 'INVALID_NETWORK_DRAFT', message: 'Assign exactly one non-control master before submit.' } })
+      return false
+    }
+    return this.runRefusedAction('Submit network draft', () => this.client.command({
+      kind: 'network.membership.apply',
+      agentId: known[0]?.agentId ?? '',
+      expectedRevision,
+      members: known,
+    }))
+  }
+
+  selectNetworkMember(agentId: string, role: 'master' | 'peer'): void {
+    this.setMembershipDraft(selectNetworkMembers(this.state.projection?.agents ?? [], this.state.membershipDraft, agentId, role))
+  }
+
+  async loadHistory(query?: Partial<HistoryQuery>): Promise<boolean> {
+    if (this.liveClient === undefined) {
+      this.update({ historyStatus: 'refused', historyError: { code: 'HISTORY_UNAVAILABLE', message: 'History owner is not bound to this UI client.' } })
+      return false
+    }
+    const beforeSequence = query?.beforeSequence ?? this.state.historyNextBeforeSequence
+    const historyQuery: HistoryQuery = { version: 1, kind: 'connection', limit: 20, ...(beforeSequence === undefined ? {} : { beforeSequence }) }
+    this.update({ historyStatus: 'loading', historyError: null })
+    try {
+      const page = await this.liveClient.readHistory(historyQuery)
+      this.update({ historyStatus: 'ready', history: page, historyNextBeforeSequence: page.nextBeforeSequence })
+      return true
+    } catch (error) {
+      this.update({ historyStatus: 'refused', historyError: typedError(error) })
+      return false
+    }
+  }
+
+  async loadRequestHistory(query?: Partial<HistoryQuery>): Promise<boolean> {
+    if (this.liveClient === undefined) {
+      this.update({ historyStatus: 'refused', historyError: { code: 'HISTORY_UNAVAILABLE', message: 'History owner is not bound to this UI client.' } })
+      return false
+    }
+    const beforeSequence = query?.beforeSequence
+    const historyQuery: HistoryQuery = { version: 1, kind: 'request', limit: 20, ...(beforeSequence === undefined ? {} : { beforeSequence }) }
+    this.update({ historyStatus: 'loading', historyError: null })
+    try {
+      const page = await this.liveClient.readHistory(historyQuery)
+      this.update({ historyStatus: 'ready', history: page, historyNextBeforeSequence: page.nextBeforeSequence })
+      return true
+    } catch (error) {
+      this.update({ historyStatus: 'refused', historyError: typedError(error) })
+      return false
+    }
+  }
+
+  private async runRefusedAction(label: string, action: () => Promise<ConsoleCommandResultV1>): Promise<boolean> {
+    this.update({ busy: label, error: null, notice: null, refusedError: null })
+    try {
+      const result = await action()
+      if (result.ok === false) {
+        this.update({ busy: null, refusedError: { code: result.error.code, message: result.error.message }, error: null })
+        return false
+      }
+      const refreshed = await this.refreshAfterAction()
+      this.update({ busy: null, notice: actionResult(label, result) })
+      return refreshed
+    } catch (error) {
+      this.update({ busy: null, error: `${label}: ${errorText(error)}` })
+      return false
+    }
   }
 
   setLocale(locale: 'en' | 'zh'): void {
@@ -203,7 +418,6 @@ export class TeamsConsoleController {
         apiBaseUrl: provider.apiBaseUrl,
         enabled: provider.enabled,
         authKind: provider.authKind,
-        // The projection intentionally exposes no credential value or reference.
         credentialRef: '',
       },
       error: null,
@@ -253,15 +467,18 @@ export class TeamsConsoleController {
   }
 
   async cancelSession(agentId: string, sessionId: string): Promise<boolean> {
-    return this.runAction('Cancel session', () => this.client.command({ kind: 'session.cancel', agentId, sessionId }))
+    this.update({ cancelState: 'requested' })
+    const ok = await this.runAction('Cancel session', () => this.client.command({ kind: 'session.cancel', agentId, sessionId }))
+    this.update({ cancelState: ok ? 'confirmed' : 'unknown' })
+    return ok
   }
 
   async acknowledge(notificationId: string, agentId: string): Promise<boolean> {
     return this.runAction('Acknowledge notification', () => this.client.command({ kind: 'notification.ack', agentId, notificationId }))
   }
 
-  async replyPermission(agentId: string, sessionId: string, permissionId: string, decision: 'once' | 'always' | 'reject'): Promise<boolean> {
-    return this.runAction('Permission reply', () => this.client.command({ kind: 'permission.reply', agentId, sessionId, permissionId, decision }))
+  async replyPermission(agentId: string, sessionId: string, permissionId: string, decision: 'once' | 'always' | 'reject', optionId?: string): Promise<boolean> {
+    return this.runAction('Permission reply', () => this.client.command({ kind: 'permission.reply', agentId, sessionId, permissionId, decision, ...(optionId === undefined ? {} : { optionId }) }))
   }
 
   async sendSession(agentId: string, sessionId: string, payload: JsonValue): Promise<boolean> {

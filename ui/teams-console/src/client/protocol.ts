@@ -1,4 +1,19 @@
-import type { ConsoleCommandResultV1, ConsoleServiceError, JsonValue } from '../../../../control-protocol/console-api.ts'
+import type {
+  ConsoleClientV1,
+  ConsoleCommandResultV1,
+  ConsoleServiceError,
+  JsonValue,
+} from '../../../../control-protocol/console-api.ts'
+import type {
+  ConsoleProjectionSnapshot,
+  ConsoleProjectionSink,
+  ConsoleProjectionUnsubscribe,
+  HistoryPage,
+  HistoryQuery,
+  TeamsConnectionState,
+  TeamsConnectionStatus,
+} from '../../../../control-protocol/teams-state.ts'
+
 export type {
   ConsoleAgentObservationV1,
   ConsoleCapabilityDetail,
@@ -18,6 +33,16 @@ export type {
   SessionObservationState,
 } from '../../../../control-protocol/console-api.ts'
 
+export type {
+  ConsoleProjectionSnapshot,
+  ConsoleProjectionSink,
+  ConsoleProjectionUnsubscribe,
+  HistoryPage,
+  HistoryQuery,
+  TeamsConnectionState,
+  TeamsConnectionStatus,
+} from '../../../../control-protocol/teams-state.ts'
+
 export {
   parseConsoleAgentObservation,
   parseConsoleSessionEvent,
@@ -27,7 +52,22 @@ export {
   parseSessionCreateResult,
 } from '../../../../control-protocol/console-api.ts'
 
+export {
+  parseConsoleProjectionSnapshot,
+  parseTeamsConnectionState,
+  parseTeamsConnectionStatus,
+} from '../../../../control-protocol/teams-state.ts'
+
 export type ServiceError = ConsoleServiceError
+
+/** UI-owned ADDITIVE capability extending the frozen canonical `ConsoleClientV1`. */
+export type TeamsConsoleClientV1 = ConsoleClientV1 & {
+  readonly readHistory: (query: HistoryQuery) => Promise<HistoryPage>
+  readonly subscribeProjection: (sink: ConsoleProjectionSink) => ConsoleProjectionUnsubscribe
+}
+
+/** The D07 live client is the canonical client plus UI-owned read/event capabilities. */
+export type TeamsConsoleLiveClientV1 = ConsoleClientV1 & TeamsConsoleClientV1
 
 export function isServiceError(value: unknown): value is ServiceError {
   if (typeof value !== 'object' || value === null) return false
