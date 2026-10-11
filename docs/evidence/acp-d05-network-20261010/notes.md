@@ -3,6 +3,8 @@
 - Task: D05 negotiation/session/history layer over the frozen D00 Teams contract,
   network-owned, **without** wiring the runtime serve entry.
 - Base: `main == origin/main == f5d53e4`.
+- Candidate commit: `ecf339a` (this receipt's hash is recorded in the follow-up
+  `docs(evidence)` commit on the same branch).
 - Worktree: `/Volumes/Intel/playground/agentteams/acp-d05-network-20261010`
 - Branch: `codex/acp-d05-network-20261010`
 - Forbidden paths in this change and left untouched: `runtime/acp-serve.ts`,
