@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
 import { createRelayServer, type RelayServer } from '../server/relay.ts'
+import { declarationWithPublishedSurfaces } from '../runtime/registry-registration.ts'
 import { createRelayClient, type RelayClient } from './relay-client.ts'
 import {
   createRegistrationClient,
@@ -162,7 +163,45 @@ it('keeps the original unreachable-endpoint error and never switches servers', a
   expect(typeof status.nextAttemptAt).toBe('string')
 
   await expect(client.directory(false)).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+  // R4: publication uses the same online guard and never opens a second endpoint.
+  await expect(client.publish(declarationWithPublishedSurfaces(declaration('daemon'), { capabilities: [], routes: [] })))
+    .rejects.toMatchObject({ code: 'UNAVAILABLE' })
   expect(client.status().endpoint).toBe(unreachable)
+  await client.stop()
+})
+
+it('publishes the daemon listener route and ACP capability over the same registration path', async () => {
+  await startRelay()
+  const client = await registration({ heartbeatIntervalMs: 1_000 })
+  expect(await client.start()).toMatchObject({ state: 'online' })
+  const watcher = await observer('watcher')
+
+  const routes = [{
+    candidateId: 'daemon-lan-8443',
+    kind: 'lan' as const,
+    endpoint: 'wss://127.0.0.1:8443',
+    port: 8443,
+    authRequired: true,
+    lastSeenAt: '2026-10-11T00:00:00.000Z',
+  }]
+  const capabilities = [{
+    capabilityId: 'acp',
+    version: '1',
+    operations: [{ operation: 'session/prompt', inputSchema: {}, outputSchema: {}, cancellation: 'cooperative' as const }],
+    resources: [],
+  }]
+  const published = declarationWithPublishedSurfaces(declaration('daemon'), { capabilities, routes })
+  expect(published.revision).toBe(2)
+  await client.publish(published)
+
+  const peer = (await watcher.directory(false)).find(candidate => candidate.declaration.identity.agentId === 'daemon')
+  expect(peer?.declaration).toMatchObject({
+    revision: 2,
+    capabilities: [{ capabilityId: 'acp', version: '1', operations: [{ operation: 'session/prompt', cancellation: 'cooperative' }] }],
+    routes: [{ candidateId: 'daemon-lan-8443', kind: 'lan', port: 8443, authRequired: true }],
+  })
+  // The same relay boundary refuses a revision that does not advance.
+  await expect(client.publish(published)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
   await client.stop()
 })
 

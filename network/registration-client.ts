@@ -72,6 +72,13 @@ export interface RegistrationClient {
   /** Runs the first attempt and returns the resulting status; retries continue in the background. */
   start(): Promise<RegistrationStatus>
   directory(subscribe: boolean): Promise<readonly RelayPeer[]>
+  /**
+   * R4: publishes an advanced declaration (the daemon's real listener route plus
+   * its accepted ACP capability) over the same registration connection. It
+   * requires the online state, never switches servers, and refuses a declaration
+   * that does not preserve identity/scope or advance the revision.
+   */
+  publish(declaration: AgentDeclaration): Promise<void>
   stop(): Promise<void>
 }
 
@@ -266,6 +273,13 @@ export function createRegistrationClient(options: RegistrationClientOptions): Re
         throw new RelayProtocolError(lastError?.code ?? 'UNAVAILABLE', lastError?.message ?? 'registration: client is not online')
       }
       return await client.directory(subscribe)
+    },
+    publish: async declaration => {
+      const client = relay
+      if (state !== 'online' || client === undefined) {
+        throw new RelayProtocolError(lastError?.code ?? 'UNAVAILABLE', lastError?.message ?? 'registration: client is not online')
+      }
+      await client.publish(declaration)
     },
     stop: async () => {
       if (stopping) { await closed; return }

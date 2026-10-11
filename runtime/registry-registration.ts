@@ -10,7 +10,8 @@ import {
   type DaemonIntentV4,
   type DiscoveryServerConfig,
 } from '../config/daemon-intent.ts'
-import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
+import type { AgentDeclaration, CapabilityDeclaration } from '../control-protocol/agent-services.ts'
+import type { RouteCandidate } from '../server/directory.ts'
 import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
 import {
   createRegistrationClient,
@@ -180,6 +181,52 @@ export function declarationForDaemon(intent: DaemonIntentV4): AgentDeclaration {
 export type AgentRegistration =
   | { readonly state: 'disabled'; readonly reason: 'discovery-not-configured'; readonly status: RegistrationStatus }
   | { readonly state: 'enabled'; readonly client: RegistrationClient; readonly status: RegistrationStatus }
+
+export interface PublishedDaemonSurfaces {
+  readonly capabilities: readonly CapabilityDeclaration[]
+  readonly routes: readonly RouteCandidate[]
+}
+
+/**
+ * R4: the daemon's real listener route, projected from the declared listener.
+ * A daemon that declares no listener publishes no route. This is a projection of
+ * the one declared listener, not a second endpoint or directory source.
+ */
+export function listenerRouteCandidates(intent: DaemonIntentV4, observedAt: string): readonly RouteCandidate[] {
+  const registrable = registrableIntent(intent)
+  // Only an agent daemon declares an ACP listener; a control daemon's WebUI
+  // listener is not a peer route and is not published here.
+  if (!isAgentIntent(registrable)) return []
+  const listen = registrable.listen
+  if (listen === undefined) return []
+  return [{
+    candidateId: `${registrable.daemon.id}-lan-${listen.port}`,
+    kind: 'lan',
+    endpoint: `wss://${listen.ip}:${listen.port}`,
+    port: listen.port,
+    authRequired: true,
+    lastSeenAt: observedAt,
+  }]
+}
+
+/**
+ * R4: one additive publication of the daemon's real surfaces (listener route
+ * plus ACP capability) over the existing D04 registration path. Identity, scope
+ * and agentKind are preserved and the declaration revision advances by one, so
+ * the directory observes a new `capabilitiesRevision`. It adds no second
+ * registry, directory or publication path.
+ */
+export function declarationWithPublishedSurfaces(
+  declaration: AgentDeclaration,
+  surfaces: PublishedDaemonSurfaces,
+): AgentDeclaration {
+  return {
+    ...declaration,
+    revision: declaration.revision + 1,
+    capabilities: [...surfaces.capabilities],
+    routes: [...surfaces.routes],
+  }
+}
 
 /**
  * Composes one config-selected registration for a consumer such as D05/D06. A

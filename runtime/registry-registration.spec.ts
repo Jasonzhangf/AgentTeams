@@ -11,6 +11,8 @@ import { createRelayClient, type RelayClient } from '../network/relay-client.ts'
 import { processAlive } from './local-ownership.ts'
 import {
   declarationForDaemon,
+  declarationWithPublishedSurfaces,
+  listenerRouteCandidates,
   loadRegistrationBootstrap,
   resolveRegistrationPlan,
   startDaemonRegistration,
@@ -167,8 +169,35 @@ it('selects the configured discovery endpoint and publishes only the declared id
   })
 })
 
-it('resolves env and file credentials plus the TLS trust anchor without leaking the secret', async () => {
-  const plan = resolveRegistrationPlan(agentConfig('wss://127.0.0.1:7444'))
+it('publishes the real listener route and the ACP capability as one advanced declaration', () => {
+  const listener = '\n[engine]\nkind = "opencode"\n\n[listen]\nip = "127.0.0.1"\nport = 8443\ntlsCertRef = "file:./ca.pem"\ntlsKeyRef = "file:./key.pem"'
+  const intent = agentConfig('wss://127.0.0.1:7444', listener)
+  const routes = listenerRouteCandidates(intent, '2026-10-11T00:00:00.000Z')
+  expect(routes).toEqual([{
+    candidateId: 'reasoner-a-lan-8443',
+    kind: 'lan',
+    endpoint: 'wss://127.0.0.1:8443',
+    port: 8443,
+    authRequired: true,
+    lastSeenAt: '2026-10-11T00:00:00.000Z',
+  }])
+  const base = declarationForDaemon(intent)
+  const capabilities = [{
+    capabilityId: 'acp',
+    version: '1',
+    operations: [{ operation: 'session/prompt', inputSchema: {}, outputSchema: {}, cancellation: 'cooperative' as const }],
+    resources: [],
+  }]
+  const published = declarationWithPublishedSurfaces(base, { capabilities, routes })
+  expect(published).toEqual({ ...base, revision: 2, capabilities, routes })
+  // Identity, scope and agentKind are preserved; only the revision advances.
+  expect(published.identity).toEqual(base.identity)
+  expect(published.scopeId).toBe(base.scopeId)
+  // A daemon that declares no listener publishes no route.
+  expect(listenerRouteCandidates(agentConfig('wss://127.0.0.1:7444'), '2026-10-11T00:00:00.000Z')).toEqual([])
+})
+
+it('resolves env and file credentials plus the TLS trust anchor without leaking the secret', async () => {  const plan = resolveRegistrationPlan(agentConfig('wss://127.0.0.1:7444'))
   if (plan.state !== 'enabled') throw new Error('plan was not enabled')
   const bootstrap = await loadRegistrationBootstrap(plan.discovery, { env: { TEAMS_DISCOVERY_CREDENTIAL: 'Bearer from-env' } })
   expect(bootstrap.credential).toBe('Bearer from-env')
