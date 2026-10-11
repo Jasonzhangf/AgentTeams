@@ -120,6 +120,31 @@ UI 属于 post-MVP，由对应的 `*-public-nat` 或后续 delivery gate 收集�
 Guidance 使用声明的项目 AGENTS 和官方治理 Skill，保持 advisory；它帮助计划，
 不重复保存质量 PASS。独立开发不要求 Collab 注册。
 
+## ACP/LAN/WebUI 增量（D00 起）
+
+产品目标与 D00–D08 任务边界由 ACP 交付计划定义。该计划树是外部受控输入，由计划
+owner 持有，尚未入库；此处以标题和任务编号引用，不建立死链。D00 的 schema/ABI
+决策、迁移说明、示例配置和下游输入版本见
+[teams-acp-daemon-config-v4.md](design/teams-acp-daemon-config-v4.md)。
+
+D00 只冻结声明：`config/daemon-intent.ts`、`config/acp-policy.ts` 与
+`control-protocol/{acp,engine,teams-connection,teams-state}.ts`。这些文件的声明与
+拒绝测试是可执行的定向 gate；它们不证明真实引擎、stdio ACP、网络、注册或 UI 已可用。
+`--serve` 的 runtime 启动依赖 D01（stdio ACP adapter）和 D02/D03（引擎 adapter 与
+CLI 实际入口）；配置指向注册服务器时还依赖 D04。在依赖交付提供真实启动前它保持
+未接线，不新增只编译不启动的伪入口。
+
+| gate | owner | 状态 | 入口 | 覆盖 |
+| --- | --- | --- | --- | --- |
+| `teams-acp-daemon-intent` | config | partial | `pnpm exec vitest run --config vitest.config.ts config/daemon-intent.spec.ts config/acp-policy.spec.ts && pnpm exec tsc --noEmit && pnpm build:runtime` | 单 daemon 编译、CLI 覆盖与生效读回、v3 与多 daemon 拒绝；不含 runtime 启动 |
+| `teams-acp-public-contract` | control-protocol | partial | `pnpm exec vitest run --config vitest.config.ts control-protocol/acp.spec.ts control-protocol/teams-connection.spec.ts control-protocol/teams-state.spec.ts` | ACP frame/fault、engine adapter port、Teams 协商 frame 与连接状态 DTO 的形状与拒绝 |
+| `teams-acp-serve-entry` | runtime | design | 未接线；planned_command `node cli/agentteams.mjs --serve opencode --ip <ip> --port <port> --config <agent.toml>` | 用户入口真实启动一个 daemon 并读回生效配置；等 D01/D02/D03 |
+
+planned/design gate 不标 implemented/passed，也不因声明测试通过而升级。AppSDK 绑定只
+声明真实输入：`config/**`、`control-protocol/**`、
+`docs/design/teams-acp-daemon-config-v4.md` 与五张 map；`.appsdk` 状态不由本增量修改。
+安装副本、restart、live 与浏览器证据由各交付在真实入口存在后收集。
+
 ## 历史重置溯源
 
 以下内容只记录 reset 历史，不是当前执行指令；历史 receipts 保持原样。

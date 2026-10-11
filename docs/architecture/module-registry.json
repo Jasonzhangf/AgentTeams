@@ -7,7 +7,7 @@
   "modules": [
     {"module_id":"endpoint","owner":"endpoint","status":"partial","owned_paths":["endpoint/**"],"forbidden_paths":["network/**","server/**","ui/**","config/**"],"note":"Owns logical Endpoint identity, descriptor, capability/resource attachment and endpoint lifecycle; E1 registry is implemented. Does not own routes, transport or Work ledger"},
     {"module_id":"cli-adapter","owner":"cli-adapter","status":"partial","owned_paths":["cli-adapter/**"],"forbidden_paths":["agent/**","runtime/**","network/**","config/**"],"note":"Fixed CLI execution and local browser handles; no provider resource ledger or daemon ownership"},
-    {"module_id":"cli-facade","owner":"runtime","status":"implemented","owned_paths":["cli/**"],"forbidden_paths":["agent/**","network/**","config/**","cli-adapter/**"],"note":"User-facing agentteams init/start/status/work/stop facade; init delegates v3 bootstrap to initializeLocalConfig and lifecycle delegates to the compiled runtime local launcher. It owns no TLS, child projection, capability implementation or network truth. Candidate evidence: c3c2e0e; U2 continuation: docs/evidence/776fcad-u2-config-impl-20261003/."},
+    {"module_id":"cli-facade","owner":"runtime","status":"implemented","owned_paths":["cli/**"],"forbidden_paths":["agent/**","network/**","config/**","cli-adapter/**"],"note":"User-facing agentteams init/start/status/work/stop facade; init delegates v3 bootstrap to initializeLocalConfig and lifecycle delegates to the compiled runtime local launcher. It owns no TLS, child projection, capability implementation or network truth. Candidate evidence: c3c2e0e; U2 continuation: docs/evidence/776fcad-u2-config-impl-20261003/. The ACP `--serve <opencode|dsh> --ip --port` entry is planned here but NOT implemented: it needs the D01 stdio ACP adapter and the D02/D03 engine adapters before a real daemon start exists, so no compile-only placeholder is added."},
     {"module_id":"local-control-socket","owner":"runtime","status":"partial","owned_paths":["runtime/local-work-control.ts","runtime/local-work-control.spec.ts"],"forbidden_paths":["agent/**","network/**","server/**","config/**"],"note":"Owns the source-level local Work Unix socket seam only: typed decode/encode, listener admission, peer drain and own-socket cleanup, plus the single failed or unconfirmed Work receipt projection from a typed frame. It is not the CLI facade, receiver dispatch, config internal owner, or installed runtime."},
     {"module_id":"development-governance","owner":"development-governance","status":"partial","owned_paths":["scripts/**","package.json","pnpm-lock.yaml","pnpm-workspace.yaml","tsconfig.json","tsconfig.runtime.json","vitest.config.ts",".appsdk/project.json",".appsdk/goal.json"],"forbidden_paths":["agent/**","network/**","server/**","config/**"],"note":"Owns the single staged package producer, base asset/CLI smoke, installed lifecycle restart smoke, and lifecycle receipt binding. Final SDK runner/graph inclusion remains a D3/U4 input dependency."},
     {
@@ -40,7 +40,7 @@
       "module_id": "control-protocol",
       "owner": "control-protocol",
       "status": "implemented",
-      "note": "Canonical owner of the Console observation wire contract. BB09 round 12 adds the optional capabilityDetails declaration summary to the shared runtime|directory Agent row fields, its closed parser validation (existing string and capacity/unit checks; illegal shapes rejected, never stripped) and the single declaration-to-summary helper reused by the runtime and Console-hub producers.",
+      "note": "Canonical owner of the Console observation wire contract. BB09 round 12 adds the optional capabilityDetails declaration summary to the shared runtime|directory Agent row fields, its closed parser validation (existing string and capacity/unit checks; illegal shapes rejected, never stripped) and the single declaration-to-summary helper reused by the runtime and Console-hub producers. D00 adds the public ACP envelope and single fault carrier (acp.ts), the type-only engine adapter port (engine.ts), the Teams negotiation frames and the connection-state/history DTOs (teams-connection.ts, teams-state.ts); declarations and parsers only, with transport, negotiation and history reads pending D01/D05/D06.",
       "owned_paths": [
         "control-protocol/**"
       ],
@@ -61,7 +61,8 @@
         "ui/**",
         "network/**",
         "server/**"
-      ]
+      ],
+      "note": "Owns Session, RPC/callback correlation, execution admission and execution history semantics. D00 declares the frames and DTOs this module will consume; no host implementation exists yet, so ACP Session behavior is D01."
     },
     {
       "module_id": "master-host",
@@ -87,7 +88,8 @@
       "forbidden_paths": [
         "ui/**",
         "opencode-adapter/**"
-      ]
+      ],
+      "note": "Planned owner of stdio ACP frame encoding/decoding between an engine handle and agent-host (D01). D00 declares the ACP frame contract and the engine adapter port that this module will implement; the directory does not exist yet."
     },
     {
       "module_id": "config",
@@ -99,7 +101,8 @@
       "forbidden_paths": [
         "network/**",
         "agent/**"
-      ]
+      ],
+      "note": "Owns config intent, provider/catalog/model and policy compilation. D00 adds the v4 single-daemon intent compiler and CLI override/effective readback (config/daemon-intent.ts) plus the ACP capability vocabulary (config/acp-policy.ts). The compiler is a library contract; no CLI or runtime caller starts a daemon yet."
     },
     {
       "module_id": "server",

@@ -1,12 +1,14 @@
 # Teams ACP daemon 单 daemon 配置 v4 与公共契约（D00）
 
-状态：D00 候选契约，等待独立 review 与集成；运行实现仍 pending。
+状态：D00 契约已定稿并集成（候选 `9a511de`，review findings 已关闭）；本集成候选
+补上根 `AGENTS.md`、开发管控、长程入口与五张 map 的 planned 绑定。运行实现仍 pending。
 基线：`origin/main@1b53e2be544fbc73559cba30db8062169f4b3d79`。
 语义 owner：config（配置意图、编译与策略词汇）、control-protocol（公共 frame/DTO/状态）。
-计划输入：ACP/LAN/WebUI 总目标与 D00 任务由外部计划树提供
+计划输入：ACP/LAN/WebUI 总目标与 D00 任务由计划 owner 持有的外部受控计划树提供
 （`docs/goals/teams-acp-network-delivery.md`、`docs/goals/teams-acp-network-tasks/D00-contract-config.md`）。
-该计划树尚未随本候选提交，因此这里不建立相对链接，避免死链。
-长程责任合同见 [teams-long-running-delivery.md](../goals/teams-long-running-delivery.md)。
+该计划树尚未入库；根 `AGENTS.md`、`docs/development-governance.md` 与
+[长程交付合同](../goals/teams-long-running-delivery.md) 按标题和任务编号引用它，
+不建立相对链接，避免死链。
 
 本文件是 D00 的 schema/ABI 决策与迁移说明，并记录各下游可引用的输入版本。
 
@@ -153,6 +155,10 @@ v3 文件不会被静默接受，也不会被自动改写。迁移按语义拆�
 
 示例只使用占位凭据引用（`env:EXAMPLE_*`）与 `file:./certs/*` 路径，不含真实密钥；解析与编译不会读取这些文件。
 
-## 10. 非目标
+## 10. 非目标与集成边界
 
-D00 不实现：stdio ACP adapter（D01）、CLI 与 runtime 接线、引擎启动、网络 transport、注册服务实现、UI，以及根 `AGENTS.md` 与五张 `docs/architecture/` map 的绑定（主集成单 writer）。
+D00 不实现：stdio ACP adapter（D01）、CLI 与 runtime 接线、引擎启动、网络 transport、注册服务实现和 UI。
+
+主集成单 writer 已在同一增量补上根 `AGENTS.md`、`docs/development-governance.md`、长程交付合同和五张 `docs/architecture/` map 的 planned 绑定。绑定只声明 D00 的契约事实与待接线路径，`planned/design` gate 不标 implemented/passed。
+
+`agentteams --serve <opencode|dsh> --ip --port` 保持未接线：该用户入口的真实启动依赖 D01 的 stdio ACP adapter 与 D02/D03 的引擎 adapter；配置指向注册服务器时还依赖 D04。依赖未交付前不新增只编译不启动的占位入口，也不把 `teams-acp-serve-entry` 记为通过。

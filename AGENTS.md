@@ -32,10 +32,30 @@
   then connect. A later Relay service may own scoped directory, broadcast and
   connection assistance, but it does not own Agent Work policy or resource
   admission. Those remain at the provider Agent.
-- Compatibility boundary: the Phase 1 local-network MVP is the supported scope.
-  Public Relay, real NAT/STUN, direct internet transport, mobile entrypoints, the
-  removed legacy host UI, and empty admission scaffolding are out of scope and
-  are not restored. Each later phase binds its own gate. See
+- Current product increment: the ACP daemon, control daemon and registration
+  server delivery. ACP carries generic inference interaction; an engine adapter
+  carries engine-specific features; the first engines are OpenCode and DSH.
+  Teams owns identity, network, negotiation, master/peer roles and capability
+  policy. Capability is the intersection of engine support, adapter, accepted
+  config and negotiated connection, and a role never grants extra authority.
+- Each config file declares exactly one daemon (`agent`, `control` or `registry`)
+  with its own identity and data directory. Multiple targets use multiple files
+  started separately. `agentteams --serve <opencode|dsh> --ip <ip> --port <port>`
+  is the user quick-start entry. One config never starts a second daemon or an
+  implicit control/registry.
+- D00 freezes the single-daemon config schema and the public ACP, engine-adapter
+  and Teams frames in `docs/design/teams-acp-daemon-config-v4.md`. The `--serve`
+  runtime wiring, the stdio ACP adapter, engine adapters, network transport,
+  registration and UI are later deliveries and stay pending. A declared port or
+  frame is not a running engine, and a parse test is not inference evidence.
+- The ACP increment does not replace the existing Work entry. Old Work
+  obligations and their acceptance remain in force, and none of their evidence
+  proves the ACP increment.
+- Compatibility boundary: the Phase 1 local-network MVP and the current
+  ACP/LAN/WebUI increment are the supported scope. Public Relay, real NAT/STUN,
+  direct internet transport, mobile entrypoints, central registration
+  deployment, the removed legacy host UI, and empty admission scaffolding are
+  out of scope and are not restored. Each phase binds its own gate. See
   `docs/development-governance.md`.
 
 ## Semantic invariants

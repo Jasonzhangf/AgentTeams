@@ -2,14 +2,37 @@
 
 授权：用户要求主任务主导完成整个 AgentTeams，监督/分配子任务，负责进度、冲突、
 协作、提交合并、工作树关闭和资源清理；每阶段执行记忆管理、二级审核并更新 AppSDK memory。
-主任务：`01a07497-8e08-7e90-be56-c9f69d72bb26`。本文件定义执行责任和收尾条件，
-当前产品范围、阶段依赖与黑盒完成条件以 [用户交付计划](teams-user-delivery-plan.md) 为准。
-本文件只维护长程责任和阶段记忆要求，不另建任务图或验收清单。
+主任务：`01a07497-8e08-7e90-be56-c9f69d72bb26`。本文件定义执行责任和收尾条件。
+当前产品增量是 ACP daemon、控制 daemon 与注册服务器交付；其范围、阶段依赖与黑盒
+完成条件以 ACP 交付计划为准（外部受控输入，见下节）。旧
+[用户交付计划](teams-user-delivery-plan.md) 的 Work 义务保留，只用于其自身范围，
+不作为 ACP 增量的完成依据。本文件只维护长程责任和阶段记忆要求，不另建任务图或
+验收清单。
 
-## 当前收口 profile：Phase 1 Local Network MVP
+## 当前产品增量 profile：ACP daemon、控制端与注册服务
 
-当前长期目标只执行这一份 Local Network MVP profile，不创建第二个 goal 或第二个
-subscription。第一阶段先收口本机真实网络桥接：多个独立 daemon 从
+当前增量交付 ACP daemon、控制 daemon 与注册服务器（任务 D00–D08）。总目标、交付图、
+任务状态入口、A01–A12 最终验收和执行授权边界由计划 owner 持有的外部受控计划树定义
+（`acp-execution-plan-20261010` 工作树 `docs/goals/teams-acp-network-delivery.md` 与
+`docs/goals/teams-acp-network-tasks/`）。该计划树尚未入库，本文件不复制其清单，避免
+第二份状态真源。D00 冻结的单 daemon 配置与公共契约见
+[teams-acp-daemon-config-v4.md](../design/teams-acp-daemon-config-v4.md)。
+
+- 依赖顺序：D00 → D01/D04；D01 → D02/D03；D02/D03/D04 → D05 → D06 → D07 → D08。
+  缺前置只阻断真实下游，不关闭总目标。
+- 本期范围：LAN 注册发现、网络连接、master/peer 角色、双向 ACP、桌面 WebUI 的发现/
+  组网/交互/历史与真实状态动效。中心注册部署、公网穿透与中继、NAT/STUN、手机入口、
+  任务调度和自动协作属于后续阶段，不为它们预建空壳。
+- 旧义务保留：Phase 1 Local Network MVP profile 及其 live gates 不被本增量替换或删除。
+  旧 Work 证据不能证明 ACP 增量，ACP 增量证据也不关闭旧 profile 的未完成项。
+- 编排、阶段 L2、候选/集成和资源收尾责任仍按本文件与项目 `AGENTS.md` 执行。公共
+  CLI/runtime/build、根 `AGENTS.md`、开发管控与五张 map 由主集成单 writer 写入。
+
+## 保留 profile：Phase 1 Local Network MVP
+
+长期目标在同一 goal 与同一 subscription 内推进两个连续 profile：先收口本机真实网络
+桥接，再执行上面的 ACP 增量；不创建第二个 goal 或第二个 subscription。Phase 1 先收口
+本机真实网络桥接：多个独立 daemon 从
 `~/.agentteams/config.toml` 启动，通过真实 TCP/WebSocket socket 完成发现、广播、连接、
 协商和 Agent-to-Agent Work。Console Host 只做观察、配置和 daemon projection，不进入
 Agent-to-Agent 数据路径。
@@ -20,8 +43,9 @@ Agent 之间的数据路径。公网 Relay、NAT/STUN、双 NAT、direct transpo
 本阶段的 mapped live gates 是 `teams-peer-work-execution` 和 `teams-console-offline-work`；
 公网/NAT 证据只由对应的 `*-public-nat` 后续 gates 收集，不得成为本地 profile 的隐含前置。
 
-产品完成以用户交付计划中的 BB01–BB14 和最终收口条件为准。本文件不另列较窄的
-“一次 Work”验收或过期的 Endpoint/browser backlog，避免把组件通过当成用户 MVP 完成。
+本 profile 的产品完成以用户交付计划中的 BB01–BB14 和最终收口条件为准；ACP 增量的完成
+以该计划树的 A01–A12 逐项证据为准。本文件不另列较窄的“一次 Work”验收或过期的
+Endpoint/browser backlog，避免把组件通过当成用户 MVP 完成。
 
 ## 主任务与实施 worker
 
