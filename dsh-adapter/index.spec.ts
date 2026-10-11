@@ -3,7 +3,7 @@ import { AcpError } from '../control-protocol/acp.ts'
 import { assertAcpAllowed, extractAcpCapabilities, resolveAcpPolicy } from '../config/acp-policy.ts'
 import type { EngineLaunchInput, EngineLaunchSpec } from '../control-protocol/engine.ts'
 import type { VersionedRuntimeConfig } from '../config/runtime-config.ts'
-import { createDshEngineAdapter, DSH_EXTENSION_METHODS, DSH_UNSUPPORTED_FEATURES } from './index.ts'
+import { createDshEngineAdapter, dshHasPolicyEnforcementOwner, DSH_EXTENSION_METHODS, DSH_UNSUPPORTED_FEATURES } from './index.ts'
 
 /**
  * Fixtures are the real frames captured from the installed DSH ACP server
@@ -309,6 +309,72 @@ describe('dsh adapter capability declaration', () => {
   it('declares the set_config_option extension as adapter-carried', () => {
     const entry = createDshEngineAdapter().capabilities.find(capability => capability.key === 'method:session/set_config_option')
     expect(entry?.support).toBe('adapter')
+  })
+})
+
+describe('dsh adapter enforceable policy declaration', () => {
+  it('derives the enforceable set from the one enforcement-owner rule over the declared surface', () => {
+    const adapter = createDshEngineAdapter()
+    for (const capability of adapter.capabilities) {
+      // The adapter's answer and its pre-launch assertion share one rule.
+      expect(adapter.enforceablePolicies.includes(capability.key)).toBe(dshHasPolicyEnforcementOwner(capability.key))
+    }
+    expect(adapter.enforceablePolicies).toContain('capability:/promptCapabilities/image')
+    expect(adapter.enforceablePolicies).toContain('client-capability:/fs/readTextFile')
+    expect(adapter.enforceablePolicies).toContain('callback:session/request_permission')
+    // A declared `feature:` label is not a policy key and has no enforcement owner.
+    expect(adapter.enforceablePolicies.some(key => key.startsWith('feature:'))).toBe(false)
+  })
+
+  it('admits a blacklist for the capability and client-capability classes the declared-method set over-refused', () => {
+    const adapter = createDshEngineAdapter()
+    const supported = extractAcpCapabilities(REAL_INITIALIZE, adapter.declaredMethods)
+    const intent = {
+      enabled: true,
+      required: ['method:session/prompt'],
+      blacklist: [
+        'capability:/mcpCapabilities/http',
+        'capability:/promptCapabilities/image',
+        'client-capability:/fs/readTextFile',
+        'callback:session/request_permission',
+      ],
+      clientCapabilities: [],
+      callbackExecutor: 'controller' as const,
+    }
+    const policy = resolveAcpPolicy({
+      intent,
+      engineInstanceId: 'engine-1',
+      supported,
+      enforceablePolicies: adapter.enforceablePolicies,
+    })
+    // A supported key really leaves the effective set...
+    expect(policy.denied).toContain('capability:/mcpCapabilities/http')
+    // ...and a declared key the engine did not advertise is accepted, not refused.
+    expect(policy.supported).not.toContain('capability:/promptCapabilities/image')
+
+    // The old substitution (`declaredMethods`) refused those same keys.
+    expect(() => resolveAcpPolicy({
+      intent,
+      engineInstanceId: 'engine-1',
+      supported,
+      enforceablePolicies: adapter.declaredMethods,
+    })).toThrow(AcpError)
+  })
+
+  it('still refuses a blacklist key with no enforcement owner', () => {
+    const adapter = createDshEngineAdapter()
+    expect(() => resolveAcpPolicy({
+      intent: {
+        enabled: true,
+        required: ['method:session/prompt'],
+        blacklist: ['internal-tool:dsh:bash'],
+        clientCapabilities: [],
+        callbackExecutor: 'controller',
+      },
+      engineInstanceId: 'engine-1',
+      supported: extractAcpCapabilities(REAL_INITIALIZE, adapter.declaredMethods),
+      enforceablePolicies: adapter.enforceablePolicies,
+    })).toThrowError(/no enforcement owner/)
   })
 })
 

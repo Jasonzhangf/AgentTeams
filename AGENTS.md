@@ -46,9 +46,11 @@
 - D00 freezes the single-daemon config schema and the public ACP, engine-adapter
   and Teams frames in `docs/design/teams-acp-daemon-config-v4.md`. The stdio ACP
   adapter (D01), the OpenCode engine adapter plus the `--serve opencode` runtime
-  entry (D02), the DSH engine adapter at source level (D03) and the registry
-  daemon plus automatic registration (D04) are delivered at source level. The
-  `--serve dsh` serve wiring, the Teams network transport/negotiation and the UI
+  entry (D02), the DSH engine adapter plus the `--serve dsh` entry (D03)
+  and the registry daemon plus automatic registration (D04) are delivered at
+  source level. One `engineAdapterFor` dispatch in `runtime/acp-serve.ts` selects
+  the OpenCode or DSH adapter and the daemon/host/stdio/readiness/stop plumbing is
+  shared. The Teams network transport/negotiation and the UI
   are later deliveries and stay pending. A declared port or
   frame is not a running engine, and a parse test is not inference evidence.
 - The ACP increment does not replace the existing Work entry. Old Work
