@@ -14,6 +14,7 @@ export default {
     include: [
       'cli/**/*.spec.ts',
       'agent-host/**/*.spec.ts',
+      'acp-adapter/**/*.spec.ts',
       'cli-adapter/**/*.spec.ts',
       'server/**/*.spec.ts',
       'network/**/*.spec.ts',

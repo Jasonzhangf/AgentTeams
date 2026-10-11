@@ -1,0 +1,940 @@
+import type { AuthenticatedAgent, JsonValue } from '../control-protocol/agent-services.ts'
+import type {
+  AcpChannelRef,
+  AcpDelivery,
+  AcpFault,
+  AcpFrame,
+  AcpIngress,
+  AcpRpcId,
+  HistoryRecord,
+} from '../control-protocol/acp.ts'
+import { AcpError, parseAcpFrame } from '../control-protocol/acp.ts'
+import type { EngineHandle } from '../control-protocol/engine.ts'
+import type { AcpPolicySnapshot } from '../config/acp-policy.ts'
+import type { AcpHistoryPort } from './acp-history.ts'
+
+/**
+ * Agent-host ACP owner: logical channels, RPC/callback correlation, Session
+ * ownership, execution admission and execution-history semantics.
+ *
+ * Owner: agent-host. It consumes the frozen D00 contracts (`AcpFrame`,
+ * `AcpFault`, `AcpError`, `parseAcpFrame`, `AcpDuplex`/`EngineHandle`,
+ * `AcpPolicySnapshot`) and declares no second frame, fault, duplex, policy or
+ * history-read type. `AcpIngress` is flat: a ref plus `frame`, never `{ ref }`.
+ */
+
+export type AcpDirection = 'to-engine' | 'from-engine'
+
+/**
+ * Injected D00 policy assertion (`config/acp-policy.ts#assertAcpAllowed`). The
+ * host never compiles policy and never imports the config store at runtime.
+ */
+export type AcpPolicyAssert = (input: {
+  readonly policy: AcpPolicySnapshot
+  readonly direction: AcpDirection
+  readonly frame: AcpFrame
+}) => void
+
+export interface AcpHost {
+  open(input: {
+    readonly ref: AcpChannelRef
+    readonly principal: AuthenticatedAgent
+    readonly policy: AcpPolicySnapshot
+  }): Promise<void>
+  receive(ingress: AcpIngress): Promise<void>
+  /** Read and consume the channel's live deliveries after `afterSequence`. */
+  read(ref: AcpChannelRef, afterSequence: number, limit: number): Promise<{
+    readonly frames: readonly AcpDelivery[]
+    readonly nextSequence: number
+  }>
+  close(ref: AcpChannelRef): Promise<void>
+}
+
+export interface CreateAcpHostInput {
+  readonly handle: EngineHandle
+  /**
+   * The genuine successful `initialize` response captured once by the runtime
+   * bootstrap as the sole reader before ownership transfer. The host serves it
+   * to every channel under that channel's policy and never initializes the
+   * child again.
+   */
+  readonly initializeResult: AcpFrame
+  readonly policy: AcpPolicySnapshot
+  readonly history: AcpHistoryPort
+  readonly assertAllowed: AcpPolicyAssert
+  /** Local Agent identity used for request history. Defaults to the engine instance. */
+  readonly agentId?: string
+  readonly maxDeliveryBacklog?: number
+  /** Observable history-write failure; never carried inside an ACP payload. */
+  readonly onHistoryFault?: (fault: AcpFault) => void
+}
+
+interface PendingRequest {
+  readonly originalId: AcpRpcId
+  readonly originalIdKey: string
+  readonly channelKey: string
+  readonly childId: string
+  readonly method: string
+  readonly sessionId?: string
+  readonly recordId: string
+  readonly frame: AcpFrame
+}
+
+interface PendingCallback {
+  readonly engineId: AcpRpcId
+  readonly outwardId: string
+  readonly channelKey: string
+  readonly sessionId?: string
+  readonly method: string
+  readonly recordId: string
+}
+
+interface ActivePrompt {
+  readonly sessionId: string
+  cancelRequested: boolean
+}
+
+interface ChannelState {
+  readonly key: string
+  readonly ref: AcpChannelRef
+  readonly principal: AuthenticatedAgent
+  readonly policy: AcpPolicySnapshot
+  readonly sessions: Set<string>
+  readonly pendingRequests: Map<string, PendingRequest>
+  readonly pendingCallbacks: Map<string, PendingCallback>
+  deliveries: AcpDelivery[]
+  nextSequence: number
+  initialized: boolean
+  closed: boolean
+  activePrompt?: ActivePrompt
+}
+
+type HistoryInput = Omit<HistoryRecord, 'recordId' | 'sequence'>
+
+const DEFAULT_MAX_DELIVERY_BACKLOG = 1024
+const MAX_READ_LIMIT = 1000
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function requireText(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new AcpError('INVALID_ACP_FRAME', `${label} must be a non-empty string`)
+  }
+  return value
+}
+
+/** Canonical correlation key for a JSON-RPC id, preserving `string` vs `number`. */
+export function rpcIdKey(id: AcpRpcId): string {
+  return `${typeof id}:${String(id)}`
+}
+
+function methodOf(frame: AcpFrame): string | undefined {
+  return typeof frame.method === 'string' && frame.method.length > 0 ? frame.method : undefined
+}
+
+function isRequestFrame(frame: AcpFrame): boolean {
+  return methodOf(frame) !== undefined && Object.hasOwn(frame, 'id')
+}
+
+function isNotificationFrame(frame: AcpFrame): boolean {
+  return methodOf(frame) !== undefined && !Object.hasOwn(frame, 'id')
+}
+
+function isResponseFrame(frame: AcpFrame): boolean {
+  return methodOf(frame) === undefined && Object.hasOwn(frame, 'id')
+}
+
+function sessionIdOf(frame: AcpFrame): string | undefined {
+  const params = frame.params
+  if (!isRecord(params)) return undefined
+  const sessionId = params.sessionId
+  return typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : undefined
+}
+
+function resultSessionId(frame: AcpFrame): string | undefined {
+  const result = frame.result
+  if (!isRecord(result)) return undefined
+  const sessionId = result.sessionId
+  return typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : undefined
+}
+
+function cloneJson(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) return value.map(cloneJson)
+  if (isRecord(value)) {
+    const output: Record<string, JsonValue> = {}
+    for (const key of Object.keys(value)) output[key] = cloneJson(value[key] as JsonValue)
+    return output
+  }
+  return value
+}
+
+/**
+ * Project the engine's declared capabilities under the channel policy. A
+ * denied capability becomes `false` in the served result; the declaration is
+ * the policy's projection, never a second editable source.
+ */
+function projectCapabilityNode(node: Record<string, unknown>, pointer: string, policy: AcpPolicySnapshot): void {
+  for (const key of Object.keys(node)) {
+    const value = node[key]
+    const escaped = key.replaceAll('~', '~0').replaceAll('/', '~1')
+    const childPointer = `${pointer}/${escaped}`
+    if (value === true) {
+      if (!policy.effective.includes(`capability:${childPointer}`)) node[key] = false
+    } else if (isRecord(value)) {
+      projectCapabilityNode(value, childPointer, policy)
+    }
+  }
+}
+
+function projectInitializeResult(frame: AcpFrame, policy: AcpPolicySnapshot): AcpFrame {
+  const result = frame.result
+  if (!isRecord(result)) return frame
+  const cloned = cloneJson(result as JsonValue)
+  if (!isRecord(cloned)) return frame
+  const agentCapabilities = cloned.agentCapabilities
+  if (isRecord(agentCapabilities)) projectCapabilityNode(agentCapabilities, '', policy)
+  return { ...frame, result: cloned }
+}
+
+function faultFrom(error: unknown, fallback: AcpFault['code']): AcpFault {
+  if (error instanceof AcpError) return error.toFault()
+  return { code: fallback, message: error instanceof Error ? error.message : 'ACP operation failed' }
+}
+
+function toAcpError(error: unknown, fallback: AcpFault['code']): AcpError {
+  if (error instanceof AcpError) return error
+  return new AcpError(fallback, error instanceof Error ? error.message : 'ACP operation failed')
+}
+
+function faultData(fault: AcpFault): Record<string, JsonValue> {
+  const output: Record<string, JsonValue> = { code: fault.code, message: fault.message }
+  if (fault.detail !== undefined) output.detail = fault.detail
+  return output
+}
+
+function rpcErrorFrame(id: AcpRpcId, fault: AcpFault): AcpFrame {
+  return { jsonrpc: '2.0', id, error: { code: -32000, message: fault.message, data: faultData(fault) } }
+}
+
+function assertRefShape(ref: unknown): asserts ref is AcpChannelRef {
+  if (!isRecord(ref)) throw new AcpError('INVALID_ACP_FRAME', 'ACP channel ref must be an object')
+  requireText(ref.connectionId, 'ref.connectionId')
+  requireText(ref.channelId, 'ref.channelId')
+  requireText(ref.engineInstanceId, 'ref.engineInstanceId')
+  if (!Number.isSafeInteger(ref.targetGeneration) || (ref.targetGeneration as number) < 1) {
+    throw new AcpError('INVALID_ACP_FRAME', 'ref.targetGeneration must be a positive safe integer')
+  }
+}
+
+function assertPrincipal(principal: unknown): asserts principal is AuthenticatedAgent {
+  if (!isRecord(principal)) throw new AcpError('AUTHENTICATION_REQUIRED', 'ACP channel principal is required')
+  requireText(principal.accountId, 'principal.accountId')
+  requireText(principal.scopeId, 'principal.scopeId')
+  requireText(principal.agentId, 'principal.agentId')
+}
+
+function assertPolicyShape(policy: unknown): asserts policy is AcpPolicySnapshot {
+  if (!isRecord(policy)) throw new AcpError('UNSUPPORTED_POLICY', 'ACP policy snapshot is required')
+  requireText(policy.revision, 'policy.revision')
+  requireText(policy.engineInstanceId, 'policy.engineInstanceId')
+  for (const [label, value] of [
+    ['policy.supported', policy.supported],
+    ['policy.effective', policy.effective],
+    ['policy.denied', policy.denied],
+  ] as const) {
+    if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || item.length === 0)) {
+      throw new AcpError('UNSUPPORTED_POLICY', `${label} must be an array of non-empty strings`)
+    }
+  }
+}
+
+function channelKeyOf(ref: AcpChannelRef): string {
+  return `${ref.engineInstanceId}\u0000${ref.targetGeneration}\u0000${ref.connectionId}\u0000${ref.channelId}`
+}
+
+export function createAcpHost(input: CreateAcpHostInput): AcpHost {
+  if (input === null || typeof input !== 'object') {
+    throw new AcpError('UNSUPPORTED_CONFIGURATION', 'createAcpHost input is required')
+  }
+  const engineInstanceId = requireText(input.handle?.engineInstanceId, 'handle.engineInstanceId')
+  if (!Number.isSafeInteger(input.handle?.targetGeneration) || input.handle.targetGeneration < 1) {
+    throw new AcpError('UNSUPPORTED_CONFIGURATION', 'handle.targetGeneration must be a positive safe integer')
+  }
+  if (typeof input.handle?.acp?.read !== 'function' || typeof input.handle.acp.send !== 'function') {
+    throw new AcpError('UNSUPPORTED_CONFIGURATION', 'handle.acp must be an AcpDuplex')
+  }
+  const initializeResult = parseAcpFrame(input.initializeResult)
+  if (Object.hasOwn(initializeResult, 'error') || !Object.hasOwn(initializeResult, 'result')) {
+    throw new AcpError('ENGINE_UNAVAILABLE', 'a genuine successful initialize result is required before host handoff')
+  }
+  assertPolicyShape(input.policy)
+  if (input.policy.engineInstanceId !== engineInstanceId) {
+    throw new AcpError('STALE_GENERATION', 'host policy does not belong to the initialized engine instance')
+  }
+  if (typeof input.assertAllowed !== 'function') {
+    throw new AcpError('UNSUPPORTED_POLICY', 'an injected ACP policy assertion is required')
+  }
+  if (typeof input.history?.append !== 'function') {
+    throw new AcpError('HISTORY_UNAVAILABLE', 'an injected ACP history write port is required')
+  }
+  const maxDeliveryBacklog = input.maxDeliveryBacklog ?? DEFAULT_MAX_DELIVERY_BACKLOG
+  if (!Number.isSafeInteger(maxDeliveryBacklog) || maxDeliveryBacklog < 1) {
+    throw new AcpError('UNSUPPORTED_CONFIGURATION', 'maxDeliveryBacklog must be a positive safe integer')
+  }
+  const localAgentId = input.agentId ?? engineInstanceId
+
+  const channels = new Map<string, ChannelState>()
+  const sessionOwners = new Map<string, string>()
+  const childRequests = new Map<string, PendingRequest>()
+  const outwardCallbacks = new Map<string, PendingCallback>()
+  let childCounter = 0
+  let callbackCounter = 0
+  let engineEnded = false
+
+  const historyEntry = (
+    event: string,
+    extras: Partial<Omit<HistoryInput, 'agentId' | 'occurredAt' | 'kind' | 'event'>> = {},
+  ): HistoryInput => ({
+    agentId: localAgentId,
+    occurredAt: new Date().toISOString(),
+    kind: 'request',
+    event,
+    ...extras,
+  })
+
+  /** Append that fails the operation: used before any engine effect. */
+  const appendRecord = async (record: HistoryInput): Promise<HistoryRecord> => {
+    try {
+      return await input.history.append(record)
+    } catch (cause) {
+      throw new AcpError('HISTORY_UNAVAILABLE', cause instanceof Error ? cause.message : 'ACP history append failed')
+    }
+  }
+
+  /** Append after an effect already happened: report the fault, never block live behavior. */
+  const safeAppend = async (record: HistoryInput): Promise<void> => {
+    try {
+      await input.history.append(record)
+    } catch (cause) {
+      input.onHistoryFault?.(faultFrom(cause, 'HISTORY_UNAVAILABLE'))
+    }
+  }
+
+  const channelBySession = (sessionId: string): ChannelState | undefined => {
+    const key = sessionOwners.get(sessionId)
+    return key === undefined ? undefined : channels.get(key)
+  }
+
+  /** Bounded live delivery. Returns false when the frame could not be delivered. */
+  const enqueue = (channel: ChannelState, frame: AcpFrame): boolean => {
+    if (channel.deliveries.length >= maxDeliveryBacklog) {
+      void safeAppend(historyEntry('delivery.overflow', {
+        connectionId: channel.ref.connectionId,
+        channelId: channel.ref.channelId,
+        engineInstanceId,
+        frame,
+        outcome: 'unknown',
+        error: { code: 'CONFLICT', message: 'ACP live delivery backlog is full' },
+      }))
+      return false
+    }
+    channel.deliveries.push({ ...channel.ref, frame, sequence: channel.nextSequence })
+    channel.nextSequence += 1
+    return true
+  }
+
+  const assertSessionOwner = (channel: ChannelState, sessionId: string): void => {
+    if (sessionOwners.get(sessionId) !== channel.key) {
+      throw new AcpError('SESSION_OWNERSHIP_CONFLICT', `session ${sessionId} is not owned by this channel`)
+    }
+  }
+
+  const requireSessionId = (frame: AcpFrame): string => {
+    const sessionId = sessionIdOf(frame)
+    if (sessionId === undefined) throw new AcpError('INVALID_ACP_FRAME', 'ACP session method requires params.sessionId')
+    return sessionId
+  }
+
+  const nextChildId = (): string => {
+    childCounter += 1
+    return `acp-child-${engineInstanceId}-${childCounter}`
+  }
+
+  const nextCallbackId = (): string => {
+    callbackCounter += 1
+    return `acp-callback-${engineInstanceId}-${callbackCounter}`
+  }
+
+  const removePendingRequest = (pending: PendingRequest): void => {
+    channels.get(pending.channelKey)?.pendingRequests.delete(pending.originalIdKey)
+    childRequests.delete(rpcIdKey(pending.childId))
+  }
+
+  const respondCallbackError = async (engineId: AcpRpcId, fault: AcpFault): Promise<void> => {
+    if (engineEnded) return
+    try {
+      await input.handle.acp.send({
+        jsonrpc: '2.0',
+        id: engineId,
+        error: { code: -32601, message: fault.message, data: faultData(fault) },
+      })
+    } catch {
+      // The child is gone; the callback obligation stays an explicit unknown.
+    }
+  }
+
+  /**
+   * A permission callback with no controller is answered with the ACP
+   * cancellation outcome. The host never converts "nobody replied" into an
+   * approval.
+   */
+  const sendPermissionCancellation = async (engineId: AcpRpcId): Promise<void> => {
+    if (engineEnded) return
+    try {
+      await input.handle.acp.send({ jsonrpc: '2.0', id: engineId, result: { outcome: { outcome: 'cancelled' } } })
+    } catch {
+      // No controller and no child: the callback remains an explicit unknown.
+    }
+  }
+
+  const settlePendingCallbacks = async (channel: ChannelState, reason: string): Promise<void> => {
+    const pending = [...channel.pendingCallbacks.values()]
+    channel.pendingCallbacks.clear()
+    for (const item of pending) {
+      outwardCallbacks.delete(rpcIdKey(item.outwardId))
+      await safeAppend(historyEntry('callback.unknown', {
+        connectionId: channel.ref.connectionId,
+        channelId: channel.ref.channelId,
+        engineInstanceId,
+        sessionId: item.sessionId,
+        requestRecordId: item.recordId,
+        outcome: 'unknown',
+        error: { code: 'CALLBACK_UNAVAILABLE', message: `${reason} before a callback reply` },
+      }))
+      if (!engineEnded) {
+        if (item.method === 'session/request_permission') await sendPermissionCancellation(item.engineId)
+        else await respondCallbackError(item.engineId, {
+          code: 'CALLBACK_UNAVAILABLE',
+          message: `${reason} before a callback reply`,
+        })
+      }
+    }
+  }
+
+  const settlePendingRequests = async (channel: ChannelState, reason: string): Promise<void> => {
+    const pending = [...channel.pendingRequests.values()]
+    for (const item of pending) {
+      removePendingRequest(item)
+      await safeAppend(historyEntry('result.unknown', {
+        connectionId: channel.ref.connectionId,
+        channelId: channel.ref.channelId,
+        engineInstanceId,
+        sessionId: item.sessionId,
+        requestRecordId: item.recordId,
+        frame: item.frame,
+        outcome: 'unknown',
+        error: { code: 'RESULT_UNKNOWN', message: `${reason} before a result` },
+      }))
+      enqueue(channel, rpcErrorFrame(item.originalId, { code: 'RESULT_UNKNOWN', message: `${reason} before a result` }))
+    }
+  }
+
+  const releaseSessions = (channel: ChannelState): void => {
+    for (const sessionId of channel.sessions) sessionOwners.delete(sessionId)
+    channel.sessions.clear()
+    channel.activePrompt = undefined
+  }
+
+  const onEngineEnd = (reason: string): void => {
+    if (engineEnded) return
+    engineEnded = true
+    childRequests.clear()
+    outwardCallbacks.clear()
+    for (const channel of channels.values()) {
+      if (channel.closed) continue
+      channel.closed = true
+      void settlePendingRequests(channel, `engine ${reason}`)
+      for (const item of [...channel.pendingCallbacks.values()]) {
+        void safeAppend(historyEntry('callback.unknown', {
+          connectionId: channel.ref.connectionId,
+          channelId: channel.ref.channelId,
+          engineInstanceId,
+          sessionId: item.sessionId,
+          requestRecordId: item.recordId,
+          outcome: 'unknown',
+          error: { code: 'CALLBACK_UNAVAILABLE', message: `engine ${reason} before a callback reply` },
+        }))
+      }
+      channel.pendingCallbacks.clear()
+      releaseSessions(channel)
+    }
+  }
+
+  const handleInitialize = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
+    if (channel.initialized) throw new AcpError('CONFLICT', 'ACP initialize has already completed for this channel')
+    input.assertAllowed({ policy: channel.policy, direction: 'to-engine', frame })
+    await appendRecord(historyEntry('initialize', {
+      connectionId: channel.ref.connectionId,
+      channelId: channel.ref.channelId,
+      engineInstanceId,
+      frame,
+    }))
+    channel.initialized = true
+    enqueue(channel, { ...projectInitializeResult(initializeResult, channel.policy), id: frame.id as AcpRpcId })
+  }
+
+  const dispatchToEngine = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
+    const method = methodOf(frame)
+    if (method === undefined) throw new AcpError('INVALID_ACP_FRAME', 'ACP dispatch requires a method')
+    const originalId = frame.id as AcpRpcId
+    const originalIdKey = rpcIdKey(originalId)
+    if (channel.pendingRequests.has(originalIdKey)) {
+      throw new AcpError('CONFLICT', `pending ACP request id ${String(originalId)} cannot be reused`)
+    }
+    if (engineEnded) throw new AcpError('ENGINE_UNAVAILABLE', 'ACP engine is not available')
+    const childId = nextChildId()
+    const sessionId = sessionIdOf(frame)
+    const entry = await appendRecord(historyEntry('request.dispatched', {
+      connectionId: channel.ref.connectionId,
+      channelId: channel.ref.channelId,
+      engineInstanceId,
+      sessionId,
+      frame,
+    }))
+    const pending: PendingRequest = {
+      originalId,
+      originalIdKey,
+      channelKey: channel.key,
+      childId,
+      method,
+      sessionId,
+      recordId: entry.recordId,
+      frame,
+    }
+    channel.pendingRequests.set(originalIdKey, pending)
+    childRequests.set(rpcIdKey(childId), pending)
+    try {
+      await input.handle.acp.send({ ...frame, id: childId })
+    } catch (cause) {
+      removePendingRequest(pending)
+      await safeAppend(historyEntry('request.send.failed', {
+        connectionId: channel.ref.connectionId,
+        channelId: channel.ref.channelId,
+        engineInstanceId,
+        sessionId,
+        frame,
+        outcome: 'unknown',
+        error: faultFrom(cause, 'ENGINE_UNAVAILABLE'),
+      }))
+      throw toAcpError(cause, 'ENGINE_UNAVAILABLE')
+    }
+  }
+
+  const handlePrompt = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
+    const sessionId = requireSessionId(frame)
+    assertSessionOwner(channel, sessionId)
+    if (channel.activePrompt !== undefined) {
+      throw new AcpError('CONFLICT', `session ${sessionId} already has a prompt in flight`)
+    }
+    channel.activePrompt = { sessionId, cancelRequested: false }
+    try {
+      await dispatchToEngine(channel, frame)
+    } catch (cause) {
+      channel.activePrompt = undefined
+      throw cause
+    }
+  }
+
+  const handleSessionAdoption = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
+    assertSessionOwner(channel, requireSessionId(frame))
+    await dispatchToEngine(channel, frame)
+  }
+
+  const receiveClientRequest = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
+    const method = methodOf(frame)
+    if (method === undefined) throw new AcpError('INVALID_ACP_FRAME', 'ACP request requires a method')
+    if (method === 'initialize') {
+      await handleInitialize(channel, frame)
+      return
+    }
+    if (!channel.initialized) throw new AcpError('CONFLICT', 'ACP initialize must precede other channel traffic')
+    input.assertAllowed({ policy: channel.policy, direction: 'to-engine', frame })
+    if (method === 'session/load' || method === 'session/resume') {
+      await handleSessionAdoption(channel, frame)
+      return
+    }
+    if (method === 'session/prompt') {
+      await handlePrompt(channel, frame)
+      return
+    }
+    const sessionId = sessionIdOf(frame)
+    if (sessionId !== undefined && method !== 'session/new' && method !== 'session/cancel') {
+      assertSessionOwner(channel, sessionId)
+    }
+    await dispatchToEngine(channel, frame)
+  }
+
+  const receiveClientNotification = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
+    if (!channel.initialized) throw new AcpError('CONFLICT', 'ACP initialize must precede other channel traffic')
+    input.assertAllowed({ policy: channel.policy, direction: 'to-engine', frame })
+    const method = methodOf(frame)
+    const sessionId = sessionIdOf(frame)
+    if (sessionId !== undefined) assertSessionOwner(channel, sessionId)
+    if (engineEnded) throw new AcpError('ENGINE_UNAVAILABLE', 'ACP engine is not available')
+
+    if (method === 'session/cancel') {
+      // A cancel request is recorded separately from the prompt's terminal
+      // result; only the engine result confirms the prompt ended.
+      await appendRecord(historyEntry('cancel.requested', {
+        connectionId: channel.ref.connectionId,
+        channelId: channel.ref.channelId,
+        engineInstanceId,
+        sessionId,
+        frame,
+      }))
+      try {
+        await input.handle.acp.send(frame)
+      } catch (cause) {
+        throw toAcpError(cause, 'ENGINE_UNAVAILABLE')
+      }
+      if (channel.activePrompt !== undefined && channel.activePrompt.sessionId === sessionId) {
+        channel.activePrompt.cancelRequested = true
+      }
+      return
+    }
+
+    await appendRecord(historyEntry('notification.dispatched', {
+      connectionId: channel.ref.connectionId,
+      channelId: channel.ref.channelId,
+      engineInstanceId,
+      sessionId,
+      frame,
+    }))
+    try {
+      await input.handle.acp.send(frame)
+    } catch (cause) {
+      throw toAcpError(cause, 'ENGINE_UNAVAILABLE')
+    }
+  }
+
+  const receiveClientResponse = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
+    const id = frame.id as AcpRpcId
+    const idKey = rpcIdKey(id)
+    const pending = outwardCallbacks.get(idKey)
+    if (pending === undefined) {
+      throw new AcpError('CALLBACK_UNAVAILABLE', 'no pending engine callback matches this response id')
+    }
+    if (pending.channelKey !== channel.key) {
+      throw new AcpError('SESSION_OWNERSHIP_CONFLICT', 'callback response belongs to another channel')
+    }
+    outwardCallbacks.delete(idKey)
+    channel.pendingCallbacks.delete(idKey)
+    await safeAppend(historyEntry('callback.reply', {
+      connectionId: channel.ref.connectionId,
+      channelId: channel.ref.channelId,
+      engineInstanceId,
+      sessionId: pending.sessionId,
+      requestRecordId: pending.recordId,
+      frame,
+    }))
+    if (engineEnded) throw new AcpError('ENGINE_UNAVAILABLE', 'ACP engine is not available')
+    try {
+      await input.handle.acp.send({ ...frame, id: pending.engineId })
+    } catch (cause) {
+      await safeAppend(historyEntry('callback.send.failed', {
+        connectionId: channel.ref.connectionId,
+        channelId: channel.ref.channelId,
+        engineInstanceId,
+        sessionId: pending.sessionId,
+        requestRecordId: pending.recordId,
+        frame,
+        outcome: 'unknown',
+        error: faultFrom(cause, 'ENGINE_UNAVAILABLE'),
+      }))
+      throw toAcpError(cause, 'ENGINE_UNAVAILABLE')
+    }
+  }
+
+  const handleEngineResponse = async (frame: AcpFrame): Promise<void> => {
+    const id = frame.id as AcpRpcId
+    const pending = childRequests.get(rpcIdKey(id))
+    if (pending === undefined) {
+      await safeAppend(historyEntry('result.unmatched', { engineInstanceId, frame, outcome: 'unknown' }))
+      return
+    }
+    removePendingRequest(pending)
+    const channel = channels.get(pending.channelKey)
+    if (channel === undefined) {
+      await safeAppend(historyEntry('result.channel-missing', {
+        engineInstanceId,
+        sessionId: pending.sessionId,
+        requestRecordId: pending.recordId,
+        frame,
+        outcome: 'unknown',
+      }))
+      return
+    }
+    // The execution result is real even when its durable record is not. The
+    // result is delivered; a failed append is reported through onHistoryFault.
+    await safeAppend(historyEntry('result.received', {
+      connectionId: channel.ref.connectionId,
+      channelId: channel.ref.channelId,
+      engineInstanceId,
+      sessionId: pending.sessionId,
+      requestRecordId: pending.recordId,
+      frame,
+      outcome: Object.hasOwn(frame, 'error') ? 'failed' : 'completed',
+    }))
+
+    let delivery: AcpFrame = { ...frame, id: pending.originalId }
+    if (pending.method === 'session/new') {
+      const sessionId = resultSessionId(frame)
+      if (sessionId !== undefined) {
+        const owner = sessionOwners.get(sessionId)
+        if (owner !== undefined && owner !== channel.key) {
+          delivery = rpcErrorFrame(pending.originalId, {
+            code: 'SESSION_OWNERSHIP_CONFLICT',
+            message: `engine returned session ${sessionId} already owned by another channel`,
+          })
+        } else {
+          channel.sessions.add(sessionId)
+          sessionOwners.set(sessionId, channel.key)
+        }
+      }
+    }
+    if (pending.method === 'session/prompt'
+      && channel.activePrompt !== undefined
+      && channel.activePrompt.sessionId === pending.sessionId) {
+      channel.activePrompt = undefined
+    }
+    enqueue(channel, delivery)
+  }
+
+  const handleEngineCallback = async (frame: AcpFrame): Promise<void> => {
+    const method = methodOf(frame)
+    if (method === undefined) throw new AcpError('INVALID_ACP_FRAME', 'engine callback requires a method')
+    const engineId = frame.id as AcpRpcId
+    try {
+      input.assertAllowed({ policy: input.policy, direction: 'from-engine', frame })
+    } catch (cause) {
+      const fault = faultFrom(cause, 'CALLBACK_UNAVAILABLE')
+      await safeAppend(historyEntry('callback.denied', { engineInstanceId, frame, outcome: 'denied', error: fault }))
+      await respondCallbackError(engineId, fault)
+      return
+    }
+
+    const sessionId = sessionIdOf(frame)
+    let target: ChannelState | undefined
+    if (sessionId !== undefined) {
+      target = channelBySession(sessionId)
+    } else {
+      const open = [...channels.values()].filter(channel => !channel.closed)
+      if (open.length === 1) target = open[0]
+    }
+    if (target === undefined || target.closed) {
+      const fault: AcpFault = { code: 'CALLBACK_UNAVAILABLE', message: 'no controller channel owns this callback' }
+      await safeAppend(historyEntry('callback.unavailable', { engineInstanceId, sessionId, frame, outcome: 'unknown', error: fault }))
+      if (method === 'session/request_permission') await sendPermissionCancellation(engineId)
+      else await respondCallbackError(engineId, fault)
+      return
+    }
+
+    const outwardId = nextCallbackId()
+    const idKey = rpcIdKey(outwardId)
+    let entry: HistoryRecord
+    try {
+      entry = await appendRecord(historyEntry('callback.dispatched', {
+        connectionId: target.ref.connectionId,
+        channelId: target.ref.channelId,
+        engineInstanceId,
+        sessionId,
+        frame,
+      }))
+    } catch (cause) {
+      // The callback must not reach an executor without a record; refuse it.
+      await respondCallbackError(engineId, faultFrom(cause, 'HISTORY_UNAVAILABLE'))
+      return
+    }
+    const pending: PendingCallback = { engineId, outwardId, channelKey: target.key, sessionId, method, recordId: entry.recordId }
+    outwardCallbacks.set(idKey, pending)
+    target.pendingCallbacks.set(idKey, pending)
+    if (!enqueue(target, { ...frame, id: outwardId })) {
+      // A callback the controller cannot receive is answered now, so the
+      // engine never waits on an undelivered permission request.
+      outwardCallbacks.delete(idKey)
+      target.pendingCallbacks.delete(idKey)
+      if (method === 'session/request_permission') await sendPermissionCancellation(engineId)
+      else await respondCallbackError(engineId, { code: 'CALLBACK_UNAVAILABLE', message: 'controller delivery backlog is full' })
+    }
+  }
+
+  const handleEngineNotification = async (frame: AcpFrame): Promise<void> => {
+    const sessionId = sessionIdOf(frame)
+    const target = sessionId === undefined ? undefined : channelBySession(sessionId)
+    if (target === undefined || target.closed) {
+      // A necessary notification is recorded, never silently dropped.
+      await safeAppend(historyEntry('notification.unrouted', { engineInstanceId, sessionId, frame, outcome: 'unknown' }))
+      return
+    }
+    await safeAppend(historyEntry('notification.received', {
+      connectionId: target.ref.connectionId,
+      channelId: target.ref.channelId,
+      engineInstanceId,
+      sessionId,
+      frame,
+    }))
+    enqueue(target, frame)
+  }
+
+  const handleEngineFrame = async (frame: AcpFrame): Promise<void> => {
+    if (isResponseFrame(frame)) {
+      await handleEngineResponse(frame)
+      return
+    }
+    if (isRequestFrame(frame)) {
+      await handleEngineCallback(frame)
+      return
+    }
+    if (isNotificationFrame(frame)) {
+      await handleEngineNotification(frame)
+      return
+    }
+    throw new AcpError('INVALID_ACP_FRAME', 'engine produced an unrecognized ACP frame')
+  }
+
+  const pump = async (): Promise<void> => {
+    while (!engineEnded) {
+      let frame: AcpFrame
+      try {
+        frame = await input.handle.acp.read()
+      } catch {
+        onEngineEnd('stream ended')
+        return
+      }
+      try {
+        await handleEngineFrame(parseAcpFrame(frame))
+      } catch (cause) {
+        await safeAppend(historyEntry('engine.protocol-fault', {
+          engineInstanceId,
+          frame,
+          outcome: 'failed',
+          error: faultFrom(cause, 'INVALID_ACP_FRAME'),
+        }))
+        onEngineEnd('protocol fault')
+        return
+      }
+    }
+  }
+  void pump()
+  void input.handle.exited.then(() => onEngineEnd('exited'), () => onEngineEnd('exited'))
+  void input.handle.acp.closed.then(() => onEngineEnd('closed'), () => onEngineEnd('closed'))
+
+  const open = async (openInput: {
+    readonly ref: AcpChannelRef
+    readonly principal: AuthenticatedAgent
+    readonly policy: AcpPolicySnapshot
+  }): Promise<void> => {
+    if (engineEnded) throw new AcpError('ENGINE_UNAVAILABLE', 'ACP engine is not available')
+    if (openInput === null || typeof openInput !== 'object') {
+      throw new AcpError('INVALID_ACP_FRAME', 'ACP open input is required')
+    }
+    assertRefShape(openInput.ref)
+    assertPrincipal(openInput.principal)
+    assertPolicyShape(openInput.policy)
+    if (openInput.ref.engineInstanceId !== engineInstanceId
+      || openInput.ref.targetGeneration !== input.handle.targetGeneration) {
+      throw new AcpError('STALE_GENERATION', 'ACP channel ref does not match the initialized engine instance')
+    }
+    if (openInput.policy.engineInstanceId !== engineInstanceId || openInput.policy.revision !== input.policy.revision) {
+      throw new AcpError('UNSUPPORTED_POLICY', 'ACP channel policy is not the active host policy')
+    }
+    const key = channelKeyOf(openInput.ref)
+    if (channels.has(key)) throw new AcpError('CONFLICT', 'ACP channel is already open')
+    await appendRecord(historyEntry('channel.open', {
+      connectionId: openInput.ref.connectionId,
+      channelId: openInput.ref.channelId,
+      engineInstanceId,
+    }))
+    channels.set(key, {
+      key,
+      ref: { ...openInput.ref },
+      principal: { ...openInput.principal },
+      policy: openInput.policy,
+      sessions: new Set<string>(),
+      pendingRequests: new Map<string, PendingRequest>(),
+      pendingCallbacks: new Map<string, PendingCallback>(),
+      deliveries: [],
+      nextSequence: 1,
+      initialized: false,
+      closed: false,
+    })
+  }
+
+  const receive = async (ingress: AcpIngress): Promise<void> => {
+    if (ingress === null || typeof ingress !== 'object') throw new AcpError('INVALID_ACP_FRAME', 'ACP ingress must be an object')
+    assertRefShape(ingress)
+    if (ingress.engineInstanceId !== engineInstanceId || ingress.targetGeneration !== input.handle.targetGeneration) {
+      throw new AcpError('STALE_GENERATION', 'ACP ingress ref does not match the initialized engine instance')
+    }
+    const channel = channels.get(channelKeyOf(ingress))
+    if (channel === undefined) throw new AcpError('STALE_GENERATION', 'ACP channel is not open')
+    if (engineEnded) throw new AcpError('ENGINE_UNAVAILABLE', 'ACP engine is not available')
+    if (channel.closed) throw new AcpError('CONFLICT', 'ACP channel is closed')
+    const frame = parseAcpFrame(ingress.frame)
+    if (isResponseFrame(frame)) {
+      await receiveClientResponse(channel, frame)
+      return
+    }
+    if (isRequestFrame(frame)) {
+      await receiveClientRequest(channel, frame)
+      return
+    }
+    if (isNotificationFrame(frame)) {
+      await receiveClientNotification(channel, frame)
+      return
+    }
+    throw new AcpError('INVALID_ACP_FRAME', 'ACP ingress must be a request, notification, or response')
+  }
+
+  const read = async (ref: AcpChannelRef, afterSequence: number, limit: number): Promise<{
+    readonly frames: readonly AcpDelivery[]
+    readonly nextSequence: number
+  }> => {
+    assertRefShape(ref)
+    if (!Number.isSafeInteger(afterSequence) || afterSequence < 0) {
+      throw new AcpError('INVALID_ACP_FRAME', 'afterSequence must be a non-negative safe integer')
+    }
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_READ_LIMIT) {
+      throw new AcpError('INVALID_ACP_FRAME', `limit must be an integer from 1 to ${MAX_READ_LIMIT}`)
+    }
+    if (ref.engineInstanceId !== engineInstanceId || ref.targetGeneration !== input.handle.targetGeneration) {
+      throw new AcpError('STALE_GENERATION', 'ACP read ref does not match the initialized engine instance')
+    }
+    const channel = channels.get(channelKeyOf(ref))
+    if (channel === undefined) throw new AcpError('STALE_GENERATION', 'ACP channel is not open')
+    const frames = channel.deliveries.filter(delivery => delivery.sequence > afterSequence).slice(0, limit)
+    const nextSequence = frames.length > 0 ? frames[frames.length - 1].sequence : afterSequence
+    channel.deliveries = channel.deliveries.filter(delivery => delivery.sequence > nextSequence)
+    return { frames, nextSequence }
+  }
+
+  const close = async (ref: AcpChannelRef): Promise<void> => {
+    assertRefShape(ref)
+    const channel = channels.get(channelKeyOf(ref))
+    if (channel === undefined) throw new AcpError('STALE_GENERATION', 'ACP channel is not open')
+    if (channel.closed) return
+    channel.closed = true
+    await settlePendingRequests(channel, 'channel closed')
+    await settlePendingCallbacks(channel, 'controller channel closed')
+    releaseSessions(channel)
+    await safeAppend(historyEntry('channel.close', {
+      connectionId: channel.ref.connectionId,
+      channelId: channel.ref.channelId,
+      engineInstanceId,
+    }))
+  }
+
+  return { open, receive, read, close }
+}
