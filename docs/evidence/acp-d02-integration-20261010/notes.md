@@ -1,0 +1,217 @@
+# D02 `--serve opencode` 用户入口 + 治理绑定 — receipt
+
+日期：2026-10-11，America/Los_Angeles。
+候选分支：`codex/acp-d02-serve-20261010`。
+Base：`origin/main@48ce0c9`（D00 + D01 + D01 绑定）。
+合并输入：`codex/acp-d02-worker-20261010@1d4df3a`（D02 OpenCode adapter 候选，fast-forward 合入，未改其库级语义）。
+Worktree：`/Volumes/Intel/playground/agentteams/acp-d02-serve-20261010`（clean、独占）。
+Run notes：`/Volumes/Intel/playground/agentteams/.worker-runs/acp-d02-serve-20261010/`。
+
+本 receipt 的目标是回答一个问题：**用户入口 `agentteams --serve opencode` 是否真的启动
+一个 daemon 加一个引擎子进程，并跑通真实 prompt / cancel / permission，然后按显式 PID 停止。**
+答案：在源码树上 **是**，并有真实 CLI 进程黑盒回执；它 **不是** 安装副本回执，也 **不覆盖**
+D03/D04/D05。因此 `teams-acp-serve-entry` 与 `teams-acp-d02-opencode` 都保持 `partial`，
+D02 milestone 的绑定只到"源码 + 真实引擎 + 真实入口"这一层。
+
+## 1. 绑定的提交
+
+| 提交 | 角色 |
+| --- | --- |
+| `1d4df3a` | D02 OpenCode adapter 功能提交（已合并输入，本增量不改其语义） |
+| `b470270` | 本增量：`--serve opencode` 入口接线 + D02/入口治理绑定 + 黑盒驱动 |
+
+`b470270` 的父提交是 `1d4df3a`，`1d4df3a` 的父提交是 `48ce0c9`。分支未 push、未合并
+main、未改写历史。本 receipt 由 `b470270` 之后的 docs-only 提交携带，因此它引用的源码树
+是 `b470270`。
+
+## 2. 变更文件与 owner
+
+| 文件 | owner | 变更 |
+| --- | --- | --- |
+| `runtime/acp-serve.ts`（新增） | runtime | 唯一 `--serve` 入口：读/编译 v4 agent intent、typed 拒绝、启动单 daemon + 单引擎、readiness 取自引擎 `session/new`、loopback 监听、显式信号停止 |
+| `runtime/acp-serve.spec.ts`（新增） | runtime | 入口定向 spec：9 条无引擎语义 + 2 条真实引擎用例（prompt/cancel 与 permission） |
+| `cli/agentteams.mjs` | runtime | `--serve/--ip/--port/--config` 解析、dispatch、typed fault code、`acp-serve` 编译产物加载 |
+| `cli/agentteams.spec.ts` | runtime | `--serve` 参数解析、dispatch 与 typed fault 透传共 4 条 |
+| `agent-host/acp-host.ts` | agent-host | 导出既有 `rpcErrorFrame`，作为唯一 ACP JSON-RPC 错误信封 |
+| `config/daemon-intent.ts` | config | 导出既有 `isAgentIntent` 判定 |
+| `tsconfig.runtime.json` | runtime | 编译闭包加入 `runtime/acp-serve.ts` 与 `opencode-adapter/src/acp-engine.ts` |
+| `docs/architecture/verification-map.json` | 治理 | 新 gate `teams-acp-d02-opencode`；`teams-acp-serve-entry` design → partial；修正两条过期陈述 |
+| `docs/architecture/function-map.json` | 治理 | 新函数绑定 `acp_engine_adapter_opencode`、`acp_serve_entry`；`acp_host_session_semantics` 增 `rpcErrorFrame`；替换"无 adapter 编译 launch spec"陈述 |
+| `docs/architecture/mainline-call-map.json` | 治理 | `acp-serve-entry-v1` design → partial 并新增步骤/边/绑定；替换三条过期陈述 |
+| `docs/architecture/module-registry.json` | 治理 | `opencode-adapter` 与 `runtime` 条目说明其唯一 owner 与 gate |
+| `docs/development-governance.md` | 治理 | D02 与 serve-entry gate 行，以及 `--serve dsh` 未接线的说明 |
+| `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`（新增） | 证据 | 真实 CLI 进程黑盒驱动 |
+| `docs/evidence/acp-d02-integration-20261010/notes.md` | 证据 | 本文件 |
+
+未改：`opencode-adapter/**` 任何文件、`runtime/agent-process.ts`、`runtime/acp-daemon.ts`、
+`acp-adapter/**`、`.appsdk/**`。
+
+## 3. 设计要点（唯一 owner，无第二路径）
+
+1. **唯一入口**：`runtime/acp-serve.ts` 是 `--serve` 的唯一实现。`cli/agentteams.mjs` 只做
+   flag 解析、dispatch 和编译产物加载，不含 ACP/引擎语义。
+2. **唯一 launch spec 编译器**：`openCodeAcpAdapter.compileLaunch`。入口不自行拼 OpenCode
+   配置，也不新增第二个配置编译器。
+3. **唯一错误信封**：`rpcErrorFrame`（agent-host 导出）。入口对 host 拒绝的帧用它回
+   JSON-RPC error，不定义第二种错误形状。
+4. **唯一引擎帧传输**：`createStdioAcpDuplex`（D01）。入口的每个 loopback 连接就是一个
+   ACP channel，复用同一 newline-delimited JSON 编解码，不新增帧协议。
+5. **readiness 诚实**：入口自己捕获唯一一次真实 `session/new` 响应，把它交给
+   `verifyEffective`；只有引擎返回的 `modelTarget` 非空时才报 `model=<provider/model>`，
+   否则报 `model=unverified`。入口不猜测模型。
+6. **绑定缺失即失败**：接受的配置若没有该 agent 的 provider/model 绑定，入口以 typed
+   `UNSUPPORTED_CONFIGURATION` 失败并指名 `binding=model.primary`，绝不启动引擎后依赖引擎
+   默认模型。这是入口层要求，adapter 库级行为未变。
+7. **单 daemon**：一个 v4 文件仍只声明一个 daemon；入口只启动该 daemon 和它的一个引擎
+   子进程，不启动隐式 control/registry。
+8. **`--serve dsh` 显式拒绝**：D03 adapter 不存在，入口返回 typed
+   `UNSUPPORTED_CONFIGURATION`，不 fallback 到 opencode。
+9. **监听只 loopback**：非回环监听以 typed fault 拒绝，而不是无 TLS/无准入地服务。
+   跨 agent 准入与协商属于 D05。
+
+## 4. 源码与定向测试证据
+
+命令均在 worktree 根目录执行。
+
+| 面 | 命令 | 结果 |
+| --- | --- | --- |
+| D02 adapter（gate `teams-acp-d02-opencode`） | `pnpm exec vitest run opencode-adapter --no-file-parallelism` | 4 files / **65 passed**，含 4 条真实引擎用例（对已安装 `opencode 1.18.23` + 本地 stub provider） |
+| D01 focused（gate `teams-acp-d01-host`） | `pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts --no-file-parallelism` | 4 files / **53 passed** |
+| 入口（gate `teams-acp-serve-entry`） | `pnpm exec vitest run runtime/acp-serve.spec.ts --no-file-parallelism` | **11 passed**（9 条无引擎 + 2 条真实引擎） |
+| CLI 入口 | `pnpm exec vitest run cli/agentteams.spec.ts --no-file-parallelism` | **28 passed**（含 `--serve` 4 条） |
+| 安装包 gate | `pnpm exec vitest run cli/package-install.spec.ts --no-file-parallelism` | **24 passed**（真实 `pnpm pack` + 安装） |
+
+`cli/package-install.spec.ts` 内含 `scripts/receipt-identity.mjs` 的候选身份检查：它要求
+工作树 clean。**未提交的脏树必然失败**（`receipt identity: staged product does not match
+the recorded index`），提交后通过。这是候选状态检查，不是内容不匹配。
+
+入口 spec 覆盖的语义（`runtime/acp-serve.spec.ts`）：
+
+- quick-start（无 `--config`）以 typed fault 指名缺失 `model.primary`；
+- 无 `--config` 时缺 `--ip`/`--port`、只给 `--ip` 均拒绝；
+- `--serve dsh` 以 `--serve dsh is not delivered` 拒绝；
+- 控制 daemon 配置被拒（`requires an agent daemon config`）；
+- 无 `[model.primary]` 的配置以 `agent <id> has no provider/model binding` 拒绝；
+- 非回环监听被拒；不可读配置文件被拒；
+- `--ip/--port` 覆盖生效并可从同一 intent 读回；
+- 可执行文件解析顺序：配置绝对路径 → `AGENTTEAMS_OPENCODE_EXECUTABLE`/`OPENCODE_EXECUTABLE`
+  → `PATH`；非绝对路径与找不到时报错；
+- 真实引擎：一个 daemon + 一个引擎子进程、readiness 报 `probe/probe-model`
+  （`session/new configOptions`）、真实 prompt 到达 stub provider、真实 cancel 得
+  `stopReason=cancelled`、真实 `session/request_permission` 回调经监听器往返并释放工具、
+  停止返回真实 `EngineStopResult`。
+
+## 5. typecheck / build
+
+| 面 | 命令 | 结果 |
+| --- | --- | --- |
+| 全量 typecheck | `pnpm typecheck` | exit 0（根 `tsc --noEmit` + adapter/console-host/ui typecheck） |
+| 运行时构建 | `pnpm build:runtime` | exit 0，产出 `generated/runtime-lib/runtime/acp-serve.js` 与 `generated/runtime-lib/opencode-adapter/src/acp-engine.js` |
+
+## 6. 真实用户入口黑盒（源码树）
+
+驱动：`docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`
+（`node docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`）。
+它自己起一个本地 OpenAI 兼容 stub provider，写一份 v4 agent 配置，然后以真实子进程运行
+用户入口：
+
+```
+node cli/agentteams.mjs --serve opencode --ip 127.0.0.1 --port <free> --config <agent.toml>
+```
+
+结果 **BLACK-BOX PASS**。关键输出（一次真实运行）：
+
+```
+serving agent=reasoner-a engine=opencode engineInstance=opencode-reasoner-a-28d4a4a4-... enginePid=52252 daemonPid=52237 listener=127.0.0.1:63313 dataDirectory=.../state config=.../agent.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1
+stopped agent=reasoner-a enginePid=52252 engine=exited code=null signal=SIGTERM channels=1
+```
+
+黑盒断言（全部通过，逐条打印 `ok:`）：
+
+1. 入口报 `engine=opencode`，`model=probe/probe-model`，`modelVerification=session/new configOptions`；
+2. 入口报的 `daemonPid` 就是真实 CLI 进程 pid；
+3. 引擎 pid 是活进程，`ps` 命令行为 `<opencode 路径> acp --pure`；
+4. daemon **恰好一个**子进程，且就是它报的引擎 pid；
+5. `initialize` 返回真实结果，`session/new` 返回真实 `ses_...` session；
+6. 真实 prompt 触发真实 `session/request_permission`，选项为 `once,always,reject`；
+   回复 `once` 后工具真正执行，prompt 以 `end_turn` 结束；
+7. stub provider 确实收到 `model=probe-model` 的请求；
+8. 第二个 prompt 被真实 `session/cancel` 结束，`stopReason=cancelled`；
+9. 对显式 pid `kill -TERM` 后入口打印 `engine=exited` 停止回执，引擎 pid 消失，daemon
+   无残留子进程，CLI 以 **exit code 0** 退出；
+10. `dataDirectory/acp-history.json` 含 `request.dispatched` 与 `result.received`。
+
+真实 CLI 层的 typed 拒绝也直接验证过（真实进程，非 mock）：
+
+```
+$ node cli/agentteams.mjs --serve opencode --ip 127.0.0.1 --port <free>
+UNSUPPORTED_CONFIGURATION: agent agent has no provider/model binding: the quick-start config declares no [model.primary]; ...
+exit=1
+$ node cli/agentteams.mjs --serve dsh --ip 127.0.0.1 --port <free>
+UNSUPPORTED_CONFIGURATION: --serve dsh is not delivered: no DSH engine adapter exists in this increment, only --serve opencode
+exit=1
+```
+
+黑盒期间发现并修掉的一个真实缺陷：停止时入口只 destroy 传输 socket，没有关闭 host 侧
+channel，而 host 的 `read` 对已关闭 channel 仍返回空页，导致投递循环每 5ms 轮询一次、
+进程永不退出。修法在入口自己的 owner 内：停止时对每个活 channel 调用
+`daemon.host.close(ref)`，且投递循环以入口自己的 channel map 作为存活判据。修后黑盒与
+spec 均通过。host 的该不对称（`receive` 拒绝已关闭 channel，`read` 不拒绝）记录为
+advisory，未改 D01 源码。
+
+## 7. 治理绑定与 map 校验
+
+- 新 gate `teams-acp-d02-opencode`（owner opencode-adapter，`partial`，可执行命令
+  `pnpm exec vitest run opencode-adapter --no-file-parallelism`），note 说明它是源码 +
+  真实引擎证据、不是安装副本证据、不含 D03。
+- `teams-acp-serve-entry`（owner runtime）从 `design` 升为 `partial`，`planned_command`
+  换成真实 `command`（`pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts
+  --no-file-parallelism`），note 指名仍缺的部分（D03/D04/D05、仅 loopback、非安装副本）。
+- `teams-acp-d01-host` 与 `teams-acp-daemon-intent` 的过期陈述已替换（不再声称 `--serve`
+  未接线、D02 adapter 不存在）。
+- 同一变更内绑定 owner、路径与 gate：`function-map` 新增 `acp_engine_adapter_opencode` 与
+  `acp_serve_entry`，`mainline-call-map` 新增 `acp-serve-entry-v1` 的三条边与三条
+  planned_binding，并把"无 engine adapter 编译 launch spec"、"无 CLI `--serve` caller"
+  三处陈述替换为事实。
+
+校验命令（只读）：
+
+```
+python3 - <<'PY'   # 见 run notes 同名脚本
+# 1) 五个 docs/architecture/*.json 用 object_pairs_hook 解析，重复键即抛错
+# 2) function-map 与 mainline-call-map 的所有 required_gates 必须存在于 verification-map
+# 3) edges/planned_bindings 引用的 chain_id 必须已声明
+PY
+```
+
+结果：五个 map 全部解析通过、无重复键；`required_gates` 无悬挂；ACP 五个 gate 都有可执行
+命令。唯一未通过的子检查是两条 **本变更之前就存在** 的 chain 引用
+（`endpoint-discovery-admission-v1`、`session-control-v1` 被边引用但未在 `chains` 声明），
+在 `HEAD`（`1d4df3a`）上完全相同，本增量未触碰，作为 advisory 留给主集成。
+
+## 8. 明确 NOT proven（不得从前一层推断）
+
+1. **无安装副本证据**：黑盒跑的是源码树入口（`node cli/agentteams.mjs`）加 `pnpm
+   build:runtime` 产物，不是 `npm pack`/安装后的 CLI。`cli/package-install.spec.ts` 的
+   24/24 只证明基线安装 gate，不证明 `--serve` 在安装副本上启动。
+2. **无 AppSDK compile/verify**：仍被既有 pin 不匹配（`0.1.0014` / `0.1.0013`）阻塞。
+   本增量未改 `.appsdk/**`，也未宣称 SDK 生命周期状态变化。
+3. **无 D03**：`--serve dsh` 是 typed 拒绝，不是可用路径。
+4. **无 D04/D05**：没有注册/心跳就绪，也没有 Teams 连接协商。监听器只服务回环，channel
+   principal 取 daemon 自身身份；跨 agent 准入与协商未实现。
+5. **无网络/UI/历史读取入口**：D06 历史读取、Console/UI 显示均未实现。
+6. **无全量回归**：本增量只跑受影响 focused 套件、`pnpm typecheck` 与 `pnpm
+   build:runtime`，不宣称全量 `pnpm test` 通过。
+7. **旧 Work 入口未变**：`runtime/agent-process.ts` 仍是 Work 入口，`--serve` 没有替换它，
+   也没有共享它的路径。
+
+## 9. 资源与清理
+
+- 独占 worktree：`/Volumes/Intel/playground/agentteams/acp-d02-serve-20261010`，owner = 本
+  worker，保留到主集成完成 review/merge/远端回执后回收。
+- Run notes：`/Volumes/Intel/playground/agentteams/.worker-runs/acp-d02-serve-20261010/`
+  （含黑盒日志 `black-box-serve.log`）。
+- 黑盒自起的 stub provider、引擎子进程与临时目录由驱动在 `finally` 中按显式 PID 清理；
+  运行中一次驱动失败曾留下 3 个残留进程，已用显式 PID（`5286`、`71316`、`78055`/`78060`）
+  停止，无 `pkill`/`killall`。当前无残留 `agentteams --serve` 或 `opencode acp` 进程。
+- 未删除或改动他人 worktree、旧 ACP 材料或共享 base。
