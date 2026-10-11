@@ -181,8 +181,8 @@ it('starts the production control entry, serves the authenticated WebUI and stop
   expect(stopped.state).toBe('stopped')
   expect(processAlive(started.pid!)).toBe(false)
   expect((await statusControlDaemon(configPath)).state).toBe('stopped')
-  // The owned directory and pid record are removed on stop.
-  expect(existsSync(started.dataDirectory!)).toBe(false)
+  // The runtime pid record is removed on stop; the data directory is durable because the
+  // daemon keeps its connection history there.
   expect(existsSync(controlStatePath(await loadControlIntent(configPath)))).toBe(false)
 })
 
@@ -253,7 +253,9 @@ it('fails a start when the webui port is already taken and never reports running
     // The child publishes its typed code, so the parent re-throws PORT_OCCUPIED itself.
     await expectFault(startControlDaemon(configPath, { env, startupTimeoutMs: 3_000 }), 'PORT_OCCUPIED')
     expect((await statusControlDaemon(configPath)).state).not.toBe('running')
-    expect(existsSync(join(directory, `state-${port}`))).toBe(false)
+    // A failed start removes the runtime state record. The data directory stays: it holds the
+    // daemon's durable connection history, which a failed start must not destroy.
+    expect(existsSync(controlStatePath(await loadControlIntent(configPath)))).toBe(false)
   } finally {
     await new Promise<void>(resolveClose => occupied.close(() => resolveClose()))
   }
@@ -417,5 +419,34 @@ it('serves the real D05 connection projection and connection history over the wi
   expect(await command.json()).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
 
   expect((await stopControlDaemon(configPath)).state).toBe('stopped')
-  expect(existsSync(dataDirectory)).toBe(false)
+  // The durable record written above is still on disk after the stop.
+  expect(existsSync(dataDirectory)).toBe(true)
+})
+
+it('keeps the durable connection history across a control-owner restart', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-durable-${port}`)
+  // One real connection-history record written through the real D05 owner, exactly the way
+  // the daemon itself writes it. The store is declared durable, so a stop must not destroy
+  // it and a restart must read it back byte-identical.
+  const store = await createAcpHistoryStore({ directory: dataDirectory })
+  await createTeamsConnectionHistory(store).record({
+    event: 'connection.negotiated',
+    agentId: 'peer-b',
+    occurredAt: '2026-10-11T00:00:00.000Z',
+    connectionId: 'durable-1',
+  })
+
+  const configPath = track(await controlConfig({ port, dataDirectory }))
+  const started = await startControlDaemon(configPath, { env })
+  const before = await (await fetch(`${started.url}/api/v1/history?version=1&kind=connection&limit=5`,
+    { headers: { authorization: basic } })).json()
+  expect(before).toMatchObject({ records: [{ connectionId: 'durable-1' }] })
+
+  expect((await stopControlDaemon(configPath, started.generation)).state).toBe('stopped')
+  const restarted = await startControlDaemon(configPath, { env })
+  expect(restarted.pid).not.toBe(started.pid)
+  const after = await (await fetch(`${restarted.url}/api/v1/history?version=1&kind=connection&limit=5`,
+    { headers: { authorization: basic } })).json()
+  expect(after).toEqual(before)
 })

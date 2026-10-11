@@ -303,9 +303,14 @@ async function waitForState(statePath: string, expected: readonly ControlDaemonL
   throw new ControlProcessError('START_TIMEOUT', `control did not report ${expected.join('/')} within ${timeoutMs}ms`)
 }
 
-/** Removes the owned directory and pid record after a stop or a failed start. */
-async function removeOwnedState(statePath: string, dataDirectory: string): Promise<void> {
-  try { await rm(dataDirectory, { recursive: true, force: true }) } catch { /* keep the recorded state */ }
+/**
+ * Stop removes the daemon's runtime ownership record, not its data directory. The directory
+ * is durable: the control daemon keeps its `kind: 'connection'` history there, so deleting
+ * the whole directory would destroy history that must survive an owner restart. The agent
+ * daemon likewise keeps its data directory across a stop. The recorded state is the only
+ * runtime artifact the control daemon writes, so removing it is the whole cleanup.
+ */
+async function removeOwnedState(statePath: string): Promise<void> {
   try { await rm(statePath, { force: true }) } catch { /* keep the recorded state */ }
 }
 
@@ -389,7 +394,7 @@ export async function startControlDaemon(configPath: string, options: ControlDae
       try { process.kill(pid, 'SIGTERM') } catch { /* preserve the startup failure */ }
       try { await waitForProcessExit(pid, 2_000) } catch { /* preserve the startup failure */ }
     }
-    await removeOwnedState(statePath, intent.daemon.dataDirectory)
+    await removeOwnedState(statePath)
     throw error
   }
 }
@@ -417,14 +422,14 @@ export async function stopControlDaemon(configPath: string, expectedGeneration?:
   const resolvedConfigPath = resolve(configPath)
   const state = await readControlState(statePath)
   if (state === undefined || state.state === 'stopped') {
-    await removeOwnedState(statePath, intent.daemon.dataDirectory)
+    await removeOwnedState(statePath)
     return statusFrom(intent, statePath, resolvedConfigPath, undefined)
   }
   if (expectedGeneration !== undefined && expectedGeneration !== state.generation) {
     throw new ControlProcessError('STALE_GENERATION', `stale control generation expected=${expectedGeneration} current=${state.generation}`)
   }
   if (state.pid <= 0 || !processAlive(state.pid)) {
-    await removeOwnedState(statePath, intent.daemon.dataDirectory)
+    await removeOwnedState(statePath)
     return statusFrom(intent, statePath, resolvedConfigPath, undefined)
   }
   if (!(await ownsPersistedProcess(state))) {
@@ -432,7 +437,7 @@ export async function stopControlDaemon(configPath: string, expectedGeneration?:
   }
   process.kill(state.pid, 'SIGTERM')
   await waitForProcessExit(state.pid, 5_000)
-  await removeOwnedState(statePath, intent.daemon.dataDirectory)
+  await removeOwnedState(statePath)
   return statusFrom(intent, statePath, resolvedConfigPath, undefined)
 }
 
