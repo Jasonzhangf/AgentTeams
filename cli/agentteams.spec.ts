@@ -235,6 +235,56 @@ describe('agentteams CLI', () => {
     expect(calls[0].options.agentEntry).toMatch(/agent-process\.js$/)
   })
 
+  it('routes registry start/status/stop to the runtime registry lifecycle owner', async () => {
+    const calls = []
+    const configPath = '/tmp/agentteams-cli-registry.toml'
+    const registryStatus = {
+      configPath,
+      statePath: '/tmp/state/registry-state.json',
+      daemonId: 'lan-registry',
+      state: 'running',
+      generation: 2,
+      pid: 42,
+      url: 'wss://127.0.0.1:7444',
+    }
+    const runtime = {
+      startRegistryDaemon: async (path, options) => {
+        calls.push({ kind: 'start', path, options })
+        return registryStatus
+      },
+      statusRegistryDaemon: async path => {
+        calls.push({ kind: 'status', path })
+        return registryStatus
+      },
+      stopRegistryDaemon: async (path, generation) => {
+        calls.push({ kind: 'stop', path, generation })
+        return { ...registryStatus, state: 'stopped' }
+      },
+    }
+    const env = { TEAMS_REGISTRY_REASONER_A: 'Bearer secret' }
+    expect(await agentteamsCommand(['registry', 'start', '--config', configPath], { runtime, env }))
+      .toBe(`started state=running generation=2 config=${configPath} daemon=lan-registry pid=42 url=wss://127.0.0.1:7444`)
+    expect(await agentteamsCommand(['registry', 'status', '--config', configPath], { runtime })).toContain('state=running')
+    expect(await agentteamsCommand(['registry', 'stop', '--config', configPath, '--generation', '2'], { runtime })).toContain('state=stopped')
+
+    expect(calls.map(call => [call.kind, call.path, call.generation])).toEqual([
+      ['start', configPath, undefined],
+      ['status', configPath, undefined],
+      ['stop', configPath, 2],
+    ])
+    // The registry child inherits the operator environment; local provider
+    // credential defaults belong to the v3 local launcher only.
+    expect(calls[0].options.env).toBe(env)
+  })
+
+  it('refuses an unknown registry subcommand, a missing config and an unknown registry flag', async () => {
+    await expect(agentteamsCommand(['registry', 'restart', '--config', '/tmp/x.toml'])).rejects.toThrow(/unknown registry subcommand/i)
+    await expect(agentteamsCommand(['registry', 'status'])).rejects.toThrow(/--config requires/i)
+    await expect(agentteamsCommand(['registry', 'status', '--bogus'], { runtime: {} })).rejects.toThrow(/unknown argument/i)
+    await expect(agentteamsCommand(['registry', 'start', '--config', '/tmp/x.toml', '--generation', '1'], { runtime: {} }))
+      .rejects.toThrow(/only accepted by registry stop/i)
+  })
+
   it('exposes only the Console lifecycle verbs and adds Console fields to status without printing credentials', async () => {
     const configPath = '/tmp/agentteams-cli-console.toml'
     const consoleStatus = {

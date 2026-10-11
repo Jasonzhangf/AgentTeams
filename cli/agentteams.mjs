@@ -22,6 +22,7 @@ const RUNTIME_ARTIFACTS = {
   localProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-process.js'),
   localWorkControl: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'local-work-control.js'),
   consoleProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'console-process.js'),
+  registryProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'registry-process.js'),
   relay: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'server', 'relay-process.js'),
   agent: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'agent-process.js'),
 }
@@ -99,7 +100,7 @@ export class AgentTeamsCliError extends Error {
 }
 
 function usage() {
-  return `usage: ${CLI_NAME} init|start|status|work|stop|console status|start|stop [--config <path>] [--generation <n>]`
+  return `usage: ${CLI_NAME} init|start|status|work|stop|console status|start|stop|registry start|status|stop [--config <path>] [--generation <n>]`
 }
 
 function workUsage() {
@@ -108,6 +109,10 @@ function workUsage() {
 
 function consoleUsage() {
   return `usage: ${CLI_NAME} console status|start|stop [--config <path>] [--generation <n>]`
+}
+
+function registryUsage() {
+  return `usage: ${CLI_NAME} registry start|status|stop --config <file>`
 }
 
 function valueAfter(argv, index, flag) {
@@ -123,6 +128,7 @@ function parseArgs(argv, options) {
   }
   if (command === 'work') return parseWorkArgs(argv.slice(1), options)
   if (command === 'console') return parseConsoleArgs(argv.slice(1), options)
+  if (command === 'registry') return parseRegistryArgs(argv.slice(1), options)
   if (!['init', 'start', 'status', 'stop'].includes(command)) {
     throw new AgentTeamsCliError(`unknown command: ${command}\n${usage()}`)
   }
@@ -167,6 +173,52 @@ function defaultConfigPath(home) {
 }
 
 const CONSOLE_SUBCOMMANDS = ['status', 'start', 'stop']
+
+const REGISTRY_SUBCOMMANDS = ['start', 'status', 'stop']
+
+function parseRegistryArgs(argv, options) {
+  const subcommand = argv[0]
+  if (subcommand === undefined || subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    throw new AgentTeamsCliError(registryUsage())
+  }
+  if (!REGISTRY_SUBCOMMANDS.includes(subcommand)) throw new AgentTeamsCliError(`unknown registry subcommand: ${subcommand}\n${registryUsage()}`)
+  const parsed = {
+    command: 'registry',
+    subcommand,
+    configPath: options.config === undefined ? undefined : resolve(options.config),
+    generation: undefined,
+  }
+  for (let index = 1; index < argv.length; index += 1) {
+    const argument = argv[index]
+    const equals = argument.indexOf('=')
+    const name = equals > 0 ? argument.slice(0, equals) : argument
+    const inline = equals > 0 ? argument.slice(equals + 1) : undefined
+    const take = flag => {
+      if (inline !== undefined) {
+        if (inline.length === 0) throw new AgentTeamsCliError(`${flag} requires a value`)
+        return inline
+      }
+      const value = valueAfter(argv, index, flag)
+      index += 1
+      return value
+    }
+    if (name === '--config') {
+      parsed.configPath = resolve(take(argument))
+    } else if (name === '--generation') {
+      // Only stop consumes an expected generation; refusing it elsewhere keeps a
+      // flag from being accepted and silently ignored.
+      if (subcommand !== 'stop') throw new AgentTeamsCliError(`--generation is only accepted by registry stop\n${registryUsage()}`)
+      const generation = Number(take(argument))
+      if (!Number.isSafeInteger(generation) || generation < 0) throw new AgentTeamsCliError('--generation must be a non-negative integer')
+      parsed.generation = generation
+    } else {
+      throw new AgentTeamsCliError(`unknown argument: ${argument}\n${registryUsage()}`)
+    }
+  }
+  // The registry is its own daemon with its own config; there is no default path.
+  if (parsed.configPath === undefined) throw new AgentTeamsCliError(`--config requires a value\n${registryUsage()}`)
+  return parsed
+}
 
 function parseConsoleArgs(argv, options) {
   const subcommand = argv[0]
@@ -604,6 +656,20 @@ function formatConsoleStatus(prefix, consoleStatus) {
   return [prefix, `launcher=${consoleStatus.launcherState}`, ...formatConsole(consoleStatus)].join(' ')
 }
 
+function formatRegistryStatus(prefix, status) {
+  const pieces = [
+    prefix,
+    `state=${status.state}`,
+    `generation=${status.generation}`,
+    `config=${status.configPath}`,
+    `daemon=${status.daemonId}`,
+  ]
+  if (status.pid !== undefined) pieces.push(`pid=${status.pid}`)
+  if (status.url !== undefined) pieces.push(`url=${status.url}`)
+  if (status.error !== undefined) pieces.push(`error=${status.error}`)
+  return pieces.join(' ')
+}
+
 async function pathExists(path) {
   try {
     await access(path)
@@ -626,12 +692,13 @@ async function defaultRuntime() {
         throw new AgentTeamsCliError(`cli runtime artifacts are missing (${missing.join(', ')}); run pnpm build:runtime first`)
       }
       try {
-        const [localConfig, localProcess, localWorkControl] = await Promise.all([
+        const [localConfig, localProcess, localWorkControl, registryProcess] = await Promise.all([
           import(RUNTIME_ARTIFACTS.localConfig),
           import(RUNTIME_ARTIFACTS.localProcess),
           import(RUNTIME_ARTIFACTS.localWorkControl),
+          import(RUNTIME_ARTIFACTS.registryProcess),
         ])
-        return { localConfig, localWorkControl, ...localProcess }
+        return { localConfig, localWorkControl, ...localProcess, ...registryProcess }
       } catch (error) {
         throw new AgentTeamsCliError(`cli runtime artifacts could not be loaded; run pnpm build:runtime first: ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -688,6 +755,16 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
     if (parsed.subcommand === 'start') return formatConsoleStatus('console', await runtime.consoleStartLocalProcess(configPath, lifecycleOptions))
     if (parsed.subcommand === 'stop') return formatConsoleStatus('console', await runtime.consoleStopLocalProcess(configPath, lifecycleOptions))
     throw new AgentTeamsCliError(`unsupported console subcommand: ${parsed.subcommand}`)
+  }
+  if (parsed.command === 'registry') {
+    const runtime = options.runtime ?? await defaultRuntime()
+    // The registry child inherits the operator environment so credential refs
+    // resolve; the v3 local provider defaults belong to the local launcher only.
+    const registryOptions = options.env === undefined ? {} : { env: options.env }
+    if (parsed.subcommand === 'start') return formatRegistryStatus('started', await runtime.startRegistryDaemon(configPath, registryOptions))
+    if (parsed.subcommand === 'status') return formatRegistryStatus('status', await runtime.statusRegistryDaemon(configPath))
+    if (parsed.subcommand === 'stop') return formatRegistryStatus('stopped', await runtime.stopRegistryDaemon(configPath, parsed.generation))
+    throw new AgentTeamsCliError(`unsupported registry subcommand: ${parsed.subcommand}`)
   }
   if (parsed.command === 'stop') {
     const runtime = options.runtime ?? await defaultRuntime()

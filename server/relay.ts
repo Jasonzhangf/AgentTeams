@@ -25,6 +25,17 @@ type RawData = WebSocket.RawData
 type SocketRole = 'unknown' | 'control' | 'data'
 type RelaySide = 'source' | 'target'
 
+/** Node refuses a timer delay above this value. */
+const MAX_TIMER_MS = 2_147_483_647
+
+/**
+ * Server-owned default presence lease. It matches the directory stale window
+ * (`removeStaleHosts` defaults to 90s) so one LAN lease policy exists. A peer
+ * that stops heartbeating for this long is published offline even when its
+ * socket never sent a close frame.
+ */
+export const DEFAULT_PEER_TTL_MS = 90_000
+
 export interface RelayServerOptions {
   readonly host?: string
   readonly port: number
@@ -37,6 +48,12 @@ export interface RelayServerOptions {
   readonly maxPendingMessages: number
   readonly maxPendingBytes: number
   readonly grantTtlMs: number
+  /**
+   * Presence lease. `relay.presence` renews it; the peer is published offline
+   * when `lastSeenAt + peerTtlMs` passes. The control socket is left in place so
+   * a late heartbeat can renew the same generation.
+   */
+  readonly peerTtlMs?: number
   readonly authenticate: (credential: Credential) => MaybePromise<AuthenticatedAgent | null>
   readonly authorizeTarget?: (source: AuthenticatedAgent, target: RelayPeer) => MaybePromise<boolean>
   readonly now?: () => Date
@@ -231,9 +248,11 @@ class RelayServerImpl implements RelayServer {
   private readonly grants = new Map<string, RelayGrantState>()
   private readonly now: () => Date
   private readonly idFactory: () => string
+  private readonly peerTtlMs: number
   private revision = 0
   private closing = false
   private closePromise?: Promise<void>
+  private leaseTimer?: ReturnType<typeof setTimeout>
 
   constructor(
     private readonly options: RelayServerOptions,
@@ -242,6 +261,7 @@ class RelayServerImpl implements RelayServer {
   ) {
     this.now = options.now ?? (() => new Date())
     this.idFactory = options.idFactory ?? randomUUID
+    this.peerTtlMs = options.peerTtlMs ?? DEFAULT_PEER_TTL_MS
     this.httpsServer.on('connection', (connection) => {
       this.connections.add(connection)
       connection.on('close', () => this.connections.delete(connection))
@@ -308,6 +328,10 @@ class RelayServerImpl implements RelayServer {
   async close(): Promise<void> {
     if (this.closePromise) return this.closePromise
     this.closing = true
+    if (this.leaseTimer) {
+      clearTimeout(this.leaseTimer)
+      this.leaseTimer = undefined
+    }
     this.closePromise = (async () => {
       for (const grantId of [...this.grants.keys()]) this.closeGrant(grantId, { code: 'UNAVAILABLE', message: 'relay closing' })
       for (const state of this.sockets) state.socket.terminate()
@@ -410,6 +434,10 @@ class RelayServerImpl implements RelayServer {
   }
 
   private async handleControl(state: RelaySocketState, input: Record<string, unknown>): Promise<void> {
+    // Presence is a lease: every control operation observes the current leases
+    // before it answers, so a silently dead socket cannot stay online in a
+    // directory snapshot or be granted a connection.
+    this.sweepPeerLeases()
     if (input.kind !== 'relay.login') this.assertCurrentControl(state)
     switch (input.kind) {
       case 'relay.login':
@@ -723,6 +751,42 @@ class RelayServerImpl implements RelayServer {
       if (state.auth.accountId !== peer.declaration.identity.accountId || state.auth.scopeId !== peer.declaration.scopeId) continue
       this.send(state.socket, { kind: 'relay.changed', revision: this.revision, peer: projectPeerEndpoints(peer, state.auth) })
     }
+    this.scheduleLeaseSweep()
+  }
+
+  /**
+   * Publishes every peer whose lease has lapsed as offline. The entry, its
+   * declaration and its generation stay in the directory as history, so an
+   * offline peer is visible without impersonating a current presence.
+   */
+  private sweepPeerLeases(): void {
+    const now = this.now().getTime()
+    for (const peer of [...this.peers.values()]) {
+      if (peer.presence !== 'online') continue
+      if (Date.parse(peer.lastSeenAt) + this.peerTtlMs <= now) {
+        this.setPeer({ ...peer, presence: 'offline' })
+      }
+    }
+    this.scheduleLeaseSweep()
+  }
+
+  /** One timer owns the earliest lease deadline; it is unref'd so it never holds the process. */
+  private scheduleLeaseSweep(): void {
+    if (this.leaseTimer !== undefined) {
+      clearTimeout(this.leaseTimer)
+      this.leaseTimer = undefined
+    }
+    if (this.closing) return
+    let earliest: number | undefined
+    for (const peer of this.peers.values()) {
+      if (peer.presence !== 'online') continue
+      const deadline = Date.parse(peer.lastSeenAt) + this.peerTtlMs
+      if (earliest === undefined || deadline < earliest) earliest = deadline
+    }
+    if (earliest === undefined) return
+    const remainingMs = Math.min(Math.max(0, earliest - this.now().getTime()), MAX_TIMER_MS)
+    this.leaseTimer = setTimeout(() => this.sweepPeerLeases(), remainingMs)
+    ;(this.leaseTimer as NodeJS.Timeout).unref?.()
   }
 
   private closeSocket(state: RelaySocketState, code: number, reason: string): void {
@@ -775,6 +839,9 @@ export async function createRelayServer(options: RelayServerOptions): Promise<Re
   if (!Number.isInteger(options.maxPendingMessages) || options.maxPendingMessages < 1) throw new Error('relay: maxPendingMessages must be positive')
   if (!Number.isInteger(options.maxPendingBytes) || options.maxPendingBytes < 1) throw new Error('relay: maxPendingBytes must be positive')
   if (!Number.isInteger(options.grantTtlMs) || options.grantTtlMs < 1) throw new Error('relay: grantTtlMs must be positive')
+  if (options.peerTtlMs !== undefined && (!Number.isSafeInteger(options.peerTtlMs) || options.peerTtlMs < 1 || options.peerTtlMs > MAX_TIMER_MS)) {
+    throw new Error('relay: peerTtlMs must be a positive safe integer within the Node timer range')
+  }
   const httpsServer = createServer({ key: options.key, cert: options.cert })
   const wsServer = new WebSocketServer({ server: httpsServer, maxPayload: options.maxPayload })
   const relay = new RelayServerImpl(options, httpsServer, wsServer)

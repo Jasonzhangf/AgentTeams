@@ -6,8 +6,8 @@ import { join } from 'node:path'
 import { connect as tlsConnect, type TLSSocket } from 'node:tls'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
-import type { AuthenticatedAgent, AgentDeclaration, RelayClientControl, RelayServerControl } from '../control-protocol/agent-services.ts'
-import { createRelayServer, type RelayServer } from './relay.ts'
+import type { AuthenticatedAgent, AgentDeclaration, RelayClientControl, RelayPeer, RelayServerControl } from '../control-protocol/agent-services.ts'
+import { createRelayServer, type RelayServer, type RelayServerOptions } from './relay.ts'
 
 interface TestCertificate {
   readonly key: Buffer
@@ -44,6 +44,9 @@ const peers: readonly TestPeer[] = [
 
 let relay: RelayServer
 let clockMs: number
+/** `true` runs the server on the real clock so a lease timer can actually fire. */
+let useRealClock: boolean
+let peerTtlMs: number
 let authenticateOverride: Authenticate | undefined
 const clients: WebSocket[] = []
 
@@ -241,9 +244,8 @@ beforeAll(() => {
 
 afterAll(() => rmSync(certificate.directory, { recursive: true, force: true }))
 
-beforeEach(async () => {
-  clockMs = Date.now()
-  relay = await createRelayServer({
+function relayOptions(ttlMs: number): RelayServerOptions {
+  return {
     host: '127.0.0.1',
     port: 0,
     key: certificate.key,
@@ -255,9 +257,17 @@ beforeEach(async () => {
     maxPendingMessages: 8,
     maxPendingBytes: 16 * 1024,
     grantTtlMs: 60_000,
-    now: () => new Date(clockMs),
+    peerTtlMs: ttlMs,
+    now: () => new Date(useRealClock ? Date.now() : clockMs),
     authenticate: (credential) => authenticateOverride?.(credential) ?? authenticateCredential(credential),
-  })
+  }
+}
+
+beforeEach(async () => {
+  clockMs = Date.now()
+  useRealClock = false
+  peerTtlMs = 90_000
+  relay = await createRelayServer(relayOptions(peerTtlMs))
 })
 
 afterEach(async () => {
@@ -482,6 +492,31 @@ describe('N1 relay server', () => {
       },
     })
     await expectNoMessage(c)
+  })
+
+  it('scopes the directory to the authenticated identity and refuses a cross-scope query', async () => {
+    const a = await openSocket(peer('agent-a').token)
+    const c = await openSocket(peer('agent-c').token)
+    await login(a, peer('agent-a'))
+    await login(c, peer('agent-c'))
+    // The directory is scoped by the authenticated identity; naming another
+    // scope is not an accepted request field, so it is refused, not filtered.
+    a.send(JSON.stringify({ kind: 'relay.directory', requestId: 'cross-scope-directory', subscribe: false, scopeId: 'scope-b' }))
+    // The refused frame never echoes a requestId, so assert on the code and on
+    // the absence of any directory answer for the foreign scope.
+    const refused = await nextJson(a)
+    expect(refused).toMatchObject({ kind: 'relay.error', error: { code: 'INVALID_INPUT' } })
+    expect(refused).not.toHaveProperty('peers')
+    send(a, { kind: 'relay.directory', requestId: 'own-scope-directory', subscribe: false })
+    const own = await nextJson(a)
+    if (own.kind !== 'relay.directory') throw new Error('own-scope directory snapshot was not returned')
+    expect(own.peers.map((item) => item.declaration.identity.agentId)).toEqual(['agent-a'])
+    // agent-c is online in scope-b, so the isolation is a real scope boundary
+    // and not an empty directory.
+    send(c, { kind: 'relay.directory', requestId: 'scope-b-directory', subscribe: false })
+    const other = await nextJson(c)
+    if (other.kind !== 'relay.directory') throw new Error('scope-b directory snapshot was not returned')
+    expect(other.peers.map((item) => item.declaration.identity.agentId)).toEqual(['agent-c'])
   })
 
   it('rejects cross-scope and stale-generation relay grants, including expired grants', async () => {
@@ -846,6 +881,120 @@ describe('N1 relay server', () => {
     const observer = await openSocket(peer('agent-b').token)
     await expect(login(observer, peer('agent-b'))).resolves.toMatchObject({ kind: 'relay.admitted', generation: 1 })
   })
+})
+
+describe('N1 relay peer lease', () => {
+  // A lease shorter than the grant deadline keeps the two expiries independent.
+  const leaseTtlMs = 10_000
+  beforeEach(async () => {
+    await relay.close()
+    peerTtlMs = leaseTtlMs
+    relay = await createRelayServer(relayOptions(peerTtlMs))
+  })
+
+  const directoryOf = async (socket: WebSocket, requestId: string): Promise<readonly RelayPeer[]> => {
+    send(socket, { kind: 'relay.directory', requestId, subscribe: false })
+    const message = await nextJson(socket)
+    if (message.kind !== 'relay.directory') throw new Error(`expected a directory snapshot, received ${message.kind}`)
+    return message.peers
+  }
+  const entryOf = (peers: readonly RelayPeer[], agentId: string): RelayPeer | undefined =>
+    peers.find(candidate => candidate.declaration.identity.agentId === agentId)
+
+  it('expires a silent peer lease, keeps its offline history, and refuses a connection to it', async () => {
+    const silent = await openSocket(peer('agent-a').token)
+    await login(silent, peer('agent-a'))
+    const observer = await openSocket(peer('agent-b').token)
+    await login(observer, peer('agent-b'))
+    expect(entryOf(await directoryOf(observer, 'lease-online'), 'agent-a')).toMatchObject({ presence: 'online', generation: 1 })
+
+    // A silently dead socket sends no close frame and no heartbeat. Only the
+    // elapsed lease can distinguish it from a live peer.
+    clockMs += leaseTtlMs + 1
+    const expired = await directoryOf(observer, 'lease-expired')
+    expect(entryOf(expired, 'agent-a')).toMatchObject({ presence: 'offline', generation: 1 })
+    expect(entryOf(expired, 'agent-a')?.declaration.identity.hostId).toBe('host-agent-a')
+
+    send(observer, { kind: 'relay.connect', requestId: 'lease-connect', generation: 1, targetAgentId: 'agent-a', targetGeneration: 1 })
+    await expect(nextJson(observer)).resolves.toMatchObject({
+      kind: 'relay.error',
+      requestId: 'lease-connect',
+      error: { code: 'UNAVAILABLE' },
+    })
+  })
+
+  it('renews the lease on a heartbeat and keeps the peer online', async () => {
+    const peerA = await openSocket(peer('agent-a').token)
+    await login(peerA, peer('agent-a'))
+    const observer = await openSocket(peer('agent-b').token)
+    await login(observer, peer('agent-b'))
+
+    clockMs += leaseTtlMs - 1_000
+    send(peerA, { kind: 'relay.presence', generation: 1 })
+    // A same-socket directory readback proves the heartbeat was processed
+    // before the clock moves again; `relay.presence` itself has no reply.
+    send(peerA, { kind: 'relay.directory', requestId: 'lease-heartbeat', subscribe: false })
+    await nextJson(peerA)
+    clockMs += leaseTtlMs - 1_000
+    expect(entryOf(await directoryOf(observer, 'lease-renewed'), 'agent-a')).toMatchObject({ presence: 'online' })
+
+    clockMs += 2_000
+    expect(entryOf(await directoryOf(observer, 'lease-lapsed'), 'agent-a')).toMatchObject({ presence: 'offline' })
+  })
+
+  it('rejects an old-generation heartbeat with STALE_GENERATION without renewing the current lease', async () => {
+    const stale = await openSocket(peer('agent-a').token)
+    await login(stale, peer('agent-a'))
+    const current = await openSocket(peer('agent-a').token)
+    await expect(login(current, peer('agent-a'))).resolves.toMatchObject({ kind: 'relay.admitted', generation: 2 })
+    await waitForClose(stale)
+    const observer = await openSocket(peer('agent-b').token)
+    await login(observer, peer('agent-b'))
+
+    clockMs += leaseTtlMs - 1_000
+    send(current, { kind: 'relay.presence', generation: 1 })
+    await expect(nextJson(current)).resolves.toMatchObject({
+      kind: 'relay.error',
+      error: { code: 'STALE_GENERATION' },
+    })
+
+    // The rejected heartbeat must not have refreshed the lease.
+    clockMs += 2_000
+    expect(entryOf(await directoryOf(observer, 'stale-heartbeat'), 'agent-a')).toMatchObject({ presence: 'offline', generation: 2 })
+  })
+
+  it('replaces an expired same-identity lease with the new generation and keeps one history entry', async () => {
+    const first = await openSocket(peer('agent-a').token)
+    await expect(login(first, peer('agent-a'))).resolves.toMatchObject({ kind: 'relay.admitted', generation: 1 })
+    const observer = await openSocket(peer('agent-b').token)
+    await login(observer, peer('agent-b'))
+
+    clockMs += leaseTtlMs + 1
+    expect(entryOf(await directoryOf(observer, 'generation-expired'), 'agent-a')).toMatchObject({ presence: 'offline', generation: 1 })
+
+    const second = await openSocket(peer('agent-a').token)
+    await expect(login(second, peer('agent-a'))).resolves.toMatchObject({ kind: 'relay.admitted', generation: 2 })
+    const replaced = await directoryOf(observer, 'generation-replaced')
+    expect(replaced.filter(candidate => candidate.declaration.identity.agentId === 'agent-a')).toHaveLength(1)
+    expect(entryOf(replaced, 'agent-a')).toMatchObject({ presence: 'online', generation: 2 })
+  })
+
+  it('publishes the lease expiry to subscribers without a directory read', async () => {
+    useRealClock = true
+    await relay.close()
+    peerTtlMs = 150
+    relay = await createRelayServer(relayOptions(peerTtlMs))
+
+    const silent = await openSocket(peer('agent-a').token)
+    await login(silent, peer('agent-a'))
+    const observer = await openSocket(peer('agent-b').token)
+    await login(observer, peer('agent-b'))
+    send(observer, { kind: 'relay.directory', requestId: 'lease-subscribe', subscribe: true })
+    await expect(nextJson(observer)).resolves.toMatchObject({ kind: 'relay.directory', requestId: 'lease-subscribe' })
+
+    await expect(nextMatching(observer, message => message.kind === 'relay.changed' && message.peer.declaration.identity.agentId === 'agent-a'))
+      .resolves.toMatchObject({ kind: 'relay.changed', peer: { presence: 'offline', generation: 1 } })
+  }, 20_000)
 })
 
 describe('N1 relay shutdown determinism', () => {
