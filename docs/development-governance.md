@@ -143,7 +143,7 @@ CLI 黑盒证据，DSH 路径仍未接线：`--serve dsh` 以 typed 拒绝退出
 | `teams-acp-d02-opencode` | opencode-adapter | partial | `pnpm exec vitest run opencode-adapter --no-file-parallelism` | 已合并候选 1d4df3a（修复 1af8fe5/9436aae）的 OpenCode adapter：compileLaunch 唯一编译 launch spec、verifyEffective 只报引擎 session/new 返回的模型、真实 prompt/cancel/permission/黑名单（本地 stub provider + 已安装 opencode，65/65）；非安装副本证据，不含 D03 |
 | `teams-acp-d03-dsh` | dsh-adapter | partial | `pnpm exec vitest run dsh-adapter --no-file-parallelism` | D03 冻结候选 60bf76b 的 DSH adapter：launch 编译、policy-before-side-effect、native config 派生与 effectiveness 读回（28/28 通过）；另有本地非 CI 证据 driver 在真实 dsh 0.2.0-rc.2 上记录 18/18；无 `--serve dsh` 接线、无安装/live 证据、AppSDK 仍阻塞 |
 | `teams-acp-d04-registry` | runtime | partial | `pnpm exec vitest run --no-file-parallelism server/relay.spec.ts network/relay-client.spec.ts network/registration-client.spec.ts server/registry-intent.spec.ts runtime/registry-process.spec.ts runtime/registry-registration.spec.ts` | D04 已合并候选 953d952 的 registry daemon 生命周期、TLS-only intent 映射、presence 租约与客户端注册/心跳/重连（73/73 通过；候选黑盒 14/14 经 review 独立复现）；无引擎级断电集成、无安装副本/live `--serve` 证据、AppSDK 仍阻塞 |
-| `teams-acp-d05-network` | network | partial | `pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts` | D05 连接层：冻结 frame 上的协商执行（唯一 agreement 来源、typed 拒绝、R3 整数 acceptedRevision）、认证 ACP session（本地分配 ref、收包边界重写 generation/engineInstanceId、payload 原样透传）、kind=connection 历史、membership 视图与 R4 增量发布面（43/43 通过）；另有隔离传输观测脚本在真实 TLS 回环 direct-WSS listener 上跑通真实准入、hello 握手与 ACP 帧往返（23 项）；peer 引擎为进程内脚本 duplex，无两真实引擎 LAN 证据、无 `--serve` 接线 |
+| `teams-acp-d05-network` | network | partial | `pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts` | D05 连接层：冻结 frame 上的协商执行（唯一 agreement 来源、typed 拒绝、R3 整数 acceptedRevision）、认证 ACP session（本地分配 ref、收包边界重写 generation/engineInstanceId、payload 原样透传）、kind=connection 历史、membership 视图与 R4 增量发布面（53/53 通过；含 R4 helper 所在的 runtime/registry-registration.spec.ts）；另有隔离传输观测脚本在真实 TLS 回环 direct-WSS listener 上跑通真实准入、hello 握手与 ACP 帧往返（23 项）；peer 引擎为进程内脚本 duplex，无两真实引擎 LAN 证据、无 `--serve` 接线 |
 | `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环/`--serve dsh`（serve 接线未交付）的 typed 拒绝、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult；真实 CLI 黑盒见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`（源码树与本地 `npm pack` + `npm install` 的 `node_modules/.bin/agentteams` 两条路径均通过）；仅 loopback 与 opencode；注册（D04，源码层已交付）与协商（D05，源码层已交付但未接入该入口）均未接入该入口 |
 
 D02 交付 OpenCode 引擎 adapter（`opencode-adapter/src/acp-engine.ts`）与 `--serve`
@@ -202,7 +202,7 @@ frame 上执行协商，身份只来自已认证的传输事实，`negotiatedAgr
 `network/teams-connection-history.ts` 以 kind=connection 写入/读取冻结的 HistoryRecord；
 `network/teams-membership.ts` 从目录/路由/注册三个既有面组装 per-remote-agent
 `TeamsConnectionStatus`。`teams-acp-d05-network` 在本候选（base f5d53e4）上可执行并通过
-（50/50），另有隔离观测脚本
+（53/53），另有隔离观测脚本
 `docs/evidence/acp-d05-network-20261010/isolated-transport-observation.mjs` 在真实 TLS
 回环 direct-WSS listener 上跑通真实准入、真实 hello 握手与真实 ACP 帧往返（23 项）。
 它保持 partial，不升级为 passed/implemented：观测中的 peer 引擎是进程内脚本 duplex、
@@ -211,7 +211,9 @@ peer agent 也在进程内，因此没有两真实引擎 LAN 证据；`runtime/a
 D05 只有在两真实引擎黑盒（`--serve opencode` 与 `--serve dsh`）跑通后才能收口。R4 的发布
 面是加性的：`RegistrationClient.publish` 复用 D04 注册路径与同样的 online 守卫，
 `runtime/registry-registration.ts` 只新增两个纯函数（`listenerRouteCandidates`、
-`declarationWithPublishedSurfaces`），没有第二个 registry/directory/发布路径。D05 的四个新
+`declarationWithPublishedSurfaces`），没有第二个 registry/directory/发布路径。R4 helper
+所在文件由 D05 gate 命令显式纳入（`runtime/registry-registration.spec.ts`），因此 R4 发布面
+不会只依赖 D04 gate 覆盖。D05 的四个新
 文件与 `runtime/registry-registration.ts` 的加性改动已由 `teams-source` 的 owned/regression
 路径覆盖（`network/**`、`runtime/**`、`docs/**`），`.appsdk/project.json` 无需改动，
 `minimum_test_count` 保持 304。
