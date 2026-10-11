@@ -122,7 +122,7 @@
       "owner": "runtime",
       "status": "partial",
       "design_doc": "docs/design/teams-behavior-contracts.md",
-      "note": "Work DAGpipe SDK host adapter and runner are implemented as a source-level library consumer (runtime/dagpipe/** with real compiled SDK and provider-ledger tests), and AgentWorkClient capability selection is implemented. The launcher local Work ingress is delivered for the exact candidate: the public CLI/launcher/receiver path and the installed runtime consumer are covered by the installed package user smoke, which drives installed submit/query plus persistent open/request/query/close against installed runtime artifacts. Provider ledger and admission remain Agent-owned; no second daemon or scheduler. The BB driver matrix, Console-offline Work and final user acceptance remain pending.",
+      "note": "Work DAGpipe SDK host adapter and runner are implemented as a source-level library consumer (runtime/dagpipe/** with real compiled SDK and provider-ledger tests), and AgentWorkClient capability selection is implemented. The launcher local Work ingress is delivered for the exact candidate: the public CLI/launcher/receiver path and the installed runtime consumer are covered by the installed package user smoke, which drives installed submit/query plus persistent open/request/query/close against installed runtime artifacts. runtime/acp-serve.ts owns the user --serve opencode entry: it reads one v4 agent intent, refuses an unbound agent or an undelivered engine with a typed fault, starts exactly one daemon plus one engine child over the D01 runtime with the D02 adapter, serves loopback ACP channels, reports readiness only from the engine's own session/new response and stops by explicit signal. Provider ledger and admission remain Agent-owned; no second daemon or scheduler. The D03 DSH entry, D04 registration, D05 negotiation, the BB driver matrix, Console-offline Work and final user acceptance remain pending.",
       "owned_paths": [
         "runtime/**"
       ],
@@ -174,6 +174,7 @@
       "module_id": "opencode-adapter",
       "owner": "opencode-adapter",
       "status": "implemented",
+      "note": "The OpenCode engine adapter is the single compiler of an OpenCode EngineLaunchSpec: compileLaunch derives the managed OpenCode config and its credential env refs from the accepted config, verifyEffective reports the model the engine itself returned from session/new, and declaredMethods/enforceablePolicies declare the adapter capability. runtime/acp-serve.ts is its only production caller. Gate teams-acp-d02-opencode stays partial because the real-engine command needs an installed opencode plus a local stub provider and is not installed-copy evidence.",
       "owned_paths": [
         "opencode-adapter/**"
       ],

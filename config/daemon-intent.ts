@@ -161,9 +161,10 @@ export type DaemonIntentV4 = AgentDaemonIntent | ControlDaemonIntent | RegistryD
 /**
  * `daemon.kind` is nested, so TypeScript cannot narrow the parent union from
  * `intent.daemon.kind`. These guards keep the narrowing honest instead of
- * casting at each call site.
+ * casting at each call site. `isAgentIntent` is exported because the `--serve`
+ * entry must narrow the same union before it may start an engine.
  */
-function isAgentIntent(intent: DaemonIntentV4): intent is AgentDaemonIntent {
+export function isAgentIntent(intent: DaemonIntentV4): intent is AgentDaemonIntent {
   return intent.daemon.kind === 'agent'
 }
 

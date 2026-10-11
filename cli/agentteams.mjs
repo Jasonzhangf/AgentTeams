@@ -24,6 +24,7 @@ const RUNTIME_ARTIFACTS = {
   consoleProcess: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'console-process.js'),
   relay: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'server', 'relay-process.js'),
   agent: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'agent-process.js'),
+  acpServe: resolve(runtimeDirectory, 'generated', 'runtime-lib', 'runtime', 'acp-serve.js'),
 }
 
 const RUNTIME_CHILD_ENTRIES = {
@@ -99,7 +100,12 @@ export class AgentTeamsCliError extends Error {
 }
 
 function usage() {
-  return `usage: ${CLI_NAME} init|start|status|work|stop|console status|start|stop [--config <path>] [--generation <n>]`
+  return `usage: ${CLI_NAME} init|start|status|work|stop|console status|start|stop [--config <path>] [--generation <n>]
+       ${CLI_NAME} --serve <opencode|dsh> --ip <ip> --port <port> [--config <v4 agent config>]`
+}
+
+function serveUsage() {
+  return `usage: ${CLI_NAME} --serve <opencode|dsh> --ip <ip> --port <port> [--config <v4 agent config>]`
 }
 
 function workUsage() {
@@ -123,6 +129,7 @@ function parseArgs(argv, options) {
   }
   if (command === 'work') return parseWorkArgs(argv.slice(1), options)
   if (command === 'console') return parseConsoleArgs(argv.slice(1), options)
+  if (command === '--serve' || command.startsWith('--serve=')) return parseServeArgs(argv, options)
   if (!['init', 'start', 'status', 'stop'].includes(command)) {
     throw new AgentTeamsCliError(`unknown command: ${command}\n${usage()}`)
   }
@@ -164,6 +171,56 @@ function parseArgs(argv, options) {
 
 function defaultConfigPath(home) {
   return resolve(home ?? homedir(), '.agentteams', 'config.toml')
+}
+
+const SERVE_ENGINES = ['opencode', 'dsh']
+
+/**
+ * The `--serve <engine>` quick-start entry. It parses only its own flags and
+ * delegates every config rule, engine start and readiness decision to the
+ * runtime serve entry; the CLI never compiles a config or starts an engine.
+ */
+function parseServeArgs(argv, options) {
+  const parsed = {
+    command: 'serve',
+    configPath: options.config === undefined ? undefined : resolve(options.config),
+    engine: undefined,
+    ip: undefined,
+    port: undefined,
+  }
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]
+    const equals = argument.indexOf('=')
+    const name = equals > 0 ? argument.slice(0, equals) : argument
+    const inline = equals > 0 ? argument.slice(equals + 1) : undefined
+    const take = flag => {
+      if (inline !== undefined) {
+        if (inline.length === 0) throw new AgentTeamsCliError(`${flag} requires a value`)
+        return inline
+      }
+      const value = valueAfter(argv, index, flag)
+      index += 1
+      return value
+    }
+    if (name === '--serve') {
+      const engine = take(argument)
+      if (!SERVE_ENGINES.includes(engine)) throw new AgentTeamsCliError(`--serve must be opencode or dsh, got ${engine}\n${serveUsage()}`)
+      parsed.engine = engine
+    } else if (name === '--ip') {
+      parsed.ip = take(argument)
+    } else if (name === '--port') {
+      const port = Number(take(argument))
+      if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new AgentTeamsCliError('--port must be an integer from 1 to 65535')
+      parsed.port = port
+    } else if (name === '--config') {
+      parsed.configPath = resolve(take(argument))
+    } else {
+      throw new AgentTeamsCliError(`unknown argument: ${argument}\n${serveUsage()}`)
+    }
+  }
+  if (parsed.engine === undefined) throw new AgentTeamsCliError(`--serve requires an engine\n${serveUsage()}`)
+  if ((parsed.ip === undefined) !== (parsed.port === undefined)) throw new AgentTeamsCliError('--ip and --port must be given together')
+  return parsed
 }
 
 const CONSOLE_SUBCOMMANDS = ['status', 'start', 'stop']
@@ -626,12 +683,13 @@ async function defaultRuntime() {
         throw new AgentTeamsCliError(`cli runtime artifacts are missing (${missing.join(', ')}); run pnpm build:runtime first`)
       }
       try {
-        const [localConfig, localProcess, localWorkControl] = await Promise.all([
+        const [localConfig, localProcess, localWorkControl, acpServe] = await Promise.all([
           import(RUNTIME_ARTIFACTS.localConfig),
           import(RUNTIME_ARTIFACTS.localProcess),
           import(RUNTIME_ARTIFACTS.localWorkControl),
+          import(RUNTIME_ARTIFACTS.acpServe),
         ])
-        return { localConfig, localWorkControl, ...localProcess }
+        return { localConfig, localWorkControl, ...acpServe, ...localProcess }
       } catch (error) {
         throw new AgentTeamsCliError(`cli runtime artifacts could not be loaded; run pnpm build:runtime first: ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -662,6 +720,33 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
   const configPath = parsed.configPath ?? defaultConfigPath(options.home)
   const env = localEnv(options.env)
 
+  if (parsed.command === 'serve') {
+    const runtime = options.runtime ?? await defaultRuntime()
+    const report = options.report ?? (line => console.log(line))
+    try {
+      // The runtime owns the config compile, the single daemon/engine start, the
+      // verified readiness line and the stop receipt. The CLI only forwards
+      // explicit flags and prints what the runtime reports.
+      await runtime.runAcpServe({
+        ...(parsed.configPath === undefined ? {} : { configPath: parsed.configPath }),
+        engine: parsed.engine,
+        ...(parsed.ip === undefined ? {} : { ip: parsed.ip }),
+        ...(parsed.port === undefined ? {} : { port: parsed.port }),
+        ...(options.home === undefined ? {} : { home: options.home }),
+        ...(options.env === undefined ? {} : { env: options.env }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+        report,
+      })
+    } catch (error) {
+      // The runtime throws a typed ACP fault; surface its code with the message
+      // instead of flattening the failure into a bare string.
+      if (error !== null && typeof error === 'object' && error.name === 'AcpError' && typeof error.code === 'string') {
+        throw new AgentTeamsCliError(`${error.code}: ${error.message}`)
+      }
+      throw error
+    }
+    return undefined
+  }
   if (parsed.command === 'init') {
     const runtime = options.runtime ?? await defaultRuntime()
     const localConfig = runtime.localConfig ?? (await defaultRuntime()).localConfig

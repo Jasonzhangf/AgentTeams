@@ -213,7 +213,12 @@ function faultData(fault: AcpFault): Record<string, JsonValue> {
   return output
 }
 
-function rpcErrorFrame(id: AcpRpcId, fault: AcpFault): AcpFrame {
+/**
+ * The one ACP JSON-RPC error envelope. Exported so the runtime serve transport
+ * answers a frame the host rejects with the same envelope instead of declaring
+ * a second one.
+ */
+export function rpcErrorFrame(id: AcpRpcId, fault: AcpFault): AcpFrame {
   return { jsonrpc: '2.0', id, error: { code: -32000, message: fault.message, data: faultData(fault) } }
 }
 

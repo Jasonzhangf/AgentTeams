@@ -750,3 +750,81 @@ describe('agentteams CLI', () => {
     })).rejects.toThrow(/local config cannot be read/i)
   })
 })
+
+describe('--serve entry', () => {
+  interface ServeCall {
+    readonly configPath?: string
+    readonly engine: string
+    readonly ip?: string
+    readonly port?: number
+    readonly report?: (line: string) => void
+  }
+
+  function serveRuntime(calls: ServeCall[], fail?: Error) {
+    return {
+      runAcpServe: async (input: ServeCall) => {
+        calls.push(input)
+        if (fail !== undefined) throw fail
+      },
+    }
+  }
+
+  it('forwards the explicit serve flags to the runtime entry and prints its reports', async () => {
+    const calls: ServeCall[] = []
+    const lines: string[] = []
+    const runtime = {
+      runAcpServe: async (input: ServeCall) => {
+        calls.push(input)
+        input.report?.('serving agent=reasoner-a engine=opencode model=probe/probe-model')
+        input.report?.('stopped agent=reasoner-a engine=exited code=0 signal=null')
+      },
+    }
+    const output = await agentteamsCommand(['--serve', 'opencode', '--ip', '127.0.0.1', '--port', '7443', '--config', '/tmp/agent.toml'], {
+      runtime,
+      report: line => lines.push(line),
+    })
+    expect(output).toBeUndefined()
+    expect(calls.map(call => ({ configPath: call.configPath, engine: call.engine, ip: call.ip, port: call.port })))
+      .toEqual([{ configPath: '/tmp/agent.toml', engine: 'opencode', ip: '127.0.0.1', port: 7443 }])
+    expect(lines).toEqual([
+      'serving agent=reasoner-a engine=opencode model=probe/probe-model',
+      'stopped agent=reasoner-a engine=exited code=0 signal=null',
+    ])
+  })
+
+  it('accepts the quick-start form without --config and the --port= form', async () => {
+    const calls: ServeCall[] = []
+    await agentteamsCommand(['--serve', 'dsh', '--ip', '127.0.0.1', '--port=7551'], {
+      runtime: serveRuntime(calls),
+      report: () => undefined,
+    })
+    expect(calls.map(call => ({ configPath: call.configPath, engine: call.engine, ip: call.ip, port: call.port })))
+      .toEqual([{ configPath: undefined, engine: 'dsh', ip: '127.0.0.1', port: 7551 }])
+  })
+
+  it('rejects malformed serve arguments before any runtime call', async () => {
+    const calls: ServeCall[] = []
+    const runtime = serveRuntime(calls)
+    await expect(agentteamsCommand(['--serve'], { runtime, report: () => undefined })).rejects.toThrow(/--serve requires a value/i)
+    await expect(agentteamsCommand(['--serve', 'python', '--ip', '127.0.0.1', '--port', '7443'], { runtime, report: () => undefined }))
+      .rejects.toThrow(/--serve must be opencode or dsh/i)
+    await expect(agentteamsCommand(['--serve', 'opencode', '--ip', '127.0.0.1'], { runtime, report: () => undefined }))
+      .rejects.toThrow(/--ip and --port must be given together/i)
+    await expect(agentteamsCommand(['--serve', 'opencode', '--ip', '127.0.0.1', '--port', '0'], { runtime, report: () => undefined }))
+      .rejects.toThrow(/--port must be an integer/i)
+    await expect(agentteamsCommand(['--serve', 'opencode', '--ip', '127.0.0.1', '--port', '7443', '--extra'], { runtime, report: () => undefined }))
+      .rejects.toThrow(/unknown argument/i)
+    expect(calls).toEqual([])
+  })
+
+  it('surfaces the runtime typed fault code instead of a bare message', async () => {
+    const fault = Object.assign(new Error('agent reasoner-a has no provider/model binding'), {
+      name: 'AcpError',
+      code: 'UNSUPPORTED_CONFIGURATION',
+    })
+    await expect(agentteamsCommand(['--serve', 'opencode', '--ip', '127.0.0.1', '--port', '7443'], {
+      runtime: serveRuntime([], fault),
+      report: () => undefined,
+    })).rejects.toThrow(/UNSUPPORTED_CONFIGURATION: agent reasoner-a has no provider\/model binding/)
+  })
+})

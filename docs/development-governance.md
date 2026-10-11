@@ -131,23 +131,37 @@ D00 只冻结声明：`config/daemon-intent.ts`、`config/acp-policy.ts` 与
 `control-protocol/{acp,engine,teams-connection,teams-state}.ts`。这些文件的声明与
 拒绝测试是可执行的定向 gate；它们不证明真实引擎、stdio ACP、网络、注册或 UI 已可用。
 `--serve` 的 runtime 启动依赖 D01（stdio ACP adapter）和 D02/D03（引擎 adapter 与
-CLI 实际入口）；配置指向注册服务器时还依赖 D04。在依赖交付提供真实启动前它保持
-未接线，不新增只编译不启动的伪入口。
+CLI 实际入口）；配置指向注册服务器时还依赖 D04。D02 之后 opencode 路径已接线并有真实
+CLI 黑盒证据，DSH 路径仍未接线：`--serve dsh` 以 typed 拒绝退出，不新增只编译不启动的
+伪入口。
 
 | gate | owner | 状态 | 入口 | 覆盖 |
 | --- | --- | --- | --- | --- |
 | `teams-acp-daemon-intent` | config | partial | `pnpm exec vitest run --config vitest.config.ts config/daemon-intent.spec.ts config/acp-policy.spec.ts && pnpm exec tsc --noEmit && pnpm build:runtime` | 单 daemon 编译、CLI 覆盖与生效读回、v3 与多 daemon 拒绝；不含 runtime 启动 |
 | `teams-acp-public-contract` | control-protocol | partial | `pnpm exec vitest run --config vitest.config.ts control-protocol/acp.spec.ts control-protocol/teams-connection.spec.ts control-protocol/teams-state.spec.ts` | ACP frame/fault、engine adapter port、Teams 协商 frame 与连接状态 DTO 的形状与拒绝 |
-| `teams-acp-d01-host` | agent-host | partial | `pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts` | D01 已合并候选 75a6cf4 的引擎无关 stdio ACP 传输、host 的 Session/policy/history 语义与 runtime 子进程接线（标注 test peer，53/53 通过）；无真实引擎推理、无安装/live 证据 |
-| `teams-acp-serve-entry` | runtime | design | 未接线；planned_command `node cli/agentteams.mjs --serve opencode --ip <ip> --port <port> --config <agent.toml>` | 用户入口真实启动一个 daemon 并读回生效配置；等 D01/D02/D03 |
+| `teams-acp-d01-host` | agent-host | partial | `pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts` | D01 已合并候选 75a6cf4 的引擎无关 stdio ACP 传输、host 的 Session/policy/history 语义与 runtime 子进程接线（标注 test peer，53/53 通过）；本命令本身无真实引擎推理、无安装/live 证据 |
+| `teams-acp-d02-opencode` | opencode-adapter | partial | `pnpm exec vitest run opencode-adapter --no-file-parallelism` | 已合并候选 1d4df3a 的 OpenCode adapter：compileLaunch 唯一编译 launch spec、verifyEffective 只报引擎 session/new 返回的模型、真实 prompt/cancel/permission/黑名单（本地 stub provider + 已安装 opencode，65/65）；非安装副本证据，不含 D03 |
+| `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环/`--serve dsh` 的 typed 拒绝、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult；真实 CLI 黑盒见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`；仅 loopback 与 opencode，无 D04/D05，非安装副本 |
+
+D02 交付 OpenCode 引擎 adapter（`opencode-adapter/src/acp-engine.ts`）与 `--serve`
+用户入口（`runtime/acp-serve.ts` + `cli/agentteams.mjs` 的 flag/dispatch）。
+`teams-acp-d02-opencode` 在合并候选 `1d4df3a` 上可执行并通过（65/65，含 4 个真实引擎
+用例）；`teams-acp-serve-entry` 在本候选上可执行并通过（runtime spec 11/11、CLI spec
+28/28，另有真实 CLI 进程黑盒），但它仍是 partial：只交付 opencode（`--serve dsh`
+显式拒绝）、监听仅 loopback、无注册就绪与连接协商，且证据是源码树入口加真实 CLI
+黑盒而非安装副本回执。adapter 的库级语义未被本增量修改；`runtime/agent-process.ts`
+仍是旧 Work 入口，未被 `--serve` 替换。
 
 D01 只交付引擎无关的 ACP 传输与 host/runtime 接线：`acp-adapter/stdio.ts`、
 `agent-host/{acp-host,acp-history}.ts`、`runtime/{acp-daemon,acp-history-store}.ts`。
 `teams-acp-d01-host` 在合并候选 `75a6cf4` 上可执行并通过（53/53），但它只证明标注
 test peer 下的传输与 host 语义，不证明真实引擎、安装副本或 live daemon，因此保持
-partial，不升级为 passed/implemented。`--serve` 用户入口仍等 D02/D03（引擎 adapter 与
-CLI 实际入口）。`.appsdk/project.json` 的 `teams-source` 现在声明 `acp-adapter/**` 与
-`cli/**` 为 owned/regression 输入，`minimum_test_count` 未改动。
+partial，不升级为 passed/implemented。D02 之后 `--serve opencode` 用户入口已接线，
+`teams-acp-serve-entry` 从 design 升为 partial，并在同一变更内绑定 D02 adapter 与
+入口的 owner、路径和 gate。`.appsdk/project.json` 的 `teams-source` 现在声明
+`acp-adapter/**` 与 `cli/**` 为 owned/regression 输入，`minimum_test_count` 未改动；
+本增量未新增 `.appsdk` 准入路径，因为 `runtime/**`、`cli/**`、`opencode-adapter/src/**`
+与 `docs/**` 已在其中。
 
 planned/design gate 不标 implemented/passed，也不因声明测试通过而升级。AppSDK 绑定只
 声明真实输入：`.appsdk/project.json` 的 `teams-source` owned/regression 路径现在含
