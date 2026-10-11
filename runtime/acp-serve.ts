@@ -1,5 +1,5 @@
 import { accessSync, statSync } from 'node:fs'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, rm } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { createServer, isIP, type Server, type Socket } from 'node:net'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import type { AuthenticatedAgent, JsonValue } from '../control-protocol/agent-services.ts'
 import type { AcpChannelRef, AcpDelivery, AcpFrame, AcpRpcId } from '../control-protocol/acp.ts'
 import { AcpError } from '../control-protocol/acp.ts'
-import type { AcpDuplex, EngineLaunchInput, EngineStopResult } from '../control-protocol/engine.ts'
+import type { AcpDuplex, EngineAdapter, EngineHandle, EngineLaunchInput, EngineStopResult } from '../control-protocol/engine.ts'
 import type { AgentDaemonIntent, DaemonEffectiveConfig, EngineKind } from '../config/daemon-intent.ts'
 import {
   DaemonIntentError,
@@ -26,6 +26,7 @@ import { providerIntentFingerprint } from '../config/runtime-config.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
 import { rpcErrorFrame, type AcpHost } from '../agent-host/acp-host.ts'
 import { openCodeAcpAdapter } from '../opencode-adapter/src/acp-engine.ts'
+import { createDshEngineAdapter } from '../dsh-adapter/index.ts'
 import { createAcpHistoryStore } from './acp-history-store.ts'
 import { startAcpAgentDaemon, type AcpAgentDaemon } from './acp-daemon.ts'
 
@@ -35,14 +36,16 @@ import { startAcpAgentDaemon, type AcpAgentDaemon } from './acp-daemon.ts'
  * One invocation reads one v4 agent config, compiles the accepted config with
  * the config-owned compiler, starts exactly one agent daemon through the D01
  * runtime (`startAcpAgentDaemon` + the acp-adapter stdio duplex + `createAcpHost`)
- * with the D02 OpenCode adapter as the only OpenCode config compiler, proves the
+ * with the engine's own adapter as the only config compiler, proves the
  * effective model from the engine's own `session/new` result, then serves local
  * ACP channels on the daemon's configured listener.
  *
  * This module declares no second Session path, no second ACP frame transport and
- * no second OpenCode config compiler: the listener reuses the one
+ * no second engine config compiler: the listener reuses the one
  * `createStdioAcpDuplex` codec over its socket, the host owns Session/RPC
- * semantics, and `runtime/agent-process.ts` stays the legacy Work entry.
+ * semantics, `engineAdapterFor` is the one dispatch point from the configured
+ * engine kind to its adapter, and `runtime/agent-process.ts` stays the legacy
+ * Work entry.
  *
  * The listener is a loopback ACP channel endpoint. Cross-agent admission and
  * negotiation (the frozen Teams connection frames) belong to the
@@ -85,7 +88,6 @@ export interface AcpServeRuntimeOptions {
 
 export interface AcpServeReadiness {
   readonly agentId: string
-  readonly engineKind: 'opencode'
   readonly engineInstanceId: string
   readonly enginePid: number
   readonly listener: { readonly ip: string; readonly port: number }
@@ -104,6 +106,8 @@ export interface AcpServeStopReceipt {
 
 export interface AcpServeHandle {
   readonly agentId: string
+  /** The engine kind this handle really started, from the compiled intent. */
+  readonly engineKind: EngineKind
   readonly engineInstanceId: string
   readonly enginePid: number
   readonly configPath: string | null
@@ -243,12 +247,6 @@ export async function readAcpServeIntent(input: AcpServeIntentInput): Promise<Ac
   if (intent.engine === undefined) {
     throw new AcpError('UNSUPPORTED_CONFIGURATION', `agent ${intent.daemon.id} declares no engine`)
   }
-  if (intent.engine.kind !== 'opencode') {
-    throw new AcpError(
-      'UNSUPPORTED_CONFIGURATION',
-      `--serve ${intent.engine.kind} is not delivered in this increment: the DSH engine adapter exists at source level (dsh-adapter/**), but the serve wiring that composes it is not delivered; a follow-up increment wires --serve dsh. Only --serve opencode is wired.`,
-    )
-  }
   if (!intent.acp.enabled) {
     throw new AcpError('UNSUPPORTED_CONFIGURATION', `agent ${intent.daemon.id} has acp disabled; --serve requires an enabled ACP policy`)
   }
@@ -290,36 +288,107 @@ function isExecutableFile(path: string): boolean {
   }
 }
 
-/** The installed OpenCode executable: config path, then project env, then PATH. */
-export function resolveOpenCodeExecutable(configured: string | undefined, env: NodeJS.ProcessEnv): string {
+interface EngineExecutableResolution {
+  /** Engine name as it appears in a fault message. */
+  readonly label: string
+  /** Executable file name looked up on PATH. */
+  readonly executableName: string
+  /** Project environment overrides, in precedence order. */
+  readonly environmentOverrides: readonly string[]
+  /** The config key a configured path came from, e.g. `[engine].executable`. */
+  readonly configKey: string
+}
+
+/**
+ * Resolve the installed engine executable: the explicit config path, then a
+ * project environment override, then PATH. The returned path is always an
+ * absolute executable file, so the runtime never spawns a bare name.
+ */
+function resolveEngineExecutable(resolution: EngineExecutableResolution, configured: string | undefined, env: NodeJS.ProcessEnv): string {
+  const { label, executableName, environmentOverrides, configKey } = resolution
   if (configured !== undefined) {
     if (!isAbsolute(configured)) {
-      throw new AcpError('UNSUPPORTED_CONFIGURATION', `engine.executable must be an absolute installed path, got ${configured}`)
+      throw new AcpError('UNSUPPORTED_CONFIGURATION', `${configKey} must be an absolute installed path, got ${configured}`)
     }
     if (!isExecutableFile(configured)) {
-      throw new AcpError('UNSUPPORTED_CONFIGURATION', `engine.executable is not an executable file: ${configured}`)
+      throw new AcpError('UNSUPPORTED_CONFIGURATION', `${configKey} is not an executable file: ${configured}`)
     }
     return configured
   }
-  const override = env.AGENTTEAMS_OPENCODE_EXECUTABLE ?? env.OPENCODE_EXECUTABLE
-  if (override !== undefined && override.length > 0) {
+  for (const name of environmentOverrides) {
+    const override = env[name]
+    if (override === undefined || override.length === 0) continue
     if (!isAbsolute(override)) {
-      throw new AcpError('UNSUPPORTED_CONFIGURATION', `the OpenCode executable override must be an absolute path, got ${override}`)
+      throw new AcpError('UNSUPPORTED_CONFIGURATION', `the ${label} executable override ${name} must be an absolute path, got ${override}`)
     }
     if (!isExecutableFile(override)) {
-      throw new AcpError('UNSUPPORTED_CONFIGURATION', `the OpenCode executable override is not an executable file: ${override}`)
+      throw new AcpError('UNSUPPORTED_CONFIGURATION', `the ${label} executable override ${name} is not an executable file: ${override}`)
     }
     return override
   }
   for (const directory of (env.PATH ?? '').split(delimiter)) {
     if (directory.length === 0) continue
-    const candidate = resolve(directory, 'opencode')
+    const candidate = resolve(directory, executableName)
     if (isExecutableFile(candidate)) return candidate
   }
   throw new AcpError(
     'UNSUPPORTED_CONFIGURATION',
-    'no OpenCode executable is configured: set [engine].executable, AGENTTEAMS_OPENCODE_EXECUTABLE or OPENCODE_EXECUTABLE, or install opencode on PATH',
+    `no ${label} executable is configured: set ${configKey}, ${environmentOverrides.join(' or ')}, or install ${executableName} on PATH`,
   )
+}
+
+/** The installed OpenCode executable: config path, then project env, then PATH. */
+export function resolveOpenCodeExecutable(configured: string | undefined, env: NodeJS.ProcessEnv): string {
+  return resolveEngineExecutable({
+    label: 'OpenCode',
+    executableName: 'opencode',
+    environmentOverrides: ['AGENTTEAMS_OPENCODE_EXECUTABLE', 'OPENCODE_EXECUTABLE'],
+    configKey: 'engine.executable',
+  }, configured, env)
+}
+
+/** The installed DSH executable: config path, then project env, then PATH. */
+export function resolveDshExecutable(configured: string | undefined, env: NodeJS.ProcessEnv): string {
+  return resolveEngineExecutable({
+    label: 'DSH',
+    executableName: 'dsh',
+    environmentOverrides: ['AGENTTEAMS_DSH_EXECUTABLE', 'DSH_EXECUTABLE'],
+    configKey: 'engine.executable',
+  }, configured, env)
+}
+
+/**
+ * The one dispatch point from a configured engine kind to its adapter. D00
+ * freezes the kinds as opencode|dsh and both adapters are delivered, so the
+ * `never` binding makes the mapping exhaustive at compile time; the default
+ * clause is unreachable for every value the config parser can produce.
+ */
+export type ServeEngineAdapter = EngineAdapter & {
+  readonly declaredMethods: readonly string[]
+  readonly enforceablePolicies?: readonly string[]
+  verifyEffective(input: {
+    readonly handle: EngineHandle
+    readonly launch: EngineLaunchInput
+    readonly initializeResult: AcpFrame
+    readonly sessionConfigResult?: AcpFrame
+  }): Promise<{
+    readonly effectiveRevision: number
+    readonly modelTarget: ModelRef | null
+    readonly evidence: JsonValue
+  }>
+}
+
+export function engineAdapterFor(kind: EngineKind): ServeEngineAdapter {
+  switch (kind) {
+    case 'opencode':
+      return openCodeAcpAdapter
+    case 'dsh':
+      return createDshEngineAdapter()
+    default: {
+      const unhandled: never = kind
+      throw new AcpError('UNSUPPORTED_CONFIGURATION', `--serve has no engine adapter for kind ${String(unhandled)}`)
+    }
+  }
 }
 
 /**
@@ -394,13 +463,14 @@ function evidenceText(evidence: JsonValue, key: string): string {
  */
 async function verifyReadiness(input: {
   readonly daemon: AcpAgentDaemon
+  readonly adapter: ServeEngineAdapter
   readonly readinessRef: AcpChannelRef
   readonly principal: AuthenticatedAgent
   readonly launch: EngineLaunchInput
   readonly workspace: string
   readonly initializeTimeoutMs: number
 }): Promise<{ readonly modelTarget: ModelRef | null; readonly modelVerification: string; readonly effectiveRevision: number; readonly evidence: JsonValue }> {
-  const { daemon, readinessRef, principal, launch, workspace, initializeTimeoutMs } = input
+  const { daemon, adapter, readinessRef, principal, launch, workspace, initializeTimeoutMs } = input
   await daemon.host.open({ ref: readinessRef, principal, policy: daemon.policy })
   await daemon.host.receive({
     ...readinessRef,
@@ -422,7 +492,7 @@ async function verifyReadiness(input: {
     },
   })
   const sessionConfigResult = await awaitDelivery(daemon.host, readinessRef, frame => frame.id === 'serve-session-new', initializeTimeoutMs)
-  const verified = await openCodeAcpAdapter.verifyEffective({
+  const verified = await adapter.verifyEffective({
     handle: daemon.handle,
     launch,
     initializeResult,
@@ -449,7 +519,13 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
   if (engine === undefined || listen === undefined) {
     throw new AcpError('UNSUPPORTED_CONFIGURATION', `agent ${agent.daemon.id} is not a startable serve intent`)
   }
-  const executable = resolveOpenCodeExecutable(engine.executable, env)
+  // The one dispatch point: the configured engine kind selects the adapter, and
+  // every step below (executable resolution, compileLaunch, the daemon, the
+  // stdio duplex, readiness and stop) is engine-independent.
+  const adapter = engineAdapterFor(engine.kind)
+  const executable = engine.kind === 'opencode'
+    ? resolveOpenCodeExecutable(engine.executable, env)
+    : resolveDshExecutable(engine.executable, env)
   const dataDirectory = resolve(agent.daemon.dataDirectory)
   const ownedDirectory = join(dataDirectory, 'engine')
   const workspace = engine.workspace ?? join(dataDirectory, 'workspace')
@@ -457,8 +533,17 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
   await mkdir(ownedDirectory, { recursive: true, mode: 0o700 })
   await mkdir(workspace, { recursive: true, mode: 0o700 })
 
+  // The owned engine directory is created by this entry and holds only derived
+  // engine state (the DSH profile patch and, with DSH_HOME, the engine's own
+  // session store). It is removed on every exit path, so a failed start or a
+  // stop leaves no engine home behind; the daemon data directory, the durable
+  // history and the workspace stay.
+  const removeOwnedDirectory = async (): Promise<void> => {
+    await rm(ownedDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+  }
+
   const targetGeneration = 1
-  const engineInstanceId = `opencode-${agent.daemon.id}-${randomUUID()}`
+  const engineInstanceId = `${engine.kind}-${agent.daemon.id}-${randomUUID()}`
   const provider = intent.accepted.providers[intent.binding.primary.providerInstanceId]
   const target: ConfigTargetIdentity = {
     agentId: agent.daemon.id,
@@ -469,7 +554,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     endpointFingerprint: provider === undefined ? '' : providerIntentFingerprint(provider),
   }
   const launchInput: EngineLaunchInput = {
-    kind: 'opencode',
+    kind: engine.kind,
     executable,
     workspace,
     ownedDirectory,
@@ -477,7 +562,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     accepted: intent.accepted,
     policy: agent.acp,
   }
-  const launch = await openCodeAcpAdapter.compileLaunch(launchInput)
+  const launch = await adapter.compileLaunch(launchInput)
   const history = await createAcpHistoryStore({ directory: dataDirectory })
   const initializeTimeoutMs = options.initializeTimeoutMs ?? DEFAULT_INITIALIZE_TIMEOUT_MS
   const stopTimeoutMs = options.stopTimeoutMs ?? DEFAULT_STOP_TIMEOUT_MS
@@ -488,8 +573,8 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     targetGeneration,
     policy: {
       intent: agent.acp,
-      adapterMethods: openCodeAcpAdapter.declaredMethods,
-      enforceablePolicies: openCodeAcpAdapter.enforceablePolicies,
+      adapterMethods: adapter.declaredMethods,
+      enforceablePolicies: adapter.enforceablePolicies ?? adapter.declaredMethods,
     },
     history,
     initialize: { params: { protocolVersion: 1, clientCapabilities: {} }, timeoutMs: initializeTimeoutMs },
@@ -498,6 +583,9 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     resolveCredential: reference => resolveCredentialReference(reference, env),
   })
   if (outcome.kind === 'failed') {
+    // No child survives a failed start (`startAcpAgentDaemon` reaps it), so the
+    // owned engine home is removed here too.
+    await removeOwnedDirectory().catch(() => undefined)
     throw new AcpError(outcome.fault.code, `engine start failed: ${outcome.fault.message}`, outcome.fault.detail)
   }
   const daemon = outcome.daemon
@@ -510,7 +598,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       engineInstanceId,
     }
     const principal = principalOf(agent)
-    const verified = await verifyReadiness({ daemon, readinessRef, principal, launch: launchInput, workspace, initializeTimeoutMs })
+    const verified = await verifyReadiness({ daemon, adapter, readinessRef, principal, launch: launchInput, workspace, initializeTimeoutMs })
 
     const channels = new Map<string, { readonly ref: AcpChannelRef; readonly duplex: AcpDuplex; readonly socket: Socket }>()
 
@@ -625,6 +713,9 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
         await closing
         await daemon.host.close(readinessRef).catch(() => undefined)
         const engineStop = await daemon.stop()
+        // The engine is gone, so its owned home (DSH_HOME and the derived patch
+        // file, or the OpenCode home) is released on this stop path too.
+        await removeOwnedDirectory().catch(() => undefined)
         return { engine: engineStop, channels: open.length }
       })()
       return stopping
@@ -632,6 +723,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
 
     return {
       agentId: agent.daemon.id,
+      engineKind: engine.kind,
       engineInstanceId,
       enginePid: daemon.handle.pid,
       configPath: intent.configPath,
@@ -639,7 +731,6 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       listener: { ip: listen.ip, port: address.port },
       readiness: {
         agentId: agent.daemon.id,
-        engineKind: 'opencode',
         engineInstanceId,
         enginePid: daemon.handle.pid,
         listener: { ip: listen.ip, port: address.port },
@@ -653,6 +744,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     }
   } catch (cause) {
     await daemon.stop().catch(() => undefined)
+    await removeOwnedDirectory().catch(() => undefined)
     throw cause instanceof AcpError ? cause : new AcpError('ENGINE_UNAVAILABLE', messageOf(cause, 'ACP serve start failed'))
   }
 }
@@ -668,7 +760,7 @@ export function formatAcpServeReady(handle: AcpServeHandle): string {
   return [
     'serving',
     `agent=${handle.agentId}`,
-    'engine=opencode',
+    `engine=${handle.engineKind}`,
     `engineInstance=${handle.engineInstanceId}`,
     `enginePid=${handle.enginePid}`,
     `daemonPid=${process.pid}`,

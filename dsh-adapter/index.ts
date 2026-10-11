@@ -470,6 +470,9 @@ export function createDshEngineAdapter(): DshEngineAdapter {
           engineRoute: native.providerRoute,
           modelOptionId: 'model',
           modelOptionValue: actual,
+          // Same readiness vocabulary as the OpenCode adapter: the model is
+          // proven from the engine's own session/new configuration options.
+          modelVerification: 'session/new configOptions',
           configOptionIds: options.map(option => (typeof option.id === 'string' ? option.id : 'unknown')),
           sessionCapabilities: [...declared],
           profilePatchFile: DSH_PATCH_FILE_NAME,
