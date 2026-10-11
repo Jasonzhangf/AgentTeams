@@ -141,16 +141,17 @@ CLI 黑盒证据，DSH 路径仍未接线：`--serve dsh` 以 typed 拒绝退出
 | `teams-acp-public-contract` | control-protocol | partial | `pnpm exec vitest run --config vitest.config.ts control-protocol/acp.spec.ts control-protocol/teams-connection.spec.ts control-protocol/teams-state.spec.ts` | ACP frame/fault、engine adapter port、Teams 协商 frame 与连接状态 DTO 的形状与拒绝 |
 | `teams-acp-d01-host` | agent-host | partial | `pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts` | D01 已合并候选 75a6cf4 的引擎无关 stdio ACP 传输、host 的 Session/policy/history 语义与 runtime 子进程接线（标注 test peer，53/53 通过）；本命令本身无真实引擎推理、无安装/live 证据 |
 | `teams-acp-d02-opencode` | opencode-adapter | partial | `pnpm exec vitest run opencode-adapter --no-file-parallelism` | 已合并候选 1d4df3a 的 OpenCode adapter：compileLaunch 唯一编译 launch spec、verifyEffective 只报引擎 session/new 返回的模型、真实 prompt/cancel/permission/黑名单（本地 stub provider + 已安装 opencode，65/65）；非安装副本证据，不含 D03 |
-| `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环/`--serve dsh` 的 typed 拒绝、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult；真实 CLI 黑盒见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`；仅 loopback 与 opencode，无 D04/D05，非安装副本 |
+| `teams-acp-serve-entry` | runtime | partial | `pnpm exec vitest run runtime/acp-serve.spec.ts cli/agentteams.spec.ts --no-file-parallelism` | 用户入口真实启动：单 daemon + 单引擎子进程、绑定缺失/控制 daemon/非回环/`--serve dsh` 的 typed 拒绝、readiness 只取引擎 session/new、显式信号停止并返回真实 EngineStopResult；真实 CLI 黑盒见 `docs/evidence/acp-d02-integration-20261010/black-box-serve.mjs`（源码树与本地 `npm pack` + `npm install` 的 `node_modules/.bin/agentteams` 两条路径均通过）；仅 loopback 与 opencode，无 D04/D05 |
 
 D02 交付 OpenCode 引擎 adapter（`opencode-adapter/src/acp-engine.ts`）与 `--serve`
 用户入口（`runtime/acp-serve.ts` + `cli/agentteams.mjs` 的 flag/dispatch）。
 `teams-acp-d02-opencode` 在合并候选 `1d4df3a` 上可执行并通过（65/65，含 4 个真实引擎
 用例）；`teams-acp-serve-entry` 在本候选上可执行并通过（runtime spec 11/11、CLI spec
-28/28，另有真实 CLI 进程黑盒），但它仍是 partial：只交付 opencode（`--serve dsh`
-显式拒绝）、监听仅 loopback、无注册就绪与连接协商，且证据是源码树入口加真实 CLI
-黑盒而非安装副本回执。adapter 的库级语义未被本增量修改；`runtime/agent-process.ts`
-仍是旧 Work 入口，未被 `--serve` 替换。
+28/28，另有真实 CLI 进程黑盒；同一黑盒在本地 `npm pack` + `npm install` 的安装副本
+`node_modules/.bin/agentteams` 上重跑也通过），但它仍是 partial：只交付 opencode
+（`--serve dsh` 显式拒绝）、监听仅 loopback、无注册就绪与连接协商；该安装副本是本地
+基础包安装，不是发布产物或 AppSDK 生命周期回执。adapter 的库级语义未被本增量修改；
+`runtime/agent-process.ts` 仍是旧 Work 入口，未被 `--serve` 替换。
 
 D01 只交付引擎无关的 ACP 传输与 host/runtime 接线：`acp-adapter/stdio.ts`、
 `agent-host/{acp-host,acp-history}.ts`、`runtime/{acp-daemon,acp-history-store}.ts`。
