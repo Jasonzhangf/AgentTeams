@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -29,6 +30,17 @@ function launchFor(mode: string): EngineLaunchSpec {
 }
 
 const intent: AcpPolicyIntent = { enabled: true, required: [], blacklist: [], clientCapabilities: [], callbackExecutor: 'controller' }
+
+/** Count live OS processes whose command line carries the unique probe marker. */
+function matchingProcessCount(marker: string): number {
+  try {
+    const output = execFileSync('pgrep', ['-f', marker], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    return output.split('\n').filter(line => line.trim().length > 0).length
+  } catch {
+    // pgrep exits non-zero when nothing matches.
+    return 0
+  }
+}
 
 async function tempDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'acp-daemon-'))
@@ -105,6 +117,32 @@ describe('startAcpEngineHandle', () => {
     })
     expect(outcome.kind).toBe('failed')
     if (outcome.kind === 'failed') expect(outcome.fault.code).toBe('UNSUPPORTED_CONFIGURATION')
+  })
+
+  it('reaps a long-lived engine child and returns real cleanup when a spawn option is invalid', async () => {
+    const marker = `acp-orphan-probe-${process.pid}-${Date.now()}`
+    expect(matchingProcessCount(marker)).toBe(0)
+    const outcome = await startAcpEngineHandle({
+      launch: {
+        executable: process.execPath,
+        args: ['-e', 'setInterval(() => {}, 1000)', marker],
+        cwd: peerDirectory,
+        env: { PATH: process.env.PATH ?? '' },
+        credentialEnvRefs: {},
+        files: [],
+        supportedPolicies: [],
+      },
+      engineInstanceId: 'engine-1',
+      targetGeneration: 1,
+      stopTimeoutMs: 2_000,
+      maxFrameBytes: 0,
+    })
+    expect(outcome.kind).toBe('failed')
+    if (outcome.kind !== 'failed') return
+    expect(outcome.fault.code).toBe('UNSUPPORTED_CONFIGURATION')
+    expect(outcome.cleanup).toMatchObject({ kind: 'exited' })
+    // The genuinely long-lived child must be gone from the OS process table.
+    expect(matchingProcessCount(marker)).toBe(0)
   })
 
   it('stops a started handle with a typed exit outcome', async () => {

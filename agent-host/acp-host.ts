@@ -91,7 +91,6 @@ interface PendingCallback {
 
 interface ActivePrompt {
   readonly sessionId: string
-  cancelRequested: boolean
 }
 
 interface ChannelState {
@@ -538,7 +537,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     if (channel.activePrompt !== undefined) {
       throw new AcpError('CONFLICT', `session ${sessionId} already has a prompt in flight`)
     }
-    channel.activePrompt = { sessionId, cancelRequested: false }
+    channel.activePrompt = { sessionId }
     try {
       await dispatchToEngine(channel, frame)
     } catch (cause) {
@@ -570,7 +569,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       return
     }
     const sessionId = sessionIdOf(frame)
-    if (sessionId !== undefined && method !== 'session/new' && method !== 'session/cancel') {
+    if (sessionId !== undefined && method !== 'session/new') {
       assertSessionOwner(channel, sessionId)
     }
     await dispatchToEngine(channel, frame)
@@ -580,6 +579,12 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     if (!channel.initialized) throw new AcpError('CONFLICT', 'ACP initialize must precede other channel traffic')
     input.assertAllowed({ policy: channel.policy, direction: 'to-engine', frame })
     const method = methodOf(frame)
+    if (method === 'initialize') {
+      // `initialize` is a request whose only legitimate answer is the captured
+      // bootstrap result. A notification form cannot be answered, so it must
+      // never reach the engine as a second initialize.
+      throw new AcpError('UNSUPPORTED_METHOD', 'ACP initialize must be a request and cannot be sent as a notification')
+    }
     const sessionId = sessionIdOf(frame)
     if (sessionId !== undefined) assertSessionOwner(channel, sessionId)
     if (engineEnded) throw new AcpError('ENGINE_UNAVAILABLE', 'ACP engine is not available')
@@ -598,9 +603,6 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
         await input.handle.acp.send(frame)
       } catch (cause) {
         throw toAcpError(cause, 'ENGINE_UNAVAILABLE')
-      }
-      if (channel.activePrompt !== undefined && channel.activePrompt.sessionId === sessionId) {
-        channel.activePrompt.cancelRequested = true
       }
       return
     }

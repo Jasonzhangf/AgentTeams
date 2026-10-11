@@ -4,7 +4,7 @@ import { dirname, isAbsolute } from 'node:path'
 import type { JsonValue } from '../control-protocol/agent-services.ts'
 import type { AcpFault, AcpFrame, AcpRpcId } from '../control-protocol/acp.ts'
 import { AcpError, parseAcpFrame } from '../control-protocol/acp.ts'
-import type { EngineHandle, EngineLaunchSpec, EngineStopResult } from '../control-protocol/engine.ts'
+import type { AcpDuplex, EngineHandle, EngineLaunchSpec, EngineStopResult } from '../control-protocol/engine.ts'
 import type { AcpPolicyIntent, AcpPolicySnapshot } from '../config/acp-policy.ts'
 import { assertAcpAllowed, extractAcpCapabilities, resolveAcpPolicy } from '../config/acp-policy.ts'
 import type { AcpHistoryPort } from '../agent-host/acp-history.ts'
@@ -54,7 +54,12 @@ export interface StartAcpEngineInput {
 
 export type StartAcpEngineOutcome =
   | { readonly kind: 'started'; readonly handle: EngineHandle }
-  | { readonly kind: 'failed'; readonly fault: AcpFault }
+  /**
+   * `cleanup` is the real stop result of the spawned child. It is null only
+   * when no OS process was created (pre-spawn validation, spawn error, or a
+   * pid-less child), so a failed start can never hide a running engine.
+   */
+  | { readonly kind: 'failed'; readonly fault: AcpFault; readonly cleanup: EngineStopResult | null }
 
 export interface BootstrapAcpInitializeInput {
   readonly params?: JsonValue
@@ -143,9 +148,11 @@ async function withDeadline<T>(work: Promise<T>, deadline: number, message: stri
  * spawn exactly one child over the stdio ACP duplex.
  */
 export async function startAcpEngineHandle(input: StartAcpEngineInput): Promise<StartAcpEngineOutcome> {
+  let launch: EngineLaunchSpec
+  let env: Record<string, string>
   try {
     if (input === null || typeof input !== 'object') throw new AcpError('UNSUPPORTED_CONFIGURATION', 'engine start input is required')
-    const launch = input.launch
+    launch = input.launch
     if (launch === null || typeof launch !== 'object') throw new AcpError('UNSUPPORTED_CONFIGURATION', 'engine launch spec is required')
     if (!isAbsolute(launch.executable)) throw new AcpError('UNSUPPORTED_CONFIGURATION', 'engine executable must be an absolute path')
     if (!isAbsolute(launch.cwd)) throw new AcpError('UNSUPPORTED_CONFIGURATION', 'engine cwd must be an absolute path')
@@ -155,7 +162,7 @@ export async function startAcpEngineHandle(input: StartAcpEngineInput): Promise<
     }
     assertPositiveInteger(input.targetGeneration, 'targetGeneration')
 
-    const env: Record<string, string> = { ...launch.env }
+    env = { ...launch.env }
     for (const [key, reference] of Object.entries(launch.credentialEnvRefs)) {
       if (input.resolveCredential === undefined) {
         throw new AcpError('UNSUPPORTED_CONFIGURATION', `engine launch needs credential ${reference} but no resolver is configured`)
@@ -171,91 +178,109 @@ export async function startAcpEngineHandle(input: StartAcpEngineInput): Promise<
       await mkdir(dirname(file.path), { recursive: true, mode: 0o700 })
       await writeFile(file.path, file.content, { encoding: 'utf8', mode: file.mode })
     }
+  } catch (cause) {
+    // Nothing has been spawned yet, so there is no child to clean up.
+    return { kind: 'failed', fault: faultFrom(cause, 'ENGINE_UNAVAILABLE'), cleanup: null }
+  }
 
-    const child: ChildProcess = spawn(launch.executable, [...launch.args], {
+  let child: ChildProcess
+  try {
+    child = spawn(launch.executable, [...launch.args], {
       cwd: launch.cwd,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
-    if (child.stdout === null || child.stdin === null) {
-      child.kill('SIGKILL')
-      throw new AcpError('ENGINE_UNAVAILABLE', 'engine child did not expose stdio pipes')
-    }
-    let ended = false
-    const exited = new Promise<{ readonly code: number | null; readonly signal: string | null }>(resolve => {
-      child.once('error', () => { ended = true; resolve({ code: null, signal: null }) })
-      child.once('exit', (code, signal) => { ended = true; resolve({ code, signal }) })
-    })
-    const spawnFailure = await new Promise<Error | null>(resolve => {
-      child.once('spawn', () => resolve(null))
-      child.once('error', error => resolve(error))
-    })
-    if (spawnFailure !== null) {
-      return { kind: 'failed', fault: { code: 'ENGINE_UNAVAILABLE', message: `engine failed to start: ${spawnFailure.message}` } }
-    }
-    const pid = child.pid
-    if (pid === undefined) {
-      child.kill('SIGKILL')
-      return { kind: 'failed', fault: { code: 'ENGINE_UNAVAILABLE', message: 'engine started without a pid' } }
-    }
+  } catch (cause) {
+    return { kind: 'failed', fault: faultFrom(cause, 'ENGINE_UNAVAILABLE'), cleanup: null }
+  }
 
-    const acp = createStdioAcpDuplex({
+  let ended = false
+  const exited = new Promise<{ readonly code: number | null; readonly signal: string | null }>(resolve => {
+    child.once('error', () => { ended = true; resolve({ code: null, signal: null }) })
+    child.once('exit', (code, signal) => { ended = true; resolve({ code, signal }) })
+  })
+  const spawnFailure = await new Promise<Error | null>(resolve => {
+    child.once('spawn', () => resolve(null))
+    child.once('error', error => resolve(error))
+  })
+  if (spawnFailure !== null) {
+    // The spawn failed before exec, so no OS process exists to reap.
+    return { kind: 'failed', fault: { code: 'ENGINE_UNAVAILABLE', message: `engine failed to start: ${spawnFailure.message}` }, cleanup: null }
+  }
+  const pid = child.pid
+  if (pid === undefined) {
+    child.kill('SIGKILL')
+    return { kind: 'failed', fault: { code: 'ENGINE_UNAVAILABLE', message: 'engine started without a pid' }, cleanup: null }
+  }
+
+  let stopping: Promise<EngineStopResult> | undefined
+  const confirmExit = async (deadlineMs: number): Promise<boolean> => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        exited,
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('exit window elapsed')), deadlineMs) }),
+      ])
+      return true
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  const stop = (): Promise<EngineStopResult> => {
+    if (stopping !== undefined) return stopping
+    stopping = (async (): Promise<EngineStopResult> => {
+      if (ended) return { kind: 'exited', code: child.exitCode, signal: child.signalCode }
+      const deadline = Date.now() + input.stopTimeoutMs
+      child.kill('SIGTERM')
+      if (await confirmExit(Math.max(1, Math.floor(input.stopTimeoutMs / 2)))) {
+        return { kind: 'exited', code: child.exitCode, signal: child.signalCode }
+      }
+      child.kill('SIGKILL')
+      if (await confirmExit(Math.max(1, deadline - Date.now()))) {
+        return { kind: 'exited', code: child.exitCode, signal: child.signalCode }
+      }
+      return {
+        kind: 'retained',
+        pid,
+        error: { code: 'ENGINE_UNAVAILABLE', message: 'engine exit remains unconfirmed after SIGKILL' },
+      }
+    })()
+    return stopping
+  }
+
+  if (child.stdout === null || child.stdin === null) {
+    return {
+      kind: 'failed',
+      fault: { code: 'ENGINE_UNAVAILABLE', message: 'engine child did not expose stdio pipes' },
+      cleanup: await stop(),
+    }
+  }
+
+  let acp: AcpDuplex
+  try {
+    acp = createStdioAcpDuplex({
       readable: child.stdout,
       writable: child.stdin,
       ...(input.maxFrameBytes === undefined ? {} : { maxFrameBytes: input.maxFrameBytes }),
       ...(input.readTimeoutMs === undefined ? {} : { readTimeoutMs: input.readTimeoutMs }),
     })
-
-    let stopping: Promise<EngineStopResult> | undefined
-    const confirmExit = async (deadlineMs: number): Promise<boolean> => {
-      let timer: ReturnType<typeof setTimeout> | undefined
-      try {
-        await Promise.race([
-          exited,
-          new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('exit window elapsed')), deadlineMs) }),
-        ])
-        return true
-      } catch {
-        return false
-      } finally {
-        clearTimeout(timer)
-      }
-    }
-    const stop = (): Promise<EngineStopResult> => {
-      if (stopping !== undefined) return stopping
-      stopping = (async (): Promise<EngineStopResult> => {
-        if (ended) return { kind: 'exited', code: child.exitCode, signal: child.signalCode }
-        const deadline = Date.now() + input.stopTimeoutMs
-        child.kill('SIGTERM')
-        if (await confirmExit(Math.max(1, Math.floor(input.stopTimeoutMs / 2)))) {
-          return { kind: 'exited', code: child.exitCode, signal: child.signalCode }
-        }
-        child.kill('SIGKILL')
-        if (await confirmExit(Math.max(1, deadline - Date.now()))) {
-          return { kind: 'exited', code: child.exitCode, signal: child.signalCode }
-        }
-        return {
-          kind: 'retained',
-          pid,
-          error: { code: 'ENGINE_UNAVAILABLE', message: 'engine exit remains unconfirmed after SIGKILL' },
-        }
-      })()
-      return stopping
-    }
-
-    return {
-      kind: 'started',
-      handle: {
-        engineInstanceId: input.engineInstanceId,
-        pid,
-        targetGeneration: input.targetGeneration,
-        acp,
-        exited,
-        stop,
-      },
-    }
   } catch (cause) {
-    return { kind: 'failed', fault: faultFrom(cause, 'ENGINE_UNAVAILABLE') }
+    // The child is already running: reap it before reporting the failure.
+    return { kind: 'failed', fault: faultFrom(cause, 'UNSUPPORTED_CONFIGURATION'), cleanup: await stop() }
+  }
+
+  return {
+    kind: 'started',
+    handle: {
+      engineInstanceId: input.engineInstanceId,
+      pid,
+      targetGeneration: input.targetGeneration,
+      acp,
+      exited,
+      stop,
+    },
   }
 }
 
@@ -304,7 +329,7 @@ export async function bootstrapAcpInitialize(
 /** Start one ACP agent daemon: child, stdio duplex, bootstrap initialize, host. */
 export async function startAcpAgentDaemon(input: StartAcpDaemonInput): Promise<StartAcpDaemonOutcome> {
   const started = await startAcpEngineHandle(input)
-  if (started.kind === 'failed') return { kind: 'failed', fault: started.fault, cleanup: null }
+  if (started.kind === 'failed') return { kind: 'failed', fault: started.fault, cleanup: started.cleanup }
   const handle = started.handle
   const initialized = await bootstrapAcpInitialize(handle, input.initialize)
   if (initialized.kind === 'failed') {

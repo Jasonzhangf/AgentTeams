@@ -181,6 +181,22 @@ describe('createAcpHost', () => {
     expect(fixture.history.records.some(record => record.event === 'initialize')).toBe(true)
   })
 
+  it('rejects a notification-form initialize instead of re-initializing the engine', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const sends = fixture.duplex.sent.length
+
+    await expect(fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', method: 'initialize', params: { clientCapabilities: {} } },
+    })).rejects.toMatchObject({ code: 'UNSUPPORTED_METHOD' })
+
+    expect(fixture.duplex.sent).toHaveLength(sends)
+    expect(fixture.history.records.filter(record => record.event === 'initialize')).toHaveLength(1)
+    expect(fixture.history.records.some(record => record.event === 'notification.dispatched')).toBe(false)
+  })
+
   it('accepts the flat AcpIngress and rejects a nested ref shape', async () => {
     const fixture = makeFixture()
     await open(fixture)
@@ -243,6 +259,11 @@ describe('createAcpHost', () => {
     await expect(fixture.host.receive({
       ...ref2,
       frame: { jsonrpc: '2.0', id: 5, method: 'session/load', params: { sessionId: 'session-1' } },
+    })).rejects.toMatchObject({ code: 'SESSION_OWNERSHIP_CONFLICT' })
+
+    await expect(fixture.host.receive({
+      ...ref2,
+      frame: { jsonrpc: '2.0', id: 6, method: 'session/cancel', params: { sessionId: 'session-1' } },
     })).rejects.toMatchObject({ code: 'SESSION_OWNERSHIP_CONFLICT' })
   })
 
