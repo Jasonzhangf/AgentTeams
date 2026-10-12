@@ -1,0 +1,38 @@
+  -- probe provider (HOST A) listening on http://100.66.1.82:54992/v1
+  -- HOST A hostname=Macstudio.local tailscale=100.66.1.82
+PASS preconditions — two distinct physical hosts — HOST A Macstudio.local (100.66.1.82) vs HOST B jennys-macbook-air.anoa-buri.ts.net (100.93.143.20), macOS 15.7.9 arm64, node v22.22.2, npm 10.9.7
+  -- staged this producer's own evidence files for the package identity gate: docs/evidence/acp-a11-crossdevice-20261011/cross-device-receipt.mjs, docs/evidence/acp-a11-crossdevice-20261011/verification.json
+  -- running the project producer: pnpm build:governance
+PASS producer — pnpm build:governance staged a final package on HOST A — mode=final version=0.1.0 content=b063607e8779e2b2… files=263
+  -- producer tail: package artifact final agentteams@0.1.0 b063607e8779e2b2f8862782d75327e844178fe6e6449fa42091fd713fe1c777 generated/modules/teams-source/lib
+PASS producer — the staged root packs into one tarball — agentteams-0.1.0.tgz bytes=1516808 sha256=f19211c9bd8123a4…
+PASS producer — the tarball installs into an isolated prefix on HOST A and exposes the compiled runtime — cli=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/a11-xdev-uQd0yJ/prefix/node_modules/agentteams/cli/agentteams.mjs modules=negotiation,routePlan,directRoute,registration
+PASS HOST B — the packed tarball installs into an isolated prefix and the installed CLI is byte-identical to HOST A's — prefix=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/prefix content=b063607e8779e2b2… cliSha256=d97ab857e0a7892f… cli=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/prefix/node_modules/agentteams/cli/agentteams.mjs
+  -- install command: export PATH="/Users/jenny/.agentteams-node/node-v22.22.2-darwin-arm64/bin:$PATH"; npm install --prefix /Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/prefix --no-audit --no-fund --no-package-lock --no-save /Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/pack/agentteams-0.1.0.tgz
+  -- install output: changed 1 package in 318ms
+  -- installed CLI: -rwxr-xr-x  1 jenny  staff  45238 Oct 12 08:51 /Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/prefix/node_modules/agentteams/cli/agentteams.mjs
+PASS TLS — the HOST B listener certificate is generated on HOST B and carries HOST B's own names — X509v3 Subject Alternative Name:   IP Address:100.93.143.20, DNS:jennys-macbook-air.anoa-buri.ts.net, DNS:localhost, IP Address:127.0.0.1
+PASS TLS — the HOST B daemon trusts the HOST A registry certificate byte-identically — sha256=b8a571f5caed5d26…
+PASS configs — HOST B owns its own config file, identity, data directory and listener — agent=reasoner-b listener=100.93.143.20:50991 data=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/state discovery=wss://100.66.1.82:55565 sha256=f76afce68ad2bfdf…
+  -- probe provider (HOST A) base URL reachable from HOST B: http://100.66.1.82:54992/v1
+PASS HOST A — the discovery registry runs from the INSTALLED CLI on HOST A's Tailscale address — started state=running generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/a11-xdev-uQd0yJ/registry.toml daemon=a11-registry pid=20448 url=wss://100.66.1.82:55565
+  -- HOST B daemon pid file: 35086
+PASS HOST B — the daemon starts from the INSTALLED entrypoint on HOST B's own Tailscale address — serving agent=reasoner-b engine=opencode engineInstance=opencode-reasoner-b-3ecf1cbf-dd88-4226-8b1b-cff11b9a9991 enginePid=35087 daemonPid=35086 listener=100.93.143.20:50991 localChannel=127.0.0.1:51006 lanChannel=wss://100.93.143.20:50991 capabilitiesRevision=2 registration=online dataDirectory=/Users/jenny/.agentteam
+PASS HOST B — the daemon spawned the real opencode engine as its own child — enginePid=35087 model=probe/probe-model modelVerification=session/new configOptions
+PASS cross-device — the HOST B daemon registers with the HOST A registry over the network — readiness registration=online; discovery=wss://100.66.1.82:55565
+PASS HOST A — HOST A's registry lists HOST B as an online peer with HOST B's own declared Tailscale route — agent=reasoner-b presence=online route=wss://100.93.143.20:50991 revision=2
+  -- HOST B hostname jennys-macbook-air.anoa-buri.ts.net resolved on HOST A to 100.93.143.20
+PASS HOST A — the peer address is neither loopback nor any HOST A address, and the hostname is a different host — hostname=jennys-macbook-air.anoa-buri.ts.net resolved=100.93.143.20 loopback=false own=false hostA=Macstudio.local
+PASS HOST A -> HOST B — authenticate, negotiate and connect over the direct WSS listener — endpoint=wss://jennys-macbook-air.anoa-buri.ts.net:50991 state=agreed observer(master) -> reasoner-b(peer) targetRevision=2
+PASS HOST B — the remote opencode engine creates a real ACP Session on HOST B — sessionId=ses_ed2674ee2ffeq3lb5nCGWsmETz cwd=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/workspace enginePid=35087
+PASS HOST A <-> HOST B — a real ACP prompt/reply with a permission callback round trip crosses the two devices — sessionId=ses_ed2674ee2ffeq3lb5nCGWsmETz engine->client session/request_permission(once,always,reject) + client->engine reply -> stopReason=end_turn; session/update delivered; HOST B's engine called the HOST A provider (bash,edit,glob,grep,read,skill,task,todowrite,webfetch,write)
+PASS HOST A -> HOST B — a real cancel ends the in-flight remote prompt with the engine's own result — session/cancel -> stopReason=cancelled
+PASS HOST B — HOST B's own durable history records the inbound HOST A peer and the negotiated agreement — records=24 negotiated: observer(master) -> reasoner-b(peer) connectionId=f242904d-fd7b-4cd6-84f7-f9a5d195c103 channels=1
+  -- HOST B explicit-PID stop: kill -TERM 35086 -> killed=0
+  -- HOST B engine pid 35087 exited=true
+  -- HOST A registry stop: stopped state=stopped generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/a11-xdev-uQd0yJ/registry.toml daemon=a11-registry pid=20448 url=wss:/
+cleanup: removed the HOST A owned root /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/a11-xdev-uQd0yJ
+cleanup: kept the HOST B install root /Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011 (A11_KEEP_HOST_B=1); it holds the isolated npm prefix, the agent config, the daemon log and the durable history
+
+A11 cross-device PASS: 19 checks, 0 gaps
+verification.json written to /Volumes/Intel/playground/agentteams/acp-a11-crossdevice-20261011/docs/evidence/acp-a11-crossdevice-20261011/verification.json
