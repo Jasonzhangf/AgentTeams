@@ -150,7 +150,7 @@ driver never substitutes loopback for a LAN claim.
 | A09 history across a UI refresh and an owner restart; a non-resumable Session is never passed off as resumed | PASS | 3 | a fresh authenticated stream plus history read returned the same 4 records byte-identical (same `recordId`/`sequence`, no loss or change); the owner restart goes through the project's own `control stop` + `control start` (not a SIGKILL crash restart), and the durable `kind: 'connection'` history still came back byte-identical; a graceful stop removes the persisted lifecycle record, so the stop+start began a new lifecycle at generation 1 instead of advancing the counter; a pre-restart Session is refused after the restart with `SESSION_OWNERSHIP_CONFLICT` and `session/load` with `UNSUPPORTED_METHOD` |
 | A10 agent-to-agent communication continues after the browser closes and after control stops | PASS | 3 | after every WebUI HTTP/SSE client connection the driver opened was closed, the established LAN channel completed a prompt with `stopReason=end_turn`; with the control daemon stopped and its listener port closed, the same established channel completed a prompt with `stopReason=end_turn`; the established channel also completed a prompt while the registry was stopped, which is the third leg of the same family |
 | A11 real LAN address; a cross-device conclusion needs a cross-device receipt | PASS | 2 | `PASS A11 — the LAN address is a real, connectable non-loopback listener` (192.168.0.3 is a non-loopback IPv4 and a raw TCP connect to the agent listener succeeded) plus `PASS A11 — the cross-device receipt is integrated and recorded gap-free` (19 checks / 0 gaps, hosts `Macstudio.local` and `jennys-macbook-air.anoa-buri.ts.net`, byte-identical tarball and installed CLI on both). The cross-device conclusion is claimed through that integrated evidence, and the residual boundary is recorded as a finding rather than a gap (§5a) |
-| A12 no Work/config/permission regression; install, restart, review and resource close-out | PARTIAL | 3 (install) + 1 (restart, counted in A03/A09) | this driver owns the installed-artifact and restart receipts; `pnpm typecheck` and the three mapped regression suites pass (31 files / 261 tests), while `pnpm verify` is recorded as a blocked gate with live-test flakes (§7). The independent review and the merge/remote/freeze close-out are the integration owner's |
+| A12 no Work/config/permission regression; install, restart, review and resource close-out | PARTIAL | 3 (install) + 1 (restart, counted in A03/A09) | this driver owns the installed-artifact and restart receipts; `pnpm typecheck` and the three mapped regression suites pass (31 files / 261 tests), while `pnpm verify` is recorded as a blocked gate with live-test flakes (§7). The remaining A12 obligations are now **complete**: the independent review is PASS (round 3 at `4b058e6`, findings fixed in `b82affd`), the candidate is integrated at `f5a54ae` by fast-forward with the remote receipt read back, the frozen `control-protocol/` tree is byte-identical to the pre-integration main, and the five owned worktrees are removed and their claims released (§7d) |
 
 `45` checks = install 3 + A01 6 + A02 3 + A03 5 + A04 5 + A05 4 + A06 2 + A07 5 + A08 4 + A09 3 + A10 3 + A11 2 + A12 3. The 44 in §1 is the historical run before the A11 receipt check and the A12 install/restart rows it counted separately. The counts have been stable across every completed run since: only the gap set changed, as A11 closed and then A02 closed.
 
@@ -453,6 +453,37 @@ reaches the caller on the first attempt.
 The D08 gate stays `partial` and the overall goal stays `INCOMPLETE`, for the A07 reasons above:
 the D06 write-side requirements are still unmet, the live-browser DOM evidence is source-level
 only, and no ACP gate has been upgraded.
+
+### 7d. Close-out
+
+All A12 obligations that were previously open are now complete:
+
+
+```text
+review            PASS — round 3 at 4b058e6 (read-only, covering d8f5cd1, 1a639a7 and 4b058e6)
+findings          F1 stale A02/A11 table rows, F2 stale header comment — both fixed in b82affd
+candidate gate    pnpm build:governance exit 0 · pnpm typecheck exit 0
+                  D06 gate 6 files / 118 tests · D07 gate 13 files / 66 tests
+                  D08 acceptance 45 checks / 3 gaps / 2 findings, exit 0, 278s
+frozen contract   git diff origin/main -- control-protocol/ empty — the contract is untouched
+integration       fast-forward 3c21d6f -> f5a54ae, 24 commits, no merge commit, no rewrite
+remote receipt    git ls-remote origin refs/heads/main read back after every push
+worktrees         5 owned worktrees removed, claims released
+```
+
+Owned worktrees reclaimed (all five were merged into main, clean, and their paths resolved to the expected locations before removal):
+
+| worktree | commit | state before removal |
+| --- | --- | --- |
+| `acp-d08-browser-20261011` | `f5a54ae` | merged, clean, 1.6 GB |
+| `acp-a11-crossdevice-20261011` | `869aff8` | merged, clean, 737 MB |
+| `acp-test-audit-d06-20261011` | `e77d9d7` | merged, clean, 155 MB |
+| `acp-test-audit-d07-20261011` | `e77d9d7` | merged, clean, 153 MB |
+| `acp-d06-d09-fold-20261011` | `3c21d6f` | merged, clean, 155 MB |
+
+All were my own `codex/acp-*` work of this delivery, verified as ancestors of main and free of uncommitted changes before `git worktree remove`. No other worktree was touched, so 30 remain in the playground, owned by other units. The two remote branches this delivery created were kept as their branches of record: `codex/acp-d08-browser-20261011` and `codex/acp-d00-contract-20261010`.
+
+One gate remains recorded as blocked and is not closed here: `pnpm verify`. Its failure is pre-recorded as live-test flakes, and the three product defects it would have exercised were each found and fixed by this driver instead, so the gate's status does not move. The A07 gaps are unmet requirements, not flakes, and they are what keeps this gate and the overall goal partial.
 
 ### `pnpm verify` did not pass on this host — reported as a blocked gate, not as a pass
 
