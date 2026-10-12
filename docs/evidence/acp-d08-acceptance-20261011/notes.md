@@ -20,8 +20,10 @@ are recorded in `verification.json` (`integration_commit`, `remote_receipt`).
 node docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs
 ```
 
-Canonical run (final artifact state, all three files in this directory present), exit
-code `0`, wall clock 136 s, empty stderr:
+Canonical run of this unit (final artifact state, all three files in this directory
+present), exit code `0`, wall clock 136 s, empty stderr. **This is the run at the commit
+that produced the artifacts below; it predates the driver's A02 retry and the A11 merge.**
+The current result on this candidate is in §7b (45 checks / 4 gaps / 2 findings, 1188 s):
 
 ```
 D08 acceptance PASS: 44 checks (gaps: 4, findings: 1) in 124s
@@ -31,8 +33,8 @@ cleanup: removed owned root /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08
 Three further full runs reached the same `44 checks / 4 gaps` result (`134s`, `133s`, `132s`).
 Those runs predate the generation observation, so they printed `findings: 0`; every run from
 the one that added it onward prints `findings: 1`. Ports, pids and sessions differ per run
-because every run creates its own temp root; the check, gap and finding counts are
-deterministic. The pids quoted in this file are the canonical run's.
+because every run creates its own temp root. The pids quoted in this file are the canonical
+run's.
 
 Two recorded values are *not* stable identities, and are quoted with that caveat:
 `content_sha256` changes whenever the staged candidate tree changes (the driver's own
@@ -147,7 +149,7 @@ driver never substitutes loopback for a LAN claim.
 | A08 registered-online, connection state and execution availability are separate; offline objects and historical connections visible | PASS | 4 | the directory lists five `online` and one `offline` peer at the same moment; live `connections=0` while durable `kind=connection` history holds 4 rows; execution availability is proven from a real engine (`session/new` configOptions) and an unavailable engine exits 1 with `UNSUPPORTED_CONFIGURATION` and no readiness line; the offline object and the historical connections stay visible |
 | A09 history across a UI refresh and an owner restart; a non-resumable Session is never passed off as resumed | PASS | 3 | a fresh authenticated stream plus history read returned the same 4 records byte-identical (same `recordId`/`sequence`, no loss or change); the owner restart goes through the project's own `control stop` + `control start` (not a SIGKILL crash restart), and the durable `kind: 'connection'` history still came back byte-identical; a graceful stop removes the persisted lifecycle record, so the stop+start began a new lifecycle at generation 1 instead of advancing the counter; a pre-restart Session is refused after the restart with `SESSION_OWNERSHIP_CONFLICT` and `session/load` with `UNSUPPORTED_METHOD` |
 | A10 agent-to-agent communication continues after the browser closes and after control stops | PASS | 3 | after every WebUI HTTP/SSE client connection the driver opened was closed, the established LAN channel completed a prompt with `stopReason=end_turn`; with the control daemon stopped and its listener port closed, the same established channel completed a prompt with `stopReason=end_turn`; the established channel also completed a prompt while the registry was stopped, which is the third leg of the same family |
-| A11 real LAN address; a cross-device conclusion needs a cross-device receipt | PASS | 1 | `PASS A11 — the LAN address is a real, connectable non-loopback listener — 192.168.0.3 is a non-loopback IPv4 and a raw TCP connect to the agent listener 192.168.0.3:57448 succeeded`. The cross-device conclusion is still not claimed: only one physical host exists here (`192.168.0.3`, tailscale `100.66.1.82`) |
+| A11 real LAN address; a cross-device conclusion needs a cross-device receipt | PASS | 2 | `PASS A11 — the LAN address is a real, connectable non-loopback listener` plus `PASS A11 — the cross-device receipt is integrated and recorded gap-free` (19 checks / 0 gaps, hosts Macstudio.local and jennys-macbook-air.anoa-buri.ts.net); the cross-device conclusion is claimed through integrated evidence and recorded as a finding rather than a gap0.3 is a non-loopback IPv4 and a raw TCP connect to the agent listener 192.168.0.3:57448 succeeded`. The cross-device conclusion is still not claimed: only one physical host exists here (`192.168.0.3`, tailscale `100.66.1.82`) |
 | A12 no Work/config/permission regression; install, restart, review and resource close-out | PARTIAL | 3 (install) + 1 (restart, counted in A03/A09) | this driver owns the installed-artifact and restart receipts; `pnpm typecheck` and the three mapped regression suites pass (31 files / 261 tests), while `pnpm verify` is recorded as a blocked gate with live-test flakes (§7). The independent review and the merge/remote/freeze close-out are the integration owner's |
 
 `44` checks = install 3 + A01 6 + A02 3 + A03 5 + A04 5 + A05 4 + A06 2 + A07 5 + A08 4 + A09 3 + A10 3 + A11 1.
@@ -157,12 +159,25 @@ The driver passes, but the overall goal stays **INCOMPLETE** while the four gaps
 ## 5. Gaps (unmet requirements and evidence boundaries)
 
 Two of these are **unmet requirements**: the shipped control daemon does not provide a
-capability D06 requires, so the acceptance item cannot be met in this candidate. Two are
-**evidence boundaries**: the capability may exist, but this environment cannot prove it.
-Neither kind is a defect introduced by D08, and neither is ever inferred from a passing
-check.
+capability D06 requires, so the acceptance item cannot be met in this candidate. One is an
+**evidence boundary**: the capability may exist, but this environment cannot prove it. One is an
+**upstream provider outage**: the candidate is correct and the dependency is not. None is a
+defect introduced by D08, and none is ever inferred from a passing check.
 
-1. **A07 — animation driven by real events. UNMET REQUIREMENT, not an environment limit.**
+1. **A02 — DSH real inference. UPSTREAM PROVIDER OUTAGE — neither a candidate defect nor
+   an evidence boundary of this project.** Agent B (`dsh`) does reach the real
+   `teams-workbuddy` provider, and the gateway refuses every turn with `API error (503)` /
+   `no_healthy_account` ("no healthy account available in pool; check /status or retry later").
+   The driver now retries that prompt with exponential backoff (30 s, 60 s, 120 s, 240 s,
+   480 s) and a fresh request id per attempt, so this is not a single flake: **all six attempts
+   were refused**, and the identical response came on the three earlier runs at 2026-10-11
+   21:06, 21:12 and 2026-10-12 05:05. What the run **did** prove for `dsh` is claimed: the
+   installed CLI started a real `dsh` engine child, and `initialize` plus `session/new`
+   succeeded against it. What it could not prove — a real prompt/process/reply — is **not**
+   claimed. Agent A (`opencode`) completed a real prompt end to end in every run
+   (`stopReason=end_turn`, `providerCalls=3`), so this gap is scoped to one engine and one
+   provider pool, and it does not touch the D06 or D07 mapped gates.
+2. **A07 — animation driven by real events. UNMET REQUIREMENT, not an environment limit.**
    D06 requires the control daemon to provide discovery query, connect/disconnect, membership
    and role projection, and targeted ACP ingress with callback reply and cancel
    (`D06-control.md`). The shipped daemon binds no Console or Session owner:
@@ -187,7 +202,7 @@ check.
    refresh is. The typed-absence path is deliberate in the shipped code, but the capability it
    stands in for is still missing. This is a retained delivery obligation owned by D06/D07,
    not a coverage boundary. It is the reason A07 is `PARTIAL`.
-2. **A07 — live-browser DOM against the installed artifact. EVIDENCE-LEVEL BOUNDARY.**
+3. **A07 — live-browser DOM against the installed artifact. EVIDENCE-LEVEL BOUNDARY.**
    The reason recorded here earlier was **wrong**. It claimed headless Chrome cannot satisfy
    the origin's HTTP Basic challenge for a same-origin `fetch`/`EventSource`. That is
    refuted: CDP `Network.setExtraHTTPHeaders` injects the credential at the network layer,
@@ -199,35 +214,45 @@ check.
    origin, which is a different evidence level from an installed-artifact run, so it does not
    close this item. The frozen DOM marker contract is also owned by
    `ui/teams-console/tests/render-d07.spec.ts` (real Chrome).
-3. **A07 — targeted interaction from the WebUI. UNMET REQUIREMENT, same missing owner as
+4. **A07 — targeted interaction from the WebUI. UNMET REQUIREMENT, same missing owner as
    gap 1.** Because no Session owner is bound, every
    interaction write is a typed `UNSUPPORTED_OPERATION` refusal, so no prompt can be
    targeted from the WebUI in this candidate. The driver proves the refusal is typed and
    that no effect is fabricated; it does not prove a targeted interaction. Retained delivery
    obligation owned by D06.
-4. **A11 — cross-device receipt. EVIDENCE-LEVEL BOUNDARY.** The reason recorded here
-   earlier was **wrong**: it said only one physical host is available. A real two-host
-   receipt now exists (HOST A `Macstudio.local` `100.66.1.82`, HOST B
-   `jennys-macbook-air.anoa-buri.ts.net` `100.93.143.20`, macOS 15.7.9 arm64) in the
-   separate A11 unit on branch `codex/acp-a11-crossdevice-20261011` at commit `869aff8`:
-   19 checks, 0 gaps, exit 0, real ACP `session/new` → `session/prompt` →
-   `session/request_permission` → `session/update` → `end_turn` plus a `session/cancel`
-   path, with byte-identical tarball sha256
-   `f19211c9bd8123a477e3b99cce3beb23542ea20de80d44b6caf68bab85b80de9` and CLI sha256
-   `d97ab857e0a7892f2bab791fbc9a377f9fb12b338c256a6af22e541afd859238` on both hosts.
-   It stays a gap for **this** driver because that unit is **not merged** into this
-   candidate, so this driver cannot verify it from here and must not claim it. Folding A11
-   into this gate requires integrating that unit first. LAN reachability over
-   `192.168.0.3` is proven here, and loopback is never substituted for it.
+### 5a. Gap closed on this candidate — A11 cross-device receipt
+
+The A11 gap is **closed** on this candidate. The reason it was open is recorded here so the
+change stays auditable: it was open because the two-host receipt lived in a **separate,
+unmerged** unit, so this driver could not verify it from here. That unit is now merged into
+this candidate at commit `869aff8`, and the driver verifies the receipt instead of carrying a
+gap. The check asserts the receipt is present, records at least two checks, records **no**
+gaps, and names two **distinct non-loopback** hosts (`Macstudio.local`,
+`jennys-macbook-air.anoa-buri.ts.net`). The receipt itself is unchanged from the A11 unit:
+
+- 19 checks, 0 gaps, exit 0, real ACP `session/new` → `session/prompt` →
+  `session/request_permission` → `session/update` → `end_turn`, plus a `session/cancel` path.
+- byte-identical tarball sha256
+  `f19211c9bd8123a477e3b99cce3beb23542ea20de80d44b6caf68bab85b80de9` and CLI sha256
+  `d97ab857e0a7892f2bab791fbc9a377f9fb12b338c256a6af22e541afd859238` on both hosts.
+
+The residual boundary is recorded as a **finding**, not a gap: this driver verified the receipt
+**by reading it**. It did not re-drive the cross-device traffic, because it exercised only
+`192.168.0.3` (tailscale `100.66.1.82`). Loopback and same-host non-loopback are still never
+substituted for a cross-device result. The A11 unit's own self-declared limits are unchanged
+and are **not** repaired by merging it: the registry runs on HOST A, HOST B's engine is a copy
+rather than an install, the provider is a stub, the path is Tailscale rather than the ordinary
+LAN, and the two hosts' physical distinctness is attested only by hostname.
 
 The overall goal stays **INCOMPLETE** while these four gaps remain.
 
 ## 6. Defects found by this driver (both fixed), and the one open observation
 
-This driver found two product defects. Both were fixed before the canonical run, so neither
-is an open finding. The canonical run reports `findings: 1`, and that single `FINDING` is the
-generation-reuse observation described in §1, not a defect: it falsifies no check and no
-requirement covers it.
+This driver found three product defects. All were fixed on this candidate, so none is an open
+finding. The current run reports `findings: 2`, and neither `FINDING` is a defect: one is the
+generation-reuse observation described in §1, and one is the A11 note that the cross-device
+receipt is verified by reading rather than by re-driving the traffic (§5a). Neither falsifies a
+check, and no requirement covers the first.
 
 ### D08-F1 — `agentteams control stop` reported `STOP_TIMEOUT` while a WebUI client socket was open (FIXED in `44d82f7`)
 
@@ -311,7 +336,7 @@ Mapped regression suites, re-run on this merged candidate (D06 fold + D07 ablati
 | D05 LAN/network | `pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts control-protocol/teams-connection.spec.ts` | 9 files, 73 tests, pass |
 | D07 WebUI | `TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism <the 13 live ui/teams-console/tests specs>` | 13 files, **66 tests, pass** (16 files / 73 tests before the ablation deleted three dead page modules and their specs) |
 
-### 7a. Re-run on the merged candidate (blocked by an upstream outage)
+### 7a. Re-runs on the merged candidate (the outage moved from the driver to a gap)
 
 The acceptance driver was re-run on this merged candidate (D06 directory-projection increment
 folded in, the A07 gap premise corrected). **Both attempts failed before reaching A07:**
@@ -331,24 +356,59 @@ sustained provider-side outage rather than a transient. Agent A (`opencode`) com
 gateway returning 503. This is an upstream provider outage, not a defect in this candidate
 and not a flake in this project.
 
-Consequences, recorded rather than papered over:
+Consequences at the time, superseded by §7b — recorded rather than papered over:
 
-- No new D08 check count is recorded. The 44-check / 4-gap / 1-finding result below is retained
-  as the historical run it is, and its A07 premise is corrected above and in
-  `verification.json` rather than left stale. The driver was not weakened, skipped, or
-  re-scoped to work around the outage; the two attempts before it and this one all
-  reached A02 from a clean install of the candidate's own tarball, so the install and
-  A01 checks did pass on this candidate.
+- No new D08 check count was recorded **at that point**, because the driver could not get
+  past A02. §7b supersedes this bullet: after the retry fix the run does complete, and the
+  44-check / 4-gap / 1-finding result above stays as the historical run it is, with its A07
+  premise corrected above and in `verification.json` rather than left stale. The driver was
+  never weakened, skipped, or re-scoped to work around the outage: every attempt reached
+  A02 from a clean install of the candidate's own tarball, so the install and A01 checks
+  passed on this candidate.
 - The failed runs retained their owned temp roots for inspection; they were verified
   process-free and then removed by name, so no `d08-acc-*` root remains.
 - The D06 and D07 mapped gates were re-run green on this candidate (118 and 66 tests), so
   the source-level evidence for the folded increment is fresh.
 
-**Retry policy: stop retrying.** Three identical failures at one check mean the blocker is the
-provider pool, not this candidate, so further retries only re-pay the build and install cost.
-Re-run once there is an independent signal that the `teams-workbuddy` pool has recovered.
-The command is unchanged and the driver stages and installs the tarball by itself. Until
-then the D08 gate stays `partial` and the overall goal stays `INCOMPLETE`.
+**Retry policy — corrected. The earlier policy was wrong and the driver was wrong.** This
+section first recorded "stop retrying" and treated the outage as a reason to stop running the
+driver. That is the wrong place to put a retry: a driver that dies on one upstream error
+throws away every result behind it and makes the operator re-pay the whole build and install.
+A single transient error must be retried **inside** the driver, with exponential backoff, so
+the same failure cannot end a run that a retry would have closed. Fixed in commit `d8f5cd1`:
+the A02 DSH prompt is attempted up to six times with a fresh request id per attempt and
+backoff of 30 s, 60 s, 120 s, 240 s and 480 s. Only a 5xx-shaped provider refusal is retried,
+so a real candidate defect still fails fast and loudly instead of being retried into an
+ambiguous result. When every attempt refuses, the driver records the prompt as a **gap** and
+still claims the `initialize`/`session/new` result it did prove, so the run continues through
+A03–A11 and neither path is a fabricated pass.
+
+### 7b. Run 4 on the merged candidate (2026-10-12 06:31 PST) — the run now completes
+
+Commit `d8f5cd1` (retry) plus the A11 merge `869aff8`, tree clean:
+
+```
+D08 acceptance PASS: 45 checks (gaps: 4, findings: 2) in 1188s
+```
+
+All six A02 DSH attempts were refused with the same `no_healthy_account` 503, so the upstream
+outage is real and sustained — but it no longer stops the run. The result moved in three ways,
+and each is a correction rather than a cosmetic change:
+
+- **The run reaches the end.** It previously died at A02 and produced no A03–A11 result at all.
+  The full A01–A11 result now exists on this candidate.
+- **The A11 cross-device gap is closed** by the merged receipt (see §5a) and replaced by a
+  check plus a finding.
+- **A02 DSH real inference became a gap.** The honest consequence of not dying: the run now
+  states plainly that no prompt result is claimed for agent B, instead of reporting nothing.
+
+Checks rose 44 → 45 (the A11 check), findings 1 → 2 (the A09 generation-1 observation plus the
+A11 read-not-drive finding), and the gap set changed membership rather than count (A11 out,
+A02 in). The later driver change to verify an integrated receipt is `git show`-able in
+`black-box-acceptance.mjs`, and the earlier 44-check run stays recorded as its own run.
+
+The D08 gate stays `partial` and the overall goal stays `INCOMPLETE`, because the D06
+write-side requirements behind the A07 gaps are still unmet and no ACP gate has been upgraded.
 
 ### `pnpm verify` did not pass on this host — reported as a blocked gate, not as a pass
 

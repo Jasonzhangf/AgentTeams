@@ -34,18 +34,18 @@
   },
   "gate_id": "teams-acp-d08-acceptance",
   "gate_status": "partial",
-  "gate_status_note": "the driver block below still carries summary_line \"D08 acceptance PASS: 44 checks (gaps: 4, findings: 1)\" and exit_code 0; that is the PRE-MERGE run and is not the acceptance result for the current candidate. Read it as a historical run, not as this candidate's result. Formatting note: the driver computes that line only from the checks it reached, and the driver has no merge awareness, so the line cannot be updated without a real run. The recorded 44-check / 4-gap / 1-finding run was produced before the D06 directory-projection increment was folded into D06, and it printed a stale A07 premise (\"the projection is a constant empty snapshot\"). The four gap reasons above have been rewritten to match what the driver now prints. A re-run of the driver on this merged candidate did NOT complete: three attempts failed at the real DSH prompt with an upstream 503 no_healthy_account from the teams-workbuddy gateway, so no new D08 check count is recorded and the recorded run is retained as historical evidence for the 44 checks it did complete. The D06 and D07 gates were re-run green on this candidate (118 tests and 66 tests).",
+  "gate_status_note": "The command is executable and passed on this candidate at 2026-10-12 06:31 PST: 45 checks, 4 gaps, 2 findings, exit 0, 1188s. Three gaps are D07 WebUI/D06 unmet requirements (A07 real-event animation, A07 targeted interaction) and one is an evidence-level boundary (A07 live-browser DOM against the installed artifact). One gap is an upstream outage (A02 DSH real inference: all six attempts refused by the teams-workbuddy pool), which is not a candidate defect and does not block the D06 or D07 gates. The earlier A11 cross-device gap is CLOSED: the A11 unit at commit 869aff8 is merged into this candidate and the driver now verifies its receipt, so the cross-device conclusion is claimed through integrated evidence instead of being recorded as a gap. Two findings, neither of which is a defect and neither of which changes the exit code: a graceful stop+start reuses owner generation 1, and the cross-device receipt is verified by reading rather than by re-driving the traffic. Status stays partial: the D06 write-side requirements behind the three A07 gaps are unmet, the D08 installed-artifact DSH prompt is blocked by the upstream provider, and no ACP gate has been upgraded.",
   "driver": {
     "path": "docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
     "command": "node docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
     "exit_code": 0,
-    "summary_line": "D08 acceptance PASS: 44 checks (gaps: 4, findings: 1) in 124s",
-    "summary_note": "the final line carries that run's own elapsed seconds; the check/gap/finding counts are deterministic across runs. The single FINDING is an observation, not a defect: a graceful control stop removes the persisted lifecycle record, so the restarted owner reuses generation 1 and a stale --generation can collide. No requirement covers it, so the driver records it instead of asserting it, and a FINDING never changes the exit code.",
-    "checks": 44,
+    "summary_line": "D08 acceptance PASS: 45 checks (gaps: 4, findings: 2) in 1188s",
+    "summary_note": "Run at 2026-10-12 06:31 PST on candidate d8f5cd1 (A11 merged). The recorded 44-check run of 2026-10-11 00:53 is historical and is retained as its own record. Since then the driver changed twice and the result moved: (1) the A02 DSH prompt now retries a transient upstream 503 with exponential backoff instead of dying on the first refusal, so the run completes A03-A11 instead of stopping at A02; (2) the A11 cross-device receipt, previously recorded as a gap because the A11 unit was not merged, is now verified by the driver and is a check. A02 DSH real inference therefore replaced it as a gap: all six attempts at the upstream provider were refused with teams-workbuddy 503 no_healthy_account, so no prompt result is claimed, while the initialize/session/new result the run did prove is still claimed. Findings rose from 1 to 2: the A09 generation-1 reuse and the A11 finding that the cross-device receipt is verified by reading rather than by re-driving the traffic.",
+    "checks": 45,
     "gaps": 4,
-    "findings": 1,
+    "findings": 2,
     "resolved_defects": 2,
-    "wall_clock_seconds": 124,
+    "wall_clock_seconds": 1188,
     "runtime_under_test": "installed artifact: npm pack of the pnpm build:governance final package, installed into an isolated prefix with npm install --prefix",
     "worktree_debug_binary_used_as_runtime_evidence": false
   },
@@ -215,9 +215,9 @@
       "id": "A11",
       "requirement": "a real LAN address is reachable; a cross-device conclusion needs a cross-device receipt and loopback does not substitute",
       "status": "pass",
-      "checks": 1,
-      "evidence": "the LAN address is a real non-loopback IPv4 and a raw TCP connect to the agent's LAN listener succeeded: 192.168.0.3 is a non-loopback IPv4 and a raw TCP connect to the agent listener 192.168.0.3:57448 succeeded. The cross-device conclusion is still not claimed: only one physical host exists here (LAN 192.168.0.3, tailscale 100.66.1.82), and loopback and same-host non-loopback are never passed off as cross-device.",
-      "unmet_requirement": "cross-device receipt"
+      "checks": 2,
+      "evidence": "the LAN address is a real non-loopback IPv4 and a raw TCP connect to the agent listener succeeded: 192.168.0.3 on port 64979. The cross-device conclusion is now claimed through integrated evidence: docs/evidence/acp-a11-crossdevice-20261011/ records 19 checks, 0 gaps over two distinct non-loopback hosts (Macstudio.local 100.66.1.82, jennys-macbook-air.anoa-buri.ts.net 100.93.143.20), which this driver verifies by reading rather than by re-driving the traffic.",
+      "unmet_requirement": null
     },
     {
       "id": "A12",
@@ -228,6 +228,10 @@
     }
   ],
   "gaps": [
+    {
+      "name": "A02 — DSH real inference",
+      "reason": "the upstream provider refused all six attempts: teams-workbuddy API error (503) no_healthy_account, \"no healthy account available in pool\". The prompt is retried with exponential backoff (30s, 60s, 120s, 240s, 480s) and a fresh request id per attempt, so this is a sustained provider outage rather than a single flake; the same response came on three earlier runs at 2026-10-11 21:06, 21:12 and 05:05. This is not a candidate defect: the D06 and D07 gates are independent of it, agent A (opencode) completed a real prompt end to end in every attempt, and agent B answered initialize and session/new over the installed CLI. No prompt result is claimed for agent B, which is the honest form of the result."
+    },
     {
       "id": "G1",
       "item": "A07",
@@ -251,14 +255,6 @@
       "reason": "the control daemon binds no Session owner, so every interaction write (permission.reply / session send) is a typed UNSUPPORTED_OPERATION refusal and no prompt can be targeted from the WebUI in this candidate; the driver proves the refusal path rather than the success path. D06 requires connect/disconnect, network.membership.apply, a Session owner and targeted ACP ingress, so this is an UNMET REQUIREMENT owned by D06, not an environment limit. The D06 directory-projection increment (formerly carried as the separate \"D09\" unit, now folded into D06) delivers the discovery query and the membership projection, so those two leave this gap",
       "owner": "D06/D07",
       "classification": "retained delivery obligation"
-    },
-    {
-      "id": "G4",
-      "item": "A11",
-      "name": "cross-device receipt",
-      "reason": "this driver runs on one physical host (LAN 192.168.0.3) and cannot itself produce a cross-device receipt; loopback and same-host non-loopback are never passed off as cross-device. A real two-host receipt exists only in the separate A11 unit (branch codex/acp-a11-crossdevice-20261011, commit 869aff8, 19 checks / 0 gaps, exit 0), which is not merged into this candidate, so this driver neither verifies nor claims it. The earlier reason recorded here claimed only one physical host exists; that was wrong",
-      "owner": "D08 integration",
-      "classification": "unmerged separate evidence unit, explicitly not claimed by this driver"
     }
   ],
   "findings": [
@@ -269,6 +265,10 @@
       "detail": "a graceful stop removes the persisted lifecycle record, so the restarted owner begins a new lifecycle at generation 1 instead of continuing the counter; a crash restart keeps the record and advances it. A stale --generation value from the previous lifecycle can therefore collide with the new one. The project declares no monotonicity requirement across a graceful stop, so the driver records this and asserts the observed rule rather than a requirement.",
       "falsifies_a_check": false,
       "affects_exit_code": false
+    },
+    {
+      "name": "A11 — the cross-device receipt is verified by reading, not by driving traffic",
+      "detail": "this driver exercised only the LAN address 192.168.0.3 (tailscale 100.66.1.82); the cross-device exchange was driven by the A11 unit at commit 869aff8, whose receipt the driver now verifies by reading: present, two distinct non-loopback hosts, no recorded gaps. Loopback and same-host non-loopback are never passed off as cross-device, and that exchange is not re-driven here. A finding is recorded rather than a gap because the requirement is satisfied by integrated evidence."
     }
   ],
   "findings_note": "the driver found two product defects (D08-F1, D08-F2); both are fixed, so no open defect remains. The canonical run reports findings: 1, and that one entry is the generation-reuse observation above: it falsifies no check, no requirement covers it, and it never changes the exit code.",
@@ -338,7 +338,8 @@
       "session/load after an owner restart": "UNSUPPORTED_METHOD",
       "stale callback reply after an agent restart": "CALLBACK_UNAVAILABLE (transport acp.error)"
     },
-    "d08_rerun_status": "blocked by an upstream teams-workbuddy 503 (no_healthy_account). Three attempts on two candidate commits (21:06 and 21:12 PST on the merge, 05:05 PST on ea046e0) failed at the identical A02 check. The driver was not weakened and retrying was stopped. The recorded 44-check run is retained as historical evidence and not superseded"
+    "d08_rerun_status": "blocked by an upstream teams-workbuddy 503 (no_healthy_account). Three attempts on two candidate commits (21:06 and 21:12 PST on the merge, 05:05 PST on ea046e0) failed at the identical A02 check. The driver was not weakened and retrying was stopped. The recorded 44-check run is retained as historical evidence and not superseded",
+    "d08_run_status": "passed at 45 checks / 4 gaps / 2 findings on 2026-10-12 06:31 PST. The A02 DSH prompt is the only upstream-blocked item: six attempts, exponential backoff, all refused with no_healthy_account. The A11 cross-device gap is closed by the merged A11 receipt."
   },
   "engine_versions": {
     "node": "v22.22.2",
@@ -367,7 +368,7 @@
     "cleanup": "every daemon/engine/provider process is stopped by explicit pid; the owned temp root is removed on PASS and retained with a printed path on FAIL"
   },
   "retained_objects": [],
-  "overall_goal": "INCOMPLETE while the four gaps remain; the two product defects this driver found (D08-F1, D08-F2) are fixed",
+  "overall_goal": "INCOMPLETE: the D06 write-side capabilities behind the A07 gaps are unmet and blocked on an engineInstanceId contract amendment, the D08 DSH prompt is blocked by an upstream provider outage, and the A07 live-browser DOM evidence is source-level only",
   "retained_obligations": [
     {
       "item": "pnpm verify is not reliably green on this host",
@@ -414,7 +415,33 @@
       "result": "FAIL at the identical check with an identical error",
       "failure": "same teams-workbuddy 503 no_healthy_account",
       "evidence": "third identical failure, on a different candidate commit than attempts 1 and 2, more than eight hours after the first. The outage is sustained, so retrying was stopped rather than continued"
+    },
+    {
+      "attempt": "2026-10-12 06:07 PST",
+      "candidate": "d8f5cd1 (A11 merged; the A02 prompt now retries a transient upstream 503 with exponential backoff)",
+      "result": "PASS — the run completed A01-A11",
+      "failure": null,
+      "detail": "all six A02 DSH attempts refused with teams-workbuddy 503 no_healthy_account; the prompt was recorded as a gap and the run continued",
+      "summary": "D08 acceptance PASS: 44 checks (gaps: 5, findings: 1) in 1234s",
+      "note": "first run after the retry fix; the A11 receipt was still recorded as a gap because the receipt-verification check had not been written yet"
+    },
+    {
+      "attempt": "2026-10-12 06:31 PST",
+      "candidate": "same tree plus the driver receipt-verification change",
+      "result": "PASS — the current result",
+      "failure": null,
+      "detail": "all six A02 DSH attempts refused again, so the outage is sustained; the A11 receipt is now verified by the driver and is a check, and A02 DSH real inference is the new gap",
+      "summary": "D08 acceptance PASS: 45 checks (gaps: 4, findings: 2) in 1188s"
     }
   ],
-  "retry_policy": "stop retrying until there is an independent signal that the teams-workbuddy pool has recovered; three identical failures at one check mean the blocker is the provider pool"
+  "retry_policy": "Retry INSIDE the driver, with exponential backoff. The earlier policy here (\"stop retrying\") was wrong, and it was driven by a driver defect rather than by judgement: a driver that dies on one upstream error discards every result behind it and makes the operator re-pay the whole build and install. Fixed at commit d8f5cd1 — the A02 DSH prompt is attempted up to six times with a fresh request id per attempt and backoff of 30s, 60s, 120s, 240s and 480s. Only a 5xx-shaped provider refusal is retried, so a real candidate defect still fails fast and loudly instead of being retried into an ambiguous result. When every attempt refuses the driver records a gap and still claims the initialize/session/new result it did prove, so the run continues through A03-A11 and neither path is a fabricated pass. The outage itself is unresolved: the same no_healthy_account 503 came on all six attempts and on the three earlier runs. Re-run once the teams-workbuddy pool is healthy.",
+  "closed_gaps": [
+    {
+      "name": "A11 — cross-device receipt",
+      "closed_by": "commit 869aff8 (the A11 unit) merged into this candidate, verified by the driver at 2026-10-12 06:31 PST",
+      "how": "the driver reads the integrated receipt and asserts it is present, names two distinct non-loopback hosts, and records no gaps",
+      "residual": "recorded as a finding rather than a gap: the driver verified the receipt by reading it, it did not re-drive the cross-device traffic itself",
+      "earlier_reason": "this driver runs on one physical host (LAN 192.168.0.3) and cannot itself produce a cross-device receipt; loopback and same-host non-loopback are never passed off as cross-device. A real two-host receipt exists only in the separate A11 unit (branch codex/acp-a11-crossdevice-20261011, commit 869aff8,"
+    }
+  ]
 }

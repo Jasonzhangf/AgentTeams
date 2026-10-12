@@ -4,6 +4,12 @@ Unit: `acp-a11-crossdevice-20261011`
 Worktree: `/Volumes/Intel/playground/agentteams/acp-a11-crossdevice-20261011` (branch `codex/acp-a11-crossdevice-20261011`)
 Base: `origin/main@8cb0238` (the D08 integration commit)
 Result: **PASS — 19 checks, 0 gaps**. A real ACP prompt/reply crosses from HOST A to HOST B.
+Integration: **MERGED** into `codex/acp-d08-browser-20261011` at 2026-10-12 06:32 PST. Merged
+evidence-only, so no gate record was edited by the merge itself. After merging, the A11
+cross-device gap of the D08 gate closed: the acceptance driver now reads this receipt and asserts
+it is present, records no gaps, and names two distinct non-loopback hosts. Before the merge the
+receipt was produced but not merged, so the D08 driver could not claim it and A11 stayed a gap.
+That earlier state is what the gate note and the acceptance unit recorded.
 
 ## 1. What A11 required
 

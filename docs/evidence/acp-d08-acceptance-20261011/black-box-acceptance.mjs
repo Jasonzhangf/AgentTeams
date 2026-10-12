@@ -78,7 +78,7 @@ import { createServer as createHttpServer } from 'node:http'
 import { createConnection, createServer as createNetServer } from 'node:net'
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { networkInterfaces, tmpdir } from 'node:os'
+import { hostname, networkInterfaces, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -1783,20 +1783,47 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
     `${lanIp} is a non-loopback IPv4 and a raw TCP connect to the agent listener ${lanIp}:${portA} succeeded`)
 
   /* -------------------------------------------------------------------------------------
-   * Cross-device boundary (recorded honestly; never inferred from the LAN result above)
+   * Cross-device boundary (satisfied by an integrated receipt, never inferred from the LAN result above)
    * ----------------------------------------------------------------------------------- */
 
-  /* The earlier text here said "only one physical host is available". That premise is now FALSE:
+  /* The earlier text here said "only one physical host is available". That premise was FALSE:
    * a real two-host receipt exists (HOST A Macstudio.local 100.66.1.82, HOST B
-   * jennys-macbook-air.anoa-buri.ts.net 100.93.143.20), produced by the A11 unit on branch
-   * codex/acp-a11-crossdevice-20261011 at commit 869aff8: 19 checks, 0 gaps, exit 0, real ACP
-   * session/new -> session/prompt -> session/request_permission -> session/update -> end_turn, plus
-   * a session/cancel path, with byte-identical tarball and CLI sha256 on both hosts.
+   * jennys-macbook-air.anoa-buri.ts.net 100.93.143.20), produced by the A11 unit at
+   * commit 869aff8 and merged into this candidate: real ACP session/new -> session/prompt ->
+   * session/request_permission -> session/update -> end_turn, plus a session/cancel path, with
+   * byte-identical tarball and CLI sha256 on both hosts.
    *
-   * It stays a gap for THIS driver for an honest reason: that receipt is a separate evidence unit
-   * which is NOT merged into this candidate, so this driver cannot verify it from here and must not
-   * claim it. Folding A11 into this gate requires integrating that unit first. */
-  gap('A11 — cross-device receipt', `this driver runs on one physical host (LAN ${lanIp}, tailscale 100.66.1.82) and cannot itself produce a cross-device receipt; loopback and same-host non-loopback are never passed off as cross-device. A real two-host receipt DOES exist in the separate A11 unit (branch codex/acp-a11-crossdevice-20261011, commit 869aff8, 19 checks / 0 gaps, exit 0), but that unit is not merged into this candidate, so this driver neither verifies nor claims it`)
+   * That receipt is a SEPARATE evidence unit that this driver does not drive. So this check
+   * verifies the integrated receipt instead of recording a gap for it: it is present in this
+   * tree, it names two distinct non-loopback peers, and it carries no recorded gaps. A run
+   * without the receipt fails rather than silently dropping to a gap, and the residual boundary
+   * is reported as a finding so a finding is never confused with a gap. */
+  const receiptUrl = new URL('../acp-a11-crossdevice-20261011/verification.json', import.meta.url)
+  let receipt
+  try {
+    receipt = JSON.parse(readFileSync(receiptUrl, 'utf8'))
+  } catch (cause) {
+    throw new Error(`the A11 cross-device receipt is not integrated at ${receiptUrl}: ${cause.message}`)
+  }
+  const receiptHosts = receipt.hosts ?? {}
+  assert(Array.isArray(receipt.checks) && receipt.checks.length >= 2,
+    'the integrated A11 receipt records no checks')
+  assert(Array.isArray(receipt.gaps) && receipt.gaps.length === 0,
+    `the integrated A11 receipt still records ${receipt.gaps?.length ?? 'an unknown number of'} gaps`)
+  const receiptHostA = receiptHosts.hostA?.hostname ?? ''
+  const receiptHostB = receiptHosts.hostB?.hostname ?? ''
+  assert(receiptHostA !== '' && receiptHostB !== '' && receiptHostA !== receiptHostB,
+    `the integrated A11 receipt does not name two distinct hosts (${receiptHostA || 'none'} / ${receiptHostB || 'none'})`)
+  const receiptPeers = [receiptHostA, receiptHostB]
+  assert(receiptPeers.every(peer => peer.toLowerCase() !== 'localhost' && peer !== '127.0.0.1' && peer !== '::1'),
+    `the integrated A11 receipt names a loopback peer (${receiptPeers.join(', ')})`)
+  check('A11 — the cross-device receipt is integrated and recorded gap-free',
+    `receipt docs/evidence/acp-a11-crossdevice-20261011/: ${receipt.checks.length} checks, ${receipt.gaps.length} gaps, `
+      + `two distinct non-loopback hosts (${receiptHostA}, ${receiptHostB})`)
+  finding('A11 — the cross-device receipt is verified by reading, not by driving traffic',
+    `this driver on ${hostname} exercised only ${lanIp} (tailscale 100.66.1.82); the cross-device exchange was driven by the `
+      + 'A11 unit at commit 869aff8, whose receipt this driver now verifies by reading. Loopback and same-host '
+      + 'non-loopback are never passed off as cross-device, and that exchange is not re-driven here')
 
   const elapsed = Math.round((Date.now() - started) / 1000)
   process.stdout.write(`\nD08 acceptance PASS: ${checks.length} checks (gaps: ${gaps.length}, findings: ${findings.length}) in ${elapsed}s\n`)
