@@ -1,6 +1,6 @@
 import type { AgentDeclaration, RelayPeer, ServiceError } from '../control-protocol/agent-services.ts'
 import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
-import { createRelayClient, type RelayClient, type RelayClientOptions } from './relay-client.ts'
+import { createRelayClient, type RelayClient, type RelayClientOptions, type RelayDirectorySnapshot } from './relay-client.ts'
 
 /**
  * Network owns the registration client transport and its health. It consumes an
@@ -72,6 +72,12 @@ export interface RegistrationClient {
   /** Runs the first attempt and returns the resulting status; retries continue in the background. */
   start(): Promise<RegistrationStatus>
   directory(subscribe: boolean): Promise<readonly RelayPeer[]>
+  /**
+   * The same real scoped directory read, carrying the server's directory revision.
+   * The account-directory projection needs the revision to confirm a route
+   * generation, so this is the one seam the D06 control daemon consumes.
+   */
+  directorySnapshot(subscribe: boolean): Promise<RelayDirectorySnapshot>
   /**
    * R4: publishes an advanced declaration (the daemon's real listener route plus
    * its accepted ACP capability) over the same registration connection. It
@@ -263,24 +269,22 @@ export function createRegistrationClient(options: RegistrationClientOptions): Re
     void client.closed.then(reason => { if (relay === client) onDisconnect(reason) })
   }
 
+  /** The one online-state guard: every directory/publish read needs the same live relay. */
+  const onlineRelay = (): RelayClient => {
+    const client = relay
+    if (state !== 'online' || client === undefined) {
+      throw new RelayProtocolError(lastError?.code ?? 'UNAVAILABLE', lastError?.message ?? 'registration: client is not online')
+    }
+    return client
+  }
+
   return {
     closed,
     status,
     start: async () => { await connect(); return status() },
-    directory: async subscribe => {
-      const client = relay
-      if (state !== 'online' || client === undefined) {
-        throw new RelayProtocolError(lastError?.code ?? 'UNAVAILABLE', lastError?.message ?? 'registration: client is not online')
-      }
-      return await client.directory(subscribe)
-    },
-    publish: async declaration => {
-      const client = relay
-      if (state !== 'online' || client === undefined) {
-        throw new RelayProtocolError(lastError?.code ?? 'UNAVAILABLE', lastError?.message ?? 'registration: client is not online')
-      }
-      await client.publish(declaration)
-    },
+    directory: async subscribe => await onlineRelay().directory(subscribe),
+    directorySnapshot: async subscribe => await onlineRelay().directorySnapshot(subscribe),
+    publish: async declaration => { await onlineRelay().publish(declaration) },
     stop: async () => {
       if (stopping) { await closed; return }
       stopping = true

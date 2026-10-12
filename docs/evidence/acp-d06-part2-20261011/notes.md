@@ -124,3 +124,160 @@ D07 只消费 `control-protocol/console-api.ts` 的 Console DTO（含 `ConsolePe
 - 无浏览器证据（未对 WebUI 做真实浏览器渲染或截图）。
 - 门禁状态保持 `partial`，不宣称 `implemented`/`passed`。
 - 未 merge、未 push；本轮只在上述分支产生一个提交。
+
+## 8. 目录投影增量（原 D09，2026-10-11 折入 D06）
+
+**归属声明：本条增量原先作为独立 “D09” 单元承载（提交 `0adc57f`，分支
+`codex/acp-d09-discovery-projection-20261011`）。它现在属于 D06：没有单独的 D09 单元、
+没有单独的 D09 门禁、没有单独的 D09 证据目录。** 原目录
+`docs/evidence/acp-d09-discovery-projection-20261011/` 已整体删除，内容迁入本目录（D06
+PART 2）。`0adc57f` 及其提交信息一字未改，作为历史事实保留在自己的分支上。
+
+选本目录（PART 2）而非 `acp-d06-control-20261011/`（PART 1）的理由：`createControlNetworkStatus`
+由 PART 2 引入，PART 2 先把 D05 端口接上、目录仍是静态空值；本条增量正是把该目录变成真实
+D04 回读，属同一注入点的直接延续。PART 1 只交付守护进程本体与线面，且本目录是本 unit 唯一
+带结构化 `verification.json` 的目录。
+
+迁入与重命名：
+
+| 原路径 | 现路径 |
+| --- | --- |
+| `docs/evidence/acp-d09-discovery-projection-20261011/notes.md` | 本节 |
+| `docs/evidence/acp-d09-discovery-projection-20261011/verification.json` | 合并进本目录 `verification.json` |
+| `docs/evidence/acp-d09-discovery-projection-20261011/black-box-discovery-projection.mjs` | `docs/evidence/acp-d06-part2-20261011/black-box-control-directory-projection.mjs` |
+
+驱动内与单元身份相关的标识符一并改为中性名：`D09_EVIDENCE_OUT`→`TEAMS_CONTROL_PROJECTION_EVIDENCE_OUT`、
+`D09_CONTROL_PASSWORD`→`TEAMS_CONTROL_BLACKBOX_PASSWORD`、`D09_CRED_*`→`TEAMS_CRED_*`、
+`D09_PROBE_KEY`→`TEAMS_PROBE_KEY`、`D09_STEP_TIMEOUT_MS`→`TEAMS_STEP_TIMEOUT_MS`、
+registry daemon id `d09-registry`→`teams-registry`、stub provider label、临时根前缀与报告文件名。
+驱动头部保留一句 “previously carried as a separate "D09" unit” 的历史事实说明。
+
+### 8.1 交付文件与调用边
+
+| 文件 | 变更（含 file:line） |
+| --- | --- |
+| `runtime/control-process.ts` | `CreateControlOwnerOptions.source?: ControlProjectionSource`（:487-494）；`createControlOwner.read` 优先用 source 的完整读（:500-503）；`ControlNetworkStatusBinding.projection`（:539-546）；`DIRECTORY_PROJECTION_INTERVAL_MS = 1_000`（:549）；`createControlNetworkStatus.refreshDirectory` 真实目录回读（:595-619）、`observe` 先刷新目录（:620-627）、每读新建 D05 port（:647）、`readProjection`（:648-652）；`runControlProcess` 绑定 owner 与真实 SSE watch（:818、:824-826） |
+| `network/registration-client.ts` | `RegistrationClient.directorySnapshot(subscribe)`（:80 接口）；唯一 online guard `onlineRelay()` 与实现（:286） |
+| `runtime/console-hub.ts` | 抽出唯一目录行映射 `directoryAgentObservation(peer)`（:17），`createConsoleHub` 改为调用它 |
+| `runtime/control-process.spec.ts` | 新增红绿用例 `projects the real D04 registration directory and streams a frame when it changes` 与真实 in-process registry/peer helper |
+
+调用边：`runControlProcess` → `createControlNetworkStatus` → `RegistrationClient.directorySnapshot`
+（`network/registration-client.ts`）→ `refreshRelayDirectory`（`network/account-directory.ts`）→
+`projectTeamsMembership`（`network/teams-membership.ts`）→ `createTeamsStatusPort`
+（`network/teams-status.ts`）；`createControlNetworkStatus.readProjection` →
+`directoryAgentObservation`（`runtime/console-hub.ts`）；`createControlOwner` →
+`ControlProjectionSource.read/watch`。**没有**第二个具名 listener、**没有**第二条历史源、
+**没有**从 history 推断在线或执行状态。
+
+### 8.2 红绿证据（原 D09 记录，事实不变）
+
+- 红：`pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts -t 'projects the real D04 registration directory'`
+  → `Tests 1 failed | 16 skipped (17)`，失败断言
+  `AssertionError: expected [] to match object [ { remoteAgentId: 'peer-a', state: 'disconnected', targetGeneration: 1 } ]`。
+  原因正确：目录仍是硬编码空快照，真实注册 peer 不出现在 `connections()`。
+- 绿：同一命令 → `Tests 1 passed | 16 skipped (17)`。
+
+红绿使用真实 in-process registry（`createRelayServer`，真实 TLS、真实 admission）与两个真实
+`createRegistrationClient` peer；第二个 peer 真实注册触发目录 revision 变化，不是定时器造帧。
+
+### 8.3 真实黑盒（`black-box-control-directory-projection.mjs`）
+
+真实入口：`agentteams registry start|stop`（真实 registry daemon，真实 openssl TLS、真实
+admission）、`agentteams --serve opencode` 两次（两个真实注册 agent daemon，真实 OpenCode
+引擎）、`agentteams control start|stop`（被测真实控制守护进程）、真实认证 HTTP
+`GET /api/v1/projection` 与 `GET /api/v1/events`。全部凭据只经环境变量传入，脚本不打印秘密值。
+清理只用显式 PID 或项目自身 `control stop` / `registry stop`；脚本不含 `pkill`/`killall`/`kill $(...)`。
+
+折入后从新路径复跑（2026-10-11，exit 0，**9 checks PASS / 0 gaps**）：
+
+```
+node docs/evidence/acp-d06-part2-20261011/black-box-control-directory-projection.mjs
+registry start: started ... daemon=teams-registry pid=35238 url=wss://127.0.0.1:63127
+PASS real registry daemon is running
+PASS real agent A registered with the registry — reasoner-a registration=online
+control start: started ... daemon=control-a pid=35502 url=http://127.0.0.1:63149
+PASS real control daemon is running
+PASS projection carries the real registered agent row — {"kind":"directory","agentId":"reasoner-a","machineId":"reasoner-a-host","generation":1,"presence":"online","capabilities":["acp"]}
+PASS projection carries the same real directory peer as a connection row — {"remoteAgentId":"reasoner-a","state":"disconnected","targetGeneration":1}
+PASS SSE emitted a real projection frame — seq=1 agents=reasoner-a
+PASS real agent B registered with the registry — reasoner-b registration=online
+PASS SSE seq advanced on the real directory change — seq 1 -> 3 agents=reasoner-a,reasoner-b
+PASS HTTP projection now carries both real registered agents
+ALL 9 CHECKS PASS
+```
+
+关键实测语义（非推断）：投影 agents 行来自真实目录（`kind:"directory"`、`presence:"online"`、
+真实 `machineId`/`generation`/`capabilities`）；投影 connections 行是同一目录 peer 且
+`state:"disconnected"`（控制守护进程不声明 Teams listener，ledger 诚实为空）；第二个 agent 真实
+注册使 SSE `seq` 由 1 前进到 3，最后一帧同时含两个 agent；控制守护进程自身的注册行被过滤
+（与 `runtime/console-runtime.ts` 的 discovery 约定一致），投影只显示远端 peer。
+
+机器报告（含 pid 与临时路径，不写入仓库）：
+`/Volumes/Intel/playground/agentteams/.worker-runs/acp-d06-directory-projection-20261011/black-box-control-directory-projection.report.json`。
+
+### 8.4 折入后复跑（本轮，真实命令与结果）
+
+| 命令 | 退出码 | 结果 |
+| --- | --- | --- |
+| `pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts` | 0 | `Test Files 6 passed (6)`，`Tests 118 passed (118)`（改动前 117；runtime/control-process 16 → 17） |
+| `pnpm exec vitest run --no-file-parallelism network/registration-client.spec.ts` | 0 | `Test Files 1 passed (1)`，`Tests 7 passed (7)` |
+| `pnpm exec vitest run --no-file-parallelism runtime/console-hub.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-status.spec.ts` | 0 | `Test Files 4 passed (4)`，`Tests 28 passed (28)`（被改动的 owner 直接回归） |
+| `pnpm typecheck` | 0 | 根 `tsc --noEmit` + console-host + opencode-adapter + `ui/teams-console` 全通过 |
+| `pnpm build` | 0 | 含 `build:runtime`（CLI 依赖的 `generated/runtime-lib`） |
+| `node docs/evidence/acp-d06-part2-20261011/black-box-control-directory-projection.mjs` | 0 | 9 checks PASS / 0 gaps |
+
+注：首次运行门禁时未先 `pnpm build`，8 个用例以 `START_TIMEOUT: control did not report running
+within 10000ms` 失败；构建后同一命令 118/118 通过。这是构建前置条件，不是本改动的缺陷。
+
+### 8.5 诚实边界（逐条核实，折入后仍成立）
+
+1. **目录刷新是真实 ~1s WSS 轮询，不是 `relay.changed` 推送。** 依据：`RegistrationClient`
+   接口（`network/registration-client.ts:68-89`）只声明 `closed`/`status`/`start`/`directory`/
+   `directorySnapshot`/`publish`/`stop`，**没有**变更事件；`runtime/control-process.ts:549`
+   定义 `DIRECTORY_PROJECTION_INTERVAL_MS = 1_000`，`:655` 用它构造
+   `createPollingProjectionSubscriber(readProjection, DIRECTORY_PROJECTION_INTERVAL_MS)`，而
+   `:663-694` 的实现是 `setInterval(tick, intervalMs)`，每次 tick 做一次真实
+   `directorySnapshot` 读。因此目录变化的最坏可见延迟约等于该间隔。
+2. **读失败保留上一次真实回读，不伪造空目录。** 依据：`runtime/control-process.ts:599-606`，
+   `directorySnapshot` 抛错时只打印诊断并 `return`，不修改 `directory`/`peers`；只有真实成功
+   的 revision（`:607` 要求 `>= 1`）才经 `refreshRelayDirectory` 写入（`:613-614`）。
+3. **控制守护进程不声明 Teams listener，连接行是目录事实而非已建立通道。** 依据：
+   `ControlDaemonIntent`（`config/daemon-intent.ts:142-150`）只有 `webui`，**没有**
+   `listen: ListenIntent`（agent/registry intent 才有）；控制 daemon 允许的顶层字段
+   （`config/daemon-intent.ts:723`）为 `['version','daemon','webui','relations','admissions',
+   'discovery','peers']`，声明 `[listen]` 会被拒。`runtime/control-process.ts:586` 建空 ledger，
+   全文件只在 `:624` 读 `ledger.list()`、`:647` 传入 port，没有任何写入点；因此
+   `projectTeamsMembership` 对目录已知但无通道的远端给出 `state: 'disconnected'`
+   （`network/teams-membership.ts:133-137`）。
+
+### 8.6 D08 A07 缺口前提的核对（只答问题，不扩大声明）
+
+D08 验收驱动记的缺口原文把两件事合成一句：“the shipped control daemon binds no Console
+owner, so /api/v1/projection is a constant empty snapshot and no real event can advance the SSE
+stream”。折入后逐半核对：
+
+- **“constant empty snapshot / no real event can advance the SSE stream” 已不成立。**
+  真实黑盒（§8.3）显示 `/api/v1/projection` 带真实 `kind:'directory'` agent 行，且第二个 agent
+  真实注册使 SSE `seq` 由 1 推进到 3。该半句的前提已过时。
+- **“binds no Console owner” 仍然成立。** `runtime/control-process.ts:818` 是唯一生产调用点：
+  `createControlOwner({ network: network.port, source: network.projection })`，**没有** `owner`
+  绑定；`ControlOwnerBinding`（`:77`）只有接口声明，没有任何生产构造点。控制守护进程仍**未**
+  绑定 Session owner，也没有 `connection.connect`/`connection.disconnect`/
+  `network.membership.apply`/定向 ACP ingress。
+
+因此结论必须分两句说：**“投影现在带真实目录行”为真（本改动范围内，已用真实入口证明）；
+“绑定了真实 Session owner”为假（不在本改动范围）。** A07 的“真实事件驱动动画”因此只被解锁
+一半：目录变化可以驱动真实 SSE 帧推进，Session/permission/notification 事件仍不能，因为
+不存在 Session owner。该缺口不应整体关闭，应改写为“目录变化已可驱动；Session 事件驱动仍缺
+Session owner”。
+
+### 8.7 本轮明确未做 / 非声明
+
+以下均为**未做**，不得由本轮任何结果推断：
+
+- 无 installed-copy 回放、无 restart、无 deployed-entrypoint 回放、无 cross-device 回执、
+  无浏览器证据。
+- 未新增第二个具名 listener、第二条历史源或第二个目录源。
+- 未改 `control-protocol/**`（冻结契约）。
+- 未 merge、未 push；未改写 `0adc57f` 及其提交信息；未触碰其它工作树。
+- 门禁状态保持 `partial`，不宣称 `implemented`/`passed`。

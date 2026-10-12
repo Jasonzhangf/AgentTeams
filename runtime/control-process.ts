@@ -14,8 +14,10 @@ import {
 } from '../config/daemon-intent.ts'
 import { createConsoleAuthorization } from '../console-host/src/auth.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
+import type { RelayPeer } from '../control-protocol/agent-services.ts'
 import {
   parseConsoleProjection,
+  type ConsoleAgentObservationV1,
   type ConsoleCommandResultV1,
   type ConsoleCommandV1,
   type ConsoleClientV1,
@@ -34,12 +36,15 @@ import {
   type HistoryQuery,
   type HistoryReadPort,
 } from '../control-protocol/teams-state.ts'
+import { refreshRelayDirectory, type AccountDirectorySnapshot } from '../network/account-directory.ts'
 import type { RegistrationStatus } from '../network/registration-client.ts'
+import type { RelayDirectorySnapshot } from '../network/relay-client.ts'
 import { createTeamsConnectionHistory } from '../network/teams-connection-history.ts'
 import { createTeamsConnectionLedger } from '../network/teams-ingress.ts'
 import { membershipHistoryEvents, projectTeamsMembership, type TeamsMembershipView } from '../network/teams-membership.ts'
 import { createTeamsStatusPort, type TeamsStatusPort } from '../network/teams-status.ts'
 import { createAcpHistoryStore } from './acp-history-store.ts'
+import { directoryAgentObservation } from './console-hub.ts'
 import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
 import { RegistrationProcessError, startDaemonRegistration, type AgentRegistration } from './registry-registration.ts'
 
@@ -480,6 +485,12 @@ function projectionWithConnections(projection: ConsoleProjectionV1, port: TeamsS
 export interface CreateControlOwnerOptions {
   readonly network?: TeamsStatusPort
   readonly owner?: ControlOwnerBinding
+  /**
+   * The real projection owner. When bound it owns the complete read, including the
+   * connection rows it already merged; `network` stays the read port for the typed
+   * connection-command refusal.
+   */
+  readonly source?: ControlProjectionSource
 }
 
 /**
@@ -487,8 +498,9 @@ export interface CreateControlOwnerOptions {
  * absent and connection/membership commands fail with the typed absence; nothing is faked.
  */
 export function createControlOwner(options: CreateControlOwnerOptions): ConsoleClientV1 {
-  const { network, owner } = options
+  const { network, owner, source } = options
   const read = async (): Promise<ConsoleProjectionV1> => {
+    if (source !== undefined) return validatedProjection(await source.read())
     const base = owner === undefined
       ? { version: 1 as const, agents: [], sessions: [], notifications: [], configs: [] }
       : validatedProjection(await owner.readProjection())
@@ -521,11 +533,20 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
   }
 }
 
-/** One bound real network read chain: the D05 status port plus its owned stop path. */
+/** One bound real network read chain: the D05 status port, its projection owner and its stop path. */
 export interface ControlNetworkStatusBinding {
   readonly port: TeamsStatusPort
+  /**
+   * The real Console projection owner. `read` is the D04 directory readback projected into
+   * the frozen Console rows plus the D05 connection rows; `watch` streams a frame whenever
+   * that real read changes. `watch` is absent only when the owner cannot stream.
+   */
+  readonly projection: ControlProjectionSource
   readonly stop: () => Promise<void>
 }
+
+/** The directory projection poll interval: one real D04 directory read per tick. */
+const DIRECTORY_PROJECTION_INTERVAL_MS = 1_000
 
 /** Maps the D04 registration failure vocabulary onto the closed control error vocabulary. */
 function controlCodeForRegistration(error: RegistrationProcessError): ControlProcessErrorCode {
@@ -547,6 +568,11 @@ function controlCodeForRegistration(error: RegistrationProcessError): ControlPro
  * channel; nothing is fabricated. Real registration transitions are recorded through the
  * owner's own `membershipHistoryEvents`, so the durable `kind: 'connection'` history is a
  * record of observed transitions and never a source for online or execution state.
+ *
+ * The Console projection is the real D04 directory readback: every refresh reads the scoped
+ * directory through the registration client and projects the admitted peers into frozen
+ * Console agent rows. A config without `[discovery]` keeps the typed empty snapshot, so the
+ * projection stays an honest absence instead of a fabricated row.
  */
 export async function createControlNetworkStatus(intent: ControlDaemonIntent, env: NodeJS.ProcessEnv): Promise<ControlNetworkStatusBinding> {
   const localAgentId = intent.daemon.id
@@ -558,15 +584,43 @@ export async function createControlNetworkStatus(intent: ControlDaemonIntent, en
       `control connection history store could not be opened: ${cause instanceof Error ? cause.message : String(cause)}`, cause)
   }
   const ledger = createTeamsConnectionLedger()
-  // The control daemon owns no directory readback: the honest unconfirmed local state, the
-  // same snapshot the serve entry publishes before a directory owner is wired.
-  const directory = { accountId: intent.daemon.accountId, scopeId: intent.daemon.scopeId, generation: 0, hosts: [], peerStates: [] }
+  // The honest unconfirmed local state until the first real directory readback replaces it.
+  let directory: AccountDirectorySnapshot = { accountId: intent.daemon.accountId, scopeId: intent.daemon.scopeId, generation: 0, hosts: [], peerStates: [] }
+  let peers: readonly RelayPeer[] = []
   let registration: AgentRegistration | undefined
   let previous: TeamsMembershipView | undefined
+  const currentRegistration = (): RegistrationStatus => registration === undefined
+    ? { state: 'disabled', attempts: 0, reconnects: 0 }
+    : registration.state === 'enabled' ? registration.client.status() : registration.status
+  const refreshDirectory = async (): Promise<void> => {
+    if (registration === undefined || registration.state !== 'enabled') return
+    if (registration.client.status().state !== 'online') return
+    let snapshot: RelayDirectorySnapshot
+    try {
+      snapshot = await registration.client.directorySnapshot(true)
+    } catch (error) {
+      // The registration status already carries the degraded registry; a failed read keeps the
+      // last real readback instead of turning the projection read into a failure.
+      console.error(`control directory read failed: ${error instanceof Error ? error.message : String(error)}`)
+      return
+    }
+    if (snapshot.revision < 1) return
+    // The local daemon's own registration is not a remote peer row, the same convention
+    // `runtime/console-runtime.ts` applies to its discovered peers. Dropping it here keeps
+    // the agent rows and the connection rows one consistent remote-only projection.
+    const remotes = snapshot.peers.filter(peer => peer.declaration.identity.agentId !== localAgentId)
+    try {
+      directory = refreshRelayDirectory(directory, snapshot.revision, remotes)
+      peers = remotes
+    } catch (error) {
+      // A concurrent refresh can observe an older revision; the monotonic owner refuses it.
+      console.error(`control directory projection failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
   const observe = async (status?: RegistrationStatus): Promise<void> => {
-    const observed = status ?? (registration === undefined ? undefined
-      : registration.state === 'enabled' ? registration.client.status() : registration.status)
-    if (observed === undefined) return
+    if (registration === undefined) return
+    const observed = status ?? currentRegistration()
+    await refreshDirectory()
     const view = projectTeamsMembership({ localAgentId, directory, registration: observed, channels: ledger.list(), observedAt: new Date().toISOString() })
     for (const event of membershipHistoryEvents(previous, view)) await history.record(event)
     previous = view
@@ -588,15 +642,17 @@ export async function createControlNetworkStatus(intent: ControlDaemonIntent, en
   }
   // Seed the previous view so the next real registration transition is recorded once.
   await observe()
-  const port = createTeamsStatusPort({
-    ledger,
-    localAgentId,
-    directory,
-    registration: registration.state === 'enabled' ? registration.client.status() : registration.status,
-    history,
-  })
+  // One live D05 port per read: the directory readback stays current without copying the
+  // owner's membership projection into this runtime.
+  const port = (): TeamsStatusPort => createTeamsStatusPort({ ledger, localAgentId, directory, registration: currentRegistration(), history })
+  const readProjection = async (): Promise<ConsoleProjectionV1> => {
+    await refreshDirectory()
+    const agents: readonly ConsoleAgentObservationV1[] = peers.map(directoryAgentObservation)
+    return projectionWithConnections({ version: 1, agents, sessions: [], notifications: [], configs: [] }, port())
+  }
   return {
-    port,
+    port: { connections: () => port().connections(), history: query => port().history(query) },
+    projection: { read: readProjection, watch: createPollingProjectionSubscriber(readProjection, DIRECTORY_PROJECTION_INTERVAL_MS) },
     stop: async () => {
       if (registration !== undefined && registration.state === 'enabled') await registration.client.stop().catch(() => undefined)
     },
@@ -754,17 +810,20 @@ export async function runControlProcess(argv: readonly string[] = process.argv.s
   let network: ControlNetworkStatusBinding | undefined
   try {
     const { username, password, origin } = await loadCredentials(intent, env)
-    // The one injection point for the real network status port (D05 owner). The daemon
-    // binds the owner from its own real network facts; `createControlOwner` and
-    // `createControlHistoryReader` keep the structurally unbound path as a typed absence.
+    // The one injection point for the real network status port (D05 owner) and its real
+    // projection owner (the D04 directory readback). The daemon binds both from its own real
+    // network facts; `createControlOwner` and `createControlHistoryReader` keep the
+    // structurally unbound path as a typed absence.
     network = await createControlNetworkStatus(intent, env)
-    const client = createControlOwner({ network: network.port })
+    const client = createControlOwner({ network: network.port, source: network.projection })
     const authorize = createConsoleAuthorization({ username, password, origin, client })
     const history = createControlHistoryReader(network.port)
     const projectionRead = async () => await client.readProjection()
     const fixturePath = env.AGENTTEAMS_CONTROL_PROJECTION_FIXTURE
+    // The real owner feed: the directory projection source streams a frame whenever the
+    // readback changes. A source that cannot stream falls back to the same read on a poll.
     const events: ConsoleProjectionSubscriber = fixturePath === undefined
-      ? createPollingProjectionSubscriber(projectionRead)
+      ? network.projection.watch ?? createPollingProjectionSubscriber(projectionRead)
       : createFixtureProjectionSubscriber(await readProjectionFixture(fixturePath))
     server = createConsoleServer({
       staticRoot,

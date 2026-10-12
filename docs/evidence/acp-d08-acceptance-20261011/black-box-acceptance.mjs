@@ -54,9 +54,13 @@
  *     cross-device acceptance layer and does not drive a browser, so a SOURCE-LEVEL browser
  *     run does not close an installed-artifact item. The frozen DOM contract is owned by
  *     `ui/teams-console/tests/render-d07.spec.ts`.
- *   - The shipped control daemon binds no Console owner, so its projection is a
- *     constant empty snapshot: real-event-driven animation and in-WebUI
- *     discovery/networking data are reported as gaps, not asserted.
+ *   - The shipped control daemon binds no Console or Session owner, so the projection
+ *     carries no sessions, notifications or configs and no Session-, permission- or
+ *     notification-driven event can advance the SSE stream. The directory half IS real:
+ *     since the D06 directory-projection increment (formerly carried as the separate
+ *     "D09" unit) the projection carries the real D04 registration-directory agent rows
+ *     and a real registration advances the SSE `seq`. Real-event-driven animation and
+ *     in-WebUI targeted interaction are therefore still reported as gaps, not asserted.
  *
  * Cleanup is explicit-PID only: no pkill, killall, `kill $(...)`, or `xargs kill`.
  * Every process this driver starts is stopped by its explicit pid (or through the
@@ -1537,7 +1541,7 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   check('A10 — communication continues after the WebUI client closes',
     `every WebUI HTTP/SSE client connection this driver opened is closed; prompt on the established channel -> stopReason=${afterWebui.frame.result.stopReason}`)
   gap('A07 — animation driven by real events',
-    'the shipped control daemon binds no Console owner (runtime/control-process.ts:761 calls createControlOwner({ network: network.port }) with no owner), so /api/v1/projection is a constant empty snapshot and no real event can advance the SSE stream; only the transport is proven here. D06 requires discovery query, connect/disconnect, membership projection and targeted ACP ingress, so this is an UNMET REQUIREMENT owned by D06, not an environment limit')
+    'the shipped control daemon binds no Console or Session owner (runtime/control-process.ts:818 calls createControlOwner({ network: network.port, source: network.projection }) with no owner), so the projection carries no sessions, notifications or configs and no Session/permission/notification event can advance the SSE stream. The directory half is now real: GET /api/v1/projection carries the real D04 registration-directory agent rows and a real registration advances the SSE seq (1 -> 3) through the declared ControlProjectionSource watch. Real-event-driven animation is therefore still not delivered — only directory-change-driven refresh is. D06 requires a Session owner plus targeted ACP ingress, so this remains an UNMET REQUIREMENT owned by D06, not an environment limit')
   // This stays a GAP for THIS gate, but the earlier reason recorded here was WRONG. The old text
   // claimed headless Chrome cannot satisfy the origin's HTTP Basic challenge. That is refuted:
   // CDP `Network.setExtraHTTPHeaders` injects the credential at the network layer, so a real
