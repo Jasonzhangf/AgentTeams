@@ -1,15 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const sourceRoot = join(import.meta.dirname, '../src')
-const sourceFiles = [
-  'client/api.ts', 'client/controller.ts', 'client/focus.ts', 'client/index.ts', 'client/model.ts', 'client/protocol.ts', 'client/render.ts', 'client/styles.ts', 'fixture.ts', 'index.ts',
-]
+
+/**
+ * Every shipped source module under `src/`, derived from the filesystem. A hard-coded list can
+ * silently stop covering a module, so the boundary scan enumerates the real tree instead.
+ */
+function sourceFilesAt(directory: string): readonly string[] {
+  const found: string[] = []
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) found.push(...sourceFilesAt(path))
+    else if (entry.name.endsWith('.ts')) found.push(path)
+  }
+  return found.sort()
+}
+
+const sourceFiles = sourceFilesAt(sourceRoot)
 
 describe('independent UI boundary', () => {
+  it('enumerates the real shipped source tree', () => {
+    expect(sourceFiles.length).toBeGreaterThanOrEqual(16)
+    expect(sourceFiles).toContain(join(sourceRoot, 'client/live-client.ts'))
+    expect(sourceFiles.every(file => file.startsWith(sourceRoot) && file.endsWith('.ts'))).toBe(true)
+  })
+
   it('has no DSH, Cordis, deepseek-harness, or parent runtime imports', () => {
-    const source = sourceFiles.map(file => readFileSync(join(sourceRoot, file), 'utf8')).join('\n')
+    const source = sourceFiles.map(file => readFileSync(file, 'utf8')).join('\n')
     expect(source).not.toMatch(/@deepseek-ai\/dsh|@deepseek-ai\/cordis|deepseek-harness|from ['"]\.\.\/\.\.\/\.\.(agent|config|network|server|runtime)/)
   })
 
@@ -27,7 +46,7 @@ describe('independent UI boundary', () => {
   })
 
   it('keeps credential values and local persistence out of the UI source', () => {
-    const source = sourceFiles.map(file => readFileSync(join(sourceRoot, file), 'utf8')).join('\n').toLowerCase()
+    const source = sourceFiles.map(file => readFileSync(file, 'utf8')).join('\n').toLowerCase()
     expect(source).not.toContain('localstorage')
     expect(source).not.toContain('password')
     expect(source).not.toContain('api_key')

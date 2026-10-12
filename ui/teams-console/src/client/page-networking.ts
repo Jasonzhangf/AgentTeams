@@ -1,6 +1,10 @@
 import type { ConsoleProjectionV1 } from './protocol.ts'
-import { projectNetworkView } from './page-discovery.ts'
-import type { NetworkMemberDraft } from './page-discovery.ts'
+
+/** One agent the operator places in the membership draft, with its assigned role. */
+export interface NetworkMemberDraft {
+  readonly agentId: string
+  readonly role: 'master' | 'peer'
+}
 
 /**
  * The networking page selects participating agents and assigns master/peer roles. It only
@@ -29,5 +33,3 @@ export function projectMembershipDraft(projection: ConsoleProjectionV1, draft: r
   const known = new Set(projection.agents.map(agent => agent.agentId))
   return draft.filter(member => known.has(member.agentId))
 }
-
-export { projectNetworkView }

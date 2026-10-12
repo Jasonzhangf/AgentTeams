@@ -31,6 +31,14 @@ type AdditiveTeamsClient = CanonicalClient & {
   readonly readHistory: (query: HistoryQuery) => Promise<HistoryPage>
   readonly subscribeProjection: (sink: ConsoleProjectionSink) => ConsoleProjectionUnsubscribe
 }
+/**
+ * These `Assert<Compatible<...>>` bindings are compile-time checks, not runtime checks: the D07
+ * vitest gate transpiles without type-checking, so the two `it` blocks below cannot catch a
+ * signature drift such as `TeamsConsoleClientV1.readHistory` returning `Promise<string>`.
+ * `pnpm typecheck` and `pnpm --dir ui/teams-console typecheck` enforce them at this exact line
+ * (a drifted signature makes the `_teamsClient` binding fail with TS2322). They are kept because
+ * that declared gate does run, and a runtime assertion cannot bind the same failure mode.
+ */
 const _provider: Assert<Compatible<UiProvider, CanonicalProvider>> = true
 const _detail: Assert<Compatible<UiCapabilityDetail, CanonicalCapabilityDetail>> = true
 const _projection: Assert<Compatible<UiProjection, CanonicalProjection>> = true

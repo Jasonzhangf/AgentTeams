@@ -45,10 +45,7 @@ const script = [
   classicModule('model.ts'),
   classicModule('drafts.ts'),
   classicModule('protocol.ts'),
-  classicModule('page-discovery.ts'),
   classicModule('page-networking.ts'),
-  classicModule('page-interaction.ts'),
-  classicModule('page-history.ts'),
   classicModule('render.ts'),
 ].join('\n')
 
@@ -171,6 +168,8 @@ ${controllerScript}
     const pages = [...combined.matchAll(/data-team-page="(discovery|networking|interaction|history)"/g)].map(match => match[1])
     document.body.dataset.fourPages = String(new Set(pages).size === 4)
     document.body.dataset.viewMarkers = String([...combined.matchAll(/data-team-page-view="/g)].length === 5)
+    const pageViewValues = [...combined.matchAll(/data-team-page-view="([^"]*)"/g)].map(match => match[1])
+    document.body.dataset.pageViewValues = String(pageViewValues.join(',') === 'discovery,discovery,networking,interaction,history')
     document.body.dataset.bands = String([...combined.matchAll(/data-team-band="/g)].length >= 4)
     document.body.dataset.bandTokens = String([...combined.matchAll(/data-band-state="/g)].length >= 4)
     document.body.dataset.observationMarker = String(combined.includes('data-team-observation="live"'))
@@ -302,6 +301,11 @@ ${controllerScript}
     document.body.dataset.staleMarker = String(stale.includes('data-team-observation="stale"'))
     document.body.dataset.staleBand = String(stale.includes('data-band-state="lost"') || stale.includes('data-band-state="unknown"'))
     document.body.dataset.historyRefused = String(refusedHistory.includes('data-history-refused="true"') && refusedHistory.includes('data-team-error-code="INVALID_ACP_FRAME"'))
+    // The whole-document dump echoes this page's own <script>, so a substring probe cannot tell the
+    // rendered marker from the script source. Read the parsed element's attributes instead.
+    const refusedElement = document.getElementById('root-refused-history').querySelector('[data-history-refused]')
+    document.body.dataset.historyRefusedMarker = String(refusedElement !== null && refusedElement.getAttribute('data-history-refused') === 'true')
+    document.body.dataset.historyErrorCode = String(refusedElement !== null && refusedElement.getAttribute('data-team-error-code') === 'INVALID_ACP_FRAME')
   </script>
 </body></html>`
 
@@ -324,6 +328,8 @@ describe('D07 four-page DOM contract in a real DOM', () => {
     const output = runChrome(page)
     expect(output).toContain('data-four-pages="true"')
     expect(output).toContain('data-view-markers="true"')
+    // The marker count alone is value-blind; this also binds each page's data-team-page-view value.
+    expect(output).toContain('data-page-view-values="true"')
     expect(output).toContain('data-bands="true"')
     expect(output).toContain('data-band-tokens="true"')
     expect(output).toContain('data-observation-marker="true"')
@@ -351,7 +357,10 @@ describe('D07 four-page DOM contract in a real DOM', () => {
     expect(output).toContain('data-exact-offered-options="true"')
     expect(output).toContain('data-stale-marker="true"')
     expect(output).toContain('data-stale-band="true"')
-    expect(output).toContain('data-history-refused="true"')
+    // Assert the parsed element's attributes, not a substring of the whole dumped document:
+    // --dump-dom echoes the page's inline <script>, which also contains this marker text.
+    expect(output).toContain('data-history-refused-marker="true"')
+    expect(output).toContain('data-history-error-code="true"')
   })
 
   it('offers no approval button to a permission notification whose engine event offered no choices', { timeout: 30_000 }, () => {

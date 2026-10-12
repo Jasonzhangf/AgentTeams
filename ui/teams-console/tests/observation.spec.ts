@@ -43,7 +43,11 @@ describe('projection observation controller', () => {
     const state = controller()
     state.instance.start()
     state.instance.onHealth({ state: 'lost', reason: 'stream-ended', detail: 'stream closed' })
+    // The emitted observation is the real wiring the controller state consumes; a snapshot read
+    // alone derives from `health` and would stay green even if a lost owner emitted `live`.
+    expect(state.observations).toEqual(['live', 'stale'])
     expect(state.instance.getSnapshot().observation).toBe('stale')
+    expect(state.instance.getSnapshot().health).toEqual({ state: 'lost', reason: 'stream-ended', detail: 'stream closed' })
     state.instance.stop()
     expect(state.wasStopped()).toBe(true)
     expect(state.instance.getSnapshot().observation).toBe('stale')
@@ -55,5 +59,7 @@ describe('projection observation controller', () => {
     sink.onSnapshot({ seq: 1, projection })
     sink.onHealth({ state: 'live' })
     expect(state.observations).toEqual(['live', 'live'])
+    expect(state.instance.getSnapshot().observation).toBe('live')
+    expect(state.instance.getSnapshot().projection).toEqual(projection)
   })
 })

@@ -2,8 +2,7 @@ import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleProviderView, Hist
 import { commandFailureMessage, formatServiceError } from './protocol.ts'
 import { readDraft, readFocus, readPage, writeDraft, writeFocus, writePage, type DraftPersistence } from './drafts.ts'
 import { ProjectionObservationController, type ObservationSession } from './observation.ts'
-import { canSubmitMembership, projectMembershipDraft, selectNetworkMembers } from './page-networking.ts'
-import type { NetworkMemberDraft } from './page-discovery.ts'
+import { canSubmitMembership, projectMembershipDraft, selectNetworkMembers, type NetworkMemberDraft } from './page-networking.ts'
 import { teamPages } from './model.ts'
 import type { ConsoleEntry, TeamPage } from './model.ts'
 

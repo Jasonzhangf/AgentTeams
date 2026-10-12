@@ -121,7 +121,7 @@ Exit code: `0`. The run was repeated and was stable.
 | Gate | Command | Result |
 |------|---------|--------|
 | `teams-acp-d06-control` | `pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts` | 6 files, **117 tests pass** |
-| `teams-acp-d07-webui` | `TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism ui/teams-console/tests/{api,boundary,contract-compat,controller,drafts,focus-dom,live-client,locale,model,observation,page-discovery,page-networking,page-interaction,page-history,render,render-d07}.spec.ts` | 16 files, **73 tests pass** |
+| `teams-acp-d07-webui` | `TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism ui/teams-console/tests/{api,boundary,contract-compat,controller,drafts,focus-dom,live-client,locale,model,observation,page-networking,render,render-d07}.spec.ts` | 13 files, **68 tests pass** |
 | D06 PART 1 black box | `node docs/evidence/acp-d06-control-20261011/black-box-control.mjs` | **10 checks pass** (updated to the `snapshot` event name) |
 | D06 PART 2 black box | `node docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs` | **7 checks pass** |
 | D06 permission optionId black box | `node docs/evidence/acp-d06-part2-20261011/black-box-permission-option.mjs` | **10 checks pass** |
