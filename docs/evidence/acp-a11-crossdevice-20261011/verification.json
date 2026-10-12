@@ -1,0 +1,254 @@
+{
+  "unit": "acp-a11-crossdevice-20261011",
+  "requirement": "A11 — genuine cross-device receipt (two physical hosts)",
+  "producedAt": "2026-10-12T00:52:59.141Z",
+  "ok": true,
+  "hosts": {
+    "hostA": {
+      "hostname": "Macstudio.local",
+      "tailscaleIpv4": "100.66.1.82",
+      "role": "initiator + registry + probe provider",
+      "os": "darwin arm64"
+    },
+    "hostB": {
+      "hostname": "jennys-macbook-air.anoa-buri.ts.net",
+      "tailscaleIpv4": "100.93.143.20",
+      "ssh": "jenny",
+      "role": "installed agent daemon + opencode engine",
+      "os": "darwin arm64 macOS 15.7.9",
+      "node": "v22.22.2",
+      "npm": "10.9.7"
+    }
+  },
+  "remotePeerCheck": {
+    "target": "100.93.143.20",
+    "loopback": false,
+    "own": false,
+    "differentHost": true,
+    "ok": true
+  },
+  "endpoint": "wss://jennys-macbook-air.anoa-buri.ts.net:50991",
+  "resolvedAddresses": [
+    "100.93.143.20"
+  ],
+  "ports": {
+    "hostARegistry": 55565,
+    "hostBAgentListener": 50991
+  },
+  "hostBReadiness": "serving agent=reasoner-b engine=opencode engineInstance=opencode-reasoner-b-3ecf1cbf-dd88-4226-8b1b-cff11b9a9991 enginePid=35087 daemonPid=35086 listener=100.93.143.20:50991 localChannel=127.0.0.1:51006 lanChannel=wss://100.93.143.20:50991 capabilitiesRevision=2 registration=online dataDirectory=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/state config=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/run/agent.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1",
+  "hostBInstalledCli": "/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/prefix/node_modules/agentteams/cli/agentteams.mjs",
+  "hostBInstallCommand": "export PATH=\"/Users/jenny/.agentteams-node/node-v22.22.2-darwin-arm64/bin:$PATH\"; npm install --prefix /Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/prefix --no-audit --no-fund --no-package-lock --no-save /Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/pack/agentteams-0.1.0.tgz",
+  "hostBInstallOutput": "changed 1 package in 318ms",
+  "hostBConfigSha256": "f76afce68ad2bfdfdedc583a0d06dbbb8dbc92362511010efd048276e17b62ca",
+  "hostBCertificateSan": " X509v3 Subject Alternative Name: \n IP Address:100.93.143.20, DNS:jennys-macbook-air.anoa-buri.ts.net, DNS:localhost, IP Address:127.0.0.1\n",
+  "artifact": {
+    "tarball": "agentteams-0.1.0.tgz",
+    "sha256": "f19211c9bd8123a477e3b99cce3beb23542ea20de80d44b6caf68bab85b80de9",
+    "hostASha256": "f19211c9bd8123a477e3b99cce3beb23542ea20de80d44b6caf68bab85b80de9",
+    "hostBSha256": "f19211c9bd8123a477e3b99cce3beb23542ea20de80d44b6caf68bab85b80de9",
+    "contentSha256": "b063607e8779e2b2f8862782d75327e844178fe6e6449fa42091fd713fe1c777",
+    "version": "0.1.0",
+    "hostBReceiptContentSha256": "b063607e8779e2b2f8862782d75327e844178fe6e6449fa42091fd713fe1c777",
+    "hostAInstalledCliSha256": "d97ab857e0a7892f2bab791fbc9a377f9fb12b338c256a6af22e541afd859238",
+    "hostBInstalledCliSha256": "d97ab857e0a7892f2bab791fbc9a377f9fb12b338c256a6af22e541afd859238"
+  },
+  "acpExchange": {
+    "sessionId": "ses_ed2674ee2ffeq3lb5nCGWsmETz",
+    "permissionOptions": [
+      "once",
+      "always",
+      "reject"
+    ],
+    "promptStopReason": "end_turn",
+    "cancelStopReason": "cancelled",
+    "agreement": {
+      "source": "observer",
+      "sourceRole": "master",
+      "target": "reasoner-b",
+      "targetRole": "peer",
+      "targetCapabilitiesRevision": "2"
+    }
+  },
+  "hostBSideEvidence": {
+    "connectionNegotiated": {
+      "event": "connection.negotiated",
+      "connectionId": "f242904d-fd7b-4cd6-84f7-f9a5d195c103",
+      "inboundPeer": "observer",
+      "inboundRole": "master",
+      "localAgent": "reasoner-b",
+      "localRole": "peer",
+      "occurredAt": "2026-10-12T00:52:22.867Z"
+    },
+    "channelOpenedRecords": 1,
+    "channelClosedRecords": 1,
+    "daemonStopLine": "stopped agent=reasoner-b enginePid=35087 engine=exited code=null signal=SIGTERM channels=0",
+    "readinessLine": "serving agent=reasoner-b engine=opencode engineInstance=opencode-reasoner-b-3ecf1cbf-dd88-4226-8b1b-cff11b9a9991 enginePid=35087 daemonPid=35086 listener=100.93.143.20:50991 localChannel=127.0.0.1:51006 lanChannel=wss://100.93.143.20:50991 capabilitiesRevision=2 registration=online dataDirectory=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/state config=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/run/agent.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1"
+  },
+  "probeProviderBaseUrl": "http://100.66.1.82:54992/v1",
+  "probeProviderCalls": [
+    {
+      "model": "probe-model",
+      "toolNames": [],
+      "text": "read /etc/hosts",
+      "at": "2026-10-12T00:52:21.579Z"
+    },
+    {
+      "model": "probe-model",
+      "toolNames": [
+        "bash",
+        "edit",
+        "glob",
+        "grep",
+        "read",
+        "skill",
+        "task",
+        "todowrite",
+        "webfetch",
+        "write"
+      ],
+      "text": "read /etc/hosts",
+      "at": "2026-10-12T00:52:22.551Z"
+    },
+    {
+      "model": "probe-model",
+      "toolNames": [
+        "bash",
+        "edit",
+        "glob",
+        "grep",
+        "read",
+        "skill",
+        "task",
+        "todowrite",
+        "webfetch",
+        "write"
+      ],
+      "text": "read /etc/hosts",
+      "at": "2026-10-12T00:52:23.604Z"
+    },
+    {
+      "model": "probe-model",
+      "toolNames": [
+        "bash",
+        "edit",
+        "glob",
+        "grep",
+        "read",
+        "skill",
+        "task",
+        "todowrite",
+        "webfetch",
+        "write"
+      ],
+      "text": "SLOW-CANCEL",
+      "at": "2026-10-12T00:52:24.398Z"
+    }
+  ],
+  "cleanup": {
+    "hostADaemonPid": 20448,
+    "hostBDaemonPid": 35086,
+    "hostBEnginePid": 35087,
+    "hostBEngineExited": true,
+    "hostAOwnedRootRemoved": true,
+    "hostBInstallRootKept": true,
+    "hostBInstallRoot": "/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011"
+  },
+  "checks": [
+    {
+      "name": "preconditions — two distinct physical hosts",
+      "detail": "HOST A Macstudio.local (100.66.1.82) vs HOST B jennys-macbook-air.anoa-buri.ts.net (100.93.143.20), macOS 15.7.9 arm64, node v22.22.2, npm 10.9.7",
+      "ok": true
+    },
+    {
+      "name": "producer — pnpm build:governance staged a final package on HOST A",
+      "detail": "mode=final version=0.1.0 content=b063607e8779e2b2… files=263",
+      "ok": true
+    },
+    {
+      "name": "producer — the staged root packs into one tarball",
+      "detail": "agentteams-0.1.0.tgz bytes=1516808 sha256=f19211c9bd8123a4…",
+      "ok": true
+    },
+    {
+      "name": "producer — the tarball installs into an isolated prefix on HOST A and exposes the compiled runtime",
+      "detail": "cli=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/a11-xdev-uQd0yJ/prefix/node_modules/agentteams/cli/agentteams.mjs modules=negotiation,routePlan,directRoute,registration",
+      "ok": true
+    },
+    {
+      "name": "HOST B — the packed tarball installs into an isolated prefix and the installed CLI is byte-identical to HOST A's",
+      "detail": "prefix=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/prefix content=b063607e8779e2b2… cliSha256=d97ab857e0a7892f… cli=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/prefix/node_modules/agentteams/cli/agentteams.mjs",
+      "ok": true
+    },
+    {
+      "name": "TLS — the HOST B listener certificate is generated on HOST B and carries HOST B's own names",
+      "detail": "X509v3 Subject Alternative Name:   IP Address:100.93.143.20, DNS:jennys-macbook-air.anoa-buri.ts.net, DNS:localhost, IP Address:127.0.0.1",
+      "ok": true
+    },
+    {
+      "name": "TLS — the HOST B daemon trusts the HOST A registry certificate byte-identically",
+      "detail": "sha256=b8a571f5caed5d26…",
+      "ok": true
+    },
+    {
+      "name": "configs — HOST B owns its own config file, identity, data directory and listener",
+      "detail": "agent=reasoner-b listener=100.93.143.20:50991 data=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/state discovery=wss://100.66.1.82:55565 sha256=f76afce68ad2bfdf…",
+      "ok": true
+    },
+    {
+      "name": "HOST A — the discovery registry runs from the INSTALLED CLI on HOST A's Tailscale address",
+      "detail": "started state=running generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/a11-xdev-uQd0yJ/registry.toml daemon=a11-registry pid=20448 url=wss://100.66.1.82:55565",
+      "ok": true
+    },
+    {
+      "name": "HOST B — the daemon starts from the INSTALLED entrypoint on HOST B's own Tailscale address",
+      "detail": "serving agent=reasoner-b engine=opencode engineInstance=opencode-reasoner-b-3ecf1cbf-dd88-4226-8b1b-cff11b9a9991 enginePid=35087 daemonPid=35086 listener=100.93.143.20:50991 localChannel=127.0.0.1:51006 lanChannel=wss://100.93.143.20:50991 capabilitiesRevision=2 registration=online dataDirectory=/Users/jenny/.agentteam",
+      "ok": true
+    },
+    {
+      "name": "HOST B — the daemon spawned the real opencode engine as its own child",
+      "detail": "enginePid=35087 model=probe/probe-model modelVerification=session/new configOptions",
+      "ok": true
+    },
+    {
+      "name": "cross-device — the HOST B daemon registers with the HOST A registry over the network",
+      "detail": "readiness registration=online; discovery=wss://100.66.1.82:55565",
+      "ok": true
+    },
+    {
+      "name": "HOST A — HOST A's registry lists HOST B as an online peer with HOST B's own declared Tailscale route",
+      "detail": "agent=reasoner-b presence=online route=wss://100.93.143.20:50991 revision=2",
+      "ok": true
+    },
+    {
+      "name": "HOST A — the peer address is neither loopback nor any HOST A address, and the hostname is a different host",
+      "detail": "hostname=jennys-macbook-air.anoa-buri.ts.net resolved=100.93.143.20 loopback=false own=false hostA=Macstudio.local",
+      "ok": true
+    },
+    {
+      "name": "HOST A -> HOST B — authenticate, negotiate and connect over the direct WSS listener",
+      "detail": "endpoint=wss://jennys-macbook-air.anoa-buri.ts.net:50991 state=agreed observer(master) -> reasoner-b(peer) targetRevision=2",
+      "ok": true
+    },
+    {
+      "name": "HOST B — the remote opencode engine creates a real ACP Session on HOST B",
+      "detail": "sessionId=ses_ed2674ee2ffeq3lb5nCGWsmETz cwd=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/workspace enginePid=35087",
+      "ok": true
+    },
+    {
+      "name": "HOST A <-> HOST B — a real ACP prompt/reply with a permission callback round trip crosses the two devices",
+      "detail": "sessionId=ses_ed2674ee2ffeq3lb5nCGWsmETz engine->client session/request_permission(once,always,reject) + client->engine reply -> stopReason=end_turn; session/update delivered; HOST B's engine called the HOST A provider (bash,edit,glob,grep,read,skill,task,todowrite,webfetch,write)",
+      "ok": true
+    },
+    {
+      "name": "HOST A -> HOST B — a real cancel ends the in-flight remote prompt with the engine's own result",
+      "detail": "session/cancel -> stopReason=cancelled",
+      "ok": true
+    },
+    {
+      "name": "HOST B — HOST B's own durable history records the inbound HOST A peer and the negotiated agreement",
+      "detail": "records=24 negotiated: observer(master) -> reasoner-b(peer) connectionId=f242904d-fd7b-4cd6-84f7-f9a5d195c103 channels=1",
+      "ok": true
+    }
+  ],
+  "gaps": []
+}

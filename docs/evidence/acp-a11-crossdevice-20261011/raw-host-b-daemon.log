@@ -1,0 +1,4 @@
+serving agent=reasoner-b engine=opencode engineInstance=opencode-reasoner-b-3ecf1cbf-dd88-4226-8b1b-cff11b9a9991 enginePid=35087 daemonPid=35086 listener=100.93.143.20:50991 localChannel=127.0.0.1:51006 lanChannel=wss://100.93.143.20:50991 capabilitiesRevision=2 registration=online dataDirectory=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/state config=/Users/jenny/.agentteams-a11/acp-a11-crossdevice-20261011/run/agent.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1
+registration state=online attempts=0 reconnects=0 endpoint=wss://100.66.1.82:55565
+registration state=stopped attempts=0 reconnects=0 endpoint=wss://100.66.1.82:55565
+stopped agent=reasoner-b enginePid=35087 engine=exited code=null signal=SIGTERM channels=0
