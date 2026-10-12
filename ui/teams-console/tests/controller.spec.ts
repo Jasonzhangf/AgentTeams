@@ -195,6 +195,30 @@ describe('TeamsConsoleController', () => {
     expect(controller.getSnapshot().page).toBe('history')
   })
 
+  it('starts the first history read for a page restored from persistence', async () => {
+    const requests: string[] = []
+    const controller = new TeamsConsoleController(createLiveConsoleHttpClient({
+      baseUrl: 'http://localhost:7788',
+      eventSourceImpl: RecordingEventSource as unknown as new (url: string) => EventSource,
+      fetchImpl: async input => {
+        const url = String(input)
+        requests.push(url)
+        if (url.includes('/api/v1/history')) return new Response(JSON.stringify({ records: [], nextBeforeSequence: 0 }), { status: 200 })
+        return new Response(JSON.stringify({ ok: true }), { status: 200 })
+      },
+    }), {
+      // A page restored from persistence never goes through selectPage, so the constructor is
+      // the only place that can start the first read for it.
+      persistence: {
+        getItem: (key: string) => key === 'teams-console-draft:teams-console-page' ? JSON.stringify('history') : null,
+        setItem: () => {},
+      },
+    })
+    expect(controller.getSnapshot().page).toBe('history')
+    await vi.waitFor(() => expect(controller.getSnapshot().historyStatus).toBe('ready'))
+    expect(requests.filter(url => url.includes('/api/v1/history'))).toHaveLength(1)
+  })
+
   it('starts no history read for a fixture client, which has no history owner', () => {
     const controller = new TeamsConsoleController(createFixtureClient())
     controller.selectPage('history')

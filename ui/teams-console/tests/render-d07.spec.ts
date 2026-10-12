@@ -150,6 +150,9 @@ const contractScript = `<!doctype html>
   <div id="root-networking"></div>
   <div id="root-interaction"></div>
   <div id="root-history"></div>
+  <div id="root-cancel-requested"></div>
+  <div id="root-cancel-confirmed"></div>
+  <div id="root-cancel-unknown"></div>
   <script>
 ${script}
 ${controllerScript}
@@ -163,6 +166,12 @@ ${controllerScript}
     renderConsole(document.getElementById('root-interaction'), controller)
     STATE = ${JSON.stringify(state({ page: 'history', history: historyPage, historyStatus: 'ready' }))}
     renderConsole(document.getElementById('root-history'), controller)
+    STATE = ${JSON.stringify(state({ page: 'interaction', cancelState: 'requested' }))}
+    renderConsole(document.getElementById('root-cancel-requested'), controller)
+    STATE = ${JSON.stringify(state({ page: 'interaction', cancelState: 'confirmed' }))}
+    renderConsole(document.getElementById('root-cancel-confirmed'), controller)
+    STATE = ${JSON.stringify(state({ page: 'interaction', cancelState: 'unknown' }))}
+    renderConsole(document.getElementById('root-cancel-unknown'), controller)
     const roots = ['root', 'root-refused', 'root-networking', 'root-interaction', 'root-history']
     const combined = roots.map(id => document.getElementById(id).outerHTML).join('\\n')
     const pages = [...combined.matchAll(/data-team-page="(discovery|networking|interaction|history)"/g)].map(match => match[1])
@@ -183,6 +192,11 @@ ${controllerScript}
     document.body.dataset.permissionChoices = String(combined.includes('data-permission-option="once"') && combined.includes('data-permission-option="always"') && combined.includes('data-permission-option="reject"'))
     document.body.dataset.permissionKind = String(combined.includes('data-permission-kind="always"'))
     document.body.dataset.cancelIdle = String(combined.includes('data-team-cancel="idle"'))
+    // D07 item 4 asks for "cancel requested vs actual terminal state": the same interaction view
+    // must carry every non-idle cancelState, so a regression to a constant idle cannot pass.
+    const cancelRoots = ['root-interaction', 'root-cancel-requested', 'root-cancel-confirmed', 'root-cancel-unknown']
+    const cancelCombined = cancelRoots.map(id => document.getElementById(id).outerHTML).join('\\n')
+    document.body.dataset.cancelStates = String(['idle', 'requested', 'confirmed', 'unknown'].every(cancelState => cancelCombined.includes('data-team-cancel="' + cancelState + '"')))
     document.body.dataset.historyPagination = String(combined.includes('data-history-prev') && combined.includes('data-history-count="2"') && combined.includes('data-enabled="true"'))
     document.body.dataset.historyDetail = String(combined.includes('data-history-record="r1"') && combined.includes('data-history-record="r2"'))
     document.body.dataset.historyOrder = String(combined.indexOf('data-history-record="r1"') < combined.indexOf('data-history-record="r2"'))
@@ -341,6 +355,7 @@ describe('D07 four-page DOM contract in a real DOM', () => {
     expect(output).toContain('data-permission-choices="true"')
     expect(output).toContain('data-permission-kind="true"')
     expect(output).toContain('data-cancel-idle="true"')
+    expect(output).toContain('data-cancel-states="true"')
     expect(output).toContain('data-history-pagination="true"')
     expect(output).toContain('data-history-detail="true"')
     expect(output).toContain('data-history-order="true"')

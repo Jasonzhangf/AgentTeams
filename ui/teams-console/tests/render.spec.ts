@@ -133,6 +133,11 @@ ${script}
     const modelSelect = () => document.querySelector('article.teams-provider-card select.teams-select')
     const bindButton = () => document.querySelector('article.teams-provider-card .teams-model-row .teams-button-primary')
     document.body.dataset.modelVisibleBusy = String([...modelSelect().options].some(option => option.value === 'bb-console-model'))
+    // Select the model through the real change event before reading the disabled state, so the
+    // "no model selected" disjunct is already false and the busy window is the only reason the
+    // bind button can still be disabled.
+    modelSelect().value = 'bb-console-model'
+    modelSelect().dispatchEvent(new Event('change', { bubbles: true }))
     document.body.dataset.bindDisabledBusy = String(bindButton().disabled)
     state = { ...state, busy: null, notice: 'Refresh models: accepted by Agent' }
     renderConsole(root, controller)
@@ -141,6 +146,13 @@ ${script}
     modelSelect().value = 'bb-console-model'
     modelSelect().dispatchEvent(new Event('change', { bubbles: true }))
     document.body.dataset.bindEnabledAfterReselect = String(bindButton().disabled === false)
+    // The change listener is not the only place that binds the busy window. Re-render with the
+    // owner's binding in place, so actionDisabled alone decides the paint-time disabled state
+    // and the "no model selected" disjunct is already false there too.
+    const boundProjection = { ...projection, agents: [{ ...projection.agents[0], providerId: 'p', modelId: 'bb-console-model' }] }
+    state = { ...state, busy: 'Refresh models', projection: boundProjection }
+    renderConsole(root, controller)
+    document.body.dataset.bindDisabledBusyBound = String(bindButton().disabled)
   </script>
 </body></html>`
     writeFileSync(page, busyWindowScript)
@@ -153,6 +165,7 @@ ${script}
     ], { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'ignore'] })
     expect(output).toContain('data-model-visible-busy="true"')
     expect(output).toContain('data-bind-disabled-busy="true"')
+    expect(output).toContain('data-bind-disabled-busy-bound="true"')
     expect(output).toContain('data-select-reset-after-complete="true"')
     expect(output).toContain('data-bind-disabled-after-complete="true"')
     expect(output).toContain('data-bind-enabled-after-reselect="true"')

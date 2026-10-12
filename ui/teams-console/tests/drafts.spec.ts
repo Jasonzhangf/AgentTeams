@@ -3,10 +3,12 @@ import { createSessionStorageDrafts, readDraft, readFocus, readPage, writeDraft,
 
 function storageLike() {
   const values = new Map<string, string>()
+  let reads = 0
   return {
     values,
+    storageReads: () => reads,
     storage: {
-      getItem: (key: string) => values.get(key) ?? null,
+      getItem: (key: string) => { reads += 1; return values.get(key) ?? null },
       setItem: (key: string, value: string) => { values.set(key, value) },
       removeItem: (key: string) => { values.delete(key) },
       clear: () => { values.clear() },
@@ -18,7 +20,7 @@ function storageLike() {
 
 describe('Teams Console draft persistence', () => {
   it('uses the injected session storage only for drafts, focus, and page state', () => {
-    const { storage, values } = storageLike()
+    const { storage, values, storageReads } = storageLike()
     const persistence = createSessionStorageDrafts(storage)
     writeDraft(persistence, 'message', 'hello')
     writeDraft(persistence, 'networking', [{ agentId: 'planner', role: 'master' }])
@@ -29,6 +31,8 @@ describe('Teams Console draft persistence', () => {
     expect(readDraft(persistence, 'networking')).toEqual([{ agentId: 'planner', role: 'master' }])
     expect(readFocus(persistence)).toBe('drawer-1')
     expect(readPage(persistence, ['discovery', 'networking', 'interaction', 'history'])).toBe('history')
+    // Each read touches the injected storage exactly once, and no read writes.
+    expect(storageReads()).toBe(4)
     expect([...values.keys()]).toEqual([
       'teams-console-draft:message',
       'teams-console-draft:networking',
@@ -47,15 +51,5 @@ describe('Teams Console draft persistence', () => {
     expect(readDraft<string>(persistence, 'message')).toBeUndefined()
     expect(readFocus(persistence)).toBe('drawer-1')
     expect(readPage(persistence, ['history'])).toBeUndefined()
-  })
-
-  it('does not call storage when persistence is absent', () => {
-    let calls = 0
-    const persistence = { getItem: () => { calls += 1; return null }, setItem: () => { calls += 1 } }
-    readDraft(persistence, 'message')
-    readFocus(persistence)
-    readPage(persistence, ['history'])
-
-    expect(calls).toBe(3)
   })
 })

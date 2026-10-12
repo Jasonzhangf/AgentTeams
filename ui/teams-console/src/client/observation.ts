@@ -1,4 +1,4 @@
-import type { ConsoleProjectionSnapshot, ConsoleProjectionSink, ConsoleProjectionUnsubscribe, SessionObservationState } from './protocol.ts'
+import type { ConsoleProjectionSnapshot, ConsoleProjectionUnsubscribe, SessionObservationState } from './protocol.ts'
 import { parseConsoleProjectionSnapshot } from './protocol.ts'
 
 export type ObservationState = 'unknown' | 'stale' | 'live'
@@ -61,62 +61,5 @@ export class ProjectionObservationController {
 
   private emit(observation: ObservationState): void {
     this.options.onObservation({ projection: this.projection, observation, health: this.health })
-  }
-}
-
-export function createSinkForController(controller: ProjectionObservationController): ConsoleProjectionSink {
-  return {
-    onSnapshot(snapshot: ConsoleProjectionSnapshot): void {
-      controller.onSnapshot(snapshot)
-    },
-    onHealth(state: SessionObservationState): void {
-      controller.onHealth(state)
-    },
-  }
-}
-
-export function sinkToSubscription(controller: ProjectionObservationController, eventSource: EventSource): ConsoleProjectionUnsubscribe {
-  const onMessage = (event: MessageEvent): void => {
-    try {
-      controller.onSnapshot(JSON.parse(String(event.data)))
-    } catch (error) {
-      controller.onHealth({ state: 'degraded', reason: 'stream-retry', detail: 'Malformed projection event', droppedEvents: 0 })
-    }
-  }
-  const onHealth = (event: MessageEvent): void => {
-    try {
-      controller.onHealth(JSON.parse(String(event.data)) as SessionObservationState)
-    } catch {
-      // A malformed health frame is observation loss, never live state.
-      controller.onHealth({ state: 'lost', reason: 'stream-ended', detail: 'Malformed observation health event' })
-    }
-  }
-  const onError = (): void => {
-    controller.onHealth({ state: 'lost', reason: 'stream-ended', detail: 'SSE stream ended' })
-  }
-  eventSource.addEventListener('snapshot', onMessage)
-  eventSource.addEventListener('health', onHealth)
-  eventSource.addEventListener('error', onError)
-  return () => {
-    eventSource.removeEventListener('snapshot', onMessage)
-    eventSource.removeEventListener('health', onHealth)
-    eventSource.removeEventListener('error', onError)
-    eventSource.close()
-  }
-}
-
-export function subscriptionFromSource(subscribe: () => ConsoleProjectionUnsubscribe, createSink: () => ConsoleProjectionSink): ConsoleProjectionUnsubscribe {
-  let unsubscribe: ConsoleProjectionUnsubscribe | null = null
-  let stopped = false
-  try {
-    unsubscribe = subscribe()
-  } catch (error) {
-    stopped = true
-    throw error
-  }
-  return () => {
-    if (stopped) return
-    stopped = true
-    unsubscribe?.()
   }
 }

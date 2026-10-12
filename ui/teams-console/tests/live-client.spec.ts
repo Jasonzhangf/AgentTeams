@@ -10,6 +10,8 @@ const page: HistoryPage = {
   nextBeforeSequence: 0,
 }
 
+const emptyProjection = { version: 1, agents: [], sessions: [], notifications: [], configs: [] }
+
 /** Minimal EventSource double: the client only needs add/remove/close plus dispatch. */
 class FakeEventSource {
   static instance: FakeEventSource | undefined
@@ -40,6 +42,7 @@ function liveClient(history?: (url: string) => Response) {
         if (history !== undefined) return history(url)
         return new Response(JSON.stringify(page), { status: 200 })
       }
+      if (url.includes('/api/v1/projection')) return new Response(JSON.stringify(emptyProjection), { status: 200 })
       return new Response(JSON.stringify({ ok: true }), { status: 200 })
     },
   })
@@ -47,15 +50,6 @@ function liveClient(history?: (url: string) => Response) {
 }
 
 describe('live console client additive capability', () => {
-  it('keeps the canonical ports while adding history and projection subscription', async () => {
-    const { client } = liveClient()
-    expect(typeof client.readProjection).toBe('function')
-    expect(typeof client.command).toBe('function')
-    expect(typeof client.sendSession).toBe('function')
-    expect(typeof client.readHistory).toBe('function')
-    expect(typeof client.subscribeProjection).toBe('function')
-  })
-
   it('reads connection history and pages with beforeSequence', async () => {
     const { client, requests } = liveClient()
     await expect(client.readHistory({ version: 1, kind: 'connection', limit: 20, beforeSequence: 10 })).resolves.toEqual(page)
@@ -69,8 +63,8 @@ describe('live console client additive capability', () => {
     await expect(client.readHistory({ version: 1, kind: 'request', limit: 20 })).rejects.toMatchObject({ code: 'INVALID_ACP_FRAME', message: '502: owner refuses request history', status: 502 })
   })
 
-  it('delivers owner snapshots through the sink and unsubscribes on the returned function', () => {
-    const { client } = liveClient()
+  it('keeps the canonical ports on the live client and delivers owner snapshots through the sink', async () => {
+    const { client, requests } = liveClient()
     const snapshots: number[] = []
     const health: string[] = []
     const sink: ConsoleProjectionSink = {
@@ -85,6 +79,14 @@ describe('live console client additive capability', () => {
     unsubscribe()
     expect(source?.closed).toBe(true)
     expect(health).toEqual([])
+    // The live client is additive: the canonical projection/command/session ports must stay
+    // reachable on the same object AND still go through the live client's own options. A
+    // regression to `{ readHistory, subscribeProjection }` or to a base client built without
+    // those options is invisible to api.spec.ts, which exercises the base client alone.
+    await expect(client.readProjection()).resolves.toEqual(emptyProjection)
+    await expect(client.command({ kind: 'config.apply', agentId: 'planner' })).resolves.toEqual({ ok: true })
+    await expect(client.sendSession({ agentId: 'planner', sessionId: 's1' }, { text: 'probe' })).resolves.toEqual({ ok: true })
+    expect(requests.map(url => new URL(url).pathname)).toEqual(['/api/v1/projection', '/api/v1/command', '/api/v1/session-message'])
   })
 
   it('reports observation loss instead of live state for a malformed frame', () => {

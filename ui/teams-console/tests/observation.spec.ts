@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ProjectionObservationController, createSinkForController } from '../src/client/observation.ts'
+import { ProjectionObservationController } from '../src/client/observation.ts'
 import type { ConsoleProjectionV1 } from '../src/client/protocol.ts'
 
 const projection: ConsoleProjectionV1 = { version: 1, agents: [], sessions: [], notifications: [], configs: [] }
@@ -51,15 +51,5 @@ describe('projection observation controller', () => {
     state.instance.stop()
     expect(state.wasStopped()).toBe(true)
     expect(state.instance.getSnapshot().observation).toBe('stale')
-  })
-
-  it('exposes a sink adapter that feeds the same controller', () => {
-    const state = controller()
-    const sink = createSinkForController(state.instance)
-    sink.onSnapshot({ seq: 1, projection })
-    sink.onHealth({ state: 'live' })
-    expect(state.observations).toEqual(['live', 'live'])
-    expect(state.instance.getSnapshot().observation).toBe('live')
-    expect(state.instance.getSnapshot().projection).toEqual(projection)
   })
 })
