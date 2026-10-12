@@ -1817,9 +1817,18 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   const receiptPeers = [receiptHostA, receiptHostB]
   assert(receiptPeers.every(peer => peer.toLowerCase() !== 'localhost' && peer !== '127.0.0.1' && peer !== '::1'),
     `the integrated A11 receipt names a loopback peer (${receiptPeers.join(', ')})`)
+  const artifact = receipt.artifact ?? {}
+  assert(typeof artifact.hostASha256 === 'string' && artifact.hostASha256 !== '',
+    'the integrated A11 receipt does not record host A tarball sha256')
+  assert(artifact.hostBSha256 === artifact.hostASha256,
+    'the integrated A11 receipt records different tarball sha256 on the two hosts, so its identical-artifact claim is false')
+  assert(typeof artifact.hostAInstalledCliSha256 === 'string' && artifact.hostAInstalledCliSha256 !== '',
+    'the integrated A11 receipt does not record host A installed CLI sha256')
+  assert(artifact.hostBInstalledCliSha256 === artifact.hostAInstalledCliSha256,
+    'the integrated A11 receipt records different installed CLI sha256 on the two hosts, so its identical-artifact claim is false')
   check('A11 — the cross-device receipt is integrated and recorded gap-free',
     `receipt docs/evidence/acp-a11-crossdevice-20261011/: ${receipt.checks.length} checks, ${receipt.gaps.length} gaps, `
-      + `two distinct non-loopback hosts (${receiptHostA}, ${receiptHostB})`)
+      + `two distinct non-loopback hosts (${receiptHostA}, ${receiptHostB}), byte-identical tarball and installed CLI on both`)
   finding('A11 — the cross-device receipt is verified by reading, not by driving traffic',
     `this driver on ${hostname} exercised only ${lanIp} (tailscale 100.66.1.82); the cross-device exchange was driven by the `
       + 'A11 unit at commit 869aff8, whose receipt this driver now verifies by reading. Loopback and same-host '
