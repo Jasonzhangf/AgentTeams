@@ -1,4 +1,4 @@
-import type { ConsoleClientV1, ConsoleProjectionV1 } from '../control-protocol/console-api.ts'
+import type { ConsoleAgentObservationV1, ConsoleClientV1, ConsoleProjectionV1 } from '../control-protocol/console-api.ts'
 import type { RelayPeer } from '../control-protocol/agent-services.ts'
 import { parseConsoleWorkRelationProjection, projectCapabilityDetails } from '../control-protocol/console-api.ts'
 import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
@@ -6,6 +6,25 @@ import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
 export interface ConsoleDirectoryBinding {
   readonly peers: readonly RelayPeer[]
   readonly client: (peer: RelayPeer) => ConsoleClientV1
+}
+
+/**
+ * One directory agent row projected from an admitted Relay peer. The peer's published
+ * declaration owns the identity, generation, presence and capability facts; this is the
+ * single mapper for a directory row, shared by the Console hub and the control daemon's
+ * directory projection.
+ */
+export function directoryAgentObservation(peer: RelayPeer): ConsoleAgentObservationV1 {
+  return {
+    kind: 'directory',
+    agentId: peer.declaration.identity.agentId,
+    label: peer.declaration.identity.label,
+    machineId: peer.declaration.identity.machineId,
+    generation: peer.generation,
+    presence: peer.presence,
+    capabilities: peer.declaration.capabilities.map(capability => capability.capabilityId),
+    capabilityDetails: projectCapabilityDetails(peer.declaration.capabilities),
+  }
 }
 
 /** Compose bound owners without storing a second copy of their state. Empty static bindings use directory discovery. */
@@ -53,16 +72,7 @@ export function createConsoleHub(
         ? discoveredState.peers.map(peer => ({ agentId: peer.declaration.identity.agentId, peer, client: peer.presence === 'online' ? discoveredState.client(peer) : undefined }))
         : [...owners].map(([agentId, client]) => ({ agentId, client, peer: undefined }))
       for (const { agentId, client, peer } of entries) {
-        const directoryAgent = peer === undefined ? undefined : {
-          kind: 'directory',
-          agentId,
-          label: peer.declaration.identity.label,
-          machineId: peer.declaration.identity.machineId,
-          generation: peer.generation,
-          presence: peer.presence,
-          capabilities: peer.declaration.capabilities.map(capability => capability.capabilityId),
-          capabilityDetails: projectCapabilityDetails(peer.declaration.capabilities),
-        } as const
+        const directoryAgent = peer === undefined ? undefined : directoryAgentObservation(peer)
         if (client === undefined) {
           if (directoryAgent) agents.push(directoryAgent)
           continue

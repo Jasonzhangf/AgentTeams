@@ -1,9 +1,12 @@
 import { createServer } from 'node:net'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import { processAlive } from './local-ownership.ts'
+import { createRelayServer, type RelayServer } from '../server/relay.ts'
+import { createRegistrationClient, type RegistrationClient } from '../network/registration-client.ts'
 import {
   ControlProcessError,
   createControlHistoryReader,
@@ -20,15 +23,26 @@ import {
 } from './control-process.ts'
 import { createAcpHistoryStore } from './acp-history-store.ts'
 import { createTeamsConnectionHistory } from '../network/teams-connection-history.ts'
-import type { HistoryQuery, TeamsConnectionStatus } from '../control-protocol/teams-state.ts'
+import type { HistoryQuery, ConsoleProjectionSnapshot, TeamsConnectionStatus } from '../control-protocol/teams-state.ts'
 
 let directory: string
+let key: string
+let cert: string
 const startedConfigs: string[] = []
+const relays: RelayServer[] = []
+const registeredPeers: RegistrationClient[] = []
 const PASSWORD_ENV = 'TEAMS_CONTROL_TEST_PASSWORD'
+const DISCOVERY_ENV = 'TEAMS_CONTROL_TEST_DISCOVERY'
 const PASSWORD = 'control-secret'
 
 beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'teams-control-process-'))
+  // One real TLS trust anchor for the in-process D04 registry the directory test uses.
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+    '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1',
+    '-keyout', join(directory, 'key.pem'), '-out', join(directory, 'ca.pem')], { stdio: 'ignore' })
+  key = readFileSync(join(directory, 'key.pem'), 'utf8')
+  cert = readFileSync(join(directory, 'ca.pem'), 'utf8')
 })
 afterEach(async () => {
   // Explicit PID cleanup only; never a pattern kill.
@@ -42,6 +56,8 @@ afterEach(async () => {
       } catch { /* no persisted process for this config */ }
     }
   }
+  for (const peer of registeredPeers.splice(0)) await peer.stop().catch(() => undefined)
+  for (const relay of relays.splice(0)) await relay.close()
 })
 afterAll(() => rmSync(directory, { recursive: true, force: true }))
 
@@ -63,6 +79,7 @@ interface ControlConfigOptions {
   readonly kind?: 'control' | 'registry'
   readonly dataDirectory?: string
   readonly auth?: boolean
+  readonly discovery?: string
 }
 
 async function controlConfig(options: ControlConfigOptions = {}): Promise<string> {
@@ -99,8 +116,50 @@ hostId = "control-host"
 accountId = "local"
 scopeId = "local"
 dataDirectory = ${JSON.stringify(options.dataDirectory ?? join(directory, `state-${port}`))}
-${body}`)
+${body}${options.discovery ?? ''}`)
   return configPath
+}
+
+/**
+ * One real in-process D04 registry over TLS. The credential carries the agent id, so the
+ * authenticated identity and the published declaration identity agree.
+ */
+function relayServer(port: number): Promise<RelayServer> {
+  return createRelayServer({
+    host: '127.0.0.1', port, key, cert,
+    maxPayload: 65_536, maxConnections: 8, maxGrants: 4, maxBufferedAmount: 65_536,
+    maxPendingMessages: 16, maxPendingBytes: 131_072, grantTtlMs: 10_000,
+    authenticate: credential => typeof credential === 'string' && credential.startsWith('Bearer ')
+      ? { accountId: 'local', scopeId: 'local', agentId: credential.slice(7) } : null,
+  })
+}
+
+/** Registers one real peer over a real WSS socket; the directory gains a real row. */
+async function registerPeer(port: number, agentId: string): Promise<void> {
+  const client = createRegistrationClient({
+    declaration: {
+      identity: { hostId: `${agentId}-host`, machineId: `${agentId}-host`, agentId, accountId: 'local', agentKind: 'acp', label: agentId },
+      scopeId: 'local', revision: 1, capabilities: [], routes: [],
+    },
+    endpoint: `wss://127.0.0.1:${port}`,
+    credential: `Bearer ${agentId}`,
+    ca: cert,
+    heartbeatIntervalMs: 15_000, admissionTimeoutMs: 5_000, requestTimeoutMs: 5_000,
+    maxPendingRequests: 16, maxDataConnections: 8, connectTimeoutMs: 5_000,
+    maxMessageBytes: 262_144, maxBufferedBytes: 262_144, maxPendingFrames: 64,
+    reconnect: { initialDelayMs: 1_000, maxDelayMs: 30_000, maxAttempts: 3 },
+  })
+  registeredPeers.push(client)
+  expect((await client.start()).state).toBe('online')
+}
+
+async function waitFor(accept: () => boolean, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (accept()) return
+    await new Promise(resolveDelay => setTimeout(resolveDelay, 25))
+  }
+  throw new Error('timed out waiting for the real directory projection to change')
 }
 
 function track(configPath: string): string {
@@ -372,6 +431,44 @@ it('binds the real D05 status port from the daemon own owners and stops it expli
   await expect(binding.port.history({ version: 1, kind: 'request', limit: 5 }))
     .rejects.toThrow(/connection records only/)
   await expect(binding.stop()).resolves.toBeUndefined()
+})
+
+it('projects the real D04 registration directory and streams a frame when it changes', async () => {
+  const registryPort = await freePort()
+  relays.push(await relayServer(registryPort))
+  await registerPeer(registryPort, 'peer-a')
+
+  const configPath = track(await controlConfig({ discovery: `
+[discovery]
+serverId = "test-registry"
+endpoint = "wss://127.0.0.1:${registryPort}"
+credentialRef = "env:${DISCOVERY_ENV}"
+tlsTrustRef = "file:${join(directory, 'ca.pem')}"
+` }))
+  const binding = await createControlNetworkStatus(await loadControlIntent(configPath), { [DISCOVERY_ENV]: 'Bearer control-a' })
+  try {
+    // The real directory readback, never the hardcoded empty snapshot: the registered peer
+    // is a real directory row and a real disconnected connection row.
+    expect(binding.port.connections()).toMatchObject([
+      { remoteAgentId: 'peer-a', state: 'disconnected', targetGeneration: 1 },
+    ])
+    const client = createControlOwner({ network: binding.port, source: binding.projection })
+    expect((await client.readProjection()).agents).toMatchObject([
+      { kind: 'directory', agentId: 'peer-a', machineId: 'peer-a-host', presence: 'online', generation: 1, capabilities: [] },
+    ])
+
+    // The declared projection seam is the SSE feed: a real directory change advances `seq`.
+    const frames: ConsoleProjectionSnapshot[] = []
+    const unsubscribe = binding.projection.watch!({ onSnapshot: snapshot => { frames.push(snapshot) }, onHealth: () => undefined })
+    await waitFor(() => frames.length >= 1)
+    await registerPeer(registryPort, 'peer-b')
+    await waitFor(() => frames.length >= 2)
+    unsubscribe()
+    expect(frames[frames.length - 1]!.seq).toBeGreaterThan(frames[0]!.seq)
+    expect(frames[frames.length - 1]!.projection.agents.map(agent => agent.agentId)).toContain('peer-b')
+  } finally {
+    await binding.stop()
+  }
 })
 
 it('serves the real D05 connection projection and connection history over the wire', async () => {

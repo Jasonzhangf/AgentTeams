@@ -3,6 +3,13 @@
   "unit": "acp-d06-part2-20261011",
   "task_id": "task-10",
   "delivery": "D06 control daemon PART 2: real D05 status-port binding at the single injection point, engine-side permission optionId decision path, D00 amendment A2 verbatim governance/docs binding, D07 handoff surface",
+  "folded_unit": {
+    "statement": "The D06 directory-projection increment was previously carried as a separate \"D09\" unit (commit 0adc57f, branch codex/acp-d09-discovery-projection-20261011). It is now part of D06: there is no separate D09 unit, no separate D09 gate and no separate D09 evidence directory.",
+    "former_evidence_dir": "docs/evidence/acp-d09-discovery-projection-20261011 (deleted; notes and verification merged here, driver re-homed and renamed)",
+    "former_gate_id": "teams-acp-d09-discovery-projection (removed; its checks are already covered by the teams-acp-d06-control check that names the real D04 directory readback)",
+    "rehomed_driver": "docs/evidence/acp-d06-part2-20261011/black-box-control-directory-projection.mjs (renamed from black-box-discovery-projection.mjs)",
+    "history_preserved": "0adc57f and its commit message are not rewritten and stay on their own branch"
+  },
   "branch": "codex/acp-d06-part2-20261011",
   "worktree": "/Volumes/Intel/playground/agentteams/acp-d06-part2-20261011",
   "base_commit": "448813a",
@@ -70,6 +77,48 @@
       "checks_passed": 10,
       "checks_total": 10,
       "observed": "real `agentteams --serve opencode` entry, real installed OpenCode engine, real ACP client over the loopback listener: engine option set with real ACP kinds, verbatim frozen-vocabulary projection, foreign optionId refused with one durable callback.denied and no forwarded reply, the engine's own optionId then forwarded unchanged and the tool really runs, a fresh callback still arrives, a stale callback id approves nothing, explicit-PID stop"
+    },
+    {
+      "id": "directory-projection-black-box-rehomed",
+      "command": "node docs/evidence/acp-d06-part2-20261011/black-box-control-directory-projection.mjs",
+      "exit_code": 0,
+      "checks_passed": 9,
+      "checks_total": 9,
+      "gaps": 0,
+      "observed": "Re-homed from the former D09 unit and run from its new path after the fold. Real `agentteams registry start|stop`, two real `agentteams --serve opencode` daemons with the real OpenCode engine, the real `agentteams control start|stop` under test, and real authenticated HTTP/SSE. The Console projection carries the real D04 directory rows (kind:'directory' with real generation/presence/host/capability facts) and the same peers as disconnected connection rows, the daemon's own registration is filtered, and the second agent's real registration advances the SSE seq 1 -> 3."
+    },
+    {
+      "id": "d06-spec-bundle-after-directory-projection",
+      "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts",
+      "exit_code": 0,
+      "test_files_passed": 6,
+      "test_files_total": 6,
+      "tests_passed": 118,
+      "tests_total": 118,
+      "per_file": {
+        "runtime/control-process.spec.ts": 17
+      },
+      "observed": "The D06 mapped gate after the directory-projection increment (117 -> 118). Note: the first run without a prior `pnpm build` failed 8 cases with START_TIMEOUT: control did not report running within 10000ms; after the build the same command passed 118/118."
+    },
+    {
+      "id": "registration-client-after-directory-projection",
+      "command": "pnpm exec vitest run --no-file-parallelism network/registration-client.spec.ts",
+      "exit_code": 0,
+      "test_files_passed": 1,
+      "test_files_total": 1,
+      "tests_passed": 7,
+      "tests_total": 7,
+      "observed": "The registration client the change extends: the additive directorySnapshot surface and the single shared online guard."
+    },
+    {
+      "id": "touched-owner-regression-after-directory-projection",
+      "command": "pnpm exec vitest run --no-file-parallelism runtime/console-hub.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-status.spec.ts",
+      "exit_code": 0,
+      "test_files_passed": 4,
+      "test_files_total": 4,
+      "tests_passed": 28,
+      "tests_total": 28,
+      "observed": "The directly changed network/runtime owners."
     }
   ],
   "red_green": [
@@ -120,6 +169,23 @@
         "exit_code": 0,
         "observed": "14/14 passed, including the two added real-port tests"
       }
+    },
+    {
+      "id": "directory-projection-real-directory",
+      "behavior": "the control daemon's Console projection is the real D04 registration directory readback instead of the previous hardcoded empty snapshot, and a real directory change advances the SSE seq",
+      "red": {
+        "mutation": "the directory snapshot was still the hardcoded empty constant in runtime/control-process.ts",
+        "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts -t 'projects the real D04 registration directory'",
+        "exit_code": 1,
+        "observed": "Tests 1 failed | 16 skipped (17); AssertionError: expected [] to match object [ { remoteAgentId: 'peer-a', state: 'disconnected', targetGeneration: 1 } ]"
+      },
+      "green": {
+        "mutation": "restored to the real RegistrationClient.directorySnapshot read through refreshRelayDirectory",
+        "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts -t 'projects the real D04 registration directory'",
+        "exit_code": 0,
+        "observed": "Tests 1 passed | 16 skipped (17)"
+      },
+      "real_owners": "a real in-process createRelayServer registry over TLS plus two real createRegistrationClient peers; the second peer's registration is the real directory change that advances the SSE seq"
     }
   ],
   "artifacts": {
@@ -127,7 +193,8 @@
     "black_boxes": [
       "docs/evidence/acp-d06-part2-20261011/black-box-permission-option.mjs",
       "docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs",
-      "docs/evidence/acp-d06-control-20261011/black-box-control.mjs"
+      "docs/evidence/acp-d06-control-20261011/black-box-control.mjs",
+      "docs/evidence/acp-d06-part2-20261011/black-box-control-directory-projection.mjs"
     ],
     "governance": [
       "docs/design/teams-acp-daemon-config-v4.md",
@@ -145,12 +212,44 @@
     "bound_in": "docs/architecture/verification-map.json",
     "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts"
   },
+  "directory_projection_boundary": {
+    "refresh_is_a_real_poll_not_a_push": {
+      "still_true": true,
+      "evidence": "network/registration-client.ts:68-89 declares no change event on RegistrationClient (only closed/status/start/directory/directorySnapshot/publish/stop); runtime/control-process.ts:549 sets DIRECTORY_PROJECTION_INTERVAL_MS = 1_000 and :655 builds createPollingProjectionSubscriber(readProjection, DIRECTORY_PROJECTION_INTERVAL_MS); :663-694 implements it with setInterval(tick, intervalMs) doing one real directorySnapshot read per tick."
+    },
+    "failed_read_keeps_the_last_real_readback": {
+      "still_true": true,
+      "evidence": "runtime/control-process.ts:599-606: a directorySnapshot failure logs a diagnostic and returns without touching directory or peers; only a real revision >= 1 (:607) is written through refreshRelayDirectory (:613-614)."
+    },
+    "no_teams_listener_so_connection_rows_are_directory_facts": {
+      "still_true": true,
+      "evidence": "config/daemon-intent.ts:142-150 gives ControlDaemonIntent a webui but no listen: ListenIntent; :723 allows only ['version','daemon','webui','relations','admissions','discovery','peers'] for a control daemon, so [listen] is refused. runtime/control-process.ts:586 creates an empty ledger that is only read at :624 and passed at :647 and never written, so projectTeamsMembership reports a directory-known remote with no channel as state: 'disconnected' (network/teams-membership.ts:133-137)."
+    }
+  },
+  "d08_a07_gap_premise": {
+    "gap_text_reviewed": "the shipped control daemon binds no Console owner, so /api/v1/projection is a constant empty snapshot and no real event can advance the SSE stream",
+    "half_now_false": {
+      "claim": "the projection is a constant empty snapshot and no real event can advance the SSE stream",
+      "verdict": "NO LONGER TRUE for directory changes",
+      "evidence": "the real black box shows real kind:'directory' agent rows for reasoner-a and reasoner-b and a real SSE seq advance 1 -> 3 when the second agent registers"
+    },
+    "half_still_true": {
+      "claim": "the shipped control daemon binds no Console owner",
+      "verdict": "STILL TRUE",
+      "evidence": "runtime/control-process.ts:818 is the only production call site and passes createControlOwner({ network: network.port, source: network.projection }) with no owner binding; ControlOwnerBinding (:77) has no production construction. No Session owner, no connection.connect/connection.disconnect, no network.membership.apply and no targeted ACP ingress are delivered."
+    },
+    "precise_conclusion": "The projection now carries real directory rows (in scope for this change and proven). A real Session owner is NOT bound (out of scope). The A07 animation gap is therefore only half unblocked: a directory-change-driven SSE advance is now real, but a Session/permission/notification-driven animation is still impossible, so the gap must be rewritten rather than closed."
+  },
   "non_claims": [
     "no installed-copy replay",
     "no restart",
     "no deployed-entrypoint replay",
     "no cross-device receipt",
     "no browser evidence",
-    "no merge and no push in this round"
+    "no merge and no push in this round",
+    "the directory refresh is a real 1s WSS directory poll, not a relay.changed push, because RegistrationClient does not expose the change event",
+    "the control daemon declares no Teams listener, so the connection rows are disconnected directory facts and not established channels",
+    "the D06 directory-projection increment was previously carried as a separate \"D09\" unit; there is no separate D09 unit, gate or evidence directory",
+    "no Session owner and no targeted ACP ingress are bound, so a Session-event-driven projection animation is still not delivered"
   ]
 }
