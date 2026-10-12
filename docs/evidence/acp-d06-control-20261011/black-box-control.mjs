@@ -299,7 +299,9 @@ allowed = ["master", "peer"]
   const streamBody = await stream.text()
   const frames = streamBody.split('\n\n').filter(Boolean)
   assert.ok(frames.length >= 3, `expected at least 3 SSE frames, got ${frames.length}: ${JSON.stringify(frames)}`)
-  assert.equal(frames[0], 'event: projection\ndata: {"seq":1,"projection":{"version":1,"agents":[],"sessions":[],"notifications":[],"configs":[]}}')
+  // The event name is the name the UI live clients subscribe to; a named SSE event that no
+  // listener matches is dropped silently, so it is asserted here as well as in the D06 gate.
+  assert.equal(frames[0], 'event: snapshot\ndata: {"seq":1,"projection":{"version":1,"agents":[],"sessions":[],"notifications":[],"configs":[]}}')
   const second = frameData(frames[1])
   assert.equal(second.seq, 2)
   assert.equal(second.projection.version, 1)

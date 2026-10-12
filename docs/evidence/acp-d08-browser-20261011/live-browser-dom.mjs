@@ -36,7 +36,16 @@
  *     never opened `/api/v1/events` at all;
  *   - the history view had no initial read, and its only other trigger is disabled until a
  *     read has happened, so the view could never show a record.
- * Each is now a real `PASS` check rather than a `GAP` claim.
+ * Each now has a real `PASS` check rather than an unverified `GAP` claim, and each check is
+ * worded to claim only what it measures:
+ *   - defect 1 is proven by the "SSE frame" check: an EventSource subscribing to `snapshot`
+ *     receives a real frame, and that check times out under the old name;
+ *   - defect 2 is proven by the "live page subscription" check: the shipped entry opens its
+ *     OWN `/api/v1/events` request. That check does NOT claim the shipped client applied a
+ *     snapshot: `ProjectionObservationController.start()` emits `live` before any snapshot
+ *     arrives, and the page also renders from its own HTTP projection fetch;
+ *   - defect 3 is proven by the "history readback from the page" check: the shipped history
+ *     view issues its own `/api/v1/history` request.
  *
  * Honest boundary (printed as a `GAP` line, never as PASS):
  *   - the control daemon binds no Console/Session owner and records no registration
@@ -481,15 +490,19 @@ passwordEnv = ${JSON.stringify(CONSOLE_PASSWORD_ENV)}
   assert(pageOpenedStream, 'the live page never opened /api/v1/events on its own; the shipped client did not start observation')
   const pageStreamRecord = networkTable(cdp.events).get(requestIdFor(networkTable(cdp.events), streamPath))
   assert(pageStreamRecord.status === 200, `the page's own /api/v1/events returned ${pageStreamRecord.status}`)
-  // A snapshot the client accepts flips the observation health to `live` (observation.ts). If
-  // the server names the event something no listener subscribes to, it is dropped silently and
-  // this stays at the initial `unknown`.
-  const observedLive = await settle('the live page to apply a real snapshot', async () =>
+  // `ProjectionObservationController.start()` emits `live` before any snapshot arrives
+  // (ui/teams-console/src/client/observation.ts:27-31), so this proves the shipped client
+  // STARTED its subscription, not that it applied a snapshot. Snapshot application by the
+  // shipped client is not separately observable here: the projection is empty, and the page
+  // also renders from its own HTTP fetch. The event-name agreement (defect 1) is proven by the
+  // driver-owned "SSE frame" check below, which subscribes to `snapshot` and would time out if
+  // the origin still emitted `projection`.
+  const observedLive = await settle('the live page to start its own observation subscription', async () =>
     (await evaluate(cdp, sessionId, DOM_INVENTORY)).observation === 'live', 250, 20_000)
   const liveInventory = await evaluate(cdp, sessionId, DOM_INVENTORY)
   assert(observedLive,
-    `the page opened its own stream but its observation state stayed ${JSON.stringify(liveInventory.observation)}; a named SSE event with no matching listener is dropped silently`)
-  check('live page subscription', `the shipped entry opened its own /api/v1/events (HTTP ${pageStreamRecord.status}) and applied a real snapshot: data-team-observation=${liveInventory.observation}`)
+    `the page opened its own stream but its observation state stayed ${JSON.stringify(liveInventory.observation)}`)
+  check('live page subscription', `the shipped entry opened its own /api/v1/events (HTTP ${pageStreamRecord.status}) and started its observation controller (data-team-observation=${liveInventory.observation}); snapshot application by the shipped client is NOT claimed here`)
 
   step = 'four pages'
   const visitedPages = []
@@ -537,7 +550,7 @@ passwordEnv = ${JSON.stringify(CONSOLE_PASSWORD_ENV)}
   assert(sseFrame.projection?.version === 1, `the SSE frame carries no v1 projection (${JSON.stringify(sseFrame).slice(0, 160)})`)
   const pageEventSourceRequests = [...networkTable(cdp.events).values()].filter(record => new URL(record.url).pathname === '/api/v1/events')
   assert(pageEventSourceRequests.some(record => record.status === 200), `the browser observed no 200 on /api/v1/events (${JSON.stringify(pageEventSourceRequests)})`)
-  check('SSE frame', `same-origin EventSource inside the live page received a real frame: seq=${sseFrame.seq} projectionVersion=${sseFrame.projection.version} (HTTP ${pageEventSourceRequests.map(record => record.status).join(',')} on /api/v1/events)`)
+  check('SSE frame', `a same-origin EventSource inside the live page that subscribes to \`snapshot\` received a real frame: seq=${sseFrame.seq} projectionVersion=${sseFrame.projection.version} (HTTP ${pageEventSourceRequests.map(record => record.status).join(',')} on /api/v1/events); this is the check that proves the origin's event name matches the client subscription, because it times out when the origin emits any other name`)
 
   step = 'projection match'
   const pageProjection = JSON.parse(pageProjectionText)
@@ -567,7 +580,13 @@ passwordEnv = ${JSON.stringify(CONSOLE_PASSWORD_ENV)}
   const signature = png.subarray(0, 8).toString('hex')
   assert(signature === '89504e470d0a1a0a', `the screenshot is not a PNG (signature ${signature})`)
   assert(png.length > 5_000, `the screenshot is implausibly small (${png.length} bytes)`)
-  check('screenshot', `real PNG written to ${SCREENSHOT_PATH} (${png.length} bytes, ${statSync(SCREENSHOT_PATH).size} bytes on disk)`)
+  // Read the real dimensions out of the IHDR chunk instead of restating a recorded value.
+  assert(png.subarray(12, 16).toString('ascii') === 'IHDR', `the first PNG chunk is ${png.subarray(12, 16).toString('ascii')}, not IHDR`)
+  const pngWidth = png.readUInt32BE(16)
+  const pngHeight = png.readUInt32BE(20)
+  assert(pngWidth > 0 && pngHeight > 0, `the PNG IHDR carries no real size (${pngWidth}x${pngHeight})`)
+  assert(pngWidth > 400 && pngHeight > 300, `the screenshot is implausibly small at ${pngWidth}x${pngHeight}`)
+  check('screenshot', `real PNG written to ${SCREENSHOT_PATH}: ${pngWidth}x${pngHeight}, ${png.length} bytes (${statSync(SCREENSHOT_PATH).size} bytes on disk)`)
 
   /* -------------------------------------------------------------------------------------
    * Honest boundaries. Each is a check this producer genuinely cannot make here.

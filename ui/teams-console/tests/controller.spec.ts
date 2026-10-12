@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { TeamsConsoleController } from '../src/client/controller.ts'
+import { createLiveConsoleHttpClient } from '../src/client/live-client.ts'
 import { projectAgents } from '../src/client/model.ts'
 import { createFixtureClient } from '../src/fixture.ts'
+
+/** Minimal EventSource double: the live client only needs add/remove/close. */
+class RecordingEventSource {
+  closed = false
+  constructor(readonly url: string) {}
+  addEventListener(): void {}
+  removeEventListener(): void {}
+  close(): void { this.closed = true }
+}
 
 describe('TeamsConsoleController', () => {
   it('loads a projection, opens a Session, and sends unchanged business payload', async () => {
@@ -161,5 +171,33 @@ describe('TeamsConsoleController', () => {
     expect(reads).toBe(2)
     expect(controller.getSnapshot().projection?.sessionEvents).toHaveLength((before ?? 0) + 1)
     expect(controller.getSnapshot().notice).toContain('{"accepted":true}')
+  })
+
+  it('reads history when the history view is opened, because its only other trigger is disabled', async () => {
+    const requests: string[] = []
+    const controller = new TeamsConsoleController(createLiveConsoleHttpClient({
+      baseUrl: 'http://localhost:7788',
+      eventSourceImpl: RecordingEventSource as unknown as new (url: string) => EventSource,
+      fetchImpl: async input => {
+        const url = String(input)
+        requests.push(url)
+        if (url.includes('/api/v1/history')) return new Response(JSON.stringify({ records: [], nextBeforeSequence: 0 }), { status: 200 })
+        return new Response(JSON.stringify({ ok: true }), { status: 200 })
+      },
+    }))
+    const historyRequests = () => requests.filter(url => url.includes('/api/v1/history'))
+    expect(historyRequests()).toHaveLength(0)
+
+    controller.selectPage('history')
+
+    await vi.waitFor(() => expect(controller.getSnapshot().historyStatus).toBe('ready'))
+    expect(historyRequests()).toHaveLength(1)
+    expect(controller.getSnapshot().page).toBe('history')
+  })
+
+  it('starts no history read for a fixture client, which has no history owner', () => {
+    const controller = new TeamsConsoleController(createFixtureClient())
+    controller.selectPage('history')
+    expect(controller.getSnapshot().historyStatus).toBe('idle')
   })
 })

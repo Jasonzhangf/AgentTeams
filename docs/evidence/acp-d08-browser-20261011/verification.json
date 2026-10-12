@@ -6,7 +6,8 @@
   "base_ref": "origin/main",
   "worktree": "/Volumes/Intel/playground/agentteams/acp-d08-browser-20261011",
   "branch": "codex/acp-d08-browser-20261011",
-  "committed": false,
+  "committed": true,
+  "commit": "7735765",
   "driver": {
     "path": "docs/evidence/acp-d08-browser-20261011/live-browser-dom.mjs",
     "command": "node docs/evidence/acp-d08-browser-20261011/live-browser-dom.mjs",
@@ -16,9 +17,9 @@
     "canonical_run": {
       "checks": 14,
       "gaps": 1,
-      "control_listener": "127.0.0.1:51477",
-      "chrome_pid": 13758,
-      "control_pid": 13699,
+      "control_listener": "127.0.0.1:59330",
+      "chrome_pid": 33342,
+      "control_pid": 33298,
       "page_projection_bytes": 88,
       "page_own_events_requests": 2,
       "sse_event": "snapshot",
@@ -28,6 +29,7 @@
       "screenshot": "docs/evidence/acp-d08-browser-20261011/live-browser-dom.png",
       "screenshot_bytes": 19874,
       "page_exceptions": 0,
+      "cdp_events": 193,
       "cleanup": "chrome and control pids dead; profile-matching process count 0; owned root removed"
     },
     "stable_observations": {
@@ -51,7 +53,8 @@
       "screenshot_png": {
         "path": "docs/evidence/acp-d08-browser-20261011/live-browser-dom.png",
         "bytes": 19874,
-        "dimensions": "756x469"
+        "dimensions": "756x469",
+        "dimensions_source": "read from the PNG IHDR chunk by the producer and asserted, not restated from a recorded value"
       }
     }
   },
@@ -65,8 +68,8 @@
         "ui/teams-console/src/client/live-client.ts:89 (consumer)",
         "ui/teams-console/src/client/observation.ts:97 (consumer)"
       ],
-      "why_unnoticed": "runtime/control-process.spec.ts pinned `event: projection` and ui/teams-console/tests/live-client.spec.ts fed a synthetic `snapshot` event; neither test ever crossed the real server with the real client, and both black-box drivers read only the SSE data, never the event name.",
-      "fix": "The origin emits `snapshot`. The name is now pinned on both sides, in console-host/tests/http-api.spec.ts and runtime/control-process.spec.ts.",
+      "why_unnoticed": "runtime/control-process.spec.ts pinned `event: projection` on the origin side and ui/teams-console/tests/live-client.spec.ts fed a synthetic `snapshot` event on the client side, so each side's test agreed with itself and neither crossed the real origin with the real client. The D06 PART1 black box did assert the event name, but it asserted the origin's own string, so it could not detect that the client disagreed.",
+      "fix": "The origin emits `snapshot`. The name is now pinned on both sides, in console-host/tests/http-api.spec.ts, runtime/control-process.spec.ts, and docs/evidence/acp-d06-control-20261011/black-box-control.mjs (re-run to 10/10).",
       "red_evidence": "console-host/tests/http-api.spec.ts:120 expect(frames[1].startsWith('event: snapshot\\n')).toBe(true) failed with '+ false' before the fix."
     },
     {
@@ -78,7 +81,8 @@
         "ui/teams-console/src/client/index.ts (mountTeamsConsole did not start it and its teardown did not call controller.destroy())"
       ],
       "fix": "mountTeamsConsole starts observation, and its teardown calls controller.destroy() so the subscription is stopped with the mount. Both are no-ops for a fixture client.",
-      "verified_by": "PASS live page subscription — the shipped entry opened its own /api/v1/events (HTTP 200) and applied a real snapshot: data-team-observation=live"
+      "verified_by": "PASS live page subscription — the shipped entry opened its own /api/v1/events (HTTP 200) and started its observation controller",
+      "claim_boundary": "This check proves the shipped client STARTED its subscription. It does NOT prove the shipped client applied a snapshot: ProjectionObservationController.start() emits `live` before any snapshot arrives (ui/teams-console/src/client/observation.ts:27-31), and the page also renders from its own HTTP projection fetch. Snapshot application by the shipped client is not separately observable while the projection is empty."
     },
     {
       "id": "D08-B3",
@@ -89,15 +93,18 @@
         "ui/teams-console/src/client/render.ts:1053 (disabled until a page has been read)",
         "ui/teams-console/src/client/controller.ts selectPage (no read on open)"
       ],
-      "fix": "selectPage('history') starts the first read, and a history page restored from persistence starts it in the constructor.",
-      "verified_by": "PASS history readback from the page — the live history view read its own history (HTTP 200)"
+      "fix": "selectPage('history') starts the first read, and a history page restored from persistence starts it in the constructor. Both paths are guarded on a live client, so a fixture client keeps its previous rendering instead of flipping to a HISTORY_UNAVAILABLE refusal.",
+      "verified_by": "PASS history readback from the page — the live history view read its own history (HTTP 200); plus unit coverage in ui/teams-console/tests/controller.spec.ts (a live client reads on open, a fixture client does not)"
     }
   ],
   "gates": {
     "teams-acp-d06-control": "pass (6 files, 117 tests)",
-    "teams-acp-d07-webui": "pass (16 files, 71 tests)",
+    "teams-acp-d07-webui": "pass (16 files, 73 tests)",
     "typecheck": "pass",
     "build": "pass",
+    "d06_part1_black_box": "pass (10 checks)",
+    "d06_part2_black_box": "pass (7 checks)",
+    "d06_permission_option_black_box": "pass (10 checks)",
     "real_control_daemon": "pass",
     "basic_challenge": "pass",
     "clean_origin_cdp_navigation": "pass",
@@ -105,7 +112,7 @@
     "live_dom": "pass",
     "shipped_page_own_sse_subscription": "pass",
     "shipped_page_own_history_read": "pass",
-    "same_origin_sse_frame_in_live_page_context": "pass",
+    "sse_event_name_matches_client_subscription": "pass",
     "projection_independent_http_comparison": "pass",
     "screenshot_png": "pass",
     "process_cleanup": "pass"
@@ -118,5 +125,23 @@
       "owner": "the D06 control-owner milestone (a Console/Session owner bound into createControlOwner)"
     }
   ],
-  "scope_note": "This artifact proves the live-browser DOM, the real authenticated fetch path, the shipped page's own SSE subscription and snapshot application, the shipped history view's own history read, and a real authenticated SSE snapshot frame in the live page context. It contains three product fixes for defects this producer found. It does not claim event-driven animation, targeted interaction, discovery rows, an installed-tarball result, a cross-device result, or a review result."
+  "review": {
+    "round": 1,
+    "reviewer": "independent (fresh context, no author transcript)",
+    "candidate": "7735765",
+    "verdict": "FAIL",
+    "findings": [
+      "F1 BLOCKING: the event-name change invalidated docs/evidence/acp-d06-control-20261011/black-box-control.mjs (it asserted `event: projection`) while the maps and governance still claimed it passed 10/10",
+      "F2 HIGH: this file and notes.md claimed the live-page-subscription check proved the shipped client applied a snapshot; it does not",
+      "F3 HIGH: the 'why unnoticed' claim that both black-box drivers read only the SSE data was false",
+      "F4 MEDIUM: the D07 gate note and two governance rows still asserted the old browser-evidence boundary",
+      "F5 LOW: ensureHistoryLoaded lacked the live-client guard its constructor path has",
+      "F6 LOW: the screenshot dimensions were restated rather than measured",
+      "F7 LOW: `committed` was false inside a commit",
+      "F8 ADVISORY: a failed-run temp root was retained and unreported",
+      "F9 ADVISORY: no unit test covered mountTeamsConsole/startObservation/ensureHistoryLoaded"
+    ],
+    "resolution": "F1-F9 all addressed on candidate 7735765: the D06 PART1 driver now asserts `snapshot` and was re-run to 10/10 (PART2 7/7 and the permission driver 10/10 also re-run green); the snapshot-application overclaim is corrected in the producer, notes.md and this file; the false 'why unnoticed' claim is replaced with the real reason; the D07 gate note and both governance rows now record the corrected boundary and the reduced gap count; ensureHistoryLoaded gained the live-client guard; the producer now reads and asserts the PNG dimensions from the IHDR chunk; `committed` is true; the retained temp root was removed; and controller.spec.ts gained two tests covering the history read on open for a live client and its absence for a fixture client."
+  },
+  "scope_note": "This artifact proves the live-browser DOM, the real authenticated fetch path, the shipped page's own SSE subscription, the shipped history view's own history read, and a real authenticated SSE snapshot frame in the live page context. It contains three product fixes for defects this producer found. It does not claim snapshot application by the shipped client, event-driven animation, targeted interaction, discovery rows, an installed-tarball result, or a cross-device result."
 }

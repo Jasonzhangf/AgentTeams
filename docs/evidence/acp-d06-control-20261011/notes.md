@@ -21,7 +21,7 @@ PART 1 只交付控制守护进程本体、CLI 入口与增量线面。Teams/连
 | `control-protocol/console-api.ts` | 增量 DTO：`ConsolePermissionOption`/`ConsolePermissionOptionKind`、pending permission 的 `options?`、agent 行 `engine?`/`lastSeenAt?`、`ConsoleConnectionView` + `connections?`、`connection.connect`/`connection.disconnect`/`network.membership.apply` 命令、`permission.reply.optionId?`、`parseConsoleProjection`、`parsePermissionOptions`、`parsePermissionReplyResult` |
 | `control-protocol/console-wire.ts` | `projection()` 委托 `parseConsoleProjection`；`commandResult` 委托 `parsePermissionReplyResult`；删除被取代的本地 helper |
 | `control-protocol/teams-state.ts` | 增量：`ConsoleProjectionSnapshot`/`ConsoleProjectionSink`/`ConsoleProjectionSubscriber`、`parseConsoleProjectionSnapshot`、`HISTORY_QUERY_FIELDS`、唯一的 HTTP query 映射 `historyQueryFromSearchParams` |
-| `console-host/src/http-api.ts` | 新增 `GET /api/v1/history` 与 `GET /api/v1/events`；query 拒绝只为 history 放宽；owner 缺席以类型化 503 表达；SSE 帧 `event: projection` / `event: health`，owner 丢失即收流 |
+| `console-host/src/http-api.ts` | 新增 `GET /api/v1/history` 与 `GET /api/v1/events`；query 拒绝只为 history 放宽；owner 缺席以类型化 503 表达；SSE 帧 `event: snapshot` / `event: health`（`snapshot` 与两个 UI live 客户端订阅的事件名一致；不匹配的具名事件会被静默丢弃），owner 丢失即收流 |
 | `console-host/tests/http-api.spec.ts` | 新增 3 个用例：history 关闭解析与放宽范围、缺席 503、真实 SSE 帧与收流 |
 | `control-protocol/console-api.spec.ts` | 新增 4 个用例：新命令闭合、permission option 集合、agent 增量字段与 connection 行 |
 | `cli/agentteams.mjs` | 新增 `agentteams control start\|status\|stop --config <file>`（`--generation` 只被 `control stop` 接受）与 `controlProcess` runtime artifact |

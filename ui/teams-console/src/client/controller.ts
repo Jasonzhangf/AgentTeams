@@ -258,6 +258,9 @@ export class TeamsConsoleController {
    */
   private ensureHistoryLoaded(page: TeamPage): void {
     if (page !== 'history') return
+    // Only a live client has a history owner. A fixture client keeps its previous rendering
+    // instead of flipping to a HISTORY_UNAVAILABLE refusal, matching the constructor path.
+    if (this.liveClient === undefined) return
     if (this.state.history !== null || this.state.historyStatus === 'loading') return
     void this.loadHistory()
   }
