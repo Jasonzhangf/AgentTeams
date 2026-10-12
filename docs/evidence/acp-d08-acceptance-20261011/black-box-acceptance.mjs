@@ -104,6 +104,18 @@ const OFFLINE_PROBE = { accountId: ACCOUNT, scopeId: SCOPE, agentId: 'offline-pr
 const TARGET_GENERATION = 1
 const ACP_CAPABILITIES = ['method:session/new', 'method:session/prompt', 'callback:session/request_permission']
 const STEP_DEADLINE_MS = 120_000
+// The DSH leg calls a real shared upstream provider. That pool returns 503
+// `no_healthy_account` for stretches of time, and three straight-through attempts
+// at 2026-10-11 21:06, 21:12 and 05:05 all died on the same response. A transient
+// upstream refusal is not a candidate defect, so the prompt is retried with
+// exponential backoff and a fresh request id per attempt. This must be a property
+// of the driver, not of the operator re-running it: the same failure must not be
+// able to end a run that a retry would have closed.
+const DSH_PROMPT_ATTEMPTS = 6
+const DSH_PROMPT_BACKOFF_MS = [30_000, 60_000, 120_000, 240_000, 480_000]
+const DSH_TRANSIENT = /no_healthy_account|no healthy account|HTTP error \(5\d\d\)|API error \(5\d\d\)/iu
+const DSH_RETRIES_EXHAUSTED =
+  `D08 is blocked at A02 by the upstream provider after ${DSH_PROMPT_ATTEMPTS} attempts. This is an upstream outage, not a candidate defect: the D06/D07 gates are independent of it, and the recorded 44-check run below remains the last completed acceptance run.`
 const CONSOLE_USERNAME = 'teams'
 const CONSOLE_PASSWORD_ENV = 'D08_CONSOLE_PASSWORD'
 const CONSOLE_PASSWORD = `d08-console-${Math.random().toString(36).slice(2, 12)}`
@@ -159,6 +171,34 @@ function assert(condition, message) {
 
 function note(message) {
   process.stdout.write(`  -- ${message}\n`)
+}
+
+/**
+ * Run one ACP prompt against a transport, retrying a transient upstream refusal
+ * with exponential backoff. Only a 5xx-shaped provider error is retried, so a real
+ * candidate defect still fails fast and loudly; each attempt uses a fresh request id
+ * so a retry can never be mistaken for the original request. `label` names the leg
+ * in the emitted detail without printing any credential.
+ *
+ * Resolves to the successful frame, or to `{ error, exhausted: true, attempts, last }`
+ * when every attempt refused. Callers must not `assert` on an exhausted result.
+ */
+async function promptWithBackoff(local, { method, params, label, deadlineMs = 240_000 }) {
+  let last
+  for (let attempt = 1; attempt <= DSH_PROMPT_ATTEMPTS; attempt += 1) {
+    const requestId = `${method}-attempt-${attempt}`
+    await local.send({ jsonrpc: '2.0', id: requestId, method, params })
+    last = await local.awaitFrame(frame => frame.id === requestId, deadlineMs)
+    if (last.error === undefined) return { frame: last, attempt }
+    if (!DSH_TRANSIENT.test(JSON.stringify(last.error))) return { frame: last, attempt }
+    note(`${label}: upstream refused (attempt ${attempt}/${DSH_PROMPT_ATTEMPTS}): `
+      + `${JSON.stringify(last.error).slice(0, 160)}`)
+    const backoffMs = DSH_PROMPT_BACKOFF_MS[attempt - 1]
+    if (backoffMs === undefined) break
+    note(`${label}: backing off ${Math.round(backoffMs / 1000)}s before the next attempt`)
+    await new Promise(resolveWait => setTimeout(resolveWait, backoffMs))
+  }
+  return { frame: last, attempt: DSH_PROMPT_ATTEMPTS, exhausted: true }
 }
 
 /* ---------------------------------------------------------------------------------------
@@ -970,13 +1010,23 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
     gap('A02 — DSH real inference', `credential ${DSH_CREDENTIAL_REF} did not resolve from ${DSH_CREDENTIALS_FILE}; initialize/session/new over the installed CLI are proven but no prompt result is claimed`)
   } else {
     const providerCallsBeforeDsh = provider.calls.length
-    await localB.send({ jsonrpc: '2.0', id: 'b02-prompt', method: 'session/prompt', params: { sessionId: sessionLocalB, prompt: [{ type: 'text', text: 'Reply with exactly: D08-DSH-OK' }] } })
-    const b02Prompt = await localB.awaitFrame(frame => frame.id === 'b02-prompt', 240_000)
-    assert(b02Prompt.error === undefined, `the real DSH prompt failed: ${JSON.stringify(b02Prompt.error ?? null).slice(0, 240)}`)
-    assert(b02Prompt.result?.stopReason === 'end_turn', `the real DSH prompt returned a terminal result (${b02Prompt.result?.stopReason})`)
-    assert(provider.calls.length === providerCallsBeforeDsh, 'the DSH leg produced no OpenCode stub provider activity')
-    check('A02 — DSH completes a real prompt/process/reply through the installed CLI',
-      `session=${sessionLocalB.slice(0, 14)}… model=${dshModel} stopReason=${b02Prompt.result.stopReason} (real provider route)`)
+    const dshPrompt = await promptWithBackoff(localB, {
+      method: 'session/prompt',
+      params: { sessionId: sessionLocalB, prompt: [{ type: 'text', text: 'Reply with exactly: D08-DSH-OK' }] },
+      label: 'A02 dsh prompt',
+    })
+    if (dshPrompt.exhausted) {
+      gap('A02 — DSH real inference', `${DSH_RETRIES_EXHAUSTED} Last refusal: ${JSON.stringify(dshPrompt.frame.error).slice(0, 200)}`)
+      check('A02 — DSH answers initialize/session/new through the installed CLI',
+        `session=${sessionLocalB.slice(0, 14)}… model=${dshModel}; no prompt result is claimed because the upstream provider refused every attempt`)
+    } else {
+      const b02Prompt = dshPrompt.frame
+      assert(b02Prompt.error === undefined, `the real DSH prompt failed: ${JSON.stringify(b02Prompt.error ?? null).slice(0, 240)}`)
+      assert(b02Prompt.result?.stopReason === 'end_turn', `the real DSH prompt returned a terminal result (${b02Prompt.result?.stopReason})`)
+      assert(provider.calls.length === providerCallsBeforeDsh, 'the DSH leg produced no OpenCode stub provider activity')
+      check('A02 — DSH completes a real prompt/process/reply through the installed CLI',
+        `session=${sessionLocalB.slice(0, 14)}… model=${dshModel} stopReason=${b02Prompt.result.stopReason} attempt=${dshPrompt.attempt} (real provider route)`)
+    }
   }
   await localA.close()
   await localB.close()
