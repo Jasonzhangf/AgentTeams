@@ -156,6 +156,39 @@
     "resolution": "F1-F9 all addressed on candidate e77d9d7 (parent 7735765): the D06 PART1 driver now asserts `snapshot` and was re-run to 10/10 (PART2 7/7 and the permission driver 10/10 also re-run green); the snapshot-application overclaim is corrected in the producer, notes.md and this file; the false 'why unnoticed' claim is replaced with the real reason; the D07 gate note and both governance rows now record the corrected boundary and the reduced gap count; ensureHistoryLoaded gained the live-client guard; the producer now reads and asserts the PNG dimensions from the IHDR chunk; `committed` is true; the retained temp root was removed; and controller.spec.ts gained two tests covering the history read on open for a live client and its absence for a fixture client.",
     "resolution_corrections": {
       "F9": "The sentence above ends with 'controller.spec.ts gained two tests covering the history read on open for a live client and its absence for a fixture client.' That is the true scope of what was added, but F9 as written asked for coverage of mountTeamsConsole and startObservation specifically. Neither entry point is unit-tested: ui/teams-console/tests/ contains no reference to mountTeamsConsole or startObservation. F9 is therefore PARTIALLY addressed — the history-read-on-open behavior it was a diagnostic aid for now has direct tests, while the two entry points themselves remain covered only by the real-Chrome render test and the live-browser producer, which is weaker than a unit test. No new test was added to close it: adding a mount-time unit test would duplicate the real-Chrome render test's assertion set without catching a different failure mode."
+    },
+    "round_2_status": {
+      "requested": "an independent re-check of this unit after the merge that folded the D06 directory-projection increment into D06 and ablated the three dead D07 page modules",
+      "candidate": "6db18e3 (branch codex/acp-d08-browser-20261011)",
+      "attempts": [
+        {
+          "when": "2026-10-11 21:20 PST",
+          "scope": "whole milestone, single reviewer",
+          "result": "FAILED before finishing, no closing message, no output file left"
+        },
+        {
+          "when": "2026-10-11 21:47 PST",
+          "scope": "code correctness only",
+          "result": "FAILED before finishing, no output file left"
+        },
+        {
+          "when": "2026-10-11 21:47 PST",
+          "scope": "evidence accuracy and prior-findings closure only",
+          "result": "FAILED before finishing, no output file left"
+        }
+      ],
+      "outcome": "NO INDEPENDENT REVIEW WAS OBTAINED. Three consecutive reviewer runs died before producing any output, so the review evidence level for this candidate is UNVERIFIED rather than passed. The rule that Astra must not act as reviewer is observed, so no reviewer was substituted.",
+      "author_side_check_performed_in_their_place": [
+        "control-protocol/ is byte-identical to origin/main (git diff --stat origin/main -- control-protocol/ is empty), so the frozen WebUI contract was not touched",
+        "createControlOwner has exactly one production call site, runtime/control-process.ts:818, called with { network: network.port, source: network.projection } and no owner, so the 'no Session owner bound' narrative matches the code",
+        "runtime/control-process.ts:655 wires projection = { read: readProjection, watch: createPollingProjectionSubscriber(readProjection, DIRECTORY_PROJECTION_INTERVAL_MS) } with DIRECTORY_PROJECTION_INTERVAL_MS = 1000, and readProjection maps the real D04 directory peers through directoryAgentObservation while keeping sessions/notifications/configs empty",
+        "network/registration-client.ts exposes no change event, so the ~1s poll is the only available refresh and is recorded as a poll rather than a push",
+        "ui/teams-console/src still contains only browser.ts, client/, fixture-browser.ts, fixture.ts and index.ts; nothing under src or tests imports page-discovery, page-interaction or page-history",
+        "ui/teams-console/tests/render-d07.spec.ts still asserts the frozen marker contract against a real Chrome DOM: data-team-page for all four views, data-team-page-view, data-team-band, data-band-state, data-team-observation, data-team-cancel across all four states, and data-permission-options-unavailable",
+        "the SSE event name is consistent end to end: runtime/control-process.spec.ts and both black-box drivers assert `event: snapshot`, the browser producer asserts a `snapshot:` frame, and the remaining `event: projection` occurrences in the evidence are historical prose describing defect 1, not current assertions",
+        "docs/evidence/acp-d07-webui-20261011/verification.json keeps its original fields byte-identical and carries a SUPERSEDED status plus a corrections block refuting its headless-Chrome claim; the superseded reason no longer names 68 tests where the gate now runs 66"
+      ],
+      "limit": "An author-side check is not a review. It can confirm that the claims are self-consistent with the code; it cannot establish that an independent reader would reach the same conclusions, and it cannot stand in for the review evidence level."
     }
   },
   "scope_note": "This artifact proves the live-browser DOM, the real authenticated fetch path, the shipped page's own SSE subscription, the shipped history view's own history read, and a real authenticated SSE snapshot frame in the live page context. It contains three product fixes for defects this producer found. It does not claim snapshot application by the shipped client, event-driven animation, targeted interaction, discovery rows, an installed-tarball result, or a cross-device result."
