@@ -261,11 +261,15 @@ D07 交付 WebUI 的四页真实 owner 投影绑定：`ui/teams-console` 只读�
 按 owner 的 pending `sessionEvents` 事件查选项，缺事件、空选项或已 resolve 时只渲染
 `[data-permission-options-unavailable]`，绝不补出批准按钮。真实黑盒
 `docs/evidence/acp-d07-webui-20261011/black-box-webui.mjs`（15/15）走真实
-`control start|status|stop` 与认证 HTTP。浏览器证据边界必须如实记录：headless
-Chrome 无法向同源 `fetch`/`EventSource` 提供 HTTP Basic 凭据，凭据 URL 又被
-`fetch` 自身拒绝，owner 也不提供凭据端点，因此本 unit 不声称
-live-browser DOM 证据；冻结 DOM 契约以真实 Chrome 渲染测试为准，黑盒只到 served
-`/ui/` 模块图标记、匿名访问的 `401 Basic` challenge 与写入命令的 typed 拒绝。
+`control start|status|stop` 与认证 HTTP。早先记录的浏览器证据边界是错误结论，现已纠正：
+headless Chrome 确实不能把 HTTP Basic 凭据交给同源 `fetch`/`EventSource`，带凭据的 URL 也
+被 `fetch` 自身拒绝，但 CDP 的 `Network.setExtraHTTPHeaders` 能在网络层注入凭据，配合干净
+origin URL 即可驱动真实浏览器。真实 live-browser DOM 证据见
+`docs/evidence/acp-d08-browser-20261011/`（14 checks / 1 gap）：真实 control daemon、真实
+Chrome、真实认证 fetch 与真实 SSE 订阅。该证据发现并修复了三个真实缺陷——origin 发
+`event: projection` 而两个 UI 客户端订阅 `snapshot`（不匹配的具名事件被静默丢弃）、产品
+任何位置都不调用 `startObservation()`（页面从不打开 `/api/v1/events`）、history 视图无首次
+读取且唯一触发器在读到数据前保持禁用。冻结 DOM 契约仍以真实 Chrome 渲染测试为准。
 D07 明确不声明 installed-copy replay、restart、deployed-entrypoint replay、
 cross-device receipt、通过 serve entry 的 live registry composition 或 mobile claim；
 `connection.connect`、`network.membership.apply` 与 `permission.reply` 在本 unit 仍为

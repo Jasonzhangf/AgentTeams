@@ -1,0 +1,122 @@
+{
+  "unit": "D08",
+  "title": "real live-browser DOM evidence producer, with the three shipped-path defects it found",
+  "date": "2026-10-11",
+  "base_commit": "8cb0238",
+  "base_ref": "origin/main",
+  "worktree": "/Volumes/Intel/playground/agentteams/acp-d08-browser-20261011",
+  "branch": "codex/acp-d08-browser-20261011",
+  "committed": false,
+  "driver": {
+    "path": "docs/evidence/acp-d08-browser-20261011/live-browser-dom.mjs",
+    "command": "node docs/evidence/acp-d08-browser-20261011/live-browser-dom.mjs",
+    "always_builds": true,
+    "always_builds_reason": "The producer used to reuse any existing build, which silently produced evidence for code no longer on disk; the run that first reported `event: projection` was reading a stale generated/runtime-lib.",
+    "exit_code": 0,
+    "canonical_run": {
+      "checks": 14,
+      "gaps": 1,
+      "control_listener": "127.0.0.1:51477",
+      "chrome_pid": 13758,
+      "control_pid": 13699,
+      "page_projection_bytes": 88,
+      "page_own_events_requests": 2,
+      "sse_event": "snapshot",
+      "sse_seq": 1,
+      "dom_observation": "live",
+      "dom_history_count": "0",
+      "screenshot": "docs/evidence/acp-d08-browser-20261011/live-browser-dom.png",
+      "screenshot_bytes": 19874,
+      "page_exceptions": 0,
+      "cleanup": "chrome and control pids dead; profile-matching process count 0; owned root removed"
+    },
+    "stable_observations": {
+      "document_status": 200,
+      "document_content_type": "text/html",
+      "script_count": 20,
+      "projection_status": 200,
+      "projection_content_type": "application/json",
+      "projection": {
+        "version": 1,
+        "agents": [],
+        "sessions": [],
+        "notifications": [],
+        "configs": [],
+        "connections": []
+      },
+      "dom_page_names": ["discovery", "networking", "interaction", "history"],
+      "dom_page_view_initial": "discovery",
+      "dom_bands": ["registration", "connection", "engine", "request"],
+      "dom_observation_after_own_subscription": "live",
+      "screenshot_png": {
+        "path": "docs/evidence/acp-d08-browser-20261011/live-browser-dom.png",
+        "bytes": 19874,
+        "dimensions": "756x469"
+      }
+    }
+  },
+  "defects_found_and_fixed": [
+    {
+      "id": "D08-B1",
+      "severity": "high",
+      "summary": "The origin emitted `event: projection` while both UI clients subscribe with addEventListener('snapshot', ...). A named SSE event with no matching listener is dropped silently, so the live view never applied a snapshot.",
+      "sites": [
+        "console-host/src/http-api.ts:79 (producer)",
+        "ui/teams-console/src/client/live-client.ts:89 (consumer)",
+        "ui/teams-console/src/client/observation.ts:97 (consumer)"
+      ],
+      "why_unnoticed": "runtime/control-process.spec.ts pinned `event: projection` and ui/teams-console/tests/live-client.spec.ts fed a synthetic `snapshot` event; neither test ever crossed the real server with the real client, and both black-box drivers read only the SSE data, never the event name.",
+      "fix": "The origin emits `snapshot`. The name is now pinned on both sides, in console-host/tests/http-api.spec.ts and runtime/control-process.spec.ts.",
+      "red_evidence": "console-host/tests/http-api.spec.ts:120 expect(frames[1].startsWith('event: snapshot\\n')).toBe(true) failed with '+ false' before the fix."
+    },
+    {
+      "id": "D08-B2",
+      "severity": "high",
+      "summary": "Nothing in the product called controller.startObservation(), so the shipped page never opened /api/v1/events at all.",
+      "sites": [
+        "ui/teams-console/src/client/controller.ts:169 (definition, no caller)",
+        "ui/teams-console/src/client/index.ts (mountTeamsConsole did not start it and its teardown did not call controller.destroy())"
+      ],
+      "fix": "mountTeamsConsole starts observation, and its teardown calls controller.destroy() so the subscription is stopped with the mount. Both are no-ops for a fixture client.",
+      "verified_by": "PASS live page subscription — the shipped entry opened its own /api/v1/events (HTTP 200) and applied a real snapshot: data-team-observation=live"
+    },
+    {
+      "id": "D08-B3",
+      "severity": "high",
+      "summary": "The history view had no initial read, and its only trigger is the 'previous' control, which is disabled until a page has already been read. The view could never show a record.",
+      "sites": [
+        "ui/teams-console/src/client/render.ts:1052 (only loadHistory caller)",
+        "ui/teams-console/src/client/render.ts:1053 (disabled until a page has been read)",
+        "ui/teams-console/src/client/controller.ts selectPage (no read on open)"
+      ],
+      "fix": "selectPage('history') starts the first read, and a history page restored from persistence starts it in the constructor.",
+      "verified_by": "PASS history readback from the page — the live history view read its own history (HTTP 200)"
+    }
+  ],
+  "gates": {
+    "teams-acp-d06-control": "pass (6 files, 117 tests)",
+    "teams-acp-d07-webui": "pass (16 files, 71 tests)",
+    "typecheck": "pass",
+    "build": "pass",
+    "real_control_daemon": "pass",
+    "basic_challenge": "pass",
+    "clean_origin_cdp_navigation": "pass",
+    "authenticated_page_fetch": "pass",
+    "live_dom": "pass",
+    "shipped_page_own_sse_subscription": "pass",
+    "shipped_page_own_history_read": "pass",
+    "same_origin_sse_frame_in_live_page_context": "pass",
+    "projection_independent_http_comparison": "pass",
+    "screenshot_png": "pass",
+    "process_cleanup": "pass"
+  },
+  "gaps": [
+    {
+      "name": "event-driven DOM markers",
+      "status": "unproven",
+      "reason": "the control daemon binds no Console/Session owner and declares no [discovery], so the projection is a real but empty snapshot; data-team-cancel, data-permission-option and data-history-record have no real source data and no event-driven animation is claimed",
+      "owner": "the D06 control-owner milestone (a Console/Session owner bound into createControlOwner)"
+    }
+  ],
+  "scope_note": "This artifact proves the live-browser DOM, the real authenticated fetch path, the shipped page's own SSE subscription and snapshot application, the shipped history view's own history read, and a real authenticated SSE snapshot frame in the live page context. It contains three product fixes for defects this producer found. It does not claim event-driven animation, targeted interaction, discovery rows, an installed-tarball result, a cross-device result, or a review result."
+}

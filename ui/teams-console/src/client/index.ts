@@ -67,11 +67,17 @@ export function mountTeamsConsole(root: HTMLElement, client: ConsoleClientV1, op
   document.addEventListener('keydown', onKeyDown)
   render()
   if (options.initialOpen === true) controller.openConsole()
+  // The mount owns the observation lifecycle: the controller builds the observation
+  // controller for a live client in its constructor but never starts it, and nothing else in
+  // the product called startObservation(), so the page opened no /api/v1/events stream and
+  // received no live snapshot. start() and destroy() are both no-ops for a fixture client.
+  controller.startObservation()
   return {
     controller,
     destroy: () => {
       unsubscribe()
       document.removeEventListener('keydown', onKeyDown)
+      controller.destroy()
       root.replaceChildren()
     },
   }

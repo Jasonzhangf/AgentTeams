@@ -156,7 +156,12 @@ export class TeamsConsoleController {
       membershipDraft: readDraft<NetworkMemberDraft[]>(options.persistence, 'networking') ?? [],
       lastFocusKey: readFocus(options.persistence),
     }
-    if (this.liveClient !== undefined) this.observeLiveProjection()
+    if (this.liveClient !== undefined) {
+      this.observeLiveProjection()
+      // A page restored from persistence is never routed through selectPage, so the first
+      // history read has to be started here as well.
+      this.ensureHistoryLoaded(this.state.page)
+    }
   }
 
   getSnapshot = (): ConsoleState => this.state
@@ -243,6 +248,18 @@ export class TeamsConsoleController {
   selectPage(page: TeamPage): void {
     this.update({ page, notice: null, refusedError: null })
     writePage(this.persistence, page)
+    this.ensureHistoryLoaded(page)
+  }
+
+  /**
+   * The history view owns no initial read. Its only other trigger is the "previous" control,
+   * which is disabled until a page has already been read, so without this the view is a dead
+   * end that can never show a record. The first read happens when the view is opened.
+   */
+  private ensureHistoryLoaded(page: TeamPage): void {
+    if (page !== 'history') return
+    if (this.state.history !== null || this.state.historyStatus === 'loading') return
+    void this.loadHistory()
   }
 
   setMessageDraft(message: string): void {

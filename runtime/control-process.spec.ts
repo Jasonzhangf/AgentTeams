@@ -203,7 +203,12 @@ it('streams the SSE projection and closes the stream on owner loss', async () =>
   const body = await response.text()
   const frames = body.split('\n\n').filter(Boolean)
   expect(frames.length).toBeGreaterThanOrEqual(3)
-  expect(frames[0]).toBe('event: projection\ndata: {"seq":1,"projection":{"version":1,"agents":[],"sessions":[],"notifications":[],"configs":[]}}')
+  // The event name is the contract the UI live client subscribes to
+  // (ui/teams-console/src/client/{live-client,observation}.ts listen for `snapshot`, and the
+  // sink method is onSnapshot for the frozen ConsoleProjectionSnapshot). A named SSE event with
+  // no matching listener is dropped silently, so this name is asserted here and in
+  // console-host/tests/http-api.spec.ts.
+  expect(frames[0]).toBe('event: snapshot\ndata: {"seq":1,"projection":{"version":1,"agents":[],"sessions":[],"notifications":[],"configs":[]}}')
   expect(JSON.parse(frames[1].split('data: ')[1]!)).toMatchObject({ seq: 2 })
   expect(JSON.parse(frames[frames.length - 1].split('data: ')[1]!)).toMatchObject({ state: 'lost', reason: 'stream-ended' })
   expect((await stopControlDaemon(configPath)).state).toBe('stopped')
@@ -221,7 +226,7 @@ it('stops by explicit pid while a live WebUI event-stream client still holds its
   expect(response.headers.get('content-type')).toContain('text/event-stream')
   const reader = response.body!.getReader()
   const first = await reader.read()
-  expect(new TextDecoder().decode(first.value)).toContain('event: projection')
+  expect(new TextDecoder().decode(first.value)).toContain('event: snapshot')
 
   const stopped = await stopControlDaemon(configPath, started.generation)
   expect(stopped.state).toBe('stopped')

@@ -76,7 +76,11 @@ function streamEvents(response: ServerResponse, subscriber: ConsoleProjectionSub
       response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`)
     }
     const sink: ConsoleProjectionSink = {
-      onSnapshot(snapshot) { frame('projection', snapshot) },
+      // The event name is the contract the UI live client subscribes to
+      // (ui/teams-console/src/client/{live-client,observation}.ts listen for `snapshot`).
+      // A named SSE event with no matching listener is dropped silently, so this name and the
+      // client listeners must agree; console-host/tests/http-api.spec.ts pins it.
+      onSnapshot(snapshot) { frame('snapshot', snapshot) },
       onHealth(state) {
         if (!open) return
         frame('health', state)
