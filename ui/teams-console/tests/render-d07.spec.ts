@@ -296,11 +296,9 @@ ${controllerScript}
     const stale = document.getElementById('root-stale').outerHTML
     STATE = ${JSON.stringify(state({ page: 'history', history: null, historyStatus: 'refused', historyError: { code: 'INVALID_ACP_FRAME', message: 'the owner refused a request history kind' } }))}
     renderConsole(document.getElementById('root-refused-history'), controller)
-    const refusedHistory = document.getElementById('root-refused-history').outerHTML
     document.body.dataset.exactOfferedOptions = String(offeredOptions === 3)
     document.body.dataset.staleMarker = String(stale.includes('data-team-observation="stale"'))
     document.body.dataset.staleBand = String(stale.includes('data-band-state="lost"') || stale.includes('data-band-state="unknown"'))
-    document.body.dataset.historyRefused = String(refusedHistory.includes('data-history-refused="true"') && refusedHistory.includes('data-team-error-code="INVALID_ACP_FRAME"'))
     // The whole-document dump echoes this page's own <script>, so a substring probe cannot tell the
     // rendered marker from the script source. Read the parsed element's attributes instead.
     const refusedElement = document.getElementById('root-refused-history').querySelector('[data-history-refused]')
