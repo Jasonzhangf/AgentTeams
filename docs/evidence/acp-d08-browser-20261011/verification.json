@@ -101,7 +101,7 @@
   ],
   "gates": {
     "teams-acp-d06-control": "pass (6 files, 117 tests)",
-    "teams-acp-d07-webui": "pass (16 files, 73 tests)",
+    "teams-acp-d07-webui": "pass (13 files, 66 tests)",
     "typecheck": "pass",
     "build": "pass",
     "d06_part1_black_box": "pass (10 checks)",
