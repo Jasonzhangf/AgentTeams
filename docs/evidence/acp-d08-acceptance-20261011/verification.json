@@ -14,9 +14,9 @@
     "18f4ffe fix(docs): repair the D06 evidence invalidated by the durable stop"
   ],
   "committed_note": "the candidate is committed on the branch; origin/main integration, the remote receipt and the freeze are separate and stay null until the integration owner records them",
-  "integration_commit": "f5a54aeb2a0f52d6479dfa208aee36b35f44c8a9",
-  "integration_method": "git merge --ff-only f5a54ae on the main checkout, then git push origin main. True fast-forward: 24 commits, no merge commit, no history rewrite. Every intermediate gate was green on the pushed candidate: pnpm build:governance exit 0, pnpm typecheck exit 0, the D06 gate (6 files / 118 tests), the D07 gate (13 files / 66 tests), and the D08 acceptance run itself (45 checks / 3 gaps / 2 findings, exit 0). The frozen control-protocol/ tree is byte-identical to origin/main.",
-  "remote_receipt": "git push origin main -> 3c21d6f..f5a54ae main -> main; git ls-remote origin refs/heads/main == f5a54aeb2a0f52d6479dfa208aee36b35f44c8a9 (read back after the push), matching local main",
+  "integration_commit": "main moved 3c21d6f -> f5a54ae (the pushed candidate tip, 24 commits, fast-forward, no merge commit), with this receipt added as d152ea3",
+  "integration_method": "git merge --ff-only f5a54ae on the main checkout, then git push origin main. True fast-forward: 24 commits, no merge commit, no history rewrite. Every gate was green on the pushed candidate f5a54ae: pnpm build:governance exit 0, pnpm typecheck exit 0, the D06 gate (6 files / 118 tests), the D07 gate (13 files / 66 tests), and the D08 acceptance run itself (45 checks / 3 gaps / 2 findings, exit 0). The frozen control-protocol/ tree is byte-identical to the pre-integration origin/main. This receipt commit d152ea3 is documentation only and changes no gate record other than this field.",
+  "remote_receipt": "git push origin main -> 3c21d6f..f5a54ae main -> main; git ls-remote origin refs/heads/main == f5a54aeb2a0f52d6479dfa208aee36b35f44c8a9 (read back after the push). Receipt commit then pushed: d152ea3 -> remote main == d152ea3 (read back).",
   "review": {
     "status": "PASS (round 3 at 4b058e6; two minor findings fixed in b82affd before the merge)",
     "rounds": [
