@@ -12,9 +12,13 @@ response with an independent HTTP read, and captures a PNG screenshot.
 Producing this evidence found three real defects in the shipped Console/WebUI path. They are
 fixed in this unit, and each now has a real `PASS` check worded to claim only what it measures.
 
-The control daemon configuration still declares no `[discovery]` and binds no Console/Session
-owner. The projection is therefore a real but empty snapshot. This evidence does **not** claim
-real-event-driven animation, discovery rows, permission interaction or Session interaction.
+This run's control configuration declared no `[discovery]`, and the control daemon binds no
+Console/Session owner. The projection for this run was therefore a real but empty snapshot.
+This evidence does **not** claim real-event-driven animation, discovery rows, permission
+interaction or Session interaction. Note the scope: the missing `[discovery]` is a fact about
+this run's configuration, not a property of the control daemon. A later increment reads the
+real D04 directory when a configuration declares `[discovery]`, so the empty projection here
+is not evidence that directory rows cannot be projected.
 
 ## Defects this producer found
 
@@ -111,7 +115,8 @@ Exit code: `0`. The run was repeated and was stable.
   Snapshot application by the shipped client is not separately observable while the projection
   is empty.
 - It does not prove real-event-driven animation. The control daemon binds no Console/Session
-  owner, so the projection is real but empty and there is no owner change to animate.
+  owner, so no Session, permission or notification event can animate the page. Session
+  ownership, not the empty directory projection, is what this item waits on.
 - It does not prove discovery rows, permission options, session cancellation, history records,
   or targeted interaction. No corresponding owner or data exists in this control-only run.
 - It does not claim an installed-tarball result, a cross-device result, or a review result.
@@ -120,7 +125,7 @@ Exit code: `0`. The run was repeated and was stable.
 
 | Gate | Command | Result |
 |------|---------|--------|
-| `teams-acp-d06-control` | `pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts` | 6 files, **117 tests pass** |
+| `teams-acp-d06-control` | `pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts` | 6 files, **117 tests pass** — 117 as run for candidate `e77d9d7`; 118 after the D06 directory-projection increment, which post-dates this record |
 | `teams-acp-d07-webui` | `TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism ui/teams-console/tests/{api,boundary,contract-compat,controller,drafts,focus-dom,live-client,locale,model,observation,page-networking,render,render-d07}.spec.ts` | 13 files, **66 tests pass** |
 | D06 PART 1 black box | `node docs/evidence/acp-d06-control-20261011/black-box-control.mjs` | **10 checks pass** (updated to the `snapshot` event name) |
 | D06 PART 2 black box | `node docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs` | **7 checks pass** |

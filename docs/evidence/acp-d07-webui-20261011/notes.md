@@ -1,5 +1,16 @@
 # D07 WebUI delivery evidence — 2026-10-11
 
+> **SUPERSEDED — do not cite as current evidence.** This file describes a past candidate
+> (`0296c93`, commits `9c50a80` and `533f75d`) of a past D07 unit. Its sibling
+> `verification.json` carries the matching SUPERSEDED marker and the full reason. Every
+> number below is that run's own number and is left unchanged on purpose: rewriting it
+> would falsify a past run. In particular the "D07 UI gate (16 spec files) 71/71 tests"
+> row and the "explicit 16-file path list" sentence do **not** describe the current gate.
+> The D07 ablation deleted `page-discovery`, `page-interaction`, `page-history` and their
+> three spec files, so the current gate runs **13 spec files / 66 tests**, and the current
+> command names 13 paths. The current evidence lives with the current candidate: see
+> `docs/evidence/acp-d08-browser-20261011/` and `docs/architecture/verification-map.json`.
+
 Unit: D07 WebUI. Base `0296c93` (`origin/main`). Worktree
 `/Volumes/Intel/playground/agentteams/acp-d07-webui-20261011`, branch
 `codex/acp-d07-webui-20261011`.

@@ -45,7 +45,6 @@ const script = [
   classicModule('model.ts'),
   classicModule('drafts.ts'),
   classicModule('protocol.ts'),
-  classicModule('page-networking.ts'),
   classicModule('render.ts'),
 ].join('\n')
 

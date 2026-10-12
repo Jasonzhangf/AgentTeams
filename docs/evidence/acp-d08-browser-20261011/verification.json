@@ -110,13 +110,13 @@
     }
   ],
   "gates": {
-    "teams-acp-d06-control": "pass (6 files, 117 tests)",
-    "teams-acp-d07-webui": "pass (13 files, 66 tests)",
+    "teams-acp-d06-control": "run result (not gate status; the map declares this gate partial): pass (6 files, 117 tests) as run for this candidate e77d9d7; the same gate runs 118 tests after the D06 directory-projection increment folded in one real-directory spec case, which post-dates this record",
+    "teams-acp-d07-webui": "run result (not gate status; the map declares this gate partial): pass (13 files, 66 tests)",
     "typecheck": "pass",
     "build": "pass",
-    "d06_part1_black_box": "pass (10 checks)",
-    "d06_part2_black_box": "pass (7 checks)",
-    "d06_permission_option_black_box": "pass (10 checks)",
+    "d06_part1_black_box": "run result (not gate status; the map declares this gate partial): pass (10 checks)",
+    "d06_part2_black_box": "run result (not gate status; the map declares this gate partial): pass (7 checks)",
+    "d06_permission_option_black_box": "run result (not gate status; the map declares this gate partial): pass (10 checks)",
     "real_control_daemon": "pass",
     "basic_challenge": "pass",
     "clean_origin_cdp_navigation": "pass",
@@ -133,7 +133,7 @@
     {
       "name": "event-driven DOM markers",
       "status": "unproven",
-      "reason": "the control daemon binds no Console/Session owner and declares no [discovery], so the projection is a real but empty snapshot; data-team-cancel, data-permission-option and data-history-record have no real source data and no event-driven animation is claimed",
+      "reason": "the control daemon binds no Console/Session owner, so no Session, permission or notification event can advance the stream; data-team-cancel, data-permission-option and data-history-record have no real source data and no event-driven animation is claimed. This browser run also used a control configuration that declared no [discovery], so its projection was empty and it proved no directory row either. That is a fact about this run's configuration, not a property of the control daemon: a configuration that declares [discovery] now yields real D04 directory agent rows and a real ~1s directory refresh, as the D06 directory-projection increment proves. The gap stays open because those rows are not what the three markers above need.",
       "owner": "the D06 control-owner milestone (a Console/Session owner bound into createControlOwner)"
     }
   ],
@@ -188,8 +188,55 @@
         "the SSE event name is consistent end to end: runtime/control-process.spec.ts and both black-box drivers assert `event: snapshot`, the browser producer asserts a `snapshot:` frame, and the remaining `event: projection` occurrences in the evidence are historical prose describing defect 1, not current assertions",
         "docs/evidence/acp-d07-webui-20261011/verification.json keeps its original fields byte-identical and carries a SUPERSEDED status plus a corrections block refuting its headless-Chrome claim; the superseded reason no longer names 68 tests where the gate now runs 66"
       ],
-      "limit": "An author-side check is not a review. It can confirm that the claims are self-consistent with the code; it cannot establish that an independent reader would reach the same conclusions, and it cannot stand in for the review evidence level."
+      "limit": "An author-side check is not a review. It can confirm that the claims are self-consistent with the code; it cannot establish that an independent reader would reach the same conclusions, and it cannot stand in for the review evidence level.",
+      "verdict_received": "FAIL (narrow) from an independent read-only reviewer on candidate be42281. Gate-level claims held (all three gates partial; 13/66; 118), but three current documents carried counts the recorded evidence contradicts. Those counts were corrected in this commit, and the browser Basic-credentials claim the reviewer flagged in the verification map was removed rather than reworded.",
+      "outcomes": [
+        {
+          "reviewer_scope": "code correctness",
+          "candidate": "4d39ab0 code (docs-only commits after it)",
+          "verdict": "PASS",
+          "basis": "frozen contract byte-identical to origin/main; the directory projection is a real directory read wired to both the projection route and the SSE stream; a real registration advances seq in runtime/control-process.spec.ts:441-477; all four unsupported operations return typed refusals with no fabricated side effect. Findings: one record-scope mismatch (fixed here), two nits (fixed here), one advisory pre-existing race (recorded as ADV-1)"
+        },
+        {
+          "reviewer_scope": "evidence accuracy",
+          "candidate": "be42281",
+          "verdict": "PASS",
+          "basis": "the D06 directory-half prose matches the code in both directions; N1/N2/N3 resolved; maps agree with governance; all 11 teams-acp gates partial; no duplicate ids. Two nits: one wording (fixed here) and the gate-label ambiguity (fixed here)"
+        },
+        {
+          "reviewer_scope": "evidence accuracy",
+          "candidate": "be42281",
+          "verdict": "FAIL (narrow)",
+          "basis": "gate-level claims held, but current documents carried citable miscounts: function-map 68 tests, the acceptance D07 entry 16/71, the acceptance D06 entry 117, and an unmarked 16/71 in the D07 notes. All corrected in this commit"
+        },
+        {
+          "reviewer_scope": "evidence accuracy",
+          "candidate": "be42281",
+          "verdict": "FAIL",
+          "basis": "the D07 gate note in the verification map still asserted the refuted headless-Chrome HTTP-Basic claim, and the acceptance record presented pre-merge PASS fields as current. Both corrected in this commit"
+        }
+      ],
+      "outcome_summary": "two independent reviews PASS (code correctness; evidence accuracy) and two independent reviews FAIL on evidence accuracy for specific stale counts and one refuted claim. Every FAIL item is corrected in this commit and re-checked by grep. No product code changed to satisfy a review finding, and no gate status changed: all ACP gates stay partial."
     }
   },
-  "scope_note": "This artifact proves the live-browser DOM, the real authenticated fetch path, the shipped page's own SSE subscription, the shipped history view's own history read, and a real authenticated SSE snapshot frame in the live page context. It contains three product fixes for defects this producer found. It does not claim snapshot application by the shipped client, event-driven animation, targeted interaction, discovery rows, an installed-tarball result, or a cross-device result."
+  "scope_note": "This artifact proves the live-browser DOM, the real authenticated fetch path, the shipped page's own SSE subscription, the shipped history view's own history read, and a real authenticated SSE snapshot frame in the live page context. It contains three product fixes for defects this producer found. It does not claim snapshot application by the shipped client, event-driven animation, targeted interaction, discovery rows, an installed-tarball result, or a cross-device result.",
+  "code_review_scope": {
+    "reviewed_code_commit": "4d39ab0 (the code under review; every later commit on this branch is docs-only)",
+    "evidence_capture_commit": "e77d9d7",
+    "scope_mismatch": "The live-browser CDP capture recorded here was taken at e77d9d7. The D07 ablation (070fb6d) then deleted page-discovery.ts, page-interaction.ts and page-history.ts, dropping ui/teams-console/src from 20 files to 17, so the recorded script_count (:40) and the committed live-browser-dom.png belong to a pre-ablation tree. This is a record-scope mismatch, not a wrong measurement. It does not change the conclusion: an independent code review confirmed the three deleted modules had no importer in src or in the barrel, so the page the driver rendered is the same page. Refreshing the record therefore needs a re-run of live-browser-dom.mjs on the ablated tree, which would also rewrite the tracked PNG; that re-run is recorded here as the way to refresh the capture rather than being done now, because it needs a real Chrome run and the dead-module analysis already covers the difference.",
+    "read_only_png_check": "an independent reviewer confirmed the committed PNG without re-running: 19874 bytes, signature 89504e470d0a1a0a, IHDR 756x469, matching the recorded dimensions"
+  },
+  "advisory_findings": [
+    {
+      "id": "ADV-1",
+      "severity": "nit (advisory)",
+      "introduced_by_this_candidate": false,
+      "pre_existing_on": "origin/main (git diff origin/main -- runtime/control-process.ts is empty)",
+      "where": "runtime/control-process.ts:633-637 starts observe() fire-and-forget from the synchronous onStatus callback; observe() at :620-627 does an unsynchronised read-modify-write of `previous` around two awaits",
+      "failure_mode": "two overlapping registration-status notifications each diff against the same stale `previous`, so membershipHistoryEvents (network/teams-membership.ts:155-204, diff-based) records the same transition twice. registration-client.ts:224-235 fires onStatus on every successful heartbeat, so an overlap is realistic",
+      "impact": "duplicated kind:\"connection\" history rows; never a wrong live state",
+      "fix": "serialise the observer, e.g. queue = queue.then(() => observe(status)).catch(() => undefined)",
+      "why_not_fixed_here": "this candidate does not touch that code, both independent reviews cover commit 4d39ab0, and a fix would need its own red test for the overlap. Recorded rather than silently dropped, and left as an open obligation for the D06 control owner."
+    }
+  ]
 }

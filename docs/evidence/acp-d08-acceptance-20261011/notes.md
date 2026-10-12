@@ -173,9 +173,16 @@ check.
    **The directory half is now real, which supersedes the premise recorded before this gate:**
    since the D06 directory-projection increment (formerly carried as the separate "D09" unit,
    now folded into D06) `/api/v1/projection` carries the real D04 registration-directory agent
-   rows and a real registration advances the SSE `seq` (1 -> 3) through the declared
-   `ControlProjectionSource` watch. `connections` stays `[]` because the control daemon
-   declares no Teams listener, which is a real directory fact, not a fabricated channel.
+   rows and a real registration advances the SSE `seq` (1 -> 3) on the
+   `/api/v1/events` stream through the declared `ControlProjectionSource` watch. That
+   `seq` advance was observed on the SSE event stream, not on `GET /api/v1/projection`;
+   `GET /api/v1/projection` is served by its own read, and the watch polls on its own interval to
+   feed the SSE stream. `connections` stays `[]` in this run
+   because both feeds are empty: the control daemon declares no Teams listener, so the live ledger has no channel,
+   and this run's configuration declares no `[discovery]`, so the directory feed has no peers either. A control
+   daemon that does declare `[discovery]` yields real `disconnected` rows from the directory feed alone
+   (`runtime/control-process.spec.ts:457-459`), which is why the empty list here is a directory fact about
+   this run rather than a fabricated channel.
    Real-event-driven animation is therefore still not delivered — only directory-change-driven
    refresh is. The typed-absence path is deliberate in the shipped code, but the capability it
    stands in for is still missing. This is a retained delivery obligation owned by D06/D07,
@@ -349,8 +356,9 @@ then the D08 gate stays `partial` and the overall goal stays `INCOMPLETE`.
 pnpm smoke && appsdk verify`. It failed twice, both times in the first step
 (`pnpm test` → `scripts/regression.mjs`, vitest `status=1`). Both attempts ran before the
 two product fixes landed (`44d82f7`, `146824a`); the final candidate's mapped D06 suite
-passes at 117 tests, but the whole-project `pnpm verify` baseline has not been re-run since,
-so it stays recorded as a blocked gate rather than claimed as a pass.
+passes at 118 tests (117 before the D06 directory-projection increment added one
+real-directory spec case), but the whole-project `pnpm verify` baseline has not been re-run
+since, so it stays recorded as a blocked gate rather than claimed as a pass.
 
 | attempt | failing tests |
 | --- | --- |
