@@ -11,6 +11,7 @@ it('serves the independent UI and authenticated API without exposing arbitrary f
   await writeFile(join(directory, 'console.html'), '<main>Teams Console</main>')
   await writeFile(join(directory, 'console-entry.js'), 'import "/ui/browser.js"')
   await writeFile(join(directory, 'private.txt'), 'not public')
+  await writeFile(join(directory, 'private.js'), 'export const secret = "outside-root"')
   const server = createConsoleServer({ staticRoot: directory, uiRoot: join(directory, 'ui'),
     authorize: async request => request.headers.authorization === 'test' ? {
       readProjection: async () => ({ version: 1, agents: [], sessions: [], notifications: [], configs: [] }),
@@ -28,7 +29,11 @@ it('serves the independent UI and authenticated API without exposing arbitrary f
     expect(script.headers.get('content-type')).toContain('javascript')
     expect(await script.text()).toBe('export const live = true')
     expect((await get('/private.txt')).status).toBe(404)
-    expect((await get('/ui/%2e%2e%2fprivate.txt')).status).toBe(404)
+    // The traversal target must use an ALLOWED extension. With a .txt target the 404 comes from
+    // the extension allowlist at server.ts:36, so the assertion passes even when the containment
+    // guard at server.ts:38-39 is removed. A .js target passes the allowlist and can only be
+    // refused by the guard itself.
+    expect((await get('/ui/%2e%2e%2fprivate.js')).status).toBe(404)
     expect(await (await get('/api/v1/projection')).json()).toMatchObject({ version: 1 })
     expect((await get('/api/action')).status).toBe(404)
   } finally {

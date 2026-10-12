@@ -241,9 +241,15 @@ WebUI listener、自有 state/data 目录，从不启动引擎子进程、regist
 与 failed-start 期望已按 durable 数据目录语义更新并在本候选上重跑（仍为 10/10 与 7/7）：D08
 验收运行发现的 `146824a` 让 stop 保留数据目录（连接历史存放在那里，D06 要求它跨重启存活），
 旧断言「stop 删除自有数据目录」因此被纠正，而不是放宽。它保持 partial，
-不升级为 passed/implemented：没有 installed-copy 回放、restart、deployed-entrypoint、
-cross-device 回执或浏览器证据；控制守护进程当前只服务 `kind=connection` 的连接历史，
-`kind=request` 由同一 owner 显式拒绝而不是引入第二个历史源。D06 的改动文件
+不升级为 passed/implemented：D06 自身没有 installed-copy 回放、restart 或
+deployed-entrypoint 回放；控制守护进程当前只服务 `kind=connection` 的连接历史，
+`kind=request` 由同一 owner 显式拒绝而不是引入第二个历史源。此前这里还写着「没有
+cross-device 回执或浏览器证据」，该表述已失效：浏览器证据由本单元的
+`docs/evidence/acp-d08-browser-20261011/` 提供（真实 Chrome/CDP，14 checks / 1 gap，
+exit 0，属 source 层），cross-device 回执由 A11 单元
+`codex/acp-a11-crossdevice-20261011`@`869aff8` 提供（两台物理机，19 checks / 0 gaps，
+exit 0，属 remote receipt 层）。两者都不改变 D06 的 partial：它们属于其他证据层，
+不替代 D06 自己的 installed-copy/restart/deployed-entrypoint 证据。D06 的改动文件
 （`runtime/**`、`agent-host/**`、`control-protocol/**`、`console-host/**`、`cli/**`、
 `network/teams-status.ts` 的消费）已由 `teams-source` 的 owned/regression 路径覆盖，
 `.appsdk/project.json` 无需改动，`minimum_test_count` 保持 304。

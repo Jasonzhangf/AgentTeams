@@ -68,7 +68,7 @@
     {
       "module_id": "master-host",
       "owner": "master-host",
-      "status": "design",
+      "status": "partial",
       "owned_paths": [
         "console-host/**"
       ],
@@ -77,7 +77,8 @@
         "server/**",
         "network/**",
         "ui/**"
-      ]
+      ],
+      "note": "Owns the optional, non-permanent Console observation/configuration transport: the authenticated HTTP/SSE surface, the frozen Console API dispatch, and the static UI/API server. Delivered as `console-host/` (`@deepseek-ai/teams-console-host`): `src/auth.ts` (exact-credential Basic auth plus the cross-site guard), `src/server.ts` (static root, extension allowlist and realpath containment for `/ui/`), `src/http-api.ts` (typed refusals, SSE snapshots, close on owner loss) and `src/console-api.ts`. `runtime/control-process.ts:15-16` imports `createConsoleAuthorization`/`createConsoleServer` from it, so D06 and D07 run on this module. Status is partial, not implemented: there is no installed-copy or published-release evidence for the console host alone, and the D08 acceptance run exercises it only through the installed tarball's control entrypoint. This entry previously read `status: design` with no note, which contradicted both the delivered code and `function-map.json`, where `independent_console_http_server` and `console_v1_http_transport` already name `master-host` as owner. Corrected here; the ownership itself was already right and is unchanged. Gate: teams-acp-d06-control."
     },
     {
       "module_id": "acp-adapter",

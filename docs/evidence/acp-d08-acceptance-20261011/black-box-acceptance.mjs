@@ -45,9 +45,14 @@
  *     cross-device result is NOT obtainable. Loopback and same-host non-loopback
  *     are never passed off as cross-device. (A11's LAN half IS in scope and checked;
  *     only the cross-device half is the boundary.)
- *   - Live-browser DOM: headless Chrome cannot satisfy this origin's HTTP Basic
- *     challenge for a same-origin fetch/EventSource, so no browser DOM/screenshot
- *     is claimed; the frozen DOM contract is owned by
+ *   - Live-browser DOM: the reason recorded here in earlier runs was WRONG. It claimed
+ *     headless Chrome cannot satisfy this origin's HTTP Basic challenge. CDP
+ *     `Network.setExtraHTTPHeaders` injects the credential at the network layer, so a real
+ *     browser CAN be driven against a clean-origin URL, and a real producer does so at
+ *     `docs/evidence/acp-d08-browser-20261011/`. The item nevertheless stays a gap for THIS
+ *     gate, for a different and correct reason: this driver is the installed-tarball,
+ *     cross-device acceptance layer and does not drive a browser, so a SOURCE-LEVEL browser
+ *     run does not close an installed-artifact item. The frozen DOM contract is owned by
  *     `ui/teams-console/tests/render-d07.spec.ts`.
  *   - The shipped control daemon binds no Console owner, so its projection is a
  *     constant empty snapshot: real-event-driven animation and in-WebUI
@@ -1464,17 +1469,21 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   }
   const graph = bodies.join('\n')
   for (const marker of D07_MARKERS) assert(graph.includes(marker), `the served /ui/ module graph is missing the frozen marker ${marker}`)
-  const pageModules = ['page-discovery', 'page-networking', 'page-interaction', 'page-history']
+  // After the D07 ablation only `page-networking` is a live page module: controller.ts imports its
+  // membership helpers. `page-discovery` (projectDiscoveryRows / projectNetworkView),
+  // `page-interaction` and `page-history` had no consumer in src or in the built barrel, and were
+  // deleted. The four page VIEWS are unaffected: render.ts renders all four and they are asserted
+  // by the frozen data-team-page-view markers and by render-d07.spec.ts.
+  const pageModules = ['page-networking']
   for (const page of pageModules) {
     const response = await authFetch(`/ui/client/${page}.js`)
     assert(response.status === 200, `the artifact does not serve /ui/client/${page}.js (HTTP ${response.status})`)
     assert((await response.text()).length > 0, `/ui/client/${page}.js is empty`)
   }
-  // The barrel graph reaches the pages its own controller imports; the remaining page
-  // modules are still served by the artifact but are not part of the barrel's import graph.
   const reachablePages = pageModules.filter(page => visited.has(`/ui/client/${page}.js`))
-  check('A07 — the WebUI serves the console and the four-page module graph',
-    `${visited.size} modules from /ui/browser.js; markers=${D07_MARKERS.length}; page modules served=4 (barrel-reachable: ${reachablePages.join(',')})`)
+  assert(reachablePages.length === pageModules.length, `the barrel graph does not reach the live page module(s): reachable=${reachablePages.join(',')}`)
+  check('A07 — the WebUI serves the console and its live page modules',
+    `${visited.size} modules from /ui/browser.js; markers=${D07_MARKERS.length}; live page modules served=${pageModules.length} (barrel-reachable: ${reachablePages.join(',')})`)
 
   step = 'A07 projection and history'
   const projectionResponse = await authFetch('/api/v1/projection')
@@ -1529,8 +1538,20 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
     `every WebUI HTTP/SSE client connection this driver opened is closed; prompt on the established channel -> stopReason=${afterWebui.frame.result.stopReason}`)
   gap('A07 — animation driven by real events',
     'the shipped control daemon binds no Console owner (runtime/control-process.ts:761 calls createControlOwner({ network: network.port }) with no owner), so /api/v1/projection is a constant empty snapshot and no real event can advance the SSE stream; only the transport is proven here. D06 requires discovery query, connect/disconnect, membership projection and targeted ACP ingress, so this is an UNMET REQUIREMENT owned by D06, not an environment limit')
-  gap('A07 — live-browser DOM and screenshots',
-    "headless Chrome cannot satisfy the origin's HTTP Basic challenge for a same-origin fetch/EventSource and a credentialed origin URL is rejected by fetch itself; the frozen DOM contract is owned by ui/teams-console/tests/render-d07.spec.ts, not by this driver")
+  // This stays a GAP for THIS gate, but the earlier reason recorded here was WRONG. The old text
+  // claimed headless Chrome cannot satisfy the origin's HTTP Basic challenge. That is refuted:
+  // CDP `Network.setExtraHTTPHeaders` injects the credential at the network layer, so a real
+  // browser can be driven against a clean-origin URL, and a real producer now does exactly that at
+  // docs/evidence/acp-d08-browser-20261011/ (14 checks / 1 gap, exit 0).
+  //
+  // The A07 live-browser DOM is STILL a gap here for a different and correct reason: this driver is
+  // the installed-tarball, cross-device acceptance layer and it does not drive a browser. The
+  // live-browser evidence is a SOURCE-LEVEL artifact. Per the evidence boundary, a later evidence
+  // level is never inferred from an earlier one, so a source-level browser run does not close an
+  // installed-artifact acceptance item. Closing it here needs a browser run against the installed
+  // tarball's own served origin, which this driver does not perform.
+  gap('A07 — live-browser DOM against the installed artifact',
+    'this installed-tarball acceptance driver does not drive a browser, so no installed-artifact DOM or screenshot is claimed here. Source-level live-browser DOM IS proven separately at docs/evidence/acp-d08-browser-20261011/ (14 checks / 1 gap, exit 0, real Chrome over CDP); that is a different evidence level and does not close this item. The frozen DOM contract is owned by ui/teams-console/tests/render-d07.spec.ts')
   gap('A07 — targeted interaction from the WebUI',
     'the control daemon binds no Session owner, so every interaction write (permission.reply/session send) is a typed UNSUPPORTED_OPERATION refusal; no prompt can be targeted from the WebUI in this candidate')
 
@@ -1711,7 +1732,17 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
    * Cross-device boundary (recorded honestly; never inferred from the LAN result above)
    * ----------------------------------------------------------------------------------- */
 
-  gap('A11 — cross-device receipt', `only one physical host is available (LAN ${lanIp}, tailscale 100.66.1.82); loopback and same-host non-loopback are never passed off as cross-device, so no cross-device receipt is claimed by this driver`)
+  /* The earlier text here said "only one physical host is available". That premise is now FALSE:
+   * a real two-host receipt exists (HOST A Macstudio.local 100.66.1.82, HOST B
+   * jennys-macbook-air.anoa-buri.ts.net 100.93.143.20), produced by the A11 unit on branch
+   * codex/acp-a11-crossdevice-20261011 at commit 869aff8: 19 checks, 0 gaps, exit 0, real ACP
+   * session/new -> session/prompt -> session/request_permission -> session/update -> end_turn, plus
+   * a session/cancel path, with byte-identical tarball and CLI sha256 on both hosts.
+   *
+   * It stays a gap for THIS driver for an honest reason: that receipt is a separate evidence unit
+   * which is NOT merged into this candidate, so this driver cannot verify it from here and must not
+   * claim it. Folding A11 into this gate requires integrating that unit first. */
+  gap('A11 — cross-device receipt', `this driver runs on one physical host (LAN ${lanIp}, tailscale 100.66.1.82) and cannot itself produce a cross-device receipt; loopback and same-host non-loopback are never passed off as cross-device. A real two-host receipt DOES exist in the separate A11 unit (branch codex/acp-a11-crossdevice-20261011, commit 869aff8, 19 checks / 0 gaps, exit 0), but that unit is not merged into this candidate, so this driver neither verifies nor claims it`)
 
   const elapsed = Math.round((Date.now() - started) / 1000)
   process.stdout.write(`\nD08 acceptance PASS: ${checks.length} checks (gaps: ${gaps.length}, findings: ${findings.length}) in ${elapsed}s\n`)

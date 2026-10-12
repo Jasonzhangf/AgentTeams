@@ -7,7 +7,9 @@
   "worktree": "/Volumes/Intel/playground/agentteams/acp-d08-browser-20261011",
   "branch": "codex/acp-d08-browser-20261011",
   "committed": true,
-  "commit": "7735765",
+  "commit": "e77d9d7",
+  "first_commit": "7735765",
+  "commit_note": "The evidence content recorded here, including the IHDR-measured canonical run and the corrected claims, exists in e77d9d7 (parent 7735765). At 7735765 this file still said committed:false and had no review section.",
   "driver": {
     "path": "docs/evidence/acp-d08-browser-20261011/live-browser-dom.mjs",
     "command": "node docs/evidence/acp-d08-browser-20261011/live-browser-dom.mjs",
@@ -141,7 +143,7 @@
       "F8 ADVISORY: a failed-run temp root was retained and unreported",
       "F9 ADVISORY: no unit test covered mountTeamsConsole/startObservation/ensureHistoryLoaded"
     ],
-    "resolution": "F1-F9 all addressed on candidate 7735765: the D06 PART1 driver now asserts `snapshot` and was re-run to 10/10 (PART2 7/7 and the permission driver 10/10 also re-run green); the snapshot-application overclaim is corrected in the producer, notes.md and this file; the false 'why unnoticed' claim is replaced with the real reason; the D07 gate note and both governance rows now record the corrected boundary and the reduced gap count; ensureHistoryLoaded gained the live-client guard; the producer now reads and asserts the PNG dimensions from the IHDR chunk; `committed` is true; the retained temp root was removed; and controller.spec.ts gained two tests covering the history read on open for a live client and its absence for a fixture client."
+    "resolution": "F1-F9 all addressed on candidate e77d9d7 (parent 7735765): the D06 PART1 driver now asserts `snapshot` and was re-run to 10/10 (PART2 7/7 and the permission driver 10/10 also re-run green); the snapshot-application overclaim is corrected in the producer, notes.md and this file; the false 'why unnoticed' claim is replaced with the real reason; the D07 gate note and both governance rows now record the corrected boundary and the reduced gap count; ensureHistoryLoaded gained the live-client guard; the producer now reads and asserts the PNG dimensions from the IHDR chunk; `committed` is true; the retained temp root was removed; and controller.spec.ts gained two tests covering the history read on open for a live client and its absence for a fixture client."
   },
   "scope_note": "This artifact proves the live-browser DOM, the real authenticated fetch path, the shipped page's own SSE subscription, the shipped history view's own history read, and a real authenticated SSE snapshot frame in the live page context. It contains three product fixes for defects this producer found. It does not claim snapshot application by the shipped client, event-driven animation, targeted interaction, discovery rows, an installed-tarball result, or a cross-device result."
 }

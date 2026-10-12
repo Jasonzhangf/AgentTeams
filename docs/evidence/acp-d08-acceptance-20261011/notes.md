@@ -174,20 +174,38 @@ check.
    is proven. The typed-absence path is deliberate in the shipped code, but the capability it
    stands in for is still missing. This is a retained delivery obligation owned by D06/D07,
    not a coverage boundary. It is the reason A07 is `PARTIAL`.
-2. **A07 — live-browser DOM and screenshots. EVIDENCE BOUNDARY.** Headless Chrome cannot satisfy the origin's
-   HTTP Basic challenge for a same-origin `fetch`/`EventSource`, and a credentialed origin
-   URL is rejected by `fetch` itself; the owner serves no credentials endpoint. The frozen
-   DOM marker contract is owned by `ui/teams-console/tests/render-d07.spec.ts` (real
-   Chrome), not by this driver. The driver proves the module graph and the HTTP contract.
+2. **A07 — live-browser DOM against the installed artifact. EVIDENCE-LEVEL BOUNDARY.**
+   The reason recorded here earlier was **wrong**. It claimed headless Chrome cannot satisfy
+   the origin's HTTP Basic challenge for a same-origin `fetch`/`EventSource`. That is
+   refuted: CDP `Network.setExtraHTTPHeaders` injects the credential at the network layer,
+   so a real browser can be driven against a clean-origin URL, and a real producer now does
+   exactly that at `docs/evidence/acp-d08-browser-20261011/` (14 checks / 1 gap, exit 0).
+   The item nevertheless stays a gap for **this** gate, for a different and correct reason:
+   this driver is the installed-tarball, cross-device acceptance layer and it does not drive
+   a browser. The live-browser run is a **source-level** artifact driving the worktree CLI
+   origin, which is a different evidence level from an installed-artifact run, so it does not
+   close this item. The frozen DOM marker contract is also owned by
+   `ui/teams-console/tests/render-d07.spec.ts` (real Chrome).
 3. **A07 — targeted interaction from the WebUI. UNMET REQUIREMENT, same missing owner as
    gap 1.** Because no Session owner is bound, every
    interaction write is a typed `UNSUPPORTED_OPERATION` refusal, so no prompt can be
    targeted from the WebUI in this candidate. The driver proves the refusal is typed and
    that no effect is fabricated; it does not prove a targeted interaction. Retained delivery
    obligation owned by D06.
-4. **A11 — cross-device receipt. EVIDENCE BOUNDARY.** Only one physical host is available. LAN reachability
-   over `192.168.0.3` is proven and loopback is never substituted for it; a cross-device
-   conclusion is explicitly not claimed.
+4. **A11 — cross-device receipt. EVIDENCE-LEVEL BOUNDARY.** The reason recorded here
+   earlier was **wrong**: it said only one physical host is available. A real two-host
+   receipt now exists (HOST A `Macstudio.local` `100.66.1.82`, HOST B
+   `jennys-macbook-air.anoa-buri.ts.net` `100.93.143.20`, macOS 15.7.9 arm64) in the
+   separate A11 unit on branch `codex/acp-a11-crossdevice-20261011` at commit `869aff8`:
+   19 checks, 0 gaps, exit 0, real ACP `session/new` → `session/prompt` →
+   `session/request_permission` → `session/update` → `end_turn` plus a `session/cancel`
+   path, with byte-identical tarball sha256
+   `f19211c9bd8123a477e3b99cce3beb23542ea20de80d44b6caf68bab85b80de9` and CLI sha256
+   `d97ab857e0a7892f2bab791fbc9a377f9fb12b338c256a6af22e541afd859238` on both hosts.
+   It stays a gap for **this** driver because that unit is **not merged** into this
+   candidate, so this driver cannot verify it from here and must not claim it. Folding A11
+   into this gate requires integrating that unit first. LAN reachability over
+   `192.168.0.3` is proven here, and loopback is never substituted for it.
 
 The overall goal stays **INCOMPLETE** while these four gaps remain.
 
