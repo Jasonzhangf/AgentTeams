@@ -113,9 +113,15 @@ const STEP_DEADLINE_MS = 120_000
 // able to end a run that a retry would have closed.
 const DSH_PROMPT_ATTEMPTS = 6
 const DSH_PROMPT_BACKOFF_MS = [30_000, 60_000, 120_000, 240_000, 480_000]
-const DSH_TRANSIENT = /no_healthy_account|no healthy account|HTTP error \(5\d\d\)|API error \(5\d\d\)/iu
+// The upstream has refused in two observed shapes: `API error (503)` carrying
+// `no_healthy_account`, and `Internal error: turn failed: Connection error.` Both come out of the
+// engine's `turn failed:` provider-call wrapper, so both mean the pool is out. A request the
+// provider never answers at all is the same stall and is retried too. A typed refusal
+// (`CONFLICT`, `SESSION_OWNERSHIP_CONFLICT`, `-32601`, ...) never matches and reaches the caller
+// on the first attempt, so a real defect still fails fast and loudly.
+const DSH_TRANSIENT = /no_healthy_account|no healthy account|HTTP error \(5\d\d\)|API error \(5\d\d\)|turn failed: Connection error|no response to/iu
 const DSH_RETRIES_EXHAUSTED =
-  `D08 is blocked at A02 by the upstream provider after ${DSH_PROMPT_ATTEMPTS} attempts. This is an upstream outage, not a candidate defect: the D06/D07 gates are independent of it, and the recorded 44-check run below remains the last completed acceptance run.`
+  `A02 DSH real inference is blocked by the upstream provider after ${DSH_PROMPT_ATTEMPTS} attempts. This is an upstream outage, not a candidate defect: the D06/D07 gates are independent of it, and agent A (opencode) completed a real prompt end to end in the same run, so only one engine is affected.`
 const CONSOLE_USERNAME = 'teams'
 const CONSOLE_PASSWORD_ENV = 'D08_CONSOLE_PASSWORD'
 const CONSOLE_PASSWORD = `d08-console-${Math.random().toString(36).slice(2, 12)}`
@@ -183,12 +189,24 @@ function note(message) {
  * Resolves to the successful frame, or to `{ error, exhausted: true, attempts, last }`
  * when every attempt refused. Callers must not `assert` on an exhausted result.
  */
-async function promptWithBackoff(local, { method, params, label, deadlineMs = 240_000 }) {
+async function promptWithBackoff(local, { method, params, label, deadlineMs = 240_000, probeIsAlive }) {
   let last
   for (let attempt = 1; attempt <= DSH_PROMPT_ATTEMPTS; attempt += 1) {
     const requestId = `${method}-attempt-${attempt}`
     await local.send({ jsonrpc: '2.0', id: requestId, method, params })
-    last = await local.awaitFrame(frame => frame.id === requestId, deadlineMs)
+    try {
+      last = await local.awaitFrame(frame => frame.id === requestId, deadlineMs)
+    } catch (cause) {
+      // No frame came back, so this is ambiguous and must not be retried blindly. The engine is
+      // still up, so nothing answered a request the provider never serves: the same stall as a
+      // 503, and worth retrying. The engine is down, so the request was never answered because
+      // the process died: that is a candidate defect, and retrying it would hide the failure and
+      // cost five minutes of backoff before reporting it.
+      if (probeIsAlive && !probeIsAlive()) {
+        return { frame: { id: requestId, error: { code: -32000, message: `${label}: the engine process died before the request was answered (no response within ${Math.round(deadlineMs / 1000)}s); this is not an upstream outage and is not retried` } }, attempt }
+      }
+      last = { id: requestId, error: { code: -32001, message: `no response to ${method} within ${Math.round(deadlineMs / 1000)}s: ${cause instanceof Error ? cause.message : String(cause)}` } }
+    }
     if (last.error === undefined) return { frame: last, attempt }
     if (!DSH_TRANSIENT.test(JSON.stringify(last.error))) return { frame: last, attempt }
     note(`${label}: upstream refused (attempt ${attempt}/${DSH_PROMPT_ATTEMPTS}): `
@@ -1014,6 +1032,7 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
       method: 'session/prompt',
       params: { sessionId: sessionLocalB, prompt: [{ type: 'text', text: 'Reply with exactly: D08-DSH-OK' }] },
       label: 'A02 dsh prompt',
+      probeIsAlive: () => pidAlive(enginePidB),
     })
     if (dshPrompt.exhausted) {
       gap('A02 — DSH real inference', `${DSH_RETRIES_EXHAUSTED} Last refusal: ${JSON.stringify(dshPrompt.frame.error).slice(0, 200)}`)
