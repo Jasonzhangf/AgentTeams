@@ -41,10 +41,12 @@
  *       that cannot be resumed is refused, never passed off as resumed.
  *
  * HONEST BOUNDARIES (printed as `GAP` lines, never as PASS):
- *   - Cross-device receipt: only one physical host exists here, so a genuine
- *     cross-device result is NOT obtainable. Loopback and same-host non-loopback
- *     are never passed off as cross-device. (A11's LAN half IS in scope and checked;
- *     only the cross-device half is the boundary.)
+ *   - Cross-device receipt: this driver exercises one machine only, so it cannot produce a
+ *     cross-device result itself. It does not fabricate one: a genuine result comes from the
+ *     integrated A11 receipt (two hosts, byte-identical tarball and CLI), which the driver
+ *     verifies by reading. Loopback and same-host non-loopback are never passed off as
+ *     cross-device. A11's LAN half is in scope and checked. The receipt is verified by reading
+ *     rather than re-driving, which is reported as a FINDING, not a GAP.
  *   - Live-browser DOM: the reason recorded here in earlier runs was WRONG. It claimed
  *     headless Chrome cannot satisfy this origin's HTTP Basic challenge. CDP
  *     `Network.setExtraHTTPHeaders` injects the credential at the network layer, so a real

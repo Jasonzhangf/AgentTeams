@@ -23,7 +23,7 @@ node docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs
 Canonical run of this unit (final artifact state, all three files in this directory
 present), exit code `0`, wall clock 136 s, empty stderr. **This is the run at the commit
 that produced the artifacts below; it predates the driver's A02 retry and the A11 merge.**
-The current result on this candidate is in §7b (45 checks / 4 gaps / 2 findings, 1188 s):
+The current result on this candidate is in §7c (45 checks / 3 gaps / 2 findings, 278 s):
 
 ```
 D08 acceptance PASS: 44 checks (gaps: 4, findings: 1) in 124s
@@ -140,7 +140,7 @@ driver never substitutes loopback for a LAN claim.
 | item | status | checks | evidence |
 | --- | --- | --- | --- |
 | A01 one config → one daemon; independent identity/storage/IP/port; CLI readback | PASS | 6 | each config produced exactly one daemon process and one engine child; four distinct identities, four distinct data directories, four distinct endpoints; `registry status` and `control status` read back `state=running` with real pids/generations; a control config passed to `--serve` and a v3 config are both refused with `UNSUPPORTED_CONFIGURATION` |
-| A02 OpenCode and DSH each complete a real prompt/process/reply | PASS | 3 | OpenCode: real `opencode acp --pure` child of the installed daemon, `session/new` → `session/prompt` → real `session/request_permission` (once/always/reject) → reply → `stopReason=end_turn`, provider served the turn. DSH: real `dsh` child, `model=["teams-workbuddy","wb-deepseek-v4.1-flash"]`, `stopReason=end_turn` through the real configured provider route |
+| A02 OpenCode and DSH each complete a real prompt/process/reply | PASS | 3 | OpenCode: real `opencode acp --pure` child of the installed daemon, `session/new` → `session/prompt` → real `session/request_permission` (once/always/reject) → reply → `stopReason=end_turn`, provider served the turn. DSH: real `dsh` child, `initialize` + `session/new`, then `session/prompt` → `stopReason=end_turn` over the real configured `teams-workbuddy` route — on **attempt 3** of the exponential-backoff retry, after attempts 1 and 2 were refused with upstream 503 `no_healthy_account` |
 | A03 config names the server; automatic registration, heartbeat, lease offline, restart and reconnect | PASS | 5 | registration is automatic against `wss://127.0.0.1:<port>` with no manual step; `lastSeenAt` advanced over a 15 s heartbeat window; the server-owned lease (`peerTtlMs=90_000`) published `lease-probe` as `presence=offline` while its registration socket stayed online; explicit-pid stop → entry retained `offline` → restart → `online` with a new pid; registry stop → the daemon reports a degraded registration state and keeps naming its configured endpoint → registry restart → `online` again |
 | A04 discover, authenticate, negotiate, connect; both sides know the role; role grants no extra authority | PASS | 5 | a wrong credential is refused at the transport (`network: WSS connection failed`) with no `connection.negotiated` record; negotiation reaches `state=agreed` with `policyRevisions=3/1` over the real LAN listener; both sides report the same `master->peer` agreement; the same daemon serves `master/peer` on one leg and `peer/master` on the other; the master leg and the peer leg are both refused `session/load` with `UNSUPPORTED_METHOD` |
 | A05 bidirectional ACP response/update/callback; cancel and unknown outcome | PASS | 4 | engine→client `session/request_permission` with real options plus client→engine reply released the tool and completed the prompt, with a real `session/update` delivered over LAN; `session/cancel` ended an in-flight prompt with `stopReason=cancelled`; closing a channel mid-prompt left a durable `result.unknown outcome=unknown` and no replay after reconnect; an outstanding callback from the pre-restart engine instance is refused with `CALLBACK_UNAVAILABLE` after the restart |
@@ -149,35 +149,21 @@ driver never substitutes loopback for a LAN claim.
 | A08 registered-online, connection state and execution availability are separate; offline objects and historical connections visible | PASS | 4 | the directory lists five `online` and one `offline` peer at the same moment; live `connections=0` while durable `kind=connection` history holds 4 rows; execution availability is proven from a real engine (`session/new` configOptions) and an unavailable engine exits 1 with `UNSUPPORTED_CONFIGURATION` and no readiness line; the offline object and the historical connections stay visible |
 | A09 history across a UI refresh and an owner restart; a non-resumable Session is never passed off as resumed | PASS | 3 | a fresh authenticated stream plus history read returned the same 4 records byte-identical (same `recordId`/`sequence`, no loss or change); the owner restart goes through the project's own `control stop` + `control start` (not a SIGKILL crash restart), and the durable `kind: 'connection'` history still came back byte-identical; a graceful stop removes the persisted lifecycle record, so the stop+start began a new lifecycle at generation 1 instead of advancing the counter; a pre-restart Session is refused after the restart with `SESSION_OWNERSHIP_CONFLICT` and `session/load` with `UNSUPPORTED_METHOD` |
 | A10 agent-to-agent communication continues after the browser closes and after control stops | PASS | 3 | after every WebUI HTTP/SSE client connection the driver opened was closed, the established LAN channel completed a prompt with `stopReason=end_turn`; with the control daemon stopped and its listener port closed, the same established channel completed a prompt with `stopReason=end_turn`; the established channel also completed a prompt while the registry was stopped, which is the third leg of the same family |
-| A11 real LAN address; a cross-device conclusion needs a cross-device receipt | PASS | 2 | `PASS A11 — the LAN address is a real, connectable non-loopback listener` plus `PASS A11 — the cross-device receipt is integrated and recorded gap-free` (19 checks / 0 gaps, hosts Macstudio.local and jennys-macbook-air.anoa-buri.ts.net); the cross-device conclusion is claimed through integrated evidence and recorded as a finding rather than a gap0.3 is a non-loopback IPv4 and a raw TCP connect to the agent listener 192.168.0.3:57448 succeeded`. The cross-device conclusion is still not claimed: only one physical host exists here (`192.168.0.3`, tailscale `100.66.1.82`) |
+| A11 real LAN address; a cross-device conclusion needs a cross-device receipt | PASS | 2 | `PASS A11 — the LAN address is a real, connectable non-loopback listener` (192.168.0.3 is a non-loopback IPv4 and a raw TCP connect to the agent listener succeeded) plus `PASS A11 — the cross-device receipt is integrated and recorded gap-free` (19 checks / 0 gaps, hosts `Macstudio.local` and `jennys-macbook-air.anoa-buri.ts.net`, byte-identical tarball and installed CLI on both). The cross-device conclusion is claimed through that integrated evidence, and the residual boundary is recorded as a finding rather than a gap (§5a) |
 | A12 no Work/config/permission regression; install, restart, review and resource close-out | PARTIAL | 3 (install) + 1 (restart, counted in A03/A09) | this driver owns the installed-artifact and restart receipts; `pnpm typecheck` and the three mapped regression suites pass (31 files / 261 tests), while `pnpm verify` is recorded as a blocked gate with live-test flakes (§7). The independent review and the merge/remote/freeze close-out are the integration owner's |
 
-`44` checks = install 3 + A01 6 + A02 3 + A03 5 + A04 5 + A05 4 + A06 2 + A07 5 + A08 4 + A09 3 + A10 3 + A11 1.
+`45` checks = install 3 + A01 6 + A02 3 + A03 5 + A04 5 + A05 4 + A06 2 + A07 5 + A08 4 + A09 3 + A10 3 + A11 2 + A12 3. The 44 in §1 is the historical run before the A11 receipt check and the A12 install/restart rows it counted separately. The counts have been stable across every completed run since: only the gap set changed, as A11 closed and then A02 closed.
 
-The driver passes, but the overall goal stays **INCOMPLETE** while the four gaps in §5 remain.
+The driver passes, but the overall goal stays **INCOMPLETE** while the three gaps in §5 remain.
 
 ## 5. Gaps (unmet requirements and evidence boundaries)
 
 Two of these are **unmet requirements**: the shipped control daemon does not provide a
 capability D06 requires, so the acceptance item cannot be met in this candidate. One is an
-**evidence boundary**: the capability may exist, but this environment cannot prove it. One is an
-**upstream provider outage**: the candidate is correct and the dependency is not. None is a
-defect introduced by D08, and none is ever inferred from a passing check.
+**evidence boundary**: the capability may exist, but this environment cannot prove it. None is
+a defect introduced by D08, and none is ever inferred from a passing check.
 
-1. **A02 — DSH real inference. UPSTREAM PROVIDER OUTAGE — neither a candidate defect nor
-   an evidence boundary of this project.** Agent B (`dsh`) does reach the real
-   `teams-workbuddy` provider, and the gateway refuses every turn with `API error (503)` /
-   `no_healthy_account` ("no healthy account available in pool; check /status or retry later").
-   The driver now retries that prompt with exponential backoff (30 s, 60 s, 120 s, 240 s,
-   480 s) and a fresh request id per attempt, so this is not a single flake: **all six attempts
-   were refused**, and the identical response came on the three earlier runs at 2026-10-11
-   21:06, 21:12 and 2026-10-12 05:05. What the run **did** prove for `dsh` is claimed: the
-   installed CLI started a real `dsh` engine child, and `initialize` plus `session/new`
-   succeeded against it. What it could not prove — a real prompt/process/reply — is **not**
-   claimed. Agent A (`opencode`) completed a real prompt end to end in every run
-   (`stopReason=end_turn`, `providerCalls=3`), so this gap is scoped to one engine and one
-   provider pool, and it does not touch the D06 or D07 mapped gates.
-2. **A07 — animation driven by real events. UNMET REQUIREMENT, not an environment limit.**
+1. **A07 — animation driven by real events. UNMET REQUIREMENT, not an environment limit.**
    D06 requires the control daemon to provide discovery query, connect/disconnect, membership
    and role projection, and targeted ACP ingress with callback reply and cancel
    (`D06-control.md`). The shipped daemon binds no Console or Session owner:
@@ -202,7 +188,7 @@ defect introduced by D08, and none is ever inferred from a passing check.
    refresh is. The typed-absence path is deliberate in the shipped code, but the capability it
    stands in for is still missing. This is a retained delivery obligation owned by D06/D07,
    not a coverage boundary. It is the reason A07 is `PARTIAL`.
-3. **A07 — live-browser DOM against the installed artifact. EVIDENCE-LEVEL BOUNDARY.**
+2. **A07 — live-browser DOM against the installed artifact. EVIDENCE-LEVEL BOUNDARY.**
    The reason recorded here earlier was **wrong**. It claimed headless Chrome cannot satisfy
    the origin's HTTP Basic challenge for a same-origin `fetch`/`EventSource`. That is
    refuted: CDP `Network.setExtraHTTPHeaders` injects the credential at the network layer,
@@ -214,13 +200,21 @@ defect introduced by D08, and none is ever inferred from a passing check.
    origin, which is a different evidence level from an installed-artifact run, so it does not
    close this item. The frozen DOM marker contract is also owned by
    `ui/teams-console/tests/render-d07.spec.ts` (real Chrome).
-4. **A07 — targeted interaction from the WebUI. UNMET REQUIREMENT, same missing owner as
+3. **A07 — targeted interaction from the WebUI. UNMET REQUIREMENT, same missing owner as
    gap 1.** Because no Session owner is bound, every
    interaction write is a typed `UNSUPPORTED_OPERATION` refusal, so no prompt can be
    targeted from the WebUI in this candidate. The driver proves the refusal is typed and
    that no effect is fabricated; it does not prove a targeted interaction. Retained delivery
    obligation owned by D06.
-### 5a. Gap closed on this candidate — A11 cross-device receipt
+### 5a. Gaps closed on this candidate
+
+**A02 — DSH real inference — CLOSED.** This was the only non-D06 gap, and it closed because the retry was in the driver. The upstream `teams-workbuddy` pool refused every attempt of the five earlier runs on 2026-10-11 21:06, 21:12 and 2026-10-12 05:05, 06:07, 06:31 with `API error (503)` / `no_healthy_account`, and an unclassified shape of the same outage (`Internal error: turn failed: Connection error.`) aborted a fourth run at 07:31. That is what the in-driver exponential backoff was for: a transient provider refusal is not a candidate defect, and the operator should not have to re-pay a whole build and install because one request was refused.
+
+Concretely, the retry went through three fixes. `d8f5cd1` retried the prompt up to six times with a fresh request id per attempt and backoff of 30 s / 60 s / 120 s / 240 s / 480 s, only retrying a 5xx-shaped provider refusal. `d05f3a0` then added the second observed upstream shape, `turn failed: Connection error`, and retried a no-frame timeout only while the engine process was still alive — a dead engine returns immediately and fails fast, because retrying a crash would hide it and cost five minutes of backoff first. At 2026-10-12 07:56 the pool refused attempts 1 and 2 and **served attempt 3** with `stopReason=end_turn` over the real provider route, so the run that would previously have died at A02 passed it. Every candidate defect still fails on the first attempt: a typed refusal or JSON-RPC error arrives as a frame and none of `CONFLICT`, `SESSION_OWNERSHIP_CONFLICT`, `ENGINE_UNAVAILABLE`, `CALLBACK_UNAVAILABLE`, `RESULT_UNKNOWN`, `CAPABILITY_DENIED` or `-32601`/`-32602` matches the transient matcher.
+
+**A11 — cross-device receipt — CLOSED.**
+
+
 
 The A11 gap is **closed** on this candidate. The reason it was open is recorded here so the
 change stays auditable: it was open because the two-host receipt lived in a **separate,
@@ -244,11 +238,11 @@ and are **not** repaired by merging it: the registry runs on HOST A, HOST B's en
 rather than an install, the provider is a stub, the path is Tailscale rather than the ordinary
 LAN, and the two hosts' physical distinctness is attested only by hostname.
 
-The overall goal stays **INCOMPLETE** while these four gaps remain.
+The overall goal stays **INCOMPLETE** while these three gaps remain.
 
 ## 6. Defects found by this driver (both fixed), and the one open observation
 
-This driver found three product defects. All were fixed on this candidate, so none is an open
+This driver found four product defects. All were fixed on this candidate, so none is an open
 finding. The current run reports `findings: 2`, and neither `FINDING` is a defect: one is the
 generation-reuse observation described in §1, and one is the A11 note that the cross-device
 receipt is verified by reading rather than by re-driving the traffic (§5a). Neither falsifies a
@@ -324,6 +318,26 @@ history, so a restart came back with an empty history page.
   non-loopback IPv4 and a raw TCP connect to the agent listener 192.168.0.3:57448 succeeded`.
 
 
+### D08-F3 — the acceptance driver aborted the whole run on a single transient upstream refusal (FIXED in `d8f5cd1`)
+
+The driver made one attempt at the A02 DSH prompt and threw on any error. The upstream
+`teams-workbuddy` pool returned `API error (503)` / `no_healthy_account`, so runs at 2026-10-11
+21:06, 21:12 and 2026-10-12 05:05 died at A02 and produced **no** A03-A11 result at all. This is
+a driver-robustness defect, not an orchestration decision: one transient error must not end a run
+that a retry would close, and the operator should not re-pay a whole build and install for it.
+Fixed by retrying with exponential backoff and a fresh request id per attempt, retrying only a
+5xx-shaped provider refusal, and recording a gap (never a pass) when every attempt is refused.
+
+### D08-F4 — the retry did not recognise the second upstream shape, and treated a stall as fatal (FIXED in `d05f3a0`)
+
+A fourth run failed at A02 with `Internal error: turn failed: Connection error.` — the same
+outage in a second shape the matcher did not know, so it was classified as a deterministic defect
+and aborted the run. The same run showed a second weakness: no frame at all was a hard failure
+even though a stall is exactly what an outage looks like. Fixed by classifying the second shape
+as transient and by retrying a no-frame timeout **only while the engine process is still alive**;
+a dead engine returns immediately and fails fast, because retrying a crash would hide it and cost
+five minutes of backoff first.
+
 ## 7. Regression gates
 
 `pnpm typecheck` → exit 0. `pnpm build` (inside `pnpm build:governance`) → exit 0.
@@ -383,7 +397,10 @@ ambiguous result. When every attempt refuses, the driver records the prompt as a
 still claims the `initialize`/`session/new` result it did prove, so the run continues through
 A03–A11 and neither path is a fabricated pass.
 
-### 7b. Run 4 on the merged candidate (2026-10-12 06:31 PST) — the run now completes
+### 7b. Run 4 on the merged candidate (2026-10-12 06:31 PST) — superseded by §7c
+
+Run 4 proved the run completes instead of dying at A02. It is retained as its own record, but
+its `gaps: 4` includes the A02 prompt, which §7c then closed.
 
 Commit `d8f5cd1` (retry) plus the A11 merge `869aff8`, tree clean:
 
@@ -409,6 +426,33 @@ A02 in). The later driver change to verify an integrated receipt is `git show`-a
 
 The D08 gate stays `partial` and the overall goal stays `INCOMPLETE`, because the D06
 write-side requirements behind the A07 gaps are still unmet and no ACP gate has been upgraded.
+
+### 7c. Run 5 on the merged candidate (2026-10-12 07:56 PST) — the retry closed the outage
+
+Commit `d05f3a0` (both upstream shapes classified; a stalled engine discriminated from a dead
+engine), tree clean:
+
+```
+D08 acceptance PASS: 45 checks (gaps: 3, findings: 2) in 278s
+```
+
+This is the definitive result. The upstream pool refused **attempts 1 and 2** and then **served
+attempt 3** with `stopReason=end_turn` over the real `teams-workbuddy` route, so **A02 DSH real
+inference closed mid-run**. Both engines now complete a real prompt through the installed CLI,
+and the gap set is the three A07 items only.
+
+That is the whole point of putting the retry in the driver. A run that treats one upstream
+refusal as fatal dies at A02, throws away every result behind it, and makes the operator re-pay
+the build and install — and it reports the outage as if it were a property of the candidate.
+With the retry, the same outage costs 90 s of backoff and the run passes. The classification is
+narrow enough that a real defect is still not retried: only the two observed upstream shapes
+(`API error (503)` / `no_healthy_account`, and `turn failed: Connection error`) and a no-frame
+timeout while the engine is still alive are retried, and a typed refusal or JSON-RPC error
+reaches the caller on the first attempt.
+
+The D08 gate stays `partial` and the overall goal stays `INCOMPLETE`, for the A07 reasons above:
+the D06 write-side requirements are still unmet, the live-browser DOM evidence is source-level
+only, and no ACP gate has been upgraded.
 
 ### `pnpm verify` did not pass on this host — reported as a blocked gate, not as a pass
 
@@ -450,8 +494,8 @@ A12 therefore stays `PARTIAL`: this worker's own receipts (install, restart, typ
 build, the three mapped suites at 31 files / 261 tests) are green, and the declared
 whole-project baseline is recorded as a blocked gate rather than claimed as a pass.
 
-The two product defects this driver found are fixed (`44d82f7`, `146824a`); the overall goal
-stays **INCOMPLETE** while the four gaps in §5 remain.
+The four product defects this driver found are fixed (`44d82f7`, `146824a`, `d8f5cd1`,
+`d05f3a0`); the overall goal stays **INCOMPLETE** while the three gaps in §5 remain.
 
 ## 8. Evidence boundary
 

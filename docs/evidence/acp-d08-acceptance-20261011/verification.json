@@ -34,18 +34,18 @@
   },
   "gate_id": "teams-acp-d08-acceptance",
   "gate_status": "partial",
-  "gate_status_note": "The command is executable and passed on this candidate at 2026-10-12 06:31 PST: 45 checks, 4 gaps, 2 findings, exit 0, 1188s. Three gaps are D07 WebUI/D06 unmet requirements (A07 real-event animation, A07 targeted interaction) and one is an evidence-level boundary (A07 live-browser DOM against the installed artifact). One gap is an upstream outage (A02 DSH real inference: all six attempts refused by the teams-workbuddy pool), which is not a candidate defect and does not block the D06 or D07 gates. The earlier A11 cross-device gap is CLOSED: the A11 unit at commit 869aff8 is merged into this candidate and the driver now verifies its receipt, so the cross-device conclusion is claimed through integrated evidence instead of being recorded as a gap. Two findings, neither of which is a defect and neither of which changes the exit code: a graceful stop+start reuses owner generation 1, and the cross-device receipt is verified by reading rather than by re-driving the traffic. Status stays partial: the D06 write-side requirements behind the three A07 gaps are unmet, the D08 installed-artifact DSH prompt is blocked by the upstream provider, and no ACP gate has been upgraded.",
+  "gate_status_note": "The command is executable and passed on this candidate at 2026-10-12 07:56 PST: 45 checks, 3 gaps, 2 findings, exit 0, 278s. Every A01-A11 item now passes end to end, including A02 DSH real inference, which the upstream pool refused for eight hours and which the in-driver exponential-backoff retry (d05f3a0) finally closed at attempt 3 of the definitive run. The three remaining gaps are all A07: animation driven by real events, live-browser DOM against the installed artifact, and targeted interaction from the WebUI. Two are D06 write-side unmet requirements (no Session owner is bound) and one is the installed-artifact evidence boundary. Two findings, neither a defect and neither changing the exit code: a graceful stop+start reuses owner generation 1, and the A11 cross-device receipt is verified by reading rather than by re-driving the traffic. Status stays partial: the D06 write-side requirements behind the A07 gaps are unmet, the A07 live-browser DOM evidence is source-level only, and no ACP gate has been upgraded.",
   "driver": {
     "path": "docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
     "command": "node docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
     "exit_code": 0,
-    "summary_line": "D08 acceptance PASS: 45 checks (gaps: 4, findings: 2) in 1188s",
-    "summary_note": "Run at 2026-10-12 06:31 PST on candidate d8f5cd1 (A11 merged). The recorded 44-check run of 2026-10-11 00:53 is historical and is retained as its own record. Since then the driver changed twice and the result moved: (1) the A02 DSH prompt now retries a transient upstream 503 with exponential backoff instead of dying on the first refusal, so the run completes A03-A11 instead of stopping at A02; (2) the A11 cross-device receipt, previously recorded as a gap because the A11 unit was not merged, is now verified by the driver and is a check. A02 DSH real inference therefore replaced it as a gap: all six attempts at the upstream provider were refused with teams-workbuddy 503 no_healthy_account, so no prompt result is claimed, while the initialize/session/new result the run did prove is still claimed. Findings rose from 1 to 2: the A09 generation-1 reuse and the A11 finding that the cross-device receipt is verified by reading rather than by re-driving the traffic.",
+    "summary_line": "D08 acceptance PASS: 45 checks (gaps: 3, findings: 2) in 278s",
+    "summary_note": "Definitive run at 2026-10-12 07:56 PST on commit d05f3a0, tree clean, exit 0. The A02 DSH prompt was refused by the upstream on attempts 1 and 2 (503 no_healthy_account) and then SUCCEEDED on attempt 3 (stopReason=end_turn, real provider route): the pool recovered mid-run, so the exponential-backoff retry is what let the run close A02 instead of dying on the first refusal. A02 DSH real inference is therefore no longer a gap; the gap set is now the three A07 items only. Findings are the A09 generation-1 reuse and the A11 read-not-drive boundary. The 45/4/2 run at 06:31 PST is superseded: its only difference is the still-open A02 prompt.",
     "checks": 45,
-    "gaps": 4,
+    "gaps": 3,
     "findings": 2,
     "resolved_defects": 2,
-    "wall_clock_seconds": 1188,
+    "wall_clock_seconds": 278,
     "runtime_under_test": "installed artifact: npm pack of the pnpm build:governance final package, installed into an isolated prefix with npm install --prefix",
     "worktree_debug_binary_used_as_runtime_evidence": false
   },
@@ -152,7 +152,8 @@
       "requirement": "OpenCode and DSH each complete a real prompt/process/reply through the installed CLI",
       "status": "pass",
       "checks": 3,
-      "evidence": "OpenCode: real `opencode acp --pure` child, session/new -> session/prompt -> real session/request_permission -> reply -> stopReason=end_turn; DSH: real `dsh` child, model=[teams-workbuddy, wb-deepseek-v4.1-flash], stopReason=end_turn through the real configured provider route"
+      "evidence": "both engines completed a real prompt through the installed CLI. OpenCode: session/new -> session/prompt -> real session/request_permission (once/always/reject) -> reply -> stopReason=end_turn, providerCalls=3. DSH: initialize and session/new, then session/prompt -> stopReason=end_turn over the real teams-workbuddy route on attempt 3 after two upstream 503 refusals, proving the backoff retry closes the leg.",
+      "unmet_requirement": null
     },
     {
       "id": "A03",
@@ -228,10 +229,6 @@
     }
   ],
   "gaps": [
-    {
-      "name": "A02 — DSH real inference",
-      "reason": "the upstream provider refused all six attempts: teams-workbuddy API error (503) no_healthy_account, \"no healthy account available in pool\". The prompt is retried with exponential backoff (30s, 60s, 120s, 240s, 480s) and a fresh request id per attempt, so this is a sustained provider outage rather than a single flake; the same response came on three earlier runs at 2026-10-11 21:06, 21:12 and 05:05. This is not a candidate defect: the D06 and D07 gates are independent of it, agent A (opencode) completed a real prompt end to end in every attempt, and agent B answered initialize and session/new over the installed CLI. No prompt result is claimed for agent B, which is the honest form of the result."
-    },
     {
       "id": "G1",
       "item": "A07",
@@ -339,7 +336,7 @@
       "stale callback reply after an agent restart": "CALLBACK_UNAVAILABLE (transport acp.error)"
     },
     "d08_rerun_status": "blocked by an upstream teams-workbuddy 503 (no_healthy_account). Three attempts on two candidate commits (21:06 and 21:12 PST on the merge, 05:05 PST on ea046e0) failed at the identical A02 check. The driver was not weakened and retrying was stopped. The recorded 44-check run is retained as historical evidence and not superseded",
-    "d08_run_status": "passed at 45 checks / 4 gaps / 2 findings on 2026-10-12 06:31 PST. The A02 DSH prompt is the only upstream-blocked item: six attempts, exponential backoff, all refused with no_healthy_account. The A11 cross-device gap is closed by the merged A11 receipt."
+    "d08_run_status": "passed at 45 checks / 3 gaps / 2 findings on 2026-10-12 07:56 PST, exit 0, 278s. The A02 DSH prompt succeeded on attempt 3 of the backoff retry after two upstream refusals; the outage that blocked it since 21:06 PST on 2026-10-11 ended mid-run."
   },
   "engine_versions": {
     "node": "v22.22.2",
@@ -368,7 +365,7 @@
     "cleanup": "every daemon/engine/provider process is stopped by explicit pid; the owned temp root is removed on PASS and retained with a printed path on FAIL"
   },
   "retained_objects": [],
-  "overall_goal": "INCOMPLETE: the D06 write-side capabilities behind the A07 gaps are unmet and blocked on an engineInstanceId contract amendment, the D08 DSH prompt is blocked by an upstream provider outage, and the A07 live-browser DOM evidence is source-level only",
+  "overall_goal": "INCOMPLETE: the D06 write-side capabilities behind the A07 gaps are unmet and blocked on an engineInstanceId contract amendment, the A07 live-browser DOM evidence is source-level only, and no ACP gate has been upgraded. The D08 acceptance run itself now passes 45 checks / 3 gaps / 2 findings, including both real engine prompts.",
   "retained_obligations": [
     {
       "item": "pnpm verify is not reliably green on this host",
@@ -432,9 +429,17 @@
       "failure": null,
       "detail": "all six A02 DSH attempts refused again, so the outage is sustained; the A11 receipt is now verified by the driver and is a check, and A02 DSH real inference is the new gap",
       "summary": "D08 acceptance PASS: 45 checks (gaps: 4, findings: 2) in 1188s"
+    },
+    {
+      "attempt": "2026-10-12 07:56 PST",
+      "candidate": "d05f3a0 (second upstream shape classified; engine-alive discrimination for stalls)",
+      "result": "PASS — definitive result",
+      "failure": null,
+      "detail": "attempts 1-2 refused (503 no_healthy_account), attempt 3 succeeded with stopReason=end_turn; A02 closed mid-run",
+      "summary": "D08 acceptance PASS: 45 checks (gaps: 3, findings: 2) in 278s"
     }
   ],
-  "retry_policy": "Retry INSIDE the driver, with exponential backoff. The earlier policy here (\"stop retrying\") was wrong, and it was driven by a driver defect rather than by judgement: a driver that dies on one upstream error discards every result behind it and makes the operator re-pay the whole build and install. Fixed at commit d8f5cd1 — the A02 DSH prompt is attempted up to six times with a fresh request id per attempt and backoff of 30s, 60s, 120s, 240s and 480s. Only a 5xx-shaped provider refusal is retried, so a real candidate defect still fails fast and loudly instead of being retried into an ambiguous result. When every attempt refuses the driver records a gap and still claims the initialize/session/new result it did prove, so the run continues through A03-A11 and neither path is a fabricated pass. The outage itself is unresolved: the same no_healthy_account 503 came on all six attempts and on the three earlier runs. Re-run once the teams-workbuddy pool is healthy.",
+  "retry_policy": "Retry INSIDE the driver, with exponential backoff — and it has now closed the outage it was built for. The policy went from a driver defect (single attempt, three aborted runs at 2026-10-11 21:06/21:12 and 2026-10-12 05:05) to d8f5cd1 (six attempts, fresh request id per attempt, backoff 30s/60s/120s/240s/480s, only 5xx-shaped refusals retried), then d05f3a0 (the second observed upstream shape, turn failed: Connection error, classified as transient; a frame timeout retried only while the engine is still alive, so a dead engine still fails fast). At 2026-10-12 07:56 the pool refused twice and served attempt 3: the run that would previously have died at A02 passed it. A deterministic failure is never retried, and exhaustion records a gap rather than a fabricated pass.",
   "closed_gaps": [
     {
       "name": "A11 — cross-device receipt",
@@ -442,6 +447,13 @@
       "how": "the driver reads the integrated receipt and asserts it is present, names two distinct non-loopback hosts, and records no gaps",
       "residual": "recorded as a finding rather than a gap: the driver verified the receipt by reading it, it did not re-drive the cross-device traffic itself",
       "earlier_reason": "this driver runs on one physical host (LAN 192.168.0.3) and cannot itself produce a cross-device receipt; loopback and same-host non-loopback are never passed off as cross-device. A real two-host receipt exists only in the separate A11 unit (branch codex/acp-a11-crossdevice-20261011, commit 869aff8,"
+    },
+    {
+      "name": "A02 — DSH real inference",
+      "closed_by": "the upstream pool recovered mid-run at 2026-10-12 07:56 PST",
+      "how": "attempt 3 of the exponential-backoff retry (d05f3a0) succeeded with stopReason=end_turn over the real provider route",
+      "residual": "none recorded; the initialize/session/new and prompt legs both completed",
+      "earlier_reason": "the upstream provider refused all six attempts of the previous run with 503 no_healthy_account; that state persisted across 2026-10-11 21:06, 21:12, 2026-10-12 05:05, 06:07 and 06:31, and is what prompted the in-driver retry"
     }
   ]
 }
