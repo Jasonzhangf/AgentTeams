@@ -34,7 +34,7 @@
   },
   "gate_id": "teams-acp-d08-acceptance",
   "gate_status": "partial",
-  "gate_status_note": "the acceptance driver passes (44 checks, 4 gaps, 1 non-defect observation), but the overall goal stays INCOMPLETE while the four gaps below remain: two are unmet D06 requirements (A07 real-event animation, A07 targeted interaction) and two are evidence-level boundaries (A07 live-browser DOM against the installed artifact, A11 cross-device receipt). Both boundary reasons were corrected: the A07 reason no longer claims headless Chrome cannot do HTTP Basic (it can, via CDP Network.setExtraHTTPHeaders, and a real source-level producer exists), and the A11 reason no longer claims only one physical host exists (a real two-host receipt exists in the unmerged A11 unit)",
+  "gate_status_note": "the recorded 44-check / 4-gap / 1-finding run was produced before the D06 directory-projection increment was folded into D06, and it printed a stale A07 premise (\"the projection is a constant empty snapshot\"). The four gap reasons above have been rewritten to match what the driver now prints. A re-run of the driver on this merged candidate did NOT complete: both attempts failed at the real DSH prompt with an upstream 503 no_healthy_account from the teams-workbuddy gateway, so no new D08 check count is recorded and the recorded run is retained as historical evidence for the 44 checks it did complete. The D06 and D07 gates were re-run green on this candidate (118 tests and 66 tests).",
   "driver": {
     "path": "docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
     "command": "node docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
@@ -232,7 +232,7 @@
       "id": "G1",
       "item": "A07",
       "name": "animation driven by real events",
-      "reason": "the shipped control daemon binds no Console owner (runtime/control-process.ts:761 calls createControlOwner({ network: network.port }) with no owner), so /api/v1/projection is a constant empty snapshot and no real event can advance the SSE stream; only the transport is proven. This is a deliberate typed-absence path in the shipped D06 code, not an accidental defect",
+      "reason": "the shipped control daemon binds no Console or Session owner (runtime/control-process.ts:818 calls createControlOwner({ network: network.port, source: network.projection }) with no owner), so the projection carries no sessions, notifications or configs and no Session/permission/notification event can advance the SSE stream. The directory half is now real: GET /api/v1/projection carries the real D04 registration-directory agent rows and a real registration advances the SSE seq (1 -> 3) through the declared ControlProjectionSource watch. Real-event-driven animation is therefore still not delivered — only directory-change-driven refresh is. D06 requires a Session owner plus targeted ACP ingress, so this remains an UNMET REQUIREMENT owned by D06, not an environment limit",
       "owner": "D06/D07",
       "classification": "retained delivery obligation, not a driver limitation"
     },
@@ -248,7 +248,7 @@
       "id": "G3",
       "item": "A07",
       "name": "targeted interaction from the WebUI",
-      "reason": "the control daemon binds no Session owner, so every interaction write is a typed UNSUPPORTED_OPERATION refusal and no prompt can be targeted from the WebUI in this candidate; the driver proves the refusal is typed and never fabricated",
+      "reason": "the control daemon binds no Session owner, so every interaction write (permission.reply / session send) is a typed UNSUPPORTED_OPERATION refusal and no prompt can be targeted from the WebUI in this candidate; the driver proves the refusal path rather than the success path. D06 requires connect/disconnect, network.membership.apply, a Session owner and targeted ACP ingress, so this is an UNMET REQUIREMENT owned by D06, not an environment limit. The D06 directory-projection increment (formerly carried as the separate \"D09\" unit, now folded into D06) delivers the discovery query and the membership projection, so those two leave this gap",
       "owner": "D06/D07",
       "classification": "retained delivery obligation"
     },
@@ -256,7 +256,7 @@
       "id": "G4",
       "item": "A11",
       "name": "cross-device receipt",
-      "reason": "this driver runs on one physical host (LAN 100.66.1.82) and cannot itself produce a cross-device receipt; loopback and same-host non-loopback are never passed off as cross-device. The earlier reason recorded here ('only one physical host is available') is now FALSE: a real two-host receipt exists (HOST A Macstudio.local 100.66.1.82, HOST B jennys-macbook-air.anoa-buri.ts.net 100.93.143.20, macOS 15.7.9 arm64) in the separate A11 unit on branch codex/acp-a11-crossdevice-20261011 at commit 869aff8: 19 checks, 0 gaps, exit 0, real ACP session/new -> session/prompt -> session/request_permission -> session/update -> end_turn plus a session/cancel path, with byte-identical tarball sha256 f19211c9bd8123a477e3b99cce3beb23542ea20de80d44b6caf68bab85b80de9 and CLI sha256 d97ab857e0a7892f2bab791fbc9a377f9fb12b338c256a6af22e541afd859238 on both hosts. That unit is NOT merged into this candidate, so this driver cannot verify it from here and does not claim it. Folding A11 into this gate requires integrating that unit first",
+      "reason": "this driver runs on one physical host (LAN 192.168.0.3) and cannot itself produce a cross-device receipt; loopback and same-host non-loopback are never passed off as cross-device. A real two-host receipt exists only in the separate A11 unit (branch codex/acp-a11-crossdevice-20261011, commit 869aff8, 19 checks / 0 gaps, exit 0), which is not merged into this candidate, so this driver neither verifies nor claims it. The earlier reason recorded here claimed only one physical host exists; that was wrong",
       "owner": "D08 integration",
       "classification": "unmerged separate evidence unit, explicitly not claimed by this driver"
     }
@@ -329,7 +329,7 @@
     "history_records_after_control_restart": 4,
     "history_records_after_control_restart_note": "the same 4 records retained byte-identical across the control stop+start; before the 146824a fix the restart returned an empty page",
     "sse_first_frame_sequence": 1,
-    "projection_v1": "agents=0 connections=0 (a constant empty snapshot; the shipped control daemon binds no Console owner)",
+    "projection_v1": "agents=0 connections=0 at the time of the recorded run. SUPERSEDED for the agents count only: since the D06 directory-projection increment the projection carries real D04 directory agent rows, while connections stays 0 because the control daemon declares no Teams listener",
     "refused_commands": {
       "connection.connect": "UNSUPPORTED_OPERATION",
       "network.membership.apply": "UNSUPPORTED_OPERATION",
@@ -337,7 +337,8 @@
       "out-of-vocabulary-command-payload": "HTTP 400 from the closed ConsoleCommandV1 parser",
       "session/load after an owner restart": "UNSUPPORTED_METHOD",
       "stale callback reply after an agent restart": "CALLBACK_UNAVAILABLE (transport acp.error)"
-    }
+    },
+    "d08_rerun_status": "blocked by an upstream teams-workbuddy 503 (no_healthy_account); the recorded 44-check run is retained as historical evidence and not superseded"
   },
   "engine_versions": {
     "node": "v22.22.2",
@@ -391,5 +392,21 @@
   ],
   "driver_side_effects": [
     "the driver stages its own evidence directory (git add -- docs/evidence/acp-d08-acceptance-20261011/...) because the project producer refuses untracked product paths; it never commits, resets, checks out, stashes or passes --no-verify"
+  ],
+  "driver_reruns": [
+    {
+      "attempt": "2026-10-11 21:06 PST",
+      "candidate": "merge of the D06 fold with the browser/ablation branch",
+      "result": "FAIL before A07 was reached",
+      "failure": "the real DSH prompt failed: teams-workbuddy API error (503) no_healthy_account — no healthy account available in pool",
+      "evidence": "agent A (opencode) completed a real prompt end to end (stopReason=end_turn, providerCalls=3); agent B (dsh) completed a real prompt only after the upstream gateway returned 503. No project defect was produced."
+    },
+    {
+      "attempt": "2026-10-11 21:12 PST",
+      "candidate": "same, unchanged",
+      "result": "FAIL at the identical check with an identical error",
+      "failure": "same teams-workbuddy 503 no_healthy_account",
+      "evidence": "the failure repeats at the same line, so it is an upstream provider outage rather than a flake in this candidate"
+    }
   ]
 }

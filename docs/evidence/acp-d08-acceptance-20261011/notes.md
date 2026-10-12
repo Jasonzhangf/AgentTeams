@@ -165,13 +165,19 @@ check.
 1. **A07 — animation driven by real events. UNMET REQUIREMENT, not an environment limit.**
    D06 requires the control daemon to provide discovery query, connect/disconnect, membership
    and role projection, and targeted ACP ingress with callback reply and cancel
-   (`D06-control.md`). The shipped daemon does not: it binds no Console
-   owner: `runtime/control-process.ts:761` calls `createControlOwner({ network: network.port })`
-   with no `owner`, and the same file hardcodes an empty directory snapshot, so
-   `/api/v1/projection` is a constant empty snapshot
-   (`{version:1, agents:[], sessions:[], notifications:[], configs:[], connections:[]}`).
-   No real event can advance the SSE stream in this candidate, so only the SSE transport
-   is proven. The typed-absence path is deliberate in the shipped code, but the capability it
+   (`D06-control.md`). The shipped daemon binds no Console or Session owner:
+   `runtime/control-process.ts:818` calls
+   `createControlOwner({ network: network.port, source: network.projection })` with no `owner`,
+   so the projection carries no `sessions`, `notifications` or `configs` and no Session-,
+   permission- or notification-driven event can advance the SSE stream.
+   **The directory half is now real, which supersedes the premise recorded before this gate:**
+   since the D06 directory-projection increment (formerly carried as the separate "D09" unit,
+   now folded into D06) `/api/v1/projection` carries the real D04 registration-directory agent
+   rows and a real registration advances the SSE `seq` (1 -> 3) through the declared
+   `ControlProjectionSource` watch. `connections` stays `[]` because the control daemon
+   declares no Teams listener, which is a real directory fact, not a fabricated channel.
+   Real-event-driven animation is therefore still not delivered — only directory-change-driven
+   refresh is. The typed-absence path is deliberate in the shipped code, but the capability it
    stands in for is still missing. This is a retained delivery obligation owned by D06/D07,
    not a coverage boundary. It is the reason A07 is `PARTIAL`.
 2. **A07 — live-browser DOM against the installed artifact. EVIDENCE-LEVEL BOUNDARY.**
@@ -285,18 +291,47 @@ history, so a restart came back with an empty history page.
   `PASS A11 — the LAN address is a real, connectable non-loopback listener — 192.168.0.3 is a
   non-loopback IPv4 and a raw TCP connect to the agent listener 192.168.0.3:57448 succeeded`.
 
+
 ## 7. Regression gates
 
 `pnpm typecheck` → exit 0. `pnpm build` (inside `pnpm build:governance`) → exit 0.
 
-Mapped regression suites (re-run on the final candidate after the two product fixes; the
-D06 suite grew by the two new spec cases):
+Mapped regression suites, re-run on this merged candidate (D06 fold + D07 ablation):
 
 | gate | command | result |
 | --- | --- | --- |
-| D06 control | `pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts` | 6 files, 117 tests, pass (was 115; +2 new spec cases) |
+| D06 control | `pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts` | 6 files, **118 tests, pass** (117 before the D06 directory-projection increment; that increment adds one real-directory spec case) |
 | D05 LAN/network | `pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts control-protocol/teams-connection.spec.ts` | 9 files, 73 tests, pass |
-| D07 WebUI | `TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism <16 ui/teams-console/tests specs>` | 16 files, 71 tests, pass |
+| D07 WebUI | `TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism <the 13 live ui/teams-console/tests specs>` | 13 files, **66 tests, pass** (16 files / 73 tests before the ablation deleted three dead page modules and their specs) |
+
+### 7a. Re-run on the merged candidate (blocked by an upstream outage)
+
+The acceptance driver was re-run on this merged candidate (D06 directory-projection increment
+folded in, the A07 gap premise corrected). **Both attempts failed before reaching A07:**
+
+```
+FAIL A02 — the real DSH prompt failed: teams-workbuddy API error (503)
+  code=no_healthy_account  "no healthy account available in pool; check /status or retry later"
+```
+
+Attempt 1 at 21:06 PST and attempt 2 at 21:12 PST failed at the same check with the same
+upstream error. Agent A (`opencode`) completed a real prompt end to end in both attempts
+(`stopReason=end_turn`, `providerCalls=3`); agent B (`dsh`) failed only on the provider
+gateway returning 503. This is an upstream provider outage, not a defect in this candidate
+and not a flake in this project.
+
+Consequences, recorded rather than papered over:
+
+- No new D08 check count is recorded. The 44-check / 4-gap / 1-finding result below is retained
+  as the historical run it is, and its A07 premise is corrected above and in
+  `verification.json` rather than left stale.
+- The failed runs retained their owned temp roots for inspection; they were verified
+  process-free and then removed by name, so no `d08-acc-*` root remains.
+- The D06 and D07 mapped gates were re-run green on this candidate (118 and 66 tests), so
+  the source-level evidence for the folded increment is fresh.
+
+Re-run the driver when the `teams-workbuddy` gateway reports a healthy account again; the
+command is unchanged and the driver stages and installs the tarball by itself.
 
 ### `pnpm verify` did not pass on this host — reported as a blocked gate, not as a pass
 
