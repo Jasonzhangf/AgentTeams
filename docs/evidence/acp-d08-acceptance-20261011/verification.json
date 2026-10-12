@@ -29,6 +29,38 @@
         "candidate": "58b24b2",
         "verdict": "RESOLVED",
         "detail": "H1, M1, M2 and M3 all resolved and independently re-checked. The reviewer re-ran both D06 black boxes itself (10 checks and 7 checks, exit 0) and the D08 driver (44 checks, 4 gaps, findings: 1, exit 0). It found three minor stale-text inconsistencies (N1 the D08 governance row still said 0 findings, N2 notes.md line 31 and the FINDING definition, N3 a driver check name), all fixed afterwards; none affects a gate or behaviour."
+      },
+      {
+        "candidate": "4b058e6",
+        "verdict": "PASS",
+        "blocking": null,
+        "scope": "driver retry (d8f5cd1), A11 receipt verification (4b058e6) and the record alignment in 1a639a7. Read-only review: the reviewer did not run the driver, pnpm, tests or a build.",
+        "what_it_confirmed": [
+          "a non-transient error is NOT retried: it returns from promptWithBackoff immediately and is asserted at the A02 call site, so a real candidate defect fails fast",
+          "realistic candidate-defect shapes (-32601/-32602, CONFLICT, CAPABILITY_DENIED, SESSION_OWNERSHIP_CONFLICT, ENGINE_UNAVAILABLE, CALLBACK_UNAVAILABLE, RESULT_UNKNOWN) do not match the transient matcher",
+          "the retry is bounded: six attempts, five backoff entries, a break on the last one; fresh request ids matched exactly by frame.id so a stale frame cannot satisfy a later attempt",
+          "exhaustion records a gap and claims only initialize/session/new; no assert runs against an exhausted result",
+          "a missing receipt throws rather than silently passing, and the asserted artifact hash keys exist and match",
+          "no check was weakened: the stub-provider assertion is preserved, the OpenCode leg still asserts independently",
+          "A11 closes only at the evidence-integration level, recorded as a finding because the receipt is verified by reading"
+        ],
+        "findings": [
+          {
+            "id": "F1",
+            "severity": "minor",
+            "where": "notes.md A02 and A11 table rows",
+            "problem": "the A02 row still claimed a DSH stopReason=end_turn and the A11 row was corrupted by a truncated cut, still ending \"the cross-device conclusion is still not claimed\"",
+            "resolution": "FIXED in b82affd: the A02 row states DSH succeeds on attempt 3 of the backoff retry and the A11 row is rewritten to the closed state"
+          },
+          {
+            "id": "F2",
+            "severity": "nit",
+            "where": "black-box-acceptance.mjs header comment",
+            "problem": "the boundary comment still said \"only one physical host exists here\"",
+            "resolution": "FIXED in b82affd: the comment now describes the integrated receipt and the read-not-drive finding"
+          }
+        ],
+        "not_covered": "commits after the review, d05f3a0 (second upstream failure shape classified, stalled-engine discrimination) and b82affd (record alignment). d05f3a0 was self-checked: the transient matcher was verified against both observed upstream shapes (matched) and eight candidate-defect shapes (all unmatched), and the engine-alive branch was verified so a dead engine fails fast. The discrimination is also behaviourally covered by the 07:56 run, which refused twice and then passed."
       }
     ]
   },
