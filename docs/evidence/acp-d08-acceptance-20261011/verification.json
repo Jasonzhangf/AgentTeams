@@ -338,7 +338,7 @@
       "session/load after an owner restart": "UNSUPPORTED_METHOD",
       "stale callback reply after an agent restart": "CALLBACK_UNAVAILABLE (transport acp.error)"
     },
-    "d08_rerun_status": "blocked by an upstream teams-workbuddy 503 (no_healthy_account); the recorded 44-check run is retained as historical evidence and not superseded"
+    "d08_rerun_status": "blocked by an upstream teams-workbuddy 503 (no_healthy_account). Three attempts on two candidate commits (21:06 and 21:12 PST on the merge, 05:05 PST on ea046e0) failed at the identical A02 check. The driver was not weakened and retrying was stopped. The recorded 44-check run is retained as historical evidence and not superseded"
   },
   "engine_versions": {
     "node": "v22.22.2",
@@ -407,6 +407,14 @@
       "result": "FAIL at the identical check with an identical error",
       "failure": "same teams-workbuddy 503 no_healthy_account",
       "evidence": "the failure repeats at the same line, so it is an upstream provider outage rather than a flake in this candidate"
+    },
+    {
+      "attempt": "2026-10-12 05:05 PST",
+      "candidate": "ea046e0 (the candidate after the evidence corrections)",
+      "result": "FAIL at the identical check with an identical error",
+      "failure": "same teams-workbuddy 503 no_healthy_account",
+      "evidence": "third identical failure, on a different candidate commit than attempts 1 and 2, more than eight hours after the first. The outage is sustained, so retrying was stopped rather than continued"
     }
-  ]
+  ],
+  "retry_policy": "stop retrying until there is an independent signal that the teams-workbuddy pool has recovered; three identical failures at one check mean the blocker is the provider pool"
 }

@@ -315,7 +315,11 @@ FAIL A02 — the real DSH prompt failed: teams-workbuddy API error (503)
 ```
 
 Attempt 1 at 21:06 PST and attempt 2 at 21:12 PST failed at the same check with the same
-upstream error. Agent A (`opencode`) completed a real prompt end to end in both attempts
+upstream error. Attempt 3 was made at 2026-10-12 05:05 PST on candidate `ea046e0`
+(the branch after the evidence corrections) and failed at the identical check with the
+identical `no_healthy_account` error. The upstream outage has therefore persisted for
+more than eight hours across three attempts on two different candidates, so it is a
+sustained provider-side outage rather than a transient. Agent A (`opencode`) completed a real prompt end to end in both attempts
 (`stopReason=end_turn`, `providerCalls=3`); agent B (`dsh`) failed only on the provider
 gateway returning 503. This is an upstream provider outage, not a defect in this candidate
 and not a flake in this project.
@@ -324,14 +328,20 @@ Consequences, recorded rather than papered over:
 
 - No new D08 check count is recorded. The 44-check / 4-gap / 1-finding result below is retained
   as the historical run it is, and its A07 premise is corrected above and in
-  `verification.json` rather than left stale.
+  `verification.json` rather than left stale. The driver was not weakened, skipped, or
+  re-scoped to work around the outage; the two attempts before it and this one all
+  reached A02 from a clean install of the candidate's own tarball, so the install and
+  A01 checks did pass on this candidate.
 - The failed runs retained their owned temp roots for inspection; they were verified
   process-free and then removed by name, so no `d08-acc-*` root remains.
 - The D06 and D07 mapped gates were re-run green on this candidate (118 and 66 tests), so
   the source-level evidence for the folded increment is fresh.
 
-Re-run the driver when the `teams-workbuddy` gateway reports a healthy account again; the
-command is unchanged and the driver stages and installs the tarball by itself.
+**Retry policy: stop retrying.** Three identical failures at one check mean the blocker is the
+provider pool, not this candidate, so further retries only re-pay the build and install cost.
+Re-run once there is an independent signal that the `teams-workbuddy` pool has recovered.
+The command is unchanged and the driver stages and installs the tarball by itself. Until
+then the D08 gate stays `partial` and the overall goal stays `INCOMPLETE`.
 
 ### `pnpm verify` did not pass on this host — reported as a blocked gate, not as a pass
 
