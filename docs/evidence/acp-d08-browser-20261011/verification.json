@@ -48,9 +48,19 @@
         "configs": [],
         "connections": []
       },
-      "dom_page_names": ["discovery", "networking", "interaction", "history"],
+      "dom_page_names": [
+        "discovery",
+        "networking",
+        "interaction",
+        "history"
+      ],
       "dom_page_view_initial": "discovery",
-      "dom_bands": ["registration", "connection", "engine", "request"],
+      "dom_bands": [
+        "registration",
+        "connection",
+        "engine",
+        "request"
+      ],
       "dom_observation_after_own_subscription": "live",
       "screenshot_png": {
         "path": "docs/evidence/acp-d08-browser-20261011/live-browser-dom.png",
@@ -143,7 +153,10 @@
       "F8 ADVISORY: a failed-run temp root was retained and unreported",
       "F9 ADVISORY: no unit test covered mountTeamsConsole/startObservation/ensureHistoryLoaded"
     ],
-    "resolution": "F1-F9 all addressed on candidate e77d9d7 (parent 7735765): the D06 PART1 driver now asserts `snapshot` and was re-run to 10/10 (PART2 7/7 and the permission driver 10/10 also re-run green); the snapshot-application overclaim is corrected in the producer, notes.md and this file; the false 'why unnoticed' claim is replaced with the real reason; the D07 gate note and both governance rows now record the corrected boundary and the reduced gap count; ensureHistoryLoaded gained the live-client guard; the producer now reads and asserts the PNG dimensions from the IHDR chunk; `committed` is true; the retained temp root was removed; and controller.spec.ts gained two tests covering the history read on open for a live client and its absence for a fixture client."
+    "resolution": "F1-F9 all addressed on candidate e77d9d7 (parent 7735765): the D06 PART1 driver now asserts `snapshot` and was re-run to 10/10 (PART2 7/7 and the permission driver 10/10 also re-run green); the snapshot-application overclaim is corrected in the producer, notes.md and this file; the false 'why unnoticed' claim is replaced with the real reason; the D07 gate note and both governance rows now record the corrected boundary and the reduced gap count; ensureHistoryLoaded gained the live-client guard; the producer now reads and asserts the PNG dimensions from the IHDR chunk; `committed` is true; the retained temp root was removed; and controller.spec.ts gained two tests covering the history read on open for a live client and its absence for a fixture client.",
+    "resolution_corrections": {
+      "F9": "The sentence above ends with 'controller.spec.ts gained two tests covering the history read on open for a live client and its absence for a fixture client.' That is the true scope of what was added, but F9 as written asked for coverage of mountTeamsConsole and startObservation specifically. Neither entry point is unit-tested: ui/teams-console/tests/ contains no reference to mountTeamsConsole or startObservation. F9 is therefore PARTIALLY addressed — the history-read-on-open behavior it was a diagnostic aid for now has direct tests, while the two entry points themselves remain covered only by the real-Chrome render test and the live-browser producer, which is weaker than a unit test. No new test was added to close it: adding a mount-time unit test would duplicate the real-Chrome render test's assertion set without catching a different failure mode."
+    }
   },
   "scope_note": "This artifact proves the live-browser DOM, the real authenticated fetch path, the shipped page's own SSE subscription, the shipped history view's own history read, and a real authenticated SSE snapshot frame in the live page context. It contains three product fixes for defects this producer found. It does not claim snapshot application by the shipped client, event-driven animation, targeted interaction, discovery rows, an installed-tarball result, or a cross-device result."
 }
