@@ -90,6 +90,11 @@ class FakeTransport implements TeamsSessionTransport {
   }
 
   read(): Promise<unknown> {
+    const seeded = this.readOnce
+    if (seeded !== undefined) {
+      this.readOnce = undefined
+      return seeded()
+    }
     const next = this.queue.shift()
     if (next !== undefined) return Promise.resolve(next)
     return new Promise(resolve => { this.waiters.push(resolve) })
@@ -97,6 +102,11 @@ class FakeTransport implements TeamsSessionTransport {
 
   send(frame: TeamsConnectionFrame): Promise<void> {
     this.sent.push(frame)
+    if (this.failSendWith !== undefined) {
+      const error = this.failSendWith
+      this.failSendWith = undefined
+      return Promise.reject(error)
+    }
     return Promise.resolve()
   }
 
@@ -109,6 +119,19 @@ class FakeTransport implements TeamsSessionTransport {
     const waiter = this.waiters.shift()
     if (waiter !== undefined) waiter(frame)
     else this.queue.push(frame)
+  }
+
+  /** Make the next `read` reject, the way a real WSS socket does when it dies. */
+  private readOnce: (() => Promise<unknown>) | undefined
+  /** Make the next `send` reject. */
+  failSendWith?: unknown
+
+  failRead(error: unknown): void {
+    this.readOnce = () => Promise.reject(error)
+  }
+
+  failSend(error: unknown): void {
+    this.failSendWith = error
   }
 }
 
@@ -670,6 +693,26 @@ describe('initiator channel open (D00 amendment A3)', () => {
     const channelId = (transport.sent[0] as { readonly ref: AcpChannelRef }).ref.channelId
     await expect(opening).rejects.toThrow(/did not acknowledge acp\.open/)
     expect(host.closes).toEqual([hostRefOf(channelId)])
+    expect(session.channels).toEqual([])
+  })
+
+  it('releases the local host channel when the read rejects before the ack', async () => {
+    const { session, transport, host } = initiatorFixture()
+    transport.failRead(new Error('the socket died before acp.open_ack'))
+    const opening = session.open({ timeoutMs: 50 })
+    await expect(opening).rejects.toThrow(/socket died/)
+    await until(() => host.closes.length === 1, 'host release')
+    const channelId = (transport.sent[0] as { readonly ref: AcpChannelRef }).ref.channelId
+    expect(host.closes).toEqual([hostRefOf(channelId)])
+    expect(session.channels).toEqual([])
+  })
+
+  it('releases the local host channel when the transport refuses to send acp.open', async () => {
+    const { session, transport, host } = initiatorFixture()
+    transport.failSend(new Error('the transport is closed'))
+    const opening = session.open({ timeoutMs: 50 })
+    await expect(opening).rejects.toThrow(/transport is closed/)
+    await until(() => host.closes.length === 1, 'host release')
     expect(session.channels).toEqual([])
   })
 

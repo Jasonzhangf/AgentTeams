@@ -307,61 +307,77 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
       throw new AcpError(fault.code, fault.message)
     }
     // Release the local host channel on every handshake failure, so a channel the
-    // peer never acknowledged cannot stay open on this side.
+    // peer never acknowledged cannot stay open on this side. `released` is set
+    // before the first await, so an outer catch can tell a typed refusal from a
+    // transport failure that arrived on the way out.
+    let released = false
     const refuse = async (fault: AcpFault): Promise<never> => {
+      released = true
       try { await input.host.close(localRef) } catch { /* the host channel is already gone */ }
       throw new AcpError(fault.code, fault.message)
     }
-    await send({ version: 1, kind: 'acp.open', ref: openRef })
     let timer: NodeJS.Timeout | undefined
-    const outcome = await Promise.race([
-      input.transport.read().then(frame => ({ kind: 'frame' as const, frame })),
-      input.transport.closed.then(() => ({ kind: 'closed' as const })),
-      new Promise<{ readonly kind: 'timeout' }>(resolve => {
-        timer = setTimeout(() => resolve({ kind: 'timeout' as const }), timeoutMs)
-        timer.unref?.()
-      }),
-    ])
-    if (timer !== undefined) clearTimeout(timer)
-    if (outcome.kind === 'timeout') {
-      // The project's own handshake convention: a deadline leaves the outcome unknown.
-      return await refuse({ code: 'RESULT_UNKNOWN', message: 'teams-session: the peer did not acknowledge acp.open' })
-    }
-    if (outcome.kind === 'closed') {
-      return await refuse({ code: 'CONFLICT', message: 'teams-session: the transport closed before acp.open was acknowledged' })
-    }
-    let parsed: ReturnType<typeof parseTeamsConnectionFrame>
     try {
-      parsed = parseTeamsConnectionFrame(outcome.frame)
-    } catch {
-      return await refuse({ code: 'INVALID_ACP_FRAME', message: 'teams-session: a malformed frame arrived before acp.open_ack' })
-    }
-    if (parsed.kind === 'acp.error') {
-      if (peerKeyOf(parsed.ref) !== peerKeyOf(openRef)) {
-        return await refuse({ code: 'INVALID_ACP_FRAME', message: 'teams-session: an acp.error for a different channel arrived before acp.open_ack' })
+      await send({ version: 1, kind: 'acp.open', ref: openRef })
+      const outcome = await Promise.race([
+        input.transport.read().then(frame => ({ kind: 'frame' as const, frame })),
+        input.transport.closed.then(() => ({ kind: 'closed' as const })),
+        new Promise<{ readonly kind: 'timeout' }>(resolve => {
+          timer = setTimeout(() => resolve({ kind: 'timeout' as const }), timeoutMs)
+          timer.unref?.()
+        }),
+      ])
+      if (outcome.kind === 'timeout') {
+        // The project's own handshake convention: a deadline leaves the outcome unknown.
+        return await refuse({ code: 'RESULT_UNKNOWN', message: 'teams-session: the peer did not acknowledge acp.open' })
       }
-      return await refuse(parsed.error)
+      if (outcome.kind === 'closed') {
+        return await refuse({ code: 'CONFLICT', message: 'teams-session: the transport closed before acp.open was acknowledged' })
+      }
+      let parsed: ReturnType<typeof parseTeamsConnectionFrame>
+      try {
+        parsed = parseTeamsConnectionFrame(outcome.frame)
+      } catch {
+        return await refuse({ code: 'INVALID_ACP_FRAME', message: 'teams-session: a malformed frame arrived before acp.open_ack' })
+      }
+      if (parsed.kind === 'acp.error') {
+        if (peerKeyOf(parsed.ref) !== peerKeyOf(openRef)) {
+          return await refuse({ code: 'INVALID_ACP_FRAME', message: 'teams-session: an acp.error for a different channel arrived before acp.open_ack' })
+        }
+        return await refuse(parsed.error)
+      }
+      if (parsed.kind !== 'acp.open_ack') {
+        return await refuse({ code: 'INVALID_ACP_FRAME', message: `teams-session: unexpected ${parsed.kind} before acp.open_ack` })
+      }
+      const ack = parsed.ref
+      if (ack.connectionId !== agreement.connectionId) {
+        return await refuse({ code: 'INVALID_ACP_FRAME', message: 'teams-session: the acknowledgement names a different connection' })
+      }
+      if (ack.targetGeneration !== targetGenerationValue) {
+        return await refuse({ code: 'STALE_GENERATION', message: 'teams-session: the acknowledgement names a stale target generation' })
+      }
+      if (ack.engineInstanceId !== targetEngineInstanceId) {
+        return await refuse({ code: 'STALE_GENERATION', message: 'teams-session: the acknowledgement names a different engine instance' })
+      }
+      const peerKey = peerKeyOf(ack)
+      if (channels.has(peerKey)) {
+        return await refuse({ code: 'CONFLICT', message: 'teams-session: the ACP channel is already open' })
+      }
+      const record: ChannelRecord = { peerKey, peerRef: ack, localRef, outboundRef: openRef, cursor: 0 }
+      channels.set(peerKey, record)
+      return viewOf(record)
+    } catch (cause) {
+      // Anything that did not go through `refuse` is a transport failure while
+      // sending `acp.open` or reading its answer: the socket died before the peer
+      // acknowledged. The original error keeps its own identity, but the local
+      // host channel is released first.
+      if (released) throw cause
+      released = true
+      try { await input.host.close(localRef) } catch { /* the host channel is already gone */ }
+      throw cause
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
     }
-    if (parsed.kind !== 'acp.open_ack') {
-      return await refuse({ code: 'INVALID_ACP_FRAME', message: `teams-session: unexpected ${parsed.kind} before acp.open_ack` })
-    }
-    const ack = parsed.ref
-    if (ack.connectionId !== agreement.connectionId) {
-      return await refuse({ code: 'INVALID_ACP_FRAME', message: 'teams-session: the acknowledgement names a different connection' })
-    }
-    if (ack.targetGeneration !== targetGenerationValue) {
-      return await refuse({ code: 'STALE_GENERATION', message: 'teams-session: the acknowledgement names a stale target generation' })
-    }
-    if (ack.engineInstanceId !== targetEngineInstanceId) {
-      return await refuse({ code: 'STALE_GENERATION', message: 'teams-session: the acknowledgement names a different engine instance' })
-    }
-    const peerKey = peerKeyOf(ack)
-    if (channels.has(peerKey)) {
-      return await refuse({ code: 'CONFLICT', message: 'teams-session: the ACP channel is already open' })
-    }
-    const record: ChannelRecord = { peerKey, peerRef: ack, localRef, outboundRef: openRef, cursor: 0 }
-    channels.set(peerKey, record)
-    return viewOf(record)
   }
 
   const flush = async (): Promise<void> => {

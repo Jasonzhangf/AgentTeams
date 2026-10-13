@@ -68,7 +68,7 @@ rejected every legitimate inbound frame from the responder.
 
 ## 2. Test surface (delivered)
 
-`network/teams-session.spec.ts` grew from 13 to 24 tests. Eleven are new:
+`network/teams-session.spec.ts` grew from 13 to 26 tests. Thirteen are new:
 
 | Test | Failure mode it catches |
 | --- | --- |
@@ -90,7 +90,20 @@ loop, and lets the real handshake run: the responder's own `openChannel` validat
 the wire ref, the real `AcpHost` opens on both sides, and the ack is adopted. It
 also asserts each host saw only its own `connectionId`.
 
-Red state was proven before implementation: 8 of the 9 first-round tests failed
+Independent review of commit `4945be8` found one FAIL-level defect: after
+`host.open` succeeded, a transport failure while sending `acp.open` (or while
+reading its single answer) escaped without releasing the local host channel,
+because `refuse()` only ran on the typed handshake branches. Two replacement
+tests reproduce it (`releases the local host channel when the read rejects before
+the ack`, `... when the transport refuses to send acp.open`) and both were red
+before the fix. The fix wraps the send-and-race in `try/catch/finally`, uses a
+`released` flag so a typed refusal is not double-released, preserves the original
+transport error identity, and clears the deadline timer on every path. Mutation
+verification: removing the outer release fails exactly those two tests.
+
+The gate count therefore moved from 77 to 90 (thirteen new session tests).
+
+Red state was proven before implementation: 8 of the first-round tests failed
 with `session.open` absent.
 
 ## 3. Mutation verification (delivered)
@@ -110,14 +123,14 @@ failed.
 
 | Gate | Command | Result |
 | --- | --- | --- |
-| `teams-acp-d05-network` | the map's declared 9-file command | **88/88**, exit 0 |
+| `teams-acp-d05-network` | the map's declared 9-file command | **90/90**, exit 0 |
 | `teams-acp-d06-control` | the map's declared 6-file command | **118/118**, exit 0 |
 | `pnpm typecheck` | `tsc -p tsconfig.json --noEmit` | exit 0 |
 | `pnpm build` | `tsc -p tsconfig.runtime.json` plus the web build | exit 0 |
 
-The D05 count moved from 77 to 88 (eleven new session tests). The D06 gate is
-unchanged at 118/118, which is the point: this increment touches no control-plane
-surface.
+The D05 count moved from 77 to 90 (thirteen new session tests, two of which are
+the independent-review release tests). The D06 gate is unchanged at 118/118,
+which is the point: this increment touches no control-plane surface.
 
 ## 5. Not delivered, and not inferred
 
