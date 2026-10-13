@@ -36,6 +36,7 @@ import { negotiatedAgreement } from './teams-negotiation.ts'
 
 const DEFAULT_POLL_INTERVAL_MS = 5
 const DEFAULT_DELIVERY_PAGE_LIMIT = 200
+const DEFAULT_OPEN_TIMEOUT_MS = 10_000
 
 export interface TeamsSessionTransport {
   /** The authenticated peer identity of this connection; never read from a payload. */
@@ -68,10 +69,23 @@ export interface CreateTeamsSessionInput {
   readonly deliveryPageLimit?: number
 }
 
+export interface TeamsSessionOpenInput {
+  /** How long the initiator waits for `acp.open_ack`; defaults to 10s. */
+  readonly timeoutMs?: number
+}
+
 export interface TeamsSession {
   readonly connectionId: string
   readonly peer: AuthenticatedAgent
   readonly channels: readonly TeamsSessionChannelView[]
+  /**
+   * Initiator only (D00 amendment A3). Open one outbound ACP channel: name the
+   * responder's own engine instance on `acp.open`, then adopt the `acp.open_ack`
+   * ref as this side's peer ref. Call it before `run()`, because the handshake
+   * drives its own reads. A responder session refuses it: the responder waits for
+   * `acp.open` and never initiates a channel.
+   */
+  open(input?: TeamsSessionOpenInput): Promise<TeamsSessionChannelView>
   /** Handle exactly one inbound Teams frame. */
   receive(frame: unknown): Promise<void>
   /** Relay one page of host deliveries for every open channel. */
@@ -83,8 +97,17 @@ export interface TeamsSession {
 
 interface ChannelRecord {
   readonly peerKey: string
+  /** The peer's wire ref: the lookup key for inbound frames and their freshness reference. */
   readonly peerRef: AcpChannelRef
+  /** The ref this side hands the host. It always carries this side's own generation and engine instance. */
   readonly localRef: AcpChannelRef
+  /**
+   * The ref this side puts on outbound frames. For the responder it is the local
+   * ref. For the initiator it is the ref it sent in `acp.open`, which names the
+   * target's generation and engine instance, because that is what the responder
+   * validates and keys by.
+   */
+  readonly outboundRef: AcpChannelRef
   cursor: number
 }
 
@@ -140,6 +163,9 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
   let channelCounter = 0
   let closed = false
   let pumping: Promise<void> | undefined
+  /** The initiator owns the outbound `acp.open`; the responder waits for one. */
+  const initiator = input.negotiation.side === 'initiator'
+  let running = false
 
   const send = async (frame: TeamsConnectionFrame): Promise<void> => {
     if (closed) throw new AcpError('CONFLICT', 'teams-session: the session is closed')
@@ -179,7 +205,7 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
       await sendError(ref, faultFrom(cause, 'CONFLICT'))
       return
     }
-    channels.set(peerKey, { peerKey, peerRef: ref, localRef, cursor: 0 })
+    channels.set(peerKey, { peerKey, peerRef: ref, localRef, outboundRef: localRef, cursor: 0 })
     await send({ version: 1, kind: 'acp.open_ack', ref: localRef })
   }
 
@@ -189,7 +215,11 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
       await sendError(entry.ref, { code: 'STALE_GENERATION', message: 'teams-session: the ACP channel is not open' })
       return
     }
-    if (entry.ref.targetGeneration !== targetGeneration || entry.ref.engineInstanceId !== input.engineInstanceId) {
+    // Freshness is judged against the ref this peer actually opened with, so the
+    // rule is the same on both sides: the responder checks its own generation and
+    // engine instance, the initiator checks the target's, and each stored them in
+    // `peerRef`.
+    if (entry.ref.targetGeneration !== record.peerRef.targetGeneration || entry.ref.engineInstanceId !== record.peerRef.engineInstanceId) {
       await sendError(entry.ref, { code: 'STALE_GENERATION', message: 'teams-session: the ACP channel generation is stale' })
       return
     }
@@ -201,7 +231,7 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
       const fault = faultFrom(cause, 'CONFLICT')
       const requestId = requestIdOf(entry.frame)
       if (requestId !== undefined && typeof entry.frame.method === 'string') {
-        await send({ version: 1, kind: 'acp.frame', ref: record.localRef, frame: rpcErrorFrame(requestId, fault) })
+        await send({ version: 1, kind: 'acp.frame', ref: record.outboundRef, frame: rpcErrorFrame(requestId, fault) })
       } else {
         await sendError(entry.ref, fault)
       }
@@ -213,6 +243,125 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
     if (record === undefined) return
     channels.delete(record.peerKey)
     try { await input.host.close(record.localRef) } catch { /* the host channel is already gone */ }
+  }
+
+  const viewOf = (record: ChannelRecord): TeamsSessionChannelView => ({
+    peerConnectionId: record.peerRef.connectionId,
+    peerChannelId: record.peerRef.channelId,
+    localRef: record.localRef,
+    open: true,
+  })
+
+  /**
+   * D00 amendment A3: the initiator opens the channel and names the responder's
+   * own engine instance on `acp.open`. `targetGeneration`/`engineInstanceId`
+   * always describe the target (responder) side, on both the ref this side sends
+   * and the ref it receives. The responder's own local ref, returned in the ack,
+   * becomes this side's peer ref, so the shared flush/close paths need no change.
+   *
+   * The handshake drives its own reads, so it must run before `run()`.
+   */
+  const open = async (openInput: TeamsSessionOpenInput = {}): Promise<TeamsSessionChannelView> => {
+    if (!initiator) {
+      throw new AcpError('CONFLICT', 'teams-session: only the initiator opens a channel; the responder waits for acp.open')
+    }
+    if (running) {
+      throw new AcpError('CONFLICT', 'teams-session: open must run before the read loop owns the transport')
+    }
+    if (closed) throw new AcpError('CONFLICT', 'teams-session: the session is closed')
+    const targetEngineInstanceId = input.negotiation.targetEngineInstanceId
+    if (typeof targetEngineInstanceId !== 'string' || targetEngineInstanceId.length === 0) {
+      throw new AcpError('INVALID_ACP_FRAME', 'teams-session: the agreed context published no engine instance to name on acp.open')
+    }
+    const targetGenerationValue = input.negotiation.targetGeneration
+    if (!Number.isSafeInteger(targetGenerationValue) || (targetGenerationValue ?? 0) < 1) {
+      throw new AcpError('INVALID_ACP_FRAME', 'teams-session: the agreed context published no target generation to name on acp.open')
+    }
+    const timeoutMs = openInput.timeoutMs ?? DEFAULT_OPEN_TIMEOUT_MS
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
+      throw new AcpError('INVALID_ACP_FRAME', 'teams-session: timeoutMs must be a positive safe integer')
+    }
+    channelCounter += 1
+    const channelId = `teams-${input.connectionId}-${channelCounter}`
+    // The host accepts only this side's own generation and engine instance
+    // (`agent-host/acp-host.ts` refuses anything else with STALE_GENERATION), so
+    // the host-facing ref carries local values.
+    const localRef: AcpChannelRef = {
+      connectionId: input.connectionId,
+      channelId,
+      targetGeneration,
+      engineInstanceId: input.engineInstanceId,
+    }
+    // The wire ref names the target's generation and engine instance: that is the
+    // value the responder validates and the value A3 publishes on the context.
+    const openRef: AcpChannelRef = {
+      connectionId: input.connectionId,
+      channelId,
+      targetGeneration: targetGenerationValue as number,
+      engineInstanceId: targetEngineInstanceId,
+    }
+    try {
+      await input.host.open({ ref: localRef, principal: peer, policy: input.policy })
+    } catch (cause) {
+      const fault = faultFrom(cause, 'CONFLICT')
+      throw new AcpError(fault.code, fault.message)
+    }
+    // Release the local host channel on every handshake failure, so a channel the
+    // peer never acknowledged cannot stay open on this side.
+    const refuse = async (fault: AcpFault): Promise<never> => {
+      try { await input.host.close(localRef) } catch { /* the host channel is already gone */ }
+      throw new AcpError(fault.code, fault.message)
+    }
+    await send({ version: 1, kind: 'acp.open', ref: openRef })
+    let timer: NodeJS.Timeout | undefined
+    const outcome = await Promise.race([
+      input.transport.read().then(frame => ({ kind: 'frame' as const, frame })),
+      input.transport.closed.then(() => ({ kind: 'closed' as const })),
+      new Promise<{ readonly kind: 'timeout' }>(resolve => {
+        timer = setTimeout(() => resolve({ kind: 'timeout' as const }), timeoutMs)
+        timer.unref?.()
+      }),
+    ])
+    if (timer !== undefined) clearTimeout(timer)
+    if (outcome.kind === 'timeout') {
+      // The project's own handshake convention: a deadline leaves the outcome unknown.
+      return await refuse({ code: 'RESULT_UNKNOWN', message: 'teams-session: the peer did not acknowledge acp.open' })
+    }
+    if (outcome.kind === 'closed') {
+      return await refuse({ code: 'CONFLICT', message: 'teams-session: the transport closed before acp.open was acknowledged' })
+    }
+    let parsed: ReturnType<typeof parseTeamsConnectionFrame>
+    try {
+      parsed = parseTeamsConnectionFrame(outcome.frame)
+    } catch {
+      return await refuse({ code: 'INVALID_ACP_FRAME', message: 'teams-session: a malformed frame arrived before acp.open_ack' })
+    }
+    if (parsed.kind === 'acp.error') {
+      if (peerKeyOf(parsed.ref) !== peerKeyOf(openRef)) {
+        return await refuse({ code: 'INVALID_ACP_FRAME', message: 'teams-session: an acp.error for a different channel arrived before acp.open_ack' })
+      }
+      return await refuse(parsed.error)
+    }
+    if (parsed.kind !== 'acp.open_ack') {
+      return await refuse({ code: 'INVALID_ACP_FRAME', message: `teams-session: unexpected ${parsed.kind} before acp.open_ack` })
+    }
+    const ack = parsed.ref
+    if (ack.connectionId !== agreement.connectionId) {
+      return await refuse({ code: 'INVALID_ACP_FRAME', message: 'teams-session: the acknowledgement names a different connection' })
+    }
+    if (ack.targetGeneration !== targetGenerationValue) {
+      return await refuse({ code: 'STALE_GENERATION', message: 'teams-session: the acknowledgement names a stale target generation' })
+    }
+    if (ack.engineInstanceId !== targetEngineInstanceId) {
+      return await refuse({ code: 'STALE_GENERATION', message: 'teams-session: the acknowledgement names a different engine instance' })
+    }
+    const peerKey = peerKeyOf(ack)
+    if (channels.has(peerKey)) {
+      return await refuse({ code: 'CONFLICT', message: 'teams-session: the ACP channel is already open' })
+    }
+    const record: ChannelRecord = { peerKey, peerRef: ack, localRef, outboundRef: openRef, cursor: 0 }
+    channels.set(peerKey, record)
+    return viewOf(record)
   }
 
   const flush = async (): Promise<void> => {
@@ -228,7 +377,7 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
       }
       record.cursor = page.nextSequence
       for (const delivery of page.frames) {
-        await send({ version: 1, kind: 'acp.frame', ref: record.localRef, frame: delivery.frame })
+        await send({ version: 1, kind: 'acp.frame', ref: record.outboundRef, frame: delivery.frame })
       }
     }
   }
@@ -243,6 +392,9 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
     const parsed = parseTeamsConnectionFrame(frame)
     switch (parsed.kind) {
       case 'acp.open':
+        // Only the responder waits for `acp.open`; an initiator that receives one
+        // is facing a peer that broke R1, and never becomes the responder.
+        if (initiator) throw new AcpError('INVALID_ACP_FRAME', 'teams-session: the initiator never receives acp.open')
         await openChannel(parsed)
         return
       case 'acp.frame':
@@ -265,13 +417,14 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
     closed = true
     for (const record of [...channels.values()]) {
       channels.delete(record.peerKey)
-      try { await input.transport.send({ version: 1, kind: 'acp.close', ref: record.localRef }) } catch { /* transport gone */ }
+      try { await input.transport.send({ version: 1, kind: 'acp.close', ref: record.outboundRef }) } catch { /* transport gone */ }
       try { await input.host.close(record.localRef) } catch { /* host channel already gone */ }
     }
     try { await input.transport.close() } catch { /* the transport is already gone */ }
   }
 
   const run = async (): Promise<void> => {
+    running = true
     const pump = setInterval(() => { void serializedFlush() }, pollIntervalMs)
     ;(pump as NodeJS.Timeout).unref?.()
     try {
@@ -285,6 +438,7 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
         await serializedFlush()
       }
     } finally {
+      running = false
       clearInterval(pump)
       // Release every host channel and the transport on every exit path,
       // including a malformed or unexpected inbound frame that throws out of
@@ -297,13 +451,9 @@ export function createTeamsSession(input: CreateTeamsSessionInput): TeamsSession
     connectionId: input.connectionId,
     peer,
     get channels(): readonly TeamsSessionChannelView[] {
-      return [...channels.values()].map(record => ({
-        peerConnectionId: record.peerRef.connectionId,
-        peerChannelId: record.peerRef.channelId,
-        localRef: record.localRef,
-        open: true,
-      }))
+      return [...channels.values()].map(viewOf)
     },
+    open,
     receive,
     flush: serializedFlush,
     run,

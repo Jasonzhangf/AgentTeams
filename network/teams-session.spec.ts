@@ -112,7 +112,15 @@ class FakeTransport implements TeamsSessionTransport {
   }
 }
 
-function agreedResponder(overrides: Partial<TeamsResponderOptions> = {}): TeamsNegotiationState {
+/**
+ * Drive the real negotiation on both sides to `agreed` and return both terminal
+ * states. The responder side is what `agreedResponder` returns; the initiator side
+ * is what the A3 channel-open tests need, because only the initiator opens.
+ */
+function negotiatePair(overrides: Partial<TeamsResponderOptions> = {}): {
+  readonly initiator: TeamsNegotiationState
+  readonly responder: TeamsNegotiationState
+} {
   const initiator: TeamsInitiatorOptions = {
     side: 'initiator',
     connectionId: 'conn-a',
@@ -157,17 +165,40 @@ function agreedResponder(overrides: Partial<TeamsResponderOptions> = {}): TeamsN
   responderState = ready.state
   initiatorState = receiveTeamsNegotiationFrame(initiatorState, ready.outbound!).state
   if (initiatorState.state !== 'agreed' || responderState.state !== 'agreed') throw new Error('negotiation did not agree')
-  return responderState
+  return { initiator: initiatorState, responder: responderState }
 }
 
-function makePolicy() {
+function agreedResponder(overrides: Partial<TeamsResponderOptions> = {}): TeamsNegotiationState {
+  return negotiatePair(overrides).responder
+}
+
+function agreedInitiator(overrides: Partial<TeamsResponderOptions> = {}): TeamsNegotiationState {
+  return negotiatePair(overrides).initiator
+}
+
+function makePolicy(engineInstanceId = ENGINE) {
   const supported = extractAcpCapabilities(initializeResult, ['session/new', 'callback:session/request_permission'])
   return resolveAcpPolicy({
     intent: { enabled: true, required: [], blacklist: [], clientCapabilities: [], callbackExecutor: 'controller' },
-    engineInstanceId: ENGINE,
+    engineInstanceId,
     supported,
     enforceablePolicies: supported,
   })
+}
+
+/**
+ * Cross-wire two session transports so a frame one side sends reaches the other,
+ * the way a real transport would.
+ */
+function bridge(left: FakeTransport, right: FakeTransport): () => void {
+  let leftCursor = 0
+  let rightCursor = 0
+  const timer = setInterval(() => {
+    while (leftCursor < left.sent.length) right.push(left.sent[leftCursor++])
+    while (rightCursor < right.sent.length) left.push(right.sent[rightCursor++])
+  }, 1)
+  timer.unref?.()
+  return () => clearInterval(timer)
 }
 
 interface RecordingHost extends AcpHost {
@@ -177,12 +208,12 @@ interface RecordingHost extends AcpHost {
   readonly closes: AcpChannelRef[]
 }
 
-function makeHost(policy: ReturnType<typeof makePolicy>): { readonly host: RecordingHost; readonly duplex: ScriptedDuplex } {
+function makeHost(policy: ReturnType<typeof makePolicy>, generation = GENERATION): { readonly host: RecordingHost; readonly duplex: ScriptedDuplex } {
   const duplex = new ScriptedDuplex()
   const engine: EngineHandle = {
-    engineInstanceId: ENGINE,
+    engineInstanceId: policy.engineInstanceId,
     pid: 4242,
-    targetGeneration: GENERATION,
+    targetGeneration: generation,
     acp: duplex,
     exited: new Promise(() => undefined),
   }
@@ -506,5 +537,187 @@ describe('Teams authenticated ACP session', () => {
     expect(Object.keys(delivered.ref).sort()).toEqual(['channelId', 'connectionId', 'engineInstanceId', 'targetGeneration'])
     expect(Object.keys(delivered.frame).sort()).toEqual(['id', 'jsonrpc', 'result'])
     expect(host.ingresses.every(ingress => Object.keys(ingress).sort().join(',') === 'channelId,connectionId,engineInstanceId,frame,targetGeneration')).toBe(true)
+  })
+})
+
+/** The engine instance the responder publishes, kept distinct from this side's own. */
+const TARGET_ENGINE = 'engine-b'
+
+function initiatorFixture(overrides: Partial<TeamsResponderOptions> = {}): Fixture {
+  const negotiation = agreedInitiator({ engineInstanceId: TARGET_ENGINE, ...overrides })
+  const transport = new FakeTransport(B)
+  const policy = makePolicy()
+  // The initiator's own engine runs at its own generation (11), not the target's.
+  const { host, duplex } = makeHost(policy, 11)
+  const session = createTeamsSession({
+    negotiation,
+    connectionId: 'conn-a',
+    transport,
+    host,
+    policy,
+    engineInstanceId: ENGINE,
+  })
+  return { session, transport, host, duplex, negotiation }
+}
+
+function ackRefOf(engineInstanceId = TARGET_ENGINE): AcpChannelRef {
+  return { connectionId: 'conn-b', channelId: 'teams-conn-b-1', targetGeneration: GENERATION, engineInstanceId }
+}
+
+/** The ref the initiator hands its own host: this side's own generation and engine instance. */
+function hostRefOf(channelId: string): AcpChannelRef {
+  return { connectionId: 'conn-a', channelId, targetGeneration: 11, engineInstanceId: ENGINE }
+}
+
+describe('initiator channel open (D00 amendment A3)', () => {
+  it('names the responder engine instance on acp.open and keeps the host ref on this side', async () => {
+    const { session, transport, host } = initiatorFixture()
+    const opening = session.open()
+    await until(() => transport.sent.length === 1, 'acp.open')
+    const open = transport.sent[0] as { readonly kind: string; readonly ref: AcpChannelRef }
+    expect(open.kind).toBe('acp.open')
+    expect(Object.keys(open.ref).sort()).toEqual(['channelId', 'connectionId', 'engineInstanceId', 'targetGeneration'])
+    // `connectionId`/`channelId` stay this side's own correlation keys (R2); only
+    // the freshness pair names the RESPONDER, never this side's `ENGINE`.
+    expect(open.ref.connectionId).toBe('conn-a')
+    expect(open.ref.targetGeneration).toBe(GENERATION)
+    expect(open.ref.engineInstanceId).toBe(TARGET_ENGINE)
+    expect(open.ref.channelId.startsWith('teams-conn-a-')).toBe(true)
+
+    transport.push({ version: 1, kind: 'acp.open_ack', ref: ackRefOf() })
+    const channel = await opening
+    // The host ref is this side's own; the host refuses a foreign engine instance.
+    expect(channel.localRef).toEqual(hostRefOf(open.ref.channelId))
+    expect(channel.peerConnectionId).toBe('conn-b')
+    expect(channel.peerChannelId).toBe('teams-conn-b-1')
+    expect(channel.open).toBe(true)
+    expect(host.opens).toEqual([{ ref: channel.localRef, principal: B }])
+  })
+
+  it('maps an inbound acp.frame addressed to the ack ref onto the local ref before the host sees it', async () => {
+    const { session, transport, host } = initiatorFixture()
+    const opening = session.open()
+    await until(() => transport.sent.length === 1, 'acp.open')
+    transport.push({ version: 1, kind: 'acp.open_ack', ref: ackRefOf() })
+    const channel = await opening
+
+    await session.receive({ version: 1, kind: 'acp.frame', ref: ackRefOf(), frame: { ...initializeRequest } })
+    expect(host.ingresses).toHaveLength(1)
+    const ingress = host.ingresses[0]
+    expect({ connectionId: ingress.connectionId, channelId: ingress.channelId, targetGeneration: ingress.targetGeneration, engineInstanceId: ingress.engineInstanceId })
+      .toEqual(channel.localRef)
+  })
+
+  it('refuses an ack that names a different engine instance and releases the local host channel', async () => {
+    const { session, transport, host } = initiatorFixture()
+    const opening = session.open()
+    await until(() => transport.sent.length === 1, 'acp.open')
+    const channelId = (transport.sent[0] as { readonly ref: AcpChannelRef }).ref.channelId
+    transport.push({ version: 1, kind: 'acp.open_ack', ref: ackRefOf('engine-other') })
+    await expect(opening).rejects.toThrow(/engine instance/)
+    expect(host.closes).toEqual([hostRefOf(channelId)])
+    expect(session.channels).toEqual([])
+  })
+
+  it('refuses to open when the agreed context published no engine instance', async () => {
+    const { targetEngineInstanceId: _omitted, ...withoutEngine } = agreedInitiator({ engineInstanceId: TARGET_ENGINE })
+    const transport = new FakeTransport(B)
+    const policy = makePolicy()
+    const { host } = makeHost(policy)
+    const session = createTeamsSession({ negotiation: withoutEngine, connectionId: 'conn-a', transport, host, policy, engineInstanceId: ENGINE })
+    await expect(session.open()).rejects.toThrow(/engine instance/)
+    expect(transport.sent).toEqual([])
+    expect(host.opens).toEqual([])
+  })
+
+  it('fails the pending open on a matching acp.error and releases the local host channel', async () => {
+    const { session, transport, host } = initiatorFixture()
+    const opening = session.open()
+    await until(() => transport.sent.length === 1, 'acp.open')
+    const wireRef = (transport.sent[0] as { readonly ref: AcpChannelRef }).ref
+    transport.push({ version: 1, kind: 'acp.error', ref: wireRef, error: { code: 'CONFLICT', message: 'peer refused the channel' } })
+    await expect(opening).rejects.toThrow('peer refused the channel')
+    expect(host.closes).toEqual([hostRefOf(wireRef.channelId)])
+  })
+
+  it('refuses an unexpected frame before the ack instead of skipping it', async () => {
+    const { session, transport } = initiatorFixture()
+    const opening = session.open()
+    await until(() => transport.sent.length === 1, 'acp.open')
+    transport.push({ version: 1, kind: 'acp.frame', ref: ackRefOf(), frame: { ...initializeRequest } })
+    await expect(opening).rejects.toThrow(/unexpected acp\.frame/)
+  })
+
+  it('refuses to open on the responder side, which never initiates a channel', async () => {
+    const { session } = fixture()
+    await expect(session.open()).rejects.toThrow(/initiator/)
+  })
+
+  it('refuses an inbound acp.open on an initiator session', async () => {
+    const { session } = initiatorFixture()
+    await expect(session.receive({ version: 1, kind: 'acp.open', ref: ackRefOf() })).rejects.toThrow(/initiator/)
+  })
+
+  it('still refuses an unsolicited acp.open_ack on the responder read path', async () => {
+    const { session } = fixture()
+    await expect(session.receive({ version: 1, kind: 'acp.open_ack', ref: ackRefOf(ENGINE) })).rejects.toThrow(/unexpected acp\.open_ack/)
+  })
+
+  it('reports an unknown outcome when the peer never acknowledges and releases the local host channel', async () => {
+    const { session, transport, host } = initiatorFixture()
+    const opening = session.open({ timeoutMs: 40 })
+    await until(() => transport.sent.length === 1, 'acp.open')
+    const channelId = (transport.sent[0] as { readonly ref: AcpChannelRef }).ref.channelId
+    await expect(opening).rejects.toThrow(/did not acknowledge acp\.open/)
+    expect(host.closes).toEqual([hostRefOf(channelId)])
+    expect(session.channels).toEqual([])
+  })
+
+  it('completes a real two-sided open against a responder session', async () => {
+    const responderPolicy = makePolicy(TARGET_ENGINE)
+    const responderTransport = new FakeTransport(A)
+    const { host: responderHost } = makeHost(responderPolicy, GENERATION)
+    const responderSession = createTeamsSession({
+      negotiation: agreedResponder({ engineInstanceId: TARGET_ENGINE }),
+      connectionId: 'conn-b',
+      transport: responderTransport,
+      host: responderHost,
+      policy: responderPolicy,
+      engineInstanceId: TARGET_ENGINE,
+    })
+
+    const initiatorPolicy = makePolicy(ENGINE)
+    const initiatorTransport = new FakeTransport(B)
+    const { host: initiatorHost } = makeHost(initiatorPolicy, 11)
+    const initiatorSession = createTeamsSession({
+      negotiation: agreedInitiator({ engineInstanceId: TARGET_ENGINE }),
+      connectionId: 'conn-a',
+      transport: initiatorTransport,
+      host: initiatorHost,
+      policy: initiatorPolicy,
+      engineInstanceId: ENGINE,
+    })
+
+    const stop = bridge(initiatorTransport, responderTransport)
+    const running = responderSession.run()
+    try {
+      const channel = await initiatorSession.open({ timeoutMs: 3_000 })
+      // The real responder accepted the ref and acknowledged with its own local ref.
+      expect(channel.peerConnectionId).toBe('conn-b')
+      expect(channel.peerChannelId).toBe('teams-conn-b-1')
+      expect(responderHost.opens).toHaveLength(1)
+      expect(responderHost.opens[0].principal).toEqual(A)
+      expect(initiatorHost.opens).toHaveLength(1)
+      expect(initiatorHost.opens[0].principal).toEqual(B)
+      // Each side's host saw only its own ref, never the peer's.
+      expect(responderHost.opens[0].ref.connectionId).toBe('conn-b')
+      expect(initiatorHost.opens[0].ref.connectionId).toBe('conn-a')
+      expect(initiatorHost.opens[0].ref.engineInstanceId).toBe(ENGINE)
+    } finally {
+      stop()
+      await initiatorSession.close()
+      await responderSession.close()
+      await running
+    }
   })
 })

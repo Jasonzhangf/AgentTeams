@@ -318,8 +318,12 @@ predates A3 and receives the context is also refused, because its closed key set
 rejects the unknown `engineInstanceId` key. No default is supplied in either
 direction. No v1 LAN peer was deployed, so no version bump is required.
 
-A3.7 A3 does not deliver the initiator. `network/teams-ingress.ts` remains the
-responder composer and still never sends `acp.open`. A3 removes the contract blocker
-that made an initiator impossible; composing one remains a separate milestone.
+A3.7 A3 alone did not deliver the initiator. The initiator channel-open primitive is
+now delivered inside `createTeamsSession.open()`: it is the only place that sends
+`acp.open`, it names the recorded `targetEngineInstanceId`, it adopts the ack ref as
+its peer ref, and it keeps its own generation and engine instance on the host-facing
+ref because `AcpHost.open` refuses a foreign pair. `network/teams-ingress.ts` still
+remains the responder composer and never sends `acp.open`, so no production daemon
+composes an initiator yet; that egress composer stays a separate milestone.
 
 `teams-acp-d05-network` binds this amendment. It stays `partial`.
