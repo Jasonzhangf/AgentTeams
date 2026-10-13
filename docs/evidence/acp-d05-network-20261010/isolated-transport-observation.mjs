@@ -271,6 +271,9 @@ async function main() {
           selfPolicyRevision: 7,
           allowedRoles: ['master', 'peer'],
           admittedCapabilities: ACP_CAPABILITIES,
+          // D00 amendment A3: publish the same engine instance this side validates
+          // in createTeamsSession below, so the initiator can name it on acp.open.
+          engineInstanceId: ENGINE_INSTANCE,
         },
         port: transport,
         timeoutMs: 5_000,

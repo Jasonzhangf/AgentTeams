@@ -294,9 +294,10 @@ freshness fact two sources.
 
 A3.2 The context frame already carries the responder's own `targetGeneration`,
 `capabilitiesRevision` and `policyRevision`. `engineInstanceId` is the same kind of
-fact and is validated at the same place: `createTeamsSession` checks
-`targetGeneration` and `engineInstanceId` in one guard and rebuilds both from local
-values before any host call.
+fact and is validated at the same boundary: `createTeamsSession` refuses a
+mismatched `targetGeneration` and a mismatched `engineInstanceId` in two adjacent
+checks at `openChannel`, and re-applies both together on every `acp.frame` in
+`receiveFrame`. It rebuilds both from local values before any host call.
 
 A3.3 The responder must supply a real value. `startTeamsNegotiation` refuses a
 responder start whose `engineInstanceId` is absent or empty with
@@ -311,9 +312,11 @@ engine instance is still refused with `STALE_GENERATION` before any host call, a
 the check is still re-applied on every `acp.frame`. A3 adds the publishing surface;
 it does not weaken the guard.
 
-A3.6 A3 is additive on the wire. It adds one required key to one v1 frame, so a peer
-that omits it is refused `INVALID_ACP_FRAME` rather than silently accepted or given a
-default. No v1 LAN peer was deployed, so no version bump is required.
+A3.6 A3 is additive on the wire and breaks compatibility in both directions. A peer
+that omits the key is refused `INVALID_ACP_FRAME` by the new check. A peer that
+predates A3 and receives the context is also refused, because its closed key set
+rejects the unknown `engineInstanceId` key. No default is supplied in either
+direction. No v1 LAN peer was deployed, so no version bump is required.
 
 A3.7 A3 does not deliver the initiator. `network/teams-ingress.ts` remains the
 responder composer and still never sends `acp.open`. A3 removes the contract blocker

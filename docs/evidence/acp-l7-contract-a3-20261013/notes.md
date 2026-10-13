@@ -55,7 +55,8 @@ host call, and the check is still re-applied on every `acp.frame`.
 
 ## 3. What changed
 
-Eleven files, 168 insertions and 10 deletions.
+Eleven files, 169 insertions and 10 deletions. The evidence file that records this
+milestone is added on top and is not counted here.
 
 | File | Change |
 | --- | --- |
@@ -129,21 +130,108 @@ this milestone changes. I checked it against the baseline instead.
 
 So the change did not cause that failure.
 
+### 4.3 `pnpm verify` does not pass, before or after this change
+
+`pnpm verify` runs `pnpm test`, and `scripts/regression.mjs` runs the whole suite in
+one vitest process with its default file parallelism. On this machine that run fails
+with deadline and timeout errors in resource-heavy specs. I checked the pristine
+baseline at `85df0a8` with the same invocation:
+
+```
+TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --config vitest.config.ts --reporter=json
+baseline 85df0a8: success=false, passed=1092, failed=2, pending=0
+  - sends one real OpenCode Session request through the selected managed provider
+      TimeoutError: The operation was aborted due to timeout
+  - installed OpenCode ACP engine through the D02 adapter cancels a real in-flight
+    prompt through the notification
+      TypeError: Cannot read properties of undefined (reading 'stopReason')
+```
+
+The baseline is untouched, so this gate is already blocked before A3. The failure
+class is the same one A3 shows in the worktree:
+
+```
+worktree: success=false, passed=1075, failed=4 (plain vitest run, 23 skipped)
+  - runtime/agent-process.spec.ts     Error: Console deadline elapsed; do not replay
+  - runtime/managed-opencode-session.spec.ts
+                                      TimeoutError: The operation was aborted due to timeout
+  - runtime/managed-opencode.spec.ts  Error: Managed OpenCode startup deadline
+  - ui/teams-console/tests/focus-dom.spec.ts
+                                      Error: spawnSync ... Google Chrome ETIMEDOUT
+```
+
+All four are deadline or spawn timeouts, and `managed-opencode-session` fails
+identically on the baseline. All four specs pass when run alone, in both trees:
+
+```
+TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism <the four specs>
+worktree:  4 files, 46 tests passed
+baseline:  4 files, 46 tests passed
+```
+
+A3 touches only the Teams connection context frame, and no responder option builder
+outside production remained except the one driver that section 6 covers. I therefore
+report `pnpm verify` as **BLOCKED and pre-existing**, and I do not claim it passes.
+This is the project's already-recorded condition; A3 neither fixes nor worsens it.
+
+One earlier run of the artifact receipt gate failed five cases. That run overlapped a
+concurrent `pnpm verify` in the same worktree, and both write packaging state. Re-run
+alone, the gate passes 24/24 (section 4.1). That was my own concurrency error.
+
 ## 5. Mutation verification
 
-Each new assertion was checked against a deliberate defect, and each defect was
-caught by exactly the intended test and no other.
+Each new assertion was checked against a deliberate defect. The counts below are the
+per-file counts of the run that isolated the defect; other files also catch the same
+defect, because the production path is shared.
 
 | Mutation | Caught by |
 | --- | --- |
-| The context emits a wrong engine instance (`'placeholder-mutation'`) | `publishes the responder engine instance so the initiator can name it on acp.open (D00 amendment A3)` — 1 failure, 21 other tests still pass |
-| The parser drops `assertText(value.engineInstanceId, ...)` | `requires a non-empty engine instance on the context frame (D00 amendment A3)` — 1 failure, 8 other tests still pass |
+| The context emits a wrong engine instance (`'placeholder-mutation'`) | `network/teams-negotiation.spec.ts` — `publishes the responder engine instance so the initiator can name it on acp.open (D00 amendment A3)` fails; 21 other tests in that file still pass. `network/teams-ingress.spec.ts` also fails, because it asserts the same production value end to end. |
+| The parser drops `assertText(value.engineInstanceId, ...)` | `control-protocol/teams-connection.spec.ts` — `requires a non-empty engine instance on the context frame (D00 amendment A3)` fails; 8 other tests in that file still pass. `network/teams-negotiation.spec.ts` also fails, on its absent-value case. |
 
 Both mutations were reverted, and `grep` confirms no residue. The red run before the
 implementation failed with `Teams connection context has unsupported field
 engineInstanceId`, which is the intended failure mode.
 
-## 6. Honest limits
+## 6. Independent review and the finding it caught
+
+One independent review ran against `0d41d51` and returned **FAIL** on a single
+concrete regression. It found no product, guard or contract defect, and it confirmed
+the design decision and the mutation results.
+
+**The finding.** `docs/evidence/acp-d05-network-20261010/isolated-transport-observation.mjs`
+builds responder options for `runTeamsNegotiation` directly. It did not pass
+`engineInstanceId`, so the new real-value check made the driver throw
+`INVALID_ACP_FRAME: teams-negotiation: engineInstanceId must be a non-empty string`.
+The driver is a committed, still-cited D05 evidence producer, and the milestone's own
+map edits still cite it.
+
+**Why my own checks missed it.** The driver is a `.mjs` file, so `pnpm typecheck`
+cannot see it, and my caller sweep only covered `.ts` files. That was a real gap in my
+verification, and the review was right to fail the milestone for it.
+
+**The fix.** The driver now passes `engineInstanceId: ENGINE_INSTANCE`, the same value
+it already passes to `createTeamsSession`. The invariant A3 relies on therefore holds
+in the driver too. The driver was re-run and passes:
+
+```
+node --experimental-transform-types docs/evidence/acp-d05-network-20261010/isolated-transport-observation.mjs
+OBSERVATION PASSED: 23 checks.
+EXIT=0
+```
+
+The 23 checks match the count the verification map and `docs/development-governance.md`
+already recorded, so no map count changes for that driver.
+
+Seven advisory findings were also raised. All were documentation-accuracy issues and
+are fixed in this milestone: the A3 note now sits on the two functions that actually
+changed (`teams_negotiation_execution` and `teams_connection_negotiation`) as well as
+on the session entry; `docs/development-governance.md` now records the D05 gate as
+77/77 instead of the stale 73/73; the mutation table in section 5 no longer claims the
+defects were caught by one file only; the counts in section 3 are corrected; and
+design section 13 A3.2 and A3.6 no longer overstate the guard shape or the wire break.
+
+## 7. Honest limits
 
 - **The initiator is still not delivered.** `network/teams-ingress.ts` remains the
   responder composer and still never sends `acp.open`. A3 removes the blocker that
@@ -152,17 +240,19 @@ engineInstanceId`, which is the intended failure mode.
   evidence.** This milestone reaches source, test and build only. Nothing here
   proves an installed copy or a live LAN channel.
 - **`teams-acp-d05-network` stays `partial`.** A3 does not upgrade it.
+- **`pnpm verify` stays BLOCKED.** It fails on the pristine baseline too, with the same
+  class of timeout errors (section 4.3). A3 does not close it.
 - **No remote receipt and no merge.** The change is not integrated.
 - The frozen contract was amended, so any peer built before A3 that omits the key is
   refused `INVALID_ACP_FRAME`. No v1 LAN peer was deployed, so no version bump is
   required.
 
-## 7. Retained obligations
+## 8. Retained obligations
 
-1. One independent review of this milestone before integration.
-2. Compose the initiator, and bind `connection.connect` at
+1. Compose the initiator, and bind `connection.connect` at
    `runtime/control-process.ts:818`, where `createControlOwner` is currently called
    without an `owner`.
 
 The re-run of `cli/package-install.spec.ts` on the committed candidate is recorded in
-section 4.1 and is no longer outstanding.
+section 4.1. The independent review of section 6 is complete, and its finding is fixed
+and re-verified.
