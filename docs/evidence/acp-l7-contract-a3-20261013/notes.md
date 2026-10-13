@@ -169,10 +169,21 @@ worktree:  4 files, 46 tests passed
 baseline:  4 files, 46 tests passed
 ```
 
-A3 touches only the Teams connection context frame, and no responder option builder
-outside production remained except the one driver that section 6 covers. I therefore
-report `pnpm verify` as **BLOCKED and pre-existing**, and I do not claim it passes.
-This is the project's already-recorded condition; A3 neither fixes nor worsens it.
+A3 touches the Teams connection context frame, the responder options that publish it,
+and the initiator state that records it. No other frozen wire surface changes. No
+responder option builder outside production was left without the field after the fix
+in section 6.
+
+I therefore report `pnpm verify` as **BLOCKED and pre-existing**, and I do not claim
+it passes. This is the project's already-recorded condition; A3 neither fixes nor
+worsens it.
+
+The plain full run on the fixed candidate `6b713cb` gave 1097 passed and 1 failed:
+`runtime/console-process.spec.ts` failed with
+`ENOTEMPTY: directory not empty, rmdir '/tmp/teams-console-lifecycle-UKFCx0'`. That
+spec passes 8/8 when run alone, so the failure is a temp-directory cleanup race under
+full-suite load, not a product defect. The artifact receipt gate passes 24/24 on the
+same candidate (section 4.1).
 
 One earlier run of the artifact receipt gate failed five cases. That run overlapped a
 concurrent `pnpm verify` in the same worktree, and both write packaging state. Re-run
@@ -223,13 +234,20 @@ EXIT=0
 The 23 checks match the count the verification map and `docs/development-governance.md`
 already recorded, so no map count changes for that driver.
 
-Seven advisory findings were also raised. All were documentation-accuracy issues and
-are fixed in this milestone: the A3 note now sits on the two functions that actually
+The review also raised seven advisory findings, A1 to A7. All seven were
+documentation-accuracy issues, and all are fixed in this milestone: the A3 note now sits on the two functions that actually
 changed (`teams_negotiation_execution` and `teams_connection_negotiation`) as well as
 on the session entry; `docs/development-governance.md` now records the D05 gate as
 77/77 instead of the stale 73/73; the mutation table in section 5 no longer claims the
 defects were caught by one file only; the counts in section 3 are corrected; and
 design section 13 A3.2 and A3.6 no longer overstate the guard shape or the wire break.
+
+A second, independent narrow re-verification then checked only the fixed area and
+returned **F1 PASS** with no new FAIL-level finding. It re-ran the driver itself
+(`OBSERVATION PASSED: 23 checks.`, exit 0), swept the whole repo for any remaining
+responder option builder in `.ts`, `.mjs`, `.js` and `.cjs` files, and confirmed each
+changed documentation statement against the code. It also re-ran the D05 gate (77/77,
+exit 0) to support the corrected count.
 
 ## 7. Honest limits
 
