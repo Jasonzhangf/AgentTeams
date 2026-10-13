@@ -209,6 +209,10 @@ export async function openTeamsIngress(input: OpenTeamsIngressInput): Promise<Te
       selfPolicyRevision: input.selfPolicyRevision,
       allowedRoles: input.allowedRoles,
       admittedCapabilities: input.admittedCapabilities,
+      // D00 amendment A3: publish this side's live engine instance so the remote
+      // initiator can name it on acp.open. It is the same value this side later
+      // validates in createTeamsSession, so the two can never disagree.
+      engineInstanceId: input.engineInstanceId,
     },
     port: transport,
     timeoutMs: input.timeoutMs ?? DEFAULT_TIMEOUT_MS,

@@ -3,6 +3,7 @@ import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
 import type { AcpFault } from '../control-protocol/acp.ts'
 import { AcpError } from '../control-protocol/acp.ts'
 import type { TeamsAgreement, TeamsConnectionFrame } from '../control-protocol/teams-connection.ts'
+import { parseTeamsConnectionFrame } from '../control-protocol/teams-connection.ts'
 import {
   negotiatedAgreement,
   negotiationFault,
@@ -49,6 +50,7 @@ function responder(overrides: Partial<TeamsResponderOptions> = {}): TeamsRespond
     selfPolicyRevision: 7,
     allowedRoles: ['master', 'peer'],
     admittedCapabilities: ['method:session/prompt', 'method:session/new'],
+    engineInstanceId: 'engine-b',
     ...overrides,
   }
 }
@@ -156,10 +158,49 @@ describe('Teams negotiation state machine', () => {
 
   it('refuses a context frame without an authenticated integer policy revision', () => {
     const state = startTeamsNegotiation(initiator()).state
-    const context = { version: 1, kind: 'teams.connection.context', connectionId: 'conn-b', targetGeneration: 22, capabilitiesRevision: 'cap-b' }
+    // engineInstanceId is present so this case isolates the policy revision only.
+    const context = { version: 1, kind: 'teams.connection.context', connectionId: 'conn-b', targetGeneration: 22, capabilitiesRevision: 'cap-b', engineInstanceId: 'engine-b' }
     expect(thrownCode(() => receiveTeamsNegotiationFrame(state, context))).toBe('INVALID_ACP_FRAME')
     expect(thrownCode(() => receiveTeamsNegotiationFrame(state, { ...context, policyRevision: 0 }))).toBe('INVALID_ACP_FRAME')
     expect(thrownCode(() => receiveTeamsNegotiationFrame(state, { ...context, policyRevision: '7' }))).toBe('INVALID_ACP_FRAME')
+  })
+
+  it('publishes the responder engine instance so the initiator can name it on acp.open (D00 amendment A3)', () => {
+    const start = startTeamsNegotiation(responder())
+    const context = start.outbound as { kind: string; engineInstanceId?: string }
+    expect(context.kind).toBe('teams.connection.context')
+    expect(context.engineInstanceId).toBe('engine-b')
+
+    const { initiator: i } = handshake()
+    expect(i.targetEngineInstanceId).toBe('engine-b')
+
+    // The recorded value is exactly what the frozen acp.open channel ref requires.
+    // Without this field the initiator cannot build a ref the parser accepts, and
+    // createTeamsSession refuses a different value with STALE_GENERATION.
+    const ref = {
+      connectionId: 'conn-b',
+      channelId: 'channel-1',
+      targetGeneration: 22,
+      engineInstanceId: i.targetEngineInstanceId,
+    }
+    const open = { version: 1, kind: 'acp.open', ref }
+    expect(parseTeamsConnectionFrame(open)).toBe(open)
+    // The same frame without the engine instance is refused, so the value is
+    // load-bearing rather than decorative.
+    expect(thrownCode(() => parseTeamsConnectionFrame({ ...open, ref: { ...ref, engineInstanceId: undefined } })))
+      .toBe('INVALID_ACP_FRAME')
+  })
+
+  it('refuses a context frame without a non-empty engine instance', () => {
+    const state = startTeamsNegotiation(initiator()).state
+    const context = { version: 1, kind: 'teams.connection.context', connectionId: 'conn-b', targetGeneration: 22, capabilitiesRevision: 'cap-b', policyRevision: 7 }
+    expect(thrownCode(() => receiveTeamsNegotiationFrame(state, context))).toBe('INVALID_ACP_FRAME')
+    expect(thrownCode(() => receiveTeamsNegotiationFrame(state, { ...context, engineInstanceId: '' }))).toBe('INVALID_ACP_FRAME')
+    expect(thrownCode(() => receiveTeamsNegotiationFrame(state, { ...context, engineInstanceId: 7 }))).toBe('INVALID_ACP_FRAME')
+  })
+
+  it('refuses a responder start without an engine instance instead of publishing a placeholder', () => {
+    expect(thrownCode(() => startTeamsNegotiation(responder({ engineInstanceId: '' })))).toBe('INVALID_ACP_FRAME')
   })
 
   it('refuses an unknown protocol version instead of downgrading', () => {
@@ -228,6 +269,7 @@ describe('Teams negotiation state machine', () => {
 
   it('refuses a stale context generation and capability revision at the initiator boundary', () => {
     const state = startTeamsNegotiation(initiator()).state
+    // engineInstanceId is present in both cases so each isolates its own failure.
     expect(() => receiveTeamsNegotiationFrame(state, {
       version: 1,
       kind: 'teams.connection.context',
@@ -235,6 +277,7 @@ describe('Teams negotiation state machine', () => {
       targetGeneration: 21,
       capabilitiesRevision: 'cap-b',
       policyRevision: 7,
+      engineInstanceId: 'engine-b',
     })).toThrow(/stale target generation/)
     expect(() => receiveTeamsNegotiationFrame(state, {
       version: 1,
@@ -243,6 +286,7 @@ describe('Teams negotiation state machine', () => {
       targetGeneration: 22,
       capabilitiesRevision: 'cap-other',
       policyRevision: 7,
+      engineInstanceId: 'engine-b',
     })).toThrow(/target capability revision/)
   })
 

@@ -47,7 +47,7 @@ const frames: readonly TeamsConnectionFrame[] = [
   { version: 1, kind: 'acp.frame', ref, frame: { jsonrpc: '2.0', id: 1, method: 'session/prompt', params: { prompt: [] }, extension: { keep: true } } },
   { version: 1, kind: 'acp.close', ref },
   { version: 1, kind: 'acp.error', ref, error: { code: 'CONFLICT', message: 'session owned' } },
-  { version: 1, kind: 'teams.connection.context', connectionId: 'connection-1', targetGeneration: 4, capabilitiesRevision: 'caps-b', policyRevision: 5 },
+  { version: 1, kind: 'teams.connection.context', connectionId: 'connection-1', targetGeneration: 4, capabilitiesRevision: 'caps-b', policyRevision: 5, engineInstanceId: 'engine-1' },
 ]
 
 function failure(run: () => unknown): unknown {
@@ -73,7 +73,7 @@ describe('Teams connection frames', () => {
   })
 
   it('carries the responder transport-owner context before proposal', () => {
-    const context = { version: 1 as const, kind: 'teams.connection.context' as const, connectionId: 'connection-1', targetGeneration: 4, capabilitiesRevision: 'caps-b', policyRevision: 5 }
+    const context = { version: 1 as const, kind: 'teams.connection.context' as const, connectionId: 'connection-1', targetGeneration: 4, capabilitiesRevision: 'caps-b', policyRevision: 5, engineInstanceId: 'engine-1' }
     expect(parseTeamsConnectionFrame(context)).toBe(context)
     expect(failure(() => parseTeamsConnectionFrame({ ...context, targetGeneration: 0 }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
     expect(failure(() => parseTeamsConnectionFrame({ ...context, extra: true }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
@@ -88,6 +88,17 @@ describe('Teams connection frames', () => {
       expect(failure(() => parseTeamsConnectionFrame({ ...context, policyRevision: invalid }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
     }
     expect(failure(() => parseTeamsConnectionFrame({ ...context, policyRevision: undefined }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
+  })
+
+  it('requires a non-empty engine instance on the context frame (D00 amendment A3)', () => {
+    const context = frames[10] as { engineInstanceId: string }
+    expect(parseTeamsConnectionFrame(context)).toBe(context)
+    // The engine instance is the only freshness fact that changes when the engine
+    // process restarts (targetGeneration is a constant in the serve path), so an
+    // absent or empty value must fail rather than default to a placeholder.
+    for (const invalid of [undefined, null, '', 0, 1, {}, [], true]) {
+      expect(failure(() => parseTeamsConnectionFrame({ ...context, engineInstanceId: invalid }))).toMatchObject({ code: 'INVALID_ACP_FRAME' })
+    }
   })
 
   it('requires an authenticated integer source policy revision on the propose frame (D00 amendment A1)', () => {

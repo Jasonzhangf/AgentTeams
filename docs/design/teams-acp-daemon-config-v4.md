@@ -267,3 +267,56 @@ verbatim from `docs/evidence/acp-d06-control-20261011/notes.md` section 4.
 
 `teams-acp-d06-control` 绑定本节的 spec 与真实黑盒证据，状态为 `partial`：没有
 installed-copy 回放、restart、deployed-entrypoint、跨设备回执或浏览器证据。
+
+## 13. D00 amendment A3 — engine instance on the connection context (2026-10-13)
+
+The initiator side of ACP was not constructible. `AcpChannelRef.engineInstanceId` is a
+required non-empty string, and `createTeamsSession` refuses an `acp.open` whose
+`engineInstanceId` differs from the receiving daemon's own value with
+`STALE_GENERATION`. No discovery surface carried that value, so a remote initiator
+could not build a legal `acp.open` at all.
+
+A3 resolves this by publishing the value on the surface that already carries its
+sibling freshness facts. The version stays `1`; the amendment changes one Teams
+negotiation frame, not the frame version.
+
+| Field | Frame | Source of truth | Parser rule |
+| --- | --- | --- | --- |
+| `engineInstanceId` | `teams.connection.context` | The responder's own live engine instance, exposed through `TeamsConnectionContext.engineInstanceId`. | Required non-empty string. Missing, empty or non-string values fail `INVALID_ACP_FRAME`. No default is supplied. |
+
+A3.1 The field belongs to the context frame, not to `AgentDeclaration`. The engine
+instance is generated per engine process as `<engine kind>-<daemon id>-<uuid>`
+(`runtime/acp-serve.ts`), so it is a connection-time fact. The declaration carries
+identity and configuration facts (`identity`, `scopeId`, `revision`, `capabilities`,
+`routes`) and is replicated through the registry. Publishing a per-process random
+value there would churn the directory on every engine restart and would give one
+freshness fact two sources.
+
+A3.2 The context frame already carries the responder's own `targetGeneration`,
+`capabilitiesRevision` and `policyRevision`. `engineInstanceId` is the same kind of
+fact and is validated at the same place: `createTeamsSession` checks
+`targetGeneration` and `engineInstanceId` in one guard and rebuilds both from local
+values before any host call.
+
+A3.3 The responder must supply a real value. `startTeamsNegotiation` refuses a
+responder start whose `engineInstanceId` is absent or empty with
+`INVALID_ACP_FRAME`, so a daemon cannot publish a placeholder.
+
+A3.4 The initiator records the value as `TeamsNegotiationState.targetEngineInstanceId`
+when it accepts the context, exactly as it already records `targetGeneration`. The
+initiator names that recorded value on `acp.open`.
+
+A3.5 The receiving side keeps its existing refusal. A peer that names a different
+engine instance is still refused with `STALE_GENERATION` before any host call, and
+the check is still re-applied on every `acp.frame`. A3 adds the publishing surface;
+it does not weaken the guard.
+
+A3.6 A3 is additive on the wire. It adds one required key to one v1 frame, so a peer
+that omits it is refused `INVALID_ACP_FRAME` rather than silently accepted or given a
+default. No v1 LAN peer was deployed, so no version bump is required.
+
+A3.7 A3 does not deliver the initiator. `network/teams-ingress.ts` remains the
+responder composer and still never sends `acp.open`. A3 removes the contract blocker
+that made an initiator impossible; composing one remains a separate milestone.
+
+`teams-acp-d05-network` binds this amendment. It stays `partial`.

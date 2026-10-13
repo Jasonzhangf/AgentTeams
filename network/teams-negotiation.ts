@@ -84,6 +84,11 @@ export interface TeamsResponderOptions {
   readonly allowedRoles: readonly RelationRole[]
   /** Capabilities this daemon admits for one connection. */
   readonly admittedCapabilities: readonly string[]
+  /**
+   * D00 amendment A3: this responder's own live engine instance. It is published
+   * on `teams.connection.context` so the initiator can name it on `acp.open`.
+   */
+  readonly engineInstanceId: string
 }
 
 export type TeamsNegotiationOptions = TeamsInitiatorOptions | TeamsResponderOptions
@@ -106,6 +111,12 @@ export interface TeamsNegotiationState {
    * `context.policyRevision`. The accept agreement must echo it.
    */
   readonly targetPolicyRevision?: number
+  /**
+   * D00 amendment A3: the responder's live engine instance, learned from
+   * `context.engineInstanceId`. The initiator names it on `acp.open`, and the
+   * responder refuses a different value with `STALE_GENERATION`.
+   */
+  readonly targetEngineInstanceId?: string
   readonly agreement?: TeamsAgreement
   readonly fault?: AcpFault
 }
@@ -220,6 +231,9 @@ export function startTeamsNegotiation(options: TeamsNegotiationOptions): TeamsNe
   assertCommonOptions(options)
   if (options.side === 'responder') {
     capabilityList(options.admittedCapabilities, 'admittedCapabilities')
+    // D00 amendment A3: the published engine instance must be real, because the
+    // initiator names it verbatim on acp.open.
+    text(options.engineInstanceId, 'engineInstanceId')
     const state: TeamsNegotiationState = {
       side: 'responder',
       state: 'awaiting-propose',
@@ -237,6 +251,8 @@ export function startTeamsNegotiation(options: TeamsNegotiationOptions): TeamsNe
       capabilitiesRevision: options.selfCapabilitiesRevision,
       // D00 amendment A1: this responder's own authenticated revision.
       policyRevision: options.selfPolicyRevision,
+      // D00 amendment A3: this responder's own live engine instance.
+      engineInstanceId: options.engineInstanceId,
     }
     return step(state, context)
   }
@@ -361,6 +377,8 @@ function acceptContext(state: TeamsNegotiationState, context: TeamsConnectionCon
     targetGeneration: context.targetGeneration,
     targetCapabilitiesRevision: context.capabilitiesRevision,
     targetPolicyRevision: context.policyRevision,
+    // D00 amendment A3: the engine instance the initiator must name on acp.open.
+    targetEngineInstanceId: context.engineInstanceId,
   }, propose)
 }
 

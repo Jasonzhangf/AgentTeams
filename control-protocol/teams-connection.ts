@@ -74,6 +74,17 @@ export interface TeamsConnectionContext {
    * revision, authenticated by this frame. Never defaulted and never coerced.
    */
   readonly policyRevision: number
+  /**
+   * D00 amendment A3: the responder's own live engine instance, so the initiator
+   * can name it on `acp.open`. `AcpChannelRef.engineInstanceId` is required and
+   * non-empty, and `createTeamsSession` refuses an `acp.open` that names a
+   * different engine instance with `STALE_GENERATION`. This is the only frame
+   * that carries the value before `acp.open`: the engine instance is generated
+   * per engine process (`<kind>-<daemonId>-<uuid>`), so it is a connection-time
+   * fact, and neither the replicated `AgentDeclaration` nor any directory or
+   * route surface publishes it. Never defaulted and never coerced.
+   */
+  readonly engineInstanceId: string
 }
 
 export interface TeamsConnectionAccept {
@@ -268,11 +279,15 @@ function parseTeamsConnectionFrameValue(value: unknown): TeamsConnectionFrame {
         'targetGeneration',
         'capabilitiesRevision',
         'policyRevision',
+        'engineInstanceId',
       ], 'Teams connection context')
       assertText(value.connectionId, 'context.connectionId')
       assertPositiveInteger(value.targetGeneration, 'context.targetGeneration')
       assertText(value.capabilitiesRevision, 'context.capabilitiesRevision')
       assertPositiveInteger(value.policyRevision, 'context.policyRevision')
+      // D00 amendment A3: absence must fail here, because assertEnvelopeKeys only
+      // rejects unknown keys. No default placeholder is supplied.
+      assertText(value.engineInstanceId, 'context.engineInstanceId')
       break
     }
     case 'teams.connection.propose': {

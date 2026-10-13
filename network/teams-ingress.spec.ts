@@ -219,6 +219,15 @@ describe('Teams production ingress', () => {
     expect(handle.negotiation.state).toBe('agreed')
     expect(input.ledger.list()[0]).toMatchObject({ state: 'ready', role: 'peer', connectionId: 'conn-b' })
 
+    // D00 amendment A3: the production composer publishes the same engine instance
+    // that createTeamsSession later validates, so a remote initiator can name it on
+    // acp.open. Without this the initiator has no legal value for the required ref.
+    const contextFrame = listener.sent
+      .map(frame => JSON.parse(frame.bytes.toString('utf8')) as { kind: string; engineInstanceId?: string })
+      .find(frame => frame.kind === 'teams.connection.context')
+    expect(contextFrame?.engineInstanceId).toBe(ENGINE)
+    expect(agreed.targetEngineInstanceId).toBe(ENGINE)
+
     // The ingress never opens a channel; the remote initiator does.
     expect(initiator.sent.every(frame => JSON.parse(frame.bytes.toString('utf8')).kind !== 'acp.open')).toBe(true)
 

@@ -139,6 +139,9 @@ function agreedResponder(overrides: Partial<TeamsResponderOptions> = {}): TeamsN
     selfPolicyRevision: 7,
     allowedRoles: ['master', 'peer'],
     admittedCapabilities: ['method:session/new'],
+    // D00 amendment A3: the responder publishes the engine instance the peer must
+    // name on acp.open, so the fixture must carry the same value the session checks.
+    engineInstanceId: ENGINE,
     ...overrides,
   }
   const start = startTeamsNegotiation(responder)
@@ -265,7 +268,7 @@ describe('Teams authenticated ACP session', () => {
     const negotiation = startTeamsNegotiation({
       side: 'responder', connectionId: 'conn-b', self: B, peer: A,
       selfGeneration: GENERATION, selfCapabilitiesRevision: 'cap-b', selfPolicyRevision: 7,
-      allowedRoles: ['peer'], admittedCapabilities: [],
+      allowedRoles: ['peer'], admittedCapabilities: [], engineInstanceId: ENGINE,
     }).state
     const { host } = makeHost(makePolicy())
     expect(() => createTeamsSession({
@@ -478,8 +481,9 @@ describe('Teams authenticated ACP session', () => {
     await session.receive(openFrame('peer-ch-1'))
     expect(host.opens).toHaveLength(1)
     // A well-formed Teams frame that is not one of the five ACP channel kinds:
-    // `receive` throws out of the run loop instead of returning a value.
-    transport.push({ version: 1, kind: 'teams.connection.context', connectionId: 'conn-a', targetGeneration: GENERATION, capabilitiesRevision: 'cap-b', policyRevision: 7 })
+    // `receive` throws out of the run loop instead of returning a value. The
+    // context carries every required field so this case isolates the frame kind.
+    transport.push({ version: 1, kind: 'teams.connection.context', connectionId: 'conn-a', targetGeneration: GENERATION, capabilitiesRevision: 'cap-b', policyRevision: 7, engineInstanceId: ENGINE })
     await expect(session.run()).rejects.toThrow(/unexpected teams\.connection\.context/)
     // The error propagates, but the release must still happen on that exit path.
     expect(session.channels).toHaveLength(0)
