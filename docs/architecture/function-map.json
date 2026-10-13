@@ -1995,6 +1995,26 @@
       "note": "D05 closure owns the one inbound Teams connection lifecycle on top of an already authenticated direct-WSS connection: it runs the responder negotiation over the frozen frames, allocates this side's own transport-scoped connectionId/channelId before any host call (so the peer wire ref never reaches the AcpHost), creates the Teams session against the injected host, and records the typed connection.negotiated / channel.opened / channel.closed / connection.failed facts into the injected connection history and ledger. It adds no second envelope, no second transport and no connection state of its own; a failed negotiation records one typed connection.failed fact and throws the negotiation fault."
     },
     {
+      "function_id": "teams_connection_egress",
+      "owner": "network",
+      "status": "partial",
+      "paths": [
+        "network/teams-egress.ts",
+        "network/teams-egress.spec.ts"
+      ],
+      "required_gates": [
+        "teams-acp-d05-network"
+      ],
+      "entry_symbols": [
+        "openTeamsEgress",
+        "TeamsEgressSocket",
+        "TeamsEgressEndpoint",
+        "OpenTeamsEgressInput",
+        "TeamsEgressHandle"
+      ],
+      "note": "L9 owns the outbound initiator counterpart of teams_connection_ingress on top of an already authenticated direct-WSS connection: it runs the initiator negotiation over the frozen frames, records connection.negotiated / connection.failed into the injected connection history and ledger, wraps the injected host in a channel-lifecycle observer that writes channel.opened / channel.closed with local refs only, and calls createTeamsSession plus session.open() so the one ACP channel handshake, the inbound mapping, the delivery pump and the release rules stay in their single owner. It declares no second envelope and never sends acp.open_ack: the responder answers opens, this module starts one. It reuses createTeamsFrameTransport (teams-connection-ingress owner) and TeamsConnectionLedger instead of redeclaring them. A handshake the peer never acknowledged fails here with the typed fault and the transport is closed on the way out, so the ledger records failed and no host channel stays open."
+    },
+    {
       "function_id": "teams_status_port",
       "owner": "network",
       "status": "partial",

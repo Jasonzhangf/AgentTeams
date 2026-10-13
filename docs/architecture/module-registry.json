@@ -5,11 +5,90 @@
   "external_boundaries": [],
   "scope": "Current product architecture. Legacy source remains captured by the AppSDK source module until separately removed.",
   "modules": [
-    {"module_id":"endpoint","owner":"endpoint","status":"partial","owned_paths":["endpoint/**"],"forbidden_paths":["network/**","server/**","ui/**","config/**"],"note":"Owns logical Endpoint identity, descriptor, capability/resource attachment and endpoint lifecycle; E1 registry is implemented. Does not own routes, transport or Work ledger"},
-    {"module_id":"cli-adapter","owner":"cli-adapter","status":"partial","owned_paths":["cli-adapter/**"],"forbidden_paths":["agent/**","runtime/**","network/**","config/**"],"note":"Fixed CLI execution and local browser handles; no provider resource ledger or daemon ownership"},
-    {"module_id":"cli-facade","owner":"runtime","status":"implemented","owned_paths":["cli/**"],"forbidden_paths":["agent/**","network/**","config/**","cli-adapter/**"],"note":"User-facing agentteams init/start/status/work/stop facade; init delegates v3 bootstrap to initializeLocalConfig and lifecycle delegates to the compiled runtime local launcher. It owns no TLS, child projection, capability implementation or network truth. Candidate evidence: c3c2e0e; U2 continuation: docs/evidence/776fcad-u2-config-impl-20261003/. The ACP `--serve <opencode|dsh> --ip --port` entry is delivered here: cli/agentteams.mjs parses the flags and dispatches to runtime/acp-serve.ts, which starts one daemon plus one engine child with the OpenCode or DSH adapter selected by runtime/acp-serve.ts engineAdapterFor. No compile-only placeholder exists. D04 adds the `agentteams registry start|status|stop --config <file> [--generation <n>]` verbs; they delegate lifecycle truth to runtime/registry-process.ts and start no other daemon."},
-    {"module_id":"local-control-socket","owner":"runtime","status":"partial","owned_paths":["runtime/local-work-control.ts","runtime/local-work-control.spec.ts"],"forbidden_paths":["agent/**","network/**","server/**","config/**"],"note":"Owns the source-level local Work Unix socket seam only: typed decode/encode, listener admission, peer drain and own-socket cleanup, plus the single failed or unconfirmed Work receipt projection from a typed frame. It is not the CLI facade, receiver dispatch, config internal owner, or installed runtime."},
-    {"module_id":"development-governance","owner":"development-governance","status":"partial","owned_paths":["scripts/**","package.json","pnpm-lock.yaml","pnpm-workspace.yaml","tsconfig.json","tsconfig.runtime.json","vitest.config.ts",".appsdk/project.json",".appsdk/goal.json"],"forbidden_paths":["agent/**","network/**","server/**","config/**"],"note":"Owns the single staged package producer, base asset/CLI smoke, installed lifecycle restart smoke, and lifecycle receipt binding. Final SDK runner/graph inclusion remains a D3/U4 input dependency."},
+    {
+      "module_id": "endpoint",
+      "owner": "endpoint",
+      "status": "partial",
+      "owned_paths": [
+        "endpoint/**"
+      ],
+      "forbidden_paths": [
+        "network/**",
+        "server/**",
+        "ui/**",
+        "config/**"
+      ],
+      "note": "Owns logical Endpoint identity, descriptor, capability/resource attachment and endpoint lifecycle; E1 registry is implemented. Does not own routes, transport or Work ledger"
+    },
+    {
+      "module_id": "cli-adapter",
+      "owner": "cli-adapter",
+      "status": "partial",
+      "owned_paths": [
+        "cli-adapter/**"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "runtime/**",
+        "network/**",
+        "config/**"
+      ],
+      "note": "Fixed CLI execution and local browser handles; no provider resource ledger or daemon ownership"
+    },
+    {
+      "module_id": "cli-facade",
+      "owner": "runtime",
+      "status": "implemented",
+      "owned_paths": [
+        "cli/**"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "network/**",
+        "config/**",
+        "cli-adapter/**"
+      ],
+      "note": "User-facing agentteams init/start/status/work/stop facade; init delegates v3 bootstrap to initializeLocalConfig and lifecycle delegates to the compiled runtime local launcher. It owns no TLS, child projection, capability implementation or network truth. Candidate evidence: c3c2e0e; U2 continuation: docs/evidence/776fcad-u2-config-impl-20261003/. The ACP `--serve <opencode|dsh> --ip --port` entry is delivered here: cli/agentteams.mjs parses the flags and dispatches to runtime/acp-serve.ts, which starts one daemon plus one engine child with the OpenCode or DSH adapter selected by runtime/acp-serve.ts engineAdapterFor. No compile-only placeholder exists. D04 adds the `agentteams registry start|status|stop --config <file> [--generation <n>]` verbs; they delegate lifecycle truth to runtime/registry-process.ts and start no other daemon."
+    },
+    {
+      "module_id": "local-control-socket",
+      "owner": "runtime",
+      "status": "partial",
+      "owned_paths": [
+        "runtime/local-work-control.ts",
+        "runtime/local-work-control.spec.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "network/**",
+        "server/**",
+        "config/**"
+      ],
+      "note": "Owns the source-level local Work Unix socket seam only: typed decode/encode, listener admission, peer drain and own-socket cleanup, plus the single failed or unconfirmed Work receipt projection from a typed frame. It is not the CLI facade, receiver dispatch, config internal owner, or installed runtime."
+    },
+    {
+      "module_id": "development-governance",
+      "owner": "development-governance",
+      "status": "partial",
+      "owned_paths": [
+        "scripts/**",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "tsconfig.json",
+        "tsconfig.runtime.json",
+        "vitest.config.ts",
+        ".appsdk/project.json",
+        ".appsdk/goal.json"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "network/**",
+        "server/**",
+        "config/**"
+      ],
+      "note": "Owns the single staged package producer, base asset/CLI smoke, installed lifecycle restart smoke, and lifecycle receipt binding. Final SDK runner/graph inclusion remains a D3/U4 input dependency."
+    },
     {
       "module_id": "bootstrap",
       "owner": "bootstrap",
@@ -35,7 +114,7 @@
         "config/**",
         "server/**"
       ],
-      "note": "Owns link configuration, transport, health and route execution. D04 adds `network/registration-client.ts` as the client transport/health owner for registry registration: it connects the config-selected discovery endpoint over wss, registers, renews the presence lease with a heartbeat, reconnects with bounded backoff on the same endpoint and keeps the original error instead of switching servers. It imports no `config/**`; the config-selected discovery plan and the AgentDeclaration stay in runtime. Gate: teams-acp-d04-registry. D05 adds the connection layer: `network/teams-negotiation.ts` (the frozen-frame negotiation state machine and the only source of an agreement), `network/teams-session.ts` (one authenticated connection bridged to the injected AcpHost, with locally allocated refs and generation/engine rewrite at the receive boundary), `network/teams-connection-history.ts` (typed kind=connection history over the injected store) and `network/teams-membership.ts` (the per-remote-agent connection/role view assembled from the directory, route and registration surfaces). D05 also adds the additive `RegistrationClient.publish` surface that carries the daemon's real listener route plus its ACP capability over the same D04 path. Gate: teams-acp-d05-network. The D05 closure adds two modules to this owner: `network/teams-ingress.ts` owns the one inbound Teams connection lifecycle on an already authenticated direct-WSS connection, runs the responder negotiation, allocates this side's own transport-scoped connectionId/channelId before any host call so the peer wire ref never reaches the AcpHost, creates the Teams session, and records the typed connection.negotiated / channel.opened / channel.closed / connection.failed facts; `network/teams-status.ts` owns the read-only `TeamsStatusPort` that projects the live connection ledger through projectTeamsMembership and reads the durable connection history, which is the D06 read handoff and stores no state of its own. Gate: teams-acp-d05-network, which now also runs network/teams-ingress.spec.ts, network/teams-status.spec.ts and control-protocol/teams-connection.spec.ts."
+      "note": "Owns link configuration, transport, health and route execution. D04 adds `network/registration-client.ts` as the client transport/health owner for registry registration: it connects the config-selected discovery endpoint over wss, registers, renews the presence lease with a heartbeat, reconnects with bounded backoff on the same endpoint and keeps the original error instead of switching servers. It imports no `config/**`; the config-selected discovery plan and the AgentDeclaration stay in runtime. Gate: teams-acp-d04-registry. D05 adds the connection layer: `network/teams-negotiation.ts` (the frozen-frame negotiation state machine and the only source of an agreement), `network/teams-session.ts` (one authenticated connection bridged to the injected AcpHost, with locally allocated refs and generation/engine rewrite at the receive boundary), `network/teams-connection-history.ts` (typed kind=connection history over the injected store) and `network/teams-membership.ts` (the per-remote-agent connection/role view assembled from the directory, route and registration surfaces). D05 also adds the additive `RegistrationClient.publish` surface that carries the daemon's real listener route plus its ACP capability over the same D04 path. Gate: teams-acp-d05-network. The D05 closure adds two modules to this owner: `network/teams-ingress.ts` owns the one inbound Teams connection lifecycle on an already authenticated direct-WSS connection, runs the responder negotiation, allocates this side's own transport-scoped connectionId/channelId before any host call so the peer wire ref never reaches the AcpHost, creates the Teams session, and records the typed connection.negotiated / channel.opened / channel.closed / connection.failed facts; `network/teams-status.ts` owns the read-only `TeamsStatusPort` that projects the live connection ledger through projectTeamsMembership and reads the durable connection history, which is the D06 read handoff and stores no state of its own. Gate: teams-acp-d05-network, which now also runs network/teams-ingress.spec.ts, network/teams-status.spec.ts and control-protocol/teams-connection.spec.ts. L9 adds `network/teams-egress.ts` to this owner: it is the outbound initiator counterpart of `network/teams-ingress.ts` on an already authenticated direct-WSS connection. It runs the initiator negotiation, records connection.negotiated / connection.failed, observes channel lifecycle with local refs only, and opens the one ACP channel through createTeamsSession.open() so the handshake, the inbound mapping, the delivery pump and the release rules keep their single owner. It reuses createTeamsFrameTransport and TeamsConnectionLedger from the ingress owner, declares no second envelope and never sends acp.open_ack. Gate: teams-acp-d05-network, which now also runs network/teams-egress.spec.ts. No production daemon composes an egress yet: runtime/acp-serve.ts still calls only openTeamsIngress."
     },
     {
       "module_id": "control-protocol",
@@ -94,22 +173,22 @@
       "note": "Owner of the engine-independent stdio ACP transport between an engine child and agent-host. D01 (merged 7d0bca4, fixed 75a6cf4) implements `acp-adapter/stdio.ts` as the newline-delimited JSON `AcpDuplex` over the frozen `control-protocol/engine.ts` port, with CRLF tolerance, a maxFrameBytes bound, typed transport faults and clean-EOF settlement; `acp-adapter/test-peer.mjs` is a labeled test peer, not an engine. The directory exists now. Status is partial, not implemented: the D03 DSH adapter and the D02 OpenCode adapter each compile a real `EngineLaunchSpec` (see the dsh-adapter and opencode-adapter modules), and runtime/acp-serve.ts dispatches both engine kinds over this one transport; installed-copy engine inference is still not proven here. Gate: teams-acp-d01-host."
     },
     {
-  "module_id": "dsh-adapter",
-  "owner": "dsh-adapter",
-  "status": "partial",
-  "owned_paths": [
-    "dsh-adapter/**"
-  ],
-  "forbidden_paths": [
-    "ui/**",
-    "opencode-adapter/**",
-    "acp-adapter/**",
-    "agent-host/**",
-    "runtime/**",
-    "config/**"
-  ],
-  "note": "Owner of the DSH engine adapter: it derives the real DSH native profile patch from the accepted Teams config, compiles the single `EngineLaunchSpec` for the `dsh` kind, and reads the real `initialize`/`session/new` results back as an effectiveness proof. D03 (frozen candidate 60bf76b, merged here) implements `dsh-adapter/index.ts` and `dsh-adapter/native-config.ts` with 31 focused specs, and `dsh-adapter/real-engine-evidence.mjs` is committed evidence tooling that drove the real installed DSH 0.2.0-rc.2 through the real D01 runtime for 18/18 gates. It reuses the frozen `control-protocol/engine.ts` port, the D00 config/policy owners and the D01 runtime; it adds no second Session path, stdio transport or config source. The `--serve dsh` wiring delivered by this candidate composes it through `runtime/acp-serve.ts` `engineAdapterFor` with the same daemon/host/stdio/readiness/stop code as `--serve opencode`, and the entry removes the owned DSH home on stop and on a failed start. It also declares its own `enforceablePolicies`, derived from `dshHasPolicyEnforcementOwner` over its declared surface, so the blacklist classes the D01 host really enforces (including `capability:` and `client-capability:` keys) are accepted while a key with no enforcement owner is still refused, and the runtime never substitutes `declaredMethods`. Status stays partial, not implemented: the DSH black-box evidence is a live local run against one provider route rather than an installed-copy receipt, the AppSDK compile/verify gate is blocked by the pre-existing 0.1.0014 pin mismatch, and `resource_link` prompts stay refused while the real DSH initialize advertises `embeddedContext: false`. Gate: teams-acp-d03-dsh."
-},
+      "module_id": "dsh-adapter",
+      "owner": "dsh-adapter",
+      "status": "partial",
+      "owned_paths": [
+        "dsh-adapter/**"
+      ],
+      "forbidden_paths": [
+        "ui/**",
+        "opencode-adapter/**",
+        "acp-adapter/**",
+        "agent-host/**",
+        "runtime/**",
+        "config/**"
+      ],
+      "note": "Owner of the DSH engine adapter: it derives the real DSH native profile patch from the accepted Teams config, compiles the single `EngineLaunchSpec` for the `dsh` kind, and reads the real `initialize`/`session/new` results back as an effectiveness proof. D03 (frozen candidate 60bf76b, merged here) implements `dsh-adapter/index.ts` and `dsh-adapter/native-config.ts` with 31 focused specs, and `dsh-adapter/real-engine-evidence.mjs` is committed evidence tooling that drove the real installed DSH 0.2.0-rc.2 through the real D01 runtime for 18/18 gates. It reuses the frozen `control-protocol/engine.ts` port, the D00 config/policy owners and the D01 runtime; it adds no second Session path, stdio transport or config source. The `--serve dsh` wiring delivered by this candidate composes it through `runtime/acp-serve.ts` `engineAdapterFor` with the same daemon/host/stdio/readiness/stop code as `--serve opencode`, and the entry removes the owned DSH home on stop and on a failed start. It also declares its own `enforceablePolicies`, derived from `dshHasPolicyEnforcementOwner` over its declared surface, so the blacklist classes the D01 host really enforces (including `capability:` and `client-capability:` keys) are accepted while a key with no enforcement owner is still refused, and the runtime never substitutes `declaredMethods`. Status stays partial, not implemented: the DSH black-box evidence is a live local run against one provider route rather than an installed-copy receipt, the AppSDK compile/verify gate is blocked by the pre-existing 0.1.0014 pin mismatch, and `resource_link` prompts stay refused while the real DSH initialize advertises `embeddedContext: false`. Gate: teams-acp-d03-dsh."
+    },
     {
       "module_id": "config",
       "owner": "config",

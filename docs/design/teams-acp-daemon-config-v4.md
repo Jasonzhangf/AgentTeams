@@ -322,8 +322,13 @@ A3.7 A3 alone did not deliver the initiator. The initiator channel-open primitiv
 now delivered inside `createTeamsSession.open()`: it is the only place that sends
 `acp.open`, it names the recorded `targetEngineInstanceId`, it adopts the ack ref as
 its peer ref, and it keeps its own generation and engine instance on the host-facing
-ref because `AcpHost.open` refuses a foreign pair. `network/teams-ingress.ts` still
-remains the responder composer and never sends `acp.open`, so no production daemon
-composes an initiator yet; that egress composer stays a separate milestone.
+ref because `AcpHost.open` refuses a foreign pair. L9 adds the production
+composition: `network/teams-egress.ts` is the outbound counterpart of
+`network/teams-ingress.ts`, it runs the initiator negotiation over the frozen
+frames, calls `createTeamsSession.open()` for the one ACP channel and observes
+channel lifecycle with local refs only, so the handshake and the release rules keep
+one owner. The egress still does not run inside a daemon: `runtime/acp-serve.ts`
+calls only `openTeamsIngress`, so no deployed process dials an initiator channel
+yet.
 
 `teams-acp-d05-network` binds this amendment. It stays `partial`.
