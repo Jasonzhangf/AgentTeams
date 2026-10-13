@@ -92,12 +92,25 @@ This milestone reaches the **source**, **test** and **build** levels only.
 
 ### 4.1 The one full-suite failure, and why it is not a defect
 
-`cli/package-install.spec.ts` fails with
+`cli/package-install.spec.ts` failed with
 `receipt identity: staged product does not match the recorded index`. That check runs
 `git diff --quiet` and fails when the tree has unstaged changes
 (`scripts/receipt-identity.mjs`). It failed because this milestone was not yet
-committed when the suite ran. It is a process gate, not a product defect, and it is
-expected to pass on the committed candidate. That re-run is recorded in section 6.
+committed when the suite ran. It is a process gate, not a product defect.
+
+On the committed candidate `0d41d51` the same gate passes 24/24:
+
+```
+pnpm exec vitest run --no-file-parallelism cli/package-install.spec.ts
+Test Files  1 passed (1)
+     Tests  24 passed (24)
+  Duration  162.01s
+```
+
+That run also exercises the artifact receipt end to end: it packs and installs the
+base tarball, produces the final SDK package, requires real installed start/restart
+lifecycle evidence, and rejects an emitted receipt with tampered candidate identity.
+The gate passes, so the receipt now names this commit rather than the previous one.
 
 ### 4.2 A first-run failure that was a missing build, not a regression
 
@@ -146,9 +159,10 @@ engineInstanceId`, which is the intended failure mode.
 
 ## 7. Retained obligations
 
-1. Re-run `cli/package-install.spec.ts` on the committed candidate and record the
-   result here.
-2. One independent review of this milestone before integration.
-3. Compose the initiator, and bind `connection.connect` at
+1. One independent review of this milestone before integration.
+2. Compose the initiator, and bind `connection.connect` at
    `runtime/control-process.ts:818`, where `createControlOwner` is currently called
    without an `owner`.
+
+The re-run of `cli/package-install.spec.ts` on the committed candidate is recorded in
+section 4.1 and is no longer outstanding.
