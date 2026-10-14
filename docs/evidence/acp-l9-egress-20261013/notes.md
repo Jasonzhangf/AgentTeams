@@ -260,3 +260,34 @@ MY-1..MY-5) and restored every file byte-identically.
   `/opt/homebrew/bin/dsh`.
 - All egress cases run in-process over a socket pair that carries real JSON text
   frames; no network listener is opened by this increment.
+
+## 7. Remote receipt, integration and cleanup
+
+- Push: `git push origin HEAD:main` returned `185e008..8eb3729  HEAD -> main`.
+- Receipt, re-read after the push with `git ls-remote origin main`:
+  `8eb3729bfa30986fd6bfba06a57b82e87afec299	refs/heads/main`. The remote head
+  equals the candidate head, and every commit of this increment is on the remote.
+- Integration precondition, restated as evidence. Two independent reviews ran on
+  this increment. The first reviewed `32825f9`: it confirmed on its own mutations
+  that all five earlier findings are closed and that no collaborator module
+  regressed, but returned FAIL on four evidence defects (two stale gate counts in
+  `docs/development-governance.md`, a case-7 frame that omitted the mandatory
+  `engineInstanceId`, and a receipt that named the wrong base). All four were
+  fixed by `284cac6`, whose two changed assertions each carry their own red-first
+  mutation. The second review, of `dc882a8`, returned PASS with the same stale
+  count as its one advisory, and independently identified the wholesale reformat
+  of `docs/architecture/mainline-call-map.json` as a defect that `dc882a8`
+  repairs. Without that PASS this push would not be authorized.
+- Base and merge: `origin/main` was `185e008` (the L8 remote receipt, docs-only
+  on top of the merge-base `0f9c1d0`). The merge commit `8eb3729` brings it in, so
+  `git diff --name-only origin/main..HEAD` now lists exactly the nine files above.
+- Final measurement on the merged result `8eb3729`: D05 **98/98** (10 files,
+  egress 8), D06 **118/118** (6 files), `tsc -p tsconfig.json --noEmit` exit 0,
+  `pnpm build` exit 0.
+- Cleanup: this worktree is removed only after the receipt above and the retention
+  copy under `docs/evidence/acp-l9-egress-20261013/` exist. The reclamation is
+  executed and recorded separately.
+- Still partial: the eleven `teams-acp-*` gates. No daemon composes this egress
+  yet — `runtime/acp-serve.ts` still only calls `openTeamsIngress` — so this
+  increment has no installed-copy, restart, deployed-entrypoint, live-browser or
+  cross-device evidence, and the counts in the maps describe this candidate only.
