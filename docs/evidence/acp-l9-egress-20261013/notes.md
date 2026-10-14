@@ -162,15 +162,24 @@ MY-1..MY-5) and restored every file byte-identically.
 
 ## 4. Not delivered, and not inferred
 
-- **No daemon composes an egress.** `runtime/acp-serve.ts` still calls only
+- **No daemon composes an egress.** *(SUPERSEDED 2026-10-14; see the correction below.)* `runtime/acp-serve.ts` still calls only
   `openTeamsIngress`. There is no production caller for `openTeamsEgress` yet, so no
   deployed process can dial an initiator channel.
-- **No control-plane write side.** `runtime/control-process.ts` still hardcodes
+- **No control-plane write side.** *(SUPERSEDED 2026-10-14; see the correction below.)* `runtime/control-process.ts` still hardcodes
   `sessions: []`, `notifications: []`, `configs: []`, still passes no `owner` to
   `createControlOwner`, and still answers `connection.connect`,
   `connection.disconnect`, `network.membership.apply` and `permission.reply` with
   typed refusals.
 - **No Session/permission/notification event stream** behind SSE.
+
+2026-10-14 更正（L9 intent-side / L9 command side）：上面两条已经部分不成立。
+`runtime/serve-egress.ts` 现在有真实生产调用者（`runtime/acp-serve.ts` 在监听与注册就绪后组合
+egress 并对声明的 peer 拨出），`runtime/control-process.ts` 也不再以 typed 拒绝回答三条 A2.4 关系命令：
+`connection.connect`/`connection.disconnect`/`network.membership.apply` 现在经
+`config/relations-intent-store.ts` 做一次 CAS 写入，目标不可解析时为 typed `FORBIDDEN`。
+仍然成立的部分：控制 daemon 不绑定 Session owner，`permission.reply` 仍是 typed
+`UNSUPPORTED_OPERATION`，SSE 后面仍没有 Session/permission/notification 事件流，
+且本单元没有 installed-copy、restart、deployed-entrypoint 或跨设备证据。
 - **No installed-artifact, restart, deployed-entrypoint, live-browser or
   cross-device evidence.** Nothing in this increment was run from an installed copy
   or through a browser.

@@ -267,8 +267,13 @@ stream”。折入后逐半核对：
 - **“binds no Console owner” 仍然成立。** `runtime/control-process.ts:818` 是唯一生产调用点：
   `createControlOwner({ network: network.port, source: network.projection })`，**没有** `owner`
   绑定；`ControlOwnerBinding`（`:77`）只有接口声明，没有任何生产构造点。控制守护进程仍**未**
-  绑定 Session owner，也没有 `connection.connect`/`connection.disconnect`/
-  `network.membership.apply`/定向 ACP ingress。
+  绑定 Session owner，也没有定向 ACP ingress。
+
+  2026-10-14 更正（L9 intent-side）：这段里的 `connection.connect`/`connection.disconnect`/
+  `network.membership.apply` 已经不再属于「未交付」。三条 A2.4 关系命令现在经
+  `config/relations-intent-store.ts` 做一次 CAS 写入，目标不可解析时为 typed `FORBIDDEN`；
+  控制 daemon 仍不拨号、不协商、不报告连接状态。仍然成立的部分是：没有 Session owner、
+  没有定向 ACP ingress、SSE 后面没有 Session/permission/notification 事件流。
 
 因此结论必须分两句说：**“投影现在带真实目录行”为真（本改动范围内，已用真实入口证明）；
 “绑定了真实 Session owner”为假（不在本改动范围）。** A07 的“真实事件驱动动画”因此只被解锁

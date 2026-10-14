@@ -267,9 +267,15 @@ exit 0) to support the corrected count.
 
 ## 8. Retained obligations
 
-1. Compose the initiator, and bind `connection.connect` at
+1. ~~Compose the initiator, and bind `connection.connect` at
    `runtime/control-process.ts:818`, where `createControlOwner` is currently called
-   without an `owner`.
+   without an `owner`.~~ **DELIVERED 2026-10-14.** The initiator is composed by
+   `runtime/acp-serve.ts` through `runtime/serve-egress.ts` (L9 command side), and
+   `connection.connect` is bound as a durable CAS write through
+   `config/relations-intent-store.ts` (L9 intent side), not as an `owner` binding: the
+   control daemon writes the desired-relations record and the agent daemon dials.
+   `createControlOwner` still receives no `owner`, so the Session half of this
+   obligation stays open.
 
 The re-run of `cli/package-install.spec.ts` on the committed candidate is recorded in
 section 4.1. The independent review of section 6 is complete, and its finding is fixed
