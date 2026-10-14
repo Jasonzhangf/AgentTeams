@@ -9,7 +9,7 @@ import type { AcpChannelRef, AcpDelivery, AcpFault, AcpFrame, AcpRpcId } from '.
 import { AcpError } from '../control-protocol/acp.ts'
 import type { AcpDuplex, EngineAdapter, EngineLaunchInput, EngineStopResult } from '../control-protocol/engine.ts'
 import type { RelationRole } from '../control-protocol/teams-connection.ts'
-import type { AdmissionIntent, AgentDaemonIntent, DaemonEffectiveConfig, EngineKind, ListenIntent } from '../config/daemon-intent.ts'
+import type { AdmissionIntent, AgentDaemonIntent, DaemonEffectiveConfig, EngineKind, ListenIntent, PeerIntent } from '../config/daemon-intent.ts'
 import {
   DaemonIntentError,
   applyDaemonCliOverrides,
@@ -45,6 +45,12 @@ import {
   type AgentRegistration,
   type PublishedDaemonSurfaces,
 } from './registry-registration.ts'
+import {
+  createServeEgressOwner,
+  type ServeEgressFailure,
+  type ServeEgressOwner,
+  type ServeEgressTargetFacts,
+} from './serve-egress.ts'
 
 /**
  * `agentteams --serve <engine>` user entry (owner: runtime).
@@ -59,10 +65,16 @@ import {
  * This module declares no second Session path, no second ACP frame transport and
  * no second engine config compiler: the local channel reuses the one
  * `createStdioAcpDuplex` codec over its socket, the LAN channel reuses the one
- * `createDirectWssListener` + `openTeamsIngress` chain, the host owns Session/RPC
- * semantics, `engineAdapterFor` is the one dispatch point from the configured
- * engine kind to its adapter, and `runtime/agent-process.ts` stays the legacy
- * Work entry.
+ * `createDirectWssListener` + `openTeamsIngress` chain, the initiator leg reuses
+ * the one `runtime/serve-egress.ts` owner over `network/teams-egress.ts`, the
+ * host owns Session/RPC semantics, `engineAdapterFor` is the one dispatch point
+ * from the configured engine kind to its adapter, and `runtime/agent-process.ts`
+ * stays the legacy Work entry.
+ *
+ * The daemon also dials its own declared peers: after the listener and
+ * registration are ready it composes the egress owner and connects every peer
+ * the accepted config declares. The agent daemon reacts on its own; the control
+ * daemon is never a relay and there is no control -> agent channel.
  *
  * `classifyServeListener` splits the configured listener by address, not by a
  * second config key:
@@ -186,6 +198,14 @@ export interface AcpServeHandle {
   readonly registration: RegistrationStatus
   /** Read-only D06 handoff over the live ledger and the durable history. */
   readonly teamsStatus: TeamsStatusPort
+  /**
+   * The daemon's own egress owner: it dialed every declared dialable peer at
+   * start and owns the live initiator connections. `list()` is the live rows and
+   * `disconnect(agentId)` tears one down; `stop()` closes them all before the host.
+   */
+  readonly egress: ServeEgressOwner
+  /** Every declared peer whose connect attempt failed, with its typed code. */
+  readonly egressFailures: readonly ServeEgressFailure[]
   readonly readiness: AcpServeReadiness
   readonly daemon: AcpAgentDaemon
   stop(): Promise<AcpServeStopReceipt>
@@ -944,6 +964,10 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     }
   }
 
+  // The daemon's own published listener generation. The direct listener target,
+  // the ingress responder context and the egress initiator's
+  // `expectedTargetGeneration` all read this one constant, so both ends of a
+  // declared peer dial agree on the target generation without a second config key.
   const targetGeneration = 1
   const engineInstanceId = `${engine.kind}-${agent.daemon.id}-${randomUUID()}`
   const provider = intent.accepted.providers[intent.binding.primary.providerInstanceId]
@@ -1023,6 +1047,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
 
     let lan: ServeLanChannel | undefined
     let registration: AgentRegistration | undefined
+    let egress: ServeEgressOwner | undefined
     try {
       if (listenerClass === 'lan') {
         lan = await buildLanChannel({
@@ -1055,6 +1080,68 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
         await publishServeRegistration({ registration, declaration: published })
       }
 
+      // The agent daemon dials the peers its own accepted config declares. This
+      // is the one production composition of the initiator egress: the owner
+      // resolves each declared peer from the accepted intent, reads the
+      // responder's published capability revision through the same scoped
+      // directory readback the D04 registration client already owns, and dials
+      // with the D05-proven `buildDirectWssRoutePlan` + `connectDirectWssTarget`
+      // pair. A peer that cannot be dialed records a typed failure here instead
+      // of crashing the daemon or being skipped silently.
+      const readServeEgressTargetFacts = async (input: {
+        readonly peerName: string
+        readonly peer: PeerIntent
+      }): Promise<ServeEgressTargetFacts> => {
+        const registrationForDirectory = registration
+        if (registrationForDirectory === undefined || registrationForDirectory.state !== 'enabled') {
+          throw new AcpError('UNSUPPORTED_CONFIGURATION',
+            `serve-egress: peer ${input.peerName} cannot be dialed because this config declares no [discovery] directory readback`)
+        }
+        const directoryStatus = registrationForDirectory.client.status()
+        if (directoryStatus.state !== 'online') {
+          throw new AcpError('ENGINE_UNAVAILABLE',
+            `serve-egress: the directory readback for peer ${input.peerName} is unavailable while registration is ${directoryStatus.state}`)
+        }
+        const snapshot = await registrationForDirectory.client.directorySnapshot(false)
+        const entry = snapshot.peers.find(candidate => candidate.declaration.identity.agentId === input.peer.agentId)
+        if (entry === undefined) {
+          throw new AcpError('FORBIDDEN',
+            `serve-egress: the scoped directory has no confirmed declaration for peer ${input.peerName} (${input.peer.agentId})`)
+        }
+        return {
+          directoryGeneration: snapshot.revision,
+          // The responder's own published listener generation. The serve entry
+          // binds its listener target with this same constant, and the directory
+          // carries only the relay login generation (a different value), so the
+          // dialer uses the one constant the responder itself publishes.
+          targetGeneration,
+          targetCapabilitiesRevision: String(entry.declaration.revision),
+        }
+      }
+      const egressOwner = createServeEgressOwner({
+        peers: agent.peers,
+        self: principal,
+        selfGeneration: targetGeneration,
+        selfCapabilitiesRevision: capabilitiesRevision,
+        selfPolicyRevision: intent.accepted.acceptedRevision,
+        allowedRoles: agent.relations.allowed,
+        requestedCapabilities: daemon.policy.effective,
+        host: daemon.host,
+        policy: daemon.policy,
+        engineInstanceId,
+        history: teamsHistory,
+        ledger,
+        env,
+        readTargetFacts: readServeEgressTargetFacts,
+      })
+      egress = egressOwner
+      for (const peerName of Object.keys(agent.peers)) {
+        // `connect` records its own typed failure and throws; the start path
+        // collects the recorded failure and continues with the next peer.
+        await egressOwner.connect(peerName).catch(() => undefined)
+      }
+      const egressFailures = egressOwner.failures()
+
       const teamsStatus = createTeamsStatusPort({
         ledger,
         localAgentId: agent.daemon.id,
@@ -1075,8 +1162,11 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       const stop = (): Promise<AcpServeStopReceipt> => {
         if (stopping !== undefined) return stopping
         stopping = (async (): Promise<AcpServeStopReceipt> => {
-          // Order: LAN listener, local server (which destroys its channels),
-          // registration client, then the daemon and the owned directory.
+          // Order: the daemon's own egress rows, the LAN listener, the local
+          // server (which destroys its channels), the registration client, then
+          // the daemon and the owned directory. The egress closes BEFORE the host
+          // it serves, so no live initiator channel outlives its host.
+          await egressOwner.close().catch(() => undefined)
           if (lan !== undefined) await lan.close().catch(() => undefined)
           const channels = await local.close()
           await daemon.host.close(readinessRef).catch(() => undefined)
@@ -1109,6 +1199,8 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           return registration?.state === 'enabled' ? registration.client.status() : registration!.status
         },
         teamsStatus,
+        egress: egressOwner,
+        egressFailures,
         readiness: {
           agentId: agent.daemon.id,
           engineInstanceId,
@@ -1123,6 +1215,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
         stop,
       }
     } catch (cause) {
+      if (egress !== undefined) await egress.close().catch(() => undefined)
       if (registration !== undefined && registration.state === 'enabled') {
         await registration.client.stop().catch(() => undefined)
       }
