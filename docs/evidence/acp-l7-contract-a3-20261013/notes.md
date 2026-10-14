@@ -251,9 +251,13 @@ exit 0) to support the corrected count.
 
 ## 7. Honest limits
 
-- **The initiator is still not delivered.** `network/teams-ingress.ts` remains the
-  responder composer and still never sends `acp.open`. A3 removes the blocker that
-  made an initiator impossible; composing one is a separate milestone.
+- **The initiator is still not delivered.** *(SUPERSEDED 2026-10-14; see below.)*
+  `network/teams-ingress.ts` remains the responder composer and still never sends
+  `acp.open`. A3 removed the blocker that made an initiator impossible; composing one
+  was a separate milestone.
+  - 2026-10-14 更正（L9 command side）：initiator 已交付。`runtime/acp-serve.ts` 通过
+    `runtime/serve-egress.ts` 组合 egress 并对声明的 peer 拨出；见
+    `docs/evidence/acp-l9-command-side-20261013/` 与本节第 8 项。
 - **No installed-artifact, restart, deployed-entrypoint, browser or cross-device
   evidence.** This milestone reaches source, test and build only. Nothing here
   proves an installed copy or a live LAN channel.

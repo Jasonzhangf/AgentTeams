@@ -454,6 +454,17 @@ The D08 gate stays `partial` and the overall goal stays `INCOMPLETE`, for the A0
 the D06 write-side requirements are still unmet, the live-browser DOM evidence is source-level
 only, and no ACP gate has been upgraded.
 
+### 7c-bis. 2026-10-14 correction to the "write-side requirements" wording
+
+第 7b/7c 节的日期是 2026-10-12，其中的「the D06 write-side requirements ... are still unmet」
+按当时的事实记录，保持原文不改。2026-10-14 的 L9 intent-side 增量交付了其中的**写侧命令**部分：
+`connection.connect`/`connection.disconnect`/`network.membership.apply` 现在经
+`config/relations-intent-store.ts` 做一次 CAS 写入，目标不可解析时为 typed `FORBIDDEN`；
+本驱动对它们的断言已更新为 `FORBIDDEN`/`FORBIDDEN`/`UNSUPPORTED_OPERATION`，但**未重跑**
+（installed-tarball 跨设备层需要自己的 replay）。**仍然未满足**的是 Session owner 与定向 ACP
+ingress，因此 A07 的「真实 Session/permission/notification 事件驱动动画」依旧未交付，
+D08 gate 仍为 `partial`，整体目标仍为 `INCOMPLETE`。
+
 ### 7d. Close-out
 
 All A12 obligations that were previously open are now complete:

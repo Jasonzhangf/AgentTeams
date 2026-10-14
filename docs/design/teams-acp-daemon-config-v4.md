@@ -327,8 +327,10 @@ composition: `network/teams-egress.ts` is the outbound counterpart of
 `network/teams-ingress.ts`, it runs the initiator negotiation over the frozen
 frames, calls `createTeamsSession.open()` for the one ACP channel and observes
 channel lifecycle with local refs only, so the handshake and the release rules keep
-one owner. The egress still does not run inside a daemon: `runtime/acp-serve.ts`
-calls only `openTeamsIngress`, so no deployed process dials an initiator channel
-yet.
+one owner. When A3.7 was written the egress did not run inside a daemon:
+`runtime/acp-serve.ts` called only `openTeamsIngress`, so no deployed process dialed
+an initiator channel. 2026-10-14 更正（L9 command side）：`runtime/acp-serve.ts` 现在组合
+`runtime/serve-egress.ts` 并对已接受的 `peers` 拨出 initiator 通道，因此 egress 已在一个
+daemon 内运行；真实入口证据见 `docs/evidence/acp-l9-command-side-20261013/`。
 
 `teams-acp-d05-network` binds this amendment. It stays `partial`.
