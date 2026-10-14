@@ -166,3 +166,79 @@ node docs/evidence/acp-l9-intent-side-20261014/black-box-intent-side.mjs
 `refused_commands_correction` 标记，说明旧值属于哪一次运行、现在的新期望是什么。
 `docs/evidence/acp-d06-part2-20261011/notes.md`、`docs/evidence/acp-d07-webui-20261011/notes.md`、
 `docs/evidence/acp-l8-initiator-open-20261013/notes.md` 里的现在时陈述同样加了带日期的更正。
+
+## 8. 文档扫描轮次（2026-10-14，第 2–6 次独立复核）
+
+首次 review 之后，独立复核只问一个问题：**是否还有文档把已被本增量改变的旧行为当成现状陈述**。
+这个问题问了五轮，每轮都发现新的同类残留，每轮都已修复；修复全部采用「保留原句 + 带日期更正」或
+「标注 SUPERSEDED」，不重写历史记录。逐轮事实如下。
+
+| 轮次 | 被审 HEAD | 结论 | 发现并已修复 |
+| --- | --- | --- | --- |
+| 2 | `cf62050` | B1/B2 FIXED；B3 整体未修完 | 三处现在时陈述漏扫：`acp-l9-egress-20261013/notes.md`、`acp-d06-part2-20261011/notes.md` §8.6、`development-governance.md` D08 行；另两条 advisory 一并处理 |
+| 3 | `979175b` | INCOMPLETE | `mainline-call-map.json` 的 `acp-webui-v1` step 5 仍写两条命令返回 `UNSUPPORTED_OPERATION`（blocking）；`acp-control-daemon-v1` step 6 与 note；`acp-relations-intent-v1` note 里 spec 计数 22→23；L8/L7 note 与 A3.7 段落的 initiator 残留 |
+| 4 | `e2dee5b` | COMPLETE 但不干净 | `function-map.json` 的 `teams_status_port` note 仍写「refuses every connection mutation typed」；L9 egress note 的 §7 收尾段；`acp-serve-entry-v1` 的 step 6/7 与 note（该轮 patch 因脚本先失败而未落到文件，见第 5 轮） |
+| 5 | `57ae689` | INCOMPLETE | `acp-serve-entry-v1` 的 step 7/8、note、edge callee 与 edge note 仍写 D04/D05 未组合、监听仅 loopback；`acp-registry-v1` note 与 `module-registry.json` 的 runtime note 同类；`governance` D03 行的 loopback 句 |
+| 6 | `bb45e03` | COMPLETE 但不干净 | 12 条 F3 现在时陈述（serve entry 不组合 D04/D05、监听仅 loopback、无 live `--serve` 守护进程）散布在五张 map 的 chain/edge/function/resource/gate 记录里，另有 1 条同类与 4 条 advisory |
+| 终审 | `0539297` | **PASS** | 无 blocking；F1/F2/F3 问题关闭 |
+
+第 6 轮修复的 12 条里有 10 条属于**本单元之外的早期单元残留**（D01–D05 的 map 记录没有随它们之后的交付更新），
+本增量一并更正并在每条里保留原句与日期。这一点在此显式记录，避免把「修正他人历史陈述」算作本单元的交付范围。
+
+## 9. 集成回执（2026-10-14）
+
+- **集成前远端**：`git ls-remote origin main` = `2ab7a8978cbea1e14715b8fb90d852849fa51736`。
+- **review 前置条件**：被审候选 `0539297` 的 `git status --porcelain -uall` 为空；终审 reviewer 自测
+  `git rev-parse HEAD` = `053929713a452f08290f6c41462edd3f939a6d34`，结论 **PASS**（无 blocking finding）。
+- **合并**：在从 `origin/main` 新建的独占集成工作树 `acp-l9-intent-side-merge-20261014`（分支
+  `codex/acp-l9-intent-side-merge-20261014`）上执行 `git merge --no-ff`，得合并提交
+  `e1e62422ec6bfd49aea194e3978726604e7b4903`，信息 `merge(acp): integrate the reviewed L9 intent-side candidate`。
+- **树等价证明**：`0539297^{tree}` = `e1e6242^{tree}` = `4af33d4cf546cdb663c068fd5233a99d0d371e5e`，
+  与 `build:governance` 产物回执里的 `tree_hash` 一致。因此第 10 节在 `0539297` 上实测的门禁结果
+  对合并结果同样成立，不需要在集成工作树里重跑（合并是纯 fast-forward 等价，base 未移动）。
+- **推送**：`git push origin HEAD:main` 返回 `2ab7a89..e1e6242  HEAD -> main`。
+- **回执复核**：推送后 `git ls-remote origin main` = `e1e62422ec6bfd49aea194e3978726604e7b4903`，
+  与合并提交一致。
+- **回收前置条件**：本节与 `docs/evidence/acp-l9-intent-side-20261014/` 的保留副本都在已推送的树里，
+  满足「先有回执与保留证据，再回收工作树」。单元工作树与集成工作树在本节提交推送后回收。
+
+## 10. 冻结候选上的最终实测（`0539297`，树 `4af33d4c`）
+
+| 项目 | 命令 | 结果 |
+| --- | --- | --- |
+| D06 门禁 | 7 个 spec 文件（verification-map 原命令） | **135/135**（7 files passed） |
+| L9 intent-side 门禁 | `config/relations-intent-store.spec.ts`、`runtime/relations-intent-watch.spec.ts`、`runtime/control-process.spec.ts`、`runtime/acp-serve.spec.ts` | **68/68**（4 files passed） |
+| serve-entry 门禁 | `runtime/acp-serve.spec.ts`、`runtime/relations-intent-watch.spec.ts`、`cli/agentteams.spec.ts` | **68/68**（3 files passed） |
+| D05 门禁 | 11 个 spec 文件 | **103/103**（11 files passed） |
+| D07 门禁 | `TEAMS_CONSOLE_REAL_DOM=1` + 13 个 spec 文件 | **66/66**（13 files passed） |
+| 类型检查 | `pnpm typecheck` | exit 0 |
+| 运行时构建 | `pnpm build:runtime` | exit 0 |
+| L9 真实入口黑盒 | `L9_RECEIPT_PATH=/tmp/... node docs/evidence/acp-l9-intent-side-20261014/black-box-intent-side.mjs` | 53 ok checks，`outcome = PASS`，exit 0 |
+| D06 PART 1 黑盒 | `node docs/evidence/acp-d06-control-20261011/black-box-control.mjs` | 10 checks PASS，exit 0 |
+| D06 PART 2 黑盒 | `node docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs` | 7 checks PASS，exit 0 |
+| D07 WebUI 黑盒 | `node docs/evidence/acp-d07-webui-20261011/black-box-webui.mjs` | 15 checks PASS，exit 0 |
+| 治理构建 | `pnpm build:governance` | exit 0；回执 `head_commit=0539297`、`base_commit=2ab7a89`、`tree_hash=4af33d4c`、`content_sha256=c3c9383e7d513c0269321c91c8b2a07d51876a490bedb72595237349f73b1e46`、`mode=final`、`release_eligible=false` |
+| 工作树 | `git status --porcelain -uall` | 空 |
+
+`pnpm verify` 仍未运行：它是**先于本增量的 BLOCKED 基线**（`PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014`），
+不作为本增量的回归结论。
+
+## 11. 保留义务（不属本增量，交接给后续阶段）
+
+终审 review 的 7 条 advisory 都是**证据范围措辞**，不是正确性问题，因此不重开已 PASS 的候选；
+它们连同 L9 写侧剩余部分一起交给后续增量：
+
+1. `docs/architecture/resource-map.json` 的 `acp-frame-contract` note「no installed or live transport is proven」
+   与 `mainline-call-map.json` 的 `acp-host-wiring-v1` note「no installed-copy engine inference is proven
+   through a product entry yet」需要按各自 gate 的范围收紧（同类句子已在 D01/D04 gate 与 agent-host 模块更正）。
+2. `mainline-call-map.json` 的 `provider-config-v1` edge「production daemon binding remains pending」
+   与 `runtime/control-process.ts`、`runtime/console-runtime.ts` 的实际绑定不一致。
+3. `docs/design/teams-agent-relation-communication-v1.md`、`docs/design/teams-control-protocol-v2-master-agent-host.md`
+   的状态段仍是早期「尚未实现」措辞，未随交付更新。
+4. `docs/evidence/acp-d05-network-20261010/notes.md` 的第 2/4/5/6 项、
+   `docs/evidence/acp-d08-acceptance-20261011/verification.json` 的 `.gaps[2].reason`、
+   `docs/evidence/acp-d07-webui-20261011/notes.md:122` 缺少行内 2026-10-14 标记（各自文件里已有更正块覆盖）。
+5. **L9 写侧剩余**：`permission.reply` 与 Session send/cancel 仍绑定在 control daemon 的
+   typed `UNSUPPORTED_OPERATION` 上，因为 control daemon 不绑定 Session owner。
+6. **L10/L11/L12**：真实 Session/permission/notification 事件驱动 SSE；安装产物 live-browser DOM 证据；
+   按证据升级门禁并收口五张 map 与 governance。11 个 `teams-acp-*` gate 全部仍为 `partial`。
