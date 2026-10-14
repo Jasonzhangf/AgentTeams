@@ -1,28 +1,28 @@
 {
   "driver": "acp-l9-intent-side-20261014/black-box-intent-side.mjs",
-  "startedAt": "2026-10-14T20:49:05.977Z",
+  "startedAt": "2026-10-14T21:55:56.112Z",
   "steps": [
     {
       "step": "startup",
       "name": "recordPath",
-      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-i8gXqw/home/.agentteams/relations/local/local/relations-intent.json"
+      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-ex8mTP/home/.agentteams/relations/local/local/relations-intent.json"
     },
     {
       "step": "startup",
       "name": "controlConfigPath",
-      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-i8gXqw/control.toml"
+      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-ex8mTP/control.toml"
     },
     {
       "step": "startup",
       "name": "observerConfigPath",
-      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-i8gXqw/observer.toml"
+      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-ex8mTP/observer.toml"
     },
     {
       "step": "startup",
       "name": "declaredPeer",
       "value": {
         "name": "l9-responder",
-        "endpoint": "wss://192.168.0.3:61398",
+        "endpoint": "wss://192.168.0.3:63574",
         "admissionRef": "adm-observer"
       }
     },
@@ -30,41 +30,41 @@
       "step": "registry start",
       "name": "registry",
       "value": {
-        "pid": 33526,
-        "endpoint": "wss://127.0.0.1:61395"
+        "pid": 38032,
+        "endpoint": "wss://127.0.0.1:63571"
       }
     },
     {
       "step": "responder readiness",
       "name": "responder",
       "value": {
-        "pid": 33742,
-        "listener": "192.168.0.3:61398",
-        "lanChannel": "wss://192.168.0.3:61398",
+        "pid": 38361,
+        "listener": "192.168.0.3:63574",
+        "lanChannel": "wss://192.168.0.3:63574",
         "capabilitiesRevision": "2",
-        "registration": "registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:61395"
+        "registration": "registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:63571"
       }
     },
     {
       "step": "observer start dial",
       "name": "observer",
       "value": {
-        "pid": 41577,
-        "listener": "192.168.0.3:61397",
-        "lanChannel": "wss://192.168.0.3:61397",
+        "pid": 48741,
+        "listener": "192.168.0.3:63573",
+        "lanChannel": "wss://192.168.0.3:63573",
         "capabilitiesRevision": "2",
-        "registration": "registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:61395"
+        "registration": "registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:63571"
       }
     },
     {
       "step": "observer start dial",
       "name": "baselineNegotiated",
       "value": {
-        "recordConnectionId": "serve-egress-cf211de7-2fb1-42a5-a4e0-e5f75533a7a8",
-        "agreementConnectionId": "5474f7c8-c707-412c-831e-6dbb8ab86cca",
+        "recordConnectionId": "serve-egress-5c33405d-0740-4f32-bfa4-c3f847976d43",
+        "agreementConnectionId": "be5300c9-dd11-44b2-beef-885e2cc9ee22",
         "event": "connection.negotiated",
         "agentId": "l9-responder",
-        "occurredAt": "2026-10-14T20:49:25.726Z",
+        "occurredAt": "2026-10-14T21:56:15.833Z",
         "source": {
           "accountId": "local",
           "scopeId": "local",
@@ -85,19 +85,19 @@
       "step": "baseline channel",
       "name": "baselineChannel",
       "value": {
-        "channelId": "teams-serve-egress-cf211de7-2fb1-42a5-a4e0-e5f75533a7a8-1",
-        "engineInstanceId": "opencode-l9-observer-c9994c7b-dce7-48b6-8a71-cf309a624227"
+        "channelId": "teams-serve-egress-5c33405d-0740-4f32-bfa4-c3f847976d43-1",
+        "engineInstanceId": "opencode-l9-observer-5f13b412-2247-451c-9a96-474ee9be4548"
       }
     },
     {
       "step": "both sides recorded the same baseline wire connection",
       "name": "responderBaseline",
       "value": {
-        "recordConnectionId": "5474f7c8-c707-412c-831e-6dbb8ab86cca",
-        "agreementConnectionId": "5474f7c8-c707-412c-831e-6dbb8ab86cca",
+        "recordConnectionId": "be5300c9-dd11-44b2-beef-885e2cc9ee22",
+        "agreementConnectionId": "be5300c9-dd11-44b2-beef-885e2cc9ee22",
         "event": "connection.negotiated",
         "agentId": "l9-observer",
-        "occurredAt": "2026-10-14T20:49:25.725Z",
+        "occurredAt": "2026-10-14T21:56:15.833Z",
         "source": {
           "accountId": "local",
           "scopeId": "local",
@@ -118,8 +118,8 @@
       "step": "control start",
       "name": "control",
       "value": {
-        "pid": 49544,
-        "listener": "127.0.0.1:61396"
+        "pid": 59171,
+        "listener": "127.0.0.1:63572"
       }
     },
     {
@@ -131,19 +131,19 @@
       "step": "disconnect closes the observer live connection",
       "name": "observedClosed",
       "value": {
-        "observer": "serve-egress-cf211de7-2fb1-42a5-a4e0-e5f75533a7a8",
-        "responder": "5474f7c8-c707-412c-831e-6dbb8ab86cca"
+        "observer": "serve-egress-5c33405d-0740-4f32-bfa4-c3f847976d43",
+        "responder": "be5300c9-dd11-44b2-beef-885e2cc9ee22"
       }
     },
     {
       "step": "connect after disconnect makes the observer dial again",
       "name": "redialNegotiated",
       "value": {
-        "recordConnectionId": "serve-egress-e4e77b76-a1a5-4fc3-8770-f84c61109f48",
-        "agreementConnectionId": "c95ea217-d003-421e-babd-4a80409d096d",
+        "recordConnectionId": "serve-egress-ae2a6fb6-2ee5-4e98-a6cc-18cc32746736",
+        "agreementConnectionId": "e7c2932e-208a-4a22-8be3-b249c34479fa",
         "event": "connection.negotiated",
         "agentId": "l9-responder",
-        "occurredAt": "2026-10-14T20:49:48.792Z",
+        "occurredAt": "2026-10-14T21:56:38.890Z",
         "source": {
           "accountId": "local",
           "scopeId": "local",

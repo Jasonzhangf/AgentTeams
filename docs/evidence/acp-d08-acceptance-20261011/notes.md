@@ -202,7 +202,7 @@ a defect introduced by D08, and none is ever inferred from a passing check.
    `ui/teams-console/tests/render-d07.spec.ts` (real Chrome).
 3. **A07 — targeted interaction from the WebUI. UNMET REQUIREMENT, same missing owner as
    gap 1.** Because no Session owner is bound, every
-   interaction write is a typed `UNSUPPORTED_OPERATION` refusal, so no prompt can be
+   interaction write (`permission.reply`/session send) is a typed `UNSUPPORTED_OPERATION` refusal, so no prompt can be
    targeted from the WebUI in this candidate. The driver proves the refusal is typed and
    that no effect is fabricated; it does not prove a targeted interaction. Retained delivery
    obligation owned by D06.

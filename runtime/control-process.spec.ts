@@ -106,6 +106,11 @@ interface ControlConfigOptions {
   readonly allowedRoles?: readonly string[]
   /** Declared accepted peers, written as one `[peers.<name>]` table each. */
   readonly peers?: readonly string[]
+  /**
+   * Declared accepted peers that live in a DIFFERENT account and scope. They are real peers
+   * of this daemon, so only the account/scope comparison can refuse them as record members.
+   */
+  readonly foreignPeers?: readonly string[]
 }
 
 async function controlConfig(options: ControlConfigOptions = {}): Promise<string> {
@@ -139,6 +144,13 @@ hostId = "${agentId}-host"
 accountId = "local"
 scopeId = "local"
 credentialRef = "env:${INDEX_ENV}${index}"
+`).join('')}${(options.foreignPeers ?? []).map((agentId, index) => `
+[peers.${agentId}]
+agentId = "${agentId}"
+hostId = "${agentId}-host"
+accountId = "other-account"
+scopeId = "other-scope"
+credentialRef = "env:${INDEX_ENV}${index + (options.peers ?? []).length}"
 `).join('')}`
   writeFileSync(configPath, `version = 4
 
@@ -548,6 +560,44 @@ it('applies the whole desired membership set with the caller expectation and ref
   expect(await owner.command({ kind: 'network.membership.apply', agentId: 'peer-b', expectedRevision: 1, members: [{ agentId: 'peer-b', role: 'master' }, { agentId: 'agent-not-declared', role: 'peer' }] }))
     .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
   expect(readFileSync(recordPath).equals(before)).toBe(true)
+})
+
+it('refuses a declared peer that lives in another account and scope as a record member', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-intent-foreign-${port}`)
+  // `peer-foreign` IS a declared accepted peer of this daemon. Only the account/scope
+  // comparison can refuse it, so this case isolates that rule from the undeclared-target rule.
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'], foreignPeers: ['peer-foreign'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-intent-foreign-${port}`)
+  const recordPath = intentRecordPath(home)
+  const owner = createControlOwner({
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+
+  // The foreign peer is really accepted: it is present in the intent this owner was given.
+  expect(intent.peers['peer-foreign']).toMatchObject({ accountId: 'other-account', scopeId: 'other-scope' })
+
+  // A local set still writes, so the refusal below is the member rule and not a broken owner.
+  expect(await owner.command({ kind: 'network.membership.apply', agentId: 'peer-b', expectedRevision: 0, members: [{ agentId: 'peer-b', role: 'master' }] }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  const before = readFileSync(recordPath)
+
+  // Adding the foreign peer would write a member that never reads this file, so the whole
+  // apply is refused and the durable bytes stay exactly as they were.
+  expect(await owner.command({ kind: 'network.membership.apply', agentId: 'peer-b', expectedRevision: 1, members: [{ agentId: 'peer-b', role: 'master' }, { agentId: 'peer-foreign', role: 'peer' }] }))
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(readFileSync(recordPath).equals(before)).toBe(true)
+  expect(await readRelationsIntentRecord(recordPath)).toMatchObject({ revision: 1, peers: [{ agentId: 'peer-b', role: 'master' }] })
+
+  // A connect for the foreign peer is NOT a refusal: the writer resolves the target's own
+  // account and scope, so it writes the record that peer's own daemon reads. The local record
+  // stays exactly as it was, which is what makes the member rule above necessary.
+  expect(await owner.command({ kind: 'connection.connect', agentId: 'peer-foreign' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  expect(readFileSync(recordPath).equals(before)).toBe(true)
+  expect(await readRelationsIntentRecord(intentRecordPath(home, 'other-account', 'other-scope')))
+    .toMatchObject({ revision: 1, peers: [{ agentId: 'peer-foreign', role: 'master' }] })
 })
 
 it('keeps the typed refusal when the relations record cannot be opened or saved', async () => {

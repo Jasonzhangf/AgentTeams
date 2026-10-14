@@ -84,7 +84,7 @@ agent 侧新增导出：`RELATIONS_INTENT_POLL_INTERVAL_MS`(500)、`RelationsInt
    `targetCapabilitiesRevision` 等于 responder 自己发布的 readiness 值。
 3. `connection.connect{l9-responder}` → 记录 revision 1、`peers=[{l9-responder,master}]`，
    结果只报 `acceptedRevision`，不含任何连接状态；Console projection 与写前逐字节相同。
-4. 记录已存在且 peer 已连时，重复 connect 不重拨（`connection.negotiated` 仍为 1，无 `channel.closed`）。
+4. 记录已存在且 peer 已连时，观察侧下一轮轮询不重拨（`connection.negotiated` 仍为 1，无 `channel.closed`）；驱动此处不再发第二条 `connection.connect`，所以这条只证明 reconcile 幂等，不证明重复命令的幂等（后者由 `runtime/relations-intent-watch.spec.ts` 与 `runtime/control-process.spec.ts` 覆盖）。
 5. `connection.disconnect{l9-responder}` → 记录 revision 2、`peers=[]`；
    **observer 自己的 history 记下 `channel.closed`（同一条 connectionId）**，responder 侧记下同一条 wire
    connection 结束；空转 3.5s 后 `connection.negotiated` 仍为 1，**没有自愈重拨**。
@@ -116,3 +116,53 @@ node docs/evidence/acp-l9-intent-side-20261014/black-box-intent-side.mjs
 - 记录是「每个 account+scope 一份期望成员集合」，不是「每个 agent 一份」，见第 2 节窄化。
 - 记录里的 `role` 目前只由控制 daemon 记账（agent 侧不消费），这是有意的安全选择，见第 3 节。
 - AppSDK gate 仍按既有阻塞 `PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014` 停住；本单元未运行 `pnpm verify`。
+
+## 7. 独立 review（2026-10-14）与 finding 修复
+
+首次独立 review 的结论是 **FAIL**，三条 blocking finding 都成立，已全部修复并在本候选上重测：
+
+- **B1（硬）**：本改动把三条 A2.4 关系命令的拒绝码从 `UNSUPPORTED_OPERATION` 改成
+  「目标不可解析的 typed `FORBIDDEN` / 真实 CAS 写入」，但 D06 门禁自己的两个真实黑盒仍断言旧码，
+  两者都变红（`docs/evidence/acp-d06-control-20261011/black-box-control.mjs`、
+  `docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs`），而 governance 与 map 仍声称它们通过。
+  两个驱动已按新期望更新并**重跑**：PART 1 **10/10**、PART 2 **7/7**，退出码均为 0。
+  同类过时断言一并更新：`docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs`（未重跑，
+  它是 installed-tarball 层，见下）；`docs/evidence/acp-d07-webui-20261011/black-box-webui.mjs` 早在本次修复前已更新并重跑。
+- **B2**：`network.membership.apply` 的 account/scope 成员校验没有独立用例——reviewer 的细粒度变异
+  （保留 `peer === undefined`、去掉 account/scope 比较）**22/22 全绿**。已新增用例
+  `refuses a declared peer that lives in another account and scope as a record member`（在 `runtime/control-process.spec.ts`），
+  并新增 `foreignPeers` 测试夹具（声明在 `other-account`/`other-scope` 的真实 peer）。
+  同一变异现在**只**让该新用例转红（1 failed | 22 passed），`runtime/control-process.ts` md5 复原为
+  `618317fba6b9013be61222f70f449d0e`。该用例同时记录一个真实不对称：`connection.connect` 对外域 peer
+  **不是**拒绝，而是写到该 peer 自己的 account/scope 记录（写侧按目标解析路径），本地记录保持不变——
+  这正是 `membership.apply` 必须拒绝外域成员的原因。
+- **B3**：`docs/architecture/verification-map.json` 的 D06 note 仍写 `119/119 across 6 files`
+  （改为明确的「intent-side 增量之前」历史计数），D06 的 `checks[3]` 仍写「connection mutation 被
+  `UNSUPPORTED_OPERATION` 拒绝」（改为新的目标规则），D07 的 checks 里同样的旧码一并更正。
+  新增用例后重测计数：D06 门禁 **135/135 / 7 files**（runtime/control-process 23、config/relations-intent-store 10、
+  agent-host/acp-host 23、runtime/acp-serve 27、cli/agentteams 33、console-host/tests/http-api 7、
+  control-protocol/console-api 12）；本单元门禁 **68/68 / 4 files**（27+23+10+8）；
+  `teams-acp-serve-entry` **68/68 / 3 files**（27+8+33）。governance 与 map 已按这三个实测值同步。
+
+### advisory finding 的处理
+
+- **A1**：驱动头部与本节第 4 条的措辞声称「重复 `connection.connect` 不重拨」，但驱动从不发第二条
+  connect。已把两处改成「记录不变时的下一轮轮询不重拨」，并显式说明该条只证明 reconcile 幂等；
+  重复命令的幂等由 `runtime/relations-intent-watch.spec.ts` 与 `runtime/control-process.spec.ts` 覆盖。
+- **A2**：`docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs:1595` 的旧断言已更新为
+  `FORBIDDEN`/`FORBIDDEN`/`UNSUPPORTED_OPERATION`，并在该单元的 `verification.json` 里加了带日期的
+  `refused_commands_correction`，明确写明**该驱动本次未重跑**（它属于 installed-tarball 跨设备层，
+  需要自己的 replay），并列出本候选上同规则的实测旁证（D07 驱动与两个 D06 控制黑盒）。
+- **A3**：并发关系命令可产生一次可重试的 `REVISION_CONFLICT`（读后 CAS、无串行化）。这是**已知限制**，
+  没有数据损坏，也没有并发用例；记录在此，不当作已证明行为。
+- **A4**：按声明命令运行黑盒会重写被跟踪的 `receipt.json`（默认 `L9_RECEIPT_PATH`）。本文件是生成产物，
+  已在本轮重跑后重新提交；只读复核建议 `L9_RECEIPT_PATH=/tmp/...`。
+- **A5**：每个 account+scope 一份记录是该范围内的共享语义，已在第 2 节记录为真实窄化。
+
+### 历史证据记录的更正方式
+
+对**已归档的过往运行记录**（`acp-d06-part2-20261011/verification.json`、`acp-d07-webui-20261011/verification.json`、
+`acp-d08-acceptance-20261011/verification.json`）不重写原文，而是加带日期的 `corrections` /
+`refused_commands_correction` 标记，说明旧值属于哪一次运行、现在的新期望是什么。
+`docs/evidence/acp-d06-part2-20261011/notes.md`、`docs/evidence/acp-d07-webui-20261011/notes.md`、
+`docs/evidence/acp-l8-initiator-open-20261013/notes.md` 里的现在时陈述同样加了带日期的更正。

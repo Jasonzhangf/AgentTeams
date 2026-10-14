@@ -142,6 +142,9 @@ which is the point: this increment touches no control-plane surface.
   passes no `owner` to `createControlOwner`, and still answers
   `connection.connect`/`connection.disconnect`/`network.membership.apply` with a
   typed `UNSUPPORTED_OPERATION`. `TeamsStatusPort` remains read-only.
+  - 2026-10-14 更正（L9 intent-side）：这条已经不再成立。三条 A2.4 关系命令现在经
+    `config/relations-intent-store.ts` 做一次 CAS 写入；目标不可解析时是 typed `FORBIDDEN`。
+    `TeamsStatusPort` 仍是只读，控制 daemon 仍只写记录、不拨号。
 - **No Session/permission/notification event stream** behind SSE.
 - **No installed-artifact, restart, deployed-entrypoint, live-browser or
   cross-device evidence.** Nothing in this increment was run from an installed

@@ -25,8 +25,9 @@
  *       accepted revision and NO connection state;
  *   (c) a successful write changes no Console projection: the control daemon
  *       reports no connection, because it never dials;
- *   (d) repeating `connection.connect` for an already connected peer re-dials
- *       nothing (the observer's `connection.negotiated` count stays 1);
+ *   (d) a later poll over the SAME record dials nothing again: the observer keeps
+ *       exactly one `connection.negotiated` for the peer while the desired set is
+ *       unchanged (the driver does not send a second `connection.connect`);
  *   (e) `connection.disconnect` makes the OBSERVER close its live connection:
  *       the observer's durable history records `channel.closed` for the peer and
  *       still records only ONE `connection.negotiated` (no self-retry);
@@ -700,9 +701,10 @@ async function main() {
   assert(projectionBody.connections === undefined || Array.isArray(projectionBody.connections),
     'the control daemon reports no connection it did not make')
 
-  step = 'a repeated connect does not re-dial'
-  // The observer is already connected to the peer. The record now desires it, so the
-  // interval agrees with the live row and must dial nothing.
+  step = 'a poll over the unchanged record does not re-dial'
+  // The observer is already connected to the peer and the record already desires it, so the
+  // interval agrees with the live row and must dial nothing. The driver sends no second
+  // connect here: this is the reconcile idempotence, not a repeated command.
   await new Promise(resolveWait => setTimeout(resolveWait, POLL_SETTLE_MS))
   const afterRepeat = negotiatedFor(await readConnectionRecords(observerState), RESPONDER.agentId)
   assert(afterRepeat.length === 1, `the observer still recorded exactly one connection.negotiated (${afterRepeat.length})`)

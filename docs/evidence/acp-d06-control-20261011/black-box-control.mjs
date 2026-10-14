@@ -250,12 +250,14 @@ allowed = ["master", "peer"]
     })
     assert.equal(response.status, 200, `expected 200 for ${JSON.stringify(body)}, got ${response.status}`)
     const result = await response.json()
-    // PART 2 (A2.7): the frozen D05 read port declares no mutation, so a connection command
-    // is refused typed. The daemon never guesses or fakes a connection outcome.
+    // A2.4/L9: this daemon declares no [peers], so none of the three relation commands can
+    // resolve a target. Each is refused typed FORBIDDEN, and none of them guesses a
+    // relation, a record path or a connection outcome.
     assert.equal(result.ok, false, `expected a typed refusal for ${JSON.stringify(body)}`)
-    assert.equal(result.error.code, 'UNSUPPORTED_OPERATION')
+    assert.equal(result.error.code, 'FORBIDDEN')
+    assert.equal('result' in result, false)
   }
-  check('new command kinds are closed at the wire boundary and the bound read port refuses mutations typed',
+  check('new command kinds are closed at the wire boundary and an unresolvable relation target is refused typed',
     `${rejected.length} refused shapes, 3 typed refusals`)
 
   // 7. History: a closed query parse plus a typed owner absence.

@@ -251,5 +251,22 @@
     "the control daemon declares no Teams listener, so the connection rows are disconnected directory facts and not established channels",
     "the D06 directory-projection increment was previously carried as a separate \"D09\" unit; there is no separate D09 unit, gate or evidence directory",
     "no Session owner and no targeted ACP ingress are bound, so a Session-event-driven projection animation is still not delivered"
-  ]
+  ],
+  "corrections": {
+    "recorded_at_original": "2026-10-11",
+    "corrected_at": "2026-10-14",
+    "reason": "The three A2.4 relation commands stopped being typed UNSUPPORTED_OPERATION refusals on 2026-10-14 (L9 intent-side). They now perform one durable CAS write through config/relations-intent-store.ts, and a command whose agentId this daemon does not declare is refused FORBIDDEN. The dated observed strings above are left byte-identical on purpose: rewriting them would falsify the 2026-10-11 run.",
+    "relation_command_expectation": {
+      "was": "a connection mutation is refused with UNSUPPORTED_OPERATION",
+      "now": "a relation command for an agentId the daemon does not declare is refused FORBIDDEN with no result and no guessed record path",
+      "why": "both control black boxes start a daemon whose config declares [relations].allowed but no [peers], so no target can be resolved"
+    },
+    "rerun_on_this_candidate": {
+      "command_1": "node docs/evidence/acp-d06-control-20261011/black-box-control.mjs",
+      "result_1": "10/10 PASS, exit 0",
+      "command_2": "node docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs",
+      "result_2": "7/7 PASS, exit 0",
+      "note": "Both drivers were updated to the new expectation and re-run on the 2026-10-14 candidate; the counts recorded above are unchanged and still hold."
+    }
+  }
 }
