@@ -100,10 +100,10 @@ never produced; both were removed rather than retained as misleading evidence.
 
 ## Honest refusals retained
 
-- `connection.connect` and `network.membership.apply` return typed
-  `UNSUPPORTED_OPERATION` — the frozen read port declares no network command channel.
-  Discovery to connect and master/peer membership apply therefore cannot complete in this
-  unit.
+- 2026-10-14 更正（L9 intent-side）：`connection.connect` 与 `network.membership.apply` 现在是 A2.4 目标规则的
+  typed `FORBIDDEN` 拒绝，因为本驱动的控制配置不声明任何 `[peers]`，目标无法解析；两者已不再返回
+  `UNSUPPORTED_OPERATION`。驱动已按新期望更新并在本候选上重跑（15 checks、退出码 0）：
+  `connection.connect=FORBIDDEN; network.membership.apply=FORBIDDEN; permission.reply=UNSUPPORTED_OPERATION`。
 - `permission.reply` returns typed `UNSUPPORTED_OPERATION` because the control daemon binds
   no Session owner. A `permission.reply` payload carrying a field outside the frozen
   `ConsoleCommandV1` vocabulary (`callbackId`) is refused by the closed parser with HTTP

@@ -162,15 +162,24 @@ MY-1..MY-5) and restored every file byte-identically.
 
 ## 4. Not delivered, and not inferred
 
-- **No daemon composes an egress.** `runtime/acp-serve.ts` still calls only
+- **No daemon composes an egress.** *(SUPERSEDED 2026-10-14; see the correction below.)* `runtime/acp-serve.ts` still calls only
   `openTeamsIngress`. There is no production caller for `openTeamsEgress` yet, so no
   deployed process can dial an initiator channel.
-- **No control-plane write side.** `runtime/control-process.ts` still hardcodes
+- **No control-plane write side.** *(SUPERSEDED 2026-10-14; see the correction below.)* `runtime/control-process.ts` still hardcodes
   `sessions: []`, `notifications: []`, `configs: []`, still passes no `owner` to
   `createControlOwner`, and still answers `connection.connect`,
   `connection.disconnect`, `network.membership.apply` and `permission.reply` with
   typed refusals.
 - **No Session/permission/notification event stream** behind SSE.
+
+2026-10-14 更正（L9 intent-side / L9 command side）：上面两条已经部分不成立。
+`runtime/serve-egress.ts` 现在有真实生产调用者（`runtime/acp-serve.ts` 在监听与注册就绪后组合
+egress 并对声明的 peer 拨出），`runtime/control-process.ts` 也不再以 typed 拒绝回答三条 A2.4 关系命令：
+`connection.connect`/`connection.disconnect`/`network.membership.apply` 现在经
+`config/relations-intent-store.ts` 做一次 CAS 写入，目标不可解析时为 typed `FORBIDDEN`。
+仍然成立的部分：控制 daemon 不绑定 Session owner，`permission.reply` 仍是 typed
+`UNSUPPORTED_OPERATION`，SSE 后面仍没有 Session/permission/notification 事件流，
+且本单元没有 installed-copy、restart、deployed-entrypoint 或跨设备证据。
 - **No installed-artifact, restart, deployed-entrypoint, live-browser or
   cross-device evidence.** Nothing in this increment was run from an installed copy
   or through a browser.
@@ -227,7 +236,8 @@ MY-1..MY-5) and restored every file byte-identically.
 - This round fixed all four. The D05 row now reads `新增 network/teams-egress 8`
   and the D07 row `（98/98）`; the D07 row's claim that no production initiator
   composer exists was corrected to name `network/teams-egress.ts` and to keep the
-  true gap (no deployed process calls it). Case 7's frame now carries
+  true gap as it stood then (no deployed process called it; see the 2026-10-14
+  correction in §5). Case 7's frame now carries
   `engineInstanceId: ENGINE_B`, so the parser accepts it and the initiator session
   rejects it typed on the unexpected-kind branch, which is what the comment and
   this receipt say. Case 6 now asserts that the refused dial adds no frame to the
@@ -287,7 +297,8 @@ MY-1..MY-5) and restored every file byte-identically.
 - Cleanup: this worktree is removed only after the receipt above and the retention
   copy under `docs/evidence/acp-l9-egress-20261013/` exist. The reclamation is
   executed and recorded separately.
-- Still partial: the eleven `teams-acp-*` gates. No daemon composes this egress
-  yet — `runtime/acp-serve.ts` still only calls `openTeamsIngress` — so this
-  increment has no installed-copy, restart, deployed-entrypoint, live-browser or
-  cross-device evidence, and the counts in the maps describe this candidate only.
+- Still partial: the eleven `teams-acp-*` gates. *(SUPERSEDED 2026-10-14; see the
+  correction in §5.)* No daemon composed this egress when this increment closed —
+  `runtime/acp-serve.ts` then called only `openTeamsIngress` — so this increment has
+  no installed-copy, restart, deployed-entrypoint, live-browser or cross-device
+  evidence, and the counts in the maps describe this candidate only.

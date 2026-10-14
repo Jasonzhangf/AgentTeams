@@ -10,9 +10,9 @@
  *
  * It proves that the control daemon binds the real D05 network status port: the additive
  * `connections` field is a real owner read, `kind: connection` history returns the real
- * durable rows the D05 owner wrote (including real pagination), a connection mutation is
- * refused typed by the frozen read port, and a clean CLI stop releases pid, listener and
- * owned state.
+ * durable rows the D05 owner wrote (including real pagination), a relation command for an
+ * agentId this daemon does not declare is refused typed, and a clean CLI stop releases pid,
+ * listener and owned state.
  *
  * `pnpm build` must have run: the CLI loads `generated/runtime-lib/runtime/control-process.js`
  * and this script loads the compiled D05 owners from the same tree.
@@ -195,7 +195,9 @@ allowed = ["master", "peer"]
   assert.equal('nextBeforeSequence' in nextPage, false)
   check('history returns the real durable connection rows with real pagination', '2 rows, 1 + 1 paged')
 
-  // 5. The frozen read port declares no mutation: typed refusal, never a guessed outcome.
+  // 5. A2.4 relation commands name a target this daemon must be able to resolve. This
+  //    daemon declares no [peers], so the target cannot be resolved: the command is a
+  //    typed refusal that guesses no relation, no record path and no connection outcome.
   const command = await fetch(`${origin}/api/v1/command`, {
     method: 'POST',
     headers: { authorization: basic, 'content-type': 'application/json' },
@@ -204,8 +206,10 @@ allowed = ["master", "peer"]
   assert.equal(command.status, 200)
   const commandBody = await command.json()
   assert.equal(commandBody.ok, false)
-  assert.equal(commandBody.error.code, 'UNSUPPORTED_OPERATION')
-  check('the bound read port refuses a connection mutation typed', commandBody.error.code)
+  assert.equal(commandBody.error.code, 'FORBIDDEN')
+  assert.equal('result' in commandBody, false)
+  check('a relation command for an agentId the daemon does not declare is refused typed with no result',
+    commandBody.error.code)
 
   // 6. Clean CLI stop: no pid, no listener, no owned state.
   const stop = runCli(['control', 'stop', '--config', configPath, '--generation', field(start.stdout, 'generation')])

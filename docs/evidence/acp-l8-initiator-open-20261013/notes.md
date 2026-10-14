@@ -134,14 +134,22 @@ which is the point: this increment touches no control-plane surface.
 
 ## 5. Not delivered, and not inferred
 
-- **No production initiator.** `network/teams-ingress.ts` is still the responder
-  composer and never sends `acp.open`. No daemon composes an initiator yet, so
-  there is no egress path from a real process. This is the next milestone.
+- **No production initiator.** *(SUPERSEDED 2026-10-13/14; see the correction below.)*
+  `network/teams-ingress.ts` is still the responder composer and never sends `acp.open`.
+  No daemon composed an initiator when this note was written, so there was no egress path
+  from a real process.
+  - 2026-10-14 更正（L9 command side）：这条已经不再成立。`runtime/acp-serve.ts` 现在通过
+    `runtime/serve-egress.ts` 组合 egress，并对已接受的 `peers` 拨出 initiator 通道；
+    真实入口证据见 `docs/evidence/acp-l9-command-side-20261013/`。仍然成立的部分：本单元
+    没有 installed-copy、restart、deployed-entrypoint 或跨设备证据。
 - **No control-plane write side.** `runtime/control-process.ts` still hardcodes
   `sessions: []`, `notifications: []`, `configs: []` in its projection, still
   passes no `owner` to `createControlOwner`, and still answers
   `connection.connect`/`connection.disconnect`/`network.membership.apply` with a
   typed `UNSUPPORTED_OPERATION`. `TeamsStatusPort` remains read-only.
+  - 2026-10-14 更正（L9 intent-side）：这条已经不再成立。三条 A2.4 关系命令现在经
+    `config/relations-intent-store.ts` 做一次 CAS 写入；目标不可解析时是 typed `FORBIDDEN`。
+    `TeamsStatusPort` 仍是只读，控制 daemon 仍只写记录、不拨号。
 - **No Session/permission/notification event stream** behind SSE.
 - **No installed-artifact, restart, deployed-entrypoint, live-browser or
   cross-device evidence.** Nothing in this increment was run from an installed

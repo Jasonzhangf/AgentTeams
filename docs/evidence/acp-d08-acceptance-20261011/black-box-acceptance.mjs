@@ -1592,7 +1592,10 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   const connectCode = await refusedCommand({ kind: 'connection.connect', agentId: CONTROL_ID })
   const membershipCode = await refusedCommand({ kind: 'network.membership.apply', agentId: CONTROL_ID, expectedRevision: 1, members: [{ agentId: AGENT_A.agentId, role: 'master' }] })
   const permissionCode = await refusedCommand({ kind: 'permission.reply', agentId: CONTROL_ID, sessionId: 'session-not-owned', permissionId: 'permission-not-pending', decision: 'once', optionId: 'option-not-offered' })
-  assert(connectCode === 'UNSUPPORTED_OPERATION' && membershipCode === 'UNSUPPORTED_OPERATION' && permissionCode === 'UNSUPPORTED_OPERATION',
+  // A2.4/L9: the two relation commands are refused FORBIDDEN because this control config declares
+  // no [peers], so neither can resolve a target and neither may guess a record path.
+  // permission.reply keeps UNSUPPORTED_OPERATION because no Session owner is bound.
+  assert(connectCode === 'FORBIDDEN' && membershipCode === 'FORBIDDEN' && permissionCode === 'UNSUPPORTED_OPERATION',
     `write commands must be typed refusals (${connectCode}/${membershipCode}/${permissionCode})`)
   const malformed = await authFetch('/api/v1/command', {
     method: 'POST', headers: { 'content-type': 'application/json' },

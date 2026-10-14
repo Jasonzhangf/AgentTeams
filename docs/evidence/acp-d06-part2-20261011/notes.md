@@ -17,7 +17,7 @@
 | `docs/design/teams-acp-daemon-config-v4.md` | 原样带入 D00 amendment A2 条文；D06/D07 行改为真实交付与交接面 |
 | `docs/architecture/*.json` | `function-map`、`mainline-call-map`、`module-registry`、`verification-map` 增量更新 |
 | `docs/development-governance.md` | `teams-acp-d06-control` 门禁条目 |
-| `docs/evidence/acp-d06-control-20261011/black-box-control.mjs` | PART 1 期望更新为真实端口绑定后的线面（`UNSUPPORTED_OPERATION`、真实空页） |
+| `docs/evidence/acp-d06-control-20261011/black-box-control.mjs` | PART 1 期望更新为真实端口绑定后的线面（未声明目标的 `FORBIDDEN` 拒绝、真实空页） |
 | `docs/evidence/acp-d06-part2-20261011/black-box-control-part2.mjs` | PART 2 真实端口绑定黑盒（7 检查） |
 | `docs/evidence/acp-d06-part2-20261011/black-box-permission-option.mjs` | PART 2 真实 permission `optionId` 黑盒（10 检查） |
 
@@ -54,7 +54,12 @@ ACP 客户端（loopback listener）。**未使用任何 mock 引擎或 mock 控
 ### 2.3 `black-box-control.mjs`（PART 1，10/10 PASS，exit 0）
 
 绑定真实端口后，PART 1 线面期望同步更新：投影必须带真实 `connections` 数组（无通道时为空）、
-连接变更拒绝码为 `UNSUPPORTED_OPERATION`、`kind=connection` 返回真实空页。
+连接变更被 typed 拒绝、`kind=connection` 返回真实空页。
+
+2026-10-14 更正：该配置声明 `[relations].allowed` 但不声明任何 `[peers]`，所以三条 A2.4 关系命令
+（`connection.connect`、`connection.disconnect`、`network.membership.apply`）现在是目标不可解析的 typed
+`FORBIDDEN` 拒绝，不再是 `UNSUPPORTED_OPERATION`；两个控制黑盒已按新期望更新并在本候选上重跑通过
+（PART 1 10/10、PART 2 7/7，退出码 0）。
 
 ## 3. 定向门禁（真实命令与结果）
 
@@ -262,8 +267,13 @@ stream”。折入后逐半核对：
 - **“binds no Console owner” 仍然成立。** `runtime/control-process.ts:818` 是唯一生产调用点：
   `createControlOwner({ network: network.port, source: network.projection })`，**没有** `owner`
   绑定；`ControlOwnerBinding`（`:77`）只有接口声明，没有任何生产构造点。控制守护进程仍**未**
-  绑定 Session owner，也没有 `connection.connect`/`connection.disconnect`/
-  `network.membership.apply`/定向 ACP ingress。
+  绑定 Session owner，也没有定向 ACP ingress。
+
+  2026-10-14 更正（L9 intent-side）：这段里的 `connection.connect`/`connection.disconnect`/
+  `network.membership.apply` 已经不再属于「未交付」。三条 A2.4 关系命令现在经
+  `config/relations-intent-store.ts` 做一次 CAS 写入，目标不可解析时为 typed `FORBIDDEN`；
+  控制 daemon 仍不拨号、不协商、不报告连接状态。仍然成立的部分是：没有 Session owner、
+  没有定向 ACP ingress、SSE 后面没有 Session/permission/notification 事件流。
 
 因此结论必须分两句说：**“投影现在带真实目录行”为真（本改动范围内，已用真实入口证明）；
 “绑定了真实 Session owner”为假（不在本改动范围）。** A07 的“真实事件驱动动画”因此只被解锁

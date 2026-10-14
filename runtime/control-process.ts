@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import {
   parseDaemonConfigText,
@@ -11,10 +12,19 @@ import {
   type ControlDaemonIntent,
   type DaemonEffectiveConfig,
   type DaemonIntentV4,
+  type PeerIntent,
 } from '../config/daemon-intent.ts'
+import {
+  readRelationsIntentRecord,
+  relationsIntentScopePath,
+  writeRelationsIntentRecord,
+  type RelationsIntentChange,
+} from '../config/relations-intent-store.ts'
+import { RuntimeConfigError, type ConfigApplyResult } from '../config/runtime-config.ts'
 import { createConsoleAuthorization } from '../console-host/src/auth.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
 import type { RelayPeer } from '../control-protocol/agent-services.ts'
+import type { RelationRole } from '../control-protocol/teams-connection.ts'
 import {
   parseConsoleProjection,
   type ConsoleAgentObservationV1,
@@ -59,6 +69,13 @@ import { RegistrationProcessError, startDaemonRegistration, type AgentRegistrati
  * real network facts; the port stays structurally optional so a daemon without the
  * dependency fails with a typed error instead of fabricating connection state. It never
  * infers online or execution state from history.
+ *
+ * The three frozen relation commands (A2.4) are written into the one durable
+ * desired-relations record that the agent daemon observes later
+ * (`config/relations-intent-store.ts`, one record per daemon data directory). This daemon
+ * is that record's single writer: it writes desired intent and the accepted revision
+ * only, and never reports a connection state, because the connection outcome belongs to
+ * the reacting daemon.
  *
  * This file is both the parent lifecycle entry and the detached child entry, exactly like
  * `runtime/registry-process.ts`.
@@ -482,23 +499,76 @@ function projectionWithConnections(projection: ConsoleProjectionV1, port: TeamsS
   return { ...projection, connections }
 }
 
+/**
+ * The accepted control intent facts that own the durable desired-relations record: the
+ * daemon's own accepted `peers` (the only legal connect targets), its accepted
+ * `relations.allowed` (the one role derivation) and the data directory that owns the file.
+ * They are threaded from the daemon's own `loadControlIntent` value; the owner never opens
+ * the config file again and never reads the environment.
+ */
+export interface ControlRelationsIntentFacts {
+  readonly peers: Readonly<Record<string, PeerIntent>>
+  readonly allowedRoles: readonly RelationRole[]
+  /**
+   * The account and scope of the target agent, and the home root the shared record path
+   * resolves from. This daemon's own configured `daemon.dataDirectory` is deliberately
+   * NOT used: an agent daemon must be able to derive the same path from its own facts,
+   * and the frozen v4 `PeerIntent` (`config/daemon-intent.ts`: `agentId`, `hostId`,
+   * `accountId`, `scopeId`, `endpoint?`, `admissionRef?`, `credentialRef`, `tlsTrustRef?`)
+   * carries no peer `dataDirectory`. Adding a key is out of scope, so the one path both
+   * sides derive independently is the shared account and scope layout that
+   * `config/relations-intent-store.ts` exports:
+   * `<home>/.agentteams/relations/<accountId>/<scopeId>/relations-intent.json`.
+   *
+   * Honest limitation: the record is one desired membership set per account and scope,
+   * not one file per agent. A `disconnect` for an agentId this daemon no longer declares
+   * is refused, because its account and scope — and therefore its record — cannot be resolved.
+   */
+  readonly home: string
+}
+
 export interface CreateControlOwnerOptions {
   readonly network?: TeamsStatusPort
   readonly owner?: ControlOwnerBinding
   /**
    * The real projection owner. When bound it owns the complete read, including the
-   * connection rows it already merged; `network` stays the read port for the typed
-   * connection-command refusal.
+   * connection rows it already merged; `network` stays the read port for the connection
+   * projection.
    */
   readonly source?: ControlProjectionSource
+  /**
+   * The accepted control intent facts for the frozen relation commands (A2.4). Without
+   * them those commands fail with the typed absence instead of writing a guessed record.
+   */
+  readonly relations?: ControlRelationsIntentFacts
+}
+
+/** The three frozen relation commands the control daemon writes, and nothing else. */
+type ControlRelationsCommand = Extract<ConsoleCommandV1,
+  { readonly kind: 'connection.connect' | 'connection.disconnect' | 'network.membership.apply' }>
+
+/**
+ * One typed command result from one durable CAS write. The result reports the accepted
+ * record revision only.
+ *
+ * It never reports a connection state: the record is the desired intent, and the agent
+ * daemon observes it later and owns the real connection outcome. A `failed` or `uncertain`
+ * store result keeps its real typed error, so an ambiguous rename is never reported as
+ * applied.
+ */
+function relationsWriteResult(result: ConfigApplyResult): ConsoleCommandResultV1 {
+  if (result.status === 'applied') return { ok: true, result: { acceptedRevision: result.effectiveRevision } }
+  return { ok: false, error: { code: result.error.code, message: result.error.message } }
 }
 
 /**
  * The control owner client. Without a network status port the connection projection stays
- * absent and connection/membership commands fail with the typed absence; nothing is faked.
+ * absent, and without the daemon's accepted intent facts the relation commands fail with
+ * the typed absence; nothing is faked. With those facts the relation commands write the
+ * one durable desired-relations record through the delivered CAS store.
  */
 export function createControlOwner(options: CreateControlOwnerOptions): ConsoleClientV1 {
-  const { network, owner, source } = options
+  const { network, owner, source, relations } = options
   const read = async (): Promise<ConsoleProjectionV1> => {
     if (source !== undefined) return validatedProjection(await source.read())
     const base = owner === undefined
@@ -506,18 +576,63 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
       : validatedProjection(await owner.readProjection())
     return projectionWithConnections(base, network)
   }
-  const connectionCommand = (command: ConsoleCommandV1): ConsoleCommandResultV1 => {
-    if (network === undefined) {
-      return { ok: false, error: { code: 'UNAVAILABLE', message: 'network status port is not bound to this control daemon; connection state is unavailable' } }
+  /**
+   * The three frozen relation commands. They write the durable desired relations record
+   * and never dial, negotiate, or report connection state; the agent daemon reacts to the
+   * record later. The record path is resolved from the target agent's declared account and
+   * scope, never guessed and never this daemon's own data directory.
+   */
+  const relationsCommand = async (command: ControlRelationsCommand): Promise<ConsoleCommandResultV1> => {
+    if (relations === undefined) {
+      return { ok: false, error: { code: 'UNAVAILABLE', message: 'the accepted control intent is not bound to this control daemon; the desired relations record is unavailable' } }
     }
-    // The read port cannot carry a mutation. This part never guesses a connection outcome.
-    return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: `${command.kind} requires a network command channel that the frozen read port does not declare` } }
+    // One desired membership set per account and scope. The target's own account and scope
+    // come from this daemon's accepted `peers`, which is the only place that carries them.
+    const target = Object.values(relations.peers).find(peer => peer.agentId === command.agentId)
+    if (target === undefined) {
+      // No guessed relation and no guessed record path: an agentId this daemon does not
+      // declare has no resolvable account and scope.
+      return { ok: false, error: { code: 'FORBIDDEN', message: `agentId ${command.agentId} is not declared by this control daemon's accepted peers` } }
+    }
+    const path = relationsIntentScopePath({ home: relations.home, accountId: target.accountId, scopeId: target.scopeId })
+    try {
+      if (command.kind === 'network.membership.apply') {
+        // One record means one CAS fence: every member must belong to the same account and
+        // scope as the record, or the set could be written where its own agent never reads.
+        const foreign = command.members.find(member => {
+          const peer = Object.values(relations.peers).find(candidate => candidate.agentId === member.agentId)
+          return peer === undefined || peer.accountId !== target.accountId || peer.scopeId !== target.scopeId
+        })
+        if (foreign !== undefined) {
+          return { ok: false, error: { code: 'FORBIDDEN', message: `member ${foreign.agentId} is not a declared peer of the record's account and scope` } }
+        }
+        // The caller's own expectation is the CAS base, unchanged: a stale client must
+        // conflict instead of overwriting a newer desired set.
+        return relationsWriteResult(await writeRelationsIntentRecord(path, command.expectedRevision, { op: 'replace', peers: command.members }))
+      }
+      // `connect` and `disconnect` carry no expectedRevision, so the accepted revision of
+      // the one durable record is the CAS base. The store still applies the CAS; this
+      // daemon is that record's single writer. A disconnect of an absent relation stays
+      // the store's accepted no-op revision bump.
+      const current = await readRelationsIntentRecord(path)
+      const change: RelationsIntentChange = command.kind === 'connection.connect'
+        // The one role rule: the same derivation `runtime/serve-egress.ts` applies to its
+        // `requestedPeerRole` from the daemon's own accepted `relations.allowed`.
+        ? { op: 'connect', agentId: command.agentId, role: relations.allowedRoles.includes('master') ? 'master' : 'peer' }
+        : { op: 'disconnect', agentId: command.agentId }
+      return relationsWriteResult(await writeRelationsIntentRecord(path, current?.revision ?? 0, change))
+    } catch (error) {
+      // A broken stored record is the store's own typed throw: refuse it here and leave
+      // the durable bytes untouched instead of overwriting them.
+      if (error instanceof RuntimeConfigError) return { ok: false, error: { code: error.code, message: error.message } }
+      throw error
+    }
   }
   return {
     readProjection: read,
     async command(command: ConsoleCommandV1): Promise<ConsoleCommandResultV1> {
       if (command.kind === 'connection.connect' || command.kind === 'connection.disconnect' || command.kind === 'network.membership.apply') {
-        return connectionCommand(command)
+        return await relationsCommand(command)
       }
       if (owner === undefined) {
         return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: `no owner is bound for ${command.kind}` } }
@@ -815,7 +930,20 @@ export async function runControlProcess(argv: readonly string[] = process.argv.s
     // network facts; `createControlOwner` and `createControlHistoryReader` keep the
     // structurally unbound path as a typed absence.
     network = await createControlNetworkStatus(intent, env)
-    const client = createControlOwner({ network: network.port, source: network.projection })
+    // The one desired-relations writer reads the same accepted intent this daemon loaded:
+    // its declared peers and its accepted role set. The record path resolves from the home
+    // root, through the shared convention the agent daemon uses for its own data directory,
+    // because the frozen v4 `PeerIntent` carries no peer `dataDirectory` and no config key
+    // may be added. No environment read and no second config source.
+    const client = createControlOwner({
+      network: network.port,
+      source: network.projection,
+      relations: {
+        peers: intent.peers,
+        allowedRoles: intent.relations.allowed,
+        home: homedir(),
+      },
+    })
     const authorize = createConsoleAuthorization({ username, password, origin, client })
     const history = createControlHistoryReader(network.port)
     const projectionRead = async () => await client.readProjection()

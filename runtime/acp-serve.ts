@@ -5,7 +5,7 @@ import { createServer, isIP, type Server, type Socket } from 'node:net'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import type { AgentDeclaration, AuthenticatedAgent, CapabilityDeclaration, JsonValue } from '../control-protocol/agent-services.ts'
-import type { AcpChannelRef, AcpDelivery, AcpFault, AcpFrame, AcpRpcId } from '../control-protocol/acp.ts'
+import type { AcpChannelRef, AcpDelivery, AcpFault, AcpFaultCode, AcpFrame, AcpRpcId } from '../control-protocol/acp.ts'
 import { AcpError } from '../control-protocol/acp.ts'
 import type { AcpDuplex, EngineAdapter, EngineLaunchInput, EngineStopResult } from '../control-protocol/engine.ts'
 import type { RelationRole } from '../control-protocol/teams-connection.ts'
@@ -25,6 +25,11 @@ import {
 import type { AcpPolicySnapshot } from '../config/acp-policy.ts'
 import type { AgentModelBinding, ConfigTargetIdentity, ModelRef, VersionedRuntimeConfig } from '../config/runtime-config.ts'
 import { providerIntentFingerprint } from '../config/runtime-config.ts'
+import {
+  readRelationsIntentRecord,
+  relationsIntentScopePath,
+  type RelationsIntentRecord,
+} from '../config/relations-intent-store.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
 import { rpcErrorFrame, type AcpHost } from '../agent-host/acp-host.ts'
 import { openCodeAcpAdapter } from '../opencode-adapter/src/acp-engine.ts'
@@ -206,6 +211,15 @@ export interface AcpServeHandle {
   readonly egress: ServeEgressOwner
   /** Every declared peer whose connect attempt failed, with its typed code. */
   readonly egressFailures: readonly ServeEgressFailure[]
+  /**
+   * The desired-relations record this daemon observes. The control daemon owns the
+   * file; this daemon polls it and reacts, and `failures()` is every typed refusal
+   * the watch recorded (an undeclared desired agent, or a broken record).
+   */
+  readonly relationsIntent: {
+    readonly path: string
+    failures(): readonly RelationsIntentWatchFailure[]
+  }
   readonly readiness: AcpServeReadiness
   readonly daemon: AcpAgentDaemon
   stop(): Promise<AcpServeStopReceipt>
@@ -913,6 +927,115 @@ async function verifyReadiness(input: {
 }
 
 /**
+ * The named poll interval of the agent daemon's desired-relations watch. One
+ * control daemon writes one durable record and this daemon reads it, so the
+ * Console stays out of the data path and no control-to-agent channel is added.
+ */
+export const RELATIONS_INTENT_POLL_INTERVAL_MS = 500
+
+/** One typed refusal the watch recorded instead of dialing or crashing. */
+export interface RelationsIntentWatchFailure {
+  readonly agentId: string
+  readonly code: AcpFaultCode
+  readonly message: string
+}
+
+/** The live-relation surface the watch drives; the real owner is `ServeEgressOwner`. */
+export interface RelationsIntentWatchInput {
+  /** The already-built egress owner. The watch never builds a second one. */
+  readonly owner: Pick<ServeEgressOwner, 'connect' | 'disconnect' | 'list'>
+  /** The one shared record path. `config/relations-intent-store.ts` owns its derivation. */
+  readonly recordPath: string
+  /** The accepted intent's declared peers. An agentId outside this set is never dialed. */
+  readonly peers: Readonly<Record<string, PeerIntent>>
+}
+
+export interface RelationsIntentWatch {
+  /** One reconcile pass: make the live rows match the record's desired set. */
+  reconcile(): Promise<void>
+  /** The one shared record path this watch observes. */
+  readonly recordPath: string
+  /** Every typed refusal this watch recorded in its lifetime. */
+  failures(): readonly RelationsIntentWatchFailure[]
+}
+
+/**
+ * React to the durable desired-relations record that the control daemon owns. One
+ * reconcile pass dials each newly desired declared peer and disconnects each live
+ * peer the record no longer desires.
+ *
+ * The record carries the control daemon's desired role, but it never overrides this
+ * daemon's own accepted policy: the role pair still comes from `relations.allowed`
+ * (`runtime/serve-egress.ts`), so a desired role this daemon does not accept stays a
+ * typed dial refusal instead of an escalated grant.
+ *
+ * A missing record is a plain no-op, and a broken record is a typed refusal that
+ * leaves the live rows untouched. Neither one crashes the daemon.
+ */
+export function createRelationsIntentWatch(input: RelationsIntentWatchInput): RelationsIntentWatch {
+  const declaredPeerName = new Map<string, string>()
+  for (const [peerName, peer] of Object.entries(input.peers)) declaredPeerName.set(peer.agentId, peerName)
+  const failures: RelationsIntentWatchFailure[] = []
+  const recorded = new Set<string>()
+  // A poll repeats the same refusal every tick, so the list keeps each distinct
+  // refusal once instead of growing without bound.
+  const refuse = (agentId: string, code: AcpFaultCode, message: string): void => {
+    const key = `${agentId}\u0000${code}\u0000${message}`
+    if (recorded.has(key)) return
+    recorded.add(key)
+    failures.push({ agentId, code, message })
+  }
+  const refuseError = (agentId: string, error: unknown, fallback: string): void => {
+    refuse(agentId, error instanceof AcpError ? error.code : 'ENGINE_UNAVAILABLE', messageOf(error, fallback))
+  }
+  const reconcile = async (): Promise<void> => {
+    let desired: RelationsIntentRecord | undefined
+    try {
+      desired = await readRelationsIntentRecord(input.recordPath)
+    } catch (error) {
+      // The store's typed throw for a broken record. Keep every live row as it is,
+      // and keep the store's own fault family through the one config translation.
+      refuse('', configFault(error).code, messageOf(error, 'the desired relations record could not be read'))
+      return
+    }
+    if (desired === undefined) return
+    const wanted = new Map<string, string>()
+    for (const relation of desired.peers) {
+      const peerName = declaredPeerName.get(relation.agentId)
+      if (peerName === undefined) {
+        // Never dial an agent this daemon's accepted intent does not declare.
+        refuse(
+          relation.agentId,
+          'FORBIDDEN',
+          `relations intent desires agent ${relation.agentId}, which this daemon's accepted intent does not declare`,
+        )
+        continue
+      }
+      wanted.set(relation.agentId, peerName)
+    }
+    for (const row of input.owner.list()) {
+      if (wanted.has(row.agentId)) continue
+      await input.owner.disconnect(row.agentId).catch(error => refuseError(row.agentId, error, `peer ${row.peerName} could not be disconnected`))
+    }
+    const live = new Set(input.owner.list().map(row => row.agentId))
+    for (const [agentId, peerName] of wanted) {
+      if (live.has(agentId)) continue
+      await input.owner.connect(peerName).catch(error => refuseError(agentId, error, `peer ${peerName} could not be dialed`))
+    }
+  }
+  return { reconcile, recordPath: input.recordPath, failures: () => [...failures] }
+}
+
+/**
+ * The one shared record path this daemon reads. It is derived from the daemon's own
+ * accepted account and scope plus the established `~/.agentteams` local root, so the
+ * control daemon resolves the same file without a new config key.
+ */
+export function agentRelationsIntentPath(home: string, daemon: AgentDaemonIntent['daemon']): string {
+  return relationsIntentScopePath({ home, accountId: daemon.accountId, scopeId: daemon.scopeId })
+}
+
+/**
  * Start exactly one agent daemon and serve local ACP channels on its configured
  * listener. Every failure before the listener is bound stops the spawned engine
  * and rethrows the typed fault, so a failed start never leaves a child behind.
@@ -1142,6 +1265,19 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       }
       const egressFailures = egressOwner.failures()
 
+      // The desired-relations watch. The control daemon owns the record; this daemon
+      // reads it on a named interval and makes its live egress rows match, so the
+      // Console stays out of the data path and no control-to-agent channel is added.
+      // `runtime/serve-egress.ts` owns the role derivation the record never overrides.
+      const relationsWatch = createRelationsIntentWatch({
+        owner: egressOwner,
+        recordPath: agentRelationsIntentPath(homedir(), agent.daemon),
+        peers: agent.peers,
+      })
+      const relationsTimer = setInterval(() => { void relationsWatch.reconcile() }, RELATIONS_INTENT_POLL_INTERVAL_MS)
+      // The watch must never keep a stopped daemon's event loop alive.
+      relationsTimer.unref()
+
       const teamsStatus = createTeamsStatusPort({
         ledger,
         localAgentId: agent.daemon.id,
@@ -1162,6 +1298,9 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       const stop = (): Promise<AcpServeStopReceipt> => {
         if (stopping !== undefined) return stopping
         stopping = (async (): Promise<AcpServeStopReceipt> => {
+          // The watch stops before the egress it drives, so no reconcile can dial a
+          // peer while the channels it needs are closing.
+          clearInterval(relationsTimer)
           // Order: the daemon's own egress rows, the LAN listener, the local
           // server (which destroys its channels), the registration client, then
           // the daemon and the owned directory. The egress closes BEFORE the host
@@ -1201,6 +1340,10 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
         teamsStatus,
         egress: egressOwner,
         egressFailures,
+        relationsIntent: {
+          path: relationsWatch.recordPath,
+          failures: () => relationsWatch.failures(),
+        },
         readiness: {
           agentId: agent.daemon.id,
           engineInstanceId,

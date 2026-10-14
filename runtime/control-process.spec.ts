@@ -1,6 +1,6 @@
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
@@ -23,16 +23,19 @@ import {
 } from './control-process.ts'
 import { createAcpHistoryStore } from './acp-history-store.ts'
 import { createTeamsConnectionHistory } from '../network/teams-connection-history.ts'
+import { readRelationsIntentRecord, relationsIntentScopePath } from '../config/relations-intent-store.ts'
 import type { HistoryQuery, ConsoleProjectionSnapshot, TeamsConnectionStatus } from '../control-protocol/teams-state.ts'
 
 let directory: string
 let key: string
 let cert: string
+let HOME: string
 const startedConfigs: string[] = []
 const relays: RelayServer[] = []
 const registeredPeers: RegistrationClient[] = []
 const PASSWORD_ENV = 'TEAMS_CONTROL_TEST_PASSWORD'
 const DISCOVERY_ENV = 'TEAMS_CONTROL_TEST_DISCOVERY'
+const INDEX_ENV = 'TEAMS_CONTROL_TEST_PEER_CREDENTIAL'
 const PASSWORD = 'control-secret'
 
 beforeAll(() => {
@@ -43,6 +46,11 @@ beforeAll(() => {
     '-keyout', join(directory, 'key.pem'), '-out', join(directory, 'ca.pem')], { stdio: 'ignore' })
   key = readFileSync(join(directory, 'key.pem'), 'utf8')
   cert = readFileSync(join(directory, 'ca.pem'), 'utf8')
+  // The shared record root for this spec: never the operator's real home. The daemon
+  // resolves its own record root from its home, so the fixture home is what it uses.
+  HOME = join(directory, 'home')
+  mkdirSync(HOME, { recursive: true })
+  env = { [PASSWORD_ENV]: PASSWORD, HOME }
 })
 afterEach(async () => {
   // Explicit PID cleanup only; never a pattern kill.
@@ -74,12 +82,35 @@ async function freePort(): Promise<number> {
   })
 }
 
+/**
+ * The one shared desired-relations record path for the account and scope this
+ * spec's configs declare. The writer (the control daemon) resolves the target peer's
+ * account and scope from its accepted `peers`; the reader (the agent daemon) resolves
+ * its own `daemon.accountId` and `daemon.scopeId`. They must agree, and this helper is
+ * that shared derivation.
+ *
+ * Every case passes its OWN `home`, so a case never reads a record another case wrote and
+ * a test never writes a record into the operator's real home.
+ */
+function intentRecordPath(home: string, accountId = 'local', scopeId = 'local'): string {
+  return relationsIntentScopePath({ home, accountId, scopeId })
+}
+
 interface ControlConfigOptions {
   readonly port?: number
   readonly kind?: 'control' | 'registry'
   readonly dataDirectory?: string
   readonly auth?: boolean
   readonly discovery?: string
+  /** Overrides the accepted `[relations].allowed`; the default is the master/peer pair. */
+  readonly allowedRoles?: readonly string[]
+  /** Declared accepted peers, written as one `[peers.<name>]` table each. */
+  readonly peers?: readonly string[]
+  /**
+   * Declared accepted peers that live in a DIFFERENT account and scope. They are real peers
+   * of this daemon, so only the account/scope comparison can refuse them as record members.
+   */
+  readonly foreignPeers?: readonly string[]
 }
 
 async function controlConfig(options: ControlConfigOptions = {}): Promise<string> {
@@ -105,8 +136,22 @@ port = ${port}
 allowedOrigin = "http://127.0.0.1:${port}"
 ${auth}
 [relations]
-allowed = ["master", "peer"]
-`
+allowed = ${JSON.stringify(options.allowedRoles ?? ['master', 'peer'])}
+${(options.peers ?? []).map((agentId, index) => `
+[peers.${agentId}]
+agentId = "${agentId}"
+hostId = "${agentId}-host"
+accountId = "local"
+scopeId = "local"
+credentialRef = "env:${INDEX_ENV}${index}"
+`).join('')}${(options.foreignPeers ?? []).map((agentId, index) => `
+[peers.${agentId}]
+agentId = "${agentId}"
+hostId = "${agentId}-host"
+accountId = "other-account"
+scopeId = "other-scope"
+credentialRef = "env:${INDEX_ENV}${index + (options.peers ?? []).length}"
+`).join('')}`
   writeFileSync(configPath, `version = 4
 
 [daemon]
@@ -167,7 +212,12 @@ function track(configPath: string): string {
   return configPath
 }
 
-const env = { [PASSWORD_ENV]: PASSWORD }
+/**
+ * The daemon's environment. `HOME` points at this spec's own temporary root so a daemon
+ * under test derives the shared desired-relations record there, never in the operator's
+ * real home. It is assigned in `beforeAll` with the rest of the fixture.
+ */
+let env: Record<string, string>
 const basic = `Basic ${Buffer.from(`teams:${PASSWORD}`).toString('base64')}`
 
 async function expectFault(promise: Promise<unknown>, code: string): Promise<void> {
@@ -225,9 +275,11 @@ it('starts the production control entry, serves the authenticated WebUI and stop
   const acceptedShape = await fetch(origin + '/api/v1/command', { method: 'POST', headers: { authorization: basic, 'content-type': 'application/json' },
     body: JSON.stringify({ kind: 'connection.connect', agentId: 'control-a' }) })
   expect(acceptedShape.status).toBe(200)
-  // The real D05 read port is bound, so the command reaches it and is refused with the typed
-  // "the frozen read port declares no mutation" outcome instead of a fabricated result.
-  expect(await acceptedShape.json()).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+  // The daemon binds its accepted intent, so the command resolves the target against the
+  // declared peers. `control-a` is this daemon's own identity and the config declares no
+  // peers, so the write is refused FORBIDDEN and no relation is guessed or written.
+  expect(await acceptedShape.json()).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(existsSync(intentRecordPath(HOME))).toBe(false)
 
   // History is the real D05 connection-history owner's page: a real (empty) read, not an absence.
   const history = await fetch(origin + '/api/v1/history?version=1&limit=5', { headers: { authorization: basic } })
@@ -381,7 +433,7 @@ it('reads history only through the frozen port and fails typed when it is absent
   expect(seen).toHaveLength(1)
 })
 
-it('keeps the connection projection absent and connection commands typed when the port is unbound', async () => {
+it('keeps the connection projection absent and relation commands typed without the accepted intent facts', async () => {
   const owner = createControlOwner({})
   expect(await owner.readProjection()).toEqual({ version: 1, agents: [], sessions: [], notifications: [], configs: [] })
   expect(await owner.command({ kind: 'connection.connect', agentId: 'a' }))
@@ -396,8 +448,189 @@ it('keeps the connection projection absent and connection commands typed when th
     observedAt: '2026-10-11T00:00:00.000Z', role: 'peer' }
   const bound = createControlOwner({ network: { history: async () => ({ records: [] }), connections: () => [status] } })
   expect(await bound.readProjection()).toMatchObject({ connections: [{ status, halfOpen: true }] })
+  // The read port is not a mutation channel: without the accepted intent facts the relation
+  // commands keep the typed absence instead of writing a guessed record.
   expect(await bound.command({ kind: 'connection.connect', agentId: 'b' }))
-    .toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+    .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+})
+
+it('writes the declared peer relation from the frozen relation commands and leaves the projection unchanged', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-intent-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  // This case's own record root, so it never reads a record another case wrote.
+  const home = join(directory, `home-intent-write-${port}`)
+  const recordPath = intentRecordPath(home)
+  // One real D05 status row: a desired-intent write must never add, drop or rewrite a
+  // connection row, and must never report that connection state back.
+  const status: TeamsConnectionStatus = { version: 1, remoteAgentId: 'peer-b', state: 'disconnected', targetGeneration: 1,
+    observedAt: '2026-10-14T00:00:00.000Z', role: 'peer' }
+  const owner = createControlOwner({
+    network: { history: async () => ({ records: [] }), connections: () => [status] },
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+  const before = await owner.readProjection()
+
+  // The declared peer is the only legal target. The desired role follows the one derivation
+  // `runtime/serve-egress.ts` applies to `requestedPeerRole`: this config's accepted relations
+  // include master, so the desired role for the peer is master.
+  expect(await owner.command({ kind: 'connection.connect', agentId: 'peer-b' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  expect(await readRelationsIntentRecord(recordPath)).toMatchObject({ revision: 1, peers: [{ agentId: 'peer-b', role: 'master' }] })
+  // The result reports the accepted revision only, and the projection stays byte-identical.
+  expect(await owner.readProjection()).toEqual(before)
+
+  // Disconnect removes that desired relation from the same record and bumps the revision.
+  expect(await owner.command({ kind: 'connection.disconnect', agentId: 'peer-b' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 2 } })
+  expect(await readRelationsIntentRecord(recordPath)).toMatchObject({ revision: 2, peers: [] })
+  expect(await owner.readProjection()).toEqual(before)
+})
+
+it('derives the desired peer role from the daemon own accepted relations', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-intent-role-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, allowedRoles: ['peer'], peers: ['peer-c'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-intent-role-${port}`)
+  const owner = createControlOwner({
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+  // A daemon whose accepted relations do not include master desires `peer`, the same branch
+  // the egress owner takes for `requestedPeerRole`.
+  expect(await owner.command({ kind: 'connection.connect', agentId: 'peer-c' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  expect(await readRelationsIntentRecord(intentRecordPath(home)))
+    .toMatchObject({ peers: [{ agentId: 'peer-c', role: 'peer' }] })
+})
+
+it('refuses an undeclared connect target with FORBIDDEN and writes no record', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-intent-unknown-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-intent-unknown-${port}`)
+  const recordPath = intentRecordPath(home)
+  const owner = createControlOwner({
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+  expect(await owner.command({ kind: 'connection.connect', agentId: 'agent-not-declared' }))
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  // Never a guessed relation or a guessed record: no record file is created at all.
+  expect(existsSync(recordPath)).toBe(false)
+  // A declared peer still writes through the same owner, so the refusal above is the target
+  // rule and not a broken store.
+  expect(await owner.command({ kind: 'connection.connect', agentId: 'peer-b' })).toMatchObject({ ok: true })
+  expect(existsSync(recordPath)).toBe(true)
+})
+
+it('applies the whole desired membership set with the caller expectation and refuses a stale revision', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-intent-apply-${port}`)
+  // Both members are declared peers of the same account and scope, so the whole set has one
+  // resolvable record and one CAS fence.
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b', 'peer-d'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-intent-apply-${port}`)
+  const recordPath = intentRecordPath(home)
+  const owner = createControlOwner({
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+  const members = [
+    { agentId: 'peer-b', role: 'master' as const },
+    { agentId: 'peer-d', role: 'peer' as const },
+  ]
+  // A successful apply writes the whole desired set in one CAS and reports its revision.
+  expect(await owner.command({ kind: 'network.membership.apply', agentId: 'peer-b', expectedRevision: 0, members }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  expect(await readRelationsIntentRecord(recordPath)).toMatchObject({ revision: 1, peers: members })
+
+  // The caller's expectation is passed through unchanged: a stale client conflicts and the
+  // durable bytes stay exactly as they were. The submitted set is itself legal, so the CAS
+  // is the only reason this write is refused.
+  const before = readFileSync(recordPath)
+  expect(await owner.command({ kind: 'network.membership.apply', agentId: 'peer-b', expectedRevision: 0, members: [{ agentId: 'peer-b', role: 'master' }] }))
+    .toMatchObject({ ok: false, error: { code: 'REVISION_CONFLICT' } })
+  expect(readFileSync(recordPath).equals(before)).toBe(true)
+  expect(await readRelationsIntentRecord(recordPath)).toMatchObject({ revision: 1, peers: members })
+
+  // A member outside the record's account and scope is refused before any write, because one
+  // record has one CAS fence and that member would never read this file.
+  expect(await owner.command({ kind: 'network.membership.apply', agentId: 'peer-b', expectedRevision: 1, members: [{ agentId: 'peer-b', role: 'master' }, { agentId: 'agent-not-declared', role: 'peer' }] }))
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(readFileSync(recordPath).equals(before)).toBe(true)
+})
+
+it('refuses a declared peer that lives in another account and scope as a record member', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-intent-foreign-${port}`)
+  // `peer-foreign` IS a declared accepted peer of this daemon. Only the account/scope
+  // comparison can refuse it, so this case isolates that rule from the undeclared-target rule.
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'], foreignPeers: ['peer-foreign'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-intent-foreign-${port}`)
+  const recordPath = intentRecordPath(home)
+  const owner = createControlOwner({
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+
+  // The foreign peer is really accepted: it is present in the intent this owner was given.
+  expect(intent.peers['peer-foreign']).toMatchObject({ accountId: 'other-account', scopeId: 'other-scope' })
+
+  // A local set still writes, so the refusal below is the member rule and not a broken owner.
+  expect(await owner.command({ kind: 'network.membership.apply', agentId: 'peer-b', expectedRevision: 0, members: [{ agentId: 'peer-b', role: 'master' }] }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  const before = readFileSync(recordPath)
+
+  // Adding the foreign peer would write a member that never reads this file, so the whole
+  // apply is refused and the durable bytes stay exactly as they were.
+  expect(await owner.command({ kind: 'network.membership.apply', agentId: 'peer-b', expectedRevision: 1, members: [{ agentId: 'peer-b', role: 'master' }, { agentId: 'peer-foreign', role: 'peer' }] }))
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(readFileSync(recordPath).equals(before)).toBe(true)
+  expect(await readRelationsIntentRecord(recordPath)).toMatchObject({ revision: 1, peers: [{ agentId: 'peer-b', role: 'master' }] })
+
+  // A connect for the foreign peer is NOT a refusal: the writer resolves the target's own
+  // account and scope, so it writes the record that peer's own daemon reads. The local record
+  // stays exactly as it was, which is what makes the member rule above necessary.
+  expect(await owner.command({ kind: 'connection.connect', agentId: 'peer-foreign' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  expect(readFileSync(recordPath).equals(before)).toBe(true)
+  expect(await readRelationsIntentRecord(intentRecordPath(home, 'other-account', 'other-scope')))
+    .toMatchObject({ revision: 1, peers: [{ agentId: 'peer-foreign', role: 'master' }] })
+})
+
+it('keeps the typed refusal when the relations record cannot be opened or saved', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-intent-failure-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-intent-failure-${port}`)
+  const recordPath = intentRecordPath(home)
+  const owner = createControlOwner({
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+
+  // A broken stored record is the store's own typed throw: the owner refuses it and the
+  // broken bytes stay exactly as they were instead of being overwritten.
+  const recordDirectory = dirname(recordPath)
+  mkdirSync(recordDirectory, { recursive: true })
+  const malformed = '{ "version": 1, "revision": 1, "peers": ['
+  writeFileSync(recordPath, malformed, 'utf8')
+  expect(await owner.command({ kind: 'connection.connect', agentId: 'peer-b' }))
+    .toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
+  expect(readFileSync(recordPath, 'utf8')).toBe(malformed)
+
+  // A record directory that cannot be written never becomes a fabricated success.
+  rmSync(recordPath, { force: true })
+  chmodSync(recordDirectory, 0o500)
+  try {
+    expect(await owner.command({ kind: 'connection.connect', agentId: 'peer-b' }))
+      .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+    expect(existsSync(recordPath)).toBe(false)
+  } finally {
+    chmodSync(recordDirectory, 0o700)
+  }
 })
 
 it('emits a full snapshot only when the polling projection changes and reports loss on owner failure', async () => {
@@ -491,6 +724,7 @@ it('serves the real D05 connection projection and connection history over the wi
   expect(written).toMatchObject({ kind: 'connection', sequence: 1 })
 
   const configPath = track(await controlConfig({ port, dataDirectory }))
+  const recordPath = intentRecordPath(HOME)
   const started = await startControlDaemon(configPath, { env })
   const origin = started.url!
 
@@ -512,14 +746,19 @@ it('serves the real D05 connection projection and connection history over the wi
   expect(requestKind.status).toBe(502)
   expect(await requestKind.json()).toEqual({ message: 'Console owner request failed; outcome not inferred' })
 
-  // A connection mutation has no owner on the frozen read port: typed refusal, never faked.
+  // A relation command writes the durable desired record through the daemon's own accepted
+  // intent. `peer-b` is not declared by this config, so the command is refused FORBIDDEN and
+  // no relation is written; the connection history is untouched by that refusal.
   const command = await fetch(origin + '/api/v1/command', {
     method: 'POST',
     headers: { authorization: basic, 'content-type': 'application/json' },
     body: JSON.stringify({ kind: 'connection.connect', agentId: 'peer-b' }),
   })
   expect(command.status).toBe(200)
-  expect(await command.json()).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+  expect(await command.json()).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(existsSync(recordPath)).toBe(false)
+  const historyAfterRefusal = await fetch(origin + '/api/v1/history?version=1&kind=connection&limit=5', { headers: { authorization: basic } })
+  expect(await historyAfterRefusal.json()).toMatchObject({ records: [{ connectionId: 'connection-1', sequence: 1 }] })
 
   expect((await stopControlDaemon(configPath)).state).toBe('stopped')
   // The durable record written above is still on disk after the stop.

@@ -251,9 +251,13 @@ exit 0) to support the corrected count.
 
 ## 7. Honest limits
 
-- **The initiator is still not delivered.** `network/teams-ingress.ts` remains the
-  responder composer and still never sends `acp.open`. A3 removes the blocker that
-  made an initiator impossible; composing one is a separate milestone.
+- **The initiator is still not delivered.** *(SUPERSEDED 2026-10-14; see below.)*
+  `network/teams-ingress.ts` remains the responder composer and still never sends
+  `acp.open`. A3 removed the blocker that made an initiator impossible; composing one
+  was a separate milestone.
+  - 2026-10-14 更正（L9 command side）：initiator 已交付。`runtime/acp-serve.ts` 通过
+    `runtime/serve-egress.ts` 组合 egress 并对声明的 peer 拨出；见
+    `docs/evidence/acp-l9-command-side-20261013/` 与本节第 8 项。
 - **No installed-artifact, restart, deployed-entrypoint, browser or cross-device
   evidence.** This milestone reaches source, test and build only. Nothing here
   proves an installed copy or a live LAN channel.
@@ -267,9 +271,15 @@ exit 0) to support the corrected count.
 
 ## 8. Retained obligations
 
-1. Compose the initiator, and bind `connection.connect` at
+1. ~~Compose the initiator, and bind `connection.connect` at
    `runtime/control-process.ts:818`, where `createControlOwner` is currently called
-   without an `owner`.
+   without an `owner`.~~ **DELIVERED 2026-10-14.** The initiator is composed by
+   `runtime/acp-serve.ts` through `runtime/serve-egress.ts` (L9 command side), and
+   `connection.connect` is bound as a durable CAS write through
+   `config/relations-intent-store.ts` (L9 intent side), not as an `owner` binding: the
+   control daemon writes the desired-relations record and the agent daemon dials.
+   `createControlOwner` still receives no `owner`, so the Session half of this
+   obligation stays open.
 
 The re-run of `cli/package-install.spec.ts` on the committed candidate is recorded in
 section 4.1. The independent review of section 6 is complete, and its finding is fixed
