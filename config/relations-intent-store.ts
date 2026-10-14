@@ -6,17 +6,18 @@ import type { ConfigApplyError, ConfigApplyResult, ManagedConfigUncertainty } fr
 import { RuntimeConfigError } from './runtime-config.ts'
 
 /**
- * Durable desired-relations intent: one record per daemon data directory.
+ * Durable desired-relations intent: one record per agent identity.
  *
  * The control daemon writes the peer relations it wants; the agent daemon reads
- * the same file. The record owns only the desired intent and its revision. It
- * never mirrors live connection state, negotiation results, or credentials, and
- * a reader never falls back to a default when the record is missing or broken.
+ * the same record at the shared conventional path (`relationsIntentPathFor`). The
+ * record owns only the desired intent and its revision. It never mirrors live
+ * connection state, negotiation results, or credentials, and a reader never falls
+ * back to a default when the record is missing or broken.
  */
 export const RELATIONS_INTENT_VERSION = 1
 export type RelationsIntentVersion = typeof RELATIONS_INTENT_VERSION
 
-/** Fixed file name inside the owning daemon's `daemon.dataDirectory`. */
+/** Fixed file name inside the agent's record directory. */
 export const RELATIONS_INTENT_FILE_NAME = 'relations-intent.json'
 
 /** One desired peer relation; `role` is the frozen control-protocol role. */
@@ -41,6 +42,39 @@ export type RelationsIntentChange =
 /** The owning daemon's record path. One derivation serves the writer and the reader. */
 export function relationsIntentPath(dataDirectory: string): string {
   return resolve(dataDirectory, RELATIONS_INTENT_FILE_NAME)
+}
+
+/**
+ * The shared record path both daemons derive independently.
+ *
+ * The writer (the control daemon) and the reader (the agent daemon) must agree
+ * without a new config key, and the frozen v4 `PeerIntent` carries no peer
+ * `dataDirectory`. The one identity both sides already carry is the account and
+ * scope pair: the writer reads the target peer's `accountId` and `scopeId` from
+ * its own declared `peers`, and the reader reads its own `daemon.accountId` and
+ * `daemon.scopeId`. `~/.agentteams` is the project's established local root
+ * (`runtime/acp-serve.ts` resolves its own `configDirectory` from it, and
+ * `config/`'s local layout uses it), so the record is one desired membership set
+ * per account and scope.
+ *
+ * Limitation: a control daemon and an agent daemon in different accounts or
+ * scopes resolve different records. The quick-start layout gives both `local`.
+ */
+export function relationsIntentScopeDirectory(input: {
+  readonly home: string
+  readonly accountId: string
+  readonly scopeId: string
+}): string {
+  return resolve(input.home, '.agentteams', 'relations', input.accountId, input.scopeId)
+}
+
+/** The one shared record path for one account and scope. */
+export function relationsIntentScopePath(input: {
+  readonly home: string
+  readonly accountId: string
+  readonly scopeId: string
+}): string {
+  return relationsIntentPath(relationsIntentScopeDirectory(input))
 }
 
 /**
