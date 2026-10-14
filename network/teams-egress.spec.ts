@@ -232,8 +232,23 @@ interface TwoSides {
   readonly listenerSocket: SocketEnd
   readonly dialerWire: unknown[]
   readonly historyFaults: AcpFault[]
-  dial(overrides?: { readonly connectionId?: string; readonly engineInstanceId?: string }): Promise<Awaited<ReturnType<typeof openTeamsEgress>>>
+  dial(overrides?: { readonly connectionId?: string; readonly engineInstanceId?: string; readonly history?: TeamsConnectionHistory }): Promise<Awaited<ReturnType<typeof openTeamsEgress>>>
   listen(): Promise<Awaited<ReturnType<typeof openTeamsIngress>>>
+}
+
+/**
+ * A history that refuses every write. `onHistoryFault` must report the failure
+ * without blocking the live connection: the durable record is best-effort after
+ * the effect, never a precondition for it.
+ */
+class FailingHistory implements TeamsConnectionHistory {
+  async record(): Promise<never> {
+    throw new AcpError('HISTORY_UNAVAILABLE', 'the test refused this history write')
+  }
+
+  async query(): Promise<never> {
+    throw new AcpError('UNSUPPORTED_OPERATION', 'teams-egress.spec: this case never reads the connection history back')
+  }
 }
 
 /**
@@ -298,7 +313,7 @@ function twoSides(options: {
       host: dialerHost,
       policy: dialerPolicy,
       engineInstanceId: overrides.engineInstanceId ?? ENGINE_A,
-      history: dialerHistory,
+      history: overrides.history ?? dialerHistory,
       ledger: dialerLedger,
       timeoutMs: 2_000,
       openTimeoutMs: 2_000,
@@ -414,9 +429,43 @@ describe('initiator egress composition (D00 amendment A3)', () => {
     expect(sides.dialerLedger.list()).toEqual([
       expect.objectContaining({ connectionId: 'conn-a', state: 'failed' }),
     ])
+    // The failed ledger names THIS side's generation as its own, never the peer's:
+    // the peer's generation belongs on the wire ref only.
+    expect(sides.dialerLedger.list()[0].targetGeneration).toBe(GENERATION_A)
     expect(sides.dialerSocket.closeCalls).toHaveLength(1)
     expect(sides.dialerHistory.entries.some(entry => entry.event === 'connection.negotiated')).toBe(false)
     expect(sides.dialerHost.opens).toEqual([])
+  })
+
+  it('records connection.failed and a failed ledger when an unexpected frame aborts the read loop', async () => {
+    const sides = twoSides()
+    const { handle } = await connect(sides)
+
+    // Sent from the responder end so it arrives at the dialer's read loop. It is
+    // a well-formed Teams frame that is not one of the five ACP channel kinds,
+    // so the initiator session rejects it typed and the read loop ends; the
+    // egress must mark the ledger failed and record the durable failure, not
+    // leave a ready record and silence.
+    await sides.listenerSocket.send({
+      bytes: Buffer.from(JSON.stringify({
+        version: 1,
+        kind: 'teams.connection.context',
+        connectionId: 'conn-a',
+        targetGeneration: GENERATION_A,
+        capabilitiesRevision: 'caps-a',
+        policyRevision: 7,
+      })),
+      binary: false,
+    })
+    await handle.done
+
+    expect(sides.dialerLedger.list()).toEqual([
+      expect.objectContaining({ connectionId: 'conn-a', state: 'failed' }),
+    ])
+    expect(sides.dialerLedger.list()[0].targetGeneration).toBe(GENERATION_A)
+    const failed = sides.dialerHistory.entries.filter(entry => entry.event === 'connection.failed')
+    expect(failed).toHaveLength(1)
+    expect(failed[0].error?.code).toBe('INVALID_ACP_FRAME')
   })
 
   it('records the negotiation and the channel, then closes the ledger when the session ends', async () => {
@@ -425,6 +474,9 @@ describe('initiator egress composition (D00 amendment A3)', () => {
     expect(sides.dialerHistory.entries.map(entry => entry.event)).toEqual(['connection.negotiated', 'channel.opened'])
     expect(sides.dialerHistory.entries[1].engineInstanceId).toBe(ENGINE_A)
     expect(sides.dialerHistory.entries[1].channelId).toBe(handle.session.channels[0].localRef.channelId)
+    // The durable channel record carries this side's own connection key, never the
+    // peer's: only the channel/engine pair on the wire ref names the target.
+    expect(sides.dialerHistory.entries[1].connectionId).toBe('conn-a')
     expect(sides.dialerLedger.list()).toEqual([
       expect.objectContaining({ connectionId: 'conn-a', state: 'ready', remoteAgentId: 'agent-b' }),
     ])
@@ -447,12 +499,33 @@ describe('initiator egress composition (D00 amendment A3)', () => {
   it('refuses a reused connection id instead of replacing the live ledger record', async () => {
     const sides = twoSides()
     await connect(sides)
-    expect(() => sides.dialerLedger.open({
-      remoteAgentId: 'agent-b',
-      connectionId: 'conn-a',
-      state: 'negotiating',
-      targetGeneration: GENERATION_A,
-      observedAt: new Date().toISOString(),
-    })).toThrowError(AcpError)
+    // The second dial goes through the egress itself, so the guard under test is
+    // the one the egress runs before it writes anything: the live `conn-a` record
+    // must survive and the refused dial must not reach the wire.
+    await expect(sides.dial()).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(sides.dialerLedger.list()).toEqual([
+      expect.objectContaining({ connectionId: 'conn-a', state: 'ready' }),
+    ])
+    expect(sides.dialerLedger.list()).toHaveLength(1)
+  })
+
+  it('reports a history write failure through onHistoryFault and never blocks the live connection', async () => {
+    const sides = twoSides()
+    const listening = sides.listen().catch(() => undefined)
+    // A durable-history refusal is an isolated failure: the connection, the
+    // negotiation and the channel must not change because the history store did.
+    const handle = await sides.dial({ history: new FailingHistory() })
+    await listening
+    await until(() => sides.listenerHost.opens.length === 1, 'the responder opened its channel')
+
+    expect(handle.negotiation.state).toBe('agreed')
+    expect(handle.session.channels).toHaveLength(1)
+    expect(sides.dialerLedger.list()).toEqual([
+      expect.objectContaining({ connectionId: 'conn-a', state: 'ready' }),
+    ])
+    const faults = sides.historyFaults.map(fault => fault.code)
+    expect(faults).toContain('HISTORY_UNAVAILABLE')
+    expect(faults.length).toBeGreaterThan(0)
+    expect(sides.listenerHost.opens).toHaveLength(1)
   })
 })
