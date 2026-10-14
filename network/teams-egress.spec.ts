@@ -442,16 +442,18 @@ describe('initiator egress composition (D00 amendment A3)', () => {
     const { handle } = await connect(sides)
 
     // Sent from the responder end so it arrives at the dialer's read loop. It is
-    // a well-formed Teams frame that is not one of the five ACP channel kinds,
-    // so the initiator session rejects it typed and the read loop ends; the
-    // egress must mark the ledger failed and record the durable failure, not
-    // leave a ready record and silence.
+    // a well-formed Teams frame — it carries the D00 A3 mandatory
+    // `engineInstanceId`, so the frozen parser accepts it — that is not one of
+    // the five ACP channel kinds. The initiator session therefore rejects it
+    // typed and the read loop ends; the egress must mark the ledger failed and
+    // record the durable failure, not leave a ready record and silence.
     await sides.listenerSocket.send({
       bytes: Buffer.from(JSON.stringify({
         version: 1,
         kind: 'teams.connection.context',
         connectionId: 'conn-a',
         targetGeneration: GENERATION_A,
+        engineInstanceId: ENGINE_B,
         capabilitiesRevision: 'caps-a',
         policyRevision: 7,
       })),
@@ -501,12 +503,14 @@ describe('initiator egress composition (D00 amendment A3)', () => {
     await connect(sides)
     // The second dial goes through the egress itself, so the guard under test is
     // the one the egress runs before it writes anything: the live `conn-a` record
-    // must survive and the refused dial must not reach the wire.
+    // must survive and the refused dial must add nothing to the wire.
+    const wireBefore = sides.dialerWire.length
     await expect(sides.dial()).rejects.toMatchObject({ code: 'CONFLICT' })
     expect(sides.dialerLedger.list()).toEqual([
       expect.objectContaining({ connectionId: 'conn-a', state: 'ready' }),
     ])
     expect(sides.dialerLedger.list()).toHaveLength(1)
+    expect(sides.dialerWire).toHaveLength(wireBefore)
   })
 
   it('reports a history write failure through onHistoryFault and never blocks the live connection', async () => {
