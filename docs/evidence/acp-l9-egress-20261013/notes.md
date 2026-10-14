@@ -236,7 +236,8 @@ egress 并对声明的 peer 拨出），`runtime/control-process.ts` 也不再�
 - This round fixed all four. The D05 row now reads `新增 network/teams-egress 8`
   and the D07 row `（98/98）`; the D07 row's claim that no production initiator
   composer exists was corrected to name `network/teams-egress.ts` and to keep the
-  true gap (no deployed process calls it). Case 7's frame now carries
+  true gap as it stood then (no deployed process called it; see the 2026-10-14
+  correction in §5). Case 7's frame now carries
   `engineInstanceId: ENGINE_B`, so the parser accepts it and the initiator session
   rejects it typed on the unexpected-kind branch, which is what the comment and
   this receipt say. Case 6 now asserts that the refused dial adds no frame to the
@@ -296,7 +297,8 @@ egress 并对声明的 peer 拨出），`runtime/control-process.ts` 也不再�
 - Cleanup: this worktree is removed only after the receipt above and the retention
   copy under `docs/evidence/acp-l9-egress-20261013/` exist. The reclamation is
   executed and recorded separately.
-- Still partial: the eleven `teams-acp-*` gates. No daemon composes this egress
-  yet — `runtime/acp-serve.ts` still only calls `openTeamsIngress` — so this
-  increment has no installed-copy, restart, deployed-entrypoint, live-browser or
-  cross-device evidence, and the counts in the maps describe this candidate only.
+- Still partial: the eleven `teams-acp-*` gates. *(SUPERSEDED 2026-10-14; see the
+  correction in §5.)* No daemon composed this egress when this increment closed —
+  `runtime/acp-serve.ts` then called only `openTeamsIngress` — so this increment has
+  no installed-copy, restart, deployed-entrypoint, live-browser or cross-device
+  evidence, and the counts in the maps describe this candidate only.
