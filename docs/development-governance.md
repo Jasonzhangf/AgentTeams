@@ -157,7 +157,7 @@ D02 交付 OpenCode 引擎 adapter（`opencode-adapter/src/acp-engine.ts`）与 
 用例）；`teams-acp-serve-entry` 在本候选上可执行并通过（runtime/acp-serve.spec.ts 27/27、runtime/relations-intent-watch.spec.ts 8/8、
 CLI spec 33/33，另有两条真实 CLI 进程黑盒：opencode 与真实安装 DSH 0.2.0-rc.2；opencode
 黑盒在本地 `npm pack` + `npm install` 的安装副本 `node_modules/.bin/agentteams` 上重跑也
-通过），但它仍是 partial：DSH 黑盒是本地 live 运行、没有安装副本回放，监听仅 loopback，
+通过），但它仍是 partial：DSH 黑盒是本地 live 运行、没有安装副本回放，当时监听仅 loopback（2026-10-14 更正：D05 closure 之后 `runtime/acp-serve.ts` 会按 `classifyServeListener` 绑定已认证的 direct-WSS LAN 通道；本行其余 partial 理由不变），
 注册（D04）与连接协商（D05）已由本 closure 接入该入口（真实 LAN 黑盒 PASS 前须外部 DSH provider 可用）；该安装副本是本地基础包安装，不是发布产物或
 AppSDK 生命周期回执。D03 的 `--serve dsh` 接线在 `runtime/acp-serve.ts` 的同一
 `engineAdapterFor` 分发点落地，daemon/host/stdio/readiness/stop 代码不重复。adapter 的
