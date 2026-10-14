@@ -146,8 +146,10 @@ which is the point: this increment touches no control-plane surface.
 - **No installed-artifact, restart, deployed-entrypoint, live-browser or
   cross-device evidence.** Nothing in this increment was run from an installed
   copy or through a browser.
-- **No remote receipt.** The commit exists only in this worktree until it is
-  pushed.
+- **Remote receipt: delivered.** Pushed `bbbf678..0f9c1d0` to `origin/main` and
+  re-read the receipt with `git ls-remote origin main`:
+  `0f9c1d0230d138cb9341d6a26f52fbe3a3a4eda5 refs/heads/main`. The receipt is
+  recorded in section 7 below.
 - **`pnpm verify` stays a recorded BLOCKED gate.** It fails at
   `scripts/regression.mjs` on a pre-existing load flake, unrelated to this change
   (proven on the pristine base `85df0a8`).
@@ -161,3 +163,23 @@ which is the point: this increment touches no control-plane surface.
   `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`.
 - `TEAMS_CONSOLE_REAL_DOM=1` is set by the regression script, not by this
   increment's gate commands.
+
+## 7. Remote receipt, integration and cleanup
+
+- Push: `git push origin HEAD:main` returned `bbbf678..0f9c1d0  HEAD -> main`.
+- Receipt, re-read after the push with `git ls-remote origin main`:
+  `0f9c1d0230d138cb9341d6a26f52fbe3a3a4eda5	refs/heads/main`. The remote head
+  equals the candidate head, and both commits (`4945be8`, `0f9c1d0`) are audited
+  on the remote.
+- Integration precondition, restated as evidence: the independent review of
+  `4945be8` raised one FAIL (an unreleased host channel after a transport failure),
+  it was fixed by `0f9c1d0`, and the independent re-verification returned PASS on
+  `0f9c1d0`: D05 90/90, D06 118/118, `pnpm typecheck` exit 0, `pnpm build` exit 0,
+  plus its own mutation run (removing the outer release fails exactly the two new
+  tests; the file was restored byte-identical). Without that PASS this push would
+  not be authorized.
+- Cleanup: this worktree is removed only after the receipt above and the
+  retention copy under `docs/evidence/acp-l8-initiator-open-20261013/` exist. The
+  reclamation is executed and recorded separately.
+- Still partial: the eleven `teams-acp-*` gates, because no L9-L12 domain carries
+  them. The counts in the three maps describe this candidate only.
