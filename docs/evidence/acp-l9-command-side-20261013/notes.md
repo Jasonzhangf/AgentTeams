@@ -102,10 +102,13 @@ direct-WSS listener whose responder runs the **real** `openTeamsIngress`, the re
 real TLS with real HTTP admission and a real `transport.hello` handshake. Cases:
 
 1. dials a declared peer over a real TLS socket, negotiates as initiator and opens
-   the one ACP channel — asserts the recorded agreement (source = dialer,
-   target = responder, `peer`/`master`, `targetGeneration` 1,
-   `targetCapabilitiesRevision` equal to the responder's real facts), one host
-   channel open on each side, and both ledgers reaching `ready`.
+   the one ACP channel — asserts the live row, the host opens (one per side), both
+   ledgers reaching `ready` and a `connection.negotiated` history record. The
+   harness pins its own responder facts (generation 22, `caps-responder`), and the
+   spec does not assert the agreement content; the real agreement content
+   (`peer`/`master`, `targetGeneration` 1, `targetCapabilitiesRevision` equal to
+   the responder's readiness line) is asserted in the real black box, which runs
+   two real daemons instead of a harness.
 2. disconnect closes the live channel and the transport, removes the row, and a
    second disconnect is a typed `CONFLICT`.
 3. duplicate connect while live is a typed `CONFLICT` and the live row is untouched.

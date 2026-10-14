@@ -153,8 +153,8 @@ CLI 实际入口）；配置指向注册服务器时还依赖 D04。opencode 与
 D02 交付 OpenCode 引擎 adapter（`opencode-adapter/src/acp-engine.ts`）与 `--serve`
 用户入口（`runtime/acp-serve.ts` + `cli/agentteams.mjs` 的 flag/dispatch）。
 `teams-acp-d02-opencode` 在合并候选 `1d4df3a` 上可执行并通过（65/65，含 4 个真实引擎
-用例）；`teams-acp-serve-entry` 在本候选上可执行并通过（runtime/acp-serve.spec.ts 26/26、
-CLI spec 30/30，另有两条真实 CLI 进程黑盒：opencode 与真实安装 DSH 0.2.0-rc.2；opencode
+用例）；`teams-acp-serve-entry` 在本候选上可执行并通过（runtime/acp-serve.spec.ts 27/27、
+CLI spec 33/33，另有两条真实 CLI 进程黑盒：opencode 与真实安装 DSH 0.2.0-rc.2；opencode
 黑盒在本地 `npm pack` + `npm install` 的安装副本 `node_modules/.bin/agentteams` 上重跑也
 通过），但它仍是 partial：DSH 黑盒是本地 live 运行、没有安装副本回放，监听仅 loopback，
 注册（D04）与连接协商（D05）已由本 closure 接入该入口（真实 LAN 黑盒 PASS 前须外部 DSH provider 可用）；该安装副本是本地基础包安装，不是发布产物或
