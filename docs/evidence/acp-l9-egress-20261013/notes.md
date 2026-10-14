@@ -4,7 +4,11 @@
   the A3 primitive delivered in L8 has a caller. Before this increment
   `network/teams-ingress.ts` was the only Teams connection composer in production
   and it answered `acp.open`; nothing sent one.
-- Base: `main == origin/main == 0f9c1d0` (the L8 candidate, already integrated).
+- Base: the branch merge-base is `0f9c1d0` (the L8 candidate). `origin/main` was
+  `185e008` (the L8 remote receipt, a docs-only commit on top of `0f9c1d0`) when
+  this branch was reviewed, so the branch diverged from it by that one commit;
+  `origin/main` is merged into this branch before integration, after which
+  `git diff origin/main..HEAD` lists exactly the nine files below.
 - Worktree: `/Volumes/Intel/playground/agentteams/acp-l9-initiator-20261013`
 - Branch: `codex/acp-l9-initiator-20261013`
 - Changed files in this increment: `network/teams-egress.ts`,
@@ -96,14 +100,17 @@ so a defect that a mock host would hide fails these cases.
    no history entry.
 6. `refuses a reused connection id instead of replacing the live ledger record` —
    the second dial goes through `openTeamsEgress` itself, `ledger.open` is a
-   `CONFLICT` for an id already live, the live record survives untouched and
-   nothing reaches the wire.
+   `CONFLICT` for an id already live, the live record survives untouched, and the
+   refused dial adds no frame to the wire (asserted by comparing the outbound
+   frame count before and after the refused dial).
 7. `records connection.failed and a failed ledger when an unexpected frame aborts
-   the read loop` — the responder sends a well-formed but foreign Teams frame
-   (`teams.connection.context`) after the open; the initiator session rejects it
-   typed, the read loop ends, the egress records exactly one `connection.failed`
-   with `INVALID_ACP_FRAME` and the ledger entry becomes `failed` (the peer never
-   gets a chance to leave a ready record and silence).
+   the read loop` — the responder sends a Teams frame that the frozen parser
+   accepts, because it carries the D00 A3 mandatory `engineInstanceId`, but that is
+   not one of the five ACP channel kinds (`teams.connection.context`). The
+   initiator session rejects it typed, the read loop ends, the egress records
+   exactly one `connection.failed` with `INVALID_ACP_FRAME` and the ledger entry
+   becomes `failed` (the peer never gets a chance to leave a ready record and
+   silence).
 8. `reports a history write failure through onHistoryFault and never blocks the
    live connection` — a history whose `record` throws is injected; the dial still
    reaches `agreed`, the channel opens on both ends, the ledger stays `ready`, and
@@ -131,13 +138,9 @@ M5 is the R2 rule the earlier standalone draft got wrong, and case 1 catches it.
 M6–M9 were added after the first independent review: the reviewer proved that
 without them, three failure-handling defects (a leaked ready ledger, a peer key
 that could reach durable history, an unasserted failed-ledger generation) and one
-dead assertion surface all survived the 6-case suite.
-
-M5 is the R2 rule the earlier standalone draft got wrong, and case 1 catches it.
-M6–M9 were added after the first independent review: the reviewer proved that
-without them, three failure-handling defects (a leaked ready ledger, a peer key
-that could reach durable history, an unasserted failed-ledger generation) and one
-dead assertion surface all survived the 6-case suite.
+dead assertion surface all survived the 6-case suite. M6–M10 were re-verified by
+a second independent review, which applied its own equivalent mutations (its
+MY-1..MY-5) and restored every file byte-identically.
 
 ## 3. Gate surface
 
@@ -209,6 +212,46 @@ dead assertion surface all survived the 6-case suite.
   ten mutations M1–M10 above are the red-first evidence for every one of those
   assertions, each restored byte-identical. The counts in this receipt and in the
   maps now read 98/98 (egress 8).
+- A second independent review (2026-10-14) of that fix returned FAIL, while
+  confirming on its own mutations that F1–F5 are all closed and that no
+  collaborator module regressed. It raised four real defects, all in evidence
+  rather than in the composer: (1) `docs/development-governance.md` still read
+  `新增 network/teams-egress 6` in the D05 row while the suite has 8 cases and the
+  same file's D05 note says 8; (2) the D07 row still carried `（90/90）` for the D05
+  gate; (3) case 7's injected frame omitted the D00 A3 mandatory `engineInstanceId`,
+  so the frozen parser rejected it and the case did not exercise the session's
+  unexpected-kind branch that the comment described; (4) the receipt claimed
+  `main == origin/main == 0f9c1d0` while `origin/main` was already `185e008`.
+  A third independent review of the corrected tip `dc882a8` returned PASS with one
+  advisory, the same `egress 6` count.
+- This round fixed all four. The D05 row now reads `新增 network/teams-egress 8`
+  and the D07 row `（98/98）`; the D07 row's claim that no production initiator
+  composer exists was corrected to name `network/teams-egress.ts` and to keep the
+  true gap (no deployed process calls it). Case 7's frame now carries
+  `engineInstanceId: ENGINE_B`, so the parser accepts it and the initiator session
+  rejects it typed on the unexpected-kind branch, which is what the comment and
+  this receipt say. Case 6 now asserts that the refused dial adds no frame to the
+  wire, so the "nothing reaches the wire" claim is asserted instead of assumed.
+  The duplicated paragraph in section 2 was removed, and the base line above now
+  names the merge-base and the real `origin/main`.
+- Red-first evidence for the two changed assertions, both measured against
+  `network/teams-egress.ts` and restored byte-identical afterwards (md5
+  `c4e4dbe736c1ffc73e68d832932465df`, `diff -q` exit 0): (A) writing one frame
+  before the duplicate-id guard — a pre-guard wire write — fails exactly case 6 on
+  the new wire assertion (`expected length 3, got 4`) while its ledger assertion
+  still passes; (B) dropping the read-loop failure handling still fails exactly
+  case 7, so adding `engineInstanceId` to the injected frame did not weaken the
+  F1 closure. M6–M10 and the second review's independent MY-1..MY-5 mutations
+  remain the evidence for the other five assertions.
+- `dc882a8` is docs-only and repairs a defect the third review also identified:
+  the L9 map commit had rewritten `docs/architecture/mainline-call-map.json` from
+  the repository's mixed one-line-per-entry style into pretty-printed JSON, so
+  ~1500 changed lines hid the single semantic change. `dc882a8` restores the
+  previous format and keeps only the real edit to the `acp-teams-network-v1`
+  chain; both revisions parse to equal JSON (`json.load` equality over all keys),
+  and the diff against `origin/main` is one changed line. No tool validates that
+  file's formatting — `scripts/lifecycle-adapter.mjs` only hashes it — so the
+  reformat was noise, not a generator requirement.
 
 ## 6. Environment
 
