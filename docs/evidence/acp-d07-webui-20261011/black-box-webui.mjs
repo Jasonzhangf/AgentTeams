@@ -330,15 +330,20 @@ allowed = ["master", "peer"]
   assert.equal(sseFrame.projection?.version, 1, 'SSE snapshot projection.version is not 1')
   check('GET /api/v1/events streams a real { seq, projection } snapshot', `seq=${sseFrame.seq} version=${sseFrame.projection.version}`)
 
+  // The frozen write commands are typed at the real HTTP surface. This config declares no
+  // `peers`, so the control daemon cannot resolve an account and scope for the requested
+  // agentId and refuses FORBIDDEN instead of guessing a relation or a record path. Both
+  // relation refusals therefore report the target rule, not the missing-owner rule.
+  // `permission.reply` still has no bound Session owner and keeps its `UNSUPPORTED_OPERATION`.
   const connectCode = await assertRefusedCommand('connection.connect', { kind: 'connection.connect', agentId: 'control-a' })
-  assert.equal(connectCode, 'UNSUPPORTED_OPERATION')
+  assert.equal(connectCode, 'FORBIDDEN')
   const membershipCode = await assertRefusedCommand('network.membership.apply', {
     kind: 'network.membership.apply',
     agentId: 'control-a',
     expectedRevision: 1,
     members: [{ agentId: 'peer-a', role: 'master' }, { agentId: 'peer-b', role: 'peer' }],
   })
-  assert.equal(membershipCode, 'UNSUPPORTED_OPERATION')
+  assert.equal(membershipCode, 'FORBIDDEN')
   const permissionCode = await assertRefusedCommand('permission.reply', {
     kind: 'permission.reply',
     agentId: 'control-a',
@@ -347,6 +352,7 @@ allowed = ["master", "peer"]
     decision: 'once',
     optionId: 'option-not-offered',
   })
+  assert.equal(permissionCode, 'UNSUPPORTED_OPERATION')
   check('D07 write commands are typed refusals on the real HTTP surface',
     `connection.connect=${connectCode}; network.membership.apply=${membershipCode}; permission.reply=${permissionCode}`)
 
