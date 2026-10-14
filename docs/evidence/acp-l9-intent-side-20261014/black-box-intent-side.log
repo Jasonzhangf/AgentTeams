@@ -1,0 +1,79 @@
+# L9 intent-side black box: a Console command makes the agent daemon dial
+cli=/Volumes/Intel/playground/agentteams/acp-l9-intent-side-20261014/cli/agentteams.mjs
+root=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-i8gXqw
+lanIp=192.168.0.3
+  ok: real openssl TLS material was generated for the registry and both agent daemons
+  receipt: recordPath = /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-i8gXqw/home/.agentteams/relations/local/local/relations-intent.json
+  ok: no desired-relations record exists before any Console command
+  receipt: controlConfigPath = /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-i8gXqw/control.toml
+  receipt: observerConfigPath = /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-i8gXqw/observer.toml
+  receipt: declaredPeer = {"name":"l9-responder","endpoint":"wss://192.168.0.3:61398","admissionRef":"adm-observer"}
+started state=running generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-i8gXqw/registry.toml daemon=l9-registry pid=33526 url=wss://127.0.0.1:61395
+  ok: the registry reports a live explicit pid (33526)
+  ok: the registry reports running (running)
+  receipt: registry = {"pid":33526,"endpoint":"wss://127.0.0.1:61395"}
+  ok: the responder serves the real LAN listener (192.168.0.3:61398)
+  ok: the responder registered with the real registry (registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:61395)
+  ok: the responder publishes a numeric capabilities revision (2)
+  receipt: responder = {"pid":33742,"listener":"192.168.0.3:61398","lanChannel":"wss://192.168.0.3:61398","capabilitiesRevision":"2","registration":"registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:61395"}
+  ok: the observer serves the real LAN listener (192.168.0.3:61397)
+  ok: the observer registered with the real registry (registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:61395)
+  receipt: observer = {"pid":41577,"listener":"192.168.0.3:61397","lanChannel":"wss://192.168.0.3:61397","capabilitiesRevision":"2","registration":"registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:61395"}
+  ok: the observer's recorded agreement source is the observer itself (l9-observer)
+  ok: the observer's recorded agreement target is the declared peer (l9-responder)
+  ok: the observer negotiated the declared non-degenerate roles (peer/master)
+  ok: the observer named the responder's published listener generation (1)
+  ok: the observer read the responder's capability revision from the scoped directory (2)
+  ok: the start dial ran with NO desired-relations record: the baseline is the accepted config, not the overlay
+  receipt: baselineNegotiated = {"recordConnectionId":"serve-egress-cf211de7-2fb1-42a5-a4e0-e5f75533a7a8","agreementConnectionId":"5474f7c8-c707-412c-831e-6dbb8ab86cca","event":"connection.negotiated","agentId":"l9-responder","occurredAt":"2026-10-14T20:49:25.726Z","source":{"accountId":"local","scopeId":"local","agentId":"l9-observer"},"target":{"accountId":"local","scopeId":"local","agentId":"l9-responder"},"sourceRole":"peer","targetRole":"master","targetGeneration":1,"targetCapabilitiesRevision":"2"}
+  ok: the observer opened a real ACP channel at start (teams-serve-egress-cf211de7-2fb1-42a5-a4e0-e5f75533a7a8-1)
+  receipt: baselineChannel = {"channelId":"teams-serve-egress-cf211de7-2fb1-42a5-a4e0-e5f75533a7a8-1","engineInstanceId":"opencode-l9-observer-c9994c7b-dce7-48b6-8a71-cf309a624227"}
+  ok: the responder recorded the same wire connection as the observer (5474f7c8-c707-412c-831e-6dbb8ab86cca)
+  receipt: responderBaseline = {"recordConnectionId":"5474f7c8-c707-412c-831e-6dbb8ab86cca","agreementConnectionId":"5474f7c8-c707-412c-831e-6dbb8ab86cca","event":"connection.negotiated","agentId":"l9-observer","occurredAt":"2026-10-14T20:49:25.725Z","source":{"accountId":"local","scopeId":"local","agentId":"l9-observer"},"target":{"accountId":"local","scopeId":"local","agentId":"l9-responder"},"sourceRole":"peer","targetRole":"master","targetGeneration":1,"targetCapabilitiesRevision":"2"}
+  ok: the control daemon reports running (running)
+  ok: the control daemon reports a live explicit pid (49544)
+  ok: the control daemon serves its declared WebUI listener (127.0.0.1:61396)
+  receipt: control = {"pid":49544,"listener":"127.0.0.1:61396"}
+  ok: an anonymous Console command is refused with 401 (401)
+  ok: the anonymous command wrote no record
+  ok: connection.connect is accepted over the real HTTP surface ({"ok":true,"result":{"acceptedRevision":1}})
+  ok: the command result reports the accepted record revision (1)
+  ok: the command result reports no connection state, because the agent daemon reacts later
+  ok: the shared record carries revision 1 ({"version":1,"revision":1,"peers":[{"agentId":"l9-responder","role":"master"}],"updatedAt":"2026-10-14T20:49:41.123Z"})
+  ok: the record carries the frozen desired peer and the one derived role ([{"agentId":"l9-responder","role":"master"}])
+  receipt: connectAcceptedRevision = 1
+  ok: the Console projection is unchanged by a successful desired-relations write
+  ok: the control daemon reports no connection it did not make
+  ok: the observer still recorded exactly one connection.negotiated (1)
+  ok: the observer closed no channel for an already desired peer
+  ok: connection.disconnect is accepted over the real HTTP surface ({"ok":true,"result":{"acceptedRevision":2}})
+  ok: the disconnect reports the accepted record revision (2)
+  ok: the record now desires no relation ({"version":1,"revision":2,"peers":[],"updatedAt":"2026-10-14T20:49:44.639Z"})
+  ok: the observer closed the connection the record no longer desires (serve-egress-cf211de7-2fb1-42a5-a4e0-e5f75533a7a8)
+  ok: the responder observed the end of the same wire connection (5474f7c8-c707-412c-831e-6dbb8ab86cca)
+  ok: the observer did not re-dial on its own after the disconnect (1 negotiation)
+  receipt: observedClosed = {"observer":"serve-egress-cf211de7-2fb1-42a5-a4e0-e5f75533a7a8","responder":"5474f7c8-c707-412c-831e-6dbb8ab86cca"}
+  ok: the second connection.connect is accepted ({"ok":true,"result":{"acceptedRevision":3}})
+  ok: the second connect reports the accepted record revision (3)
+  ok: the observer dialed a NEW connection because of the intent change (5474f7c8-c707-412c-831e-6dbb8ab86cca -> c95ea217-d003-421e-babd-4a80409d096d)
+  ok: the new agreement has the same two sides
+  ok: the new dial opened its own ACP channel (serve-egress-e4e77b76-a1a5-4fc3-8770-f84c61109f48)
+  ok: the responder recorded a second, distinct wire connection (c95ea217-d003-421e-babd-4a80409d096d)
+  ok: the observer resolved the record from the shared home path, not from its own data directory
+  receipt: redialNegotiated = {"recordConnectionId":"serve-egress-e4e77b76-a1a5-4fc3-8770-f84c61109f48","agreementConnectionId":"c95ea217-d003-421e-babd-4a80409d096d","event":"connection.negotiated","agentId":"l9-responder","occurredAt":"2026-10-14T20:49:48.792Z","source":{"accountId":"local","scopeId":"local","agentId":"l9-observer"},"target":{"accountId":"local","scopeId":"local","agentId":"l9-responder"},"sourceRole":"peer","targetRole":"master","targetGeneration":1,"targetCapabilitiesRevision":"2"}
+  ok: an undeclared agentId is a typed refusal, not a write
+  ok: the undeclared agentId refusal keeps its typed code (FORBIDDEN)
+  ok: a stale expectedRevision is refused typed (REVISION_CONFLICT)
+  ok: a member outside the record's account and scope is refused typed (FORBIDDEN)
+  ok: every refused write left the accepted revision untouched (3)
+  ok: network.membership.apply is accepted with the accepted revision as its base ({"ok":true,"result":{"acceptedRevision":4}})
+  ok: the apply reports the next accepted revision (4)
+  ok: the record carries the replaced desired set ([{"agentId":"l9-responder","role":"master"}])
+  ok: a replace that keeps the same peer dials nothing new (2)
+  receipt: finalRecord = {"revision":4,"peers":[{"agentId":"l9-responder","role":"master"}]}
+  receipt: providerCalls = 0
+
+## PASS: a Console command wrote the desired relations and the agent daemon dialed because of it
+  receipt: outcome = PASS
+receipt: wrote /Volumes/Intel/playground/agentteams/acp-l9-intent-side-20261014/docs/evidence/acp-l9-intent-side-20261014/receipt.json
+cleanup: removed owned root /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-intent-side-blackbox-i8gXqw
