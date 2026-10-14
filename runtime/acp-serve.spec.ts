@@ -392,7 +392,7 @@ async function writeFakeDshEngine(directory: string): Promise<string> {
 }
 
 /** One v4 agent config selecting the DSH engine kind. */
-function dshAgentConfig(input: { readonly executable: string; readonly port: number; readonly dataDirectory: string; readonly workspace: string; readonly baseUrl?: string; readonly binding?: boolean; readonly blacklist?: readonly string[] }): string {
+function dshAgentConfig(input: { readonly executable: string; readonly port: number; readonly dataDirectory: string; readonly workspace: string; readonly baseUrl?: string; readonly binding?: boolean; readonly blacklist?: readonly string[]; readonly peers?: string }): string {
   const provider = input.baseUrl === undefined
     ? ''
     : `
@@ -439,7 +439,7 @@ required = ["method:session/prompt"]
 blacklist = ${JSON.stringify(input.blacklist ?? [])}
 clientCapabilities = []
 callbackExecutor = "controller"
-${provider}${binding}`
+${provider}${binding}${input.peers ?? ''}`
 }
 
 async function writeDshConfig(input: { readonly executable: string; readonly port: number; readonly directory: string; readonly binding?: boolean; readonly blacklist?: readonly string[] }): Promise<string> {
@@ -1228,6 +1228,56 @@ describe('--serve LAN and local channel composition', () => {
 
     await handle.stop()
     expect(existsSync(join(directory, 'state', 'engine', 'fake-engine.pid'))).toBe(false)
+  })
+
+  it('attempts every declared peer at start and records a typed failure instead of skipping', async () => {
+    const directory = await temporaryDirectory()
+    const fakeEngine = await writeFakeDshEngine(directory)
+    const port = await availableLoopbackPort()
+    // Any readable file works as the peer's TLS trust anchor; the readback fails
+    // before a socket is opened, so its content is never parsed here.
+    const trustPath = join(directory, 'peer-trust.pem')
+    await writeFile(trustPath, readFileSync(fakeEngine))
+    const configPath = join(directory, 'agent-peers.toml')
+    await writeFile(configPath, dshAgentConfig({
+      executable: fakeEngine,
+      port,
+      dataDirectory: join(directory, 'state'),
+      workspace: join(directory, 'workspace'),
+      baseUrl: 'http://127.0.0.1:1/v1',
+      peers: `
+[peers.no-endpoint]
+agentId = "peer-c"
+hostId = "host-c"
+accountId = "local"
+scopeId = "local"
+credentialRef = "env:PROBE_DSH_KEY"
+
+[peers.with-endpoint]
+agentId = "peer-d"
+hostId = "host-d"
+accountId = "local"
+scopeId = "local"
+endpoint = "wss://127.0.0.1:1"
+admissionRef = "adm-observer"
+credentialRef = "env:PROBE_DSH_KEY"
+tlsTrustRef = "file:${trustPath}"
+`,
+    }))
+    const handle = await startDshServe({ configPath })
+
+    // The daemon still serves; a peer refusal never crashes the start.
+    expect(handle.listener).toEqual({ ip: '127.0.0.1', port })
+    expect(handle.egress.list()).toEqual([])
+    const failures = [...handle.egressFailures].sort((left, right) => left.peerName.localeCompare(right.peerName))
+    expect(failures.map(failure => failure.peerName)).toEqual(['no-endpoint', 'with-endpoint'])
+    expect(failures.every(failure => failure.code === 'UNSUPPORTED_CONFIGURATION')).toBe(true)
+    // Both refusals are recorded on the owner too, not only in the start receipt.
+    expect(handle.egress.failures()).toHaveLength(2)
+
+    const receipt = await handle.stop()
+    expect(receipt.channels).toBe(0)
+    expect(handle.egress.list()).toEqual([])
   })
 
   it.skipIf(lanIpv4() === undefined)('binds the authenticated LAN channel onto the same host and admits only a real credential', async () => {
