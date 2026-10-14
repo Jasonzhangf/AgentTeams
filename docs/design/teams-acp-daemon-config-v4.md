@@ -2,6 +2,13 @@
 
 状态：D00 契约已定稿并集成（候选 `9a511de`，review findings 已关闭）；本集成候选
 补上根 `AGENTS.md`、开发管控、长程入口与五张 map 的 planned 绑定。运行实现仍 pending。
+> 2026-10-14 更正：上面这句「运行实现仍 pending」写于 D00 候选 `9a511de`，只描述当时的状态。
+> 到本候选为止 D01–D06 都已在源码层交付并有各自的真实入口黑盒证据：D01 stdio ACP 适配器、
+> D02/D03 OpenCode 与 DSH 的 `--serve` 入口、D04 registry daemon 与自动注册、D05 Teams 传输与
+> 协商、D06 control daemon 与 WebUI（另有 D08 的 installed-artifact/restart 与 A11 的两机
+> cross-device 回执，各按自己的边界）。仍然未交付的部分按 gate 记录在
+> `docs/development-governance.md`：没有 deployed-entrypoint 回放，Session owner 与定向 ACP
+> ingress 仍未绑定。
 基线：`origin/main@1b53e2be544fbc73559cba30db8062169f4b3d79`。
 语义 owner：config（配置意图、编译与策略词汇）、control-protocol（公共 frame/DTO/状态）。
 计划输入：ACP/LAN/WebUI 总目标与 D00 任务由计划 owner 持有的外部受控计划树提供
