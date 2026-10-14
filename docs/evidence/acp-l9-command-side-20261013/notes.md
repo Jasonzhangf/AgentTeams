@@ -212,3 +212,41 @@ Observed receipts (2026-10-14, exit 0):
 - **`expectedTargetGeneration` is still the serve entry's constant (1).** The
   directory's relay login generation is not used; aligning the wire generation
   with it remains D06 work.
+
+## Review, integration and remote receipt
+
+- Independent review of `e155ca7`: **PASS**, no blocking finding. The reviewer
+  re-ran the black box itself (exit 0) and ran its own two mutations. MUT-A set
+  the dialer's `expectedTargetGeneration` one higher than the responder publishes;
+  three cases failed with `teams-negotiation: stale target generation in the
+  connection context`. MUT-B replaced `String(entry.declaration.revision)` with
+  the literal `'0'`; the black box then failed with no matching connection record
+  in the dialer's durable history. MUT-B also proved the black box drives the
+  compiled `generated/runtime-lib` through the real CLI, not TypeScript source.
+  Both files were restored byte-identical (`runtime/serve-egress.ts`
+  `ab49e275…`, `runtime/acp-serve.ts` `0d98911d…`).
+- The review raised three advisories, all truth-in-evidence defects, and `2068b91`
+  corrects them: the serve-entry note read `cli/agentteams.spec.ts 30/30` while
+  the command runs 33, governance read `26/26` and `30/30` while they run 27 and
+  33, and this file described spec case 1 as asserting the recorded agreement
+  content when it asserts only the row, the host opens and the ledger. The
+  agreement content is asserted by the real black box, whose daemons publish
+  generation 1 and a real capability revision, unlike the harness's own
+  responder facts.
+- Integration precondition, restated: `2068b91` contains `origin/main` `964eac4`
+  through merge commit `084c854`, `git diff 964eac4..2068b91` lists exactly 15
+  paths (11 code/build, the rest documentation), and no `config/**`,
+  `control-protocol/**`, `agent-host/**`, `network/**`, `console-host/**`,
+  `server/**` or `ui/**` path changed.
+- Final measurement on the pushed candidate `2068b91`: D05 **103/103** (11
+  files), D06 **119/119** (6 files), `teams-acp-serve-entry` **60/60** (2 files),
+  `tsc -p tsconfig.json --noEmit` exit 0, `pnpm build` exit 0, black box exit 0.
+  `pnpm verify` was not run (pre-existing BLOCKED
+  `PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014`).
+- Push: `git push origin HEAD:main` returned `964eac4..2068b91  HEAD -> main`.
+  Receipt, re-read with `git ls-remote origin main`:
+  `2068b91111b699c64366efa349e8c539459ac6d1	refs/heads/main`. The remote head
+  equals the candidate head.
+- This worktree is removed only after the receipt above and this retention copy
+  exist. The eleven `teams-acp-*` gates stay `partial`: still no installed-copy,
+  restart, deployed-entrypoint or cross-device evidence.
