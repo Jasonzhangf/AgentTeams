@@ -1,0 +1,211 @@
+{
+  "driver": "acp-l9-command-side-20261013/black-box-self-dial.mjs",
+  "startedAt": "2026-10-14T16:34:13.622Z",
+  "steps": [
+    {
+      "step": "startup",
+      "name": "dialerConfigPath",
+      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-command-side-blackbox-azicBz/dialer.toml"
+    },
+    {
+      "step": "startup",
+      "name": "responderConfigPath",
+      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-command-side-blackbox-azicBz/responder.toml"
+    },
+    {
+      "step": "startup",
+      "name": "declaredPeer",
+      "value": {
+        "name": "l9-responder",
+        "endpoint": "wss://192.168.0.3:53330",
+        "admissionRef": "adm-dialer"
+      }
+    },
+    {
+      "step": "registry start",
+      "name": "registry",
+      "value": {
+        "pid": 22552,
+        "endpoint": "wss://127.0.0.1:53328"
+      }
+    },
+    {
+      "step": "responder readiness",
+      "name": "responder",
+      "value": {
+        "pid": 22710,
+        "listener": "192.168.0.3:53330",
+        "lanChannel": "wss://192.168.0.3:53330",
+        "capabilitiesRevision": "2",
+        "engineInstance": "opencode-l9-responder-35329131-49e8-4d50-9269-7efee0b07f5e",
+        "registration": "registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:53328"
+      }
+    },
+    {
+      "step": "dialer readiness",
+      "name": "dialer",
+      "value": {
+        "pid": 28815,
+        "listener": "192.168.0.3:53329",
+        "lanChannel": "wss://192.168.0.3:53329",
+        "capabilitiesRevision": "2",
+        "engineInstance": "opencode-l9-dialer-f125d9bf-89fb-48b1-a5d1-10b958707504",
+        "registration": "registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:53328"
+      }
+    },
+    {
+      "step": "dialer initiator leg",
+      "name": "dialerNegotiated",
+      "value": {
+        "recordConnectionId": "serve-egress-9a6df56f-f403-4240-8be4-574a80863d9e",
+        "agreementConnectionId": "93462723-1ca9-4882-9953-6150e4224497",
+        "event": "connection.negotiated",
+        "agentId": "l9-responder",
+        "occurredAt": "2026-10-14T16:34:36.177Z",
+        "source": {
+          "accountId": "local",
+          "scopeId": "local",
+          "agentId": "l9-dialer"
+        },
+        "target": {
+          "accountId": "local",
+          "scopeId": "local",
+          "agentId": "l9-responder"
+        },
+        "sourceRole": "peer",
+        "targetRole": "master",
+        "sourceGeneration": 1,
+        "targetGeneration": 1,
+        "sourceCapabilitiesRevision": "2",
+        "targetCapabilitiesRevision": "2",
+        "capabilities": [
+          "acp",
+          "method:initialize",
+          "method:session/new",
+          "method:session/prompt",
+          "method:session/cancel",
+          "method:session/update",
+          "capability:/loadSession",
+          "capability:/mcpCapabilities/http",
+          "capability:/mcpCapabilities/sse",
+          "capability:/promptCapabilities/embeddedContext",
+          "capability:/promptCapabilities/image",
+          "capability:/sessionCapabilities/close",
+          "method:session/close",
+          "capability:/sessionCapabilities/fork",
+          "method:session/fork",
+          "capability:/sessionCapabilities/list",
+          "method:session/list",
+          "capability:/sessionCapabilities/resume",
+          "method:session/resume",
+          "internal-tool:opencode:read",
+          "internal-tool:opencode:edit",
+          "internal-tool:opencode:glob",
+          "internal-tool:opencode:grep",
+          "internal-tool:opencode:list",
+          "internal-tool:opencode:bash",
+          "internal-tool:opencode:task",
+          "internal-tool:opencode:external_directory",
+          "internal-tool:opencode:todowrite",
+          "internal-tool:opencode:question",
+          "internal-tool:opencode:webfetch",
+          "internal-tool:opencode:websearch",
+          "internal-tool:opencode:lsp",
+          "internal-tool:opencode:doom_loop",
+          "internal-tool:opencode:skill",
+          "callback:session/request_permission"
+        ]
+      }
+    },
+    {
+      "step": "responder accepts the dial",
+      "name": "responderNegotiated",
+      "value": {
+        "recordConnectionId": "93462723-1ca9-4882-9953-6150e4224497",
+        "agreementConnectionId": "93462723-1ca9-4882-9953-6150e4224497",
+        "event": "connection.negotiated",
+        "agentId": "l9-dialer",
+        "occurredAt": "2026-10-14T16:34:36.176Z",
+        "source": {
+          "accountId": "local",
+          "scopeId": "local",
+          "agentId": "l9-dialer"
+        },
+        "target": {
+          "accountId": "local",
+          "scopeId": "local",
+          "agentId": "l9-responder"
+        },
+        "sourceRole": "peer",
+        "targetRole": "master",
+        "sourceGeneration": 1,
+        "targetGeneration": 1,
+        "sourceCapabilitiesRevision": "2",
+        "targetCapabilitiesRevision": "2",
+        "capabilities": [
+          "acp",
+          "method:initialize",
+          "method:session/new",
+          "method:session/prompt",
+          "method:session/cancel",
+          "method:session/update",
+          "capability:/loadSession",
+          "capability:/mcpCapabilities/http",
+          "capability:/mcpCapabilities/sse",
+          "capability:/promptCapabilities/embeddedContext",
+          "capability:/promptCapabilities/image",
+          "capability:/sessionCapabilities/close",
+          "method:session/close",
+          "capability:/sessionCapabilities/fork",
+          "method:session/fork",
+          "capability:/sessionCapabilities/list",
+          "method:session/list",
+          "capability:/sessionCapabilities/resume",
+          "method:session/resume",
+          "internal-tool:opencode:read",
+          "internal-tool:opencode:edit",
+          "internal-tool:opencode:glob",
+          "internal-tool:opencode:grep",
+          "internal-tool:opencode:list",
+          "internal-tool:opencode:bash",
+          "internal-tool:opencode:task",
+          "internal-tool:opencode:external_directory",
+          "internal-tool:opencode:todowrite",
+          "internal-tool:opencode:question",
+          "internal-tool:opencode:webfetch",
+          "internal-tool:opencode:websearch",
+          "internal-tool:opencode:lsp",
+          "internal-tool:opencode:doom_loop",
+          "internal-tool:opencode:skill",
+          "callback:session/request_permission"
+        ]
+      }
+    },
+    {
+      "step": "both ACP channels open",
+      "name": "dialerChannel",
+      "value": {
+        "channelId": "teams-serve-egress-9a6df56f-f403-4240-8be4-574a80863d9e-1",
+        "engineInstanceId": "opencode-l9-dialer-f125d9bf-89fb-48b1-a5d1-10b958707504"
+      }
+    },
+    {
+      "step": "both ACP channels open",
+      "name": "responderChannel",
+      "value": {
+        "channelId": "teams-93462723-1ca9-4882-9953-6150e4224497-1",
+        "engineInstanceId": "opencode-l9-responder-35329131-49e8-4d50-9269-7efee0b07f5e"
+      }
+    },
+    {
+      "step": "no recorded failure",
+      "name": "providerCalls",
+      "value": 0
+    },
+    {
+      "step": "no recorded failure",
+      "name": "outcome",
+      "value": "PASS"
+    }
+  ]
+}

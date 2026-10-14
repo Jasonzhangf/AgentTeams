@@ -1,0 +1,42 @@
+# L9 command-side black box: the agent daemon dials its declared peer itself
+cli=/Volumes/Intel/playground/agentteams/acp-l9-command-side-20261013/cli/agentteams.mjs
+root=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-command-side-blackbox-azicBz
+lanIp=192.168.0.3
+  ok: real openssl TLS material was generated for the registry and both daemons
+  receipt: dialerConfigPath = /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-command-side-blackbox-azicBz/dialer.toml
+  receipt: responderConfigPath = /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-command-side-blackbox-azicBz/responder.toml
+  receipt: declaredPeer = {"name":"l9-responder","endpoint":"wss://192.168.0.3:53330","admissionRef":"adm-dialer"}
+started state=running generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-command-side-blackbox-azicBz/registry.toml daemon=l9-registry pid=22552 url=wss://127.0.0.1:53328
+  ok: the registry reports a live explicit pid (22552)
+  ok: the registry reports running (running)
+  receipt: registry = {"pid":22552,"endpoint":"wss://127.0.0.1:53328"}
+  ok: the responder serves the real LAN listener (192.168.0.3:53330)
+  ok: the responder reports its LAN channel endpoint (wss://192.168.0.3:53330)
+  ok: the responder registered with the real registry (registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:53328)
+  ok: the responder publishes a numeric capabilities revision (2)
+  receipt: responder = {"pid":22710,"listener":"192.168.0.3:53330","lanChannel":"wss://192.168.0.3:53330","capabilitiesRevision":"2","engineInstance":"opencode-l9-responder-35329131-49e8-4d50-9269-7efee0b07f5e","registration":"registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:53328"}
+  ok: the dialer serves the real LAN listener (192.168.0.3:53329)
+  ok: the dialer reports its LAN channel endpoint (wss://192.168.0.3:53329)
+  ok: the dialer registered with the real registry (registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:53328)
+  receipt: dialer = {"pid":28815,"listener":"192.168.0.3:53329","lanChannel":"wss://192.168.0.3:53329","capabilitiesRevision":"2","engineInstance":"opencode-l9-dialer-f125d9bf-89fb-48b1-a5d1-10b958707504","registration":"registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:53328"}
+  ok: the dialer's recorded agreement source is the dialer itself (l9-dialer)
+  ok: the dialer's recorded agreement target is the declared peer (l9-responder)
+  ok: the dialer negotiated the declared non-degenerate roles (peer/master)
+  ok: the dialer named the responder's published listener generation (1)
+  ok: the dialer read the responder's capability revision from the scoped directory (2)
+  receipt: dialerNegotiated = {"recordConnectionId":"serve-egress-9a6df56f-f403-4240-8be4-574a80863d9e","agreementConnectionId":"93462723-1ca9-4882-9953-6150e4224497","event":"connection.negotiated","agentId":"l9-responder","occurredAt":"2026-10-14T16:34:36.177Z","source":{"accountId":"local","scopeId":"local","agentId":"l9-dialer"},"target":{"accountId":"local","scopeId":"local","agentId":"l9-responder"},"sourceRole":"peer","targetRole":"master","sourceGeneration":1,"targetGeneration":1,"sourceCapabilitiesRevision":"2","targetCapabilitiesRevision":"2","capabilities":["acp","method:initialize","method:session/new","method:session/prompt","method:session/cancel","method:session/update","capability:/loadSession","capability:/mcpCapabilities/http","capability:/mcpCapabilities/sse","capability:/promptCapabilities/embeddedContext","capability:/promptCapabilities/image","capability:/sessionCapabilities/close","method:session/close","capability:/sessionCapabilities/fork","method:session/fork","capability:/sessionCapabilities/list","method:session/list","capability:/sessionCapabilities/resume","method:session/resume","internal-tool:opencode:read","internal-tool:opencode:edit","internal-tool:opencode:glob","internal-tool:opencode:grep","internal-tool:opencode:list","internal-tool:opencode:bash","internal-tool:opencode:task","internal-tool:opencode:external_directory","internal-tool:opencode:todowrite","internal-tool:opencode:question","internal-tool:opencode:webfetch","internal-tool:opencode:websearch","internal-tool:opencode:lsp","internal-tool:opencode:doom_loop","internal-tool:opencode:skill","callback:session/request_permission"]}
+  ok: both sides recorded the same wire agreement connection id (93462723-1ca9-4882-9953-6150e4224497)
+  ok: both sides recorded the same agreement identities and roles
+  receipt: responderNegotiated = {"recordConnectionId":"93462723-1ca9-4882-9953-6150e4224497","agreementConnectionId":"93462723-1ca9-4882-9953-6150e4224497","event":"connection.negotiated","agentId":"l9-dialer","occurredAt":"2026-10-14T16:34:36.176Z","source":{"accountId":"local","scopeId":"local","agentId":"l9-dialer"},"target":{"accountId":"local","scopeId":"local","agentId":"l9-responder"},"sourceRole":"peer","targetRole":"master","sourceGeneration":1,"targetGeneration":1,"sourceCapabilitiesRevision":"2","targetCapabilitiesRevision":"2","capabilities":["acp","method:initialize","method:session/new","method:session/prompt","method:session/cancel","method:session/update","capability:/loadSession","capability:/mcpCapabilities/http","capability:/mcpCapabilities/sse","capability:/promptCapabilities/embeddedContext","capability:/promptCapabilities/image","capability:/sessionCapabilities/close","method:session/close","capability:/sessionCapabilities/fork","method:session/fork","capability:/sessionCapabilities/list","method:session/list","capability:/sessionCapabilities/resume","method:session/resume","internal-tool:opencode:read","internal-tool:opencode:edit","internal-tool:opencode:glob","internal-tool:opencode:grep","internal-tool:opencode:list","internal-tool:opencode:bash","internal-tool:opencode:task","internal-tool:opencode:external_directory","internal-tool:opencode:todowrite","internal-tool:opencode:question","internal-tool:opencode:webfetch","internal-tool:opencode:websearch","internal-tool:opencode:lsp","internal-tool:opencode:doom_loop","internal-tool:opencode:skill","callback:session/request_permission"]}
+  ok: the dialer recorded the opened ACP channel (teams-serve-egress-9a6df56f-f403-4240-8be4-574a80863d9e-1)
+  ok: the responder recorded the opened ACP channel (teams-93462723-1ca9-4882-9953-6150e4224497-1)
+  receipt: dialerChannel = {"channelId":"teams-serve-egress-9a6df56f-f403-4240-8be4-574a80863d9e-1","engineInstanceId":"opencode-l9-dialer-f125d9bf-89fb-48b1-a5d1-10b958707504"}
+  receipt: responderChannel = {"channelId":"teams-93462723-1ca9-4882-9953-6150e4224497-1","engineInstanceId":"opencode-l9-responder-35329131-49e8-4d50-9269-7efee0b07f5e"}
+  ok: the dialer recorded no connection.failed for the declared peer
+  ok: the responder recorded no connection.failed for the dialer
+  receipt: providerCalls = 0
+
+## PASS: the agent daemon dialed its declared peer itself and reached ready
+  receipt: outcome = PASS
+receipt: wrote /Volumes/Intel/playground/agentteams/acp-l9-command-side-20261013/docs/evidence/acp-l9-command-side-20261013/receipt.json
+cleanup: removed owned root /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9-command-side-blackbox-azicBz
