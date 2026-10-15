@@ -1,0 +1,24 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014
+
+ ✓ runtime/acp-serve.spec.ts (27 tests) 16855ms
+     ✓ starts one daemon and one engine, proves the accepted model, prompts, cancels and stops  5837ms
+     ✓ delivers a real permission callback through the serve listener and applies the reply  3378ms
+     ✓ dispatches dsh to the DSH adapter, starts exactly one child and proves the model from the real session/new  3183ms
+     ✓ cancels an in-flight prompt through the entry and stops by explicit PID  430ms
+     ✓ removes the owned DSH home when the readiness session/new fails  428ms
+     ✓ removes the owned DSH home when startAcpAgentDaemon returns a failed outcome  516ms
+     ✓ accepts a blacklist for the capability and client-capability classes the DSH adapter enforces  1509ms
+     ✓ binds the local channel byte-compatibly and reports no LAN channel for a loopback listener  549ms
+     ✓ attempts every declared peer at start and records a typed failure instead of skipping  455ms
+     ✓ binds the authenticated LAN channel onto the same host and admits only a real credential  497ms
+ ✓ cli/agentteams.spec.ts (33 tests) 4602ms
+     ✓ init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it  712ms
+     ✓ direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts  624ms
+ ✓ runtime/relations-intent-watch.spec.ts (8 tests) 52ms
+
+ Test Files  3 passed (3)
+      Tests  68 passed (68)
+   Start at  23:19:46
+   Duration  23.14s (transform 2.29s, setup 0ms, import 1.06s, tests 21.51s, environment 0ms)
+
