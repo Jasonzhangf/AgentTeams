@@ -341,3 +341,73 @@ an initiator channel. 2026-10-14 更正（L9 command side）：`runtime/acp-serv
 daemon 内运行；真实入口证据见 `docs/evidence/acp-l9-command-side-20261013/`。
 
 `teams-acp-d05-network` binds this amendment. It stays `partial`.
+
+## 14. D00 amendment A4 — the Session write side (2026-10-14)
+
+A3.7 closed the initiator leg. The Console write side for Sessions was still open: the
+frozen `ConsoleCommandV1` already carried `permission.reply`, `session.cancel` and the
+dedicated Session body ingress, and the control daemon answered all three with
+`UNSUPPORTED_OPERATION`. A4 delivers them. It changes no protocol.
+
+A4.1 The user decision recorded for `connection.connect` on 2026-10-14 governs here and is
+reused, not reopened: the agent daemon reacts on its own, the control daemon only writes
+desired intent, and NO control-to-agent channel is added. The Console stays the originator
+and is never a data relay.
+
+A4.2 That decision selects the mechanism. The two rejected candidates are recorded so the
+choice stays auditable. (1) An in-process `ControlOwnerBinding` delegate needs a
+control-to-agent transport, and none exists. (2) A direct control-to-agent ACP transport
+would be exactly the new channel the decision forbids. Only durable intent reuse remains,
+and A4 uses it.
+
+A4.3 The record is `config/session-intent-store.ts`, version 1, with one
+compare-and-swap fence on a monotonic revision. It holds an ordered window of at most 256
+pending writes plus `oldestRevision`, which reports the oldest revision the window still
+carries. Each write gets its own immutable `intentId`. The store mirrors the delivered
+`config/relations-intent-store.ts` shape: mode-`0o600` temporary file, atomic rename, a
+refused write never touches the target, and a failed rename is `uncertain` with the real
+substrate facts rather than `applied`.
+
+A4.4 A4 differs from the relations record in one necessary way. A relation is desired state,
+so re-reading it is safe. A Session write is an event, so re-applying it is not. The record
+therefore carries events, and the reading daemon keeps its own consumed watermark in its own
+data directory. One record has one writer and one reader, so the two never share a fence.
+
+A4.5 One record serves one target agent: the path is
+`<home>/.agentteams/sessions/<accountId>/<scopeId>/<agentId>/session-intent.json`. The
+writer resolves `agentId`, `accountId` and `scopeId` from its own accepted `peers`; the
+reader resolves them from its own accepted `daemon`. No new config key is added, and an
+`agentId` the control daemon does not declare is refused typed `FORBIDDEN` with no record
+written. A write a daemon cannot apply stops that daemon's own watermark; it never blocks
+another agent's record.
+
+A4.6 The reader applies a write in revision order and stops at the first write it cannot
+apply, so order is preserved and no write is silently skipped. The three mappings are the
+engine's own ACP frames. `permission.reply` becomes a JSON-RPC response to the engine's own
+pending `session/request_permission` callback; the Console `decision` selects the engine
+option whose projected kind equals it, and a decision the engine did not offer is refused
+with `INVALID_ACP_FRAME`. `session.cancel` becomes the `session/cancel` notification for
+that Session. The Session body becomes `session/prompt` with the body carried verbatim,
+never parsed, rewritten or stripped.
+
+A4.7 The permission identity the Console names is the callback id the controller received
+with the request, because that is the one identity the controller can really see. The host's
+own history record id stays the durable audit identity. The host exposes both facts through
+one read surface, `AcpHost.pendingPermissions()` and `AcpHost.channelForSession()`, because
+the host is the A2.6 permission owner and the only place that knows which Session each open
+channel owns. A2.6 is not weakened: a stale, absent or ambiguous callback is refused and
+never becomes an approval.
+
+A4.8 Scope boundary. `session.create` and `session.open` stay typed `UNSUPPORTED_OPERATION`
+even when the record facts are bound, because both must return real engine data and a
+one-way record cannot carry a response. A4 delivers no Session projection and no
+notification projection, so the Console still reports `sessions: []` and `notifications: []`
+and the control daemon never fakes either. That projection is L10.
+
+A4.9 Real-entry evidence is
+`docs/evidence/acp-l9-session-write-side-20261014/`: one real control daemon, one real
+`--serve opencode` agent daemon, a real engine and a real permission callback. The driver
+sends every Session write over the control daemon's authenticated HTTP surface and never
+answers the callback over its own ACP connection.
+
+`teams-acp-d05-network` binds this amendment. It stays `partial`.
