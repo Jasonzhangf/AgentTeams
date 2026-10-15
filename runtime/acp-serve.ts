@@ -1161,6 +1161,10 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
           })
           return true
         }
+        // The frozen `optionId` is optional, so a write that named none has only its projected
+        // kind to go on. The shipped Console always names the option it rendered (it passes
+        // option.optionId together with the same option's kind), so this is the residual guess
+        // for a client that sends a bare decision; it still never picks an unoffered option.
         const option = row.options.find(candidate => candidate.kind === intent.decision)
         if (option === undefined) {
           // Never invent an optionId: only the engine's own offered set is selectable.

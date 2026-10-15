@@ -599,10 +599,11 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
    * scope, never guessed and never this daemon's own data directory.
    */
   /**
-   * The two frozen Session write commands. The frozen `permission.reply` names a `decision`
-   * from the Console vocabulary; the engine's own option set is the agent daemon's fact, so
-   * the record carries the decision and the daemon that owns the Session maps it to an
-   * option the engine really offered. This daemon never invents an optionId.
+   * The two frozen Session write commands. `permission.reply` carries the operator's `decision`
+   * and, when the Console chose one, the engine `optionId` it clicked. This daemon carries both
+   * into the record verbatim; it never invents an optionId. The agent daemon that owns the
+   * Session answers the engine with exactly the named option, and it falls back to the projected
+   * kind only for a command that named no option.
    */
   const sessionCommand = async (command: ControlSessionCommand): Promise<ConsoleCommandResultV1> => {
     // This daemon is the record's single writer, and the store's CAS is read-then-rename. Two
@@ -732,13 +733,14 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
     async sendSession(target, payload) {
       if (owner !== undefined) return await owner.sendSession(target, payload)
       // The dedicated Session body ingress. The body is carried verbatim; this daemon never
-      // parses, strips, or inspects it, and it never becomes a control frame.
-      return await sessionWrite(target.agentId, target.sessionId, resolved => ({
+      // parses, strips, or inspects it, and it never becomes a control frame. It writes the
+      // same record as the Session commands, so it goes through the same serialization.
+      return await serializeSessionWrite(async () => await sessionWrite(target.agentId, target.sessionId, resolved => ({
         op: 'session.message',
         agentId: resolved.agentId,
         sessionId: resolved.sessionId,
         payload,
-      }))
+      })))
     },
   }
 }

@@ -594,6 +594,39 @@ it('serializes its own writes so two concurrent Session commands cannot lose one
   expect(record?.intents.map(entry => (entry.kind === 'session.cancel' ? entry.sessionId : ''))).toEqual(['session-a', 'session-b'])
 })
 
+it('serializes the Session body ingress against the Session commands, which write the same record', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-session-body-race-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-session-body-race-${port}`)
+  const owner = createControlOwner({ relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home } })
+
+  // The shipped control daemon binds no Session owner, so the body ingress takes the record
+  // path. It writes the same record as the Session commands, so it needs the same
+  // serialization: two clients that interleave here would otherwise lose one write while both
+  // are told `ok: true`, and a lost permission decision leaves the engine waiting forever.
+  const [body, reply] = await Promise.all([
+    owner.sendSession({ agentId: 'peer-b', sessionId: 'session-a' }, { text: 'body-one' }),
+    owner.command({ kind: 'permission.reply', agentId: 'peer-b', sessionId: 'session-a', permissionId: 'permission-a', decision: 'once', optionId: 'once' }),
+  ])
+  expect(body.ok).toBe(true)
+  expect(reply.ok).toBe(true)
+  const record = await readSessionIntentRecord(sessionRecordPath(home))
+  expect(record?.revision).toBe(2)
+  expect(record?.intents.map(entry => entry.kind)).toEqual(['session.message', 'permission.reply'])
+
+  const [first, second] = await Promise.all([
+    owner.sendSession({ agentId: 'peer-b', sessionId: 'session-a' }, { text: 'body-two' }),
+    owner.sendSession({ agentId: 'peer-b', sessionId: 'session-b' }, { text: 'body-three' }),
+  ])
+  expect(first.ok).toBe(true)
+  expect(second.ok).toBe(true)
+  const grown = await readSessionIntentRecord(sessionRecordPath(home))
+  expect(grown?.revision).toBe(4)
+  expect(grown?.intents.filter(entry => entry.kind === 'session.message')).toHaveLength(3)
+})
+
 it('derives the desired peer role from the daemon own accepted relations', async () => {
   const port = await freePort()
   const dataDirectory = join(directory, `state-intent-role-${port}`)

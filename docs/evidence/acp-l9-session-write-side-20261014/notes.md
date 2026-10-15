@@ -290,6 +290,48 @@ driver 全程只经控制 daemon 的**认证** HTTP 面提交写入，从不经�
 | L9 session-write-side 黑盒 | **50 checks / PASS** |
 | `pnpm typecheck` / `pnpm build` | exit 0 / exit 0 |
 
+## 12. 第三次 review：F3 只修了一半（BLOCKING）与其余 advisory（2026-10-15）
+
+第三次独立 review 复核 F1/F2/F3。结论 **FAIL**：F1 与 F2 **独立确认已修**，但 **F3 只修了一半**。
+另有三条 advisory 与一条继承 advisory。
+
+### 12.1 F1'（BLOCKING，作者 F3 的残留）Session body 入口绕过了串行化
+
+- 事实：`sendSession`（`runtime/control-process.ts`）**直接**调用共享的 `sessionWrite`，只有
+  `sessionCommand` 被 `serializeSessionWrite` 包住。生产 control daemon **不绑定** `owner`
+  （只传 `network`/`source`/`relations`），所以 body 入口**总是**走记录路径，而它写的是**同一条记录**。
+  入口是冻结的公开路由 `POST /api/v1/session-message`，shipped UI 会调用它。
+- 影响：两个并发 body 会丢一条；一个 body 与一个 `permission.reply` 并发会**丢掉操作者的权限决定**，
+  而两个请求都收到 `ok: true`——引擎永远等一个 Console 认为已经送达的决定。这正是 F3 命名的失败模式，
+  同一条记录、同一道栅栏，从 shipped 认证 HTTP 面可达。
+- 修复：`sendSession` 的记录路径同样走 `serializeSessionWrite`。
+- 红先证据：新增 `runtime/control-process.spec.ts` 用例并发提交一个 body 与一个 `permission.reply`，
+  再并发提交两个 body。去掉包装即转红：`expected 1 to be 2`（记录 revision 为 1，丢了一条，
+  而两个调用都返回 `ok: true`）。复原后 27/27 通过。
+- 修正声明：§11.3 曾写「控制 daemon 是该记录的唯一写者，故其自身写入已串行化」。该句在当时不成立，
+  因为写者有两个（命令面与 body 面）。现已成立。
+
+### 12.2 advisory
+
+| finding | 处理 |
+| --- | --- |
+| A1 读侧 kind fallback 仍是「猜」 | 保留但在 `runtime/acp-serve.ts` 写明：冻结字段可选，shipped Console 总是同时送 `optionId` 与同选项的 `kind`，故这是「客户端只送裸 decision」时的残留回退，且仍不选引擎未提供的选项。 |
+| A2 `sessionCommand` 上方 JSDoc 过时且自相矛盾 | 已修：旧注释写「This daemon never invents an optionId」，而代码在下方原样携带 `command.optionId`；两段叠加的 JSDoc 已合并为一段，写明本 daemon 原样携带 `decision` 与 `optionId`，由持有 Session 的 agent daemon 按名回答。 |
+| A3 门禁文本与证据摘要的实测数字错误 | 已修：`docs/architecture/verification-map.json` 的 note 由 `76 passed / 4 files` 改为 **77**、`49 checks` 改为 **50**；该门禁的 `permission.reply` check 文本由「按 projected kind 选」改为「按记录的 `optionId` 精确回答，命名选项不存在或与 decision 矛盾即拒绝」；`verification.json` 的 `observed_values.gate_tests` 由 70 改为 **77**、`black_box_checks` 由 49 改为 **50**。§11.4 当时声称已更新，实际未更新，本次补上。 |
+| A4 relations 写路径同样有 check-then-act 且未串行化 | 继承缺陷，已披露，保持为保留义务。 |
+| A5 `runtime/agent-process.ts` 也丢弃冻结 `optionId` | 不在本单元：该路径面向 OpenCode 原生 permission API，其请求体是响应枚举、没有 option 集合，故无选项可猜。记为边界事实，不作为缺陷。 |
+
+### 12.3 修复后复测
+
+| 检查 | 结果 |
+| --- | --- |
+| `runtime/control-process.spec.ts` | **27/27** |
+| 本单元门禁（4 文件） | **78/78** |
+| D06 门禁（7 文件） | **140/140** |
+| L9 intent-side 门禁（4 文件） | **72/72** |
+| `pnpm typecheck` / `pnpm build` | exit 0 / exit 0 |
+| 真实黑盒 | **50 checks / PASS** |
+
 ## 10. Review 轮次与修复（2026-10-15）
 
 ### 10.1 review 尝试的诚实记录
