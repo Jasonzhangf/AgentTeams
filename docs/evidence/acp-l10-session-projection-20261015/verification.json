@@ -83,7 +83,8 @@
     "review": "Three independent rounds. Round 1 on the 2349be7/97c0e00 candidate: FAIL, 2 minor + 4 advisory. Round 2 on the fix diff 97c0e00..5403cca: FAIL, 2 minor + 2 advisory, while confirming round 1 as genuinely fixed. Round 3 on 5403cca..874252c: FAIL on evidence-record accuracy only, and it confirmed both round-2 minors and both round-2 advisories as genuinely closed; its findings are count misstatements (agent-host 27, not 28) and a mutation row measured on the wrong tree. The round-3 findings and their corrections are in review.md.",
     "merge": "pending at the time this file was written",
     "remote_receipt": "pending at the time this file was written",
-    "cleanup": "pending: the owned worktree is removed only after delivery, the remote receipt and retention evidence exist"
+    "cleanup": "pending: the owned worktree is removed only after delivery, the remote receipt and retention evidence exist",
+    "mutation_basis": "Every mutation row names the tree its count was measured on. Rows for the observation store and the projection were measured on the 2349be7 candidate and transfer to the head, because git diff 2349be7..HEAD is empty for config/session-observation-store.ts, config/session-observation-store.spec.ts, runtime/control-session-projection.spec.ts and runtime/control-process.ts. The publisher rows were re-measured on the head (combined no-change plus crossing: 2 of 7; serialization: 1 of 7). The host rows were re-measured on the head: the closed filter is bound by the close-window case, 1 of 27; removing channel.sessions.clear() is masked by that filter, 0 of 27, while the intermediate filter-less tree measured 2 of 26."
   },
   "full_suite": {
     "command": "pnpm test (1203 tests on the fixed candidate; 1201 before this unit's two new cases)",
