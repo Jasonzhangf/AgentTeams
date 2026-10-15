@@ -283,6 +283,7 @@ cross-device receipt、通过 serve entry 的 live registry composition 或 mobi
 `docs/evidence/acp-l11-installed-browser-20261014/`（18 checks、退出码 0）；restart、
 deployed-entrypoint replay、cross-device receipt、通过 serve entry 的 live registry composition
 与 mobile claim 仍未交付；
+2026-10-14 更正（L11）：该段所述 D06 自身无 installed-copy 回放的边界已由 `docs/evidence/acp-l11-installed-browser-20261014/` 在 console-DOM 层关闭（从安装包执行 `control start`，真实 Chrome 驱动该安装副本 origin，18 checks、退出码 0）；本门禁命令自身仍不驱动浏览器。
 2026-10-14 更正（L9 intent-side）：`connection.connect` 与 `network.membership.apply` 已不再是
 `UNSUPPORTED_OPERATION` 拒绝——本 unit 的门禁命令不声明任何 `[peers]`，所以两者现在是目标不可解析的
 typed `FORBIDDEN` 拒绝，驱动已按新期望更新并在本候选上重跑（15 checks、退出码 0）。

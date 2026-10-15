@@ -272,7 +272,8 @@ verbatim from `docs/evidence/acp-d06-control-20261011/notes.md` section 4.
   过期回调永远不会变成批准。
 - A2.1–A2.5 的线面契约由 PART 1 交付，本增量不改变它们的语义；本节只记录 A2 的题面。
 
-`teams-acp-d06-control` 绑定本节的 spec 与真实黑盒证据，状态为 `partial`：restart、deployed-entrypoint 与跨设备回执仍未交付。2026-10-14 更正（L11）：installed-copy 回放与浏览器证据已由 `docs/evidence/acp-l11-installed-browser-20261014/` 交付（从安装包执行 `control start`，用真实 Chrome 驱动该安装副本 origin，18 checks、退出码 0）。
+`teams-acp-d06-control` 绑定本节的 spec 与真实黑盒证据，状态为 `partial`：没有
+installed-copy 回放、restart、deployed-entrypoint、跨设备回执或浏览器证据（该句为本行写入时的状态）。2026-10-14 更正（L11）：其中 installed-copy 回放与浏览器证据已由 `docs/evidence/acp-l11-installed-browser-20261014/` 交付（从安装包执行 `control start`，用真实 Chrome 驱动该安装副本 origin，18 checks、退出码 0）；restart、deployed-entrypoint 与跨设备回执仍未交付。
 
 ## 13. D00 amendment A3 — engine instance on the connection context (2026-10-13)
 

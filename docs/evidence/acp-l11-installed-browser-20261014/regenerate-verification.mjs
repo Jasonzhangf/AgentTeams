@@ -47,7 +47,10 @@ const cleanup = receipt.cleanup
 // Recorded measured facts that the receipt keeps inside check details rather than in
 // measurements. Each one is read back with an assertion, never retyped.
 const tarballBytes = Number(one(/npm pack \S+ \((\d+) bytes\)/, check('installed artifact — isolated install').detail, 'the tarball size'))
-const cdpEvents = Number(one(/\((\d+) CDP events\)/, check('page runtime errors').detail, 'the CDP event count'))
+const runtimeDetail = check('page runtime errors').detail
+const cdpEvents = Number(one(/\((\d+) CDP events\)/, runtimeDetail, 'the CDP event count'))
+const pageExceptions = Number(one(/^(\d+) uncaught page exception/, runtimeDetail, 'the uncaught page exception count'))
+const sseEvent = one(/received a real (\w+):/, check('SSE frame').detail, 'the SSE event name')
 const daemonDetail = check('installed daemons — registry, agent, control all from the installed CLI').detail
 const registryPort = Number(one(/registry pid=\d+ \(127\.0\.0\.1:(\d+)\)/, daemonDetail, 'the registry port'))
 const agentPort = Number(one(/agent pid=\d+ \(127\.0\.0\.1:(\d+)/, daemonDetail, 'the agent port'))
@@ -95,8 +98,8 @@ const verification = {
       control_port: controlPort,
       chrome_pid: daemons.chrome,
       cdp_events: cdpEvents,
-      page_exceptions: 0,
-      sse_event: 'snapshot',
+      page_exceptions: pageExceptions,
+      sse_event: sseEvent,
       sse_seq: m.sse.seq,
       sse_agents: m.sse.agents,
       dom_observation: m.domMarkers.observation,
@@ -223,4 +226,4 @@ const verification = {
 }
 
 writeFileSync(join(here, 'verification.json'), `${JSON.stringify(verification, null, 2)}\n`)
-console.log(`verification.json regenerated: checks=${receipt.checks.length} tarball=${tarballBytes} cdp_events=${cdpEvents} ports=${registryPort}/${agentPort}/${controlPort} png=${width}x${height}`)
+console.log(`verification.json regenerated: checks=${receipt.checks.length} tarball=${tarballBytes} cdp_events=${cdpEvents} exceptions=${pageExceptions} sse=${sseEvent} ports=${registryPort}/${agentPort}/${controlPort} png=${width}x${height}`)
