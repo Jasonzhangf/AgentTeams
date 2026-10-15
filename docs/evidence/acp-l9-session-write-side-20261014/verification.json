@@ -27,7 +27,7 @@
   "remote_receipt": null,
   "review": {
     "status": "NO INDEPENDENT ARTIFACT. Four independent review attempts returned prose verdicts and wrote no review file, so no independent review PASS receipt exists for this unit. The Lead transcribed nothing: the verdicts below are the reviewers' own returned text, recorded here as claims and then independently checked by the unit owner.",
-    "attempts": 5,
+    "attempts": 4,
     "round_1": {
       "verdict": "PASS, self-contradictory",
       "text": "labelled its F1 BLOCKING and then wrote 'All findings are ADVISORY. No BLOCKING finding exists.'; its 'Measurements' reported the receipt verdict as 'applied', which is not a receipt field value, so it did not run the driver. Not citable."
@@ -45,7 +45,7 @@
       "round_2_F3": "TRUE, fixed",
       "round_3_F1": "TRUE, fixed in this round"
     },
-    "note": "No independent review PASS exists. Five review attempts: rounds 1 and 2 were self-contradictory or invalid; round 3 returned FAIL with three true BLOCKING findings (fixed); round 4 returned FAIL with one true BLOCKING residual (fixed); round 5 re-checked the residual and returned PASS. The unit does not claim a review PASS from a reviewer that wrote no artifact; the PASS is the round-5 text transcribed here.",
+    "note": "No independent review PASS exists. Four review attempts: rounds 1 and 2 were self-contradictory or invalid; round 3 returned FAIL with three true BLOCKING findings (fixed); round 4 returned FAIL with one true BLOCKING residual (fixed). The re-check of that residual is not yet recorded, so this unit claims no review PASS and integration is not authorized on review grounds.",
     "round_3": {
       "verdict": "FAIL, one BLOCKING finding",
       "findings": "F1 and F2 independently confirmed fixed. F3 only half fixed: sendSession, the shipped Session body ingress, called the shared sessionWrite primitive directly and bypassed serializeSessionWrite, so two concurrent writes on the same record still lost one while both callers were told ok:true. Also three advisories (the kind fallback is still a guess; a stale self-contradicting JSDoc above sessionCommand; the gate note and observed_values carried stale numbers and a superseded check) and one inherited advisory (the relations path)."
