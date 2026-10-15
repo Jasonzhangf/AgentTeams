@@ -1,0 +1,314 @@
+{
+  "version": 1,
+  "driver": "acp-l10-session-projection",
+  "checks": [
+    {
+      "step": "no observation before any Session",
+      "ok": true,
+      "message": "no Session observation record exists before the agent daemon runs"
+    },
+    {
+      "step": "control start",
+      "ok": true,
+      "message": "the control daemon reports a live explicit pid (2692)"
+    },
+    {
+      "step": "control start",
+      "ok": true,
+      "message": "the control daemon reports running (running)"
+    },
+    {
+      "step": "agent readiness",
+      "ok": true,
+      "message": "the agent daemon is live with explicit pid 2771"
+    },
+    {
+      "step": "agent readiness",
+      "ok": true,
+      "message": "the agent daemon spawned a live engine child (2842)"
+    },
+    {
+      "step": "controller connect",
+      "ok": true,
+      "message": "the controller opened a real ACP channel to the agent daemon"
+    },
+    {
+      "step": "session/new",
+      "ok": true,
+      "message": "the engine returned a real sessionId (ses_ec045ebe…)"
+    },
+    {
+      "step": "prompt and permission callback",
+      "ok": true,
+      "message": "the engine raised a real permission callback the controller received as id acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1"
+    },
+    {
+      "step": "prompt and permission callback",
+      "ok": true,
+      "message": "the callback carries a real engine option set (allow_once,allow_always,reject_once)"
+    },
+    {
+      "step": "agent publishes the observation",
+      "ok": true,
+      "message": "the observation names the agent that owns it (l10sp-agent)"
+    },
+    {
+      "step": "agent publishes the observation",
+      "ok": true,
+      "message": "the observation carries the REAL controller-visible permission id acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1"
+    },
+    {
+      "step": "agent publishes the observation",
+      "ok": true,
+      "message": "the permission row names the real Session (ses_ec045ebedffe1HneCQtW2ffB8Q)"
+    },
+    {
+      "step": "agent publishes the observation",
+      "ok": true,
+      "message": "the permission row's own id is derived from the callback id (permission:acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1)"
+    },
+    {
+      "step": "an unchanged observation is not a heartbeat",
+      "ok": true,
+      "message": "an unchanged observation keeps its revision (2)"
+    },
+    {
+      "step": "projection carries the real Session",
+      "ok": true,
+      "message": "the projection keeps its frozen version (1)"
+    },
+    {
+      "step": "projection carries the real Session",
+      "ok": true,
+      "message": "the notification row is a pending permission (permission/pending)"
+    },
+    {
+      "step": "projection carries the real Session",
+      "ok": true,
+      "message": "the notification row names the agent and the Session that really own it"
+    },
+    {
+      "step": "projection carries the real Session",
+      "ok": true,
+      "message": "the notification row carries a non-empty Console title (Permission request)"
+    },
+    {
+      "step": "projection carries the real Session",
+      "ok": true,
+      "message": "the projection carries NO sessionEvents, which is the honest remaining gap"
+    },
+    {
+      "step": "SSE snapshot carries the real rows",
+      "ok": true,
+      "message": "the SSE projection stream accepts the declared credential (200)"
+    },
+    {
+      "step": "SSE snapshot carries the real rows",
+      "ok": true,
+      "message": "the SSE stream delivered a sequenced snapshot (seq=1)"
+    },
+    {
+      "step": "SSE snapshot carries the real rows",
+      "ok": true,
+      "message": "the streamed snapshot carries the real Session row"
+    },
+    {
+      "step": "SSE snapshot carries the real rows",
+      "ok": true,
+      "message": "the streamed snapshot carries the real pending permission"
+    },
+    {
+      "step": "the projection surface still requires its credential",
+      "ok": true,
+      "message": "an unauthenticated projection read is refused (401)"
+    },
+    {
+      "step": "the control daemon never writes the observation",
+      "ok": true,
+      "message": "the control daemon data directory holds no observation record"
+    },
+    {
+      "step": "the control daemon never writes the observation",
+      "ok": true,
+      "message": "the only observation record on this host is the one the agent daemon published"
+    },
+    {
+      "step": "answering the callback removes the permission row",
+      "ok": true,
+      "message": "the observation carries no pending permission after the engine answered it"
+    },
+    {
+      "step": "answering the callback removes the permission row",
+      "ok": true,
+      "message": "the observation still reports the open Session"
+    },
+    {
+      "step": "closing the controller channel releases the controller Session",
+      "ok": true,
+      "message": "closing the controller channel released its own Session ses_ec045ebe…"
+    },
+    {
+      "step": "the agent daemon publishes the empty observation on stop",
+      "ok": true,
+      "message": "the agent daemon published the empty observation itself when it stopped"
+    },
+    {
+      "step": "the agent daemon publishes the empty observation on stop",
+      "ok": true,
+      "message": "the control daemon projects neither Session nor permission for the stopped agent"
+    }
+  ],
+  "sessionId": "ses_ec045ebedffe1HneCQtW2ffB8Q",
+  "observationPath": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l10sp-blackbox-dcpGs8/home/.agentteams/sessions/local/local/l10sp-agent/session-observation.json",
+  "projection": {
+    "version": 1,
+    "agents": [],
+    "sessions": [
+      {
+        "agentId": "l10sp-agent",
+        "sessionId": "ses_ec045ebedffe1HneCQtW2ffB8Q"
+      },
+      {
+        "agentId": "l10sp-agent",
+        "sessionId": "ses_ec045ec2bfferKXv8DzT0LONCn"
+      }
+    ],
+    "notifications": [
+      {
+        "agentId": "l10sp-agent",
+        "notificationId": "permission:acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1",
+        "sessionId": "ses_ec045ebedffe1HneCQtW2ffB8Q",
+        "kind": "permission",
+        "state": "pending",
+        "title": "Permission request",
+        "permissionId": "acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1"
+      }
+    ],
+    "configs": [],
+    "connections": []
+  },
+  "controlConfigPath": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l10sp-blackbox-dcpGs8/control.toml",
+  "agentConfigPath": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l10sp-blackbox-dcpGs8/agent.toml",
+  "control": {
+    "pid": 2692,
+    "origin": "http://127.0.0.1:60543"
+  },
+  "agentReady": "serving agent=l10sp-agent engine=opencode engineInstance=opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e enginePid=2842 daemonPid=2771 listener=127.0.0.1:60544 localChannel=127.0.0.1:60544 lanChannel=none capabilitiesRevision=2 registration=disabled dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l10sp-blackbox-dcpGs8/agent/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l10sp-blackbox-dcpGs8/agent.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1",
+  "permission": {
+    "id": "acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1",
+    "engineOptionKinds": [
+      "allow_once",
+      "allow_always",
+      "reject_once"
+    ]
+  },
+  "observation": {
+    "version": 1,
+    "revision": 2,
+    "updatedAt": "2026-10-15T13:22:05.840Z",
+    "agentId": "l10sp-agent",
+    "sessions": [
+      {
+        "sessionId": "ses_ec045ebedffe1HneCQtW2ffB8Q"
+      },
+      {
+        "sessionId": "ses_ec045ec2bfferKXv8DzT0LONCn"
+      }
+    ],
+    "permissions": [
+      {
+        "notificationId": "permission:acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1",
+        "sessionId": "ses_ec045ebedffe1HneCQtW2ffB8Q",
+        "permissionId": "acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1"
+      }
+    ]
+  },
+  "sseSnapshot": {
+    "seq": 1,
+    "sessions": [
+      {
+        "agentId": "l10sp-agent",
+        "sessionId": "ses_ec045ebedffe1HneCQtW2ffB8Q"
+      },
+      {
+        "agentId": "l10sp-agent",
+        "sessionId": "ses_ec045ec2bfferKXv8DzT0LONCn"
+      }
+    ],
+    "notifications": [
+      {
+        "agentId": "l10sp-agent",
+        "notificationId": "permission:acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1",
+        "sessionId": "ses_ec045ebedffe1HneCQtW2ffB8Q",
+        "kind": "permission",
+        "state": "pending",
+        "title": "Permission request",
+        "permissionId": "acp-callback-opencode-l10sp-agent-481bcfb1-9615-405f-a462-89072f15918e-1"
+      }
+    ]
+  },
+  "projectionAfterReply": {
+    "version": 1,
+    "agents": [],
+    "sessions": [
+      {
+        "agentId": "l10sp-agent",
+        "sessionId": "ses_ec045ebedffe1HneCQtW2ffB8Q"
+      },
+      {
+        "agentId": "l10sp-agent",
+        "sessionId": "ses_ec045ec2bfferKXv8DzT0LONCn"
+      }
+    ],
+    "notifications": [],
+    "configs": [],
+    "connections": []
+  },
+  "sessionsWhileOpen": [
+    "ses_ec045ebedffe1HneCQtW2ffB8Q",
+    "ses_ec045ec2bfferKXv8DzT0LONCn"
+  ],
+  "sessionsAfterChannelClose": [
+    {
+      "sessionId": "ses_ec045ec2bfferKXv8DzT0LONCn"
+    }
+  ],
+  "otherOwnedSessions": [
+    {
+      "sessionId": "ses_ec045ec2bfferKXv8DzT0LONCn"
+    }
+  ],
+  "projectionAfterClose": {
+    "version": 1,
+    "agents": [],
+    "sessions": [
+      {
+        "agentId": "l10sp-agent",
+        "sessionId": "ses_ec045ec2bfferKXv8DzT0LONCn"
+      }
+    ],
+    "notifications": [],
+    "configs": [],
+    "connections": []
+  },
+  "observationAfterStop": {
+    "version": 1,
+    "revision": 5,
+    "updatedAt": "2026-10-15T13:22:11.936Z",
+    "agentId": "l10sp-agent",
+    "sessions": [],
+    "permissions": []
+  },
+  "projectionAfterStop": {
+    "version": 1,
+    "agents": [],
+    "sessions": [],
+    "notifications": [],
+    "configs": [],
+    "connections": []
+  },
+  "summary": {
+    "checks": 31,
+    "passed": 31
+  }
+}

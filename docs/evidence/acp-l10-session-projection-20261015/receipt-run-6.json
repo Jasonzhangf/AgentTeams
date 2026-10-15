@@ -1,0 +1,9 @@
+{
+  "tool": "the L10 session-projection black box",
+  "purpose": "the real entrypoint evidence for this unit: one real control daemon, one real agent daemon with a real engine and a real ACP permission callback, driven over their real public surfaces",
+  "base_commit": "83496b7ff1be7f340f874c5ef604f8c6f5c4da53",
+  "candidate_commit": "4e5b77e",
+  "run": "the same driver, run again on the committed candidate after the two review findings were fixed. 31/31 checks passed, exit 0. See black-box-run-6-final.log in this directory for the full log.",
+  "no_secrets": "the driver generates its own loopback credentials and stub-provider port inside one mkdtemp directory and removes it on exit; this file records no credential, token, password, account name or machine path outside the evidence directory.",
+  "next": "This run re-ran the whole real chain (control start, agent readiness, session/new, prompt and permission callback, SSE snapshot, credential refusal, callback answer, controller channel close, agent stop). The receipt.json in this directory is the receipt of the earlier run on the same candidate tree and is kept unchanged so each file names one run exactly."
+}

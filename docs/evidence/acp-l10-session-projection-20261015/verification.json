@@ -1,0 +1,220 @@
+{
+  "unit": "L10 session-projection",
+  "title": "the Console projection carries the real Session and the real permission identity the agent daemon's engine holds",
+  "date": "2026-10-15",
+  "base_commit": "83496b7ff1be7f340f874c5ef604f8c6f5c4da53",
+  "base_ref": "origin/main",
+  "worktree": "/Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015",
+  "branch": "codex/acp-l10-session-projection-20261015",
+  "gate_id": "teams-acp-l10-session-projection",
+  "gate_status": "partial",
+  "gate_status_note": "The gate is declared and its measured source evidence is green. It stays partial because sessionEvents is not projected, the notification title is a fixed Console label, the projection also carries the daemon's own readiness-channel Session, a hard crash leaves the last observation projected, and this unit has no installed-copy, restart, deployed-entrypoint or cross-device receipt.",
+  "governing_decision": "No control-to-agent channel exists and none is added: the control daemon declares no Teams listener. The agent daemon that owns the AcpHost facts is the only writer of one durable observation record per agent, and the control daemon is the only reader. The Console never enters the data path and no protocol frame changed.",
+  "driver": "docs/evidence/acp-l10-session-projection-20261015/black-box-session-projection.mjs",
+  "verification": {
+    "source": "This worktree, reviewed heads 753775d and e83a7b0 on origin/main base 83496b7 (an ancestor). The rounds are recorded in review.md: round 1 reviewed the 2349be7/97c0e00 candidate and found 2 minor + 4 advisory; the fix at 4e5b77e closed them. Round 2 reviewed 97c0e00..5403cca (FAIL, 2 minor + 2 advisory, both round-1 items confirmed closed). Round 3 reviewed 5403cca..874252c (FAIL, evidence-record arithmetic; code confirmed). Round 4 reviewed 874252c..753775d (FAIL, two evidence locations that had not received the corrections). The count corrections land at e83a7b0, and round 5 (read-only count confirmation of 753775d..e83a7b0) PASSED it. Every count in this record matches its committed log.",
+    "test": [
+      {
+        "command": "pnpm exec vitest run --no-file-parallelism config/session-observation-store.spec.ts runtime/session-observation-publisher.spec.ts runtime/control-session-projection.spec.ts config/session-intent-store.spec.ts agent-host/acp-host.spec.ts runtime/control-process.spec.ts",
+        "result": "86 passed / 6 files, exit 0",
+        "log": "gate-l10.log",
+        "per_file": {
+          "config/session-observation-store.spec.ts": 8,
+          "runtime/session-observation-publisher.spec.ts": 7,
+          "runtime/control-session-projection.spec.ts": 5,
+          "config/session-intent-store.spec.ts": 12,
+          "agent-host/acp-host.spec.ts": 27,
+          "runtime/control-process.spec.ts": 27
+        },
+        "per_file_sum": 86,
+        "log_line": "Tests 86 passed (86); Test Files 6 passed (6); the per-file lines are agent-host/acp-host.spec.ts 27, config/session-intent-store.spec.ts 12, runtime/control-process.spec.ts 27, runtime/session-observation-publisher.spec.ts 7, config/session-observation-store.spec.ts 8, runtime/control-session-projection.spec.ts 5",
+        "exit_marker": "GATE_EXIT=0 is the last line of gate-l10.log"
+      },
+      {
+        "command": "pnpm exec vitest run --no-file-parallelism config/relations-intent-store.spec.ts runtime/relations-intent-watch.spec.ts runtime/control-process.spec.ts runtime/acp-serve.spec.ts",
+        "result": "72 passed / 4 files, exit 0",
+        "why": "the L9 intent-side gate command, re-run because this unit migrated config/relations-intent-store.ts onto config/durable-record.ts, touched runtime/acp-serve.ts's stop path and now adds a host close-window test; its first 2-file re-run is superseded by this 4-file run",
+        "log": "gate-l9-intent-side-4files.log (the two directly affected specs alone: gate-l10-review-fixes-relations.log, 18 passed / 2 files)",
+        "per_file": {
+          "runtime/acp-serve.spec.ts": 27,
+          "runtime/control-process.spec.ts": 27,
+          "config/relations-intent-store.spec.ts": 10,
+          "runtime/relations-intent-watch.spec.ts": 8
+        },
+        "per_file_sum": 72,
+        "log_line": "Tests 72 passed (72); Test Files 4 passed (4)",
+        "exit_marker": "the log ends with the run's own summary; the command exited 0"
+      },
+      {
+        "command": "pnpm typecheck",
+        "result": "exit 0",
+        "log": "typecheck.log"
+      }
+    ],
+    "mutation_evidence": [
+      "config/session-observation-store.spec.ts: disabling the cross-Session check and the CAS check fails 3 of 8",
+      "runtime/session-observation-publisher.spec.ts: removing the no-change early return and the Session-crossing drop fails 2 of 7",
+      "runtime/session-observation-publisher.spec.ts: removing the pass serialization fails 1 of 7 — the stop-time empty observation loses its revision to a conflict and the stale non-empty record survives at revision 1",
+      "runtime/control-session-projection.spec.ts: removing the directory-online gate and the attribution check fails 2 of 5",
+      "agent-host/acp-host.spec.ts: removing channel.sessions.clear() from releaseSessions fails 0 of 27 on the head, because the restored closed filter masks it — the observable invariant is now carried by the filter; on the intermediate filter-less tree the same ablation failed 2 of 26 (close path and engine-ended channel), which is the tree that measurement belongs to",
+      "agent-host/acp-host.spec.ts: the `closed` filter in openedSessions() is the bound rule — a close-window case holds the close's durable settling open and samples the host; with the filter removed that case fails with expected [ 'session-1' ] to deeply equal [] (1 of 27). An earlier attempt in this round to delete that filter as unreachable was wrong; it came back as round-3 review minor 1 and the fix restored it"
+    ],
+    "build": "pnpm build, exit 0; the log build.log ends with BUILD_EXIT=0",
+    "black_box": {
+      "command": "node docs/evidence/acp-l10-session-projection-20261015/black-box-session-projection.mjs",
+      "result": "31 checks, all passed, exit 0",
+      "receipt": "docs/evidence/acp-l10-session-projection-20261015/receipt.json",
+      "rerun_on_the_fixed_candidate": "the same driver ran again after the two review fixes were committed (4e5b77e): 31 checks, all passed, exit 0, log black-box-run-6-final.log, receipt-run-6.json",
+      "topology": "one real control daemon through the real CLI (control start --config) on a real loopback port, one real `agentteams --serve opencode --ip 127.0.0.1 --port <p> --config` agent daemon with a real engine child, a real Newline-delimited ACP connection held by the driver as the controller, and a local OpenAI-compatible stub provider for the engine.",
+      "proven": [
+        "no observation record exists before any Session is opened (honest absence, not an empty placeholder)",
+        "the published Session id is the one the engine really returned, and the published permission row carries the real controller-visible callback id with notificationId derived from it",
+        "an unchanged observation keeps its revision across a quiet window, so a poll is not a heartbeat",
+        "the control daemon's real GET /api/v1/projection carries the Session row and the pending notification row with the real permissionId, the real sessionId, kind permission and state pending",
+        "the real GET /api/v1/events SSE stream delivers a snapshot that carries those rows",
+        "an unauthenticated projection read is refused 401",
+        "the control daemon data directory holds no observation record, so there is one writer",
+        "answering the callback over ACP removes the permission row at a later revision while the Session row stays",
+        "closing the controller channel releases exactly that channel's Session, and the Sessions other open channels own stay reported (a real finding: the daemon's readiness channel owns its own Session)",
+        "SIGTERM on the agent daemon makes it publish the empty observation, and the control daemon then projects neither Session nor permission"
+      ]
+    },
+    "installed_artifact": "none: this unit does not change packaging and has no installed-copy receipt",
+    "restart": "none: the driver starts and stops its own daemons, and no installed daemon was restarted",
+    "deployed_entrypoint_replay": "none: the driver runs the worktree's compiled generated/runtime-lib through the source CLI",
+    "review": "No single PASS until round 5. Rounds 1-4 were independent FAILs on this unit's own code or evidence statements (2 minor + 4 advisory; then 2 minor + 2 advisory; then 2 minor + 3 advisory, all evidence arithmetic; then 2 missed evidence locations). Round 5, a read-only count confirmation of the corrections at e83a7b0, PASSED: every count matches its committed log and no artifact claims otherwise. See review.md.",
+    "merge": "pending at the time this file was written",
+    "remote_receipt": "pending at the time this file was written",
+    "cleanup": "pending: the owned worktree is removed only after delivery, the remote receipt and retention evidence exist",
+    "mutation_basis": "Every mutation row names the tree its count was measured on. Rows for the observation store and the projection were measured on the 2349be7 candidate and transfer to the head, because git diff 2349be7..HEAD is empty for config/session-observation-store.ts, config/session-observation-store.spec.ts, runtime/control-session-projection.spec.ts and runtime/control-process.ts. The publisher rows were re-measured on the head (combined no-change plus crossing: 2 of 7; serialization: 1 of 7). The host rows were re-measured on the head: the closed filter is bound by the close-window case, 1 of 27; removing channel.sessions.clear() is masked by that filter, 0 of 27, while the intermediate filter-less tree measured 2 of 26.",
+    "typecheck": "pnpm typecheck, exit 0; the log typecheck.log ends with TYPECHECK_EXIT=0"
+  },
+  "full_suite": {
+    "command": "pnpm test (1203 tests on the fixed candidate; 1201 before this unit's two new cases)",
+    "runs": [
+      {
+        "log": "regression-run-1.log",
+        "result": "1173 passed / 5 failed"
+      },
+      {
+        "log": "regression-run-2.log",
+        "result": "1175 passed / 3 failed"
+      },
+      {
+        "log": "regression-run-3.log",
+        "result": "1175 passed / 3 failed"
+      },
+      {
+        "log": "regression-run-4.log",
+        "result": "1174 passed / 6 failed (1203 total) on the fixed candidate"
+      }
+    ],
+    "conclusion": "NOT green. The failing set is unstable and lies in specs this change does not touch: run 4 failed in ui/teams-console/tests/render.spec.ts, ui/teams-console/tests/render-d07.spec.ts, ui/teams-console/tests/focus-dom.spec.ts, runtime/agent-process.spec.ts, runtime/managed-opencode-session.spec.ts and cli/agentteams.spec.ts, and `git diff 83496b7..HEAD` is empty for all six. cli/agentteams.spec.ts has a deterministic pre-existing cause: its beforeAll runs pnpm build:runtime while the parallel cli/package-install.spec.ts beforeAll runs pnpm build, and both delete and rebuild generated/runtime-lib; both hooks exist at origin/main. Run in isolation the same six specs pass: 80 passed / 6 files, exit 0 (regression-failing-specs-isolated-run4.log, with TEAMS_CONSOLE_REAL_DOM=1 for the three real-DOM cases); the earlier three-spec set also passed in isolation, 74/74 (regression-failing-specs-isolated.log). Therefore these failures are parallel-load and real-browser/real-engine timing plus the pre-existing derived-artifact race, and this unit does not claim a green full regression."
+  },
+  "acceptance_items": [
+    {
+      "item": "the Console projection carries the Session the Console writes to",
+      "status": "delivered",
+      "evidence": "black box checks 11-13 and 15 plus runtime/control-session-projection.spec.ts"
+    },
+    {
+      "item": "the Console projection carries a real permission identity",
+      "status": "delivered",
+      "evidence": "black box checks 8 and 12; the real callback id is the projected permissionId"
+    },
+    {
+      "item": "the SSE stream is driven by the real projection",
+      "status": "delivered",
+      "evidence": "black box check 14 reads the real /api/v1/events stream"
+    },
+    {
+      "item": "a stopped agent's rows disappear",
+      "status": "delivered",
+      "evidence": "black box checks 18-19: the daemon publishes the empty observation in its own stop()"
+    },
+    {
+      "item": "sessionEvents reaches the Console approve buttons",
+      "status": "not delivered",
+      "evidence": "asserted absent in the black box on the real GET /api/v1/projection; the projection the control daemon builds (runtime/control-process.ts:939) carries no sessionEvents key"
+    },
+    {
+      "item": "installed artifact, restart or deployed-entrypoint evidence",
+      "status": "not delivered",
+      "evidence": "no such receipt exists for this unit"
+    }
+  ],
+  "gaps": [
+    "sessionEvents is not projected, so the Console approve buttons still render data-permission-options-unavailable: the frozen pending-permission ConsoleSessionEventView requires a messageId that AcpPendingPermission does not carry",
+    "the notification title is the fixed Console label 'Permission request', because the ACP callback carries options and not a subject",
+    "the projection also reports the Session of the agent daemon's own readiness channel, which no controller opened",
+    "after a hard crash with no SIGTERM the last observation stays projected, because no registry reports that peer's liveness and no timeout heuristic was invented",
+    "the projection is honest only inside one home, one account and one scope: the reader resolves <home>/.agentteams/sessions/<declared peer accountId>/<scopeId>/<agentId> while the writer uses its own daemon accountId and scopeId, so two daemons that differ there, or that run on two machines, project silently empty (the same documented limitation as the L9 path)",
+    "the full-suite regression is not green on this candidate: 3 load-sensitive failures in pre-existing specs",
+    "pnpm verify stays blocked by the pre-existing PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014"
+  ],
+  "resolved_defects": [
+    "L9 retained obligation F4 (duplicated durable-write helpers): closed by config/durable-record.ts, which the session intent store, its watermark, the observation store and the relations intent store all call; the second implementation in config/relations-intent-store.ts was deleted in this unit, so one discipline exists",
+    "L9 retained obligation (the control daemon reported sessions: [] and notifications: []): closed and proven by the real projection in the black box",
+    "L10 review minor 1 (the stop-time empty publish could lose its revision to an in-flight poll): closed by running one publisher pass at a time, with a spec whose failure is the stale non-empty record at revision 1",
+    "L10 review minor 2 (the F4 claim was true for only half the pair): closed by migrating config/relations-intent-store.ts onto config/durable-record.ts and deleting its private copy, with the L9 intent-side gate re-measured at 72 passed / 4 files, exit 0",
+    "L10 review round-3 minor (the closed-filter removal was wrong, not a redundant guard): close() sets channel.closed and only then awaits its durable settling, so openedSessions() would report a closed channel's Session during that window; the filter is restored with its real reason recorded, and a new close-window spec binds it — removing the filter fails that case with expected [ 'session-1' ] to deeply equal []",
+    "L10 review round-3 minor (the 72 passed / 4 files rerun had no committed log): the four-file gate runs now has a committed log, gate-l9-intent-side-4files.log, 72 passed / 4 files, exit 0",
+    "L10 review round-3 evidence-record accuracy: the earlier resolved item claiming the closed filter 'could not change any behaviour ... it was deleted' was itself the rejected ablation and is superseded by the round-3 correction; the only remaining statements are the measured ones on the head (filter removed -> 1 of 27 red close-window case; clear() removed -> 0 of 27, masked by the restored filter)"
+  ],
+  "observed_values": {
+    "real_session_id_prefix": "ses_",
+    "real_permission_callback_id_shape": "acp-callback-opencode-<agentId>-<uuid>-<n>",
+    "engine_option_kinds_offered": [
+      "allow_once",
+      "allow_always",
+      "reject_once"
+    ],
+    "projection_version": 1,
+    "record_revisions_observed": {
+      "empty_before_any_session": "no file",
+      "session_and_permission": 2,
+      "after_the_callback_was_answered": 3,
+      "after_the_channel_closed": 4,
+      "after_the_agent_stopped": "empty observation"
+    },
+    "poll_intervals_ms": {
+      "session_observation": 500,
+      "control_projection": 1000
+    },
+    "notification_title": "Permission request"
+  },
+  "engine_versions": {
+    "node": "v22.22.2",
+    "pnpm": "10.31.0",
+    "opencode_executable": "/Users/fanzhang/.opencode/bin/opencode"
+  },
+  "non_claims": [
+    "This unit does not claim the Console can approve a permission: sessionEvents is absent.",
+    "This unit does not claim the notification title comes from the engine.",
+    "This unit does not claim the Console lists only controller-opened Sessions.",
+    "This unit does not claim crash recovery or liveness truth for a peer no registry reports.",
+    "This unit does not claim protocol, installation, restart or deployment evidence.",
+    "This unit does not claim a green full-suite regression."
+  ],
+  "evidence_boundary": "source-tree evidence only: module specs, the L10 gate command, typecheck, the full build and one real two-daemon black box over the worktree's compiled library. No installed-copy, restart, deployed-entrypoint replay or cross-device evidence exists for this unit.",
+  "overall_goal": "Continue the AgentTeams ACP/LAN/WebUI long-running delivery: L10 delivers the real Session and permission projection that L9 retained.",
+  "retained_obligations": [
+    "sessionEvents plus a message identity for the pending-permission Console view",
+    "an engine-supplied notification subject if the Console needs a real title",
+    "a console-surface decision on whether to list a Session no controller opened, which needs a channel-ownership marker",
+    "liveness truth for a peer no registry reports",
+    "one home, one account and one scope for the observation path; a cross-machine or differently-scoped peer still projects empty",
+    "a consumer that reads sessionObservation.failures(): the handle exposes it, no production caller does, matching the sibling sessionIntent and relationsIntent handles",
+    "the L9 obligations this unit does not touch",
+    "installed-copy, restart and deployed-entrypoint evidence for the ACP/LAN/WebUI increment"
+  ],
+  "driver_side_effects": [
+    "one real control daemon started and stopped through the real CLI",
+    "one real agent daemon plus its engine child started and SIGTERMed by explicit pid",
+    "one local OpenAI-compatible stub provider on an ephemeral loopback port",
+    "all state under one mkdtemp directory that the driver removes on exit"
+  ],
+  "driver_reruns": 6,
+  "driver_reruns_note": "The driver was re-run after each fix: (1) awaiting only the Session row raced the permission row, so the await now requires both; (2) asserting an empty Session list after the controller channel closed was wrong, because the daemon's own readiness channel keeps its Session, so the assertion now names the controller's own Session; (3) the empty observation on stop still ends with no rows at all; (4) after the publisher was serialized and the relations store was migrated onto the shared durable write, the whole real chain ran again on the committed candidate and passed 31/31, exit 0 (black-box-run-6-final.log).",
+  "retry_policy": "Re-run the gate command and the black box on the same candidate; investigate a changed failing spec before any re-run of the full suite."
+}

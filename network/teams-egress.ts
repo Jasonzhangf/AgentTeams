@@ -255,6 +255,7 @@ export async function openTeamsEgress(input: OpenTeamsEgressInput): Promise<Team
     // The wrapper observes channel lifecycle and must not hide what it wraps.
     pendingPermissions: () => input.host.pendingPermissions(),
     channelForSession: sessionId => input.host.channelForSession(sessionId),
+    openedSessions: () => input.host.openedSessions(),
   }
 
   const session = createTeamsSession({

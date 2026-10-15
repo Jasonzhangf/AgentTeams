@@ -77,6 +77,15 @@ export interface AcpHost {
    * channel owns it. A caller never invents a ref for a Session it does not own.
    */
   channelForSession(sessionId: string): AcpChannelRef | undefined
+  /**
+   * The Session ids an open channel really owns, in the order this host learned them.
+   *
+   * The host is the Session owner, so it is the only place that knows which engine Sessions
+   * are still held by a live channel. This is a read of the host's own record, never a
+   * second session source: a Session whose channel closed is not reported, and no title or
+   * transcript is invented here.
+   */
+  openedSessions(): readonly string[]
 }
 
 export interface CreateAcpHostInput {
@@ -1110,5 +1119,19 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     return channel === undefined || channel.closed ? undefined : channel.ref
   }
 
-  return { open, receive, read, close, pendingPermissions, channelForSession }
+  const openedSessions = (): readonly string[] => {
+    const rows: string[] = []
+    for (const channel of channels.values()) {
+      // A closed channel holds no Session any more, so it must not be reported as one — the same
+      // rule `channelForSession` and `pendingPermissions` already apply. `releaseSessions` clears
+      // the ids, but `close()` marks the channel closed and only then awaits its durable settling,
+      // so a reader that samples this host inside that window would otherwise see the Sessions of
+      // a channel that already stopped accepting writes.
+      if (channel.closed) continue
+      for (const sessionId of channel.sessions) rows.push(sessionId)
+    }
+    return rows
+  }
+
+  return { open, receive, read, close, pendingPermissions, channelForSession, openedSessions }
 }

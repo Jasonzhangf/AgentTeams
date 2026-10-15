@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type { JsonValue } from '../control-protocol/agent-services.ts'
-import type { ConfigApplyError, ConfigApplyResult, ManagedConfigUncertainty } from './runtime-config.ts'
+import type { ConfigApplyError, ConfigApplyResult } from './runtime-config.ts'
 import { RuntimeConfigError } from './runtime-config.ts'
+import { writeRecordAtomically } from './durable-record.ts'
 
 /**
  * Durable Session-write intent: one record per account and scope.
@@ -338,20 +339,14 @@ export async function writeSessionIntentWatermark(path: string, appliedRevision:
   if (!Number.isSafeInteger(appliedRevision) || appliedRevision < 0) {
     fail('INVALID_INPUT', `session intent watermark appliedRevision must be a non-negative integer: ${path}`)
   }
-  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
-  try {
-    await mkdir(dirname(path), { recursive: true })
-    await writeFile(temporary, `${JSON.stringify({ version: SESSION_INTENT_VERSION, appliedRevision })}\n`, { encoding: 'utf8', mode: 0o600 })
-  } catch {
-    await discard(temporary)
-    fail('UNAVAILABLE', `session intent watermark could not be saved: ${path}`)
-  }
-  try {
-    await rename(temporary, path)
-  } catch {
-    await discard(temporary)
-    fail('UNAVAILABLE', `session intent watermark could not be replaced: ${path}`)
-  }
+  const result = await writeRecordAtomically({
+    path,
+    label: 'session intent watermark',
+    record: { version: SESSION_INTENT_VERSION, appliedRevision },
+    acceptedRevision: appliedRevision,
+    effectiveRevision: appliedRevision,
+  })
+  if (result.status !== 'applied') fail('UNAVAILABLE', result.error.message)
 }
 
 /**
@@ -387,64 +382,20 @@ export function pendingSessionIntents(
   }
 }
 
-/** Best-effort removal of the temporary file; the first write error is what matters. */
-async function discard(temporary: string): Promise<void> {
-  try {
-    await unlink(temporary)
-  } catch { /* keep the first failure */ }
-}
-
 /**
- * The fence records the real substrate facts of an ambiguous write: the durable target (the
- * record path, which is the only identity this store owns), the revision the caller
- * accepted, and the revision the write intended to publish.
- */
-function uncertainty(path: string, acceptedRevision: number, effectiveRevision: number, cause: unknown): ManagedConfigUncertainty {
-  const target = resolve(path)
-  return {
-    target: {
-      agentId: target,
-      targetGeneration: 1,
-      acceptedRevision,
-      acceptedSourceRevision: 0,
-      acceptedSourceHash: '',
-      endpointFingerprint: target,
-    },
-    operation: { operationId: `apply:${target}:${Date.now()}:${randomUUID()}`, kind: 'apply' },
-    error: {
-      code: 'RESULT_UNKNOWN',
-      message: `session intent outcome is unknown: ${path}: ${cause instanceof Error ? cause.message : String(cause)}`,
-    },
-    substrate: {
-      effectiveRevision,
-      effectiveHandleFingerprint: `${target}\u0000${effectiveRevision}`,
-    },
-  }
-}
-
-/**
- * Durable write: a mode-`0o600` temporary file in the target directory, then an atomic
- * rename. A failed temporary write leaves the target untouched and is a known failure. A
- * failed rename is never `applied`: the target may already carry the new bytes, so the
- * result is `uncertain` with the real substrate facts.
+ * Durable write, one mode-`0o600` temporary file then one atomic rename, with the three
+ * honest outcomes that rule owns. The discipline itself lives in
+ * `config/durable-record.ts`, shared with the Session observation store so a second durable
+ * record cannot grow its own copy of it.
  */
 async function persist(path: string, record: SessionIntentRecord, acceptedRevision: number): Promise<ConfigApplyResult> {
-  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
-  try {
-    await mkdir(dirname(path), { recursive: true })
-    await writeFile(temporary, `${JSON.stringify(record)}\n`, { encoding: 'utf8', mode: 0o600 })
-  } catch {
-    await discard(temporary)
-    return { status: 'failed', error: { code: 'UNAVAILABLE', message: `session intent could not be saved: ${path}` } }
-  }
-  try {
-    await rename(temporary, path)
-  } catch (cause) {
-    await discard(temporary)
-    const fence = uncertainty(path, acceptedRevision, record.revision, cause)
-    return { status: 'uncertain', error: fence.error, fence }
-  }
-  return { status: 'applied', effectiveRevision: record.revision }
+  return await writeRecordAtomically({
+    path,
+    label: 'session intent',
+    record,
+    acceptedRevision,
+    effectiveRevision: record.revision,
+  })
 }
 
 /**

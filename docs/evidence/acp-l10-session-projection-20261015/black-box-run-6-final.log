@@ -1,0 +1,36 @@
+# L10 Session-observation black box: the Console projects the real Session
+cli=/Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015/cli/agentteams.mjs
+engine=/Users/fanzhang/.opencode/bin/opencode
+root=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l10sp-blackbox-5Qg3a3
+PASS [no observation before any Session] no Session observation record exists before the agent daemon runs
+PASS [control start] the control daemon reports a live explicit pid (98596)
+PASS [control start] the control daemon reports running (running)
+PASS [agent readiness] the agent daemon is live with explicit pid 98862
+PASS [agent readiness] the agent daemon spawned a live engine child (99016)
+PASS [controller connect] the controller opened a real ACP channel to the agent daemon
+PASS [session/new] the engine returned a real sessionId (ses_ec0323ba…)
+PASS [prompt and permission callback] the engine raised a real permission callback the controller received as id acp-callback-opencode-l10sp-agent-263e662d-e1cd-4c08-a1ab-83137e7d7981-1
+PASS [prompt and permission callback] the callback carries a real engine option set (allow_once,allow_always,reject_once)
+PASS [agent publishes the observation] the observation names the agent that owns it (l10sp-agent)
+PASS [agent publishes the observation] the observation carries the REAL controller-visible permission id acp-callback-opencode-l10sp-agent-263e662d-e1cd-4c08-a1ab-83137e7d7981-1
+PASS [agent publishes the observation] the permission row names the real Session (ses_ec0323baeffePo73aKhqEwyW1i)
+PASS [agent publishes the observation] the permission row's own id is derived from the callback id (permission:acp-callback-opencode-l10sp-agent-263e662d-e1cd-4c08-a1ab-83137e7d7981-1)
+PASS [an unchanged observation is not a heartbeat] an unchanged observation keeps its revision (2)
+PASS [projection carries the real Session] the projection keeps its frozen version (1)
+PASS [projection carries the real Session] the notification row is a pending permission (permission/pending)
+PASS [projection carries the real Session] the notification row names the agent and the Session that really own it
+PASS [projection carries the real Session] the notification row carries a non-empty Console title (Permission request)
+PASS [projection carries the real Session] the projection carries NO sessionEvents, which is the honest remaining gap
+PASS [SSE snapshot carries the real rows] the SSE projection stream accepts the declared credential (200)
+PASS [SSE snapshot carries the real rows] the SSE stream delivered a sequenced snapshot (seq=1)
+PASS [SSE snapshot carries the real rows] the streamed snapshot carries the real Session row
+PASS [SSE snapshot carries the real rows] the streamed snapshot carries the real pending permission
+PASS [the projection surface still requires its credential] an unauthenticated projection read is refused (401)
+PASS [the control daemon never writes the observation] the control daemon data directory holds no observation record
+PASS [the control daemon never writes the observation] the only observation record on this host is the one the agent daemon published
+PASS [answering the callback removes the permission row] the observation carries no pending permission after the engine answered it
+PASS [answering the callback removes the permission row] the observation still reports the open Session
+PASS [closing the controller channel releases the controller Session] closing the controller channel released its own Session ses_ec0323ba…
+PASS [the agent daemon publishes the empty observation on stop] the agent daemon published the empty observation itself when it stopped
+PASS [the agent daemon publishes the empty observation on stop] the control daemon projects neither Session nor permission for the stopped agent
+# 31/31 checks passed; receipt=/Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015/docs/evidence/acp-l10-session-projection-20261015/receipt.json

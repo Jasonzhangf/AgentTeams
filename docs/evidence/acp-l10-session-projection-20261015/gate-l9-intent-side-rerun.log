@@ -1,0 +1,11 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015
+
+ ✓ config/relations-intent-store.spec.ts (10 tests) 291ms
+ ✓ runtime/relations-intent-watch.spec.ts (8 tests) 60ms
+
+ Test Files  2 passed (2)
+      Tests  18 passed (18)
+   Start at  06:39:58
+   Duration  1.61s (transform 664ms, setup 0ms, import 858ms, tests 351ms, environment 0ms)
+
