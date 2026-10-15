@@ -74,7 +74,6 @@ const OPENCODE_EXECUTABLE = process.env.OPENCODE_EXECUTABLE ?? '/Users/fanzhang/
  * ------------------------------------------------------------------------------------- */
 
 const checks = []
-const gaps = []
 const measurements = {}
 let step = 'startup'
 let liveLogPath
@@ -90,11 +89,6 @@ function emit(line) {
 function check(name, detail) {
   checks.push({ name, detail })
   emit(`PASS ${name} — ${detail}`)
-}
-
-function gap(name, reason) {
-  gaps.push({ name, reason })
-  emit(`GAP ${name} — ${reason}`)
 }
 
 function note(message) {
@@ -700,14 +694,21 @@ async function run() {
   // path it was given (`/var/...`). Both spellings name the same install.
   const installSpellings = [live.installedRoot, installedReal]
   const inInstall = command => installSpellings.some(spelling => command.includes(spelling))
-  const controlCommand = commandOf(live.controlPid) ?? ''
-  assert(inInstall(controlCommand), `the control daemon command line does not resolve inside the installed root: ${controlCommand}`)
-  assert(!controlCommand.includes(sourceReal), `the control daemon command line names the source tree: ${controlCommand}`)
-  const agentCommand = commandOf(live.agentPid) ?? ''
-  assert(inInstall(agentCommand), `the agent daemon command line does not resolve inside the installed root: ${agentCommand}`)
-  assert(!agentCommand.includes(sourceReal), `the agent daemon command line names the source tree: ${agentCommand}`)
-  measurements.controlCommand = controlCommand
-  measurements.agentCommand = agentCommand
+  // Every Teams daemon this producer started is inspected by its own command line. Chrome is
+  // deliberately excluded: it is not part of the installed package, so its command line cannot
+  // and must not resolve inside the install.
+  const daemonCommands = {
+    registry: commandOf(live.registryPid) ?? '',
+    agent: commandOf(live.agentPid) ?? '',
+    control: commandOf(live.controlPid) ?? '',
+  }
+  for (const [name, command] of Object.entries(daemonCommands)) {
+    assert(inInstall(command), `the ${name} daemon command line does not resolve inside the installed root: ${command}`)
+    assert(!command.includes(sourceReal), `the ${name} daemon command line names the source tree: ${command}`)
+  }
+  measurements.daemonCommands = daemonCommands
+  const controlCommand = daemonCommands.control
+  const agentCommand = daemonCommands.agent
   const statePath = join(controlData, 'control-state.json')
   const stateReady = await settle('the control daemon state file', async () => existsSync(statePath), 200, 15_000)
   assert(stateReady, `the control daemon wrote no state file at ${statePath}`)
@@ -719,7 +720,7 @@ async function run() {
     'the control daemon state records the SOURCE runtime entry')
   measurements.controlEntryPath = realpathSync(controlState.entryPath)
   check('installed provenance — the running daemons are the installed copy',
-    `control pid=${live.controlPid} runs ${measurements.controlCommand.split(' ').slice(1, -4).join(' ')}; agent pid=${live.agentPid} runs the installed CLI; the control daemon's own state entryPath=${measurements.controlEntryPath}; no process command line references the source tree`)
+    `every Teams daemon command line was inspected and resolves inside the install: registry pid=${live.registryPid}, agent pid=${live.agentPid}, control pid=${live.controlPid}; the control daemon's own state entryPath=${measurements.controlEntryPath}; none of those three command lines names the source tree (Chrome is excluded: it is not part of the installed package)`)
 
   step = 'origin challenge'
   const controlOrigin = `http://127.0.0.1:${controlPort}`
@@ -829,7 +830,6 @@ async function run() {
   // One request table for the whole comparison: rebuilding it per module would compare
   // freshly built record objects and silently compare nothing.
   const requests = networkTable(cdp.events)
-  const requestIdByUrl = new Map([...requests.entries()].map(([id, record]) => [record.url, id]))
   const moduleEntries = [...requests.entries()].filter(([, record]) => new URL(record.url).pathname.startsWith('/ui/'))
   assert(moduleEntries.length >= 10, `the page loaded only ${moduleEntries.length} /ui/ modules`)
   const badModules = moduleEntries.filter(([, record]) => record.status !== 200)
@@ -974,8 +974,10 @@ async function run() {
   measurements.failedRequests = failedRequests
   assert(failedRequests.every(record => record.path === '/favicon.ico' && record.status === 404),
     `the live page observed unexpected failed requests: ${JSON.stringify(failedRequests)}`)
-  assert(consoleErrors.length === 0 || failedRequests.some(record => record.path === '/favicon.ico'),
-    `the live page logged console errors without the observed favicon 404: ${JSON.stringify(errorTexts)}`)
+  // Each console error must be accounted for by its own failed request: a page-originated
+  // console.error without a matching failed request fails the run.
+  assert(consoleErrors.length === failedRequests.length,
+    `the live page logged ${consoleErrors.length} console error(s) for ${failedRequests.length} observed failed request(s): ${JSON.stringify(errorTexts)}`)
   check('page runtime errors', `0 uncaught page exceptions across the whole installed-browser session (${cdp.events.length} CDP events); ${consoleErrors.length} generic console error(s) map only to the expected /favicon.ico 404: ${JSON.stringify(errorTexts)}`)
 
   step = 'screenshot'
@@ -1072,9 +1074,11 @@ function writeReceipt(cleanupResult) {
     },
     measurements,
     checks,
-    gaps,
     cleanup: cleanupResult,
-    result: gaps.length === 0 && failure === undefined ? 'PASS' : 'FAIL',
+    // The producer declares no gap of its own: a gap here would be a check it chose not to
+    // assert. The unit's unproven items are recorded in verification.json instead.
+    gaps: [],
+    result: failure === undefined ? 'PASS' : 'FAIL',
   }
   writeFileSync(RECEIPT_PATH, `${JSON.stringify(receipt, null, 2)}\n`)
   if (existsSync(liveLogPath)) copyFileSync(liveLogPath, LOG_EVIDENCE_PATH)
@@ -1112,10 +1116,14 @@ try {
     process.exitCode = 1
     emit(`FAIL cleanup — ${ownedAlive} owned pid(s) are still alive`)
   }
+  if (cleanupResult !== undefined && (cleanupResult.strays > 0 || cleanupResult.chromeStrays > 0)) {
+    process.exitCode = 1
+    emit(`FAIL cleanup — ${cleanupResult.strays} process(es) still match the owned temp root and ${cleanupResult.chromeStrays} still match the owned Chrome profile`)
+  }
   // `process.exitCode` stays `undefined` on the success path, so normalise it before the
   // ownership decision; comparing `undefined === 0` would retain every successful run's root.
   process.exitCode = process.exitCode ?? 0
-  emit(`checks=${checks.length} gaps=${gaps.length} exit=${process.exitCode}`)
+  emit(`checks=${checks.length} exit=${process.exitCode}`)
   if (logDescriptor !== undefined) { closeSync(logDescriptor); logDescriptor = undefined }
   if (existsSync(liveLogPath)) copyFileSync(liveLogPath, LOG_EVIDENCE_PATH)
   if (process.exitCode === 0) {
