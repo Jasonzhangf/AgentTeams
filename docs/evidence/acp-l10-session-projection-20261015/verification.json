@@ -76,13 +76,14 @@
     "cleanup": "pending: the owned worktree is removed only after delivery, the remote receipt and retention evidence exist"
   },
   "full_suite": {
-    "command": "pnpm test (1201 tests)",
+    "command": "pnpm test (1203 tests on the fixed candidate; 1201 before this unit's two new cases)",
     "runs": [
       {"log": "regression-run-1.log", "result": "1173 passed / 5 failed"},
       {"log": "regression-run-2.log", "result": "1175 passed / 3 failed"},
-      {"log": "regression-run-3.log", "result": "1175 passed / 3 failed"}
+      {"log": "regression-run-3.log", "result": "1175 passed / 3 failed"},
+      {"log": "regression-run-4.log", "result": "1174 passed / 6 failed (1203 total) on the fixed candidate"}
     ],
-    "conclusion": "NOT green. The failing set is unstable and lies in specs this change does not touch. cli/agentteams.spec.ts has a deterministic pre-existing cause: its beforeAll runs pnpm build:runtime while the parallel cli/package-install.spec.ts beforeAll runs pnpm build, and both delete and rebuild generated/runtime-lib. Both hooks exist at origin/main and git diff origin/main for both files is empty. Run in isolation, the three failing specs pass: 74 passed / 3 files, exit 0 (regression-failing-specs-isolated.log). Therefore these failures are environmental load and a pre-existing derived-artifact race, and this unit does not claim a green full regression."
+    "conclusion": "NOT green. The failing set is unstable and lies in specs this change does not touch: run 4 failed in ui/teams-console/tests/render.spec.ts, ui/teams-console/tests/render-d07.spec.ts, ui/teams-console/tests/focus-dom.spec.ts, runtime/agent-process.spec.ts, runtime/managed-opencode-session.spec.ts and cli/agentteams.spec.ts, and `git diff 83496b7..HEAD` is empty for all six. cli/agentteams.spec.ts has a deterministic pre-existing cause: its beforeAll runs pnpm build:runtime while the parallel cli/package-install.spec.ts beforeAll runs pnpm build, and both delete and rebuild generated/runtime-lib; both hooks exist at origin/main. Run in isolation the same six specs pass: 80 passed / 6 files, exit 0 (regression-failing-specs-isolated-run4.log, with TEAMS_CONSOLE_REAL_DOM=1 for the three real-DOM cases); the earlier three-spec set also passed in isolation, 74/74 (regression-failing-specs-isolated.log). Therefore these failures are parallel-load and real-browser/real-engine timing plus the pre-existing derived-artifact race, and this unit does not claim a green full regression."
   },
   "acceptance_items": [
     {"item": "the Console projection carries the Session the Console writes to", "status": "delivered", "evidence": "black box checks 11-13 and 15 plus runtime/control-session-projection.spec.ts"},

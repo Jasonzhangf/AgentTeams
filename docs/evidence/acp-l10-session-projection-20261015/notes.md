@@ -174,16 +174,19 @@ ACP 连接。它证明的关键事实：
 | 1 | 1173 passed / 5 failed | 含 `cli/agentteams.spec.ts` 与 4 个真实引擎/Work 用例 |
 | 2 | 1175 passed / 3 failed | `agent-process.spec.ts`、`managed-opencode-session.spec.ts`、`cli/agentteams.spec.ts` |
 | 3 | 1175 passed / 3 failed | 同上三项 |
+| 4（修复后候选，1203 用例） | 1174 passed / 6 failed | 上述三项 + 三个真实 DOM 用例（`render.spec.ts`、`render-d07.spec.ts`、`focus-dom.spec.ts`） |
 
-失败集不稳定，且**集中在与本变更无关的既有 spec**。其中 `cli/agentteams.spec.ts` 的
+失败集不稳定，且**集中在与本变更无关的既有 spec**：第 4 跑的 6 个失败 spec 在本单元
+`git diff 83496b7..HEAD` 中**全部为空**。其中 `cli/agentteams.spec.ts` 的
 `generated/runtime-lib/.../http-api.js` ENOENT 有确定性根因：它的 `beforeAll` 跑
 `pnpm build:runtime`，而同一轮并行执行的 `cli/package-install.spec.ts` 的 `beforeAll` 跑
 `pnpm build`（同样删除并重建 `generated/runtime-lib`）。两个 hook 在 `origin/main` 上都已存在，
 且本单元 `git diff origin/main` 对这两个文件为空——该竞态先于 L10。
 
-把三个失败 spec 单独跑：**74/74 passed / 3 files**，全部通过。因此结论是：这 3 个失败是
-并发行负载与既有派生产物竞态造成的环境性失败，不是本变更引起；本单元**不宣称全量回归为绿**，
-只宣称 L10 门与上表模块证据为绿。
+把三个失败 spec 单独跑：**74/74 passed / 3 files**，全部通过。修复后候选的第 4 跑失败集换成
+6 个 spec，单独跑（真实 DOM 三个用 `TEAMS_CONSOLE_REAL_DOM=1`）：**80/80 passed / 6 files**，
+exit 0。因此结论是：这些失败是并发行负载、真实浏览器/真实引擎时序与既有派生产物竞态造成的
+环境性失败，不是本变更引起；本单元**不宣称全量回归为绿**，只宣称 L10 门与上表模块证据为绿。
 
 ## 7. 保留义务（明确未交付）
 
