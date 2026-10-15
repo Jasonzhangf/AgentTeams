@@ -143,10 +143,11 @@ option set 或任何凭据。`permissionId` 就是 controller 收到的那个 ca
 | L10 门命令 6 文件 | 86 passed / 6 files，exit 0（`gate-l10.log`） |
 | L9 intent 侧四文件门 | 72 passed / 4 files，exit 0（`gate-l9-intent-side-4files.log`） |
 | `acp-host.spec.ts` 去掉 `closed` 过滤 | 1 failed / 27（关闭窗口用例，`expected [ 'session-1' ] to deeply equal []`） |
-| 去掉 `releaseSessions` 的 `clear()` | 3 failed / 28（关闭通道、引擎结束、关闭窗口三个用例） |
+| 去掉 `releaseSessions` 的 `clear()` | 0 failed / 27（被恢复的过滤遮罩；中间无过滤树上同消融 2 failed / 26） |
+| `openedSessions()` 去掉 `closed` 过滤 | 1 failed / 27（关闭窗口用例，`expected [ 'session-1' ] to deeply equal []`） |
 
-L10 六文件门因本轮新增两个用例从 85 涨到 86（`agent-host/acp-host.spec.ts` 28、其余 5 文件
-17+12+8+7+27），Log 同步更新。
+L10 六文件门因本轮新增一个用例从 85 涨到 86（86 = `agent-host` 27 + 8 + 7 + 5 + 12 + 27），
+Log 同步更新。
 
 四条 advisory 的收口：`verification.json` 里 `sessionEvents` 的断言归属改为黑盒与控制 daemon
 组装投影的真实位置；`verification-map.json` 的 L10 门补上引擎结束通道这一**真的用例**
@@ -154,6 +155,30 @@ L10 六文件门因本轮新增两个用例从 85 涨到 86（`agent-host/acp-ho
 retained；`failures()` 只被 handle 暴露、没有生产读者这件事写进 retained，`acp-serve.ts` 的
 注释随之改为「pass 永不 reject，拒绝记录在 handle 上供读者读」。
 
+
+## 4d. 第 3 轮定向复核与修法
+
+第 3 轮只复核 `5403cca..874252c`，结论 **FAIL，2 minor + 3 advisory——但全部落在证据文本的
+计数与标注上，代码判定为正确**。它逐条确认：`close()` 的顺序（1086 置 closed → 1087/1088 两条
+持久 settle → 1089 releaseSessions）使恢复的过滤**必要**；关闭窗口用例（spec 384-405、gate
+72-87）确定性地采到窗口、去掉过滤后报出与作者声称完全一致的失败信息；四文件门日志真实存在
+（4 文件 / 72 passed）且四处引用都指向它；`review.md` 无占位、不声称 PASS；§4a 的排队/丢弃
+方向已正确。
+
+它揭出的三个问题都是**作者写错的数**：
+
+1. **minor：`agent-host/acp-host.spec.ts` 写成 28**。提交的 `gate-l10.log` 明确是 27 tests，
+   各文件相加 87 ≠ 记录里的 86。真值是 27（26 + 本轮 1 个关闭窗口用例）。
+2. **minor：`clear()` 消融的「3 of 28」在提交树上不可复现**。过滤恢复后，`openedSessions()`
+   会跳过已关闭通道，所以去掉 `clear()` 三个用例照样通过。**本机重测：0 of 27**（
+   `channel.sessions` 只在 :563 与 :1131 被读，后者被过滤遮罩）。那个 2 次失败属于**恢复过滤之前
+   的中间树**（26 用例），不是提交树。
+3. **advisory：`resolved_defects` 里仍留着「过滤无法改变行为、因此被删除」这条已废弃结论**，
+   与下一条自相矛盾；`notes.md` 的「17+12+8+7+27」算式与「新增两个用例」也不成立。
+
+修法：真值 27 写回所有位置；消融行改成**按树标注**（提交树 0/27 被遮罩；中间树 2/26），并补上
+真正被绑定的那条（去掉过滤 1/27 红）；废弃的 resolved 项合并进第 3 轮修正；算式改为
+`86 = 27 + 8 + 7 + 5 + 12 + 27`，用例增量改为一个。
 
 ## 5. 证据分层（每层只证明自己）
 
@@ -168,7 +193,7 @@ retained；`failures()` 只被 handle 暴露、没有生产读者这件事写进
 | `runtime/session-observation-publisher.spec.ts` | 7 |
 | `runtime/control-session-projection.spec.ts` | 5 |
 | `config/session-intent-store.spec.ts` | 12 |
-| `agent-host/acp-host.spec.ts` | 28 |
+| `agent-host/acp-host.spec.ts` | 27 |
 | `runtime/control-process.spec.ts` | 27 |
 | F4 迁移受影响的两个 spec | 18 passed / 2 files |
 | F4 迁移影响的四文件门 | 72 passed / 4 files |
