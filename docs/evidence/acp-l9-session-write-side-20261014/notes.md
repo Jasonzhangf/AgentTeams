@@ -461,3 +461,45 @@ D07 门禁复用修复前的 **66/66**：该修复只改 `runtime/acp-serve.ts`�
    `acp-frame-contract` note、`mainline-call-map.json` 的 `provider-config-v1` edge、
    两份 design 文档的早期状态段，以及三处缺行内 2026-10-14 标记的历史证据）随 L12 一起处理。
 5. **未合入的 `codex/acp-l9-egress-20261013`** 不属本单元范围。
+
+## 15. Integration receipt (2026-10-15)
+
+| 项 | 值 |
+| --- | --- |
+| 候选提交 | `f6f21f8966516dd54d43078939e8ba9273639c7b` |
+| 候选树 | `2cc71e4f6a15859fb980d235a6a5fd35b7299c64` |
+| 合并提交 | `9f01942c84ae60db31551c1ac872cefbcc615fd5` |
+| 合并树 | `2cc71e4f6a15859fb980d235a6a5fd35b7299c64` |
+| 合并方式 | `git merge --no-ff codex/acp-l9-session-write-side-20261014`（在从 `origin/main` `d531d242550c5588b0c59483776c0ab3115f0eaf` 拉出的本地分支 `tmp/l9sw-integration` 上执行，主线 checkout 全程只读） |
+| Tree 相等证明 | `<candidate>{tree}` = `<merge>{tree}` = `2cc71e4f6a15859fb980d235a6a5fd35b7299c64` |
+| 推送 | `git push origin HEAD:refs/heads/main` → `d531d24..9f01942  HEAD -> main` |
+| 远端回执复读 | `git ls-remote origin refs/heads/main` → `9f01942c84ae60db31551c1ac872cefbcc615fd5	refs/heads/main` |
+
+### 集成前置条件
+
+| 条件 | 结论 |
+| --- | --- |
+| 独占 worktree，建自最新 `origin/main` | 是，`base d531d24` |
+| 适用门禁在冻结源码上实测 | 是，见 §13.2：本单元 78/78、D06 140/140、L9 72/72、D01 58/58、D05 103/103、serve 68/68、D07 66/66、typecheck/build exit 0 |
+| 真实黑盒 | 本单元 50 checks / PASS；D07 15 checks / PASS（期望已按被取代行为更正并重跑） |
+| 全量回归 | 119 个测试文件 / **1181 passed** / exit 0（`regression-committed-candidate.log`，测于 `cc46fc4`） |
+| 一次独立 review PASS | 是，第五轮 targeted 复核 PASS；**无 review 文件产物**，PASS 为 reviewer 自述文本转录，来源写在 `verification.json` 的 `review.round_5.provenance` |
+| review 后源码未变 | 是，PASS 之后只有 2 条 docs-only 提交，`git diff --name-only cc46fc4..ba33929` 的非 docs 改动为 0 |
+| 合并提交为 `--no-ff` | 是，`9f01942` 的两个父提交为 `d531d24` 与 `f6f21f8` |
+
+### 前三轮 review 的结论与处置
+
+- 第 1 轮：PASS 但自相矛盾（先标 BLOCKING 又写「All findings are ADVISORY」），且「Measurements」声称回执 verdict 为 `applied`——这不是回执字段值，说明它没有真的跑驱动。**不可引用**。
+- 第 2 轮：**FAIL**，三个 BLOCKING（`optionId` 被丢弃并被同 kind 猜测替代、500ms 间隔的两轮 pass 可重叠、CAS 是 check-then-act 可丢写且双方都报成功）。owner 独立核对**三条全为真**，已修，各有红先证据。
+- 第 3 轮：**FAIL**，确认第 2 轮的 F1/F2 已修，但 **F3 只修了一半**——`sendSession`（shipped 的 Session body 入口）绕过串行化链，而生产 control daemon 不绑定 owner，故它总走记录路径、写的是同一条记录；reviewer 用三组并发输入复现。owner 核对**为真**，已修，新增用例去掉包装即转红（revision 1 而非 2）。
+- 第 4 轮：针对第 3 轮残留的 targeted 复核，**PASS**，并用自建探针（每组 40 次，0 次坏）而非作者 spec 复测。
+
+### 保留义务（8 条，合并后仍成立）
+
+见 `verification.json` 的 `retained_obligations`：store 与 relations-intent-store 的辅助函数重复；记录被删除重建后 watermark 更高会被跳过（需要 generation id）；relations 写路径同样的 check-then-act；kind fallback 的残留猜测；Session/notification 投影未交付（L10）；`session.create`/`session.open` 仍 typed `UNSUPPORTED_OPERATION`；本单元只有 source-tree 证据；崩溃窗口内是 at-least-once 而非 exactly-once。
+
+### 清理前提
+
+- 本单元 worktree `/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014`：**交付已完成、远端回执已复读、保留义务已落盘**，满足移除前提。
+- 基线核对 worktree `/Volumes/Intel/playground/agentteams/acp-l9sw-base-check`：只服务于 pristine `origin/main` 基线测量，证据已归档到 `baseline-origin-main-regression.log`，满足移除前提。
+- 遗留的 `codex/acp-l9-egress-20261013` 分支与两条 stash（`l9-draft-superseded-v2`、`l9-egress-v1-superseded`）**不属于本单元**，保持原样不动。
