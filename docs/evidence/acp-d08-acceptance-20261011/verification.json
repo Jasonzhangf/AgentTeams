@@ -275,7 +275,7 @@
       "name": "live-browser DOM against the installed artifact",
       "reason": "this driver is the installed-tarball, cross-device acceptance layer and it does not drive a browser, so no installed-artifact DOM or screenshot is claimed here. The earlier reason recorded for this gap was WRONG: it claimed headless Chrome cannot satisfy the origin's HTTP Basic challenge, but CDP Network.setExtraHTTPHeaders injects the credential at the network layer, and a real Chrome/CDP producer now exists at docs/evidence/acp-d08-browser-20261011/ (14 checks / 1 gap, exit 0). That is a SOURCE-LEVEL artifact driving the worktree CLI origin, which is a different evidence level from an installed-artifact run, so it does not close this item. The frozen DOM contract is also owned by ui/teams-console/tests/render-d07.spec.ts",
       "owner": "D07",
-      "classification": "evidence-level boundary: source-level browser evidence exists, installed-artifact browser evidence does not"
+      "classification": "evidence-level boundary at this record's capture time: source-level browser evidence existed, installed-artifact browser evidence did not. 2026-10-14 correction (L11): the installed-artifact browser run now exists at docs/evidence/acp-l11-installed-browser-20261014/ (18 checks, exit 0), which closes the browser half of A07 at the WebUI DOM level; this driver still drives no browser, so its own A07 item stays a gap for its own layer."
     },
     {
       "id": "G3",
