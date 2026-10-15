@@ -85,3 +85,49 @@ spawn 出的 control 子进程在写 state 前于 `presentationRoots()` 抛错
 - 14 门禁各自的 installed-copy/restart/deployed-entrypoint/cross-device 回执。
 - AppSDK compile/verify：仍被既有 `PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014` 阻塞。
 - 10 个 PROTECTED_HOLD worktree 的 EXTRACT_THEN_CLOSE 决定（见 resource-inventory.md）。
+
+## 9. Integration receipt (2026-10-15)
+
+- **Candidate.** `25a058a` on `codex/acp-l12-gate-closure-20261015`, tree
+  `a7eced87de026038f361a3e47939acf489daef10`, built from `origin/main` `4d3ffe5`.
+  The unit carries no product change: `git diff --name-only 4d3ffe5 25a058a -- ':!docs'`
+  is empty, so every commit is documentation, evidence or a map/governance edit.
+- **Review precondition.** Two independent reviews ran in fresh, read-only contexts.
+  Round 1 (`4d3ffe5..a56b04d` 之前的候选) returned **FAIL** with two blocking findings,
+  both on D07: the first D07 re-run used 6 of the gate's 13 recorded spec files (29 of 66
+  tests) while the note asserted "the command is unchanged" and reported 29/6 as this
+  gate's result, and that narrowing was disclosed nowhere. The fix (a56b04d) re-ran D07
+  with the full recorded command (66/66, exit 0) and disclosed the 29/6 narrowing in all
+  four places (verification-map note, verification.json, notes.md, governance table).
+  Round 2 (`4d3ffe5..a56b04d`) returned **PASS** with no blocking findings: the reviewer
+  programmatically verified all 13 vitest gates' measured counts against their logs,
+  confirmed D07 stays partial with no closure claimed, confirmed D08 is recorded honestly
+  as an A02-external-limit stop (exit 1) without claiming a pass, and verified the three
+  advisory fixes (design path, recon D08 cleanup, L10-based not_claimed) against real
+  sources. One advisory (the stale recon survey row) was fixed in 25a058a.
+- **Merge.** `ea9714a merge(acp): integrate the reviewed L12 gate-closure candidate`, a
+  `--no-ff` merge into `4d3ffe5`. The tree `a7eced87de026038f361a3e47939acf489daef10`
+  equals the candidate tree (verified `TREE-EQUAL`), so the candidate's measured results
+  stand for the merge.
+- **Push line.** `4d3ffe5..ea9714a  HEAD -> main`.
+- **Remote receipt.** `git ls-remote origin refs/heads/main` re-read after the push
+  (below).
+- **Final measured gates on the candidate.** 13 vitest gates pass on the exact candidate
+  `4d3ffe5` after `pnpm build` (exit 0) and `pnpm exec tsc --noEmit` (exit 0):
+  daemon-intent 35/2, public-contract 17/3, d01-host 61/4, d02-opencode 65/4, d03-dsh 58/3,
+  d04-registry 75/6, d05-network 103/11, d06-control 143/7, d07-webui 66/13 (full recorded
+  command), serve-entry 68/3, l9-intent-side 72/4, l9-session-write-side 81/4,
+  l10-session-projection 86/6. D08 black-box re-run stops at the A02 DSH prompt on an
+  upstream provider limit (HTTP 400 `model_unavailable`, `model_blocked` 13 accounts
+  cooling down until 2026-10-16 02:00 UTC+8), exit 1; its recorded 2026-10-12
+  45-check/3-gap/exit-0 result stands and is not re-derived. No gate status was upgraded:
+  all 14 teams-acp-* gates stay `partial`.
+- **Retention.** The evidence directory stays in the repository: recon, design, notes,
+  review, verification.json, resource-inventory, build/typecheck and 15 gate logs. The
+  D08 owned temp root was removed post-run (explained in recon.md); no run left a live
+  process.
+- **Cleanup precondition.** The unit worktree is removed only after this receipt is on
+  the remote and re-read.
+- **Guidance on the remaining D08 next action.** Re-run the D08 black box after
+  2026-10-16 02:00 UTC+8 when the provider cooling window opens; that is the single
+  executable next action for that gate.
