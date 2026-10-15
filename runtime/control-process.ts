@@ -26,6 +26,7 @@ import {
   writeSessionIntentRecord,
   type SessionIntentChange,
 } from '../config/session-intent-store.ts'
+import { readSessionObservationRecord, sessionObservationScopePath } from '../config/session-observation-store.ts'
 import { RuntimeConfigError, type ConfigApplyResult } from '../config/runtime-config.ts'
 import { createConsoleAuthorization } from '../console-host/src/auth.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
@@ -786,6 +787,76 @@ function controlCodeForRegistration(error: RegistrationProcessError): ControlPro
  * Console agent rows. A config without `[discovery]` keeps the typed empty snapshot, so the
  * projection stays an honest absence instead of a fabricated row.
  */
+/**
+ * The Console row title for a pending engine permission callback.
+ *
+ * The agent daemon does not read the callback's own title out of the engine frame: the ACP
+ * callback carries options, not a subject, and inventing one from the Session id would be a
+ * guess. The Console shows this fixed label until a real subject is published.
+ */
+const PENDING_PERMISSION_TITLE = 'Permission request'
+
+/**
+ * The Sessions and pending permissions the Console projection reports, read from the
+ * observation records the declared agent daemons publish.
+ *
+ * The agent daemon owns each record because it owns the Sessions and permission callbacks it
+ * carries. This reader resolves one path per declared peer from the same account and scope
+ * layout the writer used, and it adds no channel of its own. Three rules keep the projection
+ * honest:
+ *
+ *  - A declared peer whose record does not exist or is empty contributes no rows, so the
+ *    Console never invents a Session.
+ *  - A peer the current directory readback reports as not online contributes nothing, so a
+ *    directory that knows the daemon is down never keeps projecting its last observation.
+ *    A peer the directory does not report at all is not treated as offline: a deployment
+ *    with no registry has no liveness truth, and the agent daemon itself publishes the empty
+ *    observation when it stops, which is the owner's own answer to the same question.
+ *  - A record that names another agent is skipped rather than projected under this one, which
+ *    keeps the `agentId` on every row the agent that really owns it.
+ */
+export async function readObservedSessionProjection(input: {
+  readonly home: string
+  readonly peers: readonly { readonly agentId: string; readonly accountId: string; readonly scopeId: string }[]
+  /** The presence the directory readback reports, by agent. A missing agent has no report. */
+  readonly presence: ReadonlyMap<string, string>
+}): Promise<Pick<ConsoleProjectionV1, 'sessions' | 'notifications'>> {
+  const sessions: { readonly agentId: string; readonly sessionId: string }[] = []
+  const notifications: ConsoleProjectionV1['notifications'][number][] = []
+  for (const peer of input.peers) {
+    const reported = input.presence.get(peer.agentId)
+    if (reported !== undefined && reported !== 'online') continue
+    const path = sessionObservationScopePath({ home: input.home, accountId: peer.accountId, scopeId: peer.scopeId, agentId: peer.agentId })
+    let record: Awaited<ReturnType<typeof readSessionObservationRecord>>
+    try {
+      record = await readSessionObservationRecord(path)
+    } catch (error) {
+      // The record's own owner reports its broken record; a projection read must still serve
+      // the rest of the directory, so this peer's rows stay absent instead of guessed.
+      console.error(`control Session observation read failed for ${peer.agentId}: ${error instanceof Error ? error.message : String(error)}`)
+      continue
+    }
+    if (record === undefined) continue
+    if (record.agentId !== peer.agentId) {
+      console.error(`control Session observation at ${path} names agent ${record.agentId}, not ${peer.agentId}; its rows are not projected`)
+      continue
+    }
+    for (const row of record.sessions) sessions.push({ agentId: peer.agentId, sessionId: row.sessionId })
+    for (const row of record.permissions) {
+      notifications.push({
+        agentId: peer.agentId,
+        notificationId: row.notificationId,
+        sessionId: row.sessionId,
+        kind: 'permission',
+        state: 'pending',
+        title: PENDING_PERMISSION_TITLE,
+        permissionId: row.permissionId,
+      })
+    }
+  }
+  return { sessions, notifications }
+}
+
 export async function createControlNetworkStatus(intent: ControlDaemonIntent, env: NodeJS.ProcessEnv): Promise<ControlNetworkStatusBinding> {
   const localAgentId = intent.daemon.id
   let history: ReturnType<typeof createTeamsConnectionHistory>
@@ -860,7 +931,12 @@ export async function createControlNetworkStatus(intent: ControlDaemonIntent, en
   const readProjection = async (): Promise<ConsoleProjectionV1> => {
     await refreshDirectory()
     const agents: readonly ConsoleAgentObservationV1[] = peers.map(directoryAgentObservation)
-    return projectionWithConnections({ version: 1, agents, sessions: [], notifications: [], configs: [] }, port())
+    const observed = await readObservedSessionProjection({
+      home: homedir(),
+      peers: Object.values(intent.peers),
+      presence: new Map(peers.map(peer => [peer.declaration.identity.agentId, peer.presence])),
+    })
+    return projectionWithConnections({ version: 1, agents, sessions: observed.sessions, notifications: observed.notifications, configs: [] }, port())
   }
   return {
     port: { connections: () => port().connections(), history: query => port().history(query) },
