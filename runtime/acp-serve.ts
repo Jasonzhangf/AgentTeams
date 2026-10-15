@@ -30,6 +30,15 @@ import {
   relationsIntentScopePath,
   type RelationsIntentRecord,
 } from '../config/relations-intent-store.ts'
+import {
+  pendingSessionIntents,
+  readSessionIntentRecord,
+  readSessionIntentWatermark,
+  sessionIntentScopePath,
+  sessionIntentWatermarkPath,
+  writeSessionIntentWatermark,
+  type SessionIntent,
+} from '../config/session-intent-store.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
 import { rpcErrorFrame, type AcpHost } from '../agent-host/acp-host.ts'
 import { openCodeAcpAdapter } from '../opencode-adapter/src/acp-engine.ts'
@@ -219,6 +228,17 @@ export interface AcpServeHandle {
   readonly relationsIntent: {
     readonly path: string
     failures(): readonly RelationsIntentWatchFailure[]
+  }
+  /**
+   * The pending-Session-write record this daemon observes. The control daemon owns the
+   * file; this daemon polls it and applies each write to its own host. `failures()` is
+   * every typed refusal the watch recorded, so a write this daemon could not apply stays
+   * visible instead of disappearing.
+   */
+  readonly sessionIntent: {
+    readonly path: string
+    readonly watermarkPath: string
+    failures(): readonly SessionIntentWatchFailure[]
   }
   readonly readiness: AcpServeReadiness
   readonly daemon: AcpAgentDaemon
@@ -927,9 +947,10 @@ async function verifyReadiness(input: {
 }
 
 /**
- * The named poll interval of the agent daemon's desired-relations watch. One
- * control daemon writes one durable record and this daemon reads it, so the
- * Console stays out of the data path and no control-to-agent channel is added.
+ * The named poll interval of the agent daemon's desired-relations watch and of its
+ * pending-Session-write watch. One control daemon writes one durable record and this
+ * daemon reads it, so the Console stays out of the data path and no control-to-agent
+ * channel is added.
  */
 export const RELATIONS_INTENT_POLL_INTERVAL_MS = 500
 
@@ -1033,6 +1054,232 @@ export function createRelationsIntentWatch(input: RelationsIntentWatchInput): Re
  */
 export function agentRelationsIntentPath(home: string, daemon: AgentDaemonIntent['daemon']): string {
   return relationsIntentScopePath({ home, accountId: daemon.accountId, scopeId: daemon.scopeId })
+}
+
+/** One typed refusal to apply a pending Session write, with the write it belongs to. */
+export interface SessionIntentWatchFailure {
+  readonly intentId: string
+  readonly code: AcpFaultCode
+  readonly message: string
+}
+
+/**
+ * The Session surface the watch drives. The real owner is the agent daemon's own
+ * `AcpHost`, which is the A2.6 permission owner and the only place that knows which
+ * Session each open channel owns.
+ */
+export interface SessionIntentWatchInput {
+  readonly host: Pick<AcpHost, 'receive' | 'pendingPermissions' | 'channelForSession'>
+  /** The one record path for this daemon. `config/session-intent-store.ts` owns it. */
+  readonly recordPath: string
+  /** This daemon's own consumed watermark, in its own data directory. */
+  readonly watermarkPath: string
+  /** This daemon's own accepted identity. A record that names another agent is refused. */
+  readonly agentId: string
+}
+
+export interface SessionIntentWatch {
+  /** One pass: apply every pending write addressed to this daemon, in revision order. */
+  reconcile(): Promise<void>
+  readonly recordPath: string
+  readonly watermarkPath: string
+  /** Every typed refusal this watch recorded in its lifetime. */
+  failures(): readonly SessionIntentWatchFailure[]
+}
+
+/**
+ * React to the durable pending-Session-write record that the control daemon owns.
+ *
+ * This daemon applies a write to its own `AcpHost` and reports nothing back: no
+ * control-to-agent channel exists, and the Console stays out of the data path. The three
+ * frozen writes map to the engine exactly as ACP defines them.
+ *
+ *  - `permission.reply` becomes a JSON-RPC response to the engine's own pending
+ *    `session/request_permission` callback. The write names the permission by the id the
+ *    controller received with that request. The decision is the Console vocabulary, so the
+ *    watch selects the engine option whose `kind` equals it. When the engine offered no
+ *    such option, or when no callback matches, the watch refuses: a stale or missing
+ *    callback never becomes an approval.
+ *  - `session.cancel` becomes the `session/cancel` notification for that Session.
+ *  - `session.message` becomes `session/prompt` with the body carried verbatim.
+ *
+ * Ordering and retry: the pass stops at the first write it cannot apply and does not
+ * advance the watermark, so the next tick retries that write and every later one. Order is
+ * therefore preserved per daemon, and a write is never silently skipped. A write this
+ * daemon can never apply keeps its typed refusal and eventually pushes the reader past the
+ * retained window, where the store reports the honest `behind` refusal instead of a gap.
+ */
+export function createSessionIntentWatch(input: SessionIntentWatchInput): SessionIntentWatch {
+  const failures: SessionIntentWatchFailure[] = []
+  const recorded = new Set<string>()
+  // A poll repeats the same refusal every tick, so the list keeps each distinct refusal once.
+  const refuse = (intentId: string, code: AcpFaultCode, message: string): void => {
+    const key = `${intentId}\u0000${code}\u0000${message}`
+    if (recorded.has(key)) return
+    recorded.add(key)
+    failures.push({ intentId, code, message })
+  }
+  const refuseError = (intentId: string, error: unknown, fallback: string): void => {
+    refuse(intentId, error instanceof AcpError ? error.code : 'ENGINE_UNAVAILABLE', messageOf(error, fallback))
+  }
+
+  /** Apply one write. `true` means the write really reached the engine. */
+  const apply = async (intent: SessionIntent): Promise<boolean> => {
+    if (intent.agentId !== input.agentId) {
+      // The record path is derived from the target, so a record naming another agent was
+      // written where it does not belong. Refuse it instead of applying another's write.
+      refuse(intent.intentId, 'FORBIDDEN', `pending Session write names agent ${intent.agentId}, but this daemon is ${input.agentId}`)
+      return false
+    }
+    try {
+      if (intent.kind === 'permission.reply') {
+        const rows = input.host.pendingPermissions()
+          .filter(row => row.sessionId === intent.sessionId && row.permissionId === intent.permissionId)
+        if (rows.length !== 1) {
+          refuse(intent.intentId, 'CONFLICT', `pending Session write names permission ${intent.permissionId} on session ${intent.sessionId}, but ${rows.length} engine callbacks match`)
+          return false
+        }
+        const row = rows[0]
+        // The Console already chose one engine option, and the frozen command carries it. It is
+        // used verbatim, because answering with a same-kind substitute would silently replace
+        // the operator's decision. A kind is only the fallback for a command that named none.
+        if (intent.optionId !== undefined) {
+          const named = row.options.find(candidate => candidate.optionId === intent.optionId)
+          if (named === undefined) {
+            refuse(intent.intentId, 'INVALID_ACP_FRAME', `the engine never offered option ${intent.optionId} for permission ${intent.permissionId}; offered options: ${row.options.map(candidate => candidate.optionId).join(', ') || 'none'}`)
+            return false
+          }
+          if (named.kind !== intent.decision) {
+            // Guessing which of the two contradicting values is right would answer the engine
+            // with a decision nobody made, so the mismatch is refused instead.
+            refuse(intent.intentId, 'INVALID_ACP_FRAME', `option ${intent.optionId} is kind ${named.kind}, but the write states decision ${intent.decision} for permission ${intent.permissionId}`)
+            return false
+          }
+          await input.host.receive({
+            ...row.ref,
+            frame: { jsonrpc: '2.0', id: row.permissionId, result: { outcome: { outcome: 'selected', optionId: named.optionId } } },
+          })
+          return true
+        }
+        // The frozen `optionId` is optional, so a write that named none has only its projected
+        // kind to go on. The shipped Console always names the option it rendered (it passes
+        // option.optionId together with the same option's kind), so this is the residual guess
+        // for a client that sends a bare decision; it still never picks an unoffered option.
+        const option = row.options.find(candidate => candidate.kind === intent.decision)
+        if (option === undefined) {
+          // Never invent an optionId: only the engine's own offered set is selectable.
+          refuse(intent.intentId, 'INVALID_ACP_FRAME', `the engine offered no ${intent.decision} option for permission ${intent.permissionId}; offered kinds: ${row.options.map(candidate => candidate.kind).join(', ') || 'none'}`)
+          return false
+        }
+        await input.host.receive({
+          ...row.ref,
+          frame: { jsonrpc: '2.0', id: row.permissionId, result: { outcome: { outcome: 'selected', optionId: option.optionId } } },
+        })
+        return true
+      }
+      const ref = input.host.channelForSession(intent.sessionId)
+      if (ref === undefined) {
+        // No open channel owns the Session, so no engine can receive this write.
+        refuse(intent.intentId, 'CONFLICT', `no open channel owns session ${intent.sessionId}`)
+        return false
+      }
+      if (intent.kind === 'session.cancel') {
+        await input.host.receive({ ...ref, frame: { jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: intent.sessionId } } })
+        return true
+      }
+      // The body stays verbatim: the watch never parses, rewrites, or strips it.
+      await input.host.receive({
+        ...ref,
+        frame: { jsonrpc: '2.0', id: `session-intent-${intent.intentId}`, method: 'session/prompt', params: { sessionId: intent.sessionId, prompt: intent.payload } },
+      })
+      return true
+    } catch (error) {
+      refuseError(intent.intentId, error, `pending Session write ${intent.intentId} could not be applied`)
+      return false
+    }
+  }
+
+  /**
+   * The highest revision this watch really applied, counting only the contiguous run from the
+   * durable watermark. A `session.message` re-applied is a second prompt to the engine, so the
+   * watch must never re-apply a write it already applied in this process, even when the durable
+   * watermark could not be saved. A restart still re-applies the writes after the last saved
+   * watermark, which is the at-least-once boundary this record can offer.
+   */
+  let appliedThrough: number | undefined
+
+  const reconcileOnce = async (): Promise<void> => {
+    let record
+    let watermark
+    try {
+      record = await readSessionIntentRecord(input.recordPath)
+      watermark = await readSessionIntentWatermark(input.watermarkPath)
+    } catch (error) {
+      // The store's typed throw for a broken record. Nothing is applied and the watermark
+      // stays where it was, so a repaired record resumes from the same point.
+      refuse('', configFault(error).code, messageOf(error, 'the pending Session write record could not be read'))
+      return
+    }
+    // The durable watermark is the floor, and this process's own progress may be ahead of it.
+    const base = Math.max(watermark.appliedRevision, appliedThrough ?? 0)
+    const view = pendingSessionIntents(record, base)
+    if (view.state === 'behind') {
+      // The writer's window already dropped writes this daemon never saw. Refuse instead of
+      // skipping them, and keep the watermark so the gap stays visible.
+      refuse('', 'CONFLICT', `pending Session writes start at revision ${view.oldestRevision}, but this daemon applied only through ${view.appliedRevision}`)
+      return
+    }
+    for (const [index, intent] of view.intents.entries()) {
+      // The loop stops at the first write it cannot apply, so the applied revisions stay a
+      // contiguous run and one revision advances per successful write. The intent at index
+      // `index` carries revision `base + index + 1`.
+      if (!await apply(intent)) break
+      appliedThrough = base + index + 1
+    }
+    // Save exactly what was applied, including a partial pass, so the durable watermark
+    // never lags a write that already reached the engine. With nothing applied this is
+    // simply the floor, and a pass that applied nothing saves nothing.
+    const durable = appliedThrough ?? base
+    if (durable === watermark.appliedRevision) return
+    try {
+      await writeSessionIntentWatermark(input.watermarkPath, durable)
+    } catch (error) {
+      // The writes above already reached the engine and `appliedThrough` already covers them,
+      // so this pass does not repeat them; only a restart can, and only after this point.
+      // The store's own typed code is kept: the engine is fine, the watermark is not.
+      refuse('', configFault(error).code, messageOf(error, 'the pending Session write watermark could not be saved'))
+    }
+  }
+
+  /**
+   * One poll at a time. Two overlapping passes would read the same watermark and could apply
+   * the same write twice, and a poll that arrived while the previous one still ran has nothing
+   * new to do. A throw is recorded as a typed refusal instead of escaping the interval callback,
+   * which would leave an unhandled rejection and could take the daemon down.
+   */
+  let running = false
+  const reconcile = async (): Promise<void> => {
+    if (running) return
+    running = true
+    try {
+      await reconcileOnce()
+    } catch (error) {
+      refuse('', configFault(error).code, messageOf(error, 'the pending Session write watch failed'))
+    } finally {
+      running = false
+    }
+  }
+
+  return { reconcile, recordPath: input.recordPath, watermarkPath: input.watermarkPath, failures: () => [...failures] }
+}
+
+/**
+ * The one record path this daemon reads. It is derived from the daemon's own accepted
+ * identity, account and scope plus the established `~/.agentteams` local root, so the
+ * control daemon resolves the same file without a new config key.
+ */
+export function agentSessionIntentPath(home: string, daemon: AgentDaemonIntent['daemon']): string {
+  return sessionIntentScopePath({ home, accountId: daemon.accountId, scopeId: daemon.scopeId, agentId: daemon.id })
 }
 
 /**
@@ -1278,6 +1525,20 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       // The watch must never keep a stopped daemon's event loop alive.
       relationsTimer.unref()
 
+      // The pending-Session-write watch. The control daemon writes what the Console
+      // submitted; this daemon applies it to its own host on a named interval, so the
+      // Console stays out of the data path and no control-to-agent channel is added. The
+      // host is the A2.6 permission owner and the only place that knows which Session each
+      // open channel owns, so the watch never tracks either fact a second time.
+      const sessionWatch = createSessionIntentWatch({
+        host: daemon.host,
+        recordPath: agentSessionIntentPath(homedir(), agent.daemon),
+        watermarkPath: sessionIntentWatermarkPath(agent.daemon.dataDirectory),
+        agentId: agent.daemon.id,
+      })
+      const sessionTimer = setInterval(() => { void sessionWatch.reconcile() }, RELATIONS_INTENT_POLL_INTERVAL_MS)
+      sessionTimer.unref()
+
       const teamsStatus = createTeamsStatusPort({
         ledger,
         localAgentId: agent.daemon.id,
@@ -1301,6 +1562,9 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           // The watch stops before the egress it drives, so no reconcile can dial a
           // peer while the channels it needs are closing.
           clearInterval(relationsTimer)
+          // The Session watch stops before the host it drives, so no write is applied to a
+          // channel that is closing.
+          clearInterval(sessionTimer)
           // Order: the daemon's own egress rows, the LAN listener, the local
           // server (which destroys its channels), the registration client, then
           // the daemon and the owned directory. The egress closes BEFORE the host
@@ -1343,6 +1607,11 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
         relationsIntent: {
           path: relationsWatch.recordPath,
           failures: () => relationsWatch.failures(),
+        },
+        sessionIntent: {
+          path: sessionWatch.recordPath,
+          watermarkPath: sessionWatch.watermarkPath,
+          failures: () => sessionWatch.failures(),
         },
         readiness: {
           agentId: agent.daemon.id,

@@ -1,0 +1,37 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014
+
+ ✓ runtime/acp-serve.spec.ts (27 tests) 9916ms
+     ✓ starts one daemon and one engine, proves the accepted model, prompts, cancels and stops  3612ms
+     ✓ delivers a real permission callback through the serve listener and applies the reply  3074ms
+     ✓ dispatches dsh to the DSH adapter, starts exactly one child and proves the model from the real session/new  474ms
+     ✓ cancels an in-flight prompt through the entry and stops by explicit PID  395ms
+     ✓ removes the owned DSH home when the readiness session/new fails  360ms
+     ✓ removes the owned DSH home when startAcpAgentDaemon returns a failed outcome  352ms
+     ✓ accepts a blacklist for the capability and client-capability classes the DSH adapter enforces  383ms
+     ✓ binds the local channel byte-compatibly and reports no LAN channel for a loopback listener  364ms
+     ✓ attempts every declared peer at start and records a typed failure instead of skipping  377ms
+     ✓ binds the authenticated LAN channel onto the same host and admits only a real credential  464ms
+ ✓ runtime/control-process.spec.ts (26 tests) 7575ms
+   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  489ms
+   ✓ streams the SSE projection and closes the stream on owner loss  449ms
+   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  383ms
+   ✓ refuses a second start while the control generation is alive  364ms
+   ✓ refuses a stop from a stale generation without touching the live process  399ms
+   ✓ fails a start when the webui port is already taken and never reports running  3036ms
+   ✓ projects the real D04 registration directory and streams a frame when it changes  1058ms
+   ✓ serves the real D05 connection projection and connection history over the wire  352ms
+   ✓ keeps the durable connection history across a control-owner restart  809ms
+ ✓ cli/agentteams.spec.ts (33 tests) 5623ms
+     ✓ init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it  870ms
+     ✓ direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts  754ms
+ ✓ config/relations-intent-store.spec.ts (10 tests) 247ms
+ ✓ agent-host/acp-host.spec.ts (24 tests) 67ms
+ ✓ console-host/tests/http-api.spec.ts (7 tests) 51ms
+ ✓ control-protocol/console-api.spec.ts (12 tests) 8ms
+
+ Test Files  7 passed (7)
+      Tests  139 passed (139)
+   Start at  01:49:02
+   Duration  26.17s (transform 2.74s, setup 0ms, import 1.56s, tests 23.49s, environment 0ms)
+

@@ -1,0 +1,72 @@
+
+> agentteams@0.1.0 test /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014
+> pnpm build:runtime && pnpm --dir opencode-adapter build && node scripts/regression.mjs
+
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    55.02 kB │ gzip: 14.29 kB
+ℹ lib/index.d.mts  32.85 kB │ gzip:  7.67 kB
+ℹ 2 files, total: 87.87 kB
+✔ Build complete in 1101ms
+Regression gate: TEAMS_CONSOLE_REAL_DOM=1 (real Chrome required)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+(node:71643) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+blackbox-user-mvp: unknown case: BB99
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/runtime/dagpipe/.build/build-F2mQhj)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.61s
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/runtime/dagpipe/.build/build-filF42)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.88s
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/runtime/dagpipe/.build/build-kX62ui)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.90s
+Test Files 119 passed
+Tests 1181 passed
+EXIT=0

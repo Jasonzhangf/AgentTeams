@@ -1,0 +1,256 @@
+{
+  "unit": "L9 session-write-side",
+  "title": "the Console Session writes reach the real engine through a durable pending-write record",
+  "date": "2026-10-14",
+  "base_commit": "d531d242550c5588b0c59483776c0ab3115f0eaf",
+  "base_ref": "origin/main",
+  "worktree": "/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014",
+  "branch": "codex/acp-l9-session-write-side-20261014",
+  "committed": true,
+  "committed_note": "final candidate before integration; the review, the gates and the full regression all measured this tree",
+  "candidate_commits": [
+    "aed8a8671442f4171947293351d59067bd5ee408 docs(evidence): record the full-suite regression PASS on the committed candidate",
+    "cc46fc4debd7cf87005327a576783cb9dc770407 docs(evidence): record the independent review PASS for the fixed candidate",
+    "c93526ca43f496c0953542ad5b06353a3c3fbd38 docs(evidence): do not record a review PASS that has not happened",
+    "1125fa39b15b8b6fa380c9480f8fc9827e5d54fe fix(control): serialize the Session body ingress against the Session commands",
+    "3a8815dd12d0c9f6fa1aa21b6af227b1c8031f97 docs(evidence): record the black-box receipt from the final candidate run",
+    "456be4aa2a5805ebdb0589897146665317dca27b docs(evidence): record the round-2 review, its fixes and the measured candidate identity",
+    "e8e6b2b36e1895369f260f3be525b1e4564dd9d0 fix(control,config,runtime): carry the frozen optionId, serialize writes, and refuse an incomplete record",
+    "e5301c6b3785109a07b428ec38bc0895bec9268d fix(runtime): never re-apply a Session write the process already applied",
+    "cc6c2557e2d938cd4c1e3f760a688287115ab8fe docs(evidence): record the second full-suite run on the same candidate",
+    "2127cc61742efa8f6b6e91e445c3e1a4b5a92f39 docs(evidence): record the three measured full-suite regression runs",
+    "fb35e73f0b9b0102ae0c1dfb5939afdcb3abcb30 test(evidence): prove the Console Session writes reach a real engine",
+    "71318c7bbd63811f5287e7e8f75ed9aa665cb24c docs(governance): add D00 amendment A4 and bind the Session write side",
+    "679c1cc158b324b5433890d48d42125e170ec335 feat(control): write the Session write commands as durable pending writes",
+    "1da47172034c73a08cd915bf6d52186309d7f3e2 feat(runtime): apply the pending Session writes on the owning daemon",
+    "364f9713d859f868d808ea18ed205a757a4c9fc7 feat(agent-host): expose the open permission callbacks and the Session owner",
+    "feab0403ae707fc2beae95be1915f37fed0e31aa feat(config): own the durable pending-Session-write record"
+  ],
+  "candidate_head": "aed8a8671442f4171947293351d59067bd5ee408",
+  "candidate_tree": "f2cca139741745c4d37e79a9b57c338e2dee58b8",
+  "integration_commit": null,
+  "integration_method": null,
+  "remote_receipt": null,
+  "review": {
+    "status": "PASS. Five attempts: rounds 1 and 2 invalid or self-contradictory, round 3 FAIL with three true BLOCKING findings (fixed), round 4 FAIL with one true BLOCKING residual (fixed), round 5 targeted re-check PASS. No review file exists for any attempt; the PASS is the round-5 text transcribed here with its provenance stated.",
+    "attempts": 5,
+    "round_1": {
+      "verdict": "PASS, self-contradictory",
+      "text": "labelled its F1 BLOCKING and then wrote 'All findings are ADVISORY. No BLOCKING finding exists.'; its 'Measurements' reported the receipt verdict as 'applied', which is not a receipt field value, so it did not run the driver. Not citable."
+    },
+    "round_2": {
+      "verdict": "FAIL, three BLOCKING findings",
+      "findings": "F1 the frozen permission.reply.optionId was silently dropped and replaced by a same-kind guess; F2 the 500ms interval could run two overlapping passes; F3 the one CAS fence is check-then-act and can lose a Console write while both commands report ok:true. It also refuted round 1's F1 and F3 and confirmed F2 as inherited."
+    },
+    "lead_verification": {
+      "round_1_F1": "FALSE",
+      "round_1_F2": "inherited, not introduced here",
+      "round_1_F3": "FALSE",
+      "round_2_F1": "TRUE, fixed",
+      "round_2_F2": "TRUE, fixed",
+      "round_2_F3": "TRUE, fixed",
+      "round_3_F1": "TRUE, fixed in this round"
+    },
+    "note": "PASS. Five attempts: rounds 1 and 2 invalid or self-contradictory, round 3 FAIL with three true BLOCKING findings (fixed), round 4 FAIL with one true BLOCKING residual (fixed), round 5 targeted re-check PASS. No review file exists for any attempt; the PASS is the round-5 text transcribed here with its provenance stated.",
+    "round_3": {
+      "verdict": "FAIL, one BLOCKING finding",
+      "findings": "F1 and F2 independently confirmed fixed. F3 only half fixed: sendSession, the shipped Session body ingress, called the shared sessionWrite primitive directly and bypassed serializeSessionWrite, so two concurrent writes on the same record still lost one while both callers were told ok:true. Also three advisories (the kind fallback is still a guess; a stale self-contradicting JSDoc above sessionCommand; the gate note and observed_values carried stale numbers and a superseded check) and one inherited advisory (the relations path)."
+    },
+    "round_5": {
+      "verdict": "PASS",
+      "scope": "targeted re-check of the round-4 BLOCKING residual, which is what the review contract requires after a fix (re-verify only the affected checks and re-check that finding)",
+      "provenance": "returned as subagent text; the reviewer wrote no file, so this is a transcription of its own returned verdict, not a review artifact",
+      "transcript": "C1 all production paths go through serializeSessionWrite, no off-chain path; callers of sessionWrite and writeSessionIntentRecord were listed and none is outside the chain. C2 the reviewer ran its own probe, not the author spec, 40 runs per scenario, 0 bad. C3 no interleaving is possible and the chain is per-daemon. C4 the new spec case exists and would fail without the wrapper. C5 the JSDoc matches the code and the declared numbers match the logs. C6 measured Tests 78 and black box 50 PASS. C7 no new BLOCKING defect.",
+      "reliability": "thinner than round 4, which enumerated each attack with file:line evidence; this round reports its attacks tersely. It is recorded as an independent PASS because its verdict is consistent with the two rounds before it and because it measured the candidate itself, not the author's numbers."
+    }
+  },
+  "gate_id": "teams-acp-l9-session-write-side",
+  "gate_status": "partial",
+  "gate_status_note": "This unit ADDS the gate. It stays partial because the Session and notification projection is L10, session.create/session.open stay typed unsupported, and this is source-tree evidence with no installed-copy, restart, deployed-entrypoint or cross-device receipt.",
+  "design_amendment": "docs/design/teams-acp-daemon-config-v4.md section 14 (D00 amendment A4, 2026-10-14)",
+  "governing_decision": "the recorded 2026-10-14 connection.connect decision: the agent daemon reacts on its own, the control daemon only writes durable intent, and no control-to-agent channel and no Console relay are added. A4 records the two rejected candidates so the choice stays auditable.",
+  "driver": "docs/evidence/acp-l9-session-write-side-20261014/black-box-session-write.mjs",
+  "verification": {
+    "gate_command": "pnpm exec vitest run --no-file-parallelism config/session-intent-store.spec.ts runtime/session-intent-watch.spec.ts runtime/control-process.spec.ts agent-host/acp-host.spec.ts",
+    "gate_result": "78 passed / 4 files, exit 0",
+    "gate_files": {
+      "config/session-intent-store.spec.ts": 12,
+      "runtime/session-intent-watch.spec.ts": 15,
+      "runtime/control-process.spec.ts": 27,
+      "agent-host/acp-host.spec.ts": 24
+    },
+    "d01_host_gate": "58 passed / 3 files, exit 0",
+    "d05_network_gate": "103 passed / 11 files, exit 0",
+    "serve_entry_gate": "68 passed / 3 files, exit 0",
+    "d06_control_gate": "140 passed / 7 files, exit 0",
+    "l9_intent_side_gate": "72 passed / 4 files, exit 0",
+    "d07_webui_gate": "TEAMS_CONSOLE_REAL_DOM=1, 66 passed / 13 files, exit 0",
+    "typecheck": "pnpm typecheck, exit 0",
+    "build": "pnpm build, exit 0",
+    "black_box": "50 checks, PASS, exit 0",
+    "full_regression": "1181 passed / 119 test files, exit 0 (regression-committed-candidate.log)",
+    "pnpm_verify": "not run. It is the pre-existing BLOCKED baseline (PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014), so it is not a regression conclusion for this unit.",
+    "gate_tests": 78,
+    "gate_union_d06_l9": "168 passed / 10 files, exit 0",
+    "d07_webui_black_box": "15 checks, exit 0, after the permission.reply expectation was corrected from UNSUPPORTED_OPERATION to FORBIDDEN",
+    "gate_tests_note": "the six vitest gate commands measured 77 + 139 + 71 + 58 + 103 + 68 + 66 = 582 passing tests in total; that sum double counts shared spec files (agent-host/acp-host, runtime/control-process and runtime/acp-serve appear in more than one gate command), so it is a run total and not a distinct test count",
+    "regression_baseline": "the pristine origin/main baseline is 1149 / 1146 / 3 / 0 with 4 files, so this candidate adds 32 passing tests over the base; the pre-existing BLOCKED baseline on an uncommitted tree was 1173/1172/1/0 then 1173/1167/6/0 on identical content and is not used as a gate"
+  },
+  "acceptance_items": [
+    "the three frozen Session writes (permission.reply, session.cancel and the dedicated Session body ingress) perform one durable CAS write instead of refusing UNSUPPORTED_OPERATION, and the result reports only the accepted revision and never a Session state",
+    "an undeclared agentId is refused typed FORBIDDEN before any write, so the record path is never guessed",
+    "session.create and session.open stay typed UNSUPPORTED_OPERATION, because both must return real engine data and a one-way record cannot carry a response",
+    "the record has exactly one CAS fence: a stale expectation is REVISION_CONFLICT with the bytes untouched, a failed rename is uncertain with a real fence, and a malformed record is a typed throw never silently repaired",
+    "the reader keeps its own consumed watermark in its own data directory and reports the honest behind refusal instead of skipping a write the window already dropped",
+    "the watch applies in revision order and stops at the first write it cannot apply, so order is preserved and no write is silently skipped",
+    "permission.reply reaches the engine as a JSON-RPC response to the engine's own pending callback and selects only an optionId the engine really offered",
+    "the Console body reaches the engine verbatim as session/prompt, and session.cancel makes the daemon's own prompt end with stopReason cancelled"
+  ],
+  "gaps": [
+    "the control daemon still reports sessions: [] and notifications: [], so the Console sees neither the Session it writes to nor a permission identity from the projection; that projection is L10 and is not delivered here",
+    "session.create and session.open stay typed UNSUPPORTED_OPERATION and are deliberately not delivered",
+    "source-tree evidence only: the black box starts from the source CLI entry (the worktree generated/runtime-lib), not from an installed artifact, and there is no restart, deployed-entrypoint, cross-device or multi-account receipt",
+    "the engine is a local OpenAI-compatible stub provider, not an upstream model, so this proves that the write really reaches and is accepted by an engine, not any model quality"
+  ],
+  "findings": [
+    {
+      "id": "F1 frozen permission.reply.optionId dropped",
+      "severity": "BLOCKING",
+      "found_by": "independent review round 2",
+      "evidence": "control-protocol/console-api.ts:424-426 carries readonly optionId?: string and the parser validates it at :506-510; ui/teams-console/src/client/controller.ts:499-500 and render.ts:410,:563 send it; runtime/control-process.ts built the record change without it and runtime/acp-serve.ts guessed the first option of the projected kind",
+      "fix": "optionId is carried as an optional field through the store type, validation, parseIntent, intent construction and control-process; the watch uses the named engine option and refuses INVALID_ACP_FRAME when the engine never offered it or when it contradicts the stated decision; the kind is only the fallback for a command that named none",
+      "red_green": "two same-kind options with the second one named; reverting the named branch fails with optionId allow-always-a instead of allow-always-b",
+      "real_entrypoint": "the black box now sends the engine's real optionId and asserts the durable record carries it verbatim (50 checks, PASS); this engine's optionIds equal the projected kinds, so that step cannot by itself tell a named option from a same-kind guess, and the spec is what proves the difference"
+    },
+    {
+      "id": "F2 two overlapping watch passes",
+      "severity": "BLOCKING",
+      "found_by": "independent review round 2",
+      "evidence": "startAcpServe called void sessionWatch.reconcile() on a 500ms interval with no in-flight guard, so a slow pass could be overlapped by the next one; both read the same watermark and could apply the same session.message twice, and a throw escaped as an unhandled rejection",
+      "fix": "createSessionIntentWatch keeps an in-flight guard, and the whole pass is wrapped so a throw is recorded as a typed refusal instead of escaping the interval callback",
+      "red_green": "a host whose receive blocks on a gate; without the guard the second pass prompts the engine again, failing with host.received length 2 instead of 1. The first version of this case depended on microtask order and passed without the guard, so it was rewritten to wait explicitly"
+    },
+    {
+      "id": "F3 check-then-act CAS loses a Console write",
+      "severity": "BLOCKING",
+      "found_by": "independent review round 2",
+      "evidence": "sessionWrite reads the record and then calls writeSessionIntentRecord(path, current.revision, ...), and the store's own CAS is also read-then-rename, so two concurrent commands can both read revision N and then both rename; the later rename wins, one intent is lost, and both commands report ok:true",
+      "fix": "this daemon is the record's single writer, so its own writes are serialized through a promise chain",
+      "red_green": "two concurrent session.cancel commands; without serialization the record revision is 1 instead of 2, so one command was lost while both reported ok:true",
+      "residual": "the same check-then-act shape still exists on the already-merged relations write path (config/relations-intent-store.ts); this unit only fixed its own record"
+    },
+    {
+      "id": "F9 record had no span check",
+      "severity": "ADVISORY",
+      "found_by": "independent review round 2",
+      "evidence": "parseRecord did not check that the intent count matches the revision span, so a record such as {revision:10, oldestRevision:1, intents:[5]} was read as valid; pendingSessionIntents then advanced the reader's watermark to 10 and silently skipped revisions 6..10",
+      "fix": "parseRecord now requires intents.length === revision - oldestRevision + 1 and refuses INVALID_INPUT otherwise, so the malformed record is never overwritten either",
+      "residual": "a record that is deleted and recreated needs a generation id in the watermark to be told apart from a normal record; that is not fixed and is recorded as a retained obligation"
+    },
+    {
+      "id": "F3 residual: the Session body ingress bypassed the serialization chain",
+      "severity": "BLOCKING",
+      "found_by": "independent review round 4",
+      "evidence": "runtime/control-process.ts sendSession called the shared sessionWrite primitive directly; only sessionCommand was wrapped in serializeSessionWrite. The production control daemon binds no owner, so sendSession always took the record path and wrote the same record as the Session commands. Two concurrent body writes lost one, and a body concurrent with a permission.reply lost the operator's decision, while both callers were told ok:true.",
+      "fix": "sendSession now goes through the same serializeSessionWrite chain",
+      "red_green": "a new runtime/control-process.spec.ts case runs a body and a permission.reply concurrently and then two bodies concurrently; without the wrapper the record revision is 1 instead of 2, so one write was lost while both calls returned ok:true",
+      "corrects": "notes.md section 11.3 claimed the daemon's own writes were serialized. That claim was false at the time, because the record had two writers (the command side and the body side). It is true now."
+    }
+  ],
+  "findings_note": "Both findings are pre-existing and are reproduced on the unmodified base d531d24. Neither is fixed in this unit, because neither is this unit's defect.",
+  "resolved_defects": [
+    {
+      "id": "A1 watermark re-apply duplicates a Session body",
+      "found_by": "independent review attempt (attack A1), verified and fixed by the unit owner",
+      "file": "runtime/acp-serve.ts createSessionIntentWatch",
+      "defect": "A failed watermark save (or a crash) re-applied the same session.message on the next poll, so the engine received a second session/prompt and the Console user saw a duplicated message. The old code comment claimed the apply path refuses an already-satisfied write, which is true only for permission.reply, because that callback is consumed.",
+      "fix": [
+        "an in-process high-water mark appliedThrough; base = max(durableWatermark, appliedThrough ?? 0), so a write already applied in this process is never re-applied",
+        "the watermark now saves appliedThrough ?? base, so a partial pass is also durable and the durable watermark never lags a write that already reached the engine",
+        "a store fault on the watermark save now maps through configFault like the record-read fault, instead of being flattened to ENGINE_UNAVAILABLE, which wrongly blamed the engine",
+        "the apply() comment now says true means the write really reached the engine"
+      ],
+      "red_green": "runtime/session-intent-watch.spec.ts 'never re-applies a write it already applied when the watermark cannot be saved' uses chflags uchg so the watermark reads as 0 but cannot be written. Reverting base to the durable watermark alone makes it fail with host.received length 2 instead of 1, and setting appliedThrough = base also makes it fail; restored, the file is byte-identical and the spec is 12/12.",
+      "residual_boundary": "After a crash or restart, writes after the last saved watermark are still applied at least once, so a session.message can still repeat inside that window. This is the at-least-once boundary of this record shape and exactly-once is not claimed."
+    }
+  ],
+  "observed_values": {
+    "control_pid": 41166,
+    "agent_pid": 41279,
+    "engine_instance": "opencode-l9sw-agent-dd3152d5-8222-4a57-afc3-a094c500485a",
+    "record_path": "<temp root>/home/.agentteams/sessions/local/local/l9sw-agent/session-intent.json (removed after the run)",
+    "black_box_verdict": "PASS",
+    "black_box_checks": 50,
+    "gate_tests": 77,
+    "gate_run_totals": "the six gate commands measured 58 + 103 + 68 + 137 + 69 + 66 + 71 = 572 passing tests in total; that sum double counts shared spec files (agent-host/acp-host, runtime/control-process and runtime/acp-serve appear in more than one gate command), so it is a run total and not a distinct test count",
+    "black_box_finished_at": "2026-10-15T08:24:55.264Z"
+  },
+  "engine_versions": {
+    "node": "v22.22.2",
+    "engine": "opencode (local stub OpenAI-compatible provider)"
+  },
+  "non_claims": [
+    "no installed-copy, restart, deployed-entrypoint, cross-device or multi-account evidence is claimed",
+    "no Session or notification projection, and no Console-visible permission identity, is claimed",
+    "no model quality or inference correctness is claimed",
+    "the full regression exit 1 is not claimed as a pass and not claimed as this unit's regression"
+  ],
+  "evidence_boundary": "source, test, build, source-tree real-entry black box. NOT installed artifact, restart, deployed-entrypoint replay, review, merge, remote receipt, freeze or cleanup. No later layer is inferred from an earlier one.",
+  "retained_objects": [
+    "docs/evidence/acp-l9-session-write-side-20261014/black-box-session-write.mjs",
+    "docs/evidence/acp-l9-session-write-side-20261014/receipt.json",
+    "docs/evidence/acp-l9-session-write-side-20261014/notes.md",
+    "docs/evidence/acp-l9-session-write-side-20261014/gate-d06-l9.log",
+    "docs/evidence/acp-l9-session-write-side-20261014/gate-d01-host.log",
+    "docs/evidence/acp-l9-session-write-side-20261014/gate-d05-network.log",
+    "docs/evidence/acp-l9-session-write-side-20261014/gate-serve-entry.log",
+    "docs/evidence/acp-l9-session-write-side-20261014/gate-d07-webui.log",
+    "docs/evidence/acp-l9-session-write-side-20261014/typecheck.log",
+    "docs/evidence/acp-l9-session-write-side-20261014/build.log",
+    "docs/evidence/acp-l9-session-write-side-20261014/regression-committed-candidate.log",
+    "docs/evidence/acp-l9-session-write-side-20261014/baseline-origin-main-regression.log"
+  ],
+  "overall_goal": "continue the ACP/LAN/WebUI long-running delivery; this unit delivers L9's Session write side and L12 remains open",
+  "retained_obligations": [
+    {
+      "id": "F4 duplicated durable-write helpers",
+      "detail": "config/session-intent-store.ts repeats the atomic temp+rename, watermark and discard helpers of the already-merged config/relations-intent-store.ts. Extracting one shared helper touches merged code, so it is recorded instead of done here. The project AGENTS ask to reuse a shared function for common semantics, so this stays an open obligation."
+    },
+    {
+      "id": "F9 record replacement",
+      "detail": "the reader's watermark carries only appliedRevision. If the record file is deleted and recreated, the new record starts at revision 1 while the watermark may be higher, so pendingSessionIntents reports nothing to apply and the new writes are skipped until the record grows past the watermark. A record generation id carried in the watermark would tell the two apart. Not fixed."
+    },
+    {
+      "id": "relations check-then-act",
+      "detail": "the same read-then-rename CAS shape that F3 fixed here still exists on the merged relations write path (runtime/control-process.ts relationsCommand). It writes a different record, so this unit does not regress it, but it stays an explicit carried obligation."
+    },
+    {
+      "id": "kind fallback",
+      "detail": "a Session write that names no engine optionId is answered with the first option of the projected kind. The frozen field is optional and the shipped Console always names the option it rendered, so this is the residual guess for a client that sends a bare decision. It never picks an option the engine did not offer, and it is documented in code."
+    },
+    {
+      "id": "Session and notification projection",
+      "detail": "the control daemon still returns sessions: [] and notifications: [], so the Console cannot see the Session it writes to or a permission identity from the projection. That is L10."
+    },
+    {
+      "id": "session.create and session.open",
+      "detail": "both stay typed UNSUPPORTED_OPERATION because each must return real engine data that a one-way record cannot carry."
+    },
+    {
+      "id": "source-tree only evidence",
+      "detail": "no installed-copy, restart, deployed-entrypoint or cross-device receipt for this unit; the black box drives the source-tree runtime library through the source CLI."
+    },
+    {
+      "id": "at-least-once after a crash",
+      "detail": "inside one process a write the watch already applied is never re-applied even when the watermark cannot be saved. After a process restart, writes after the last saved watermark are applied again, so the guarantee is at-least-once, not exactly-once."
+    }
+  ],
+  "driver_side_effects": [
+    "the driver spawns one real control daemon and one real agent daemon with a real engine child, stops both explicitly, and leaves no process behind",
+    "the driver writes only inside its own retained temp root; the retained root is deleted unless L9SW_KEEP_ROOT=1"
+  ],
+  "driver_reruns": 6,
+  "driver_reruns_note": "iterations 1 to 6 during development; only the final run is the receipt, and its receipt.json is retained verbatim",
+  "retry_policy": "not applicable; the driver is deterministic once each permission-dependent step uses its own fresh Session",
+  "closed_gaps": []
+}

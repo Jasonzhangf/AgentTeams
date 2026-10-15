@@ -36,6 +36,23 @@ export type AcpPolicyAssert = (input: {
   readonly frame: AcpFrame
 }) => void
 
+/**
+ * One engine callback that awaits a controller reply, with the identity and the real option
+ * set the controller needs (A2.6).
+ *
+ * `permissionId` is the id the controller received with the request, which is also the
+ * address a reply must use. It is the Console-facing identity because it is the one the
+ * controller can really see; the host keeps its own history record id separately as the
+ * durable audit identity.
+ */
+export interface AcpPendingPermission {
+  readonly ref: AcpChannelRef
+  readonly sessionId: string
+  readonly permissionId: string
+  /** The engine's real choice set; empty when the engine offered no options. */
+  readonly options: readonly ConsolePermissionOption[]
+}
+
 export interface AcpHost {
   open(input: {
     readonly ref: AcpChannelRef
@@ -49,6 +66,17 @@ export interface AcpHost {
     readonly nextSequence: number
   }>
   close(ref: AcpChannelRef): Promise<void>
+  /**
+   * The engine permission callbacks awaiting a controller reply. The host is the A2.6
+   * permission owner, so this is the only place that knows which callbacks are still open
+   * and which options the engine really offered.
+   */
+  pendingPermissions(): readonly AcpPendingPermission[]
+  /**
+   * The host-facing ref of the channel that owns `sessionId`, or `undefined` when no open
+   * channel owns it. A caller never invents a ref for a Session it does not own.
+   */
+  channelForSession(sessionId: string): AcpChannelRef | undefined
 }
 
 export interface CreateAcpHostInput {
@@ -1057,5 +1085,30 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     }))
   }
 
-  return { open, receive, read, close }
+  const pendingPermissions = (): readonly AcpPendingPermission[] => {
+    const rows: AcpPendingPermission[] = []
+    for (const channel of channels.values()) {
+      if (channel.closed) continue
+      for (const pending of channel.pendingCallbacks.values()) {
+        // Only a permission callback carries an option set, and only a callback with a
+        // Session can be matched to a Session write.
+        if (pending.method !== 'session/request_permission' || pending.sessionId === undefined) continue
+        rows.push({
+          ref: channel.ref,
+          sessionId: pending.sessionId,
+          permissionId: pending.outwardId,
+          options: pending.permissionOptions ?? [],
+        })
+      }
+    }
+    return rows
+  }
+
+  const channelForSession = (sessionId: string): AcpChannelRef | undefined => {
+    const channel = channelBySession(sessionId)
+    // A closed channel cannot accept a write, so it must not be reported as the owner.
+    return channel === undefined || channel.closed ? undefined : channel.ref
+  }
+
+  return { open, receive, read, close, pendingPermissions, channelForSession }
 }

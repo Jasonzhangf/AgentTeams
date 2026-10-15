@@ -1,0 +1,130 @@
+{
+  "driver": "acp-l9-session-write-side-20261014/black-box-session-write.mjs",
+  "startedAt": "2026-10-15T09:12:16.305Z",
+  "steps": [
+    {
+      "step": "startup",
+      "name": "recordPath",
+      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9sw-blackbox-hh7uLJ/home/.agentteams/sessions/local/local/l9sw-agent/session-intent.json"
+    },
+    {
+      "step": "startup",
+      "name": "watermarkPath",
+      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9sw-blackbox-hh7uLJ/agent/state/session-intent-watermark.json"
+    },
+    {
+      "step": "startup",
+      "name": "controlConfigPath",
+      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9sw-blackbox-hh7uLJ/control.toml"
+    },
+    {
+      "step": "startup",
+      "name": "agentConfigPath",
+      "value": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9sw-blackbox-hh7uLJ/agent.toml"
+    },
+    {
+      "step": "startup",
+      "name": "declaredPeer",
+      "value": {
+        "name": "l9sw-agent",
+        "accountId": "local",
+        "scopeId": "local"
+      }
+    },
+    {
+      "step": "control start",
+      "name": "control",
+      "value": {
+        "pid": 10632,
+        "origin": "http://127.0.0.1:50978"
+      }
+    },
+    {
+      "step": "agent readiness",
+      "name": "agentReady",
+      "value": "serving agent=l9sw-agent engine=opencode engineInstance=opencode-l9sw-agent-fe9adb5e-3282-4204-8725-9ca01a90c239 enginePid=10814 daemonPid=10805 listener=127.0.0.1:50979 localChannel=127.0.0.1:50979 lanChannel=none capabilitiesRevision=2 registration=disabled dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9sw-blackbox-hh7uLJ/agent/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l9sw-blackbox-hh7uLJ/agent.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1"
+    },
+    {
+      "step": "session/new",
+      "name": "sessionId",
+      "value": "ses_ec12a4489ffeu8ZS1D7KKOiicH"
+    },
+    {
+      "step": "prompt 1 (driver)",
+      "name": "permissionOne",
+      "value": {
+        "id": "acp-callback-opencode-l9sw-agent-fe9adb5e-3282-4204-8725-9ca01a90c239-1",
+        "engineOptionKinds": [
+          "allow_once",
+          "allow_always",
+          "reject_once"
+        ],
+        "consoleDecision": "once",
+        "resolvesToEngineOptionId": "once"
+      }
+    },
+    {
+      "step": "permission.reply",
+      "name": "recordAfterReply",
+      "value": {
+        "revision": 1,
+        "oldestRevision": 1,
+        "kinds": [
+          "permission.reply"
+        ]
+      }
+    },
+    {
+      "step": "permission.reply",
+      "name": "callbackOutcome",
+      "value": {
+        "replyEvent": "callback.reply",
+        "answeredRecordId": "acp-history-14",
+        "dispatchedEvent": "callback.dispatched",
+        "selectedOptionId": "once",
+        "sessionId": "ses_ec12a4489ffeu8ZS1D7KKOiicH"
+      }
+    },
+    {
+      "step": "session-message",
+      "name": "bodyReachedEngine",
+      "value": {
+        "daemonRequestId": "session-intent-6ca52da4-0ec1-47ac-b685-cda7598877ee",
+        "dispatchedMethod": "session/prompt",
+        "providerText": "read /etc/hosts l9sw-body-1"
+      }
+    },
+    {
+      "step": "invented permission",
+      "name": "refusedWrite",
+      "value": {
+        "recordRevision": 6,
+        "watermark": 5,
+        "pendingPermission": "acp-callback-opencode-l9sw-agent-fe9adb5e-3282-4204-8725-9ca01a90c239-3",
+        "refusedPermissionId": "permission-the-engine-never-awaited"
+      }
+    },
+    {
+      "step": "undeclared target",
+      "name": "undeclaredRefusal",
+      "value": {
+        "code": "FORBIDDEN",
+        "message": "agentId agent-not-declared is not declared by this control daemon's accepted peers"
+      }
+    },
+    {
+      "step": "projection",
+      "name": "projection",
+      "value": {
+        "agents": 0,
+        "sessions": 0
+      }
+    }
+  ],
+  "checks": 50,
+  "verdict": "PASS",
+  "finishedAt": "2026-10-15T09:12:50.458Z",
+  "retainedRoot": null,
+  "controlPid": 10632,
+  "agentPid": 10805
+}

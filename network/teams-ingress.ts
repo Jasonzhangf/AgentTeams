@@ -271,6 +271,9 @@ export async function openTeamsIngress(input: OpenTeamsIngressInput): Promise<Te
         engineInstanceId: ref.engineInstanceId,
       })
     },
+    // The wrapper observes channel lifecycle and must not hide what it wraps.
+    pendingPermissions: () => input.host.pendingPermissions(),
+    channelForSession: sessionId => input.host.channelForSession(sessionId),
   }
 
   const session = createTeamsSession({

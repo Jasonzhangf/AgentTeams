@@ -24,6 +24,7 @@ import {
 import { createAcpHistoryStore } from './acp-history-store.ts'
 import { createTeamsConnectionHistory } from '../network/teams-connection-history.ts'
 import { readRelationsIntentRecord, relationsIntentScopePath } from '../config/relations-intent-store.ts'
+import { readSessionIntentRecord, sessionIntentScopePath } from '../config/session-intent-store.ts'
 import type { HistoryQuery, ConsoleProjectionSnapshot, TeamsConnectionStatus } from '../control-protocol/teams-state.ts'
 
 let directory: string
@@ -94,6 +95,10 @@ async function freePort(): Promise<number> {
  */
 function intentRecordPath(home: string, accountId = 'local', scopeId = 'local'): string {
   return relationsIntentScopePath({ home, accountId, scopeId })
+}
+
+function sessionRecordPath(home: string, agentId = 'peer-b', accountId = 'local', scopeId = 'local'): string {
+  return sessionIntentScopePath({ home, accountId, scopeId, agentId })
 }
 
 interface ControlConfigOptions {
@@ -433,14 +438,27 @@ it('reads history only through the frozen port and fails typed when it is absent
   expect(seen).toHaveLength(1)
 })
 
-it('keeps the connection projection absent and relation commands typed without the accepted intent facts', async () => {
+it('keeps the connection projection absent and relation and Session commands typed without the accepted intent facts', async () => {
   const owner = createControlOwner({})
   expect(await owner.readProjection()).toEqual({ version: 1, agents: [], sessions: [], notifications: [], configs: [] })
   expect(await owner.command({ kind: 'connection.connect', agentId: 'a' }))
     .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
   expect(await owner.command({ kind: 'network.membership.apply', agentId: 'a', expectedRevision: 1, members: [] }))
     .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+  // The Session writes are supported operations whose record facts are absent, so the typed
+  // absence is UNAVAILABLE and never a silent success or a guessed record path.
   expect(await owner.sendSession({ agentId: 'a', sessionId: 's' }, { text: 'x' }))
+    .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+  expect(await owner.command({ kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'once' }))
+    .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+  expect(await owner.command({ kind: 'session.cancel', agentId: 'a', sessionId: 's' }))
+    .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+  // A command that must return real engine data stays typed unsupported even when the record
+  // facts are bound: a one-way intent record cannot carry a response.
+  const facts = createControlOwner({ relations: { peers: {}, allowedRoles: [], home: '/tmp/unused-home' } })
+  expect(await facts.command({ kind: 'session.create', agentId: 'a' }))
+    .toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+  expect(await facts.command({ kind: 'session.open', agentId: 'a', sessionId: 's' }))
     .toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
 
   // A bound read port projects the frozen status verbatim and never mutates it.
@@ -486,6 +504,127 @@ it('writes the declared peer relation from the frozen relation commands and leav
     .toEqual({ ok: true, result: { acceptedRevision: 2 } })
   expect(await readRelationsIntentRecord(recordPath)).toMatchObject({ revision: 2, peers: [] })
   expect(await owner.readProjection()).toEqual(before)
+})
+
+it('writes the Session write commands as one durable pending-write record and reports only its revision', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-session-write-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-session-write-${port}`)
+  const recordPath = sessionRecordPath(home)
+  // One real D05 status row: a Session write must never add, drop or rewrite a connection
+  // row, and must never report a Session state back.
+  const status: TeamsConnectionStatus = { version: 1, remoteAgentId: 'peer-b', state: 'disconnected', targetGeneration: 1,
+    observedAt: '2026-10-14T00:00:00.000Z', role: 'peer' }
+  const owner = createControlOwner({
+    network: { history: async () => ({ records: [] }), connections: () => [status] },
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+  const before = await owner.readProjection()
+
+  expect(await owner.command({ kind: 'permission.reply', agentId: 'peer-b', sessionId: 'session-1', permissionId: 'permission-1', decision: 'always' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  expect(await owner.command({ kind: 'session.cancel', agentId: 'peer-b', sessionId: 'session-1' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 2 } })
+  expect(await owner.sendSession({ agentId: 'peer-b', sessionId: 'session-1' }, { text: '你好', keep: [1, null] }))
+    .toEqual({ ok: true, result: { acceptedRevision: 3 } })
+  // The result reports the accepted revision only: no Session state, no optionId, no engine
+  // fact. The agent daemon owns the real outcome.
+  const record = await readSessionIntentRecord(recordPath)
+  expect(record?.revision).toBe(3)
+  expect(record?.intents.map(entry => entry.kind)).toEqual(['permission.reply', 'session.cancel', 'session.message'])
+  expect(record?.intents[0]).toMatchObject({ permissionId: 'permission-1', decision: 'always' })
+  // The business body is carried verbatim and never parsed or stripped.
+  expect(record?.intents[2]).toMatchObject({ payload: { text: '你好', keep: [1, null] } })
+  expect(await owner.readProjection()).toEqual(before)
+
+  // An undeclared target is refused and writes nothing, so no record path is ever guessed.
+  const freshHome = join(directory, `home-session-unknown-${port}`)
+  const fresh = createControlOwner({ relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home: freshHome } })
+  expect(await fresh.command({ kind: 'session.cancel', agentId: 'agent-not-declared', sessionId: 's' }))
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(await fresh.sendSession({ agentId: 'agent-not-declared', sessionId: 's' }, { text: 'x' }))
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(existsSync(sessionRecordPath(freshHome, 'agent-not-declared'))).toBe(false)
+  // One record per target agent: the declared peer's own record is the only one written.
+  expect(existsSync(sessionRecordPath(freshHome, 'peer-b'))).toBe(false)
+})
+
+it('carries the frozen engine optionId verbatim instead of letting the reader guess one', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-session-option-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-session-option-${port}`)
+  const owner = createControlOwner({ relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home } })
+
+  // The frozen Console command carries the engine option the operator clicked. It must reach
+  // the record unchanged, because the reading daemon answers the engine with exactly that one.
+  expect(await owner.command({ kind: 'permission.reply', agentId: 'peer-b', sessionId: 'session-1', permissionId: 'permission-1', decision: 'always', optionId: 'allow-always-b' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  const record = await readSessionIntentRecord(sessionRecordPath(home))
+  expect(record?.intents[0]).toMatchObject({ kind: 'permission.reply', decision: 'always', optionId: 'allow-always-b' })
+  // A command that names no option stores none, and the reader keeps its kind fallback.
+  expect(await owner.command({ kind: 'permission.reply', agentId: 'peer-b', sessionId: 'session-1', permissionId: 'permission-2', decision: 'reject' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 2 } })
+  expect((await readSessionIntentRecord(sessionRecordPath(home)))?.intents[1]).not.toHaveProperty('optionId')
+})
+
+it('serializes its own writes so two concurrent Session commands cannot lose one', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-session-race-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-session-race-${port}`)
+  const owner = createControlOwner({ relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home } })
+
+  // Two Console clients command the same record at the same time. The store's CAS is
+  // read-then-rename, so without serialization both reads see revision 0, both rename, and one
+  // intent is lost while both commands report success.
+  const [first, second] = await Promise.all([
+    owner.command({ kind: 'session.cancel', agentId: 'peer-b', sessionId: 'session-a' }),
+    owner.command({ kind: 'session.cancel', agentId: 'peer-b', sessionId: 'session-b' }),
+  ])
+  expect(first.ok).toBe(true)
+  expect(second.ok).toBe(true)
+  const record = await readSessionIntentRecord(sessionRecordPath(home))
+  expect(record?.revision).toBe(2)
+  expect(record?.intents.map(entry => entry.kind)).toEqual(['session.cancel', 'session.cancel'])
+  expect(record?.intents.map(entry => (entry.kind === 'session.cancel' ? entry.sessionId : ''))).toEqual(['session-a', 'session-b'])
+})
+
+it('serializes the Session body ingress against the Session commands, which write the same record', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-session-body-race-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-session-body-race-${port}`)
+  const owner = createControlOwner({ relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home } })
+
+  // The shipped control daemon binds no Session owner, so the body ingress takes the record
+  // path. It writes the same record as the Session commands, so it needs the same
+  // serialization: two clients that interleave here would otherwise lose one write while both
+  // are told `ok: true`, and a lost permission decision leaves the engine waiting forever.
+  const [body, reply] = await Promise.all([
+    owner.sendSession({ agentId: 'peer-b', sessionId: 'session-a' }, { text: 'body-one' }),
+    owner.command({ kind: 'permission.reply', agentId: 'peer-b', sessionId: 'session-a', permissionId: 'permission-a', decision: 'once', optionId: 'once' }),
+  ])
+  expect(body.ok).toBe(true)
+  expect(reply.ok).toBe(true)
+  const record = await readSessionIntentRecord(sessionRecordPath(home))
+  expect(record?.revision).toBe(2)
+  expect(record?.intents.map(entry => entry.kind)).toEqual(['session.message', 'permission.reply'])
+
+  const [first, second] = await Promise.all([
+    owner.sendSession({ agentId: 'peer-b', sessionId: 'session-a' }, { text: 'body-two' }),
+    owner.sendSession({ agentId: 'peer-b', sessionId: 'session-b' }, { text: 'body-three' }),
+  ])
+  expect(first.ok).toBe(true)
+  expect(second.ok).toBe(true)
+  const grown = await readSessionIntentRecord(sessionRecordPath(home))
+  expect(grown?.revision).toBe(4)
+  expect(grown?.intents.filter(entry => entry.kind === 'session.message')).toHaveLength(3)
 })
 
 it('derives the desired peer role from the daemon own accepted relations', async () => {
