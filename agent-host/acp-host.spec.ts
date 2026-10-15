@@ -688,4 +688,58 @@ describe('permission option decision path (A2.6)', () => {
     expect(refusal.error).toBeDefined()
     expect(fixture.history.records.some(record => record.event === 'callback.denied' && record.outcome === 'denied')).toBe(true)
   })
+
+  it('reports the open permission callback and the owning channel, and reports neither once the channel closes', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await open(fixture, ref2)
+    await initialize(fixture, ref1, 1)
+    await initialize(fixture, ref2, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      id: 'engine-permission-open',
+      method: 'session/request_permission',
+      params: { sessionId: 'session-1', options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }] },
+    })
+    await flush()
+    const callback = (await readFrames(fixture, ref1))[0]
+
+    // The controller sees the id it received with the request, and the engine's real option set.
+    expect(fixture.host.pendingPermissions()).toEqual([{
+      ref: ref1,
+      sessionId: 'session-1',
+      permissionId: callback.id,
+      options: [{ optionId: 'allow', name: 'Allow', kind: 'once' }],
+    }])
+    expect(fixture.host.channelForSession('session-1')).toEqual(ref1)
+    expect(fixture.host.channelForSession('session-unknown')).toBeUndefined()
+    // A Session the other channel never adopted has no owner, so no ref is invented for it.
+    expect(fixture.host.channelForSession('session-2')).toBeUndefined()
+
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: callback.id as string, result: { outcome: { outcome: 'selected', optionId: 'allow' } } },
+    })
+    expect(fixture.host.pendingPermissions()).toEqual([])
+
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      id: 'engine-permission-late',
+      method: 'session/request_permission',
+      params: { sessionId: 'session-1', options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }] },
+    })
+    await flush()
+    await readFrames(fixture, ref1)
+    expect(fixture.host.pendingPermissions()).toHaveLength(1)
+
+    await fixture.host.close(ref1)
+    // A closed channel can accept no write, so it must not be reported as the owner.
+    expect(fixture.host.pendingPermissions()).toEqual([])
+    expect(fixture.host.channelForSession('session-1')).toBeUndefined()
+  })
 })
