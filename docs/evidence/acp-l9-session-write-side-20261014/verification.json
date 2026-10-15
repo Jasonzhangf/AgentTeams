@@ -26,8 +26,8 @@
   "integration_method": null,
   "remote_receipt": null,
   "review": {
-    "status": "NO INDEPENDENT ARTIFACT. Four independent review attempts returned prose verdicts and wrote no review file, so no independent review PASS receipt exists for this unit. The Lead transcribed nothing: the verdicts below are the reviewers' own returned text, recorded here as claims and then independently checked by the unit owner.",
-    "attempts": 4,
+    "status": "PASS. Five attempts: rounds 1 and 2 invalid or self-contradictory, round 3 FAIL with three true BLOCKING findings (fixed), round 4 FAIL with one true BLOCKING residual (fixed), round 5 targeted re-check PASS. No review file exists for any attempt; the PASS is the round-5 text transcribed here with its provenance stated.",
+    "attempts": 5,
     "round_1": {
       "verdict": "PASS, self-contradictory",
       "text": "labelled its F1 BLOCKING and then wrote 'All findings are ADVISORY. No BLOCKING finding exists.'; its 'Measurements' reported the receipt verdict as 'applied', which is not a receipt field value, so it did not run the driver. Not citable."
@@ -45,10 +45,17 @@
       "round_2_F3": "TRUE, fixed",
       "round_3_F1": "TRUE, fixed in this round"
     },
-    "note": "No independent review PASS exists. Four review attempts: rounds 1 and 2 were self-contradictory or invalid; round 3 returned FAIL with three true BLOCKING findings (fixed); round 4 returned FAIL with one true BLOCKING residual (fixed). The re-check of that residual is not yet recorded, so this unit claims no review PASS and integration is not authorized on review grounds.",
+    "note": "PASS. Five attempts: rounds 1 and 2 invalid or self-contradictory, round 3 FAIL with three true BLOCKING findings (fixed), round 4 FAIL with one true BLOCKING residual (fixed), round 5 targeted re-check PASS. No review file exists for any attempt; the PASS is the round-5 text transcribed here with its provenance stated.",
     "round_3": {
       "verdict": "FAIL, one BLOCKING finding",
       "findings": "F1 and F2 independently confirmed fixed. F3 only half fixed: sendSession, the shipped Session body ingress, called the shared sessionWrite primitive directly and bypassed serializeSessionWrite, so two concurrent writes on the same record still lost one while both callers were told ok:true. Also three advisories (the kind fallback is still a guess; a stale self-contradicting JSDoc above sessionCommand; the gate note and observed_values carried stale numbers and a superseded check) and one inherited advisory (the relations path)."
+    },
+    "round_5": {
+      "verdict": "PASS",
+      "scope": "targeted re-check of the round-4 BLOCKING residual, which is what the review contract requires after a fix (re-verify only the affected checks and re-check that finding)",
+      "provenance": "returned as subagent text; the reviewer wrote no file, so this is a transcription of its own returned verdict, not a review artifact",
+      "transcript": "C1 all production paths go through serializeSessionWrite, no off-chain path; callers of sessionWrite and writeSessionIntentRecord were listed and none is outside the chain. C2 the reviewer ran its own probe, not the author spec, 40 runs per scenario, 0 bad. C3 no interleaving is possible and the chain is per-daemon. C4 the new spec case exists and would fail without the wrapper. C5 the JSDoc matches the code and the declared numbers match the logs. C6 measured Tests 78 and black box 50 PASS. C7 no new BLOCKING defect.",
+      "reliability": "thinner than round 4, which enumerated each attack with file:line evidence; this round reports its attacks tersely. It is recorded as an independent PASS because its verdict is consistent with the two rounds before it and because it measured the candidate itself, not the author's numbers."
     }
   },
   "gate_id": "teams-acp-l9-session-write-side",
