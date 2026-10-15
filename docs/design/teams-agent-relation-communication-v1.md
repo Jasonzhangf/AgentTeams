@@ -5,7 +5,7 @@ work 配对与关系语义；传输以 [v2 协议](teams-control-protocol-v2-mas
 为准。2026-10-15 更正（L12 收口）：「当前源码尚未实现本协议」已不准确。会话、
 permission 与 notification 语义由 D01 的 host（agent-host/acp-host.ts）、L9 的 Session 写侧
 （config/session-intent-store.ts）与 L10 的投影（runtime/session-observation-publisher.ts 与
-runtime/control-session-projection.ts）交付，并各有 teams-acp-d01-host、
+runtime/control-process.ts 的 `readObservedSessionProjection`）交付，并各有 teams-acp-d01-host、
 teams-acp-l9-session-write-side、teams-acp-l10-session-projection 门禁。本文仍拥有的
 capability/resource 配对与 work 关系语义不在 ACP/LAN/WebUI 增量内，尚未实现的范围仅限该部分。
 

@@ -100,13 +100,14 @@
     },
     {
       "gate_id": "teams-acp-d07-webui",
-      "command": "TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run ui/teams-console/tests --no-file-parallelism",
+      "command": "TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run --no-file-parallelism ui/teams-console/tests/api.spec.ts ui/teams-console/tests/boundary.spec.ts ui/teams-console/tests/contract-compat.spec.ts ui/teams-console/tests/controller.spec.ts ui/teams-console/tests/drafts.spec.ts ui/teams-console/tests/focus-dom.spec.ts ui/teams-console/tests/live-client.spec.ts ui/teams-console/tests/locale.spec.ts ui/teams-console/tests/model.spec.ts ui/teams-console/tests/observation.spec.ts ui/teams-console/tests/page-networking.spec.ts ui/teams-console/tests/render.spec.ts ui/teams-console/tests/render-d07.spec.ts",
       "recorded_base": "83496b7",
-      "measured": {"files": 6, "passed": 29, "per_file": {"ui/teams-console/tests/api.spec.ts": 12, "ui/teams-console/tests/render-d07.spec.ts": 3, "ui/teams-console/tests/render.spec.ts": 2, "ui/teams-console/tests/boundary.spec.ts": 8, "ui/teams-console/tests/focus-dom.spec.ts": 1, "ui/teams-console/tests/contract-compat.spec.ts": 3}, "exit_code": 0},
+      "measured": {"files": 13, "passed": 66, "per_file": {"ui/teams-console/tests/controller.spec.ts": 17, "ui/teams-console/tests/api.spec.ts": 12, "ui/teams-console/tests/model.spec.ts": 8, "ui/teams-console/tests/boundary.spec.ts": 8, "ui/teams-console/tests/live-client.spec.ts": 4, "ui/teams-console/tests/render-d07.spec.ts": 3, "ui/teams-console/tests/observation.spec.ts": 3, "ui/teams-console/tests/contract-compat.spec.ts": 3, "ui/teams-console/tests/render.spec.ts": 2, "ui/teams-console/tests/page-networking.spec.ts": 2, "ui/teams-console/tests/drafts.spec.ts": 2, "ui/teams-console/tests/locale.spec.ts": 1, "ui/teams-console/tests/focus-dom.spec.ts": 1}, "exit_code": 0},
       "log": "gate-teams-acp-d07-webui.log",
       "status_after": "partial",
+      "correction_disclosed": "an earlier L12 run used only 6 of the 13 recorded files and reported 29/6; that was a narrowed run that dropped the 7 fast non-DOM specs and is not this gate's result. The full recorded command was re-run and reports 66/66.",
       "open_items_unchanged": ["restart, deployed-entrypoint replay, cross-device receipt, mobile, and the data-team-cancel and data-permission-option rendering blocked by L10 retained obligations"],
-      "count_note": "matches the recorded count; the 15-check black-box driver was not re-run by this unit"
+      "count_note": "matches the recorded 13 files / 66 tests baseline; the 15-check black-box driver was not re-run by this unit"
     },
     {
       "gate_id": "teams-acp-serve-entry",
@@ -176,7 +177,7 @@
     "no gate status was upgraded to implemented or passed",
     "the D08 black box was not re-run to completion; its recorded 2026-10-12 result stands",
     "pnpm verify is not claimed; it stays blocked by the pre-existing PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014",
-    "no full regression run is claimed; the 6 unrelated failing specs recorded earlier are unchanged"
+    "no full regression run is claimed; the L10 record's unstable failing-spec set (docs/evidence/acp-l10-session-projection-20261015/notes.md regression runs 1-4, which reports 5, then 3, then 3, then 6 failing specs) is cited as-is and not re-run or re-counted by this unit"
   ],
   "review": null,
   "integration": null

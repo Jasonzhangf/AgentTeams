@@ -155,10 +155,15 @@ CLI 实际入口）；配置指向注册服务器时还依赖 D04。opencode 与
 2026-10-15 L12 门禁收口：上述 14 个 `teams-acp-*` 门禁在最新 `origin/main` 候选
 `4d3ffe5` 上按各自身命令全量重跑，13 个通过（daemon-intent 35/2、public-contract 17/3、
 d01-host 61/4、d02-opencode 65/4、d03-dsh 58/3、d04-registry 75/6、d05-network 103/11、
-d06-control 143/7、d07-webui 29/6、serve-entry 68/3、l9-intent-side 72/4、
+d06-control 143/7、d07-webui 66/13、serve-entry 68/3、l9-intent-side 72/4、
 l9-session-write-side 81/4、l10-session-projection 86/6，均退出码 0），同一树 `pnpm build`
 退出码 0、`pnpm exec tsc --noEmit` 退出码 0，日志在
-`docs/evidence/acp-l12-gate-closure-20261015/gate-*.log`。按「任何门禁在其未闭合项消除前
+`docs/evidence/acp-l12-gate-closure-20261015/gate-*.log`。d07-webui 的 66/13 是
+**收窄后修正**：首次 L12 只跑了记录命令 13 个文件中的 6 个（29 用例），漏掉 7 个
+快速非 DOM spec（controller、model、live-client、observation、page-networking、
+drafts、locale），该 6/29 不是本门禁结果；已用完整记录命令重跑得 66/66，并把收窄
+记入门禁 note 与 verification.json，不留作未披露的缩减。同表其余门禁计数与记录一致。
+按「任何门禁在其未闭合项消除前
 不得升级」这一不变量，14 个门禁**全部保留 `partial`**：一个通过的复跑只证明命令在新树上
 仍绿，不消除该门禁自己声明的未闭合项（installed-copy / restart / deployed-entrypoint /
 cross-device 回执、真实引擎推理、A07 事件驱动动画、L10 的 sessionEvents 与 permission 身份

@@ -86,7 +86,10 @@ this model; earliest unblock at 2026-10-16T02:00:01+08:00; ...
 
 后果：A03–A11 未执行。按证据边界，D08 **不得升级**，保留 partial，并把本次重跑与失败原因
 记进它自己的 note。已清理：owned temp root `/var/folders/.../T/d08-acc-RjzpQa` 已删除，
-所有 owned pid 已退出（ps 复核 0 个残留）。
+所有 owned pid 已退出（ps 复核 0 个残留）。该清理是 driver 失败保留 root 之后的一次
+运行后手动移除（driver 自身在 A02 失败路径上保留 root 供检查），移除后用只读 `ps`
+复核 0 残留；`gate-teams-acp-d08-acceptance.log` 末尾因此仍留 "Retained owned temp root"
+字样，反映的是 driver 失败时的保留行为，不是清理未发生。
 
 ## 五张 map 与 governance 的待办
 

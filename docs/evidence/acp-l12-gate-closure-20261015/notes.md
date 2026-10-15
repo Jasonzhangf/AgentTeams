@@ -19,7 +19,7 @@ L12 未升级任何门禁。14 个 `teams-acp-*` 门禁在候选 `4d3ffe5` 上�
 | teams-acp-d04-registry | 6 | 75 passed | 0 | gate-teams-acp-d04-registry.log |
 | teams-acp-d05-network | 11 | 103 passed | 0 | gate-teams-acp-d05-network.log |
 | teams-acp-d06-control | 7 | 143 passed | 0 | gate-teams-acp-d06-control.log |
-| teams-acp-d07-webui | 6 | 29 passed | 0 | gate-teams-acp-d07-webui.log |
+| teams-acp-d07-webui | 13 | 66 passed | 0 | gate-teams-acp-d07-webui.log |
 | teams-acp-serve-entry | 3 | 68 passed | 0 | gate-teams-acp-serve-entry.log |
 | teams-acp-l9-intent-side | 4 | 72 passed | 0 | gate-teams-acp-l9-intent-side.log |
 | teams-acp-l9-session-write-side | 4 | 81 passed | 0 | gate-teams-acp-l9-session-write-side.log |
@@ -58,6 +58,11 @@ spawn 出的 control 子进程在写 state 前于 `presentationRoots()` 抛错
 - d06-control：旧 119/119、135/135 → 现 143（control-process 17→27、host 23→27）。
 - l9-session-write-side：旧 77/77 → 现 81（同上）。
 - d04-registry、d05-network、l9-intent-side、l10 计数与记录一致，无需纠正。
+- d07-webui 收窄后重跑：首次 L12 只跑了记录命令 13 个文件中的 6 个（29 用例），
+  漏掉 7 个快速非 DOM spec（controller 17、model 8、live-client 4、observation 3、
+  page-networking 2、drafts 2、locale 1），该 6/29 不是本门禁结果。已用完整记录命令
+  重跑，66/66 通过，13 文件与记录基线一致，退出码 0。此收窄与纠正在门禁 note、
+  verification.json、本文件与 governance 表均已披露。
 
 ## map / design / governance 收口
 

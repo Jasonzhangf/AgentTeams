@@ -50,6 +50,11 @@ L9/L10 的 session 增量把 `runtime/control-process.spec.ts` 从 17 → 23 →
 note 里记「当前计数 = 同一命令对更大树」，不把旧数字改写成新数字，也不把新
 数字当成新范围。
 
+d07-webui 是唯一一处收窄后重跑：首次 L12 只跑了记录命令 13 个文件中的 6 个
+（29 用例），漏掉 7 个快速非 DOM spec。那不是本门禁结果，已在门禁 note、
+verification.json、notes.md 与 governance 表披露该收窄，并用完整记录命令重跑
+得到 66/66。本决策因此要求：任何收窄都必须显式披露，不得当作完整门禁结果。
+
 ## 范围（本单元要改的文件）
 
 - `docs/architecture/verification-map.json`：14 个门禁 note 追加 2026-10-15 标记。
