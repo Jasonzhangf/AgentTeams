@@ -13,34 +13,59 @@
     "always_reinstalls": true,
     "always_rebuilds_reason": "A reused build or a reused prefix silently produces evidence for code that is no longer on disk, which is exactly the boundary this unit exists to close. The producer runs pnpm build:governance, npm pack and npm install on every run.",
     "exit_code": 0,
+    "check_count_source": "len(receipt.json .checks); every measured field below is copied from receipt.json and the committed PNG, never retyped",
     "canonical_run": {
       "checks": 18,
-      "gaps": 0,
       "artifact_mode": "final",
       "artifact_release_eligible": false,
-      "artifact_content_sha256": "9053205f567f52149035fc4447ec727c28322e26c606880478a13a01de4ffae3",
+      "artifact_content_sha256": "ea3145e6c5c1e484cc1308f0b07ba7222cdbeff5fd1826b5a3bea837327dfe1b",
       "artifact_files": 263,
-      "tarball_bytes": 1536594,
-      "installed_root": "<owned temp root>/prefix/node_modules/agentteams",
-      "installed_cli": "<installed root>/cli/agentteams.mjs",
-      "registry_pid": 47560,
-      "registry_listener": "127.0.0.1:54500",
-      "agent_pid": 47754,
-      "agent_listener": "127.0.0.1:54502",
-      "agent_engine_children": [47950],
-      "control_pid": 52006,
-      "control_listener": "127.0.0.1:54501",
-      "chrome_pid": 52814,
-      "cdp_events": 185,
+      "tarball_bytes": 1536585,
+      "installed_root": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams",
+      "installed_cli": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs",
+      "registry_pid": 40115,
+      "agent_pid": 40410,
+      "agent_engine_children": [
+        40804
+      ],
+      "control_pid": 46062,
+      "chrome_pid": 47755,
+      "cdp_events": null,
       "page_exceptions": 0,
       "sse_event": "snapshot",
       "sse_seq": 1,
+      "sse_agents": [
+        "reasoner-a"
+      ],
       "dom_observation": "live",
-      "dom_agent_rows": ["reasoner-a"],
+      "dom_agent_rows": [
+        "reasoner-a"
+      ],
       "dom_history_count": "0",
+      "page_projection": {
+        "version": 1,
+        "agents": [
+          "reasoner-a"
+        ],
+        "bytes": 617
+      },
       "screenshot_bytes": 28255,
       "screenshot_dimensions": "756x469",
-      "cleanup": "every owned pid dead (47560, 47754, 47950, 52006, 52814); 0 processes matched the owned temp root; 0 processes matched the owned Chrome profile; the owned temp root was removed"
+      "console_errors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ],
+      "failed_requests": [
+        {
+          "path": "/favicon.ico",
+          "status": 404
+        }
+      ],
+      "daemon_command_lines_inspected": [
+        "agent",
+        "control",
+        "registry"
+      ],
+      "cleanup": "every owned pid dead [40115, 40410, 40804, 46062, 47755]; 0 processes matched the owned temp root; 0 processes matched the owned Chrome profile; the owned temp root was removed"
     }
   },
   "installed_artifact": {
@@ -61,14 +86,13 @@
   "provenance": {
     "claim": "the daemons that served the page were the installed copy, and the bytes the browser received were the installed package's files",
     "measured_facts": [
-      "the control daemon's own command line runs <installed root>/generated/runtime-lib/runtime/control-process.js",
+      "every Teams daemon command line the producer started (registry, agent, control) was inspected and resolves inside the installed root",
+      "none of those three command lines contains the source worktree path; Chrome is excluded because it is not part of the installed package",
       "the control daemon's own control-state.json records entryPath=<installed root>/generated/runtime-lib/runtime/control-process.js",
-      "the agent daemon's own command line runs <installed root>/cli/agentteams.mjs",
-      "no process command line contains the source worktree path",
       "the document served for GET / is byte-identical to the installed console-host/static/console.html (sha256 2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21)",
       "the served /console-entry.js is byte-identical to the installed console-host/static/console-entry.js (343 bytes, sha256 d67e55de91996771f6e011cbeaf746bdc9ac7dc3643dab70787af4fbfc67f636)",
       "the served /ui/browser.js is byte-identical to the installed ui/teams-console/browser.js (273 bytes, sha256 7ea6a860c73a9b712b883464451b2958c0ecf126db4fb2e578c80043844c39e0)",
-      "all 18 /ui/* modules the page received are byte-identical to their installed package counterpart"
+      "all 18 /ui/* modules the page received are byte-identical to their installed package counterpart; the producer fails the run if any served module is left uncompared"
     ],
     "not_claimed": "no restart, no deployed-entrypoint replay, no cross-device receipt, no mobile layout, and no control-daemon Session or permission write"
   },
@@ -76,7 +100,7 @@
     "installed_artifact_staging": "pass (mode=final, release_eligible=false, content_sha256 recorded, 263 files)",
     "installed_artifact_install": "pass (tarball packed and installed into an isolated prefix outside the source tree)",
     "installed_daemon_start": "pass (registry, real --serve opencode agent with a real engine child, and control, all from the installed CLI)",
-    "installed_provenance": "pass (process command lines and the daemon's own state entry path all resolve inside the install)",
+    "installed_provenance": "pass (all three Teams daemon command lines and the control daemon's own state entry path resolve inside the install)",
     "served_asset_provenance": "pass (document and every served /ui/ module byte-match the installed package)",
     "real_control_daemon": "pass (installed origin, real listener, real Basic challenge)",
     "basic_challenge": "pass (anonymous GET / -> 401 Basic)",
@@ -88,7 +112,7 @@
     "sse_snapshot_frame": "pass (driver-owned EventSource received {seq:1, projection})",
     "live_page_navigation": "pass (all four frozen views rendered in real Chrome)",
     "screenshot_png": "pass (756x469, 28255 bytes, dimensions read from the IHDR chunk)",
-    "process_cleanup": "pass (all owned pids dead, no strays, owned temp root removed)"
+    "process_cleanup": "pass (all owned pids dead, no stray process matched the owned temp root or Chrome profile, owned temp root removed)"
   },
   "defects_found_in_the_producer": [
     {
@@ -101,7 +125,7 @@
       "id": "L11-P2",
       "severity": "low",
       "summary": "The first canonical run reported a console error count without naming the errors.",
-      "resolution": "The producer now reports the verbatim texts and binds them to the observed Network table; any failed request other than the expected /favicon.ico 404 fails the run."
+      "resolution": "The producer now reports the verbatim texts and binds each console error to its own observed failed request; any failed request other than the expected /favicon.ico 404 fails the run, and a page-originated console error without a matching failed request also fails it."
     }
   ],
   "gaps": [
@@ -116,5 +140,30 @@
       "reason": "The history view renders data-history-count=0 with 0 rows in this configuration. The marker render is proven; a non-empty history row is not."
     }
   ],
+  "review": {
+    "round_1": {
+      "reviewer": "independent (fresh context, read-only)",
+      "candidate": "e98097b",
+      "verdict": "FAIL",
+      "blocking_findings": [
+        "B1: this file recorded tarball_bytes=1536594 while the receipt and the log record 1536584.",
+        "B2: the installed-artifact correction was incomplete; the D08 acceptance records, the D08 gate note, the D08 governance row, the serve-entry function note and the console-host module note still asserted that installed-artifact browser evidence does not exist.",
+        "B3: the provenance check claimed that no process command line references the source tree while only the control and agent command lines were examined; the registry daemon was never inspected."
+      ],
+      "advisories": [
+        "A1: requestIdByUrl was built and never used.",
+        "A2: gap() was never called, so the driver's gaps array was always empty and '0 gaps' carried no information.",
+        "A3: the console-error binding passed whenever one favicon 404 existed, which is weaker than the notes claimed.",
+        "A4: the stray-process counts were recorded but never asserted.",
+        "A5: the D07 gate command does not run this producer, so the closed item rests on referenced evidence rather than on the gate command (the same convention the D08-browser producer uses)."
+      ],
+      "resolution": "B1: this file is now generated from receipt.json and the committed PNG instead of being retyped. B2: five more sites carry a dated 2026-10-14 correction (commit dd74395). B3: the producer now inspects the registry command line as well and states exactly which command lines it examined. A1-A4: the dead code is removed, gap() is gone and the receipt declares no gap of its own, each console error must be matched by its own failed request, and a stray process now fails the run.",
+      "re_check": "see round_2"
+    },
+    "round_2": {
+      "status": "requested",
+      "scope": "focused re-check of B1, B2 and B3 plus the five advisories on the post-fix candidate"
+    }
+  },
   "scope_note": "This artifact proves the installed package serves the frozen D07 console to a real browser whose page fetches, subscribes and renders from that origin, and that the bytes the browser received are the installed package's files. It does not prove restart, a deployed-entrypoint replay, cross-device behaviour, mobile layout, or any control-daemon Session/permission write. The D07 gate therefore stays partial."
 }

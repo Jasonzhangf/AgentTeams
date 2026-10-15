@@ -1,31 +1,34 @@
 {
   "unit": "acp-l11-installed-browser-20261014",
-  "produced_at": "2026-10-15T03:44:04.558Z",
-  "head_commit": "d83553824569371475d6fca20c181e07aec7b6e5",
+  "produced_at": "2026-10-15T04:25:26.058Z",
+  "head_commit": "49edbf6de4b76cdb1cddc4c1bdbcfa979ac3cef6",
   "artifact": {
     "mode": "final",
     "release_eligible": false,
-    "content_sha256": "9053205f567f52149035fc4447ec727c28322e26c606880478a13a01de4ffae3",
+    "content_sha256": "ea3145e6c5c1e484cc1308f0b07ba7222cdbeff5fd1826b5a3bea837327dfe1b",
     "files": 263
   },
   "installed": {
-    "prefix": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix",
-    "root": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams",
-    "cli": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/cli/agentteams.mjs"
+    "prefix": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix",
+    "root": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams",
+    "cli": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs"
   },
   "daemons": {
-    "registry": 47560,
-    "agent": 47754,
+    "registry": 40115,
+    "agent": 40410,
     "agent_engine_children": [
-      47950
+      40804
     ],
-    "control": 52006,
-    "chrome": 52814
+    "control": 46062,
+    "chrome": 47755
   },
   "measurements": {
-    "controlCommand": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js --config /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/control.toml --start-token 92ce97fc-3f83-4cc6-8a94-54b97307c09a",
-    "agentCommand": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/cli/agentteams.mjs --serve opencode --ip 127.0.0.1 --port 54502 --config /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/agent.toml",
-    "controlEntryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js",
+    "daemonCommands": {
+      "registry": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/generated/runtime-lib/runtime/registry-process.js --config /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/registry.toml --launcher-start-token 173a9c7a-317c-4ba3-b9fa-d190f3237fef",
+      "agent": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs --serve opencode --ip 127.0.0.1 --port 54178 --config /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/agent.toml",
+      "control": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js --config /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/control.toml --start-token d5f21a36-7b47-45a7-a5c3-77067609e011"
+    },
+    "controlEntryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js",
     "servedAssets": [
       {
         "path": "/console-entry.js",
@@ -108,11 +111,11 @@
   "checks": [
     {
       "name": "installed artifact — staged package",
-      "detail": "pnpm build:governance staged mode=final release_eligible=false content_sha256=9053205f567f52149035fc4447ec727c28322e26c606880478a13a01de4ffae3 files=263"
+      "detail": "pnpm build:governance staged mode=final release_eligible=false content_sha256=ea3145e6c5c1e484cc1308f0b07ba7222cdbeff5fd1826b5a3bea837327dfe1b files=263"
     },
     {
       "name": "installed artifact — isolated install",
-      "detail": "npm pack agentteams-0.1.0.tgz (1536584 bytes) + npm install --prefix prefix; installed root=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams cli=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/cli/agentteams.mjs"
+      "detail": "npm pack agentteams-0.1.0.tgz (1536585 bytes) + npm install --prefix prefix; installed root=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams cli=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs"
     },
     {
       "name": "installed artifact — carries the compiled runtime and the UI assets",
@@ -120,11 +123,11 @@
     },
     {
       "name": "installed daemons — registry, agent, control all from the installed CLI",
-      "detail": "registry pid=47560 (127.0.0.1:54500); agent pid=47754 (127.0.0.1:54502, engine children=1); control pid=52006 (127.0.0.1:54501); all launched from /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/cli/agentteams.mjs"
+      "detail": "registry pid=40115 (127.0.0.1:54176); agent pid=40410 (127.0.0.1:54178, engine children=1); control pid=46062 (127.0.0.1:54177); all launched from /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs"
     },
     {
       "name": "installed provenance — the running daemons are the installed copy",
-      "detail": "control pid=52006 runs /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js; agent pid=47754 runs the installed CLI; the control daemon's own state entryPath=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js; no process command line references the source tree"
+      "detail": "every Teams daemon command line was inspected and resolves inside the install: registry pid=40115, agent pid=40410, control pid=46062; the control daemon's own state entryPath=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js; none of those three command lines names the source tree (Chrome is excluded: it is not part of the installed package)"
     },
     {
       "name": "origin challenge",
@@ -136,11 +139,11 @@
     },
     {
       "name": "chrome launch",
-      "detail": "real Chrome pid=52814 --headless=new own --user-data-dir, devtools=ws://127.0.0.1:54542/devtools/browser/5972e244-16bc-482c-b634-fc1beff565b5"
+      "detail": "real Chrome pid=47755 --headless=new own --user-data-dir, devtools=ws://127.0.0.1:54213/devtools/browser/b208350e-79bf-4c40-8714-2e092cf318d3"
     },
     {
       "name": "page load",
-      "detail": "the installed origin loaded in real Chrome: http://127.0.0.1:54501/ title=\"AgentTeams Console\" readyState=complete Document=200 text/html"
+      "detail": "the installed origin loaded in real Chrome: http://127.0.0.1:54177/ title=\"AgentTeams Console\" readyState=complete Document=200 text/html"
     },
     {
       "name": "page module graph",
@@ -172,25 +175,25 @@
     },
     {
       "name": "page runtime errors",
-      "detail": "0 uncaught page exceptions across the whole installed-browser session (185 CDP events); 1 generic console error(s) map only to the expected /favicon.ico 404: [\"Failed to load resource: the server responded with a status of 404 (Not Found)\"]"
+      "detail": "0 uncaught page exceptions across the whole installed-browser session (188 CDP events); 1 generic console error(s) map only to the expected /favicon.ico 404: [\"Failed to load resource: the server responded with a status of 404 (Not Found)\"]"
     },
     {
       "name": "screenshot",
       "detail": "real PNG 756x469, 28255 bytes (dimensions read from the IHDR chunk) at installed-browser-dom.png"
     }
   ],
-  "gaps": [],
   "cleanup": {
     "owned": [
-      47560,
-      47754,
-      47950,
-      52006,
-      52814
+      40115,
+      40410,
+      40804,
+      46062,
+      47755
     ],
     "stillAlive": [],
     "strays": 0,
     "chromeStrays": 0
   },
+  "gaps": [],
   "result": "PASS"
 }

@@ -45,18 +45,18 @@ or on a leaked owned pid.
 
 ## 3. The canonical run (2026-10-14)
 
-`checks=18 gaps=0 exit=0`. Full output: `installed-browser-dom.log`; structured facts: `receipt.json`.
+`checks=18 exit=0`. Full output: `installed-browser-dom.log`; structured facts: `receipt.json`.
 
 | # | check | measured |
 |---|---|---|
-| 1 | staged package | `mode=final release_eligible=false content_sha256=9053205f567f52149035fc4447ec727c28322e26c606880478a13a01de4ffae3 files=263` |
+| 1 | staged package | `mode=final release_eligible=false content_sha256=ea3145e6c5c1e484cc1308f0b07ba7222cdbeff5fd1826b5a3bea837327dfe1b files=263` |
 | 2 | isolated install | `agentteams-0.1.0.tgz` packed and `npm install --prefix` into the owned temp root; installed root `<ownedRoot>/prefix/node_modules/agentteams`, CLI `<root>/cli/agentteams.mjs`; the root does not resolve inside the source tree |
 | 3 | installed payload | `cli/agentteams.mjs`, `generated/runtime-lib/runtime/control-process.js`, `generated/runtime-lib/runtime/acp-serve.js`, `console-host/static/console.html`, `console-host/static/console-entry.js`, `ui/teams-console/browser.js` all present |
-| 4 | daemons from the installed CLI | registry pid 47560 (`127.0.0.1:54500`), agent pid 47754 (`127.0.0.1:54502`, 1 engine child pid 47950), control pid 52006 (`127.0.0.1:54501`) |
-| 5 | installed provenance | control command line runs `<install>/generated/runtime-lib/runtime/control-process.js`; agent command line runs `<install>/cli/agentteams.mjs`; the control daemon's own `control-state.json` records `entryPath=<install>/generated/runtime-lib/runtime/control-process.js`; **no** process command line contains the source tree |
+| 4 | daemons from the installed CLI | registry pid 40115, agent pid 40410 with 1 engine child pid 40804, control pid 46062 (all on dynamic loopback ports) |
+| 5 | installed provenance | **all three** Teams daemon command lines (registry, agent, control) were inspected and resolve inside the install, and none names the source tree; the control daemon's own `control-state.json` records `entryPath=<install>/generated/runtime-lib/runtime/control-process.js`; Chrome is excluded because it is not part of the installed package |
 | 6 | origin challenge | anonymous `GET /` → 401 `Basic realm="AgentTeams", charset="UTF-8"` |
 | 7 | served asset provenance | document sha256 `2b9ebd60…` equals installed `console-host/static/console.html`; `/console-entry.js` = 343 B `d67e55de…` equals installed `console-host/static/console-entry.js`; `/ui/browser.js` = 273 B `7ea6a860…` equals installed `ui/teams-console/browser.js` |
-| 8 | chrome launch | real Chrome pid 52814, `--headless=new`, own `--user-data-dir`, DevTools endpoint on a loopback port |
+| 8 | chrome launch | real Chrome pid 47755, `--headless=new`, own `--user-data-dir`, DevTools endpoint on a loopback port |
 | 9 | page load | clean origin URL (no userinfo), Document 200 `text/html`, `title="AgentTeams Console"`, `readyState=complete` |
 | 10 | page module graph | `/console-entry.js` 200 and **18** `/ui/*` modules, all 200; **all 18 byte-match** the installed package |
 | 11 | page fetch | the page's own same-origin `fetch('/api/v1/projection')` → 200 `application/json`, 617 B, `version=1 agents=["reasoner-a"]`; same agent set and same frozen empty `sessions`/`notifications`/`configs` as an independent Node read of the same endpoint |
@@ -65,10 +65,10 @@ or on a leaked owned pid.
 | 14 | real agent row | `data-agent-id=reasoner-a` — the real registered agent from the live directory |
 | 15 | SSE frame | a driver-owned `EventSource` received a real `snapshot`: `seq=1`, `agents=["reasoner-a"]` |
 | 16 | four pages | the live page switched `discovery → networking → interaction → history`; the history view rendered `data-history-count=0`, 0 record rows, `data-history-prev[data-enabled]=false` |
-| 17 | page runtime errors | 0 uncaught page exceptions across 185 CDP events; the only console error is Chrome's generic 404 text, bound by the observed Network table to the expected `/favicon.ico` 404 |
+| 17 | page runtime errors | 0 uncaught page exceptions across the whole session; each console error is bound to its own observed failed request, and the only failed request is the expected `/favicon.ico` 404 |
 | 18 | screenshot | real PNG **756×469**, 28,255 B, dimensions read from the IHDR chunk and asserted |
 
-Cleanup: owned pids `47560, 47754, 47950, 52006, 52814` all dead, 0 processes matching the owned temp root,
+Cleanup: owned pids `40115, 40410, 40804, 46062, 47755` all dead, 0 processes matching the owned temp root, 0 processes matching the owned Chrome profile, and the owned temp root removed.
 0 processes matching the owned Chrome profile, and the owned temp root removed.
 
 ![installed-browser-dom.png](./installed-browser-dom.png)

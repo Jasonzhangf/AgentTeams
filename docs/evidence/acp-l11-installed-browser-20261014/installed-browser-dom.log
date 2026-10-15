@@ -1,18 +1,18 @@
-== L11 installed-artifact live-browser DOM run 2026-10-15T03:43:33.616Z ==
-  -- staged the driver's own evidence files for the package identity gate: docs/evidence/acp-l11-installed-browser-20261014/installed-browser-dom.mjs
+== L11 installed-artifact live-browser DOM run 2026-10-15T04:24:47.123Z ==
+  -- staged the driver's own evidence files for the package identity gate: docs/evidence/acp-l11-installed-browser-20261014/installed-browser-dom.log, docs/evidence/acp-l11-installed-browser-20261014/receipt.json
   -- running the project producer: pnpm build:governance
-PASS installed artifact — staged package — pnpm build:governance staged mode=final release_eligible=false content_sha256=9053205f567f52149035fc4447ec727c28322e26c606880478a13a01de4ffae3 files=263
-PASS installed artifact — isolated install — npm pack agentteams-0.1.0.tgz (1536584 bytes) + npm install --prefix prefix; installed root=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams cli=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/cli/agentteams.mjs
+PASS installed artifact — staged package — pnpm build:governance staged mode=final release_eligible=false content_sha256=ea3145e6c5c1e484cc1308f0b07ba7222cdbeff5fd1826b5a3bea837327dfe1b files=263
+PASS installed artifact — isolated install — npm pack agentteams-0.1.0.tgz (1536585 bytes) + npm install --prefix prefix; installed root=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams cli=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs
 PASS installed artifact — carries the compiled runtime and the UI assets — present in the installed package: cli/agentteams.mjs, generated/runtime-lib/runtime/control-process.js, generated/runtime-lib/runtime/acp-serve.js, console-host/static/console.html, console-host/static/console-entry.js, ui/teams-console/browser.js
-  -- installedRoot=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams
-  -- ownedRoot=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU
-PASS installed daemons — registry, agent, control all from the installed CLI — registry pid=47560 (127.0.0.1:54500); agent pid=47754 (127.0.0.1:54502, engine children=1); control pid=52006 (127.0.0.1:54501); all launched from /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/cli/agentteams.mjs
-PASS installed provenance — the running daemons are the installed copy — control pid=52006 runs /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js; agent pid=47754 runs the installed CLI; the control daemon's own state entryPath=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-6ABTHU/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js; no process command line references the source tree
+  -- installedRoot=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams
+  -- ownedRoot=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8
+PASS installed daemons — registry, agent, control all from the installed CLI — registry pid=40115 (127.0.0.1:54176); agent pid=40410 (127.0.0.1:54178, engine children=1); control pid=46062 (127.0.0.1:54177); all launched from /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs
+PASS installed provenance — the running daemons are the installed copy — every Teams daemon command line was inspected and resolves inside the install: registry pid=40115, agent pid=40410, control pid=46062; the control daemon's own state entryPath=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js; none of those three command lines names the source tree (Chrome is excluded: it is not part of the installed package)
 PASS origin challenge — the installed origin answered an anonymous GET / with 401 challenge="Basic realm="AgentTeams", charset="UTF-8""
 PASS served asset provenance — the installed files are what the origin served — document sha256=2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21; /console-entry.js=d67e55de91996771f6e011cbeaf746bdc9ac7dc3643dab70787af4fbfc67f636 (343 bytes) == installed console-host/static/console-entry.js; /ui/browser.js=7ea6a860c73a9b712b883464451b2958c0ecf126db4fb2e578c80043844c39e0 (273 bytes) == installed ui/teams-console/browser.js
-PASS chrome launch — real Chrome pid=52814 --headless=new own --user-data-dir, devtools=ws://127.0.0.1:54542/devtools/browser/5972e244-16bc-482c-b634-fc1beff565b5
+PASS chrome launch — real Chrome pid=47755 --headless=new own --user-data-dir, devtools=ws://127.0.0.1:54213/devtools/browser/b208350e-79bf-4c40-8714-2e092cf318d3
   -- Network.setExtraHTTPHeaders installed the Basic credential at the network layer
-PASS page load — the installed origin loaded in real Chrome: http://127.0.0.1:54501/ title="AgentTeams Console" readyState=complete Document=200 text/html
+PASS page load — the installed origin loaded in real Chrome: http://127.0.0.1:54177/ title="AgentTeams Console" readyState=complete Document=200 text/html
 PASS page module graph — the page received /console-entry.js (200) and 18 /ui/ modules, all 200; all 18 byte-match the installed package
 PASS page fetch — the page's own same-origin fetch('/api/v1/projection') -> 200 application/json, 617 bytes; version=1 agents=["reasoner-a"]; the same registered agent set and the same frozen empty interaction arrays as an independent read (whole-document byte equality is not claimed for a live directory)
 PASS DOM markers — live DOM of the installed entry: pages=discovery,networking,interaction,history view=discovery bands=registration,connection,engine,request states=unknown,disconnected,not-applicable,idle observation=live; data-team-cancel and data-permission-option are ABSENT because this control daemon binds no Session owner (the existing D06/D08 gap), and their absence is not claimed as evidence
@@ -21,8 +21,8 @@ PASS real agent row — the installed WebUI rendered the real registered agent f
 PASS SSE frame — a driver-owned EventSource on the installed origin received a real snapshot: seq=1 agents=["reasoner-a"]
   -- history view: data-history-count=0 data-history-record rows=0 data-history-prev[data-enabled]=false
 PASS four pages — the live page switched through all four frozen views in real Chrome: discovery -> networking -> interaction -> history; the history view rendered data-history-count=0 with 0 record row(s)
-PASS page runtime errors — 0 uncaught page exceptions across the whole installed-browser session (185 CDP events); 1 generic console error(s) map only to the expected /favicon.ico 404: ["Failed to load resource: the server responded with a status of 404 (Not Found)"]
+PASS page runtime errors — 0 uncaught page exceptions across the whole installed-browser session (188 CDP events); 1 generic console error(s) map only to the expected /favicon.ico 404: ["Failed to load resource: the server responded with a status of 404 (Not Found)"]
 PASS screenshot — real PNG 756x469, 28255 bytes (dimensions read from the IHDR chunk) at installed-browser-dom.png
-  -- cleanup: owned pids=47560,47754,47950,52006,52814 alive=0; temp-root matches=0; profile Chrome matches=0
+  -- cleanup: owned pids=40115,40410,40804,46062,47755 alive=0; temp-root matches=0; profile Chrome matches=0
 receipt: /Volumes/Intel/playground/agentteams/acp-l11-installed-browser-20261014/docs/evidence/acp-l11-installed-browser-20261014/receipt.json
-checks=18 gaps=0 exit=0
+checks=18 exit=0
