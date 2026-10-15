@@ -332,6 +332,62 @@ driver 全程只经控制 daemon 的**认证** HTTP 面提交写入，从不经�
 | `pnpm typecheck` / `pnpm build` | exit 0 / exit 0 |
 | 真实黑盒 | **50 checks / PASS** |
 
+## 13. 最终候选的完整复测与集成前置（2026-10-15）
+
+### 13.1 被测量的提交链
+
+| 提交 | 含义 | 证据 |
+| --- | --- | --- |
+| `cc46fc4` | **全量回归所测的提交**，工作树干净 | 119 个测试文件 / **1181 passed** / 0 failed / 0 pending，**exit 0**（`regression-committed-candidate.log`） |
+| `aed8a86` | 只追加上述回归日志 | docs-only |
+| `ba33929` | 只刷新候选身份与保留义务 | docs-only |
+
+`git diff --name-only cc46fc4..ba33929` 只命中本单元证据目录下的 2 个文件
+（`regression-committed-candidate.log`、`verification.json`），**源码文件改动数为 0**。
+因此全量回归所测的树与交付头之间的差异只有记录，没有行为。
+
+### 13.2 门禁（全部在冻结源码上实测）
+
+| 门禁 | 结果 | 日志 |
+| --- | --- | --- |
+| 本单元门禁（4 文件） | **78/78** | `gate-d06-l9.log` |
+| D06 控制守护进程（7 文件） | **140/140** | `gate-d06-control.log` |
+| L9 intent-side（4 文件） | **72/72** | `gate-l9-intent-side.log` |
+| D01 host（3 文件） | **58/58** | `gate-d01-host.log` |
+| D05 network（11 文件） | **103/103** | `gate-d05-network.log` |
+| serve-entry（3 文件） | **68/68** | `gate-serve-entry.log` |
+| D07 WebUI（13 文件，`TEAMS_CONSOLE_REAL_DOM=1`） | **66/66** | `gate-d07-webui.log` |
+| `pnpm typecheck` / `pnpm build` | exit 0 / exit 0 | `typecheck.log`、`build.log` |
+| 本单元真实黑盒 | **50 checks / PASS** | `receipt.json` |
+| D07 真实黑盒（期望已更正） | **15 checks / PASS** | D07 证据目录 |
+
+### 13.3 关于全量回归的诚实边界
+
+- 同一次全量回归在**工作树脏**时给 `1180 / 1153 passed / 4 failed / 23 pending`，脏文件是黑盒重写的
+  `receipt.json`，它让 `scripts/receipt-identity.mjs` 的身份检查失败，`cli/package-install.spec.ts`
+  因此跳过 23 条。提交该回执后重跑，得到 **1181 passed / exit 0**。也就是说：**门禁要求工作树干净**，
+  而本单元的证据文件会被黑盒重写，必须先提交再跑全量。
+- 另一次全量回归在候选 `3a8815d`（`sendSession` 修复之前）出现 4 条失败：3 条是
+  `ui/teams-console/tests/focus-dom.spec.ts`、`render-d07.spec.ts`、`render.spec.ts` 的
+  headless Chrome `--dump-dom` 进程失败，1 条是 `cli/agentteams.spec.ts` 的
+  `direct node entry avoids source TS parameter properties`。pristine `origin/main` 基线是
+  `1149 / 1146 / 3 / 0`、4 个文件失败，前三条同类失败在基线里也在。这些 Chrome 失败与机器负载有关，
+  在最终一次运行里没有出现。**因此不能宣称它们被本单元修好了**，只能记录它们在最终候选上未复现。
+- `pnpm verify` 仍是既有 BLOCKED 基线 `PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014`，未变。
+
+### 13.4 集成前置条件核对
+
+| 条件 | 状态 |
+| --- | --- |
+| 独占 worktree，建自最新 `origin/main` | ✅ `/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014`，base `d531d24` |
+| 源码 / 测试 / 构建 | ✅ 见 13.2 |
+| 黑盒（真实入口） | ✅ 本单元 50 checks、D07 15 checks，均为真实 daemon 与真实引擎 |
+| 一次独立 review PASS | ✅ 第五轮 targeted 复核 PASS（见 §12 与 verification.json 的 provenance 字段）。**没有 review 文件产物**，PASS 是 reviewer 自述文本的转录，来源已写明 |
+| review 后未再改源码 | ✅ PASS 之后只有两条 docs-only 提交，`git diff --name-only cc46fc4..ba33929` 源码改动 0 |
+| `--no-ff` 合并与 tree 相等证明 | 待集成 |
+| 远端回执（`git ls-remote` 复读） | 待集成 |
+| 保留义务 | ✅ 8 条，见 verification.json `retained_obligations` |
+
 ## 10. Review 轮次与修复（2026-10-15）
 
 ### 10.1 review 尝试的诚实记录
