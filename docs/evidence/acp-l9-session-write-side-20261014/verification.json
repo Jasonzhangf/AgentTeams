@@ -6,9 +6,15 @@
   "base_ref": "origin/main",
   "worktree": "/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014",
   "branch": "codex/acp-l9-session-write-side-20261014",
-  "committed": "true",
-  "committed_note": "the candidate is committed on the branch as six logical commits; origin/main integration, the independent review verdict, the remote receipt and the freeze are still open.",
+  "committed": true,
+  "committed_note": "final candidate before integration; the review, the gates and the full regression all measured this tree",
   "candidate_commits": [
+    "aed8a8671442f4171947293351d59067bd5ee408 docs(evidence): record the full-suite regression PASS on the committed candidate",
+    "cc46fc4debd7cf87005327a576783cb9dc770407 docs(evidence): record the independent review PASS for the fixed candidate",
+    "c93526ca43f496c0953542ad5b06353a3c3fbd38 docs(evidence): do not record a review PASS that has not happened",
+    "1125fa39b15b8b6fa380c9480f8fc9827e5d54fe fix(control): serialize the Session body ingress against the Session commands",
+    "3a8815dd12d0c9f6fa1aa21b6af227b1c8031f97 docs(evidence): record the black-box receipt from the final candidate run",
+    "456be4aa2a5805ebdb0589897146665317dca27b docs(evidence): record the round-2 review, its fixes and the measured candidate identity",
     "e8e6b2b36e1895369f260f3be525b1e4564dd9d0 fix(control,config,runtime): carry the frozen optionId, serialize writes, and refuse an incomplete record",
     "e5301c6b3785109a07b428ec38bc0895bec9268d fix(runtime): never re-apply a Session write the process already applied",
     "cc6c2557e2d938cd4c1e3f760a688287115ab8fe docs(evidence): record the second full-suite run on the same candidate",
@@ -20,8 +26,8 @@
     "364f9713d859f868d808ea18ed205a757a4c9fc7 feat(agent-host): expose the open permission callbacks and the Session owner",
     "feab0403ae707fc2beae95be1915f37fed0e31aa feat(config): own the durable pending-Session-write record"
   ],
-  "candidate_head": "e8e6b2b36e1895369f260f3be525b1e4564dd9d0",
-  "candidate_tree": "b417ca10d9e02c2a1fd120ba3ad94fab326c1205",
+  "candidate_head": "aed8a8671442f4171947293351d59067bd5ee408",
+  "candidate_tree": "f2cca139741745c4d37e79a9b57c338e2dee58b8",
   "integration_commit": null,
   "integration_method": null,
   "remote_receipt": null,
@@ -82,12 +88,13 @@
     "typecheck": "pnpm typecheck, exit 0",
     "build": "pnpm build, exit 0",
     "black_box": "50 checks, PASS, exit 0",
-    "full_regression": "scripts/regression.mjs measured three times with one command: the uncommitted candidate 1172/1146/3/23, the unmodified base d531d24 in its own worktree 1149/1146/3/0, and this committed candidate fb35e73 1173/1172/1/0. The single remaining failure is the same one that fails on the base with the same root cause, and that spec file passes 33/33 in isolation. Not claimed as a pass and not claimed as a regression of this unit; see notes.md section 9.",
+    "full_regression": "1181 passed / 119 test files, exit 0 (regression-committed-candidate.log)",
     "pnpm_verify": "not run. It is the pre-existing BLOCKED baseline (PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014), so it is not a regression conclusion for this unit.",
     "gate_tests": 78,
     "gate_union_d06_l9": "168 passed / 10 files, exit 0",
     "d07_webui_black_box": "15 checks, exit 0, after the permission.reply expectation was corrected from UNSUPPORTED_OPERATION to FORBIDDEN",
-    "gate_tests_note": "the six vitest gate commands measured 77 + 139 + 71 + 58 + 103 + 68 + 66 = 582 passing tests in total; that sum double counts shared spec files (agent-host/acp-host, runtime/control-process and runtime/acp-serve appear in more than one gate command), so it is a run total and not a distinct test count"
+    "gate_tests_note": "the six vitest gate commands measured 77 + 139 + 71 + 58 + 103 + 68 + 66 = 582 passing tests in total; that sum double counts shared spec files (agent-host/acp-host, runtime/control-process and runtime/acp-serve appear in more than one gate command), so it is a run total and not a distinct test count",
+    "regression_baseline": "the pristine origin/main baseline is 1149 / 1146 / 3 / 0 with 4 files, so this candidate adds 32 passing tests over the base; the pre-existing BLOCKED baseline on an uncommitted tree was 1173/1172/1/0 then 1173/1167/6/0 on identical content and is not used as a gate"
   },
   "acceptance_items": [
     "the three frozen Session writes (permission.reply, session.cancel and the dedicated Session body ingress) perform one durable CAS write instead of refusing UNSUPPORTED_OPERATION, and the result reports only the accepted revision and never a Session state",
@@ -207,7 +214,7 @@
   "retained_obligations": [
     {
       "id": "F4 duplicated durable-write helpers",
-      "detail": "config/session-intent-store.ts repeats the atomic temp+rename, watermark and discard helpers of the already-merged config/relations-intent-store.ts. Extracting one shared helper touches merged code, so it is recorded instead of done here. Project AGENTS says to reuse a shared function for common semantics; this stays an open obligation."
+      "detail": "config/session-intent-store.ts repeats the atomic temp+rename, watermark and discard helpers of the already-merged config/relations-intent-store.ts. Extracting one shared helper touches merged code, so it is recorded instead of done here. The project AGENTS ask to reuse a shared function for common semantics, so this stays an open obligation."
     },
     {
       "id": "F9 record replacement",
@@ -215,7 +222,11 @@
     },
     {
       "id": "relations check-then-act",
-      "detail": "the same read-then-rename CAS shape F3 fixed here still exists on the merged relations write path."
+      "detail": "the same read-then-rename CAS shape that F3 fixed here still exists on the merged relations write path (runtime/control-process.ts relationsCommand). It writes a different record, so this unit does not regress it, but it stays an explicit carried obligation."
+    },
+    {
+      "id": "kind fallback",
+      "detail": "a Session write that names no engine optionId is answered with the first option of the projected kind. The frozen field is optional and the shipped Console always names the option it rendered, so this is the residual guess for a client that sends a bare decision. It never picks an option the engine did not offer, and it is documented in code."
     },
     {
       "id": "Session and notification projection",
@@ -227,7 +238,11 @@
     },
     {
       "id": "source-tree only evidence",
-      "detail": "no installed-copy, restart, deployed-entrypoint or cross-device receipt for this unit."
+      "detail": "no installed-copy, restart, deployed-entrypoint or cross-device receipt for this unit; the black box drives the source-tree runtime library through the source CLI."
+    },
+    {
+      "id": "at-least-once after a crash",
+      "detail": "inside one process a write the watch already applied is never re-applied even when the watermark cannot be saved. After a process restart, writes after the last saved watermark are applied again, so the guarantee is at-least-once, not exactly-once."
     }
   ],
   "driver_side_effects": [
