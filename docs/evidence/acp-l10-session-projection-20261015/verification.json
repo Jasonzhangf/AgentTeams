@@ -12,20 +12,26 @@
   "governing_decision": "No control-to-agent channel exists and none is added: the control daemon declares no Teams listener. The agent daemon that owns the AcpHost facts is the only writer of one durable observation record per agent, and the control daemon is the only reader. The Console never enters the data path and no protocol frame changed.",
   "driver": "docs/evidence/acp-l10-session-projection-20261015/black-box-session-projection.mjs",
   "verification": {
-    "source": "This worktree at candidate head 2349be7, tree 68ee7ec, base origin/main 83496b7 (an ancestor of the candidate head).",
+    "source": "This worktree: the L10 candidate head is 2349be7 (code and maps) and 97c0e00 (evidence bundle); the first independent review found 2 minor and 4 advisory findings, fixed at 4e5b77e (tree cebe45a). base origin/main 83496b7 is an ancestor of both candidate heads.",
     "test": [
       {
         "command": "pnpm exec vitest run --no-file-parallelism config/session-observation-store.spec.ts runtime/session-observation-publisher.spec.ts runtime/control-session-projection.spec.ts config/session-intent-store.spec.ts agent-host/acp-host.spec.ts runtime/control-process.spec.ts",
-        "result": "83 passed / 6 files, exit 0",
+        "result": "85 passed / 6 files, exit 0",
         "log": "gate-l10.log",
         "per_file": {
           "config/session-observation-store.spec.ts": 8,
-          "runtime/session-observation-publisher.spec.ts": 6,
+          "runtime/session-observation-publisher.spec.ts": 7,
           "runtime/control-session-projection.spec.ts": 5,
           "config/session-intent-store.spec.ts": 12,
-          "agent-host/acp-host.spec.ts": 25,
+          "agent-host/acp-host.spec.ts": 26,
           "runtime/control-process.spec.ts": 27
         }
+      },
+      {
+        "command": "pnpm exec vitest run --no-file-parallelism config/relations-intent-store.spec.ts runtime/relations-intent-watch.spec.ts runtime/control-process.spec.ts runtime/acp-serve.spec.ts",
+        "result": "72 passed / 4 files, exit 0",
+        "why": "the L9 intent-side gate command, re-run because this unit migrated config/relations-intent-store.ts onto config/durable-record.ts and touched runtime/acp-serve.ts",
+        "log": "gate-l9-intent-side-rerun.log (the two directly affected specs alone: gate-l10-review-fixes-relations.log, 18 passed / 2 files)"
       },
       {
         "command": "pnpm typecheck",
@@ -35,14 +41,18 @@
     ],
     "mutation_evidence": [
       "config/session-observation-store.spec.ts: disabling the cross-Session check and the CAS check fails 3 of 8",
-      "runtime/session-observation-publisher.spec.ts: removing the no-change early return and the Session-crossing drop fails 2 of 6",
-      "runtime/control-session-projection.spec.ts: removing the directory-online gate and the attribution check fails 2 of 5"
+      "runtime/session-observation-publisher.spec.ts: removing the no-change early return and the Session-crossing drop fails 2 of 7",
+      "runtime/session-observation-publisher.spec.ts: removing the pass serialization fails 1 of 7 — the stop-time empty observation loses its revision to a conflict and the stale non-empty record survives at revision 1",
+      "runtime/control-session-projection.spec.ts: removing the directory-online gate and the attribution check fails 2 of 5",
+      "agent-host/acp-host.spec.ts: removing channel.sessions.clear() from releaseSessions fails 2 of 26, one for the channel close path and one for the engine-ended channel",
+      "agent-host/acp-host.spec.ts: the `closed` filter that openedSessions() carried could not fail any case, because both close paths already run releaseSessions; it was deleted as unreachable instead of keeping a second copy of the forgetting rule"
     ],
-    "build": "pnpm build (all targets, including opencode-adapter) exit 0",
+    "build": "pnpm build (all targets, including opencode-adapter) exit 0, log build.log",
     "black_box": {
       "command": "node docs/evidence/acp-l10-session-projection-20261015/black-box-session-projection.mjs",
       "result": "31 checks, all passed, exit 0",
       "receipt": "docs/evidence/acp-l10-session-projection-20261015/receipt.json",
+      "rerun_on_the_fixed_candidate": "the same driver ran again after the two review fixes were committed (4e5b77e): 31 checks, all passed, exit 0, log black-box-run-6-final.log, receipt-run-6.json",
       "topology": "one real control daemon through the real CLI (control start --config) on a real loopback port, one real `agentteams --serve opencode --ip 127.0.0.1 --port <p> --config` agent daemon with a real engine child, a real Newline-delimited ACP connection held by the driver as the controller, and a local OpenAI-compatible stub provider for the engine.",
       "proven": [
         "no observation record exists before any Session is opened (honest absence, not an empty placeholder)",
@@ -60,7 +70,7 @@
     "installed_artifact": "none: this unit does not change packaging and has no installed-copy receipt",
     "restart": "none: the driver starts and stops its own daemons, and no installed daemon was restarted",
     "deployed_entrypoint_replay": "none: the driver runs the worktree's compiled generated/runtime-lib through the source CLI",
-    "review": "pending at the time this file was written; recorded in review.md and in the integration receipt when it exists",
+    "review": "FAIL on 2 minor + 4 advisory findings, then fixed and re-reviewed in the same round; the review record, both minor findings, their red tests and the advisory closures are in review.md",
     "merge": "pending at the time this file was written",
     "remote_receipt": "pending at the time this file was written",
     "cleanup": "pending: the owned worktree is removed only after delivery, the remote receipt and retention evidence exist"
@@ -93,7 +103,10 @@
   ],
   "resolved_defects": [
     "L9 retained obligation F4 (duplicated durable-write helpers): closed by config/durable-record.ts, which the session intent store, its watermark, the observation store and the relations intent store all call; the second implementation in config/relations-intent-store.ts was deleted in this unit, so one discipline exists",
-    "L9 retained obligation (the control daemon reported sessions: [] and notifications: []): closed and proven by the real projection in the black box"
+    "L9 retained obligation (the control daemon reported sessions: [] and notifications: []): closed and proven by the real projection in the black box",
+    "L10 review minor 1 (the stop-time empty publish could lose its revision to an in-flight poll): closed by running one publisher pass at a time, with a spec whose failure is the stale non-empty record at revision 1",
+    "L10 review minor 2 (the F4 claim was true for only half the pair): closed by migrating config/relations-intent-store.ts onto config/durable-record.ts and deleting its private copy, with the L9 intent-side gate re-measured at 72 passed / 4 files, exit 0",
+    "L10 self-found redundancy: the `closed` filter in openedSessions() could not change any behaviour, because releaseSessions already forgets the Sessions on both close paths; it was deleted, and a mutation now binds the forgetting rule itself"
   ],
   "observed_values": {
     "real_session_id_prefix": "ses_",
@@ -141,7 +154,7 @@
     "one local OpenAI-compatible stub provider on an ephemeral loopback port",
     "all state under one mkdtemp directory that the driver removes on exit"
   ],
-  "driver_reruns": 4,
-  "driver_reruns_note": "The driver was re-run after each fix: (1) awaiting only the Session row raced the permission row, so the await now requires both; (2) asserting an empty Session list after the controller channel closed was wrong, because the daemon's own readiness channel keeps its Session, so the assertion now names the controller's own Session; (3) the empty observation on stop still ends with no rows at all.",
+  "driver_reruns": 6,
+  "driver_reruns_note": "The driver was re-run after each fix: (1) awaiting only the Session row raced the permission row, so the await now requires both; (2) asserting an empty Session list after the controller channel closed was wrong, because the daemon's own readiness channel keeps its Session, so the assertion now names the controller's own Session; (3) the empty observation on stop still ends with no rows at all; (4) after the publisher was serialized and the relations store was migrated onto the shared durable write, the whole real chain ran again on the committed candidate and passed 31/31, exit 0 (black-box-run-6-final.log).",
   "retry_policy": "Re-run the gate command and the black box on the same candidate; investigate a changed failing spec before any re-run of the full suite."
 }
