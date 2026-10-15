@@ -112,7 +112,15 @@ spawn 出的 control 子进程在写 state 前于 `presentationRoots()` 抛错
   (its tree still equals the candidate tree), so the receipt sits on the mainline history.
 - **Push line.** `4d3ffe5..c33d54e  HEAD -> main`.
 - **Remote receipt.** `git ls-remote origin refs/heads/main` re-read after the push
-  returned `c33d54e0d3d5b856d76a487083c385e912af101b`, which equals local `HEAD`.
+  returned `c33d54e0d3d5b856d76a487083c385e912af101b`, which equalled local `HEAD` at
+  that point. This receipt paragraph was corrected afterwards in a receipt-only commit
+  (pushed as `c33d54e..310c04d`); receipt-only commits do not change the delivered tree,
+  which stays `a7eced87de026038f361a3e47939acf489daef10`, so the measured gate results
+  above stand for the delivered state regardless of the moving tip hash.
+- **Verification of this claim.** `git rev-parse <merge>^{tree}` and
+  `git rev-parse <receipt-only-tip>^{tree}` both equal
+  `a7eced87de026038f361a3e47939acf489daef10`; run `git ls-remote origin refs/heads/main`
+  to read the current tip, which is documentation-only above this tree.
 - **Final measured gates on the candidate.** 13 vitest gates pass on the exact candidate
   `4d3ffe5` after `pnpm build` (exit 0) and `pnpm exec tsc --noEmit` (exit 0):
   daemon-intent 35/2, public-contract 17/3, d01-host 61/4, d02-opencode 65/4, d03-dsh 58/3,
