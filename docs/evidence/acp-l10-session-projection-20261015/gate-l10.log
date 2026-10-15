@@ -1,0 +1,27 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015
+
+ ✓ runtime/control-process.spec.ts (27 tests) 7648ms
+   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  476ms
+   ✓ streams the SSE projection and closes the stream on owner loss  475ms
+   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  328ms
+   ✓ refuses a second start while the control generation is alive  422ms
+   ✓ refuses a stop from a stale generation without touching the live process  431ms
+   ✓ fails a start when the webui port is already taken and never reports running  3037ms
+   ✓ projects the real D04 registration directory and streams a frame when it changes  1057ms
+   ✓ serves the real D05 connection projection and connection history over the wire  406ms
+   ✓ keeps the durable connection history across a control-owner restart  753ms
+ ✓ config/session-intent-store.spec.ts (12 tests) 1248ms
+     ✓ keeps a fixed window and advances the retained boundary when it drops  577ms
+     ✓ refuses a reader that fell behind the retained window instead of skipping  444ms
+ ✓ config/session-observation-store.spec.ts (8 tests) 78ms
+ ✓ runtime/control-session-projection.spec.ts (5 tests) 67ms
+ ✓ runtime/session-observation-publisher.spec.ts (6 tests) 110ms
+ ✓ agent-host/acp-host.spec.ts (25 tests) 62ms
+
+ Test Files  6 passed (6)
+      Tests  83 passed (83)
+   Start at  05:24:48
+   Duration  11.21s (transform 673ms, setup 0ms, import 1.01s, tests 9.21s, environment 0ms)
+
+GATE_EXIT=0

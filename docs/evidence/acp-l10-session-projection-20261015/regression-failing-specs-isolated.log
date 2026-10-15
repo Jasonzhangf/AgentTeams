@@ -1,0 +1,42 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015
+
+(node:17249) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015/runtime/dagpipe/.build/build-0zgn3c)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.38s
+stderr | runtime/agent-process.spec.ts > Session host admission, cancel causality and observation > separates observation degradation from owner readiness and contains expected errors
+Promise returned by `expect(actual).resolves.toMatchObject(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in the next Vitest major. Please remember to await the assertion.
+    at /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015/runtime/agent-process.spec.ts:1363:62
+
+ ✓ runtime/agent-process.spec.ts (40 tests) 42739ms
+   ✓ executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state  7691ms
+   ✓ keeps an Agent with an accepted model binding but an unresolved managed executable passive and unavailable  456ms
+   ✓ persists unknown state before refusing a restart with active Work  490ms
+   ✓ recovers a stale work lock only after the previous daemon lease is reacquired  350ms
+   ✓ runs real persistent Camo browser Work through current SDK graphs and restores capacity  28078ms
+     ✓ keeps a multi-match assistant identity ambiguous and never confirms its cancel  5009ms
+ ✓ runtime/managed-opencode-session.spec.ts (1 test) 4133ms
+   ✓ sends one real OpenCode Session request through the selected managed provider  4131ms
+ ✓ cli/agentteams.spec.ts (33 tests) 5193ms
+     ✓ init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it  823ms
+     ✓ direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts  705ms
+
+ Test Files  3 passed (3)
+      Tests  74 passed (74)
+   Start at  05:25:30
+   Duration  53.81s (transform 2.69s, setup 0ms, import 1.27s, tests 52.06s, environment 0ms)
+
+ISOLATED_EXIT=0
