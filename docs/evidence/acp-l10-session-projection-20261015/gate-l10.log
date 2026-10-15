@@ -1,26 +1,26 @@
 
  RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015
 
- ✓ runtime/control-process.spec.ts (27 tests) 7540ms
-   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  504ms
-   ✓ streams the SSE projection and closes the stream on owner loss  369ms
-   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  353ms
-   ✓ refuses a second start while the control generation is alive  482ms
-   ✓ refuses a stop from a stale generation without touching the live process  382ms
-   ✓ fails a start when the webui port is already taken and never reports running  3023ms
-   ✓ projects the real D04 registration directory and streams a frame when it changes  1060ms
-   ✓ serves the real D05 connection projection and connection history over the wire  395ms
-   ✓ keeps the durable connection history across a control-owner restart  688ms
- ✓ config/session-intent-store.spec.ts (12 tests) 1369ms
-     ✓ keeps a fixed window and advances the retained boundary when it drops  573ms
-     ✓ refuses a reader that fell behind the retained window instead of skipping  525ms
- ✓ runtime/session-observation-publisher.spec.ts (7 tests) 73ms
- ✓ runtime/control-session-projection.spec.ts (5 tests) 65ms
- ✓ agent-host/acp-host.spec.ts (26 tests) 81ms
- ✓ config/session-observation-store.spec.ts (8 tests) 63ms
+ ✓ agent-host/acp-host.spec.ts (27 tests) 64ms
+ ✓ config/session-intent-store.spec.ts (12 tests) 1171ms
+     ✓ keeps a fixed window and advances the retained boundary when it drops  507ms
+     ✓ refuses a reader that fell behind the retained window instead of skipping  489ms
+ ✓ runtime/control-process.spec.ts (27 tests) 7657ms
+   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  427ms
+   ✓ streams the SSE projection and closes the stream on owner loss  374ms
+   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  408ms
+   ✓ refuses a second start while the control generation is alive  445ms
+   ✓ refuses a stop from a stale generation without touching the live process  431ms
+   ✓ fails a start when the webui port is already taken and never reports running  3022ms
+   ✓ projects the real D04 registration directory and streams a frame when it changes  1056ms
+   ✓ serves the real D05 connection projection and connection history over the wire  412ms
+   ✓ keeps the durable connection history across a control-owner restart  808ms
+ ✓ runtime/session-observation-publisher.spec.ts (7 tests) 65ms
+ ✓ config/session-observation-store.spec.ts (8 tests) 93ms
+ ✓ runtime/control-session-projection.spec.ts (5 tests) 52ms
 
  Test Files  6 passed (6)
-      Tests  85 passed (85)
-   Start at  06:21:08
-   Duration  11.18s (transform 770ms, setup 0ms, import 1.08s, tests 9.19s, environment 0ms)
+      Tests  86 passed (86)
+   Start at  07:44:04
+   Duration  11.00s (transform 532ms, setup 0ms, import 835ms, tests 9.10s, environment 0ms)
 

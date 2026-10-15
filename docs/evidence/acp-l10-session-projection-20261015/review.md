@@ -64,11 +64,45 @@ owner 边界（`openedSessions()` 只读非关闭通道真正持有的 `channel.
 两个网络 wrapper 是纯转发；证据诚实（`gate-l10.log` 与实际计数一致、`receipt.json` 31/31、
 `pnpm verify` 阻塞与全量回归不绿都如实写明）。
 
-## 5. 复审
+## 5. 复审（两轮，结论都写在这里）
 
-上述 6 项按「finding 修复后只补受影响验证并复核该 finding」处理：修复提交为 `TO_BE_FILLED`，
-同一审查者被再次派发，只复核这两个 minor 的修法与红测、四条 advisory 的收口，以及修复是否引入
-新的 owner/边界问题；不重跑全量测试，因为修复只影响 publisher 的并发调度、一个 config store 的
-内部实现、一个只读方法的一处冗余过滤与文档/地图陈述。
+修复提交是 `4e5b77e`，其后是证据提交 `5403cca`。按「finding 修复后只补受影响验证并复核该
+finding」，修复后只做**针对性复核**，不重跑全量测试。
 
-**复审结论**：待填（本轮修复提交后派发）。
+### 第 2 轮（复核 `97c0e00..5403cca`）
+
+结论 **FAIL，2 minor + 2 advisory**。它确认第 1 轮的两条 minor 与四条 advisory **都已真正关闭**
+（publisher 串行化让 stop 发布一定排在在飞 pass 之后；relations store 的迁移逐字节保持原消息与
+fence 形状；sessionEvents 的缺席由黑盒与投影字面量共同绑定；引擎结束通道有了真实用例；限制与
+`failures()` 的形态都进了保留项）。
+
+它同时指出两件本轮自己的问题：
+
+1. **作者在同一 diff 里删掉 `openedSessions()` 的 `closed` 过滤是错的**。`close()` 先置
+   `channel.closed = true`，**之后**才 `await` 持久 settle，最后才 `releaseSessions`；这两个
+   await 是真实 I/O，所以在那个窗口里读者会看到一条已关闭通道仍然列着它的 Session id。
+   作者原来的消融（删掉过滤跑测试，测试不失败）是因为**测试没有覆盖这个窗口**，不是过滤不可达。
+   修法：过滤按原意恢复（理由改为与 `channelForSession`、`pendingPermissions` 一致），并新增
+   `agent-host/acp-host.spec.ts`「reports a closed channel as holding no Session while its close
+   is still settling durably」：用一个保持 append 挂起的 gate 让 settle 卡在窗口里，再采样
+   `openedSessions()`。删掉过滤后该用例失败（`expected [ 'session-1' ] to deeply equal []`）。
+2. **声称的「72 passed / 4 files」没有任何日志**。作者先跑了两文件（18）并把它写成了
+   `gate-l9-intent-side-rerun.log`，随后又把四文件的数字挂到同一个文件名上。修法：四文件命令重跑
+   并单独留存 `gate-l9-intent-side-4files.log`，两处指针改成它。
+
+两条 advisory 同轮收口：`review.md` 不再留 `TO_BE_FILLED` /「待填」占位（本节就是结论所在），
+`notes.md` 不再把 publisher 的**排队**说成与 `createPollingProjectionSubscriber` 的
+**丢弃**同惯例——排队是因为 stop 那次发布不能被丢弃，代价是一个 500ms tick 在 pass 在飞时再排一个
+pass，而排队到的 pass 一般在「无变化」比较处立即返回、不做任何 I/O。
+
+### 第 3 轮（复核第 2 轮的两条修法）
+
+只核对：过滤恢复后新增的关闭窗口用例是否是红的、过滤理由与地图陈述是否一致、四文件门日志是否与
+`verification.json` 的引用一致。结论在本文件第 6 节，与该轮实际时间一致。
+
+## 6. 总判定
+
+本单元在独立 review 路上共走**两轮 FAIL** 与一轮定向复核，不宣称单次 PASS。三轮结论、每轮修法
+与红测试命中的失败都在本节与 `verification.json` 里，与代码一一对应。第 2 轮之后本单元的
+**代码事实**（owner 边界、单写者单读者、无 control→agent 通道、无 Console relay、无协议变更）
+没有被任何一轮质疑；所有 FAIL 都落在本单元自己新写的行或本单元自己写的证据陈述上。

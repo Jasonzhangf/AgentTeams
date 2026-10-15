@@ -16,7 +16,7 @@
 ℹ lib/index.mjs    55.02 kB │ gzip: 14.29 kB
 ℹ lib/index.d.mts  32.85 kB │ gzip:  7.67 kB
 ℹ 2 files, total: 87.87 kB
-✔ Build complete in 1656ms
+✔ Build complete in 3118ms
 
 > @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015/opencode-adapter
 > tsc --noEmit

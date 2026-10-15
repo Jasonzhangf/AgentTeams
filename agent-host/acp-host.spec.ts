@@ -61,8 +61,23 @@ class FakeHistory implements AcpHistoryPort {
   readonly records: HistoryRecord[] = []
   failOnEvent?: string
   failures: AcpFault[] = []
+  /** While set, every append waits on this gate, so a close's durable settling stays in flight. */
+  private wait?: Promise<void>
+  private openGate?: () => void
+
+  /**
+   * Hold every further append until the returned function is called. This makes the window
+   * between a close marking its channel closed and releasing the Session ids observable.
+   */
+  holdAppends(): () => void {
+    let openGate!: () => void
+    this.wait = new Promise<void>(resolve => { openGate = resolve })
+    this.openGate = openGate
+    return () => { this.wait = undefined; this.openGate = undefined; openGate() }
+  }
 
   async append(record: Omit<HistoryRecord, 'recordId' | 'sequence'>): Promise<HistoryRecord> {
+    if (this.wait !== undefined) await this.wait
     if (this.failOnEvent !== undefined && record.event === this.failOnEvent) {
       throw new Error(`history append failed for ${record.event}`)
     }
@@ -363,6 +378,29 @@ describe('createAcpHost', () => {
     // Session whose engine no longer runs, and it cannot ask the channel that just died.
     fixture.exit()
     await flush()
+    expect(fixture.host.openedSessions()).toEqual([])
+  })
+
+  it('reports a closed channel as holding no Session while its close is still settling durably', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    expect(fixture.host.openedSessions()).toEqual(['session-1'])
+    // `close()` marks the channel closed and only then awaits the durable settle calls, so an
+    // observer that samples the host inside that window must not see the closed channel's
+    // Session. The gate keeps the settle in flight until the sample has read the host.
+    const release = fixture.history.holdAppends()
+    const closing = fixture.host.close(ref1)
+    try {
+      await Promise.resolve()
+      expect(fixture.host.openedSessions()).toEqual([])
+    } finally {
+      release()
+    }
+    await closing
     expect(fixture.host.openedSessions()).toEqual([])
   })
 

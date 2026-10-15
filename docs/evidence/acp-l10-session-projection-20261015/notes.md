@@ -88,14 +88,19 @@ option set 或任何凭据。`permissionId` 就是 controller 收到的那个 ca
 
 独立 reviewer（`openai-codex/gpt-6.1-sol`，全新上下文，未运行任何测试）对本候选给出
 **2 minor + 4 advisory**。两条 minor 都已修复并重新取证，4 条 advisory 全部按证据收口。
+随后第 2 轮定向复核**再次 FAIL**（2 minor + 2 advisory），并确认第 1 轮的 6 项已真正关闭；
+第 2 轮的两条修法见 §4b，两条 advisory 也在 §4b 收口。
 
 1. **minor：stop 时空观测可被轮询写抢走**。`publish()` 原本没有重入保护，而轮询 tick 与
    `stop()` 的发布共用同一个 publisher；`clearInterval` 不能取消一个已经开始的 pass。若 tick 的
    写在 `stop()` pass 读到同一 revision 之后、store 内部读旧内容之前落盘，`stop()` pass 会得到
    `REVISION_CONFLICT` 并直接返回，停掉 daemon 的非空观测就留在盘上继续被投影。
-   修法：publisher 改为**一次只跑一个 pass**，后到的调用串到在飞的那个 pass 后面（与既有
-   `createPollingProjectionSubscriber` 的 `running` 惯例一致），因此 `stop()` 的 pass 一定跟在
-   在飞的轮询 pass 之后；`stop()` 处不再 `.catch()`——publisher 的 pass 本身永不 reject。
+   修法：publisher 改为**一次只跑一个 pass**，后到的调用串到在飞的那个 pass 后面。这与既有
+   `createPollingProjectionSubscriber` 的 `running` 惯例**方向相反**（后者丢弃重叠 tick），
+   差异是有意的：stop 的发布**不能被丢弃**，所以此处选择排队；代价是每个 500ms tick 在 pass
+   在飞时仍会再排一个 pass，而排队到的 pass 通常在「无变化」比较处立即返回、不做任何 I/O。
+   因此 `stop()` 的 pass 一定跟在在飞的轮询 pass 之后；`stop()` 处不再 `.catch()`——publisher
+   的 pass 本身永不 reject。
    新 spec（`runtime/session-observation-publisher.spec.ts`「serializes overlapping
    passes」）以「第一次读有 Session、第二次读没有」的假 host 绑定：去掉串行化后该用例从
    `revision=2 / sessions=[]` 退回 `revision=1 / sessions=[ses-1]`，红测成立。
@@ -103,7 +108,45 @@ option set 或任何凭据。`permissionId` 就是 controller 收到的那个 ca
    原子写，而 notes、`verification.json` 与两张地图都宣称 F4 已关闭。修法：迁移到
    `writeRecordAtomically`，删除该文件里的 `discard` / `uncertainty` / `persist` 三处重复实现。
    `config/relations-intent-store.spec.ts` 与 `runtime/relations-intent-watch.spec.ts`
-   **18/18 passed，exit 0**，证明行为未变（`gate-l10-review-fixes-relations.log`）。
+   **18/18 passed，exit 0**（`gate-l10-review-fixes-relations.log`）；四文件门命令（这两个 +
+   `runtime/control-process.spec.ts` + `runtime/acp-serve.spec.ts`）另跑一次并单独留存
+   **72 passed / 4 files，exit 0**（`gate-l9-intent-side-4files.log`）——上一轮作者把四文件数字
+   挂到了两文件日志名上，第 2 轮 review 指出后补了这份日志。
+
+## 4b. 第 2 轮定向复核与修法
+
+第 2 轮只复核 `97c0e00..5403cca`，结论 **FAIL，2 minor + 2 advisory**。它确认 §4a 的两条 minor
+与四条 advisory 已真正关闭，同时揭出本轮自己两个问题：
+
+1. **minor：`closed` 过滤的删除是错的（作者判断失误）**。作者在同一 diff 里删掉了
+   `openedSessions()` 对 `closed` 的过滤，理由是「两条关闭路径都跑 `releaseSessions`，所以过滤
+   不可达」。消融（删掉过滤跑测试）不失败只说明**测试没覆盖这个窗口**：`close()` 先置
+   `channel.closed = true`，**之后**才 `await` 两条持久 settle（真实 I/O），最后才
+   `releaseSessions`。在窗口里读者会看到一条已关闭通道仍列着 Session id——publisher 的 500ms
+   轮询与两个网络 wrapper 都能采到。修法：过滤按原意恢复，理由改成与 `channelForSession` /
+   `pendingPermissions` 同一规则；新增用例「reports a closed channel as holding no Session while
+   its close is still settling durably」用一个保持 append 挂起的 gate 卡住窗口后采样
+   `openedSessions()`。删掉过滤后该用例失败（`expected [ 'session-1' ] to deeply equal []`），
+   红测成立。
+2. **minor：四文件门日志不存在**。`verification.json` / `review.md` / 两张地图都写着
+   「72 passed / 4 files」，但引用的日志只有 18 passed / 2 files。修法：四文件命令重跑并单独提交
+   `gate-l9-intent-side-4files.log`，四处引用指向它。
+
+两条 advisory 同轮收口：`review.md` 的占位（`TO_BE_FILLED` /「待填」）改写为该轮结论本身；
+`notes.md` 不再把 publisher 的**排队**与 `createPollingProjectionSubscriber` 的**丢弃**称为
+同一惯例（§4a 第 1 条已写明方向相反及代价）。
+
+## 4c. 本节修复后的重新取证
+
+| 证据 | 结果 |
+| --- | --- |
+| L10 门命令 6 文件 | 86 passed / 6 files，exit 0（`gate-l10.log`） |
+| L9 intent 侧四文件门 | 72 passed / 4 files，exit 0（`gate-l9-intent-side-4files.log`） |
+| `acp-host.spec.ts` 去掉 `closed` 过滤 | 1 failed / 27（关闭窗口用例，`expected [ 'session-1' ] to deeply equal []`） |
+| 去掉 `releaseSessions` 的 `clear()` | 3 failed / 28（关闭通道、引擎结束、关闭窗口三个用例） |
+
+L10 六文件门因本轮新增两个用例从 85 涨到 86（`agent-host/acp-host.spec.ts` 28、其余 5 文件
+17+12+8+7+27），Log 同步更新。
 
 四条 advisory 的收口：`verification.json` 里 `sessionEvents` 的断言归属改为黑盒与控制 daemon
 组装投影的真实位置；`verification-map.json` 的 L10 门补上引擎结束通道这一**真的用例**
@@ -120,24 +163,30 @@ retained；`failures()` 只被 handle 暴露、没有生产读者这件事写进
 
 | 证据 | 结果 |
 | --- | --- |
-| L10 门命令 6 文件 | 85 passed / 6 files |
+| L10 门命令 6 文件 | 86 passed / 6 files |
 | `config/session-observation-store.spec.ts` | 8 |
 | `runtime/session-observation-publisher.spec.ts` | 7 |
 | `runtime/control-session-projection.spec.ts` | 5 |
 | `config/session-intent-store.spec.ts` | 12 |
-| `agent-host/acp-host.spec.ts` | 26 |
+| `agent-host/acp-host.spec.ts` | 28 |
 | `runtime/control-process.spec.ts` | 27 |
 | F4 迁移受影响的两个 spec | 18 passed / 2 files |
+| F4 迁移影响的四文件门 | 72 passed / 4 files |
 | `pnpm typecheck` | exit 0 |
 
 红测（mutation）证据按项记录：去掉 store 的跨 Session 校验与 CAS 校验 → 3 个失败；去掉
 publisher 的无变化早退与跨 Session 丢弃 → 2 个失败；去掉 publisher 的 pass 串行化 → 1 个
 失败；去掉投影的 online 闸门与归属校验 → 2 个失败；去掉 `releaseSessions` 里
-`channel.sessions.clear()` → **2 个**失败（关闭通道与引擎结束两个用例）。全部恢复后重新跑绿。
+`channel.sessions.clear()` → **3 个**失败（关闭通道、引擎结束、关闭窗口采样三个用例）。
+全部恢复后重新跑绿。
 
-消融证据：`openedSessions()` 里对 `closed` 的过滤被证明无法改变任何行为（mutation 不失败），
-因为两条关闭路径都在标记 `closed` 之前跑 `releaseSessions`，因此该过滤被删除——忘记 Session
-的 owner 只有 `releaseSessions` 一条规则，不再有第二份。
+关闭窗口的真实原因（第 2 轮 review 揭出，作者最初的「过滤不可达」判断是错的）：`close()` 先置
+`channel.closed = true`，**之后**才 `await` 两条持久 settle，最后才 `releaseSessions`；这两个
+await 是真实 I/O，所以窗口里一条已关闭通道仍列着 Session id。`openedSessions()` 的 `closed`
+过滤因此**可达且必要**，与 `channelForSession` / `pendingPermissions` 同一规则；新增用例
+「reports a closed channel as holding no Session while its close is still settling durably」
+用保持 append 挂起的 gate 卡住窗口再采样，删掉过滤后该用例失败
+（`expected [ 'session-1' ] to deeply equal []`）。
 
 **build**：`pnpm build`（含 opencode-adapter）exit 0。
 
@@ -218,11 +267,13 @@ edge `acp-session-observation-v1`；`module-registry.json` 的 `config` 与 `run
 事实；`verification-map.json` 新增 `teams-acp-l10-session-projection` 门（含黑盒真实入口）。
 `pnpm verify` 仍被既有的 `PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014` 阻塞，与本变更无关。
 
-review 轮次又更新了三张地图：`verification-map.json` 的 L10 门新增「publisher 一次只跑一个
-pass」这条 check 并把实测数字改成 85/6 与新的 mutation 计数，`function-map.json` 与
-`module-registry.json` 的 F4 陈述改成 relations store 也共用同一条纪律（并且已真的迁移）。
-`verification-map.json` 的 L9 intent-side 门补记本次迁移与 72/4 的复测结果——**一次变更同时
-改动两张门的语义，两张门都在同一变更内更新**。
+review 轮次又更新了地图：`verification-map.json` 的 L10 门新增「publisher 一次只跑一个
+pass」这条 check，把引擎结束通道的条目扩成三条（引擎结束、关闭通道、关闭窗口）并附红测证据，
+把 `sessionEvents` 缺席的断言归属写成黑盒 + 投影字面量，实测数字改成 86/6 与新的 mutation
+计数；`function-map.json` 与 `module-registry.json` 的 F4 陈述改成 relations store 也共用同一条
+纪律（并且已真的迁移）；`verification-map.json` 的 L9 intent-side 门补记本次迁移、把 72/4 指向
+新提交的四文件日志，并把命令写为可直接执行的形式——**一次变更同时改动两张门的语义，两张门都在
+同一变更内更新**。
 
 ## 9. 提交、集成与资源
 

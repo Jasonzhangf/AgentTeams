@@ -1122,9 +1122,12 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
   const openedSessions = (): readonly string[] => {
     const rows: string[] = []
     for (const channel of channels.values()) {
-      // `releaseSessions` is the one rule that forgets a Session, and both close paths run it,
-      // so a closed channel already holds none. Filtering on `closed` here would be a second
-      // copy of that rule that nothing can reach.
+      // A closed channel holds no Session any more, so it must not be reported as one — the same
+      // rule `channelForSession` and `pendingPermissions` already apply. `releaseSessions` clears
+      // the ids, but `close()` marks the channel closed and only then awaits its durable settling,
+      // so a reader that samples this host inside that window would otherwise see the Sessions of
+      // a channel that already stopped accepting writes.
+      if (channel.closed) continue
       for (const sessionId of channel.sessions) rows.push(sessionId)
     }
     return rows
