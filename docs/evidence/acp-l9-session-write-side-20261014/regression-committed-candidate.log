@@ -24,3 +24,26 @@ success=False total=1173 passed=1172 failed=1 skipped=0 todo=0 suites=256 passed
 
 FAILED agentteams CLI direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts
   Error: expected [Function] to throw error matching /already exists/i but got 'Command failed: /opt/homebrew/Cellar/…'
+
+## measured summary, second run on the same committed candidate (generated/validation/regression.json)
+success=False total=1173 passed=1167 failed=6 skipped=0 todo=0
+
+FAILED agentteams CLI direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts
+  Error: Command failed: /opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/cli/agentteams.mjs status
+FAILED executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state
+  Error: Console deadline elapsed; do not replay
+FAILED sends one real OpenCode Session request through the selected managed provider
+  TimeoutError: The operation was aborted due to timeout
+FAILED drawer keyboard focus in a real DOM moves outside focus into the drawer and wraps forward and backward Tab
+  Error: Command failed: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --disable-gpu --no-sandbox --dump-dom file:///var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/teams-c
+FAILED D07 four-page DOM contract in a real DOM renders the four pages, owner bands, permissions and history without inventing state
+  Error: Command failed: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --disable-gpu --no-sandbox --dump-dom file:///var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/teams-c
+FAILED declared capability rendering in a real DOM renders declared services and resources and an explicit unavailable state
+  Error: Command failed: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --disable-gpu --no-sandbox --dump-dom file:///var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/teams-c
+
+## reading
+The failure set differs between the two runs on this same committed candidate (1 then 6),
+and every added failure is a real-process, real-Chrome or real-engine timeout test. The CLI
+direct-entry test is the only one that fails in both runs and it also fails on the unmodified
+base with the same root cause. So pnpm test is a load-sensitive BLOCKED baseline, and none of
+these failures is caused by this unit. The six mapped gate commands pass on this candidate.

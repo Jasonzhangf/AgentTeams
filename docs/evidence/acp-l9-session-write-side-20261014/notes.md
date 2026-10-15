@@ -160,7 +160,8 @@ driver 全程只经控制 daemon 的**认证** HTTP 面提交写入，从不经�
 | --- | --- | --- |
 | 工作树未提交候选 | 未提交 | 1172 / 1146 / 3 / 23 |
 | base `d531d24` 独立 worktree | 未改一行 | 1149 / 1146 / 3 / 0 |
-| **已提交候选 `fb35e73`** | 干净 | **1173 / 1172 / 1 / 0** |
+| **已提交候选 `fb35e73`**（第 1 次） | 干净 | **1173 / 1172 / 1 / 0** |
+| **已提交候选 `fb35e73`**（第 2 次，同一内容） | 干净 | **1173 / 1167 / 6 / 0** |
 
 日志：`regression-committed-candidate.log`（候选）、`baseline-origin-main-regression.log`（base）。
 可判读的事实有四条：
@@ -178,6 +179,9 @@ driver 全程只经控制 daemon 的**认证** HTTP 面提交写入，从不经�
    在已提交候选上通过，base 那次失败的 `D07 four-page DOM` 与 `declared capability rendering`
    在本单元的 D07 门禁（`TEAMS_CONSOLE_REAL_DOM=1`，13 个文件）里同样 66/66 通过——
    这四条是真实进程/真实 Chrome/真实引擎的负载抖动，不是固定回归。
+   **同一份已提交内容再跑一次得到 6 条失败**（1 → 6），新增的 5 条全部是真实
+   Work agent、真实 OpenCode Session 与真实 Chrome DOM 的超时用例，只有 CLI 直入那条两次都在。
+   这直接证明失败集合由环境负载决定，而不是由本单元的代码决定。
 4. 因此这些失败**不是**由本单元引入：本单元没有改 CLI 装配、`generated/runtime-lib` 的构建
    或 DOM 渲染路径；D01/D05/D06/D07/serve-entry 六个门禁命令在候选上全部通过。
 
