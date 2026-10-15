@@ -47,7 +47,7 @@ are missing beside the control entry: <tree>/runtime/control-process.ts; run pnp
 | teams-acp-d04-registry | 953d952 | 75 passed / 6 files，exit 0 | PASS |
 | teams-acp-d05-network | 83496b7 | 103 passed / 11 files，exit 0 | PASS |
 | teams-acp-d06-control | 83496b7 | 143 passed / 7 files，exit 0 | PASS |
-| teams-acp-d07-webui | 83496b7 | 29 passed / 6 files，exit 0 | PASS |
+| teams-acp-d07-webui | 83496b7 | **66 passed / 13 files**，exit 0（修正：首次 29/6 是收窄运行，非本门禁结果；完整记录命令重跑得 66/66，见 design.md 决策 4） | PASS |
 | teams-acp-serve-entry | 83496b7 | 68 passed / 3 files，exit 0 | PASS |
 | teams-acp-l9-intent-side | 83496b7 | 72 passed / 4 files，exit 0 | PASS |
 | teams-acp-l9-session-write-side | d531d24 | 81 passed / 4 files，exit 0 | PASS |

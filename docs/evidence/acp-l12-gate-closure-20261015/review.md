@@ -39,14 +39,30 @@ per-file；「6 个 failing spec」应引用 L10 的不稳定集合；design 文
 - recon 的 D08 清理声明补「driver 失败保留 root 之后的运行后手动移除」。
 - verification.json 的 not_claimed 改为引用 L10 回归 run 1-4 的不稳定 5/3/3/6 集合。
 
-## Round 2（修复后）—— 待复核
+## Round 2（修复后）—— PASS
 
-候选：4d3ffe5..a56b04d（5 提交）。复核范围仅限 round 1 的 2 个 blocking 与 4 条
-advisory 的修复是否到位，不重审未触及内容。
+reviewer：独立（fresh context，read-only，DSH 宿主 `openai-codex/gpt-6.1-sol`）
+候选：`4d3ffe5..a56b04d`（5 提交，含 D07 修复与 review 记录）
 
-Round 1 结论与已确认的诚实性事实不因修复改变：其余 13 门禁计数与日志逐一对上、
-计数纠正是 append-only、D08 不宣称通过、provider-config-v1 生产绑定属实、资源
-盘点属实。
+verdict：PASS，无 blocking。
 
-（reviewer 复核结论补记于此。）
+复核结论：
+- d07_verified 全部为真：日志是真实 13 文件/66 用例运行，per-file 求和 66，
+  `Tests 66 passed` 与 `GATE_EXIT=0` 均在，记录命令字段与 base 逐字节一致且与
+  运行的文件集合一致，note 报 66/13；29/6 收窄在四个强制披露点（note 的
+  Correction disclosed 段、verification.json 的 13/66 对象 + correction_disclosed
+  字段、notes.md 计数纠正段与表格、governance L12 段点名 29/6）全部到位，design.md
+  也披露；D07 在两个权威文件里均保持 partial，未声明任何未闭合项闭合。
+- 其余 13 门禁的 measured 与日志逐文件、逐总数程序化比对全部一致；D08 如实记为
+  A02 外部限流停、exit 1，不宣称通过。
+- 三条 advisory 全部修复且对真实源复核：design 文档路径改为存在的
+  `runtime/control-process.ts` 的 `readObservedSessionProjection`（:818）；
+  recon 的 D08 清理改为运行后手动移除并解释日志中 retained root 字样的成因；
+  not_claimed 引用 L10 回归 run 1-4 的 5/3/3/6 不稳定集合（L10 notes §6 核实）。
+- 两个 JSON 均解析通过。
+
+advisory（不阻断）：recon.md 调查表第 50 行还留被取代的「29 passed / 6 files | PASS」，
+已在随后提交中改为 66/13 并注明收窄来源。round 2 结论记录于本文件。
+
+（Round 2 后仅 recon.md 调查表行修正，不触及任何门禁状态或证据声明。）
 
