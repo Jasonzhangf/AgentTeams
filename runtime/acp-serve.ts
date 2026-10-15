@@ -1123,7 +1123,7 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
     refuse(intentId, error instanceof AcpError ? error.code : 'ENGINE_UNAVAILABLE', messageOf(error, fallback))
   }
 
-  /** Apply one write. `true` means the write reached the engine or was a real refusal. */
+  /** Apply one write. `true` means the write really reached the engine. */
   const apply = async (intent: SessionIntent): Promise<boolean> => {
     if (intent.agentId !== input.agentId) {
       // The record path is derived from the target, so a record naming another agent was
@@ -1174,6 +1174,15 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
     }
   }
 
+  /**
+   * The highest revision this watch really applied, counting only the contiguous run from the
+   * durable watermark. A `session.message` re-applied is a second prompt to the engine, so the
+   * watch must never re-apply a write it already applied in this process, even when the durable
+   * watermark could not be saved. A restart still re-applies the writes after the last saved
+   * watermark, which is the at-least-once boundary this record can offer.
+   */
+  let appliedThrough: number | undefined
+
   const reconcile = async (): Promise<void> => {
     let record
     let watermark
@@ -1186,23 +1195,34 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
       refuse('', configFault(error).code, messageOf(error, 'the pending Session write record could not be read'))
       return
     }
-    const view = pendingSessionIntents(record, watermark.appliedRevision)
+    // The durable watermark is the floor, and this process's own progress may be ahead of it.
+    const base = Math.max(watermark.appliedRevision, appliedThrough ?? 0)
+    const view = pendingSessionIntents(record, base)
     if (view.state === 'behind') {
       // The writer's window already dropped writes this daemon never saw. Refuse instead of
       // skipping them, and keep the watermark so the gap stays visible.
       refuse('', 'CONFLICT', `pending Session writes start at revision ${view.oldestRevision}, but this daemon applied only through ${view.appliedRevision}`)
       return
     }
-    for (const intent of view.intents) {
-      if (!await apply(intent)) return
+    for (const [index, intent] of view.intents.entries()) {
+      // The loop stops at the first write it cannot apply, so the applied revisions stay a
+      // contiguous run and one revision advances per successful write. The intent at index
+      // `index` carries revision `base + index + 1`.
+      if (!await apply(intent)) break
+      appliedThrough = base + index + 1
     }
-    if (view.throughRevision === watermark.appliedRevision) return
+    // Save exactly what was applied, including a partial pass, so the durable watermark
+    // never lags a write that already reached the engine. With nothing applied this is
+    // simply the floor, and a pass that applied nothing saves nothing.
+    const durable = appliedThrough ?? base
+    if (durable === watermark.appliedRevision) return
     try {
-      await writeSessionIntentWatermark(input.watermarkPath, view.throughRevision)
+      await writeSessionIntentWatermark(input.watermarkPath, durable)
     } catch (error) {
-      // A watermark this pass could not save only makes the next pass apply the same writes
-      // again; the apply path above is what refuses an already-satisfied write.
-      refuseError('', error, 'the pending Session write watermark could not be saved')
+      // The writes above already reached the engine and `appliedThrough` already covers them,
+      // so this pass does not repeat them; only a restart can, and only after this point.
+      // The store's own typed code is kept: the engine is fine, the watermark is not.
+      refuse('', configFault(error).code, messageOf(error, 'the pending Session write watermark could not be saved'))
     }
   }
 

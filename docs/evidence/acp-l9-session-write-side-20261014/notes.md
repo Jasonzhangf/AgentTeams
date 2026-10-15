@@ -86,9 +86,9 @@ record id 仍是独立的持久审计身份，两者在 `AcpPendingPermission` �
 | --- | --- | --- |
 | 事件记录存储 | `config/session-intent-store.ts` + `.spec.ts` | 11 tests |
 | host 两个只读面 | `agent-host/acp-host.ts` + `.spec.ts` | 24 tests（原 23，+1） |
-| 读侧 watch | `runtime/acp-serve.ts` + `runtime/session-intent-watch.spec.ts` | 11 tests |
+| 读侧 watch | `runtime/acp-serve.ts` + `runtime/session-intent-watch.spec.ts` | 12 tests |
 | 控制侧三条命令 | `runtime/control-process.ts` + `.spec.ts` | 24 tests（原 23，+1） |
-| **本单元门禁** | `pnpm exec vitest run --no-file-parallelism config/session-intent-store.spec.ts runtime/session-intent-watch.spec.ts runtime/control-process.spec.ts agent-host/acp-host.spec.ts` | **70 passed / 4 files**，退出码 0（`gate-d06-l9.log`） |
+| **本单元门禁** | `pnpm exec vitest run --no-file-parallelism config/session-intent-store.spec.ts runtime/session-intent-watch.spec.ts runtime/control-process.spec.ts agent-host/acp-host.spec.ts` | **71 passed / 4 files**，退出码 0（`gate-d06-l9.log`） |
 | `pnpm typecheck` | 根 + opencode-adapter + console-host + ui | 退出码 0（`typecheck.log`） |
 | `pnpm build` | 全量（opencode-adapter + console-host + ui + build:runtime） | 退出码 0（`build.log`） |
 
@@ -108,10 +108,11 @@ relations 观察的 egress 之前先 `clearInterval` Session 观察。
 | `teams-acp-d05-network` | 11 个 spec 文件 | **103/103**，`gate-d05-network.log` |
 | `teams-acp-serve-entry` | `runtime/acp-serve.spec.ts runtime/relations-intent-watch.spec.ts cli/agentteams.spec.ts` | **68/68**，`gate-serve-entry.log` |
 | `teams-acp-d06-control` | 7 个 spec 文件 | **137/137**（control-process 24、relations-intent-store 10、acp-host 24、acp-serve 27、agentteams 33、http-api 7、console-api 12） |
+| `teams-acp-l9-session-write-side` | 4 个 spec 文件（修复后复测） | **71/71** |
 | `teams-acp-l9-intent-side` | 4 个 spec 文件 | **69/69**（10+8+24+27） |
 | `teams-acp-d07-webui` | `TEAMS_CONSOLE_REAL_DOM=1` + 13 个 spec 文件 | **66/66**，`gate-d07-webui.log` |
 
-D06 与 L9 intent-side 两个门禁的文件集合之并一次跑完为 **167/167**（10 个文件），
+D06 与 L9 intent-side 两个门禁的文件集合之并一次跑完为 **168/168**（10 个文件），
 逐文件计数见上（`gate-d06-l9.log`）。
 
 `teams-acp-d07-webui` 的既有证据 `docs/evidence/acp-d07-webui-20261011/black-box-webui.mjs`
@@ -212,6 +213,67 @@ driver 全程只经控制 daemon 的**认证** HTTP 面提交写入，从不经�
 因此本单元按映射门禁 + 类型检查 + 构建 + 真实入口黑盒判定，并把这三次运行的差异如实记录；
 不把任何一次 `exit 1` 说成通过，也不把它们说成本单元的回归。`pnpm verify` 仍**未运行**：它是
 先于本单元的 BLOCKED 基线（`PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014`）。
+
+## 10. Review 轮次与修复（2026-10-15）
+
+### 10.1 review 尝试的诚实记录
+
+本单元共发起三次独立 review，**三次都没有产出 review 文件**：两次 `subagent` 与一次复用既有
+teammate 都只回了散文式结论，没有落盘。`review-1.md` 不存在（`ls` 与 `git status` 均为空）。
+因此**本单元没有可引用的独立 review PASS 回执**，这一点必须明说，不能用散文结论顶替。
+
+第一次 review 的结论是 PASS，且**自相矛盾**：它把 F1 标为 BLOCKING，随后又写「All findings are
+ADVISORY」。第二次 review 的「Measurements」里出现了不存在的输出（把 receipt 的 `verdict` 写成
+`applied`，实际是 `PASS`），说明它没有真正运行黑盒。因此两次结论都**不可采信**。
+
+### 10.2 对 review 论点的独立核对（由本单元 owner 实测）
+
+| review 论点 | 核对结果 |
+| --- | --- |
+| F1「`sessionWrite` 在 `uncertain`/`failed` 时仍返回成功」 | **假**。`runtime/control-process.ts:640` 是 `return relationsWriteResult(await writeSessionIntentRecord(...))`，而 `relationsWriteResult` 只在 `status === 'applied'` 时回 `{ok:true}`，`uncertain`/`failed` 都回 typed 错误。reviewer 误读了控制流。 |
+| F2「`sessionWrite` 把目标 account/scope 泄漏给控制 daemon」 | **不是本单元引入**：写侧从**自己 accepted 的 `peers`** 推导路径，与已合入并 review PASS 的 relations 记录同一条规则；peer 声明写错时 agent daemon 只是读不到，不会读到别人的记录。记为继承性质。 |
+| F3「handler 接受任意 `ConsoleCommandV1`，未来 `session.open` 会落到 Session 分支」 | **假**。`sessionCommand` 只在 `kind === 'permission.reply' \|\| kind === 'session.cancel'` 时被调用，其余 kind 仍走原有分支。 |
+| A1「watermark 保存失败时下一轮会重复施加」 | **真，且是本单元的真实缺陷**，见 10.3。 |
+
+### 10.3 已修复的真实缺陷
+
+review 的 A1 论点指向一条真实路径：watermark 保存失败（或进程崩溃）后，下一轮会**再次**施加同一条
+`session.message`，于是引擎收到**第二次 `session/prompt`**，Console 用户看到重复消息。原代码注释
+「the apply path above is what refuses an already-satisfied write」只对 `permission.reply` 成立
+（回调已消费故被拒），对 `session.message` 与 `session.cancel` **不成立**。
+
+修复（`runtime/acp-serve.ts` `createSessionIntentWatch`）：
+
+1. 新增进程内高水位 `appliedThrough`，`base = max(durableWatermark, appliedThrough ?? 0)`；
+   每成功施加一条就把 `appliedThrough` 推到该条的 revision。**本进程内已施加的写绝不重复施加**，
+   即使 durable watermark 保存失败。
+2. watermark 改为保存 `appliedThrough ?? base`，即**部分进度也落盘**，durable watermark 不再落后于
+   已经到达引擎的写。
+3. 修掉一处错误类型被抹平：watermark 保存失败原先经 `refuseError` 变成 `ENGINE_UNAVAILABLE`
+   （引擎明明是好的），现改为与读记录失败同一条 `configFault` 通道。冻结的 `AcpFaultCode` 词表
+   没有 `UNAVAILABLE`，故两者都落在 `UNSUPPORTED_CONFIGURATION`，并在测试里写明理由。
+4. 更正 `apply` 的注释：`true` 只表示「真的到达了引擎」，不再声称拒绝也返回 true（代码里拒绝返回 false）。
+
+红先证据（`runtime/session-intent-watch.spec.ts` 新增用例
+`never re-applies a write it already applied when the watermark cannot be saved`）：
+用 `chflags uchg` 把 watermark 目录置为不可变，使读成功（ENOENT→0）而写失败。
+
+| 变异 | 结果 |
+| --- | --- |
+| 把 `base` 改回只读 durable watermark（即修复前行为） | 该用例转红：`expected [ {…}, {…} ] to have a length of 1 but got 2`，即引擎真的收到两次 prompt |
+| 把 `appliedThrough = base + index + 1` 改为 `appliedThrough = base` | 该用例转红（内存高水位失效） |
+| 复原 | `diff` 与原文件逐字节相同，`runtime/session-intent-watch.spec.ts` **12/12** 通过 |
+
+修复后复测：本单元门禁 **71/71**、D01 **58/58**、D05 **103/103**、serve-entry **68/68**、
+D06+L9 并集 **168/168**、`pnpm typecheck` exit 0、`pnpm build` exit 0、真实入口黑盒
+**49 checks / PASS**（receipt `controlPid=41166`、`agentPid=41279`）。
+D07 门禁复用修复前的 **66/66**：该修复只改 `runtime/acp-serve.ts`，UI 侧输入未变。
+
+### 10.4 剩余的真实边界（不因修复而消失）
+
+崩溃/重启后，最后一次成功落盘的 watermark 之后的写仍会**至少一次**地重新施加，因此
+`session.message` 在崩溃窗口内仍可能重复。这是该记录形态能提供的最强保证（at-least-once），
+已在代码注释与本节写明，不宣称 exactly-once。
 
 ## 10. 保留义务（不属本增量，交接给后续阶段）
 

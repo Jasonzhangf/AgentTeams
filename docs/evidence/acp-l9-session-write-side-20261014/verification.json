@@ -8,13 +8,35 @@
   "branch": "codex/acp-l9-session-write-side-20261014",
   "committed": "true",
   "committed_note": "the candidate is committed on the branch as six logical commits; origin/main integration, the independent review verdict, the remote receipt and the freeze are still open.",
-  "candidate_commits": ["feab040 feat(config): own the durable pending-Session-write record", "364f971 feat(agent-host): expose the open permission callbacks and the Session owner", "1da4717 feat(runtime): apply the pending Session writes on the owning daemon", "679c1cc feat(control): write the Session write commands as durable pending writes", "71318c7 docs(governance): add D00 amendment A4 and bind the Session write side", "fb35e73 test(evidence): prove the Console Session writes reach a real engine"],
+  "candidate_commits": [
+    "feab040 feat(config): own the durable pending-Session-write record",
+    "364f971 feat(agent-host): expose the open permission callbacks and the Session owner",
+    "1da4717 feat(runtime): apply the pending Session writes on the owning daemon",
+    "679c1cc feat(control): write the Session write commands as durable pending writes",
+    "71318c7 docs(governance): add D00 amendment A4 and bind the Session write side",
+    "fb35e73 test(evidence): prove the Console Session writes reach a real engine"
+  ],
   "candidate_head": "fb35e73f0b9b0102ae0c1dfb5939afdcb3abcb30",
   "candidate_tree": "b9aad9906c39224ea7cffb4982333a59aeca1257",
   "integration_commit": null,
   "integration_method": null,
   "remote_receipt": null,
-  "review": null,
+  "review": {
+    "status": "NO INDEPENDENT ARTIFACT. Three independent review attempts returned prose verdicts and wrote no review file, so no independent review PASS receipt exists for this unit. The first was self-contradictory (labelled F1 BLOCKING and then claimed no BLOCKING finding); the second reported a measurement that does not exist (it wrote the receipt verdict as 'applied', which is not a receipt field value). Neither is citable.",
+    "attempts": 3,
+    "attempt_methods": [
+      "subagent (fresh)",
+      "subagent_fork",
+      "reused durable teammate acp-d00-final-review owning task-12"
+    ],
+    "lead_verification_of_review_claims": {
+      "F1 sessionWrite reports success for uncertain/failed": "FALSE. runtime/control-process.ts:640 returns relationsWriteResult(await writeSessionIntentRecord(...)), and relationsWriteResult returns {ok:true} only when status === 'applied'.",
+      "F2 sessionWrite leaks the target account/scope": "NOT INTRODUCED HERE. The writer derives the path from its own accepted peers, the same rule the already-merged relations record uses; a wrong peer declaration only makes the agent daemon fail to find the record.",
+      "F3 a future session.open falls into the Session handler": "FALSE. sessionCommand is called only for kind permission.reply or session.cancel.",
+      "A1 a failed watermark save re-applies the write": "TRUE. This was a real defect and it is fixed; see resolved_defects."
+    },
+    "note": "The review process was still useful: its A1 attack surfaced the real defect recorded in resolved_defects. The unit does not claim a review PASS."
+  },
   "gate_id": "teams-acp-l9-session-write-side",
   "gate_status": "partial",
   "gate_status_note": "This unit ADDS the gate. It stays partial because the Session and notification projection is L10, session.create/session.open stay typed unsupported, and this is source-tree evidence with no installed-copy, restart, deployed-entrypoint or cross-device receipt.",
@@ -23,24 +45,26 @@
   "driver": "docs/evidence/acp-l9-session-write-side-20261014/black-box-session-write.mjs",
   "verification": {
     "gate_command": "pnpm exec vitest run --no-file-parallelism config/session-intent-store.spec.ts runtime/session-intent-watch.spec.ts runtime/control-process.spec.ts agent-host/acp-host.spec.ts",
-    "gate_result": "70 passed / 4 files, exit 0 (gate-d06-l9.log)",
+    "gate_result": "71 passed / 4 files, exit 0 (gate-d06-l9.log)",
     "gate_files": {
       "config/session-intent-store.spec.ts": 11,
-      "runtime/session-intent-watch.spec.ts": 11,
+      "runtime/session-intent-watch.spec.ts": 12,
       "runtime/control-process.spec.ts": 24,
       "agent-host/acp-host.spec.ts": 24
     },
-    "d01_host_gate": "58 passed / 3 files, exit 0",
-    "d05_network_gate": "103 passed / 11 files, exit 0",
-    "serve_entry_gate": "68 passed / 3 files, exit 0",
+    "d01_host_gate": "58 passed / 3 files, exit 0 (re-measured after the fix)",
+    "d05_network_gate": "103 passed / 11 files, exit 0 (re-measured after the fix)",
+    "serve_entry_gate": "68 passed / 3 files, exit 0 (re-measured after the fix)",
     "d06_control_gate": "137 passed / 7 files, exit 0",
     "l9_intent_side_gate": "69 passed / 4 files, exit 0",
-    "d07_webui_gate": "TEAMS_CONSOLE_REAL_DOM=1, 66 passed / 13 files, exit 0",
+    "d07_webui_gate": "TEAMS_CONSOLE_REAL_DOM=1, 66 passed / 13 files, exit 0. Reused from before the fix: the fix changes only runtime/acp-serve.ts and the UI inputs are unchanged.",
     "typecheck": "pnpm typecheck, exit 0",
     "build": "pnpm build, exit 0",
     "black_box": "49 checks, verdict PASS, exit 0 (receipt.json)",
     "full_regression": "scripts/regression.mjs measured three times with one command: the uncommitted candidate 1172/1146/3/23, the unmodified base d531d24 in its own worktree 1149/1146/3/0, and this committed candidate fb35e73 1173/1172/1/0. The single remaining failure is the same one that fails on the base with the same root cause, and that spec file passes 33/33 in isolation. Not claimed as a pass and not claimed as a regression of this unit; see notes.md section 9.",
-    "pnpm_verify": "not run. It is the pre-existing BLOCKED baseline (PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014), so it is not a regression conclusion for this unit."
+    "pnpm_verify": "not run. It is the pre-existing BLOCKED baseline (PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014), so it is not a regression conclusion for this unit.",
+    "gate_tests": 71,
+    "gate_union_d06_l9": "168 passed / 10 files, exit 0"
   },
   "acceptance_items": [
     "the three frozen Session writes (permission.reply, session.cancel and the dedicated Session body ingress) perform one durable CAS write instead of refusing UNSUPPORTED_OPERATION, and the result reports only the accepted revision and never a Session state",
@@ -63,17 +87,32 @@
     "scripts/regression.mjs does not pass --no-file-parallelism, and both cli/agentteams.spec.ts and cli/package-install.spec.ts rebuild generated/runtime-lib in their beforeAll, so the CLI direct-entry test can fail from a concurrent rebuild; it passes 3/3 in isolation and 33/33 in its own file"
   ],
   "findings_note": "Both findings are pre-existing and are reproduced on the unmodified base d531d24. Neither is fixed in this unit, because neither is this unit's defect.",
-  "resolved_defects": [],
+  "resolved_defects": [
+    {
+      "id": "A1 watermark re-apply duplicates a Session body",
+      "found_by": "independent review attempt (attack A1), verified and fixed by the unit owner",
+      "file": "runtime/acp-serve.ts createSessionIntentWatch",
+      "defect": "A failed watermark save (or a crash) re-applied the same session.message on the next poll, so the engine received a second session/prompt and the Console user saw a duplicated message. The old code comment claimed the apply path refuses an already-satisfied write, which is true only for permission.reply, because that callback is consumed.",
+      "fix": [
+        "an in-process high-water mark appliedThrough; base = max(durableWatermark, appliedThrough ?? 0), so a write already applied in this process is never re-applied",
+        "the watermark now saves appliedThrough ?? base, so a partial pass is also durable and the durable watermark never lags a write that already reached the engine",
+        "a store fault on the watermark save now maps through configFault like the record-read fault, instead of being flattened to ENGINE_UNAVAILABLE, which wrongly blamed the engine",
+        "the apply() comment now says true means the write really reached the engine"
+      ],
+      "red_green": "runtime/session-intent-watch.spec.ts 'never re-applies a write it already applied when the watermark cannot be saved' uses chflags uchg so the watermark reads as 0 but cannot be written. Reverting base to the durable watermark alone makes it fail with host.received length 2 instead of 1, and setting appliedThrough = base also makes it fail; restored, the file is byte-identical and the spec is 12/12.",
+      "residual_boundary": "After a crash or restart, writes after the last saved watermark are still applied at least once, so a session.message can still repeat inside that window. This is the at-least-once boundary of this record shape and exactly-once is not claimed."
+    }
+  ],
   "observed_values": {
-    "control_pid": 3398,
-    "agent_pid": 3500,
+    "control_pid": 41166,
+    "agent_pid": 41279,
     "engine_instance": "opencode-l9sw-agent-dd3152d5-8222-4a57-afc3-a094c500485a",
     "record_path": "<temp root>/home/.agentteams/sessions/local/local/l9sw-agent/session-intent.json (removed after the run)",
     "black_box_verdict": "PASS",
     "black_box_checks": 49,
     "gate_tests": 70,
-    "gate_run_totals": "the six gate commands measured 58 + 103 + 68 + 137 + 69 + 66 + 70 = 571 passing tests in total; that sum double counts shared spec files (agent-host/acp-host, runtime/control-process and runtime/acp-serve appear in more than one gate command), so it is a run total and not a distinct test count",
-    "black_box_finished_at": "2026-10-15T06:41:18.718Z"
+    "gate_run_totals": "the six gate commands measured 58 + 103 + 68 + 137 + 69 + 66 + 71 = 572 passing tests in total; that sum double counts shared spec files (agent-host/acp-host, runtime/control-process and runtime/acp-serve appear in more than one gate command), so it is a run total and not a distinct test count",
+    "black_box_finished_at": "2026-10-15T08:24:55.264Z"
   },
   "engine_versions": {
     "node": "v22.22.2",

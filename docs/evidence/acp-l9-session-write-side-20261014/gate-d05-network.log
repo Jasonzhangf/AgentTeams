@@ -1,24 +1,23 @@
 
  RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014
 
- ✓ runtime/registry-registration.spec.ts (7 tests) 1415ms
-   ✓ keeps a standalone registration process alive through a registry outage and reconnects it  1308ms
- ✓ network/registration-client.spec.ts (7 tests) 1598ms
-   ✓ registers automatically, heartbeats its lease, and reports typed online health  935ms
-   ✓ reconnects to the same configured server after a registry restart  423ms
- ✓ runtime/serve-egress.spec.ts (5 tests) 335ms
- ✓ network/teams-connection-history.spec.ts (5 tests) 22ms
- ✓ network/teams-session.spec.ts (26 tests) 122ms
- ✓ network/teams-negotiation.spec.ts (22 tests) 30ms
- ✓ network/teams-egress.spec.ts (8 tests) 19ms
- ✓ network/teams-ingress.spec.ts (6 tests) 16ms
+ ✓ network/registration-client.spec.ts (7 tests) 1618ms
+   ✓ registers automatically, heartbeats its lease, and reports typed online health  939ms
+   ✓ reconnects to the same configured server after a registry restart  420ms
+ ✓ runtime/registry-registration.spec.ts (7 tests) 1344ms
+   ✓ keeps a standalone registration process alive through a registry outage and reconnects it  1258ms
+ ✓ runtime/serve-egress.spec.ts (5 tests) 471ms
+ ✓ network/teams-connection-history.spec.ts (5 tests) 41ms
+ ✓ network/teams-session.spec.ts (26 tests) 119ms
+ ✓ network/teams-negotiation.spec.ts (22 tests) 28ms
+ ✓ network/teams-ingress.spec.ts (6 tests) 21ms
+ ✓ network/teams-egress.spec.ts (8 tests) 20ms
  ✓ control-protocol/teams-connection.spec.ts (9 tests) 5ms
- ✓ network/teams-membership.spec.ts (5 tests) 4ms
- ✓ network/teams-status.spec.ts (3 tests) 3ms
+ ✓ network/teams-status.spec.ts (3 tests) 4ms
+ ✓ network/teams-membership.spec.ts (5 tests) 5ms
 
  Test Files  11 passed (11)
       Tests  103 passed (103)
-   Start at  23:18:30
-   Duration  6.50s (transform 675ms, setup 0ms, import 1.13s, tests 3.57s, environment 1ms)
+   Start at  01:24:21
+   Duration  6.60s (transform 708ms, setup 0ms, import 1.13s, tests 3.68s, environment 0ms)
 
-D05_EXIT=0

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -229,6 +230,40 @@ describe('pending Session write watch', () => {
     // Nothing was applied and the watermark was never created.
     expect(host.received).toEqual([])
     expect((await readSessionIntentWatermark(watermarkPath)).appliedRevision).toBe(0)
+  })
+
+  it('never re-applies a write it already applied when the watermark cannot be saved', async () => {
+    await write(0, { op: 'session.message', agentId: 'agent-alpha', sessionId: 'session-1', payload: { text: 'once' } })
+    const host = recordingHost({ sessions: { 'session-1': REF } })
+    // A watermark the watch can read but cannot replace: the directory is immutable, so the
+    // temporary file cannot be created, while the missing watermark still reads as revision 0.
+    const frozen = join(directory, 'frozen')
+    await mkdir(frozen, { recursive: true })
+    execFileSync('chflags', ['uchg', frozen])
+    try {
+      const watch = createSessionIntentWatch({
+        host,
+        recordPath,
+        watermarkPath: join(frozen, 'watermark.json'),
+        agentId: 'agent-alpha',
+      })
+
+      await watch.reconcile()
+      // The write reached the engine and the failed save is a real typed refusal. The frozen
+      // ACP fault vocabulary has no `UNAVAILABLE`, so a store fault maps through the same
+      // `configFault` bucket the record-read refusal already uses; it never blames the engine.
+      expect(host.received).toHaveLength(1)
+      expect(watch.failures().map(failure => failure.code)).toEqual(['UNSUPPORTED_CONFIGURATION'])
+      expect(watch.failures()[0]?.message).toContain('watermark could not be saved')
+
+      await watch.reconcile()
+      // A second prompt would be a second message in the Session, so the write is not re-sent.
+      expect(host.received).toHaveLength(1)
+      // The durable watermark really was not saved, which is why the process has to remember.
+      expect((await readSessionIntentWatermark(watermarkPath)).appliedRevision).toBe(0)
+    } finally {
+      execFileSync('chflags', ['nouchg', frozen])
+    }
   })
 
   it('keeps each distinct refusal once instead of growing on every pass', async () => {
