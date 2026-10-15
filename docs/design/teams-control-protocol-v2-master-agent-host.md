@@ -1,7 +1,11 @@
 # Teams Control Protocol v2：Agent 网络与可离线 Console
 
 状态：design-revised。文件路径保留供链接兼容；Console 不是持久在线 master 或
-必经 relay。本轮是设计变更，当前源码仅有部分状态组件与旧 Console HTTP 原型。
+必经 relay。2026-10-15 更正（L12 收口）：「当前源码仅有部分状态组件与旧 Console HTTP 原型」
+已不准确。控制 daemon（runtime/control-process.ts + console-host/）与真实 WebUI 已由 D06、
+D07 与 L11 交付并有各自门禁与 installed-copy 浏览器证据；agent-to-agent 关系/协商/
+连接语义由 D05 与 serve-entry 交付。尚未实现的范围限于 ACP/LAN/WebUI 增量之外的部分
+（capability/resource 配对、work 关系、公开 relay 等），见文内边界。
 
 ## 1. 身份和连接角色
 
