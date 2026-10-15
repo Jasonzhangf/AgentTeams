@@ -1,0 +1,13 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015
+
+ ✓ control-protocol/teams-connection.spec.ts (9 tests) 6ms
+ ✓ control-protocol/teams-state.spec.ts (5 tests) 4ms
+ ✓ control-protocol/acp.spec.ts (3 tests) 3ms
+
+ Test Files  3 passed (3)
+      Tests  17 passed (17)
+   Start at  10:33:33
+   Duration  683ms (transform 155ms, setup 0ms, import 202ms, tests 13ms, environment 0ms)
+
+GATE_EXIT=0

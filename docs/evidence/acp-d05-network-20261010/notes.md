@@ -258,7 +258,11 @@ counts 23 checks.
      not wire the serve entry.
   2. **Serve composition.** `runtime/acp-serve.ts` and `cli/agentteams.mjs` are
      outside this change's scope, so the serve entry does not compose the D05
-     chain; `--serve dsh` still has no serve wiring.
+     chain; `--serve dsh` still has no serve wiring. 2026-10-14 correction:
+     `runtime/acp-serve.ts` now composes the D05 chain and `--serve dsh` has
+     serve wiring (docs/evidence/acp-d03-serve-20261010/); the capture-time
+     wording above stands for this unit, and the closure lives in the
+     serve-entry and L9 evidence.
   3. **`peerPolicyRevision` wire source.** SUPERSEDED by D00 amendment A1
      (2026-10-11, closure receipt): the unauthenticated caller input no longer
      exists. The responder now derives the peer revision from
@@ -268,11 +272,24 @@ counts 23 checks.
   4. **R4 publication wiring.** `listenerRouteCandidates` and
      `declarationWithPublishedSurfaces` are pure helpers covered at source level;
      no live daemon caller composes them into a running publish loop.
+     2026-10-14 correction: `runtime/serve-egress.ts` now composes these helpers
+     into the serve entry's live publish loop, and the L9 black boxes drive it;
+     the capture-time wording above stands for this unit, and the live
+     composition is L9's evidence, not this change's.
   5. **Live `onConnection`/ingress.** The real `network/direct-listener.ts`
      `onConnection` path is driven only by the isolated observation; no installed
-     or live daemon runs it.
+     or live daemon runs it. 2026-10-14 correction: the real path is now driven by
+     live `--serve` daemons in the L9 command-side black box
+     (docs/evidence/acp-l9-command-side-20261013/) and the D05 closure run
+     (docs/evidence/acp-d05-closure-20261011/); the capture-time wording above
+     stands for this unit, and those runs are the L9/D05 evidence, not this
+     change's own source-level evidence.
   6. **Membership consumer.** The membership view is a projection only. It has
      no live consumer yet, so nothing proves a UI or control daemon renders it.
+     2026-10-14 correction: the control daemon and WebUI now consume the
+     membership projection through the D06 directory-projection increment; the
+     capture-time wording above stands for this unit, and the live rendering is
+     D06/D07's evidence, not this change's.
   7. **Installed / restart / live / AppSDK.** No installed-artifact, no restart,
      no deployed-entrypoint and no browser/UI evidence exists for this change.
      No AppSDK compile/verify run is claimed: `appsdk compile` fails before it

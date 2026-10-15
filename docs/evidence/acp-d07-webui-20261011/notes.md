@@ -126,4 +126,6 @@ the serve entry, no mobile claim.
 `docs/evidence/acp-l11-installed-browser-20261014/` (18 checks, exit 0). Restart,
 deployed-entrypoint replay, cross-device receipt, live registry composition through the serve
 entry and mobile remain open, so the gate stays **partial**. The sentence above keeps its own
-capture-time wording.
+capture-time wording. 2026-10-14 correction: the `teams-acp-d07-webui stays partial` sentence
+above is the capture-time wording for this unit and is not re-edited; this inline mark records
+that the correction block immediately below is the operative statement for the L11 closure.

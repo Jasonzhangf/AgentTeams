@@ -1,0 +1,19 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015
+
+ ✓ runtime/control-process.spec.ts (27 tests) 7789ms
+   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  512ms
+   ✓ streams the SSE projection and closes the stream on owner loss  478ms
+   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  429ms
+   ✓ refuses a second start while the control generation is alive  451ms
+   ✓ refuses a stop from a stale generation without touching the live process  358ms
+   ✓ fails a start when the webui port is already taken and never reports running  3032ms
+   ✓ projects the real D04 registration directory and streams a frame when it changes  1061ms
+   ✓ serves the real D05 connection projection and connection history over the wire  387ms
+   ✓ keeps the durable connection history across a control-owner restart  784ms
+
+ Test Files  1 passed (1)
+      Tests  27 passed (27)
+   Start at  10:51:03
+   Duration  8.73s (transform 607ms, setup 0ms, import 749ms, tests 7.79s, environment 0ms)
+

@@ -1,0 +1,18 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015
+
+ ✓ opencode-adapter/tests/index.spec.ts (42 tests) 17ms
+ ✓ opencode-adapter/tests/acp-engine.real.spec.ts (4 tests) 12393ms
+     ✓ runs a real prompt with the accepted model binding and reports the real effective model  3150ms
+     ✓ cancels a real in-flight prompt through the notification form  2941ms
+     ✓ delivers a real permission callback and applies the client reply  3392ms
+     ✓ enforces a native-tool blacklist before the tool can run  2909ms
+ ✓ opencode-adapter/tests/acp-engine.spec.ts (16 tests) 8ms
+ ✓ opencode-adapter/tests/managed-config.spec.ts (3 tests) 2ms
+
+ Test Files  4 passed (4)
+      Tests  65 passed (65)
+   Start at  10:33:34
+   Duration  13.45s (transform 272ms, setup 0ms, import 466ms, tests 12.42s, environment 0ms)
+
+GATE_EXIT=0

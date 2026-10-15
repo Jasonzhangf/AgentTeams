@@ -1,0 +1,25 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015
+
+ ✓ runtime/acp-serve.spec.ts (27 tests) 9823ms
+     ✓ starts one daemon and one engine, proves the accepted model, prompts, cancels and stops  3579ms
+     ✓ delivers a real permission callback through the serve listener and applies the reply  3022ms
+     ✓ dispatches dsh to the DSH adapter, starts exactly one child and proves the model from the real session/new  397ms
+     ✓ cancels an in-flight prompt through the entry and stops by explicit PID  400ms
+     ✓ removes the owned DSH home when the readiness session/new fails  372ms
+     ✓ removes the owned DSH home when startAcpAgentDaemon returns a failed outcome  385ms
+     ✓ accepts a blacklist for the capability and client-capability classes the DSH adapter enforces  369ms
+     ✓ binds the local channel byte-compatibly and reports no LAN channel for a loopback listener  370ms
+     ✓ attempts every declared peer at start and records a typed failure instead of skipping  370ms
+     ✓ binds the authenticated LAN channel onto the same host and admits only a real credential  493ms
+ ✓ cli/agentteams.spec.ts (33 tests) 5236ms
+     ✓ init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it  666ms
+     ✓ direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts  602ms
+ ✓ runtime/relations-intent-watch.spec.ts (8 tests) 44ms
+
+ Test Files  3 passed (3)
+      Tests  68 passed (68)
+   Start at  10:36:47
+   Duration  16.67s (transform 2.11s, setup 0ms, import 1.07s, tests 15.10s, environment 0ms)
+
+GATE_EXIT=0

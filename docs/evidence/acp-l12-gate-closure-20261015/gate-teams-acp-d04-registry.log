@@ -1,0 +1,22 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015
+
+ ✓ server/relay.spec.ts (29 tests) 1835ms
+ ✓ network/relay-client.spec.ts (21 tests) 743ms
+ ✓ runtime/registry-registration.spec.ts (7 tests) 1507ms
+   ✓ keeps a standalone registration process alive through a registry outage and reconnects it  1403ms
+ ✓ network/registration-client.spec.ts (7 tests) 1608ms
+   ✓ registers automatically, heartbeats its lease, and reports typed online health  937ms
+   ✓ reconnects to the same configured server after a registry restart  424ms
+ ✓ runtime/registry-process.spec.ts (6 tests) 1213ms
+   ✓ starts the production registry entry, reports it running and stops it by explicit pid  375ms
+   ✓ refuses a second start while the registry generation is alive  383ms
+   ✓ refuses a stop from a stale generation without touching the live process  387ms
+ ✓ server/registry-intent.spec.ts (5 tests) 42ms
+
+ Test Files  6 passed (6)
+      Tests  75 passed (75)
+   Start at  10:33:33
+   Duration  9.34s (transform 863ms, setup 0ms, import 1.34s, tests 6.95s, environment 0ms)
+
+GATE_EXIT=0
