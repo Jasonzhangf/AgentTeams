@@ -336,6 +336,21 @@ describe('createAcpHost', () => {
     expect(fixture.duplex.sent[fixture.duplex.sent.length - 1].result).toMatchObject({ outcome: { outcome: 'cancelled' } })
   })
 
+  it('reports the Sessions an open channel holds and forgets them when it closes', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    // Before any Session exists, the host holds none.
+    expect(fixture.host.openedSessions()).toEqual([])
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    expect(fixture.host.openedSessions()).toEqual(['session-1'])
+    // The channel's own close releases the Session, so it must not be reported after it.
+    await fixture.host.close(ref1)
+    expect(fixture.host.openedSessions()).toEqual([])
+  })
+
   it('cancels explicitly when no controller owns a permission callback', async () => {
     const fixture = makeFixture()
     await open(fixture, ref1)
