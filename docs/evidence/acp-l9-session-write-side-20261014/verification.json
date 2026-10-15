@@ -6,9 +6,11 @@
   "base_ref": "origin/main",
   "worktree": "/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014",
   "branch": "codex/acp-l9-session-write-side-20261014",
-  "committed": "false",
-  "committed_note": "the candidate is not committed yet; the unit commits, the gate, the review, the merge and the push are still open. Until then every number below is a working-tree measurement, not a frozen candidate receipt.",
-  "candidate_commits": [],
+  "committed": "true",
+  "committed_note": "the candidate is committed on the branch as six logical commits; origin/main integration, the independent review verdict, the remote receipt and the freeze are still open.",
+  "candidate_commits": ["feab040 feat(config): own the durable pending-Session-write record", "364f971 feat(agent-host): expose the open permission callbacks and the Session owner", "1da4717 feat(runtime): apply the pending Session writes on the owning daemon", "679c1cc feat(control): write the Session write commands as durable pending writes", "71318c7 docs(governance): add D00 amendment A4 and bind the Session write side", "fb35e73 test(evidence): prove the Console Session writes reach a real engine"],
+  "candidate_head": "fb35e73f0b9b0102ae0c1dfb5939afdcb3abcb30",
+  "candidate_tree": "b9aad9906c39224ea7cffb4982333a59aeca1257",
   "integration_commit": null,
   "integration_method": null,
   "remote_receipt": null,
@@ -37,7 +39,7 @@
     "typecheck": "pnpm typecheck, exit 0",
     "build": "pnpm build, exit 0",
     "black_box": "49 checks, verdict PASS, exit 0 (receipt.json)",
-    "full_regression": "scripts/regression.mjs exit 1 on this candidate AND on unmodified base origin/main d531d24; the three failures differ between the two runs and the shared one has the same root cause on the base. Not claimed as a pass and not claimed as a regression of this unit; see notes.md section 9.",
+    "full_regression": "scripts/regression.mjs measured three times with one command: the uncommitted candidate 1172/1146/3/23, the unmodified base d531d24 in its own worktree 1149/1146/3/0, and this committed candidate fb35e73 1173/1172/1/0. The single remaining failure is the same one that fails on the base with the same root cause, and that spec file passes 33/33 in isolation. Not claimed as a pass and not claimed as a regression of this unit; see notes.md section 9.",
     "pnpm_verify": "not run. It is the pre-existing BLOCKED baseline (PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014), so it is not a regression conclusion for this unit."
   },
   "acceptance_items": [
@@ -95,7 +97,7 @@
     "docs/evidence/acp-l9-session-write-side-20261014/gate-d07-webui.log",
     "docs/evidence/acp-l9-session-write-side-20261014/typecheck.log",
     "docs/evidence/acp-l9-session-write-side-20261014/build.log",
-    "docs/evidence/acp-l9-session-write-side-20261014/regression-full-suite.log",
+    "docs/evidence/acp-l9-session-write-side-20261014/regression-committed-candidate.log",
     "docs/evidence/acp-l9-session-write-side-20261014/baseline-origin-main-regression.log"
   ],
   "overall_goal": "continue the ACP/LAN/WebUI long-running delivery; this unit delivers L9's Session write side and L12 remains open",

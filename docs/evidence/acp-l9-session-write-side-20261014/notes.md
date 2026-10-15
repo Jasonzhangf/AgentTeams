@@ -154,6 +154,33 @@ driver 全程只经控制 daemon 的**认证** HTTP 面提交写入，从不经�
 
 ## 9. 全量回归的状态（不作为本单元结论，也不作为「已通过」）
 
+三次运行按同一命令 `scripts/regression.mjs` 完成，均为同一根因的抖动，不是本单元的回归：
+
+| 运行 | 工作树 | total / passed / failed / skipped |
+| --- | --- | --- |
+| 工作树未提交候选 | 未提交 | 1172 / 1146 / 3 / 23 |
+| base `d531d24` 独立 worktree | 未改一行 | 1149 / 1146 / 3 / 0 |
+| **已提交候选 `fb35e73`** | 干净 | **1173 / 1172 / 1 / 0** |
+
+日志：`regression-committed-candidate.log`（候选）、`baseline-origin-main-regression.log`（base）。
+可判读的事实有四条：
+
+1. `cli/package-install.spec.ts` 的 23 条 skipped 在**已提交**候选上消失（23→0），
+   因为 `scripts/receipt-identity.mjs` 不再拒绝这个候选。这正是预期的：该门禁只在已提交候选上运行。
+2. 三次运行唯一的共同失败是
+   `agentteams CLI direct node entry avoids source TS parameter properties…`，
+   而该文件单独跑 33/33 通过，隔离后也 3/3 通过。base 上它以**同一根因**失败。
+   根因是 `scripts/regression.mjs` 不传 `--no-file-parallelism`，而
+   `cli/agentteams.spec.ts` 与 `cli/package-install.spec.ts` 的 `beforeAll` 都会重建同一份
+   `generated/runtime-lib`；并行跑时 `agentteams.mjs init`/`status` 读到半份产物，
+   于是第二次 `init` 不报预期的 `already exists` 而报底层错误。
+3. 未提交候选那次还失败的 `executes remote Work…` 与 `sends one real OpenCode Session request…`
+   在已提交候选上通过，base 那次失败的 `D07 four-page DOM` 与 `declared capability rendering`
+   在本单元的 D07 门禁（`TEAMS_CONSOLE_REAL_DOM=1`，13 个文件）里同样 66/66 通过——
+   这四条是真实进程/真实 Chrome/真实引擎的负载抖动，不是固定回归。
+4. 因此这些失败**不是**由本单元引入：本单元没有改 CLI 装配、`generated/runtime-lib` 的构建
+   或 DOM 渲染路径；D01/D05/D06/D07/serve-entry 六个门禁命令在候选上全部通过。
+
 `scripts/regression.mjs` 在本候选上 **exit 1**；在**未改一行的 base `origin/main` `d531d24`**
 的独立 worktree 上同样 **exit 1**。两者都不是本单元引入的回归，证据如下：
 
@@ -178,9 +205,9 @@ driver 全程只经控制 daemon 的**认证** HTTP 面提交写入，从不经�
    not match the recorded index`）。这是工作流事实，不是代码缺陷：`package-install` 门禁按
    设计只在**已提交**候选上运行。本单元的集成提交完成后重跑该门禁即可闭合此项。
 
-因此本单元按映射门禁 + 类型检查 + 构建 + 真实入口黑盒判定，并在集成后重跑全量回归；
-不把这次 `exit 1` 说成通过，也不把它说成本单元的回归。`pnpm verify` 仍**未运行**：它是先于
-本单元的 BLOCKED 基线（`PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014`）。
+因此本单元按映射门禁 + 类型检查 + 构建 + 真实入口黑盒判定，并把这三次运行的差异如实记录；
+不把任何一次 `exit 1` 说成通过，也不把它们说成本单元的回归。`pnpm verify` 仍**未运行**：它是
+先于本单元的 BLOCKED 基线（`PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014`）。
 
 ## 10. 保留义务（不属本增量，交接给后续阶段）
 
