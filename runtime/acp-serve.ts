@@ -1140,6 +1140,27 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
           return false
         }
         const row = rows[0]
+        // The Console already chose one engine option, and the frozen command carries it. It is
+        // used verbatim, because answering with a same-kind substitute would silently replace
+        // the operator's decision. A kind is only the fallback for a command that named none.
+        if (intent.optionId !== undefined) {
+          const named = row.options.find(candidate => candidate.optionId === intent.optionId)
+          if (named === undefined) {
+            refuse(intent.intentId, 'INVALID_ACP_FRAME', `the engine never offered option ${intent.optionId} for permission ${intent.permissionId}; offered options: ${row.options.map(candidate => candidate.optionId).join(', ') || 'none'}`)
+            return false
+          }
+          if (named.kind !== intent.decision) {
+            // Guessing which of the two contradicting values is right would answer the engine
+            // with a decision nobody made, so the mismatch is refused instead.
+            refuse(intent.intentId, 'INVALID_ACP_FRAME', `option ${intent.optionId} is kind ${named.kind}, but the write states decision ${intent.decision} for permission ${intent.permissionId}`)
+            return false
+          }
+          await input.host.receive({
+            ...row.ref,
+            frame: { jsonrpc: '2.0', id: row.permissionId, result: { outcome: { outcome: 'selected', optionId: named.optionId } } },
+          })
+          return true
+        }
         const option = row.options.find(candidate => candidate.kind === intent.decision)
         if (option === undefined) {
           // Never invent an optionId: only the engine's own offered set is selectable.
@@ -1183,7 +1204,7 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
    */
   let appliedThrough: number | undefined
 
-  const reconcile = async (): Promise<void> => {
+  const reconcileOnce = async (): Promise<void> => {
     let record
     let watermark
     try {
@@ -1223,6 +1244,25 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
       // so this pass does not repeat them; only a restart can, and only after this point.
       // The store's own typed code is kept: the engine is fine, the watermark is not.
       refuse('', configFault(error).code, messageOf(error, 'the pending Session write watermark could not be saved'))
+    }
+  }
+
+  /**
+   * One poll at a time. Two overlapping passes would read the same watermark and could apply
+   * the same write twice, and a poll that arrived while the previous one still ran has nothing
+   * new to do. A throw is recorded as a typed refusal instead of escaping the interval callback,
+   * which would leave an unhandled rejection and could take the daemon down.
+   */
+  let running = false
+  const reconcile = async (): Promise<void> => {
+    if (running) return
+    running = true
+    try {
+      await reconcileOnce()
+    } catch (error) {
+      refuse('', configFault(error).code, messageOf(error, 'the pending Session write watch failed'))
+    } finally {
+      running = false
     }
   }
 

@@ -1,43 +1,24 @@
 
  RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014
 
- ✓ cli/agentteams.spec.ts (33 tests) 4711ms
-     ✓ init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it  691ms
-     ✓ direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts  760ms
- ✓ runtime/session-intent-watch.spec.ts (12 tests) 101ms
- ✓ runtime/acp-serve.spec.ts (27 tests) 9444ms
-     ✓ starts one daemon and one engine, proves the accepted model, prompts, cancels and stops  2955ms
-     ✓ delivers a real permission callback through the serve listener and applies the reply  3003ms
-     ✓ dispatches dsh to the DSH adapter, starts exactly one child and proves the model from the real session/new  442ms
-     ✓ cancels an in-flight prompt through the entry and stops by explicit PID  399ms
-     ✓ removes the owned DSH home when the readiness session/new fails  367ms
-     ✓ removes the owned DSH home when startAcpAgentDaemon returns a failed outcome  356ms
-     ✓ accepts a blacklist for the capability and client-capability classes the DSH adapter enforces  393ms
-     ✓ binds the local channel byte-compatibly and reports no LAN channel for a loopback listener  372ms
-     ✓ attempts every declared peer at start and records a typed failure instead of skipping  582ms
-     ✓ binds the authenticated LAN channel onto the same host and admits only a real credential  454ms
- ✓ runtime/control-process.spec.ts (24 tests) 7633ms
-   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  503ms
+ ✓ runtime/control-process.spec.ts (26 tests) 7602ms
+   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  434ms
    ✓ streams the SSE projection and closes the stream on owner loss  415ms
-   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  419ms
-   ✓ refuses a second start while the control generation is alive  479ms
-   ✓ refuses a stop from a stale generation without touching the live process  353ms
-   ✓ fails a start when the webui port is already taken and never reports running  3046ms
-   ✓ projects the real D04 registration directory and streams a frame when it changes  1059ms
-   ✓ serves the real D05 connection projection and connection history over the wire  405ms
-   ✓ keeps the durable connection history across a control-owner restart  731ms
- ✓ config/session-intent-store.spec.ts (11 tests) 1343ms
-     ✓ keeps a fixed window and advances the retained boundary when it drops  579ms
-     ✓ refuses a reader that fell behind the retained window instead of skipping  555ms
- ✓ config/relations-intent-store.spec.ts (10 tests) 221ms
- ✓ runtime/relations-intent-watch.spec.ts (8 tests) 60ms
- ✓ console-host/tests/http-api.spec.ts (7 tests) 61ms
- ✓ agent-host/acp-host.spec.ts (24 tests) 65ms
- ✓ control-protocol/console-api.spec.ts (12 tests) 11ms
+   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  388ms
+   ✓ refuses a second start while the control generation is alive  483ms
+   ✓ refuses a stop from a stale generation without touching the live process  407ms
+   ✓ fails a start when the webui port is already taken and never reports running  3027ms
+   ✓ projects the real D04 registration directory and streams a frame when it changes  1064ms
+   ✓ serves the real D05 connection projection and connection history over the wire  399ms
+   ✓ keeps the durable connection history across a control-owner restart  721ms
+ ✓ config/session-intent-store.spec.ts (12 tests) 1402ms
+     ✓ keeps a fixed window and advances the retained boundary when it drops  515ms
+     ✓ refuses a reader that fell behind the retained window instead of skipping  631ms
+ ✓ runtime/session-intent-watch.spec.ts (15 tests) 185ms
+ ✓ agent-host/acp-host.spec.ts (24 tests) 64ms
 
- Test Files  10 passed (10)
-      Tests  168 passed (168)
-   Start at  01:23:21
-   Duration  27.00s (transform 2.48s, setup 0ms, import 1.75s, tests 23.65s, environment 0ms)
+ Test Files  4 passed (4)
+      Tests  77 passed (77)
+   Start at  01:48:50
+   Duration  11.29s (transform 905ms, setup 0ms, import 1.25s, tests 9.25s, environment 0ms)
 
-EXIT=0

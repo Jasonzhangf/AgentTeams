@@ -100,6 +100,47 @@ describe('pending Session write watch', () => {
     expect((await readSessionIntentWatermark(watermarkPath)).appliedRevision).toBe(1)
   })
 
+  it('answers with the exact engine option the write names, not the first option of that kind', async () => {
+    // Two options project to the same `always` kind. The Console named the second one, and the
+    // engine must be answered with that one; a same-kind guess would silently replace the
+    // operator's decision.
+    const twoOfAKind = [
+      { optionId: 'allow-always-a', name: 'Always allow A', kind: 'always' as const },
+      { optionId: 'allow-always-b', name: 'Always allow B', kind: 'always' as const },
+    ]
+    await write(0, { op: 'permission.reply', agentId: 'agent-alpha', sessionId: 'session-1', permissionId: 'permission-1', decision: 'always', optionId: 'allow-always-b' })
+    const host = recordingHost({ pending: [pending({ options: twoOfAKind })] })
+    const watch = watchFor(host)
+    await watch.reconcile()
+    expect(host.received).toEqual([{
+      ...REF,
+      frame: { jsonrpc: '2.0', id: 'permission-1', result: { outcome: { outcome: 'selected', optionId: 'allow-always-b' } } },
+    }])
+    expect(watch.failures()).toEqual([])
+  })
+
+  it('refuses a named engine option the engine never offered, and one that contradicts the decision', async () => {
+    await write(0, { op: 'permission.reply', agentId: 'agent-alpha', sessionId: 'session-1', permissionId: 'permission-1', decision: 'always', optionId: 'allow-always-invented' })
+    const invented = recordingHost({ pending: [pending()] })
+    const first = watchFor(invented)
+    await first.reconcile()
+    expect(invented.received).toEqual([])
+    expect(first.failures()[0]).toMatchObject({ code: 'INVALID_ACP_FRAME' })
+    expect(first.failures()[0]?.message).toContain('never offered option allow-always-invented')
+
+    // The named option exists, but its kind is not the decision the same write states. Guessing
+    // which one is right would answer the engine with a decision nobody made. This record is
+    // separate, because the watch above stopped on its own unappliable first write.
+    const contradictingPath = sessionIntentPath(join(directory, 'record-contradicting'))
+    await write(0, { op: 'permission.reply', agentId: 'agent-alpha', sessionId: 'session-1', permissionId: 'permission-1', decision: 'once', optionId: 'allow-always' }, contradictingPath)
+    const contradicting = recordingHost({ pending: [pending()] })
+    const second = watchFor(contradicting, { recordPath: contradictingPath })
+    await second.reconcile()
+    expect(contradicting.received).toEqual([])
+    expect(second.failures()[0]).toMatchObject({ code: 'INVALID_ACP_FRAME' })
+    expect(second.failures()[0]?.message).toContain('is kind always')
+  })
+
   it('never turns a decision the engine did not offer into an approval', async () => {
     // The engine offered no `always` option, so the write must be refused, not mapped onto
     // the nearest option.
@@ -264,6 +305,34 @@ describe('pending Session write watch', () => {
     } finally {
       execFileSync('chflags', ['nouchg', frozen])
     }
+  })
+
+  it('never runs two passes at once, so a poll that overlaps cannot apply the same write twice', async () => {
+    await write(0, { op: 'session.message', agentId: 'agent-alpha', sessionId: 'session-1', payload: { text: 'once' } })
+    const received: AcpIngress[] = []
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const host = {
+      pendingPermissions: () => [],
+      channelForSession: () => REF,
+      // The engine is slow, so the next poll arrives while this write is still in flight.
+      receive: async (ingress: AcpIngress) => { received.push(ingress); await gate },
+    }
+    const watch = createSessionIntentWatch({ host, recordPath, watermarkPath, agentId: 'agent-alpha' })
+
+    const first = watch.reconcile()
+    // Let the first pass reach the engine and block there, before it can save its watermark.
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const second = watch.reconcile()
+    // Let the second pass read the still-unsaved watermark, so the overlap is real and not a
+    // lucky microtask order.
+    await new Promise(resolve => setTimeout(resolve, 20))
+    release()
+    await Promise.all([first, second])
+
+    // Two overlapping passes would both read watermark 0 and both prompt the engine.
+    expect(received).toHaveLength(1)
+    expect((await readSessionIntentWatermark(watermarkPath)).appliedRevision).toBe(1)
   })
 
   it('keeps each distinct refusal once instead of growing on every pass', async () => {

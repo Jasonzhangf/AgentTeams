@@ -134,9 +134,10 @@ describe('session intent record', () => {
 
   it('is a typed throw on a broken record and never overwrites it', async () => {
     await withStore(async path => {
-      await writeFile(path, '{"version":1,"revision":2,"oldestRevision":1,"intents":[{"intentId":"i","kind":"session.cancel","agentId":"agent-alpha","sessionId":"s"}],"updatedAt":"t"}\n')
+      // A well-formed record at revision 2 carries two intents, one per revision.
+      await writeFile(path, '{"version":1,"revision":2,"oldestRevision":1,"intents":[{"intentId":"i","kind":"session.cancel","agentId":"agent-alpha","sessionId":"s"},{"intentId":"j","kind":"session.cancel","agentId":"agent-alpha","sessionId":"s"}],"updatedAt":"t"}\n')
       const result = await writeSessionIntentRecord(path, 1, PERMISSION)
-      // The stored revision really is 2, so the CAS fence refuses before any parse of intents.
+      // The stored revision really is 2, so the CAS fence refuses instead of writing at 1.
       expect(result.status).toBe('failed')
       expect((result as { readonly error: { readonly code: string } }).error.code).toBe('REVISION_CONFLICT')
       await writeFile(path, 'not json\n')
@@ -223,6 +224,26 @@ describe('session intent reader view', () => {
       expect(pendingSessionIntents(grown, 0)).toEqual({ state: 'behind', appliedRevision: 0, oldestRevision: 3 })
       expect(pendingSessionIntents(grown, 1)).toEqual({ state: 'behind', appliedRevision: 1, oldestRevision: 3 })
       expect(pendingSessionIntents(grown, 2)).toMatchObject({ state: 'pending' })
+    })
+  })
+
+  it('refuses a record whose intent count does not cover its own revision span', async () => {
+    await withStore(async path => {
+      await writeSessionIntentRecord(path, 0, { op: 'session.message', agentId: 'agent-alpha', sessionId: 's', payload: 1 })
+      expect(await readSessionIntentRecord(path)).toMatchObject({ revision: 1, oldestRevision: 1 })
+
+      // A record that claims revision 10 but carries 5 intents would let the reader advance its
+      // watermark to 10 and skip revisions 6..10 without any refusal, so it is refused instead.
+      const truncated = JSON.stringify({ version: 1, revision: 10, oldestRevision: 1, updatedAt: '2026-10-15T00:00:00.000Z', intents: Array.from({ length: 5 }, (_unused, index) => ({ intentId: `intent-${index}`, kind: 'session.message', agentId: 'agent-alpha', sessionId: 's', payload: index })) })
+      await writeFile(path, `${truncated}\n`)
+      await expect(readSessionIntentRecord(path)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+      await expect(readSessionIntentRecord(path)).rejects.toThrow(/incomplete/)
+
+      // The write path never overwrites those bytes either: its own read throws first, so the
+      // malformed record is refused instead of being replaced by a fresh one.
+      await expect(writeSessionIntentRecord(path, 10, { op: 'session.message', agentId: 'agent-alpha', sessionId: 's', payload: 'next' }))
+        .rejects.toMatchObject({ code: 'INVALID_INPUT' })
+      expect((await readFile(path, 'utf8')).trim()).toBe(truncated)
     })
   })
 })

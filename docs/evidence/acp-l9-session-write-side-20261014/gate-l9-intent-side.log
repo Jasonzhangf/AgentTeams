@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014
+
+ ✓ runtime/acp-serve.spec.ts (27 tests) 9652ms
+     ✓ starts one daemon and one engine, proves the accepted model, prompts, cancels and stops  3031ms
+     ✓ delivers a real permission callback through the serve listener and applies the reply  3356ms
+     ✓ dispatches dsh to the DSH adapter, starts exactly one child and proves the model from the real session/new  397ms
+     ✓ cancels an in-flight prompt through the entry and stops by explicit PID  433ms
+     ✓ removes the owned DSH home when the readiness session/new fails  392ms
+     ✓ removes the owned DSH home when startAcpAgentDaemon returns a failed outcome  377ms
+     ✓ accepts a blacklist for the capability and client-capability classes the DSH adapter enforces  385ms
+     ✓ binds the local channel byte-compatibly and reports no LAN channel for a loopback listener  372ms
+     ✓ attempts every declared peer at start and records a typed failure instead of skipping  388ms
+     ✓ binds the authenticated LAN channel onto the same host and admits only a real credential  464ms
+ ✓ runtime/control-process.spec.ts (26 tests) 7608ms
+   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  511ms
+   ✓ streams the SSE projection and closes the stream on owner loss  494ms
+   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  348ms
+   ✓ refuses a second start while the control generation is alive  368ms
+   ✓ refuses a stop from a stale generation without touching the live process  339ms
+   ✓ fails a start when the webui port is already taken and never reports running  3036ms
+   ✓ projects the real D04 registration directory and streams a frame when it changes  1051ms
+   ✓ serves the real D05 connection projection and connection history over the wire  402ms
+   ✓ keeps the durable connection history across a control-owner restart  822ms
+ ✓ config/relations-intent-store.spec.ts (10 tests) 222ms
+ ✓ runtime/relations-intent-watch.spec.ts (8 tests) 40ms
+
+ Test Files  4 passed (4)
+      Tests  71 passed (71)
+   Start at  01:49:28
+   Duration  19.64s (transform 986ms, setup 0ms, import 1.46s, tests 17.52s, environment 0ms)
+

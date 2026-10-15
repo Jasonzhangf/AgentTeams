@@ -22,20 +22,25 @@
   "integration_method": null,
   "remote_receipt": null,
   "review": {
-    "status": "NO INDEPENDENT ARTIFACT. Three independent review attempts returned prose verdicts and wrote no review file, so no independent review PASS receipt exists for this unit. The first was self-contradictory (labelled F1 BLOCKING and then claimed no BLOCKING finding); the second reported a measurement that does not exist (it wrote the receipt verdict as 'applied', which is not a receipt field value). Neither is citable.",
-    "attempts": 3,
-    "attempt_methods": [
-      "subagent (fresh)",
-      "subagent_fork",
-      "reused durable teammate acp-d00-final-review owning task-12"
-    ],
-    "lead_verification_of_review_claims": {
-      "F1 sessionWrite reports success for uncertain/failed": "FALSE. runtime/control-process.ts:640 returns relationsWriteResult(await writeSessionIntentRecord(...)), and relationsWriteResult returns {ok:true} only when status === 'applied'.",
-      "F2 sessionWrite leaks the target account/scope": "NOT INTRODUCED HERE. The writer derives the path from its own accepted peers, the same rule the already-merged relations record uses; a wrong peer declaration only makes the agent daemon fail to find the record.",
-      "F3 a future session.open falls into the Session handler": "FALSE. sessionCommand is called only for kind permission.reply or session.cancel.",
-      "A1 a failed watermark save re-applies the write": "TRUE. This was a real defect and it is fixed; see resolved_defects."
+    "status": "NO INDEPENDENT ARTIFACT. Four independent review attempts returned prose verdicts and wrote no review file, so no independent review PASS receipt exists for this unit. The Lead transcribed nothing: the verdicts below are the reviewers' own returned text, recorded here as claims and then independently checked by the unit owner.",
+    "attempts": 4,
+    "round_1": {
+      "verdict": "PASS, self-contradictory",
+      "text": "labelled its F1 BLOCKING and then wrote 'All findings are ADVISORY. No BLOCKING finding exists.'; its 'Measurements' reported the receipt verdict as 'applied', which is not a receipt field value, so it did not run the driver. Not citable."
     },
-    "note": "The review process was still useful: its A1 attack surfaced the real defect recorded in resolved_defects. The unit does not claim a review PASS."
+    "round_2": {
+      "verdict": "FAIL, three BLOCKING findings",
+      "findings": "F1 the frozen permission.reply.optionId was silently dropped and replaced by a same-kind guess; F2 the 500ms interval could run two overlapping passes; F3 the one CAS fence is check-then-act and can lose a Console write while both commands report ok:true. It also refuted round 1's F1 and F3 and confirmed F2 as inherited."
+    },
+    "lead_verification": {
+      "round_1_F1": "FALSE",
+      "round_1_F2": "inherited, not introduced here",
+      "round_1_F3": "FALSE",
+      "round_2_F1": "TRUE, fixed",
+      "round_2_F2": "TRUE, fixed",
+      "round_2_F3": "TRUE, fixed"
+    },
+    "note": "No independent review PASS exists. The three BLOCKING findings are fixed and each has red-first evidence in notes.md section 11. The unit does not claim a review PASS."
   },
   "gate_id": "teams-acp-l9-session-write-side",
   "gate_status": "partial",
@@ -45,26 +50,28 @@
   "driver": "docs/evidence/acp-l9-session-write-side-20261014/black-box-session-write.mjs",
   "verification": {
     "gate_command": "pnpm exec vitest run --no-file-parallelism config/session-intent-store.spec.ts runtime/session-intent-watch.spec.ts runtime/control-process.spec.ts agent-host/acp-host.spec.ts",
-    "gate_result": "71 passed / 4 files, exit 0 (gate-d06-l9.log)",
+    "gate_result": "77 passed / 4 files, exit 0 (gate-d06-l9.log)",
     "gate_files": {
-      "config/session-intent-store.spec.ts": 11,
-      "runtime/session-intent-watch.spec.ts": 12,
-      "runtime/control-process.spec.ts": 24,
+      "config/session-intent-store.spec.ts": 12,
+      "runtime/session-intent-watch.spec.ts": 15,
+      "runtime/control-process.spec.ts": 26,
       "agent-host/acp-host.spec.ts": 24
     },
-    "d01_host_gate": "58 passed / 3 files, exit 0 (re-measured after the fix)",
-    "d05_network_gate": "103 passed / 11 files, exit 0 (re-measured after the fix)",
-    "serve_entry_gate": "68 passed / 3 files, exit 0 (re-measured after the fix)",
-    "d06_control_gate": "137 passed / 7 files, exit 0",
-    "l9_intent_side_gate": "69 passed / 4 files, exit 0",
-    "d07_webui_gate": "TEAMS_CONSOLE_REAL_DOM=1, 66 passed / 13 files, exit 0. Reused from before the fix: the fix changes only runtime/acp-serve.ts and the UI inputs are unchanged.",
+    "d01_host_gate": "58 passed / 3 files, exit 0",
+    "d05_network_gate": "103 passed / 11 files, exit 0",
+    "serve_entry_gate": "68 passed / 3 files, exit 0",
+    "d06_control_gate": "139 passed / 7 files, exit 0 (gate-d06-control.log)",
+    "l9_intent_side_gate": "71 passed / 4 files, exit 0 (gate-l9-intent-side.log)",
+    "d07_webui_gate": "TEAMS_CONSOLE_REAL_DOM=1, 66 passed / 13 files, exit 0",
     "typecheck": "pnpm typecheck, exit 0",
     "build": "pnpm build, exit 0",
-    "black_box": "49 checks, verdict PASS, exit 0 (receipt.json)",
+    "black_box": "50 checks, PASS, exit 0",
     "full_regression": "scripts/regression.mjs measured three times with one command: the uncommitted candidate 1172/1146/3/23, the unmodified base d531d24 in its own worktree 1149/1146/3/0, and this committed candidate fb35e73 1173/1172/1/0. The single remaining failure is the same one that fails on the base with the same root cause, and that spec file passes 33/33 in isolation. Not claimed as a pass and not claimed as a regression of this unit; see notes.md section 9.",
     "pnpm_verify": "not run. It is the pre-existing BLOCKED baseline (PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014), so it is not a regression conclusion for this unit.",
-    "gate_tests": 71,
-    "gate_union_d06_l9": "168 passed / 10 files, exit 0"
+    "gate_tests": 77,
+    "gate_union_d06_l9": "168 passed / 10 files, exit 0",
+    "d07_webui_black_box": "15 checks, exit 0, after the permission.reply expectation was corrected from UNSUPPORTED_OPERATION to FORBIDDEN",
+    "gate_tests_note": "the six vitest gate commands measured 77 + 139 + 71 + 58 + 103 + 68 + 66 = 582 passing tests in total; that sum double counts shared spec files (agent-host/acp-host, runtime/control-process and runtime/acp-serve appear in more than one gate command), so it is a run total and not a distinct test count"
   },
   "acceptance_items": [
     "the three frozen Session writes (permission.reply, session.cancel and the dedicated Session body ingress) perform one durable CAS write instead of refusing UNSUPPORTED_OPERATION, and the result reports only the accepted revision and never a Session state",
@@ -83,8 +90,40 @@
     "the engine is a local OpenAI-compatible stub provider, not an upstream model, so this proves that the write really reaches and is accepted by an engine, not any model quality"
   ],
   "findings": [
-    "cli/package-install.spec.ts is skipped on an uncommitted candidate by design: scripts/receipt-identity.mjs refuses a working tree with untracked product paths, so that gate runs only after integration",
-    "scripts/regression.mjs does not pass --no-file-parallelism, and both cli/agentteams.spec.ts and cli/package-install.spec.ts rebuild generated/runtime-lib in their beforeAll, so the CLI direct-entry test can fail from a concurrent rebuild; it passes 3/3 in isolation and 33/33 in its own file"
+    {
+      "id": "F1 frozen permission.reply.optionId dropped",
+      "severity": "BLOCKING",
+      "found_by": "independent review round 2",
+      "evidence": "control-protocol/console-api.ts:424-426 carries readonly optionId?: string and the parser validates it at :506-510; ui/teams-console/src/client/controller.ts:499-500 and render.ts:410,:563 send it; runtime/control-process.ts built the record change without it and runtime/acp-serve.ts guessed the first option of the projected kind",
+      "fix": "optionId is carried as an optional field through the store type, validation, parseIntent, intent construction and control-process; the watch uses the named engine option and refuses INVALID_ACP_FRAME when the engine never offered it or when it contradicts the stated decision; the kind is only the fallback for a command that named none",
+      "red_green": "two same-kind options with the second one named; reverting the named branch fails with optionId allow-always-a instead of allow-always-b",
+      "real_entrypoint": "the black box now sends the engine's real optionId and asserts the durable record carries it verbatim (50 checks, PASS); this engine's optionIds equal the projected kinds, so that step cannot by itself tell a named option from a same-kind guess, and the spec is what proves the difference"
+    },
+    {
+      "id": "F2 two overlapping watch passes",
+      "severity": "BLOCKING",
+      "found_by": "independent review round 2",
+      "evidence": "startAcpServe called void sessionWatch.reconcile() on a 500ms interval with no in-flight guard, so a slow pass could be overlapped by the next one; both read the same watermark and could apply the same session.message twice, and a throw escaped as an unhandled rejection",
+      "fix": "createSessionIntentWatch keeps an in-flight guard, and the whole pass is wrapped so a throw is recorded as a typed refusal instead of escaping the interval callback",
+      "red_green": "a host whose receive blocks on a gate; without the guard the second pass prompts the engine again, failing with host.received length 2 instead of 1. The first version of this case depended on microtask order and passed without the guard, so it was rewritten to wait explicitly"
+    },
+    {
+      "id": "F3 check-then-act CAS loses a Console write",
+      "severity": "BLOCKING",
+      "found_by": "independent review round 2",
+      "evidence": "sessionWrite reads the record and then calls writeSessionIntentRecord(path, current.revision, ...), and the store's own CAS is also read-then-rename, so two concurrent commands can both read revision N and then both rename; the later rename wins, one intent is lost, and both commands report ok:true",
+      "fix": "this daemon is the record's single writer, so its own writes are serialized through a promise chain",
+      "red_green": "two concurrent session.cancel commands; without serialization the record revision is 1 instead of 2, so one command was lost while both reported ok:true",
+      "residual": "the same check-then-act shape still exists on the already-merged relations write path (config/relations-intent-store.ts); this unit only fixed its own record"
+    },
+    {
+      "id": "F9 record had no span check",
+      "severity": "ADVISORY",
+      "found_by": "independent review round 2",
+      "evidence": "parseRecord did not check that the intent count matches the revision span, so a record such as {revision:10, oldestRevision:1, intents:[5]} was read as valid; pendingSessionIntents then advanced the reader's watermark to 10 and silently skipped revisions 6..10",
+      "fix": "parseRecord now requires intents.length === revision - oldestRevision + 1 and refuses INVALID_INPUT otherwise, so the malformed record is never overwritten either",
+      "residual": "a record that is deleted and recreated needs a generation id in the watermark to be told apart from a normal record; that is not fixed and is recorded as a retained obligation"
+    }
   ],
   "findings_note": "Both findings are pre-existing and are reproduced on the unmodified base d531d24. Neither is fixed in this unit, because neither is this unit's defect.",
   "resolved_defects": [
@@ -141,10 +180,30 @@
   ],
   "overall_goal": "continue the ACP/LAN/WebUI long-running delivery; this unit delivers L9's Session write side and L12 remains open",
   "retained_obligations": [
-    "L10: real Session/permission/notification events driving SSE, including publishing the permission identity in the Console projection",
-    "session.create and session.open remain typed unsupported and decide their own delivery later",
-    "L12: evidence-based gate upgrades plus the five-map and governance closure, including the 7 advisory obligations inherited from the L9 intent-side unit notes section 11",
-    "codex/acp-l9-egress-20261013 is not merged and is out of this unit's scope"
+    {
+      "id": "F4 duplicated durable-write helpers",
+      "detail": "config/session-intent-store.ts repeats the atomic temp+rename, watermark and discard helpers of the already-merged config/relations-intent-store.ts. Extracting one shared helper touches merged code, so it is recorded instead of done here. Project AGENTS says to reuse a shared function for common semantics; this stays an open obligation."
+    },
+    {
+      "id": "F9 record replacement",
+      "detail": "the reader's watermark carries only appliedRevision. If the record file is deleted and recreated, the new record starts at revision 1 while the watermark may be higher, so pendingSessionIntents reports nothing to apply and the new writes are skipped until the record grows past the watermark. A record generation id carried in the watermark would tell the two apart. Not fixed."
+    },
+    {
+      "id": "relations check-then-act",
+      "detail": "the same read-then-rename CAS shape F3 fixed here still exists on the merged relations write path."
+    },
+    {
+      "id": "Session and notification projection",
+      "detail": "the control daemon still returns sessions: [] and notifications: [], so the Console cannot see the Session it writes to or a permission identity from the projection. That is L10."
+    },
+    {
+      "id": "session.create and session.open",
+      "detail": "both stay typed UNSUPPORTED_OPERATION because each must return real engine data that a one-way record cannot carry."
+    },
+    {
+      "id": "source-tree only evidence",
+      "detail": "no installed-copy, restart, deployed-entrypoint or cross-device receipt for this unit."
+    }
   ],
   "driver_side_effects": [
     "the driver spawns one real control daemon and one real agent daemon with a real engine child, stops both explicitly, and leaves no process behind",

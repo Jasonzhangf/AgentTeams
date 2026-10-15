@@ -559,8 +559,13 @@ async function main() {
   })
 
   step = 'permission.reply'
+  // The frozen command carries the engine option the Console chose. It is sent with the real
+  // optionId OpenCode offered, so the durable record is checked to carry it verbatim. This
+  // engine's optionIds equal the projected kinds, so this step cannot by itself tell a named
+  // option from a same-kind guess; the watch spec proves that distinction with two options of
+  // one kind.
   const replyOne = await sendCommand(origin, {
-    kind: 'permission.reply', agentId: AGENT_ID, sessionId, permissionId: permissionOne, decision: 'once',
+    kind: 'permission.reply', agentId: AGENT_ID, sessionId, permissionId: permissionOne, decision: 'once', optionId: 'once',
   }, BASIC)
   assert(replyOne.status === 200 && replyOne.body?.ok === true, `the control daemon accepted permission.reply (${JSON.stringify(replyOne.body)})`)
   assert(replyOne.body?.result?.acceptedRevision === 1, `the result reports the accepted revision 1 and nothing else (${JSON.stringify(replyOne.body?.result)})`)
@@ -570,6 +575,8 @@ async function main() {
   assert(recordOne?.revision === 1 && recordOne?.intents?.length === 1, `the durable record carries revision 1 with one intent (${JSON.stringify(recordOne?.intents?.map(intent => intent.kind))})`)
   assert(recordOne.intents[0].kind === 'permission.reply' && recordOne.intents[0].permissionId === permissionOne,
     'the record names the permission by the id the controller received')
+  assert(recordOne.intents[0].optionId === 'once',
+    `the durable record carries the engine option the frozen command named (${JSON.stringify(recordOne.intents[0].optionId)})`)
   record('recordAfterReply', { revision: recordOne.revision, oldestRevision: recordOne.oldestRevision, kinds: recordOne.intents.map(intent => intent.kind) })
 
   // The agent daemon applies the write to its OWN host. The driver never answers over ACP.

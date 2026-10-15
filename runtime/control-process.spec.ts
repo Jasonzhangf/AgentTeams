@@ -551,6 +551,49 @@ it('writes the Session write commands as one durable pending-write record and re
   expect(existsSync(sessionRecordPath(freshHome, 'peer-b'))).toBe(false)
 })
 
+it('carries the frozen engine optionId verbatim instead of letting the reader guess one', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-session-option-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-session-option-${port}`)
+  const owner = createControlOwner({ relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home } })
+
+  // The frozen Console command carries the engine option the operator clicked. It must reach
+  // the record unchanged, because the reading daemon answers the engine with exactly that one.
+  expect(await owner.command({ kind: 'permission.reply', agentId: 'peer-b', sessionId: 'session-1', permissionId: 'permission-1', decision: 'always', optionId: 'allow-always-b' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  const record = await readSessionIntentRecord(sessionRecordPath(home))
+  expect(record?.intents[0]).toMatchObject({ kind: 'permission.reply', decision: 'always', optionId: 'allow-always-b' })
+  // A command that names no option stores none, and the reader keeps its kind fallback.
+  expect(await owner.command({ kind: 'permission.reply', agentId: 'peer-b', sessionId: 'session-1', permissionId: 'permission-2', decision: 'reject' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 2 } })
+  expect((await readSessionIntentRecord(sessionRecordPath(home)))?.intents[1]).not.toHaveProperty('optionId')
+})
+
+it('serializes its own writes so two concurrent Session commands cannot lose one', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-session-race-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-session-race-${port}`)
+  const owner = createControlOwner({ relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home } })
+
+  // Two Console clients command the same record at the same time. The store's CAS is
+  // read-then-rename, so without serialization both reads see revision 0, both rename, and one
+  // intent is lost while both commands report success.
+  const [first, second] = await Promise.all([
+    owner.command({ kind: 'session.cancel', agentId: 'peer-b', sessionId: 'session-a' }),
+    owner.command({ kind: 'session.cancel', agentId: 'peer-b', sessionId: 'session-b' }),
+  ])
+  expect(first.ok).toBe(true)
+  expect(second.ok).toBe(true)
+  const record = await readSessionIntentRecord(sessionRecordPath(home))
+  expect(record?.revision).toBe(2)
+  expect(record?.intents.map(entry => entry.kind)).toEqual(['session.cancel', 'session.cancel'])
+  expect(record?.intents.map(entry => (entry.kind === 'session.cancel' ? entry.sessionId : ''))).toEqual(['session-a', 'session-b'])
+})
+
 it('derives the desired peer role from the daemon own accepted relations', async () => {
   const port = await freePort()
   const dataDirectory = join(directory, `state-intent-role-${port}`)

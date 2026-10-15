@@ -47,6 +47,11 @@ export type SessionIntent =
     readonly sessionId: string
     readonly permissionId: string
     readonly decision: SessionPermissionDecision
+    /**
+     * The engine option the Console chose, carried verbatim from the frozen command. The
+     * reading daemon must answer with exactly this option, never with a same-kind guess.
+     */
+    readonly optionId?: string
   }
   | {
     readonly intentId: string
@@ -74,7 +79,7 @@ export interface SessionIntentRecord {
 
 /** The three mutations the frozen Session write commands need. */
 export type SessionIntentChange =
-  | { readonly op: 'permission.reply'; readonly agentId: string; readonly sessionId: string; readonly permissionId: string; readonly decision: SessionPermissionDecision }
+  | { readonly op: 'permission.reply'; readonly agentId: string; readonly sessionId: string; readonly permissionId: string; readonly decision: SessionPermissionDecision; readonly optionId?: string }
   | { readonly op: 'session.cancel'; readonly agentId: string; readonly sessionId: string }
   | { readonly op: 'session.message'; readonly agentId: string; readonly sessionId: string; readonly payload: JsonValue }
 
@@ -197,6 +202,11 @@ function validateChange(value: unknown): ConfigApplyError | undefined {
     if (!isDecision(value.decision)) {
       return invalid('session intent change decision must be once, always, or reject')
     }
+    // The frozen command carries the engine option the Console chose, and the reading daemon
+    // answers with that exact option. It stays optional, because an engine may offer none.
+    if (value.optionId !== undefined) {
+      return requireText(value.optionId, 'session intent change optionId')
+    }
     return undefined
   }
   if (value.op === 'session.message') {
@@ -221,6 +231,7 @@ function parseIntent(value: unknown, label: string): SessionIntent {
       kind: 'permission.reply',
       permissionId: value.permissionId as string,
       decision: value.decision as SessionPermissionDecision,
+      ...(value.optionId === undefined ? {} : { optionId: value.optionId as string }),
     }
   }
   if (value.kind === 'session.cancel') return { ...base, kind: 'session.cancel' }
@@ -256,6 +267,13 @@ function parseRecord(text: string, path: string): SessionIntentRecord {
   if (!Array.isArray(value.intents)) fail('INVALID_INPUT', `session intent intents must be an array: ${path}`)
   if (value.intents.length > SESSION_INTENT_WINDOW) {
     fail('INVALID_INPUT', `session intent carries ${value.intents.length} intents, above the retained window: ${path}`)
+  }
+  // Each retained intent stands for exactly one revision: `intents[i]` is revision
+  // `oldestRevision + i`. A record whose count disagrees is refused here, because the reader
+  // would otherwise advance its watermark over revisions this record never carried and skip
+  // them without a refusal.
+  if (value.intents.length !== (revision as number) - (oldest as number) + 1) {
+    fail('INVALID_INPUT', `session intent carries ${value.intents.length} intents for revisions ${oldest as number}..${revision as number}, so the record is incomplete: ${path}`)
   }
   const intents = value.intents.map((intent, index) => parseIntent(intent, `intents[${index}]`))
   const seen = new Set<string>()
@@ -464,7 +482,7 @@ export async function writeSessionIntentRecord(
 
   const stored = current?.intents ?? []
   const intent: SessionIntent = next.op === 'permission.reply'
-    ? { intentId: randomUUID(), kind: 'permission.reply', agentId: next.agentId, sessionId: next.sessionId, permissionId: next.permissionId, decision: next.decision }
+    ? { intentId: randomUUID(), kind: 'permission.reply', agentId: next.agentId, sessionId: next.sessionId, permissionId: next.permissionId, decision: next.decision, ...(next.optionId === undefined ? {} : { optionId: next.optionId }) }
     : next.op === 'session.cancel'
       ? { intentId: randomUUID(), kind: 'session.cancel', agentId: next.agentId, sessionId: next.sessionId }
       : { intentId: randomUUID(), kind: 'session.message', agentId: next.agentId, sessionId: next.sessionId, payload: next.payload }

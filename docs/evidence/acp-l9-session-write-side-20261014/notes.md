@@ -214,6 +214,82 @@ driver 全程只经控制 daemon 的**认证** HTTP 面提交写入，从不经�
 不把任何一次 `exit 1` 说成通过，也不把它们说成本单元的回归。`pnpm verify` 仍**未运行**：它是
 先于本单元的 BLOCKED 基线（`PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014`）。
 
+## 11. 第二次 review：FAIL 与三个 BLOCKING 修复（2026-10-15）
+
+第二次独立 review（`subagent`，只回文本、同样未落盘）给出 **FAIL**，三个 BLOCKING finding。
+本单元 owner 逐条独立核对，**三条全部为真**，已全部修复并各附红先证据。该 review 同时**驳回了**
+上一轮的三条论点（F1 假、F2 继承、F3 假），与本单元 owner 的核对一致。
+
+### 11.1 F1（BLOCKING）冻结契约的 `permission.reply.optionId` 被丢弃
+
+- 证据：`control-protocol/console-api.ts:424-426` 的冻结命令带 `readonly optionId?: string`
+  （注释：Engine option chosen from the pending event's option set），parser 在 `:506-510` 校验它；
+  shipped Console 确实发送它（`ui/teams-console/src/client/controller.ts:499-500`、
+  `render.ts:410`/`:563`）。
+- 缺陷：`runtime/control-process.ts` 构造记录变更时**没有带 `optionId`**，store 类型也没有该字段，
+  于是 `runtime/acp-serve.ts` 的读侧用 `row.options.find(candidate => candidate.kind === intent.decision)`
+  **按 kind 猜第一个**。当引擎提供两个同 kind 选项时，引擎收到的是与操作者点击**不同**的真实 optionId，
+  而 Console 无法察觉（结果只回 `acceptedRevision`，投影属 L10）。这违反项目不变量
+  「Unsupported or lossy protocol, parameter, or network mapping fails explicitly at the owning adapter boundary」。
+- 修复：`optionId` 作为可选字段贯通 store 类型、校验、`parseIntent`、意图构造与 `control-process`；
+  读侧**优先使用**写侧命名的引擎选项，命名选项不存在或与 `decision` 矛盾时以 `INVALID_ACP_FRAME` 拒绝
+  （不猜），只有未命名时才回退到 kind。
+- 红先证据：`runtime/session-intent-watch.spec.ts` 新增用例用两个同 kind 选项
+  （`allow-always-a`/`allow-always-b`）并命名第二个。把命名分支改成 `if (false)` 即转红：
+  `- "optionId": "allow-always-b"` / `+ "optionId": "allow-always-a"`。复原后 15/15 通过。
+- 真实入口证据：黑盒现在在 `permission.reply` 里发送引擎真实 `optionId: 'once'`，并断言
+  **durable 记录原样携带**它（50 checks、PASS）。该引擎的 optionId 恰好等于 projected kind，
+  故黑盒这一步**不能**区分「命名」与「按 kind 猜」；这个区分由上面的 spec 证明。此边界已在黑盒注释写明。
+
+### 11.2 F2（BLOCKING）500ms interval 的两次 pass 可以重叠
+
+- 缺陷：`startAcpServe` 用 `setInterval(..., 500)` 调用 `void sessionWatch.reconcile()`，没有 in-flight 保护。
+  一次 pass 超过 500ms（慢引擎 + 文件 IO）时两次 pass 会同时读到同一个 watermark，从而**重复施加**
+  同一条 `session.message`（引擎收到两次 `session/prompt`）。`void` 还会把抛出的 rejection 变成
+  unhandled rejection，可能拖垮 daemon。
+- 修复：`createSessionIntentWatch` 增加 in-flight 守卫（重叠的那次直接返回），并把整个 pass 包在
+  `try/catch` 里，异常记为 typed refusal 而不是逃出 interval 回调。
+- 红先证据：新增用例让 host 的 `receive` 阻塞在 gate 上，等第一次 pass 卡住后再发起第二次 pass，
+  再放行。去掉守卫即转红：`expected [ … ] to have a length of 1 but got 2`。复原后通过。
+  （注：第一版用例依赖 microtask 顺序，去掉守卫仍然通过，属无效用例；已改为显式等待使其确定性转红。）
+
+### 11.3 F3（BLOCKING）一次 CAS 栅栏是 check-then-act，可丢写且双方都报成功
+
+- 缺陷：`sessionWrite` 先 `readSessionIntentRecord` 再 `writeSessionIntentRecord(path, current.revision, …)`，
+  而 store 内部的 CAS 也是「先读、后 rename」。两个并发 Console 命令可以**都读到 revision N**，
+  随后**都 rename**：后者的 rename 覆盖前者，一条 intent 丢失，而**两条命令都返回 `ok: true`**。
+- 修复：控制 daemon 是该记录设计上的唯一写者，故把本 daemon 自己的写入串行化
+  （`serializeSessionWrite` 的 promise 链）。并发第二次写入因此读到前一次的结果并 CAS 成功。
+- 红先证据：新增用例用 `Promise.all` 并发提交两条 `session.cancel`。去掉串行化即转红：
+  `expected 1 to be 2`（记录 revision 为 1，即丢了一条），而两条命令都报 `ok: true`。复原后通过。
+- 未收口（advisory，非本单元引入）：`config/relations-intent-store.ts` 的同形 check-then-act
+  在已合入的 relations 写路径上仍然存在；本单元只修自己这条记录。
+
+### 11.4 已处理的 advisory
+
+| finding | 处理 |
+| --- | --- |
+| F4 复制了原子 temp+rename / watermark 实现 | 未修，记为保留义务。`config/session-intent-store.ts` 与已合入的 `config/relations-intent-store.ts` 在 `fail`/`decode`/`discard`/`uncertainty`/`persist` 上同形；抽公共 helper 需要同时改动已合入代码，故不在本增量做。 |
+| F5 `verification.json` 身份过期 | 已修：`candidate_head`/`candidate_tree`/`candidate_commits` 更新到最终提交；并修掉 `gate_tests` 与 `gate_result` 不一致。 |
+| F6 门禁 check 数与被跑文件数不符 | 已核对：`checks` 是**断言条目**（11 条），`command` 是 4 个 spec 文件，`note` 记录实测通过数；已把 note 的数字更新为修复后的实测值。 |
+| F7 A4 末尾写了错误的门禁名 | 已修：`docs/design/teams-acp-daemon-config-v4.md` 末尾由 `teams-acp-d05-network` 改为 `teams-acp-l9-session-write-side`，并保留一行说明与日期。 |
+| F8 D07 行/check 仍断言被取代的拒绝 | 已修两处：`docs/architecture/verification-map.json` 的 D07 check 文本、以及 `docs/evidence/acp-d07-webui-20261011/black-box-webui.mjs` 的断言。该黑盒原先断言 `permission.reply` 回 `UNSUPPORTED_OPERATION`；在本单元的无 `peers` 配置下它现回 `FORBIDDEN`（同一条目标规则，且在写入前拒绝）。更新后重跑：**15 checks、exit 0**。 |
+| F9 记录缺少 span 校验与记录身份 | span 已修：`parseRecord` 现在要求 `intents.length === revision - oldestRevision + 1`，否则 typed `INVALID_INPUT`。此前一条手写 `{revision:10, oldestRevision:1, intents:[5 条]}` 会被正常读取，读侧把 watermark 推到 10 并**静默跳过** revision 6..10。红先证据见 `config/session-intent-store.spec.ts` 新增用例（去掉校验即转红）。**未修**：记录文件被删除/重建后 watermark 高于新记录 revision 的场景需要记录 generation id，记为保留义务。 |
+
+### 11.5 修复后复测（同一冻结源码）
+
+| 检查 | 结果 |
+| --- | --- |
+| 本单元门禁（4 文件） | **77/77** |
+| D06 门禁（7 文件） | **139/139** |
+| L9 intent-side 门禁（4 文件） | **71/71** |
+| D01 host（3 文件） | **58/58** |
+| D05 network（11 文件） | **103/103** |
+| serve-entry（3 文件） | **68/68** |
+| D07 WebUI 黑盒 | **15 checks / PASS** |
+| L9 session-write-side 黑盒 | **50 checks / PASS** |
+| `pnpm typecheck` / `pnpm build` | exit 0 / exit 0 |
+
 ## 10. Review 轮次与修复（2026-10-15）
 
 ### 10.1 review 尝试的诚实记录

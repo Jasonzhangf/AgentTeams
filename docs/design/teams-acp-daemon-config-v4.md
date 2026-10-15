@@ -410,4 +410,7 @@ A4.9 Real-entry evidence is
 sends every Session write over the control daemon's authenticated HTTP surface and never
 answers the callback over its own ACP connection.
 
-`teams-acp-d05-network` binds this amendment. It stays `partial`.
+`teams-acp-l9-session-write-side` binds this amendment. It stays `partial`.
+
+(This line named `teams-acp-d05-network`, which owns the network side of the same
+delivery. The Session write side has its own gate. Corrected 2026-10-15.)

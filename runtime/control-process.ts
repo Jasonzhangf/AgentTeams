@@ -605,16 +605,33 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
    * option the engine really offered. This daemon never invents an optionId.
    */
   const sessionCommand = async (command: ControlSessionCommand): Promise<ConsoleCommandResultV1> => {
-    if (command.kind === 'permission.reply') {
-      return await sessionWrite(command.agentId, command.sessionId, target => ({
-        op: 'permission.reply',
-        agentId: target.agentId,
-        sessionId: target.sessionId,
-        permissionId: command.permissionId,
-        decision: command.decision,
-      }))
-    }
-    return await sessionWrite(command.agentId, command.sessionId, target => ({ op: 'session.cancel', agentId: target.agentId, sessionId: target.sessionId }))
+    // This daemon is the record's single writer, and the store's CAS is read-then-rename. Two
+    // Console commands that interleave there can both read the same revision and then both
+    // rename, which loses one intent while reporting success for both. Serializing this
+    // daemon's own writes removes that interleaving.
+    return await serializeSessionWrite(async () => {
+      if (command.kind === 'permission.reply') {
+        return await sessionWrite(command.agentId, command.sessionId, target => ({
+          op: 'permission.reply',
+          agentId: target.agentId,
+          sessionId: target.sessionId,
+          permissionId: command.permissionId,
+          decision: command.decision,
+          // The frozen command may carry the engine option the Console chose. It is carried
+          // verbatim so the owning daemon answers with that option, not a same-kind guess.
+          ...(command.optionId === undefined ? {} : { optionId: command.optionId }),
+        }))
+      }
+      return await sessionWrite(command.agentId, command.sessionId, target => ({ op: 'session.cancel', agentId: target.agentId, sessionId: target.sessionId }))
+    })
+  }
+
+  /** Serialize this daemon's own writes to the Session write record it solely owns. */
+  let sessionWriteChain: Promise<unknown> = Promise.resolve()
+  const serializeSessionWrite = <T>(work: () => Promise<T>): Promise<T> => {
+    const next = sessionWriteChain.then(work, work)
+    sessionWriteChain = next.then(() => undefined, () => undefined)
+    return next
   }
 
   const sessionWrite = async (
