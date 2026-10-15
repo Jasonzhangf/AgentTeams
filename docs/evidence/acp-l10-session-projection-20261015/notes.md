@@ -320,8 +320,8 @@ pass」这条 check，把引擎结束通道的条目扩成三条（引擎结束�
 | 合并父提交 | `83496b7ff1be7f340f874c5ef604f8c6f5c4da53`（origin/main）与 `6a50d865587789b25f9da62488b2a48f90e9b1d2`（候选） |
 | 合并类型 | `--no-ff`，`git show --format=%P` 输出两个父提交，非 fast-forward |
 | Tree 相等证明 | `<candidate>{tree}` = `<merge>{tree}` = `bc646269915b561ef3b644e4401a0b0758fbda9c` |
-| 推送 | `git push origin HEAD:refs/heads/main` |
-| 远端回执复读 | `git ls-remote origin refs/heads/main` |
+| 推送 | `git push origin HEAD:refs/heads/main` → `83496b7..f0ea497  HEAD -> main` |
+| 远端回执复读（推送后立即执行） | `git ls-remote origin refs/heads/main` → `f0ea49742c410a99acc418482a8caf37d403646d	refs/heads/main` |
 
 ### 集成前置条件
 
