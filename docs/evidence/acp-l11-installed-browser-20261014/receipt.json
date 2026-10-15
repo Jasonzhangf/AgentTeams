@@ -1,0 +1,199 @@
+{
+  "unit": "acp-l11-installed-browser-20261014",
+  "produced_at": "2026-10-15T04:25:26.058Z",
+  "head_commit": "49edbf6de4b76cdb1cddc4c1bdbcfa979ac3cef6",
+  "artifact": {
+    "mode": "final",
+    "release_eligible": false,
+    "content_sha256": "ea3145e6c5c1e484cc1308f0b07ba7222cdbeff5fd1826b5a3bea837327dfe1b",
+    "files": 263
+  },
+  "installed": {
+    "prefix": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix",
+    "root": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams",
+    "cli": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs"
+  },
+  "daemons": {
+    "registry": 40115,
+    "agent": 40410,
+    "agent_engine_children": [
+      40804
+    ],
+    "control": 46062,
+    "chrome": 47755
+  },
+  "measurements": {
+    "daemonCommands": {
+      "registry": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/generated/runtime-lib/runtime/registry-process.js --config /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/registry.toml --launcher-start-token 173a9c7a-317c-4ba3-b9fa-d190f3237fef",
+      "agent": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs --serve opencode --ip 127.0.0.1 --port 54178 --config /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/agent.toml",
+      "control": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js --config /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/control.toml --start-token d5f21a36-7b47-45a7-a5c3-77067609e011"
+    },
+    "controlEntryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js",
+    "servedAssets": [
+      {
+        "path": "/console-entry.js",
+        "relative": "console-host/static/console-entry.js",
+        "sha256": "d67e55de91996771f6e011cbeaf746bdc9ac7dc3643dab70787af4fbfc67f636",
+        "bytes": 343
+      },
+      {
+        "path": "/ui/browser.js",
+        "relative": "ui/teams-console/browser.js",
+        "sha256": "7ea6a860c73a9b712b883464451b2958c0ecf126db4fb2e578c80043844c39e0",
+        "bytes": 273
+      }
+    ],
+    "documentSha256": "2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21",
+    "pageProjection": {
+      "version": 1,
+      "agents": [
+        "reasoner-a"
+      ],
+      "bytes": 617
+    },
+    "domMarkers": {
+      "pages": [
+        "discovery",
+        "networking",
+        "interaction",
+        "history"
+      ],
+      "view": "discovery",
+      "bands": [
+        "registration",
+        "connection",
+        "engine",
+        "request"
+      ],
+      "bandStates": [
+        "unknown",
+        "disconnected",
+        "not-applicable",
+        "idle"
+      ],
+      "observation": "live",
+      "cancel": null,
+      "permissionOptions": [],
+      "connectionRows": [
+        "reasoner-a"
+      ],
+      "agentRows": [
+        "reasoner-a"
+      ]
+    },
+    "sse": {
+      "seq": 1,
+      "agents": [
+        "reasoner-a"
+      ]
+    },
+    "history": {
+      "count": "0",
+      "records": 0,
+      "prevEnabled": "false"
+    },
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedRequests": [
+      {
+        "path": "/favicon.ico",
+        "status": 404
+      }
+    ],
+    "screenshot": {
+      "path": "/Volumes/Intel/playground/agentteams/acp-l11-installed-browser-20261014/docs/evidence/acp-l11-installed-browser-20261014/installed-browser-dom.png",
+      "bytes": 28255,
+      "width": 756,
+      "height": 469
+    }
+  },
+  "checks": [
+    {
+      "name": "installed artifact — staged package",
+      "detail": "pnpm build:governance staged mode=final release_eligible=false content_sha256=ea3145e6c5c1e484cc1308f0b07ba7222cdbeff5fd1826b5a3bea837327dfe1b files=263"
+    },
+    {
+      "name": "installed artifact — isolated install",
+      "detail": "npm pack agentteams-0.1.0.tgz (1536585 bytes) + npm install --prefix prefix; installed root=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams cli=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs"
+    },
+    {
+      "name": "installed artifact — carries the compiled runtime and the UI assets",
+      "detail": "present in the installed package: cli/agentteams.mjs, generated/runtime-lib/runtime/control-process.js, generated/runtime-lib/runtime/acp-serve.js, console-host/static/console.html, console-host/static/console-entry.js, ui/teams-console/browser.js"
+    },
+    {
+      "name": "installed daemons — registry, agent, control all from the installed CLI",
+      "detail": "registry pid=40115 (127.0.0.1:54176); agent pid=40410 (127.0.0.1:54178, engine children=1); control pid=46062 (127.0.0.1:54177); all launched from /private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/cli/agentteams.mjs"
+    },
+    {
+      "name": "installed provenance — the running daemons are the installed copy",
+      "detail": "every Teams daemon command line was inspected and resolves inside the install: registry pid=40115, agent pid=40410, control pid=46062; the control daemon's own state entryPath=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/l11-installed-browser-s28vy8/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js; none of those three command lines names the source tree (Chrome is excluded: it is not part of the installed package)"
+    },
+    {
+      "name": "origin challenge",
+      "detail": "the installed origin answered an anonymous GET / with 401 challenge=\"Basic realm=\"AgentTeams\", charset=\"UTF-8\"\""
+    },
+    {
+      "name": "served asset provenance — the installed files are what the origin served",
+      "detail": "document sha256=2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21; /console-entry.js=d67e55de91996771f6e011cbeaf746bdc9ac7dc3643dab70787af4fbfc67f636 (343 bytes) == installed console-host/static/console-entry.js; /ui/browser.js=7ea6a860c73a9b712b883464451b2958c0ecf126db4fb2e578c80043844c39e0 (273 bytes) == installed ui/teams-console/browser.js"
+    },
+    {
+      "name": "chrome launch",
+      "detail": "real Chrome pid=47755 --headless=new own --user-data-dir, devtools=ws://127.0.0.1:54213/devtools/browser/b208350e-79bf-4c40-8714-2e092cf318d3"
+    },
+    {
+      "name": "page load",
+      "detail": "the installed origin loaded in real Chrome: http://127.0.0.1:54177/ title=\"AgentTeams Console\" readyState=complete Document=200 text/html"
+    },
+    {
+      "name": "page module graph",
+      "detail": "the page received /console-entry.js (200) and 18 /ui/ modules, all 200; all 18 byte-match the installed package"
+    },
+    {
+      "name": "page fetch",
+      "detail": "the page's own same-origin fetch('/api/v1/projection') -> 200 application/json, 617 bytes; version=1 agents=[\"reasoner-a\"]; the same registered agent set and the same frozen empty interaction arrays as an independent read (whole-document byte equality is not claimed for a live directory)"
+    },
+    {
+      "name": "DOM markers",
+      "detail": "live DOM of the installed entry: pages=discovery,networking,interaction,history view=discovery bands=registration,connection,engine,request states=unknown,disconnected,not-applicable,idle observation=live; data-team-cancel and data-permission-option are ABSENT because this control daemon binds no Session owner (the existing D06/D08 gap), and their absence is not claimed as evidence"
+    },
+    {
+      "name": "live page subscription",
+      "detail": "the installed entry opened its own /api/v1/events (HTTP 200) and started its observation controller (data-team-observation=live)"
+    },
+    {
+      "name": "real agent row",
+      "detail": "the installed WebUI rendered the real registered agent from the live directory: data-agent-id=reasoner-a"
+    },
+    {
+      "name": "SSE frame",
+      "detail": "a driver-owned EventSource on the installed origin received a real snapshot: seq=1 agents=[\"reasoner-a\"]"
+    },
+    {
+      "name": "four pages",
+      "detail": "the live page switched through all four frozen views in real Chrome: discovery -> networking -> interaction -> history; the history view rendered data-history-count=0 with 0 record row(s)"
+    },
+    {
+      "name": "page runtime errors",
+      "detail": "0 uncaught page exceptions across the whole installed-browser session (188 CDP events); 1 generic console error(s) map only to the expected /favicon.ico 404: [\"Failed to load resource: the server responded with a status of 404 (Not Found)\"]"
+    },
+    {
+      "name": "screenshot",
+      "detail": "real PNG 756x469, 28255 bytes (dimensions read from the IHDR chunk) at installed-browser-dom.png"
+    }
+  ],
+  "cleanup": {
+    "owned": [
+      40115,
+      40410,
+      40804,
+      46062,
+      47755
+    ],
+    "stillAlive": [],
+    "strays": 0,
+    "chromeStrays": 0
+  },
+  "gaps": [],
+  "result": "PASS"
+}

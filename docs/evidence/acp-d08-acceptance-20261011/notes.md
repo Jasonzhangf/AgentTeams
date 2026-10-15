@@ -198,7 +198,9 @@ a defect introduced by D08, and none is ever inferred from a passing check.
    this driver is the installed-tarball, cross-device acceptance layer and it does not drive
    a browser. The live-browser run is a **source-level** artifact driving the worktree CLI
    origin, which is a different evidence level from an installed-artifact run, so it does not
-   close this item. The frozen DOM marker contract is also owned by
+   close this item.
+
+2026-10-14 correction (L11): the installed-artifact browser item is now closed by `docs/evidence/acp-l11-installed-browser-20261014/` (18 checks, exit 0). That producer installs the final package into an isolated prefix outside the source tree, starts the registry, a real `--serve opencode` agent daemon and the control daemon all from the installed CLI, and drives that installed origin in real Chrome over CDP. This driver's own scope argument is unchanged: it drives no browser and its A07 item stays a gap for its own layer. What no longer holds is the repository-state clause that installed-artifact browser evidence does not exist. The frozen DOM marker contract is also owned by
    `ui/teams-console/tests/render-d07.spec.ts` (real Chrome).
 3. **A07 — targeted interaction from the WebUI. UNMET REQUIREMENT, same missing owner as
    gap 1.** Because no Session owner is bound, every
@@ -451,8 +453,11 @@ timeout while the engine is still alive are retried, and a typed refusal or JSON
 reaches the caller on the first attempt.
 
 The D08 gate stays `partial` and the overall goal stays `INCOMPLETE`, for the A07 reasons above:
-the D06 write-side requirements are still unmet, the live-browser DOM evidence is source-level
-only, and no ACP gate has been upgraded.
+the D06 write-side requirements are still unmet, and no ACP gate has been upgraded. The
+live-browser DOM evidence was source-level only at this record's capture time; the
+installed-artifact browser run now exists at `docs/evidence/acp-l11-installed-browser-20261014/`
+(18 checks, exit 0, 2026-10-14), which closes the browser half of A07 at the WebUI DOM level
+while the D06 write-side half stays open.
 
 ### 7c-bis. 2026-10-14 correction to the "write-side requirements" wording
 

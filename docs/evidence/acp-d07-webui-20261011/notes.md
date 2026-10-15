@@ -121,3 +121,9 @@ never produced; both were removed rather than retained as misleading evidence.
 `teams-acp-d07-webui` stays **partial**: no installed-copy replay, no restart, no
 deployed-entrypoint replay, no cross-device receipt, no live registry composition through
 the serve entry, no mobile claim.
+
+2026-10-14 correction (L11): the installed-copy item is now closed at the WebUI DOM level by
+`docs/evidence/acp-l11-installed-browser-20261014/` (18 checks, exit 0). Restart,
+deployed-entrypoint replay, cross-device receipt, live registry composition through the serve
+entry and mobile remain open, so the gate stays **partial**. The sentence above keeps its own
+capture-time wording.
