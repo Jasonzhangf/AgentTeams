@@ -39,6 +39,8 @@ import {
   writeSessionIntentWatermark,
   type SessionIntent,
 } from '../config/session-intent-store.ts'
+import { sessionObservationScopePath } from '../config/session-observation-store.ts'
+import { createSessionObservationPublisher, type SessionObservationFailure } from './session-observation-publisher.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
 import { rpcErrorFrame, type AcpHost } from '../agent-host/acp-host.ts'
 import { openCodeAcpAdapter } from '../opencode-adapter/src/acp-engine.ts'
@@ -239,6 +241,16 @@ export interface AcpServeHandle {
     readonly path: string
     readonly watermarkPath: string
     failures(): readonly SessionIntentWatchFailure[]
+  }
+  /**
+   * The Session-observation record this daemon publishes. The agent daemon owns the file
+   * because it owns the Sessions and permission callbacks it carries; the control daemon
+   * reads it to project them. `failures()` is every typed refusal this publisher recorded,
+   * so an observation it could not store stays visible instead of disappearing.
+   */
+  readonly sessionObservation: {
+    readonly path: string
+    failures(): readonly SessionObservationFailure[]
   }
   readonly readiness: AcpServeReadiness
   readonly daemon: AcpAgentDaemon
@@ -1283,6 +1295,16 @@ export function agentSessionIntentPath(home: string, daemon: AgentDaemonIntent['
 }
 
 /**
+ * The one observation record path this daemon publishes. It is derived from the same
+ * accepted identity, account and scope the pending-Session-write record uses, so the
+ * control daemon resolves the same file without a new config key and the two Session
+ * records for one agent sit in one directory.
+ */
+export function agentSessionObservationPath(home: string, daemon: AgentDaemonIntent['daemon']): string {
+  return sessionObservationScopePath({ home, accountId: daemon.accountId, scopeId: daemon.scopeId, agentId: daemon.id })
+}
+
+/**
  * Start exactly one agent daemon and serve local ACP channels on its configured
  * listener. Every failure before the listener is bound stops the spawned engine
  * and rethrows the typed fault, so a failed start never leaves a child behind.
@@ -1539,6 +1561,19 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       const sessionTimer = setInterval(() => { void sessionWatch.reconcile() }, RELATIONS_INTENT_POLL_INTERVAL_MS)
       sessionTimer.unref()
 
+      // The Session-observation publisher. The control daemon has no channel to ask this
+      // daemon which Sessions its engine holds or which permission callbacks it awaits, so
+      // this daemon publishes its own observation to the one durable record the control
+      // daemon reads. The host is the Session and A2.6 permission owner, so this publisher
+      // reads both facts from it and never tracks either one a second time.
+      const sessionObservation = createSessionObservationPublisher({
+        host: daemon.host,
+        recordPath: agentSessionObservationPath(homedir(), agent.daemon),
+        agentId: agent.daemon.id,
+      })
+      const observationTimer = setInterval(() => { void sessionObservation.publish() }, RELATIONS_INTENT_POLL_INTERVAL_MS)
+      observationTimer.unref()
+
       const teamsStatus = createTeamsStatusPort({
         ledger,
         localAgentId: agent.daemon.id,
@@ -1565,6 +1600,9 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           // The Session watch stops before the host it drives, so no write is applied to a
           // channel that is closing.
           clearInterval(sessionTimer)
+          // The publisher stops with the same fence, so no observation is read out of a
+          // host that is already releasing its Sessions.
+          clearInterval(observationTimer)
           // Order: the daemon's own egress rows, the LAN listener, the local
           // server (which destroys its channels), the registration client, then
           // the daemon and the owned directory. The egress closes BEFORE the host
@@ -1573,6 +1611,12 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           if (lan !== undefined) await lan.close().catch(() => undefined)
           const channels = await local.close()
           await daemon.host.close(readinessRef).catch(() => undefined)
+          // The host is closed, so this daemon holds no Session and awaits no permission. It
+          // publishes that empty observation itself: the agent daemon is the owner of these
+          // facts, and a reader must not keep projecting them for a daemon that stopped. A
+          // failed publish is not swallowed — the publisher records it as a typed refusal on
+          // `sessionObservation.failures()`, which is where every publish refusal lives.
+          await sessionObservation.publish().catch(() => undefined)
           if (registration !== undefined && registration.state === 'enabled') {
             await registration.client.stop().catch(() => undefined)
           }
@@ -1612,6 +1656,10 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           path: sessionWatch.recordPath,
           watermarkPath: sessionWatch.watermarkPath,
           failures: () => sessionWatch.failures(),
+        },
+        sessionObservation: {
+          path: sessionObservation.recordPath,
+          failures: () => sessionObservation.failures(),
         },
         readiness: {
           agentId: agent.daemon.id,
