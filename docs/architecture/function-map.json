@@ -2185,6 +2185,41 @@
       ],
       "design_doc": "docs/design/teams-acp-daemon-config-v4.md",
       "note": "2026-10-14 session-write-side: the one durable pending-Session-write record per target agent, and the reading daemon's own consumed watermark. The control daemon is the only writer and one agent daemon is the only reader, so the record has exactly one CAS fence and the two never share it. The record holds version, a monotonic revision, the retained window (at most 256 pending writes), oldestRevision, the ordered intents and updatedAt. Each write is a CAS on revision through the same atomic durable write the config state uses (mode-0o600 temp file plus rename): a CAS mismatch is a typed REVISION_CONFLICT with the bytes untouched, a failed temp write is failed, and a failed rename is uncertain with a real fence instead of a guessed outcome. A broken record is a typed INVALID_INPUT, UNAVAILABLE or UNSUPPORTED_VERSION throw and is never overwritten or silently repaired, and a body JSON cannot carry is refused instead of written as a key the reader then fails to find. A4 makes this an event record rather than desired state, because re-applying a Session write is not safe: the reader keeps its own watermark in its own data directory, and pendingSessionIntents reports the honest behind refusal when the writer's window already dropped a write the reader never saw, instead of skipping it. The path is the shared convention <home>/.agentteams/sessions/<accountId>/<scopeId>/<agentId>/session-intent.json: the writer resolves the target identity, account and scope from its own accepted peers and the reader resolves its own daemon.id, daemon.accountId and daemon.scopeId, so frozen PeerIntent gains no field and no config key is added. Gate: teams-acp-l9-session-write-side."
+    },
+    {
+      "function_id": "session_observation_projection",
+      "owner": "runtime",
+      "status": "partial",
+      "paths": [
+        "config/durable-record.ts",
+        "config/session-observation-store.ts",
+        "config/session-observation-store.spec.ts",
+        "runtime/session-observation-publisher.ts",
+        "runtime/session-observation-publisher.spec.ts",
+        "runtime/control-session-projection.spec.ts",
+        "runtime/acp-serve.ts",
+        "runtime/control-process.ts",
+        "agent-host/acp-host.ts",
+        "network/teams-ingress.ts",
+        "network/teams-egress.ts"
+      ],
+      "entry_symbols": [
+        "SESSION_OBSERVATION_VERSION",
+        "SESSION_OBSERVATION_FILE_NAME",
+        "sessionObservationScopePath",
+        "readSessionObservationRecord",
+        "writeSessionObservationRecord",
+        "createSessionObservationPublisher",
+        "sessionObservationNotificationId",
+        "readObservedSessionProjection",
+        "writeRecordAtomically",
+        "openedSessions"
+      ],
+      "required_gates": [
+        "teams-acp-l10-session-projection"
+      ],
+      "design_doc": "docs/design/teams-acp-daemon-config-v4.md",
+      "note": "2026-10-15 session-projection: the Console projection now carries the real Session and the real permission identity the agent daemon's own engine holds. The agent daemon owns the fact, so it publishes it: config/session-observation-store.ts holds ONE observation record per agent at <home>/.agentteams/sessions/<accountId>/<scopeId>/<agentId>/session-observation.json, beside the L9 pending-Session-write record and in the same account-and-scope layout. The record is a whole snapshot of projection rows only (the Session ids an open channel really owns, and the pending permission callbacks with the controller-visible id), never a transcript, a permission option set or a credential. runtime/session-observation-publisher.ts reads both facts from the one AcpHost (the Session and A2.6 permission owner, through the new read-only openedSessions() and the existing pendingPermissions()), writes only when the observation really changed so a poll is not a heartbeat, and refuses another agent's bytes at its own path. runtime/control-process.ts readObservedSessionProjection resolves one path per declared peer and adds the rows under the agentId that really owns them; a peer the directory readback reports as not online contributes nothing, and a peer the directory does not report is not treated as offline because a deployment with no registry has no liveness truth and the agent daemon itself publishes the empty observation on stop. The control daemon declares no Teams listener, so no control-to-agent channel, no Console relay and no protocol change are added, and the Console never enters the data path. F4 is closed in the same change: config/durable-record.ts is the one atomic write discipline (mode-0o600 temp plus rename, with the failed/uncertain/applied outcomes) shared by the intent store, its watermark and this store. Retained: sessionEvents is not projected, because the frozen pending-permission ConsoleSessionEventView needs a messageId the ACP callback does not carry, so the Console approve buttons stay data-permission-options-unavailable; the notification title is a fixed Console label rather than an engine subject; and the projection also reports the Session of the daemon's own readiness channel. Gate: teams-acp-l10-session-projection."
     }
   ]
 }
