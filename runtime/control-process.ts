@@ -20,6 +20,12 @@ import {
   writeRelationsIntentRecord,
   type RelationsIntentChange,
 } from '../config/relations-intent-store.ts'
+import {
+  readSessionIntentRecord,
+  sessionIntentScopePath,
+  writeSessionIntentRecord,
+  type SessionIntentChange,
+} from '../config/session-intent-store.ts'
 import { RuntimeConfigError, type ConfigApplyResult } from '../config/runtime-config.ts'
 import { createConsoleAuthorization } from '../console-host/src/auth.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
@@ -548,6 +554,15 @@ type ControlRelationsCommand = Extract<ConsoleCommandV1,
   { readonly kind: 'connection.connect' | 'connection.disconnect' | 'network.membership.apply' }>
 
 /**
+ * The two frozen Session write commands the control daemon writes as intent, and nothing
+ * else. `session.create` and `session.open` are deliberately absent: both must return real
+ * engine data (a new `sessionId`, a transcript), and a one-way intent record cannot carry a
+ * response, so they stay typed unsupported instead of pretending to answer.
+ */
+type ControlSessionCommand = Extract<ConsoleCommandV1,
+  { readonly kind: 'permission.reply' | 'session.cancel' }>
+
+/**
  * One typed command result from one durable CAS write. The result reports the accepted
  * record revision only.
  *
@@ -576,6 +591,61 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
       : validatedProjection(await owner.readProjection())
     return projectionWithConnections(base, network)
   }
+  /**
+   * The two frozen Session write commands plus the Session body ingress. They write the
+   * durable pending-Session-write record and never touch an engine, a transcript, or a
+   * Session state; the agent daemon that owns the Session reacts to the record later on its
+   * own. The record path is resolved from the target agent's declared identity, account and
+   * scope, never guessed and never this daemon's own data directory.
+   */
+  /**
+   * The two frozen Session write commands. The frozen `permission.reply` names a `decision`
+   * from the Console vocabulary; the engine's own option set is the agent daemon's fact, so
+   * the record carries the decision and the daemon that owns the Session maps it to an
+   * option the engine really offered. This daemon never invents an optionId.
+   */
+  const sessionCommand = async (command: ControlSessionCommand): Promise<ConsoleCommandResultV1> => {
+    if (command.kind === 'permission.reply') {
+      return await sessionWrite(command.agentId, command.sessionId, target => ({
+        op: 'permission.reply',
+        agentId: target.agentId,
+        sessionId: target.sessionId,
+        permissionId: command.permissionId,
+        decision: command.decision,
+      }))
+    }
+    return await sessionWrite(command.agentId, command.sessionId, target => ({ op: 'session.cancel', agentId: target.agentId, sessionId: target.sessionId }))
+  }
+
+  const sessionWrite = async (
+    agentId: string,
+    sessionId: string,
+    change: (target: { readonly agentId: string; readonly sessionId: string }) => SessionIntentChange,
+  ): Promise<ConsoleCommandResultV1> => {
+    if (relations === undefined) {
+      return { ok: false, error: { code: 'UNAVAILABLE', message: 'the accepted control intent is not bound to this control daemon; the pending Session write record is unavailable' } }
+    }
+    const target = Object.values(relations.peers).find(peer => peer.agentId === agentId)
+    if (target === undefined) {
+      // No guessed record path: an agentId this daemon does not declare has no resolvable
+      // account and scope, and the Session it names is not this daemon's to write.
+      return { ok: false, error: { code: 'FORBIDDEN', message: `agentId ${agentId} is not declared by this control daemon's accepted peers` } }
+    }
+    const path = sessionIntentScopePath({ home: relations.home, accountId: target.accountId, scopeId: target.scopeId, agentId: target.agentId })
+    try {
+      // These commands carry no expectedRevision, so the accepted revision of the one
+      // durable record is the CAS base. This daemon is that record's single writer, and the
+      // store still applies the CAS.
+      const current = await readSessionIntentRecord(path)
+      return relationsWriteResult(await writeSessionIntentRecord(path, current?.revision ?? 0, change({ agentId, sessionId })))
+    } catch (error) {
+      // A broken stored record is the store's own typed throw: refuse it here and leave the
+      // durable bytes untouched instead of overwriting them.
+      if (error instanceof RuntimeConfigError) return { ok: false, error: { code: error.code, message: error.message } }
+      throw error
+    }
+  }
+
   /**
    * The three frozen relation commands. They write the durable desired relations record
    * and never dial, negotiate, or report connection state; the agent daemon reacts to the
@@ -634,16 +704,24 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
       if (command.kind === 'connection.connect' || command.kind === 'connection.disconnect' || command.kind === 'network.membership.apply') {
         return await relationsCommand(command)
       }
+      if (command.kind === 'permission.reply' || command.kind === 'session.cancel') {
+        return await sessionCommand(command)
+      }
       if (owner === undefined) {
         return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: `no owner is bound for ${command.kind}` } }
       }
       return await owner.command(command)
     },
     async sendSession(target, payload) {
-      if (owner === undefined) {
-        return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: 'no Session owner is bound to this control daemon' } }
-      }
-      return await owner.sendSession(target, payload)
+      if (owner !== undefined) return await owner.sendSession(target, payload)
+      // The dedicated Session body ingress. The body is carried verbatim; this daemon never
+      // parses, strips, or inspects it, and it never becomes a control frame.
+      return await sessionWrite(target.agentId, target.sessionId, resolved => ({
+        op: 'session.message',
+        agentId: resolved.agentId,
+        sessionId: resolved.sessionId,
+        payload,
+      }))
     },
   }
 }

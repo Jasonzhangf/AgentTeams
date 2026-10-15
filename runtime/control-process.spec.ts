@@ -24,6 +24,7 @@ import {
 import { createAcpHistoryStore } from './acp-history-store.ts'
 import { createTeamsConnectionHistory } from '../network/teams-connection-history.ts'
 import { readRelationsIntentRecord, relationsIntentScopePath } from '../config/relations-intent-store.ts'
+import { readSessionIntentRecord, sessionIntentScopePath } from '../config/session-intent-store.ts'
 import type { HistoryQuery, ConsoleProjectionSnapshot, TeamsConnectionStatus } from '../control-protocol/teams-state.ts'
 
 let directory: string
@@ -94,6 +95,10 @@ async function freePort(): Promise<number> {
  */
 function intentRecordPath(home: string, accountId = 'local', scopeId = 'local'): string {
   return relationsIntentScopePath({ home, accountId, scopeId })
+}
+
+function sessionRecordPath(home: string, agentId = 'peer-b', accountId = 'local', scopeId = 'local'): string {
+  return sessionIntentScopePath({ home, accountId, scopeId, agentId })
 }
 
 interface ControlConfigOptions {
@@ -433,14 +438,27 @@ it('reads history only through the frozen port and fails typed when it is absent
   expect(seen).toHaveLength(1)
 })
 
-it('keeps the connection projection absent and relation commands typed without the accepted intent facts', async () => {
+it('keeps the connection projection absent and relation and Session commands typed without the accepted intent facts', async () => {
   const owner = createControlOwner({})
   expect(await owner.readProjection()).toEqual({ version: 1, agents: [], sessions: [], notifications: [], configs: [] })
   expect(await owner.command({ kind: 'connection.connect', agentId: 'a' }))
     .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
   expect(await owner.command({ kind: 'network.membership.apply', agentId: 'a', expectedRevision: 1, members: [] }))
     .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+  // The Session writes are supported operations whose record facts are absent, so the typed
+  // absence is UNAVAILABLE and never a silent success or a guessed record path.
   expect(await owner.sendSession({ agentId: 'a', sessionId: 's' }, { text: 'x' }))
+    .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+  expect(await owner.command({ kind: 'permission.reply', agentId: 'a', sessionId: 's', permissionId: 'p', decision: 'once' }))
+    .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+  expect(await owner.command({ kind: 'session.cancel', agentId: 'a', sessionId: 's' }))
+    .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
+  // A command that must return real engine data stays typed unsupported even when the record
+  // facts are bound: a one-way intent record cannot carry a response.
+  const facts = createControlOwner({ relations: { peers: {}, allowedRoles: [], home: '/tmp/unused-home' } })
+  expect(await facts.command({ kind: 'session.create', agentId: 'a' }))
+    .toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+  expect(await facts.command({ kind: 'session.open', agentId: 'a', sessionId: 's' }))
     .toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
 
   // A bound read port projects the frozen status verbatim and never mutates it.
@@ -486,6 +504,51 @@ it('writes the declared peer relation from the frozen relation commands and leav
     .toEqual({ ok: true, result: { acceptedRevision: 2 } })
   expect(await readRelationsIntentRecord(recordPath)).toMatchObject({ revision: 2, peers: [] })
   expect(await owner.readProjection()).toEqual(before)
+})
+
+it('writes the Session write commands as one durable pending-write record and reports only its revision', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-session-write-${port}`)
+  const configPath = await controlConfig({ port, dataDirectory, peers: ['peer-b'] })
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-session-write-${port}`)
+  const recordPath = sessionRecordPath(home)
+  // One real D05 status row: a Session write must never add, drop or rewrite a connection
+  // row, and must never report a Session state back.
+  const status: TeamsConnectionStatus = { version: 1, remoteAgentId: 'peer-b', state: 'disconnected', targetGeneration: 1,
+    observedAt: '2026-10-14T00:00:00.000Z', role: 'peer' }
+  const owner = createControlOwner({
+    network: { history: async () => ({ records: [] }), connections: () => [status] },
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+  const before = await owner.readProjection()
+
+  expect(await owner.command({ kind: 'permission.reply', agentId: 'peer-b', sessionId: 'session-1', permissionId: 'permission-1', decision: 'always' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  expect(await owner.command({ kind: 'session.cancel', agentId: 'peer-b', sessionId: 'session-1' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 2 } })
+  expect(await owner.sendSession({ agentId: 'peer-b', sessionId: 'session-1' }, { text: '你好', keep: [1, null] }))
+    .toEqual({ ok: true, result: { acceptedRevision: 3 } })
+  // The result reports the accepted revision only: no Session state, no optionId, no engine
+  // fact. The agent daemon owns the real outcome.
+  const record = await readSessionIntentRecord(recordPath)
+  expect(record?.revision).toBe(3)
+  expect(record?.intents.map(entry => entry.kind)).toEqual(['permission.reply', 'session.cancel', 'session.message'])
+  expect(record?.intents[0]).toMatchObject({ permissionId: 'permission-1', decision: 'always' })
+  // The business body is carried verbatim and never parsed or stripped.
+  expect(record?.intents[2]).toMatchObject({ payload: { text: '你好', keep: [1, null] } })
+  expect(await owner.readProjection()).toEqual(before)
+
+  // An undeclared target is refused and writes nothing, so no record path is ever guessed.
+  const freshHome = join(directory, `home-session-unknown-${port}`)
+  const fresh = createControlOwner({ relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home: freshHome } })
+  expect(await fresh.command({ kind: 'session.cancel', agentId: 'agent-not-declared', sessionId: 's' }))
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(await fresh.sendSession({ agentId: 'agent-not-declared', sessionId: 's' }, { text: 'x' }))
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+  expect(existsSync(sessionRecordPath(freshHome, 'agent-not-declared'))).toBe(false)
+  // One record per target agent: the declared peer's own record is the only one written.
+  expect(existsSync(sessionRecordPath(freshHome, 'peer-b'))).toBe(false)
 })
 
 it('derives the desired peer role from the daemon own accepted relations', async () => {
