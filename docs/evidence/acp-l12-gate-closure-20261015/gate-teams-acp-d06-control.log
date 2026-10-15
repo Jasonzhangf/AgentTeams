@@ -1,0 +1,37 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015
+
+ ✓ runtime/acp-serve.spec.ts (27 tests) 12099ms
+     ✓ starts one daemon and one engine, proves the accepted model, prompts, cancels and stops  5295ms
+     ✓ delivers a real permission callback through the serve listener and applies the reply  3599ms
+     ✓ dispatches dsh to the DSH adapter, starts exactly one child and proves the model from the real session/new  467ms
+     ✓ cancels an in-flight prompt through the entry and stops by explicit PID  391ms
+     ✓ removes the owned DSH home when the readiness session/new fails  367ms
+     ✓ removes the owned DSH home when startAcpAgentDaemon returns a failed outcome  355ms
+     ✓ accepts a blacklist for the capability and client-capability classes the DSH adapter enforces  394ms
+     ✓ binds the local channel byte-compatibly and reports no LAN channel for a loopback listener  369ms
+     ✓ attempts every declared peer at start and records a typed failure instead of skipping  365ms
+     ✓ binds the authenticated LAN channel onto the same host and admits only a real credential  444ms
+ ✓ runtime/control-process.spec.ts (27 tests) 7591ms
+   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  456ms
+   ✓ streams the SSE projection and closes the stream on owner loss  480ms
+   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  435ms
+   ✓ refuses a second start while the control generation is alive  366ms
+   ✓ fails a start when the webui port is already taken and never reports running  3024ms
+   ✓ projects the real D04 registration directory and streams a frame when it changes  1050ms
+   ✓ serves the real D05 connection projection and connection history over the wire  394ms
+   ✓ keeps the durable connection history across a control-owner restart  830ms
+ ✓ cli/agentteams.spec.ts (33 tests) 5112ms
+     ✓ init writes v3 user intent, runtime-owned TLS and internal v2 state, then refuses to overwrite it  856ms
+     ✓ direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts  741ms
+ ✓ config/relations-intent-store.spec.ts (10 tests) 343ms
+ ✓ agent-host/acp-host.spec.ts (27 tests) 73ms
+ ✓ console-host/tests/http-api.spec.ts (7 tests) 59ms
+ ✓ control-protocol/console-api.spec.ts (12 tests) 8ms
+
+ Test Files  7 passed (7)
+      Tests  143 passed (143)
+   Start at  10:51:28
+   Duration  28.45s (transform 3.23s, setup 0ms, import 1.98s, tests 25.28s, environment 0ms)
+
+GATE_EXIT=0

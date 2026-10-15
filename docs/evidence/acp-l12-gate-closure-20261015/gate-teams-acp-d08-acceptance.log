@@ -1,0 +1,42 @@
+  -- running the project producer: pnpm build:governance
+PASS install — pnpm build:governance staged a final package — mode=final version=0.1.0 content=60cba7c0ebefb706… files=271
+PASS install — the packed tarball installs into an isolated prefix — tarball=agentteams-0.1.0.tgz bytes=1557425 cli=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/prefix/node_modules/agentteams/cli/agentteams.mjs
+PASS install — the installed copy exposes the compiled Teams runtime modules — modules=negotiation,routePlan,directRoute,registration
+  -- installedRoot=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/prefix/node_modules/agentteams
+  -- ownedRoot=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa
+  -- lanIp=192.168.0.3
+  -- agent A readiness: serving agent=reasoner-a engine=opencode engineInstance=opencode-reasoner-a-1411d825-4481-4bd0-aef1-3fdc8e52c35f enginePid=32006 daemonPid=31940 listener=192.168.0.3:64934 localChannel=127.0.0.1:64957 lanChannel=wss://192.168.0.3:64934 capabilitiesRevision=2 registration=online dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/agent-a/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/agent-a.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1
+  -- agent B readiness: serving agent=reasoner-dsh engine=dsh engineInstance=dsh-reasoner-dsh-70df2449-5c27-4ff4-b7e8-a1a4b0c57624 enginePid=34785 daemonPid=34533 listener=192.168.0.3:64935 localChannel=127.0.0.1:64976 lanChannel=wss://192.168.0.3:64935 capabilitiesRevision=2 registration=online dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/agent-b/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/agent-b.toml model=workbuddy/wb-deepseek-v4.1-flash modelVerification=session/new configOptions effectiveRevision=1
+PASS A01 — one config starts exactly one daemon — agents: 1 --serve each; registry/control: 1 process each; engine children: a=1 b=1
+PASS A01 — independent identity per config — reasoner-a,reasoner-dsh,control-a,lan-registry
+PASS A01 — independent storage per config — agent-a/state,agent-b/state,control/state,registry-state
+PASS A01 — independent IP/port per config — a=192.168.0.3:64934 b=192.168.0.3:64935 control=127.0.0.1:64933 registry=127.0.0.1:64932
+PASS A01 — the installed CLI reads every daemon back — registry: state=running pid=31602 gen=1; control: state=running pid=37427 listener=127.0.0.1:64933
+PASS A01 — one config never starts a second daemon — control-as-agent refused (UNSUPPORTED_CONFIGURATION: --serve <engine> requires an agent daemon c); v3 refused (UNSUPPORTED_CONFIGURATION: version 3 multi-agent config is n)
+PASS A02 — both engines are real child processes of the installed CLI daemons — a=31940 /Users/fanzhang/.opencode/bin/opencode acp --pure b=pid 34785 owns agent-b/state/engine/teams-dsh-acp.patch.json
+PASS A02 — OpenCode completes a real prompt/process/reply through the installed CLI — session=ses_ebf49b306f… permission options=once,always,reject stopReason=end_turn providerCalls=3
+
+D08 acceptance FAIL [A02 dsh prompt]: D08 acceptance FAIL [A02 dsh prompt]: the real DSH prompt failed: {"code":-32603,"message":"Internal error: turn failed: teams-workbuddy API error (400): {\"code\":\"model_unavailable\",\"gateway_hint\":\"model_blocked: 13 account(s) cooling down this model; earliest unblock at 2026-10-16T02:00:01+08:00; 
+Error: D08 acceptance FAIL [A02 dsh prompt]: the real DSH prompt failed: {"code":-32603,"message":"Internal error: turn failed: teams-workbuddy API error (400): {\"code\":\"model_unavailable\",\"gateway_hint\":\"model_blocked: 13 account(s) cooling down this model; earliest unblock at 2026-10-16T02:00:01+08:00; 
+    at assert (file:///Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015/docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs:177:25)
+    at file:///Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015/docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs:1045:7
+--- reasoner-a stdout ---
+serving agent=reasoner-a engine=opencode engineInstance=opencode-reasoner-a-1411d825-4481-4bd0-aef1-3fdc8e52c35f enginePid=32006 daemonPid=31940 listener=192.168.0.3:64934 localChannel=127.0.0.1:64957 lanChannel=wss://192.168.0.3:64934 capabilitiesRevision=2 registration=online dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/agent-a/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/agent-a.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1
+registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:64932
+
+--- reasoner-a stderr ---
+
+--- reasoner-dsh stdout ---
+serving agent=reasoner-dsh engine=dsh engineInstance=dsh-reasoner-dsh-70df2449-5c27-4ff4-b7e8-a1a4b0c57624 enginePid=34785 daemonPid=34533 listener=192.168.0.3:64935 localChannel=127.0.0.1:64976 lanChannel=wss://192.168.0.3:64935 capabilitiesRevision=2 registration=online dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/agent-b/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/agent-b.toml model=workbuddy/wb-deepseek-v4.1-flash modelVerification=session/new configOptions effectiveRevision=1
+registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:64932
+
+--- reasoner-dsh stderr ---
+
+--- registry cli log ---
+status state=running generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/registry.toml daemon=lan-registry pid=31602 url=wss://127.0.0.1:64932
+
+--- control cli log ---
+status state=running generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/control.toml daemon=control-a pid=37427 url=http://127.0.0.1:64933 listener=127.0.0.1:64933 data=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa/control/state
+
+Retained owned temp root: /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa
+Owned temp root retained for inspection: /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-RjzpQa

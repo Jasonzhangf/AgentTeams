@@ -1,0 +1,17 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015
+
+ ✓ agent-host/acp-host.spec.ts (27 tests) 71ms
+ ✓ runtime/acp-daemon.spec.ts (11 tests) 975ms
+ ✓ acp-adapter/stdio.spec.ts (15 tests) 2036ms
+     ✓ reports a crash before readiness and a malformed peer as typed failures  374ms
+     ✓ bounds a real oversized frame and an incomplete peer exit  344ms
+     ✓ times out a real silent peer  1090ms
+ ✓ runtime/acp-history-store.spec.ts (8 tests) 64ms
+
+ Test Files  4 passed (4)
+      Tests  61 passed (61)
+   Start at  10:33:33
+   Duration  4.19s (transform 281ms, setup 0ms, import 415ms, tests 3.15s, environment 0ms)
+
+GATE_EXIT=0

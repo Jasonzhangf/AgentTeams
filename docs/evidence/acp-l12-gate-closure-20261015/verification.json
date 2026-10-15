@@ -1,0 +1,183 @@
+{
+  "unit": "L12",
+  "title": "ACP 门禁按证据升级与五张 map 收口",
+  "date": "2026-10-15",
+  "base_commit": "4d3ffe5",
+  "base_ref": "origin/main",
+  "worktree": "/Volumes/Intel/playground/agentteams/acp-l12-gate-closure-20261015",
+  "branch": "codex/acp-l12-gate-closure-20261015",
+  "kind": "gate-evidence and map/governance closure unit; no runtime code change",
+  "scope_note": "本单元不重新论证代码。它只按每个门禁自身命令重跑并记录，把结果与未闭合项写进该门禁自己的 note，并按 L9 notes §11 的 7 条 advisory 收紧五张 map、两份 design、governance 与三处历史证据的措辞。任何门禁在其未闭合项消除前不得升级，因此 14 个门禁全部保留 partial。",
+  "invariant": "a gate upgrades only when its own open items close; another gate's or unit's evidence is referenced, never counted as this gate's own evidence",
+  "environment": {
+    "node": "v22.22.2",
+    "pnpm": "10.31.0",
+    "frozen_install": "pnpm install --frozen-lockfile, exit 0",
+    "build": "pnpm build, exit 0, logged at gate build.log",
+    "typecheck": "pnpm exec tsc --noEmit, exit 0, logged at gate typecheck.log"
+  },
+  "gates": [
+    {
+      "gate_id": "teams-acp-daemon-intent",
+      "command": "pnpm exec vitest run --config vitest.config.ts config/daemon-intent.spec.ts config/acp-policy.spec.ts && pnpm exec tsc --noEmit && pnpm build:runtime",
+      "recorded_base": "83496b7",
+      "measured": {"files": 2, "passed": 35, "per_file": {"config/daemon-intent.spec.ts": 23, "config/acp-policy.spec.ts": 12}, "exit_code": 0},
+      "log": "gate-teams-acp-daemon-intent.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["installed start evidence for every delivered engine belongs to teams-acp-serve-entry, whose own installed-copy run is docs/evidence/acp-l11-installed-browser-20261014/"],
+      "count_note": "no count correction; the recorded count matches on a newer tree"
+    },
+    {
+      "gate_id": "teams-acp-public-contract",
+      "command": "pnpm exec vitest run --config vitest.config.ts control-protocol/acp.spec.ts control-protocol/teams-connection.spec.ts control-protocol/teams-state.spec.ts",
+      "recorded_base": "83496b7",
+      "measured": {"files": 3, "passed": 17, "per_file": {"control-protocol/acp.spec.ts": 3, "control-protocol/teams-connection.spec.ts": 9, "control-protocol/teams-state.spec.ts": 5}, "exit_code": 0},
+      "log": "gate-teams-acp-public-contract.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["declaration and refusal semantics only; no transport, negotiation, connection or session behavior"],
+      "count_note": "no count correction"
+    },
+    {
+      "gate_id": "teams-acp-d01-host",
+      "command": "pnpm exec vitest run acp-adapter agent-host/acp-host.spec.ts runtime/acp-history-store.spec.ts runtime/acp-daemon.spec.ts",
+      "recorded_base": "75a6cf4",
+      "measured": {"files": 4, "passed": 61, "per_file": {"agent-host/acp-host.spec.ts": 27, "runtime/acp-daemon.spec.ts": 11, "acp-adapter/stdio.spec.ts": 15, "runtime/acp-history-store.spec.ts": 8}, "exit_code": 0},
+      "log": "gate-teams-acp-d01-host.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["runs against the labeled test peer acp-adapter/test-peer.mjs; no real-engine inference and no installed/live evidence of its own"],
+      "count_note": "recorded 53/53 predates the L9/L10 host additions; the current count is the same command against a larger tree"
+    },
+    {
+      "gate_id": "teams-acp-d02-opencode",
+      "command": "pnpm exec vitest run opencode-adapter --no-file-parallelism",
+      "recorded_base": "1d4df3a",
+      "measured": {"files": 4, "passed": 65, "per_file": {"opencode-adapter/tests/index.spec.ts": 42, "opencode-adapter/tests/acp-engine.real.spec.ts": 4, "opencode-adapter/tests/acp-engine.spec.ts": 16, "opencode-adapter/tests/managed-config.spec.ts": 3}, "exit_code": 0},
+      "log": "gate-teams-acp-d02-opencode.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["local stub provider and installed opencode, so not installed-copy evidence; DSH wiring and installed entry proof belong to teams-acp-serve-entry"],
+      "count_note": "matches the recorded 65/65"
+    },
+    {
+      "gate_id": "teams-acp-d03-dsh",
+      "command": "pnpm exec vitest run dsh-adapter runtime/acp-serve.spec.ts --no-file-parallelism",
+      "recorded_base": "83496b7",
+      "measured": {"files": 3, "passed": 58, "per_file": {"runtime/acp-serve.spec.ts": 27, "dsh-adapter/index.spec.ts": 26, "dsh-adapter/native-config.spec.ts": 5}, "exit_code": 0},
+      "log": "gate-teams-acp-d03-dsh.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["resource_link prompt refused by frozen policy; session/list returns [] while a session is live; AppSDK pin mismatch block"],
+      "count_note": "recorded dsh-adapter 31/31 is 26+5, so the count is consistent"
+    },
+    {
+      "gate_id": "teams-acp-d04-registry",
+      "command": "pnpm exec vitest run --no-file-parallelism server/relay.spec.ts network/relay-client.spec.ts network/registration-client.spec.ts server/registry-intent.spec.ts runtime/registry-process.spec.ts runtime/registry-registration.spec.ts",
+      "recorded_base": "953d952",
+      "measured": {"files": 6, "passed": 75, "per_file": {"server/relay.spec.ts": 29, "network/relay-client.spec.ts": 21, "network/registration-client.spec.ts": 7, "server/registry-intent.spec.ts": 5, "runtime/registry-process.spec.ts": 6, "runtime/registry-registration.spec.ts": 7}, "exit_code": 0},
+      "log": "gate-teams-acp-d04-registry.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["engine-level outage integration, this gate's own installed-copy and live --serve evidence, AppSDK pin mismatch block"],
+      "count_note": "matches the recorded 75/75"
+    },
+    {
+      "gate_id": "teams-acp-d05-network",
+      "command": "pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts network/teams-egress.spec.ts runtime/serve-egress.spec.ts control-protocol/teams-connection.spec.ts",
+      "recorded_base": "83496b7",
+      "measured": {"files": 11, "passed": 103, "per_file": {"network/teams-negotiation.spec.ts": 22, "network/teams-session.spec.ts": 26, "network/teams-connection-history.spec.ts": 5, "network/teams-membership.spec.ts": 5, "network/registration-client.spec.ts": 7, "runtime/registry-registration.spec.ts": 7, "network/teams-ingress.spec.ts": 6, "network/teams-status.spec.ts": 3, "control-protocol/teams-connection.spec.ts": 9, "network/teams-egress.spec.ts": 8, "runtime/serve-egress.spec.ts": 5}, "exit_code": 0},
+      "log": "gate-teams-acp-d05-network.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["installed-copy, restart, deployed-entrypoint and cross-device receipts; AppSDK pin mismatch block"],
+      "count_note": "matches the recorded 103/103 with the same per-file counts"
+    },
+    {
+      "gate_id": "teams-acp-d06-control",
+      "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts config/relations-intent-store.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts",
+      "recorded_base": "83496b7",
+      "measured": {"files": 7, "passed": 143, "per_file": {"runtime/control-process.spec.ts": 27, "config/relations-intent-store.spec.ts": 10, "agent-host/acp-host.spec.ts": 27, "runtime/acp-serve.spec.ts": 27, "cli/agentteams.spec.ts": 33, "console-host/tests/http-api.spec.ts": 7, "control-protocol/console-api.spec.ts": 12}, "exit_code": 0},
+      "log": "gate-teams-acp-d06-control.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["Session owner, L10 retained sessionEvents and permission identity, installed-copy, restart, deployed-entrypoint and cross-device receipts"],
+      "count_note": "recorded 119/119 and 135/135 predate the L9/L10 increments that raised control-process 17->27 and host 23->27; the current count is the same command against a larger tree",
+      "build_prerequisite": "a worktree without compiled console-host/static and ui/teams-console artifacts makes every spawned control child fail presentationRoots() at runtime/control-process.ts:1096 outside the try block, so the parent reports START_TIMEOUT; pnpm build exit 0 restores 27/27"
+    },
+    {
+      "gate_id": "teams-acp-d07-webui",
+      "command": "TEAMS_CONSOLE_REAL_DOM=1 pnpm exec vitest run ui/teams-console/tests --no-file-parallelism",
+      "recorded_base": "83496b7",
+      "measured": {"files": 6, "passed": 29, "per_file": {"ui/teams-console/tests/api.spec.ts": 12, "ui/teams-console/tests/render-d07.spec.ts": 3, "ui/teams-console/tests/render.spec.ts": 2, "ui/teams-console/tests/boundary.spec.ts": 8, "ui/teams-console/tests/focus-dom.spec.ts": 1, "ui/teams-console/tests/contract-compat.spec.ts": 3}, "exit_code": 0},
+      "log": "gate-teams-acp-d07-webui.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["restart, deployed-entrypoint replay, cross-device receipt, mobile, and the data-team-cancel and data-permission-option rendering blocked by L10 retained obligations"],
+      "count_note": "matches the recorded count; the 15-check black-box driver was not re-run by this unit"
+    },
+    {
+      "gate_id": "teams-acp-serve-entry",
+      "command": "pnpm exec vitest run runtime/acp-serve.spec.ts runtime/relations-intent-watch.spec.ts cli/agentteams.spec.ts --no-file-parallelism",
+      "recorded_base": "83496b7",
+      "measured": {"files": 3, "passed": 68, "per_file": {"runtime/acp-serve.spec.ts": 27, "runtime/relations-intent-watch.spec.ts": 8, "cli/agentteams.spec.ts": 33}, "exit_code": 0},
+      "log": "gate-teams-acp-serve-entry.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["DSH installed-copy replay, restart, deployed-entrypoint and cross-device receipts"],
+      "count_note": "matches the recorded 68/68; the referenced L11 run started one real --serve opencode agent daemon from an installed package but drives no second engine and no restart, deployed-entrypoint or cross-device replay"
+    },
+    {
+      "gate_id": "teams-acp-l9-intent-side",
+      "command": "pnpm exec vitest run runtime/acp-serve.spec.ts runtime/control-process.spec.ts config/relations-intent-store.spec.ts runtime/relations-intent-watch.spec.ts --no-file-parallelism",
+      "recorded_base": "83496b7",
+      "measured": {"files": 4, "passed": 72, "per_file": {"runtime/acp-serve.spec.ts": 27, "runtime/control-process.spec.ts": 27, "config/relations-intent-store.spec.ts": 10, "runtime/relations-intent-watch.spec.ts": 8}, "exit_code": 0},
+      "log": "gate-teams-acp-l9-intent-side.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["installed-copy replay, restart, deployed-entrypoint replay, cross-device receipt, AppSDK pin mismatch block"],
+      "count_note": "matches the recorded 72/72"
+    },
+    {
+      "gate_id": "teams-acp-l9-session-write-side",
+      "command": "pnpm exec vitest run runtime/control-process.spec.ts agent-host/acp-host.spec.ts runtime/session-intent-watch.spec.ts config/session-intent-store.spec.ts --no-file-parallelism",
+      "recorded_base": "d531d24",
+      "measured": {"files": 4, "passed": 81, "per_file": {"runtime/control-process.spec.ts": 27, "agent-host/acp-host.spec.ts": 27, "runtime/session-intent-watch.spec.ts": 15, "config/session-intent-store.spec.ts": 12}, "exit_code": 0},
+      "log": "gate-teams-acp-l9-session-write-side.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["session.create and session.open stay typed unsupported; the Session and notification projection L10 delivered only partially; missing installed-copy, restart, deployed-entrypoint and cross-device receipts"],
+      "count_note": "recorded 77/77 and the per-file 26 and 24 predate the L10 increment that raised control-process 26->27 and host 24->27"
+    },
+    {
+      "gate_id": "teams-acp-l10-session-projection",
+      "command": "pnpm exec vitest run config/session-observation-store.spec.ts runtime/session-observation-publisher.spec.ts runtime/control-session-projection.spec.ts config/session-intent-store.spec.ts agent-host/acp-host.spec.ts runtime/control-process.spec.ts --no-file-parallelism",
+      "recorded_base": "83496b7",
+      "measured": {"files": 6, "passed": 86, "per_file": {"config/session-observation-store.spec.ts": 8, "runtime/session-observation-publisher.spec.ts": 7, "runtime/control-session-projection.spec.ts": 5, "config/session-intent-store.spec.ts": 12, "agent-host/acp-host.spec.ts": 27, "runtime/control-process.spec.ts": 27}, "exit_code": 0},
+      "log": "gate-teams-acp-l10-session-projection.log",
+      "status_after": "partial",
+      "open_items_unchanged": ["sessionEvents not projected because the frozen pending-permission ConsoleSessionEventView requires a messageId the ACP callback does not carry; notification title still a fixed Console label; readiness-channel Session projected; last observation survives a hard crash with no SIGTERM; missing installed-copy, restart, deployed-entrypoint and cross-device receipts"],
+      "count_note": "matches the recorded 86/86 with the same per-file counts"
+    },
+    {
+      "gate_id": "teams-acp-d08-acceptance",
+      "command": "node docs/evidence/acp-d08-acceptance-20261011/black-box-acceptance.mjs",
+      "recorded_base": "83496b7",
+      "measured": {"exit_code": 1, "checks_passed": 11, "stop_point": "A02 dsh prompt", "levels_run": ["install", "A01", "A02-opencode"], "levels_not_run": ["A03", "A04", "A05", "A06", "A07", "A08", "A09", "A10", "A11"]},
+      "log": "gate-teams-acp-d08-acceptance.log",
+      "status_after": "partial",
+      "blocker": {"classification": "external provider limit, not a product defect", "upstream": "teams-workbuddy gateway", "http_status": 400, "code": "model_unavailable", "gateway_hint": "model_blocked: 13 account(s) cooling down this model; earliest unblock at 2026-10-16T02:00:01+08:00", "note": "the OpenCode prompt in the same run completed through the same code, so the delivered path works and the block is external"},
+      "recorded_result_unchanged": {"date": "2026-10-12", "checks": 45, "gaps": 3, "exit_code": 0, "note": "this re-run neither raises nor lowers it; it is not re-derived"},
+      "open_items_unchanged": ["A07 Session-, permission- and notification-driven event animation", "installed-artifact live-browser DOM evidence", "targeted WebUI interaction behind L10 retained obligations"],
+      "next_action": "re-run the DSH prompt after the provider cooling window opens at 2026-10-16T02:00:01+08:00"
+    }
+  ],
+  "map_and_governance_edits": [
+    {"file": "docs/architecture/verification-map.json", "change": "14 teams-acp-* gate notes carry an inline 2026-10-15 L12 re-run mark; every status stays partial"},
+    {"file": "docs/development-governance.md", "change": "appended the L12 closure paragraph: the full re-run, the upgrade invariant, the D08 external-limit stop, the build prerequisite and the unchanged AppSDK pin block"},
+    {"file": "docs/architecture/resource-map.json", "change": "acp-frame-contract note closing clause scoped to its own gate"},
+    {"file": "docs/architecture/mainline-call-map.json", "change": "provider-config-v1 master-host edge 'production daemon binding remains pending' corrected to the real runtime/control-process.ts binding; acp-host-wiring-v1 chain note closing clause scoped to its own gate"},
+    {"file": "docs/design/teams-agent-relation-communication-v1.md", "change": "status section corrected with an inline 2026-10-15 mark and the unimplemented scope narrowed"},
+    {"file": "docs/design/teams-control-protocol-v2-master-agent-host.md", "change": "status section corrected with an inline 2026-10-15 mark and the unimplemented scope narrowed"},
+    {"file": "docs/evidence/acp-d05-network-20261010/notes.md", "change": "inline 2026-10-14 marks added to NOT-proven items 2, 4, 5 and 6"},
+    {"file": "docs/evidence/acp-d08-acceptance-20261011/verification.json", "change": "inline 2026-10-14 mark added to gaps[2].reason"},
+    {"file": "docs/evidence/acp-d07-webui-20261011/notes.md", "change": "inline 2026-10-14 mark added after the stays-partial sentence"}
+  ],
+  "not_claimed": [
+    "no gate status was upgraded to implemented or passed",
+    "the D08 black box was not re-run to completion; its recorded 2026-10-12 result stands",
+    "pnpm verify is not claimed; it stays blocked by the pre-existing PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014",
+    "no full regression run is claimed; the 6 unrelated failing specs recorded earlier are unchanged"
+  ],
+  "review": null,
+  "integration": null
+}
