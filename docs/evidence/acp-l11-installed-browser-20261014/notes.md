@@ -110,3 +110,35 @@ produced the canonical run.
 5. **The installed-copy item is closed only for the WebUI DOM level.** Restart, deployed-entrypoint replay,
    cross-device receipt and mobile remain open for the D07 gate, which therefore stays `partial`.
 6. **`release_eligible=false`** is the project's own value for the final package; this unit does not upgrade it.
+
+## 9. Integration receipt (2026-10-14)
+
+- **Candidate.** `b08a0ea` on `codex/acp-l11-installed-browser-20261014`, tree
+  `2a5198465fcadecce23834c26062b89ffeae5e2a`, built from `origin/main` `d835538`.
+  The unit carries no product change: `git diff --name-only d835538 b08a0ea -- ':!docs'` is empty,
+  so every commit is documentation, evidence or an evidence producer.
+- **Review precondition.** Three independent reviews ran in fresh, read-only contexts.
+  Round 1 (`e98097b`) returned **FAIL** on a recorded tarball size that contradicted the receipt, an
+  incomplete installed-artifact correction sweep, and a provenance check that inspected only two of
+  the three Teams daemon command lines. Round 2 (`c1c8154`) returned **FAIL**: those three were fixed,
+  but six further sites still asserted the stale claim. Round 3 (`4a91a4e`) returned **PASS**, with two
+  non-blocking advisories that were also fixed. Every review re-ran the D07 gate (13 files / 66 tests,
+  exit 0) and the D07 black box (15 checks, exit 0) itself, and re-read the recorded run against the
+  producer.
+- **Merge.** `193201b merge(acp): integrate the reviewed L11 installed-browser candidate`, a `--no-ff`
+  merge into `d835538`. The base did not move during the unit, and the merge tree
+  `2a5198465fcadecce23834c26062b89ffeae5e2a` equals the candidate tree, so the candidate's measured
+  results stand for the merge.
+- **Push line.** `d835538..193201b  HEAD -> main`.
+- **Remote receipt.** `git ls-remote origin refs/heads/main` re-read after the push returned
+  `193201bddb80ec90314abe1fa3dfd95f878fe8c5`.
+- **Final measured gates on the candidate.** Producer `node docs/evidence/acp-l11-installed-browser-20261014/installed-browser-dom.mjs`:
+  18 checks, exit 0. D07 gate command with `TEAMS_CONSOLE_REAL_DOM=1`: 13 files / 66 tests, exit 0.
+  `pnpm typecheck`: exit 0. `node docs/evidence/acp-d07-webui-20261011/black-box-webui.mjs`: 15 checks,
+  exit 0. `regenerate-verification.mjs`: exit 0 and idempotent, and it exits 1 without writing anything
+  when the receipt is not a PASS with 18 checks.
+- **Retention.** The evidence directory stays in the repository: the producer, its log, its receipt, the
+  generated verification record, the generator, the screenshot and these notes. The owned temp roots from
+  every run were removed; no run left a live process.
+- **Cleanup precondition.** The unit worktree and the integration worktree are removed only after this
+  receipt is on the remote and re-read.
