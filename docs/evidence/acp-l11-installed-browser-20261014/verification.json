@@ -1,0 +1,120 @@
+{
+  "unit": "L11",
+  "title": "installed-artifact live-browser DOM evidence for the Teams console",
+  "date": "2026-10-14",
+  "base_commit": "d835538",
+  "base_ref": "origin/main",
+  "worktree": "/Volumes/Intel/playground/agentteams/acp-l11-installed-browser-20261014",
+  "branch": "codex/acp-l11-installed-browser-20261014",
+  "driver": {
+    "path": "docs/evidence/acp-l11-installed-browser-20261014/installed-browser-dom.mjs",
+    "command": "node docs/evidence/acp-l11-installed-browser-20261014/installed-browser-dom.mjs",
+    "always_rebuilds": true,
+    "always_reinstalls": true,
+    "always_rebuilds_reason": "A reused build or a reused prefix silently produces evidence for code that is no longer on disk, which is exactly the boundary this unit exists to close. The producer runs pnpm build:governance, npm pack and npm install on every run.",
+    "exit_code": 0,
+    "canonical_run": {
+      "checks": 18,
+      "gaps": 0,
+      "artifact_mode": "final",
+      "artifact_release_eligible": false,
+      "artifact_content_sha256": "9053205f567f52149035fc4447ec727c28322e26c606880478a13a01de4ffae3",
+      "artifact_files": 263,
+      "tarball_bytes": 1536594,
+      "installed_root": "<owned temp root>/prefix/node_modules/agentteams",
+      "installed_cli": "<installed root>/cli/agentteams.mjs",
+      "registry_pid": 47560,
+      "registry_listener": "127.0.0.1:54500",
+      "agent_pid": 47754,
+      "agent_listener": "127.0.0.1:54502",
+      "agent_engine_children": [47950],
+      "control_pid": 52006,
+      "control_listener": "127.0.0.1:54501",
+      "chrome_pid": 52814,
+      "cdp_events": 185,
+      "page_exceptions": 0,
+      "sse_event": "snapshot",
+      "sse_seq": 1,
+      "dom_observation": "live",
+      "dom_agent_rows": ["reasoner-a"],
+      "dom_history_count": "0",
+      "screenshot_bytes": 28255,
+      "screenshot_dimensions": "756x469",
+      "cleanup": "every owned pid dead (47560, 47754, 47950, 52006, 52814); 0 processes matched the owned temp root; 0 processes matched the owned Chrome profile; the owned temp root was removed"
+    }
+  },
+  "installed_artifact": {
+    "staged_by": "pnpm build:governance (pnpm build && node scripts/package-artifact.mjs --mode final)",
+    "receipt_path": "generated/modules/teams-source/package-receipt.json",
+    "pack_root": "generated/modules/teams-source/lib",
+    "install": "npm pack <pack root> --pack-destination <owned root>/pack, then npm install --prefix <owned root>/prefix --no-audit --no-fund <tarball>",
+    "install_outside_source_tree": true,
+    "payload_asserted_present": [
+      "cli/agentteams.mjs",
+      "generated/runtime-lib/runtime/control-process.js",
+      "generated/runtime-lib/runtime/acp-serve.js",
+      "console-host/static/console.html",
+      "console-host/static/console-entry.js",
+      "ui/teams-console/browser.js"
+    ]
+  },
+  "provenance": {
+    "claim": "the daemons that served the page were the installed copy, and the bytes the browser received were the installed package's files",
+    "measured_facts": [
+      "the control daemon's own command line runs <installed root>/generated/runtime-lib/runtime/control-process.js",
+      "the control daemon's own control-state.json records entryPath=<installed root>/generated/runtime-lib/runtime/control-process.js",
+      "the agent daemon's own command line runs <installed root>/cli/agentteams.mjs",
+      "no process command line contains the source worktree path",
+      "the document served for GET / is byte-identical to the installed console-host/static/console.html (sha256 2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21)",
+      "the served /console-entry.js is byte-identical to the installed console-host/static/console-entry.js (343 bytes, sha256 d67e55de91996771f6e011cbeaf746bdc9ac7dc3643dab70787af4fbfc67f636)",
+      "the served /ui/browser.js is byte-identical to the installed ui/teams-console/browser.js (273 bytes, sha256 7ea6a860c73a9b712b883464451b2958c0ecf126db4fb2e578c80043844c39e0)",
+      "all 18 /ui/* modules the page received are byte-identical to their installed package counterpart"
+    ],
+    "not_claimed": "no restart, no deployed-entrypoint replay, no cross-device receipt, no mobile layout, and no control-daemon Session or permission write"
+  },
+  "gates": {
+    "installed_artifact_staging": "pass (mode=final, release_eligible=false, content_sha256 recorded, 263 files)",
+    "installed_artifact_install": "pass (tarball packed and installed into an isolated prefix outside the source tree)",
+    "installed_daemon_start": "pass (registry, real --serve opencode agent with a real engine child, and control, all from the installed CLI)",
+    "installed_provenance": "pass (process command lines and the daemon's own state entry path all resolve inside the install)",
+    "served_asset_provenance": "pass (document and every served /ui/ module byte-match the installed package)",
+    "real_control_daemon": "pass (installed origin, real listener, real Basic challenge)",
+    "basic_challenge": "pass (anonymous GET / -> 401 Basic)",
+    "clean_origin_cdp_navigation": "pass (clean URL, no userinfo, credential injected with Network.setExtraHTTPHeaders)",
+    "authenticated_page_fetch": "pass (the page's own fetch reached the installed origin)",
+    "live_dom": "pass (frozen D07 markers present in the live DOM of the installed entry)",
+    "real_agent_row_from_live_directory": "pass (data-agent-id=reasoner-a)",
+    "shipped_page_own_sse_subscription": "pass (the entry opened its own /api/v1/events and reached observation=live)",
+    "sse_snapshot_frame": "pass (driver-owned EventSource received {seq:1, projection})",
+    "live_page_navigation": "pass (all four frozen views rendered in real Chrome)",
+    "screenshot_png": "pass (756x469, 28255 bytes, dimensions read from the IHDR chunk)",
+    "process_cleanup": "pass (all owned pids dead, no strays, owned temp root removed)"
+  },
+  "defects_found_in_the_producer": [
+    {
+      "id": "L11-P1",
+      "severity": "high",
+      "summary": "The first module-provenance loop rebuilt its request table per module and compared record objects by identity, so every lookup returned undefined and zero modules were compared while the check still printed a pass.",
+      "resolution": "The table is built once, and the check asserts comparedModules === moduleEntries.length so an uncompared module fails the run."
+    },
+    {
+      "id": "L11-P2",
+      "severity": "low",
+      "summary": "The first canonical run reported a console error count without naming the errors.",
+      "resolution": "The producer now reports the verbatim texts and binds them to the observed Network table; any failed request other than the expected /favicon.ico 404 fails the run."
+    }
+  ],
+  "gaps": [
+    {
+      "name": "event-driven DOM markers",
+      "status": "unproven",
+      "reason": "data-team-cancel and data-permission-option are only emitted for a rendered Session. This control daemon binds no Session owner, so no Session exists to cancel and no permission is pending. Their absence is the same gap D06/D08 already records and is not treated as evidence here."
+    },
+    {
+      "name": "history rows through the installed entry",
+      "status": "unproven",
+      "reason": "The history view renders data-history-count=0 with 0 rows in this configuration. The marker render is proven; a non-empty history row is not."
+    }
+  ],
+  "scope_note": "This artifact proves the installed package serves the frozen D07 console to a real browser whose page fetches, subscribes and renders from that origin, and that the bytes the browser received are the installed package's files. It does not prove restart, a deployed-entrypoint replay, cross-device behaviour, mobile layout, or any control-daemon Session/permission write. The D07 gate therefore stays partial."
+}
