@@ -215,6 +215,12 @@ edge `acp-session-observation-v1`；`module-registry.json` 的 `config` 与 `run
 事实；`verification-map.json` 新增 `teams-acp-l10-session-projection` 门（含黑盒真实入口）。
 `pnpm verify` 仍被既有的 `PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014` 阻塞，与本变更无关。
 
+review 轮次又更新了三张地图：`verification-map.json` 的 L10 门新增「publisher 一次只跑一个
+pass」这条 check 并把实测数字改成 85/6 与新的 mutation 计数，`function-map.json` 与
+`module-registry.json` 的 F4 陈述改成 relations store 也共用同一条纪律（并且已真的迁移）。
+`verification-map.json` 的 L9 intent-side 门补记本次迁移与 72/4 的复测结果——**一次变更同时
+改动两张门的语义，两张门都在同一变更内更新**。
+
 ## 9. 提交、集成与资源
 
 待填（见 receipt 与集成回执）。
