@@ -110,9 +110,10 @@ settle → `releaseSessions`）证明恢复的过滤**必要**、关闭窗口用
 
 ## 6. 总判定
 
-本单元在独立 review 路上共走**三轮 FAIL**（第 1 轮 2 minor + 4 advisory；第 2 轮 2 minor +
-2 advisory；第 3 轮 2 minor + 3 advisory，纯证据计数），不宣称单次 PASS。每轮结论、修法与红测
-命中的失败都在本节与 `verification.json` 里，与代码一一对应。
+本单元在独立 review 路上共走**四轮 FAIL**（第 1-3 轮为全量 review，第 4 轮为计数复核轮；
+第 1 轮 2 minor + 4 advisory，第 2 轮 2 minor + 2 advisory，第 3 轮 2 minor + 3 advisory 纯
+证据计数），随后第 5 轮只读计数确认 **PASS**。每轮结论、修法与红测命中的失败都在本节与
+`verification.json` 里，与代码一一对应。
 
 三轮**代码事实**（owner 边界、单写者单读者、无 control→agent 通道、无 Console relay、无协议
 变更）都没有被质疑；第 2 轮之后被质疑的只有本单元自己新写的行与本单元自己写的证据陈述，第 3 轮
@@ -125,4 +126,17 @@ settle → `releaseSessions`）证明恢复的过滤**必要**、关闭窗口用
 指出两处修正没有落盘**：`docs/architecture/verification-map.json` 的 L10 门注仍写「28」与
 「3 failures」（此前脚本把 `n` 改完没写回 `g['note']`，属于作者脚本缺陷，不是审查者误读），
 `notes.md` §5 的红测段仍写「3 个失败」（与 §4c 矛盾）。两处已在本轮修正（提交 `HEAD`），
-第 5 轮做只读核对该文件落盘后的计数，结论填入本节与 `verification.json`。
+第 5 轮做只读核对该文件落盘后的计数。
+
+### 第 5 轮结论（`753775d..e83a7b0`）
+
+**PASS**。同一独立审查者只读核对了三处修正：`verification-map.json:1196` 全部门市中
+agent-host 计数为 27，host mutation 句与本树实测一致（过滤遮罩下 clear 0/27、过滤本身
+1/27），per-file 相加 8+7+5+12+27+27 = 86 与 `gate-l10.log` 一致，72/4 引用指向
+`gate-l9-intent-side-4files.log`；`notes.md` §5 与 §4c、`verification.json` 的 mutation 行完全
+一致（clear 0/27 本树遮罩 + 2/26 中间树；过滤 1/27）；`verification.json` 的 `source` 不再以
+被取代的候选为当前 head。它指出三项遗留措辞（review.md §6 的「三轮 FAIL」、`source` 未命名
+当前 head、门注只写「两轮 review」），本提交一并修掉后 PASS。
+
+至此本单元的独立 review 链为 **FAIL x4 + PASS x1**，通过项全部落在证据与措辞层面，
+owner 边界、单写者/单读者、无 control→agent 通道、无 Console relay、无协议变更未被任何一轮质疑。

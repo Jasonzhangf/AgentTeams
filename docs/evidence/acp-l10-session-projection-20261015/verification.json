@@ -12,7 +12,7 @@
   "governing_decision": "No control-to-agent channel exists and none is added: the control daemon declares no Teams listener. The agent daemon that owns the AcpHost facts is the only writer of one durable observation record per agent, and the control daemon is the only reader. The Console never enters the data path and no protocol frame changed.",
   "driver": "docs/evidence/acp-l10-session-projection-20261015/black-box-session-projection.mjs",
   "verification": {
-    "source": "This worktree, reviewed head 753775d on origin/main base 83496b7 (an ancestor). The rounds are recorded in review.md: round 1 reviewed the 2349be7/97c0e00 candidate and found 2 minor + 4 advisory; the fix at 4e5b77e closed them. Round 2 reviewed 97c0e00..5403cca (FAIL, 2 minor + 2 advisory, both round-1 items confirmed closed). Round 3 reviewed 5403cca..874252c (FAIL, evidence-record arithmetic; code confirmed). Round 4 reviewed 874252c..753775d, then the count corrections ending at the head above. Every count in this record matches its committed log.",
+    "source": "This worktree, reviewed heads 753775d and e83a7b0 on origin/main base 83496b7 (an ancestor). The rounds are recorded in review.md: round 1 reviewed the 2349be7/97c0e00 candidate and found 2 minor + 4 advisory; the fix at 4e5b77e closed them. Round 2 reviewed 97c0e00..5403cca (FAIL, 2 minor + 2 advisory, both round-1 items confirmed closed). Round 3 reviewed 5403cca..874252c (FAIL, evidence-record arithmetic; code confirmed). Round 4 reviewed 874252c..753775d (FAIL, two evidence locations that had not received the corrections). The count corrections land at e83a7b0, and round 5 (read-only count confirmation of 753775d..e83a7b0) PASSED it. Every count in this record matches its committed log.",
     "test": [
       {
         "command": "pnpm exec vitest run --no-file-parallelism config/session-observation-store.spec.ts runtime/session-observation-publisher.spec.ts runtime/control-session-projection.spec.ts config/session-intent-store.spec.ts agent-host/acp-host.spec.ts runtime/control-process.spec.ts",
@@ -82,7 +82,7 @@
     "installed_artifact": "none: this unit does not change packaging and has no installed-copy receipt",
     "restart": "none: the driver starts and stops its own daemons, and no installed daemon was restarted",
     "deployed_entrypoint_replay": "none: the driver runs the worktree's compiled generated/runtime-lib through the source CLI",
-    "review": "No single PASS; four independent rounds (FAIL x3, then the count-only round on the head). Round 4 returned FAIL on two evidence locations that had not received the corrections; they are fixed in the same review round and re-checked in round 5. See review.md.",
+    "review": "No single PASS until round 5. Rounds 1-4 were independent FAILs on this unit's own code or evidence statements (2 minor + 4 advisory; then 2 minor + 2 advisory; then 2 minor + 3 advisory, all evidence arithmetic; then 2 missed evidence locations). Round 5, a read-only count confirmation of the corrections at e83a7b0, PASSED: every count matches its committed log and no artifact claims otherwise. See review.md.",
     "merge": "pending at the time this file was written",
     "remote_receipt": "pending at the time this file was written",
     "cleanup": "pending: the owned worktree is removed only after delivery, the remote receipt and retention evidence exist",
