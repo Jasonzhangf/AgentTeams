@@ -108,10 +108,11 @@ spawn 出的 control 子进程在写 state 前于 `presentationRoots()` 抛错
 - **Merge.** `ea9714a merge(acp): integrate the reviewed L12 gate-closure candidate`, a
   `--no-ff` merge into `4d3ffe5`. The tree `a7eced87de026038f361a3e47939acf489daef10`
   equals the candidate tree (verified `TREE-EQUAL`), so the candidate's measured results
-  stand for the merge.
-- **Push line.** `4d3ffe5..ea9714a  HEAD -> main`.
+  stand for the merge. The receipt commit `c33d54e` was then applied on top of the merge
+  (its tree still equals the candidate tree), so the receipt sits on the mainline history.
+- **Push line.** `4d3ffe5..c33d54e  HEAD -> main`.
 - **Remote receipt.** `git ls-remote origin refs/heads/main` re-read after the push
-  (below).
+  returned `c33d54e0d3d5b856d76a487083c385e912af101b`, which equals local `HEAD`.
 - **Final measured gates on the candidate.** 13 vitest gates pass on the exact candidate
   `4d3ffe5` after `pnpm build` (exit 0) and `pnpm exec tsc --noEmit` (exit 0):
   daemon-intent 35/2, public-contract 17/3, d01-host 61/4, d02-opencode 65/4, d03-dsh 58/3,
