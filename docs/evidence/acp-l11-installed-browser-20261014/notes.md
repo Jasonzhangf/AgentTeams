@@ -65,11 +65,10 @@ or on a leaked owned pid.
 | 14 | real agent row | `data-agent-id=reasoner-a` — the real registered agent from the live directory |
 | 15 | SSE frame | a driver-owned `EventSource` received a real `snapshot`: `seq=1`, `agents=["reasoner-a"]` |
 | 16 | four pages | the live page switched `discovery → networking → interaction → history`; the history view rendered `data-history-count=0`, 0 record rows, `data-history-prev[data-enabled]=false` |
-| 17 | page runtime errors | 0 uncaught page exceptions across the whole session; each console error is bound to its own observed failed request, and the only failed request is the expected `/favicon.ico` 404 |
+| 17 | page runtime errors | 0 uncaught page exceptions across the whole session; the console-error count must equal the observed failed-request count, and every failed request must be the expected `/favicon.ico` 404 |
 | 18 | screenshot | real PNG **756×469**, 28,255 B, dimensions read from the IHDR chunk and asserted |
 
-Cleanup: owned pids `40115, 40410, 40804, 46062, 47755` all dead, 0 processes matching the owned temp root, 0 processes matching the owned Chrome profile, and the owned temp root removed.
-0 processes matching the owned Chrome profile, and the owned temp root removed.
+Cleanup: owned pids `40115, 40410, 40804, 46062, 47755` all dead, 0 processes matching the owned temp root, 0 processes matching the owned Chrome profile, and the owned temp root removed. A stray process in either count now fails the run.
 
 ![installed-browser-dom.png](./installed-browser-dom.png)
 
@@ -88,8 +87,11 @@ produced the canonical run.
   ("0 of them byte-match"). The producer now builds the table once and asserts
   `comparedModules === moduleEntries.length`, so an uncompared module fails the run instead of passing it.
 - **Unnamed console error.** The first run reported "1 log errors observed" without naming them. The
-  producer now reports the verbatim texts and binds them to the observed Network table; a console error
-  that is not the expected `/favicon.ico` 404 fails the run.
+  producer now reports the verbatim texts, requires every failed request to be the expected `/favicon.ico`
+  404, and requires the console-error count to equal the observed failed-request count. The binding is a
+  count and boundary match, not a per-error identity match: a page-originated `console.error` fails the run
+  because it has no matching failed request, but an error that coincided exactly with an equal number of
+  favicon 404s would pass. In the canonical run the counts are 1 and 1.
 
 ## 5. Honest non-claims and retained obligations
 
