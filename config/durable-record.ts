@@ -4,11 +4,12 @@ import { dirname, resolve } from 'node:path'
 import type { ConfigApplyResult, ManagedConfigUncertainty } from './runtime-config.ts'
 
 /**
- * The one durable record write both Session record stores use.
+ * The one durable record write every record store in `config/` uses.
  *
- * `config/session-intent-store.ts` (the control daemon writing pending Session writes) and
+ * `config/session-intent-store.ts` (the control daemon writing pending Session writes),
  * `config/session-observation-store.ts` (the agent daemon publishing its own Session and
- * permission observations) are two different facts with two different owners, but the
+ * permission observations) and `config/relations-intent-store.ts` (the control daemon writing
+ * desired peer relations) carry three different facts with three different owners, but the
  * durability discipline is one decision: a mode-`0o600` temporary file in the target
  * directory followed by an atomic rename, so a reader never observes a half-written record.
  *

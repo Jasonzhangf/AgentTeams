@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type { RelationRole } from '../control-protocol/teams-connection.ts'
-import type { ConfigApplyError, ConfigApplyResult, ManagedConfigUncertainty } from './runtime-config.ts'
+import { writeRecordAtomically } from './durable-record.ts'
+import type { ConfigApplyError, ConfigApplyResult } from './runtime-config.ts'
 import { RuntimeConfigError } from './runtime-config.ts'
 
 /**
@@ -199,65 +199,21 @@ function validateChange(value: unknown): ConfigApplyError | undefined {
   return undefined
 }
 
-/** Best-effort removal of the temporary file; the first write error is what matters. */
-async function discard(temporary: string): Promise<void> {
-  try {
-    await unlink(temporary)
-  } catch { /* keep the first failure */ }
-}
-
 /**
- * The fence records the real substrate facts of an ambiguous write: the durable
- * target (the record path, which is the only identity this store owns), the
- * revision the caller accepted, and the revision the write intended to publish.
- */
-function uncertainty(path: string, acceptedRevision: number, effectiveRevision: number, cause: unknown): ManagedConfigUncertainty {
-  const target = resolve(path)
-  return {
-    target: {
-      agentId: target,
-      targetGeneration: 1,
-      acceptedRevision,
-      acceptedSourceRevision: 0,
-      acceptedSourceHash: '',
-      endpointFingerprint: target,
-    },
-    operation: { operationId: `apply:${target}:${Date.now()}:${randomUUID()}`, kind: 'apply' },
-    error: {
-      code: 'RESULT_UNKNOWN',
-      message: `relations intent outcome is unknown: ${path}: ${cause instanceof Error ? cause.message : String(cause)}`,
-    },
-    substrate: {
-      effectiveRevision,
-      effectiveHandleFingerprint: `${target}\u0000${effectiveRevision}`,
-    },
-  }
-}
-
-/**
- * Durable write: a mode-`0o600` temporary file in the target directory, then an
- * atomic rename. A failed temporary write leaves the target untouched and is a
- * known failure. A failed rename is never `applied`: the target may already
- * carry the new bytes, so the result is `uncertain` with the real substrate
- * facts.
+ * Durable write: the one shared atomic-write discipline in `config/durable-record.ts`
+ * (a mode-`0o600` temporary file in the target directory, then a rename). A failed
+ * temporary write leaves the target untouched and is a known failure. A failed rename is
+ * never `applied`: the target may already carry the new bytes, so the result is
+ * `uncertain` with the real substrate facts.
  */
 async function persist(path: string, record: RelationsIntentRecord, acceptedRevision: number): Promise<ConfigApplyResult> {
-  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
-  try {
-    await mkdir(dirname(path), { recursive: true })
-    await writeFile(temporary, `${JSON.stringify(record)}\n`, { encoding: 'utf8', mode: 0o600 })
-  } catch {
-    await discard(temporary)
-    return { status: 'failed', error: { code: 'UNAVAILABLE', message: `relations intent could not be saved: ${path}` } }
-  }
-  try {
-    await rename(temporary, path)
-  } catch (cause) {
-    await discard(temporary)
-    const fence = uncertainty(path, acceptedRevision, record.revision, cause)
-    return { status: 'uncertain', error: fence.error, fence }
-  }
-  return { status: 'applied', effectiveRevision: record.revision }
+  return writeRecordAtomically({
+    path,
+    label: 'relations intent',
+    record,
+    acceptedRevision,
+    effectiveRevision: record.revision,
+  })
 }
 
 /**

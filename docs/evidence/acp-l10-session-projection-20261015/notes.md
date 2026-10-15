@@ -80,8 +80,37 @@ option set 或任何凭据。`permissionId` 就是 controller 收到的那个 ca
 - `runtime/acp-serve.ts`：在既有命名间隔上运行 publisher，并在 `stop()` 里 `host.close()`
   之后发布一次空观测，因此停掉的 agent 行会消失，**不需要超时启发式**。
 - `config/durable-record.ts`：把原子写收敛成一份实现（mode `0o600` 临时文件 + rename，
-  以及 `applied` / `failed` / `uncertain` 三种结果）。intent store、它的 watermark 与本
-  store 共用它，**L9 记录的 F4「重复的持久写 helper」由此关闭**。
+  以及 `applied` / `failed` / `uncertain` 三种结果）。intent store、它的 watermark、本
+  store **与 relations intent store** 共用它，**L9 记录的 F4「重复的持久写 helper」由此关闭**：
+  `config/relations-intent-store.ts` 里自己那份 `persist` / `uncertainty` / `discard` 已删除。
+
+## 4a. 独立 review 的两个 minor 与修法
+
+独立 reviewer（`openai-codex/gpt-6.1-sol`，全新上下文，未运行任何测试）对本候选给出
+**2 minor + 4 advisory**。两条 minor 都已修复并重新取证，4 条 advisory 全部按证据收口。
+
+1. **minor：stop 时空观测可被轮询写抢走**。`publish()` 原本没有重入保护，而轮询 tick 与
+   `stop()` 的发布共用同一个 publisher；`clearInterval` 不能取消一个已经开始的 pass。若 tick 的
+   写在 `stop()` pass 读到同一 revision 之后、store 内部读旧内容之前落盘，`stop()` pass 会得到
+   `REVISION_CONFLICT` 并直接返回，停掉 daemon 的非空观测就留在盘上继续被投影。
+   修法：publisher 改为**一次只跑一个 pass**，后到的调用串到在飞的那个 pass 后面（与既有
+   `createPollingProjectionSubscriber` 的 `running` 惯例一致），因此 `stop()` 的 pass 一定跟在
+   在飞的轮询 pass 之后；`stop()` 处不再 `.catch()`——publisher 的 pass 本身永不 reject。
+   新 spec（`runtime/session-observation-publisher.spec.ts`「serializes overlapping
+   passes」）以「第一次读有 Session、第二次读没有」的假 host 绑定：去掉串行化后该用例从
+   `revision=2 / sessions=[]` 退回 `revision=1 / sessions=[ses-1]`，红测成立。
+2. **minor：F4 只关了一半**。`config/relations-intent-store.ts` 仍保留自己一份字节级相同的
+   原子写，而 notes、`verification.json` 与两张地图都宣称 F4 已关闭。修法：迁移到
+   `writeRecordAtomically`，删除该文件里的 `discard` / `uncertainty` / `persist` 三处重复实现。
+   `config/relations-intent-store.spec.ts` 与 `runtime/relations-intent-watch.spec.ts`
+   **18/18 passed，exit 0**，证明行为未变（`gate-l10-review-fixes-relations.log`）。
+
+四条 advisory 的收口：`verification.json` 里 `sessionEvents` 的断言归属改为黑盒与控制 daemon
+组装投影的真实位置；`verification-map.json` 的 L10 门补上引擎结束通道这一**真的用例**
+（`agent-host/acp-host.spec.ts` 新增）；单 home / 单 account / 单 scope 限制写进 gaps 与
+retained；`failures()` 只被 handle 暴露、没有生产读者这件事写进 retained，`acp-serve.ts` 的
+注释随之改为「pass 永不 reject，拒绝记录在 handle 上供读者读」。
+
 
 ## 5. 证据分层（每层只证明自己）
 
@@ -91,18 +120,24 @@ option set 或任何凭据。`permissionId` 就是 controller 收到的那个 ca
 
 | 证据 | 结果 |
 | --- | --- |
-| L10 门命令 6 文件 | 83 passed / 6 files |
+| L10 门命令 6 文件 | 85 passed / 6 files |
 | `config/session-observation-store.spec.ts` | 8 |
-| `runtime/session-observation-publisher.spec.ts` | 6 |
+| `runtime/session-observation-publisher.spec.ts` | 7 |
 | `runtime/control-session-projection.spec.ts` | 5 |
 | `config/session-intent-store.spec.ts` | 12 |
-| `agent-host/acp-host.spec.ts` | 25 |
+| `agent-host/acp-host.spec.ts` | 26 |
 | `runtime/control-process.spec.ts` | 27 |
+| F4 迁移受影响的两个 spec | 18 passed / 2 files |
 | `pnpm typecheck` | exit 0 |
 
 红测（mutation）证据按项记录：去掉 store 的跨 Session 校验与 CAS 校验 → 3 个失败；去掉
-publisher 的无变化早退与跨 Session 丢弃 → 2 个失败；去掉投影的 online 闸门与归属校验 →
-2 个失败。全部恢复后重新跑绿。
+publisher 的无变化早退与跨 Session 丢弃 → 2 个失败；去掉 publisher 的 pass 串行化 → 1 个
+失败；去掉投影的 online 闸门与归属校验 → 2 个失败；去掉 `releaseSessions` 里
+`channel.sessions.clear()` → **2 个**失败（关闭通道与引擎结束两个用例）。全部恢复后重新跑绿。
+
+消融证据：`openedSessions()` 里对 `closed` 的过滤被证明无法改变任何行为（mutation 不失败），
+因为两条关闭路径都在标记 `closed` 之前跑 `releaseSessions`，因此该过滤被删除——忘记 Session
+的 owner 只有 `releaseSessions` 一条规则，不再有第二份。
 
 **build**：`pnpm build`（含 opencode-adapter）exit 0。
 
@@ -164,7 +199,13 @@ ACP 连接。它证明的关键事实：
 4. **硬崩溃后最后一次观测仍在**。没有 SIGTERM 时 daemon 来不及发布空观测，而没有 registry
    报告该 peer 时也没有 liveness 真源；本单元**没有发明超时启发式**。`agents[]` 的 presence
    仍由 registry 拓扑的真实 liveness 承载。
-5. **遗留 Work 侧 obligations** 与 L9 的其它 retained 项不因本单元改变。
+5. **观测路径只在同 home、同 account、同 scope 下诚实**。读侧解析
+   `<home>/.agentteams/sessions/<声明 peer 的 accountId>/<scopeId>/<agentId>`，写侧用自己的
+   `daemon.accountId` / `scopeId`；两者不同、或两个 daemon 不在同一台机器时，投影**静默为空**
+   （与 L9 记录同一限制）。本单元没有引入第二条路径或默认值来掩盖它。
+6. **`sessionObservation.failures()` 没有生产读者**。拒绝记录在 handle 上，与既有的
+   `sessionIntent` / `relationsIntent` handle 同一形态；本单元没有为它新建日志面。
+7. **遗留 Work 侧 obligations** 与 L9 的其它 retained 项不因本单元改变。
 
 ## 8. 治理与地图
 

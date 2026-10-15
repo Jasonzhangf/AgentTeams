@@ -124,6 +124,36 @@ describe('session observation publisher', () => {
     }
   })
 
+  it('serializes overlapping passes, so a poll cannot lose its own write to a conflict', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'session-observation-publisher-'))
+    const path = sessionObservationScopePath({ home: directory, accountId: 'local', scopeId: 'local', agentId: 'agent-alpha' })
+    try {
+      // The poll tick and the stop-time publish share this one publisher, and clearing the
+      // interval cannot cancel a pass that already started. This host reports a Session on the
+      // first read and none on the second, which is what a stop looks like: two passes that ran
+      // at once would read the same revision, so the second would fail a CAS conflict it did
+      // not cause and the stale non-empty observation would stay on disk.
+      let reads = 0
+      const publisher = createSessionObservationPublisher({
+        host: {
+          openedSessions: () => { reads += 1; return reads === 1 ? ['ses-1'] : [] },
+          pendingPermissions: () => [],
+        },
+        recordPath: path,
+        agentId: 'agent-alpha',
+      })
+      await Promise.all([publisher.publish(), publisher.publish()])
+      expect(publisher.failures()).toEqual([])
+      const record = await readSessionObservationRecord(path)
+      // The last observation is the one that survives, and the two passes did not both claim
+      // revision 1.
+      expect(record?.sessions).toEqual([])
+      expect(record?.revision).toBe(2)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('rebases onto the durable revision after another writer moved the record', async () => {
     await withPublisher(async (engine, publisher, path) => {
       await publisher.publish()

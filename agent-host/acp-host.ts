@@ -1122,10 +1122,9 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
   const openedSessions = (): readonly string[] => {
     const rows: string[] = []
     for (const channel of channels.values()) {
-      // A closed channel holds no Session any more, so it must not be reported as one. The
-      // channels map keeps the closed record readable, so the filter is on `closed` and not
-      // on the map's own membership.
-      if (channel.closed) continue
+      // `releaseSessions` is the one rule that forgets a Session, and both close paths run it,
+      // so a closed channel already holds none. Filtering on `closed` here would be a second
+      // copy of that rule that nothing can reach.
       for (const sessionId of channel.sessions) rows.push(sessionId)
     }
     return rows

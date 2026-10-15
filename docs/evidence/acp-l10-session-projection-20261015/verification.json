@@ -79,7 +79,7 @@
     {"item": "the Console projection carries a real permission identity", "status": "delivered", "evidence": "black box checks 8 and 12; the real callback id is the projected permissionId"},
     {"item": "the SSE stream is driven by the real projection", "status": "delivered", "evidence": "black box check 14 reads the real /api/v1/events stream"},
     {"item": "a stopped agent's rows disappear", "status": "delivered", "evidence": "black box checks 18-19: the daemon publishes the empty observation in its own stop()"},
-    {"item": "sessionEvents reaches the Console approve buttons", "status": "not delivered", "evidence": "asserted absent in the black box and asserted absent in runtime/control-session-projection.spec.ts"},
+    {"item": "sessionEvents reaches the Console approve buttons", "status": "not delivered", "evidence": "asserted absent in the black box on the real GET /api/v1/projection; the projection the control daemon builds (runtime/control-process.ts:939) carries no sessionEvents key"},
     {"item": "installed artifact, restart or deployed-entrypoint evidence", "status": "not delivered", "evidence": "no such receipt exists for this unit"}
   ],
   "gaps": [
@@ -87,11 +87,12 @@
     "the notification title is the fixed Console label 'Permission request', because the ACP callback carries options and not a subject",
     "the projection also reports the Session of the agent daemon's own readiness channel, which no controller opened",
     "after a hard crash with no SIGTERM the last observation stays projected, because no registry reports that peer's liveness and no timeout heuristic was invented",
+    "the projection is honest only inside one home, one account and one scope: the reader resolves <home>/.agentteams/sessions/<declared peer accountId>/<scopeId>/<agentId> while the writer uses its own daemon accountId and scopeId, so two daemons that differ there, or that run on two machines, project silently empty (the same documented limitation as the L9 path)",
     "the full-suite regression is not green on this candidate: 3 load-sensitive failures in pre-existing specs",
     "pnpm verify stays blocked by the pre-existing PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014"
   ],
   "resolved_defects": [
-    "L9 retained obligation F4 (duplicated durable-write helpers): closed by config/durable-record.ts, used by the intent store, its watermark and the observation store",
+    "L9 retained obligation F4 (duplicated durable-write helpers): closed by config/durable-record.ts, which the session intent store, its watermark, the observation store and the relations intent store all call; the second implementation in config/relations-intent-store.ts was deleted in this unit, so one discipline exists",
     "L9 retained obligation (the control daemon reported sessions: [] and notifications: []): closed and proven by the real projection in the black box"
   ],
   "observed_values": {
@@ -129,6 +130,8 @@
     "an engine-supplied notification subject if the Console needs a real title",
     "a console-surface decision on whether to list a Session no controller opened, which needs a channel-ownership marker",
     "liveness truth for a peer no registry reports",
+    "one home, one account and one scope for the observation path; a cross-machine or differently-scoped peer still projects empty",
+    "a consumer that reads sessionObservation.failures(): the handle exposes it, no production caller does, matching the sibling sessionIntent and relationsIntent handles",
     "the L9 obligations this unit does not touch",
     "installed-copy, restart and deployed-entrypoint evidence for the ACP/LAN/WebUI increment"
   ],

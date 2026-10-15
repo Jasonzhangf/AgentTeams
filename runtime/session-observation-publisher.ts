@@ -96,6 +96,15 @@ export function createSessionObservationPublisher(input: SessionObservationPubli
   let published: SessionObservationSnapshot | undefined
   let revision = 0
   let seeded = false
+  /**
+   * The pass that is running, if any. The poll tick and the stop-time publish share this one
+   * publisher, and clearing the interval does not cancel a pass that already started. Two
+   * passes would read the same revision, so one of them would fail a CAS conflict it did not
+   * cause, and a stop pass that lost that race would leave the last non-empty observation on
+   * disk while the daemon holds nothing. Chaining also makes a stop-time publish run after the
+   * pass in flight, which is the order the stop path needs.
+   */
+  let inFlight: Promise<void> | undefined
 
   const seed = async (): Promise<void> => {
     const record = await readSessionObservationRecord(input.recordPath)
@@ -111,18 +120,18 @@ export function createSessionObservationPublisher(input: SessionObservationPubli
     seeded = true
   }
 
-  const publish = async (): Promise<void> => {
+  /**
+   * One pass. It never rejects: every refusal, including a read or a host read that throws, is
+   * recorded as a typed refusal instead of escaping an interval callback, where an unhandled
+   * rejection could take the daemon down.
+   */
+  const runPass = async (): Promise<void> => {
     try {
       if (!seeded) await seed()
-    } catch (error) {
-      refuse((error as { readonly code?: ConfigErrorCode | 'FORBIDDEN' }).code ?? 'UNAVAILABLE', error instanceof Error ? error.message : String(error))
-      return
-    }
-    const snapshot = observe(input)
-    // Nothing changed: the revision stays, so the control daemon's polling readback reports
-    // no new event and the Console receives no frame for a heartbeat.
-    if (same(published, snapshot)) return
-    try {
+      const snapshot = observe(input)
+      // Nothing changed: the revision stays, so the control daemon's polling readback reports
+      // no new event and the Console receives no frame for a heartbeat.
+      if (same(published, snapshot)) return
       const result = await writeSessionObservationRecord(input.recordPath, revision, snapshot)
       if (result.status === 'applied') {
         published = snapshot
@@ -137,6 +146,12 @@ export function createSessionObservationPublisher(input: SessionObservationPubli
     } catch (error) {
       refuse((error as { readonly code?: ConfigErrorCode | 'FORBIDDEN' }).code ?? 'UNAVAILABLE', error instanceof Error ? error.message : String(error))
     }
+  }
+
+  const publish = async (): Promise<void> => {
+    const pass = (inFlight ?? Promise.resolve()).then(runPass)
+    inFlight = pass
+    await pass
   }
 
   return { publish, recordPath: input.recordPath, failures: () => [...failures] }

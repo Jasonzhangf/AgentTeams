@@ -1613,10 +1613,11 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           await daemon.host.close(readinessRef).catch(() => undefined)
           // The host is closed, so this daemon holds no Session and awaits no permission. It
           // publishes that empty observation itself: the agent daemon is the owner of these
-          // facts, and a reader must not keep projecting them for a daemon that stopped. A
-          // failed publish is not swallowed — the publisher records it as a typed refusal on
-          // `sessionObservation.failures()`, which is where every publish refusal lives.
-          await sessionObservation.publish().catch(() => undefined)
+          // facts, and a reader must not keep projecting them for a daemon that stopped. The
+          // publisher runs one pass at a time, so this pass follows the poll that may still be
+          // writing, and a pass never rejects: a refused publish is recorded as a typed refusal
+          // on `sessionObservation.failures()`, which the handle exposes for a caller to read.
+          await sessionObservation.publish()
           if (registration !== undefined && registration.state === 'enabled') {
             await registration.client.stop().catch(() => undefined)
           }

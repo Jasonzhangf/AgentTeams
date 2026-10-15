@@ -351,6 +351,21 @@ describe('createAcpHost', () => {
     expect(fixture.host.openedSessions()).toEqual([])
   })
 
+  it('reports no Session after the engine ends the channel it owns', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    expect(fixture.host.openedSessions()).toEqual(['session-1'])
+    // The engine ended, so the channel holds no Session any more. A publisher must not report a
+    // Session whose engine no longer runs, and it cannot ask the channel that just died.
+    fixture.exit()
+    await flush()
+    expect(fixture.host.openedSessions()).toEqual([])
+  })
+
   it('cancels explicitly when no controller owns a permission callback', async () => {
     const fixture = makeFixture()
     await open(fixture, ref1)
