@@ -1,49 +1,72 @@
-# committed candidate full-suite regression run (scripts/regression.mjs) on fb35e73
-# vitest runs its spec files in parallel; this file keeps the measured summary and every failure excerpt.
-# The untrimmed reporter JSON is not retained because it is 16 MB of per-test timing with no additional fact.
 
+> agentteams@0.1.0 test /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014
+> pnpm build:runtime && pnpm --dir opencode-adapter build && node scripts/regression.mjs
+
+
+> agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    55.02 kB │ gzip: 14.29 kB
+ℹ lib/index.d.mts  32.85 kB │ gzip:  7.67 kB
+ℹ 2 files, total: 87.87 kB
+✔ Build complete in 1101ms
 Regression gate: TEAMS_CONSOLE_REAL_DOM=1 (real Chrome required)
-(node:33430) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+(node:71643) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
 blackbox-user-mvp: unknown case: BB99
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.25s
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 18.04s
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.95s
-file:///Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/scripts/regression.mjs:23
-  throw new Error(`Regression process failed: status=${result.status}, signal=${result.signal}`)
-        ^
-Error: Regression process failed: status=1, signal=null
-    at file:///Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/scripts/regression.mjs:23:9
-    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
-Node.js v22.22.2
-EXIT=1
-## measured summary (generated/validation/regression.json)
-success=False total=1173 passed=1172 failed=1 skipped=0 todo=0 suites=256 passed_suites=254
-
-FAILED agentteams CLI direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts
-  Error: expected [Function] to throw error matching /already exists/i but got 'Command failed: /opt/homebrew/Cellar/…'
-
-## measured summary, second run on the same committed candidate (generated/validation/regression.json)
-success=False total=1173 passed=1167 failed=6 skipped=0 todo=0
-
-FAILED agentteams CLI direct node entry avoids source TS parameter properties and writes internal v2 from built runtime artifacts
-  Error: Command failed: /opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/cli/agentteams.mjs status
-FAILED executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state
-  Error: Console deadline elapsed; do not replay
-FAILED sends one real OpenCode Session request through the selected managed provider
-  TimeoutError: The operation was aborted due to timeout
-FAILED drawer keyboard focus in a real DOM moves outside focus into the drawer and wraps forward and backward Tab
-  Error: Command failed: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --disable-gpu --no-sandbox --dump-dom file:///var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/teams-c
-FAILED D07 four-page DOM contract in a real DOM renders the four pages, owner bands, permissions and history without inventing state
-  Error: Command failed: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --disable-gpu --no-sandbox --dump-dom file:///var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/teams-c
-FAILED declared capability rendering in a real DOM renders declared services and resources and an explicit unavailable state
-  Error: Command failed: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --disable-gpu --no-sandbox --dump-dom file:///var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/teams-c
-
-## reading
-The failure set differs between the two runs on this same committed candidate (1 then 6),
-and every added failure is a real-process, real-Chrome or real-engine timeout test. The CLI
-direct-entry test is the only one that fails in both runs and it also fails on the unmodified
-base with the same root cause. So pnpm test is a load-sensitive BLOCKED baseline, and none of
-these failures is caused by this unit. The six mapped gate commands pass on this candidate.
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/runtime/dagpipe/.build/build-F2mQhj)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.61s
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/runtime/dagpipe/.build/build-filF42)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.88s
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/acp-l9-session-write-side-20261014/runtime/dagpipe/.build/build-kX62ui)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.90s
+Test Files 119 passed
+Tests 1181 passed
+EXIT=0
