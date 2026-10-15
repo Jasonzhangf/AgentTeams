@@ -27,7 +27,8 @@
           "runtime/control-process.spec.ts": 27
         },
         "per_file_sum": 86,
-        "log_line": "Tests 86 passed (86); Test Files 6 passed (6); the per-file lines are agent-host/acp-host.spec.ts 27, config/session-intent-store.spec.ts 12, runtime/control-process.spec.ts 27, runtime/session-observation-publisher.spec.ts 7, config/session-observation-store.spec.ts 8, runtime/control-session-projection.spec.ts 5"
+        "log_line": "Tests 86 passed (86); Test Files 6 passed (6); the per-file lines are agent-host/acp-host.spec.ts 27, config/session-intent-store.spec.ts 12, runtime/control-process.spec.ts 27, runtime/session-observation-publisher.spec.ts 7, config/session-observation-store.spec.ts 8, runtime/control-session-projection.spec.ts 5",
+        "exit_marker": "GATE_EXIT=0 is the last line of gate-l10.log"
       },
       {
         "command": "pnpm exec vitest run --no-file-parallelism config/relations-intent-store.spec.ts runtime/relations-intent-watch.spec.ts runtime/control-process.spec.ts runtime/acp-serve.spec.ts",
@@ -41,7 +42,8 @@
           "runtime/relations-intent-watch.spec.ts": 8
         },
         "per_file_sum": 72,
-        "log_line": "Tests 72 passed (72); Test Files 4 passed (4)"
+        "log_line": "Tests 72 passed (72); Test Files 4 passed (4)",
+        "exit_marker": "the log ends with the run's own summary; the command exited 0"
       },
       {
         "command": "pnpm typecheck",
@@ -57,7 +59,7 @@
       "agent-host/acp-host.spec.ts: removing channel.sessions.clear() from releaseSessions fails 0 of 27 on the head, because the restored closed filter masks it — the observable invariant is now carried by the filter; on the intermediate filter-less tree the same ablation failed 2 of 26 (close path and engine-ended channel), which is the tree that measurement belongs to",
       "agent-host/acp-host.spec.ts: the `closed` filter in openedSessions() is the bound rule — a close-window case holds the close's durable settling open and samples the host; with the filter removed that case fails with expected [ 'session-1' ] to deeply equal [] (1 of 27). An earlier attempt in this round to delete that filter as unreachable was wrong; it came back as round-3 review minor 1 and the fix restored it"
     ],
-    "build": "pnpm build (all targets, including opencode-adapter) exit 0, log build.log",
+    "build": "pnpm build, exit 0; the log build.log ends with BUILD_EXIT=0",
     "black_box": {
       "command": "node docs/evidence/acp-l10-session-projection-20261015/black-box-session-projection.mjs",
       "result": "31 checks, all passed, exit 0",
@@ -84,7 +86,8 @@
     "merge": "pending at the time this file was written",
     "remote_receipt": "pending at the time this file was written",
     "cleanup": "pending: the owned worktree is removed only after delivery, the remote receipt and retention evidence exist",
-    "mutation_basis": "Every mutation row names the tree its count was measured on. Rows for the observation store and the projection were measured on the 2349be7 candidate and transfer to the head, because git diff 2349be7..HEAD is empty for config/session-observation-store.ts, config/session-observation-store.spec.ts, runtime/control-session-projection.spec.ts and runtime/control-process.ts. The publisher rows were re-measured on the head (combined no-change plus crossing: 2 of 7; serialization: 1 of 7). The host rows were re-measured on the head: the closed filter is bound by the close-window case, 1 of 27; removing channel.sessions.clear() is masked by that filter, 0 of 27, while the intermediate filter-less tree measured 2 of 26."
+    "mutation_basis": "Every mutation row names the tree its count was measured on. Rows for the observation store and the projection were measured on the 2349be7 candidate and transfer to the head, because git diff 2349be7..HEAD is empty for config/session-observation-store.ts, config/session-observation-store.spec.ts, runtime/control-session-projection.spec.ts and runtime/control-process.ts. The publisher rows were re-measured on the head (combined no-change plus crossing: 2 of 7; serialization: 1 of 7). The host rows were re-measured on the head: the closed filter is bound by the close-window case, 1 of 27; removing channel.sessions.clear() is masked by that filter, 0 of 27, while the intermediate filter-less tree measured 2 of 26.",
+    "typecheck": "pnpm typecheck, exit 0; the log typecheck.log ends with TYPECHECK_EXIT=0"
   },
   "full_suite": {
     "command": "pnpm test (1203 tests on the fixed candidate; 1201 before this unit's two new cases)",

@@ -1,26 +1,27 @@
 
  RUN  v4.1.11 /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015
 
- ✓ agent-host/acp-host.spec.ts (27 tests) 64ms
- ✓ config/session-intent-store.spec.ts (12 tests) 1171ms
-     ✓ keeps a fixed window and advances the retained boundary when it drops  507ms
-     ✓ refuses a reader that fell behind the retained window instead of skipping  489ms
- ✓ runtime/control-process.spec.ts (27 tests) 7657ms
-   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  427ms
-   ✓ streams the SSE projection and closes the stream on owner loss  374ms
-   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  408ms
-   ✓ refuses a second start while the control generation is alive  445ms
-   ✓ refuses a stop from a stale generation without touching the live process  431ms
-   ✓ fails a start when the webui port is already taken and never reports running  3022ms
-   ✓ projects the real D04 registration directory and streams a frame when it changes  1056ms
-   ✓ serves the real D05 connection projection and connection history over the wire  412ms
-   ✓ keeps the durable connection history across a control-owner restart  808ms
- ✓ runtime/session-observation-publisher.spec.ts (7 tests) 65ms
- ✓ config/session-observation-store.spec.ts (8 tests) 93ms
- ✓ runtime/control-session-projection.spec.ts (5 tests) 52ms
+ ✓ runtime/session-observation-publisher.spec.ts (7 tests) 75ms
+ ✓ runtime/control-process.spec.ts (27 tests) 7672ms
+   ✓ starts the production control entry, serves the authenticated WebUI and stops by explicit pid  476ms
+   ✓ streams the SSE projection and closes the stream on owner loss  415ms
+   ✓ stops by explicit pid while a live WebUI event-stream client still holds its socket open  386ms
+   ✓ refuses a second start while the control generation is alive  448ms
+   ✓ refuses a stop from a stale generation without touching the live process  350ms
+   ✓ fails a start when the webui port is already taken and never reports running  3028ms
+   ✓ projects the real D04 registration directory and streams a frame when it changes  1061ms
+   ✓ serves the real D05 connection projection and connection history over the wire  456ms
+   ✓ keeps the durable connection history across a control-owner restart  765ms
+ ✓ config/session-intent-store.spec.ts (12 tests) 1491ms
+     ✓ keeps a fixed window and advances the retained boundary when it drops  587ms
+     ✓ refuses a reader that fell behind the retained window instead of skipping  656ms
+ ✓ config/session-observation-store.spec.ts (8 tests) 57ms
+ ✓ agent-host/acp-host.spec.ts (27 tests) 70ms
+ ✓ runtime/control-session-projection.spec.ts (5 tests) 85ms
 
  Test Files  6 passed (6)
       Tests  86 passed (86)
-   Start at  07:44:04
-   Duration  11.00s (transform 532ms, setup 0ms, import 835ms, tests 9.10s, environment 0ms)
+   Start at  09:11:06
+   Duration  11.42s (transform 596ms, setup 0ms, import 990ms, tests 9.45s, environment 0ms)
 
+GATE_EXIT=0

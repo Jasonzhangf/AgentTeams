@@ -16,7 +16,7 @@
 ℹ lib/index.mjs    55.02 kB │ gzip: 14.29 kB
 ℹ lib/index.d.mts  32.85 kB │ gzip:  7.67 kB
 ℹ 2 files, total: 87.87 kB
-✔ Build complete in 1112ms
+✔ Build complete in 2075ms
 
 > @deepseek-ai/teams-console-host@0.1.0 build /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015/console-host
 > tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
@@ -31,7 +31,7 @@
 ℹ lib/index.mjs    21.91 kB │ gzip: 6.25 kB
 ℹ lib/index.d.mts  25.90 kB │ gzip: 6.53 kB
 ℹ 2 files, total: 47.81 kB
-✔ Build complete in 848ms
+✔ Build complete in 878ms
 
 > @deepseek-ai/teams-console@0.1.0 build /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015/ui/teams-console
 > tsc -p tsconfig.build.json && node scripts/finalize-build.mjs
@@ -40,3 +40,4 @@
 > agentteams@0.1.0 build:runtime /Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015
 > node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
 
+BUILD_EXIT=0
