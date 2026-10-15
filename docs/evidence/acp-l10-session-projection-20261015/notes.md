@@ -306,4 +306,50 @@ pass」这条 check，把引擎结束通道的条目扩成三条（引擎结束�
 
 ## 9. 提交、集成与资源
 
-待填（见 receipt 与集成回执）。
+已填：候选提交与集成回执见下文。
+
+## 15. Integration receipt (2026-10-15)
+
+| 项 | 值 |
+| --- | --- |
+| 候选提交 | `6a50d865587789b25f9da62488b2a48f90e9b1d2` |
+| 候选树 | `bc646269915b561ef3b644e4401a0b0758fbda9c` |
+| 合并提交 | `cbb9ec2f5c7faa04483a6e65cb71276917839d1f` |
+| 合并树 | `bc646269915b561ef3b644e4401a0b0758fbda9c` |
+| 合并方式 | `git merge --no-ff codex/acp-l10-session-projection-20261015`，在本地 `main` 从 `origin/main` `83496b7ff1be7f340f874c5ef604f8c6f5c4da53` 快进之后执行 |
+| 合并父提交 | `83496b7ff1be7f340f874c5ef604f8c6f5c4da53`（origin/main）与 `6a50d865587789b25f9da62488b2a48f90e9b1d2`（候选） |
+| 合并类型 | `--no-ff`，`git show --format=%P` 输出两个父提交，非 fast-forward |
+| Tree 相等证明 | `<candidate>{tree}` = `<merge>{tree}` = `bc646269915b561ef3b644e4401a0b0758fbda9c` |
+| 推送 | `git push origin HEAD:refs/heads/main` |
+| 远端回执复读 | `git ls-remote origin refs/heads/main` |
+
+### 集成前置条件
+
+| 条件 | 结论 |
+| --- | --- |
+| 独占 worktree，建自最新 `origin/main` | 是，base `83496b7`，路径 `/Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015` |
+| 适用门禁在冻结源码上实测 | 是：L10 门 86 passed / 6 files、L9 intent 侧四文件门 72 passed / 4 files、relations 受影响两文件 18 passed / 2 files，typecheck 与 build exit 0（三段日志均以 `GATE_EXIT=0` / `BUILD_EXIT=0` / `TYPECHECK_EXIT=0` 结尾） |
+| 真实入口黑盒 | 是：`docs/evidence/acp-l10-session-projection-20261015/black-box-session-projection.mjs` 31/31，exit 0，两次——run 5 在修复前的树上，run 6 在修复后的候选上 |
+| 全量回归 | **不绿，如实记录**：1203 用例共 4 跑，失败集不稳定且全部落在本变更未触碰的既有 spec；第 4 跑的 6 个失败 spec 单独跑 80 passed / 6 files，exit 0。本单元**不宣称全量回归为绿** |
+| 一次独立 review PASS | 是：第 5 轮只读计数复核（`753775d..e83a7b0`）PASS；第 1-4 轮 FAIL 的每项修法、红测与结论见 `review.md` 与 §4a-§4d |
+| review 后源码未变 | 是：`git diff --name-only e83a7b0..6a50d86` 无 `docs/` 之外的改动 |
+
+### 保留义务（集成后仍成立，逐条见 §7）
+
+1. `sessionEvents` 仍未投影——frozen 的 `ConsoleSessionEventView` 需要 ACP callback 没有的
+   `messageId`，Console approve 按钮仍 `data-permission-options-unavailable`；黑盒断言其缺席。
+2. notification 的 title 是固定 Console 标签，不是引擎主题。
+3. 投影含 daemon 自身 readiness 通道的 Session（真实存在、被诚实报告）。
+4. 硬崩溃且无 SIGTERM 时，最后一次观测留在盘上，没有发明 liveness 超时启发式。
+5. 观测只在与写侧同 home / account / scope 时诚实，否则投影静默为空。
+6. `sessionObservation.failures()` 及其同类 handle 没有生产读者。
+7. `pnpm verify` 仍被既有 `PROJECT_SDK_VERSION_PIN_MISMATCH:0.1.0014` 阻塞（先于本变更存在）。
+8. 全量回归不绿（原因与隔离复跑约日志见 §6）。
+9. 本单元是**源码证据层**：无安装副本、无重启、无部署入口、无跨设备回执，不作上一层断言。
+
+### 清理前提
+
+- 本单元 worktree `/Volumes/Intel/playground/agentteams/acp-l10-session-projection-20261015`
+  在交付、本回执、远端复读与保留义务落盘后移除。
+- 本轮回收 19 棵工作树，另 10 棵 PROTECTED_HOLD 与 2 棵内容干净但 dirty 的树保留，
+  逐文件 EXTRACT_THEN_CLOSE 决策是保留义务，见 `resource-inventory.md`。
