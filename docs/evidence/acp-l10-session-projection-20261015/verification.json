@@ -12,7 +12,7 @@
   "governing_decision": "No control-to-agent channel exists and none is added: the control daemon declares no Teams listener. The agent daemon that owns the AcpHost facts is the only writer of one durable observation record per agent, and the control daemon is the only reader. The Console never enters the data path and no protocol frame changed.",
   "driver": "docs/evidence/acp-l10-session-projection-20261015/black-box-session-projection.mjs",
   "verification": {
-    "source": "This worktree: the L10 candidate head is 2349be7 (code and maps) and 97c0e00 (evidence bundle); the first independent review found 2 minor and 4 advisory findings, fixed at 4e5b77e (tree cebe45a). base origin/main 83496b7 is an ancestor of both candidate heads.",
+    "source": "This worktree, reviewed head 753775d on origin/main base 83496b7 (an ancestor). The rounds are recorded in review.md: round 1 reviewed the 2349be7/97c0e00 candidate and found 2 minor + 4 advisory; the fix at 4e5b77e closed them. Round 2 reviewed 97c0e00..5403cca (FAIL, 2 minor + 2 advisory, both round-1 items confirmed closed). Round 3 reviewed 5403cca..874252c (FAIL, evidence-record arithmetic; code confirmed). Round 4 reviewed 874252c..753775d, then the count corrections ending at the head above. Every count in this record matches its committed log.",
     "test": [
       {
         "command": "pnpm exec vitest run --no-file-parallelism config/session-observation-store.spec.ts runtime/session-observation-publisher.spec.ts runtime/control-session-projection.spec.ts config/session-intent-store.spec.ts agent-host/acp-host.spec.ts runtime/control-process.spec.ts",
@@ -82,7 +82,7 @@
     "installed_artifact": "none: this unit does not change packaging and has no installed-copy receipt",
     "restart": "none: the driver starts and stops its own daemons, and no installed daemon was restarted",
     "deployed_entrypoint_replay": "none: the driver runs the worktree's compiled generated/runtime-lib through the source CLI",
-    "review": "Three independent rounds. Round 1 on the 2349be7/97c0e00 candidate: FAIL, 2 minor + 4 advisory. Round 2 on the fix diff 97c0e00..5403cca: FAIL, 2 minor + 2 advisory, while confirming round 1 as genuinely fixed. Round 3 on 5403cca..874252c: FAIL on evidence-record accuracy only, and it confirmed both round-2 minors and both round-2 advisories as genuinely closed; its findings are count misstatements (agent-host 27, not 28) and a mutation row measured on the wrong tree. The round-3 findings and their corrections are in review.md.",
+    "review": "No single PASS; four independent rounds (FAIL x3, then the count-only round on the head). Round 4 returned FAIL on two evidence locations that had not received the corrections; they are fixed in the same review round and re-checked in round 5. See review.md.",
     "merge": "pending at the time this file was written",
     "remote_receipt": "pending at the time this file was written",
     "cleanup": "pending: the owned worktree is removed only after delivery, the remote receipt and retention evidence exist",

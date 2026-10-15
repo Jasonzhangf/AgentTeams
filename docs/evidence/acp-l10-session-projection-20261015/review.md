@@ -116,5 +116,13 @@ settle → `releaseSessions`）证明恢复的过滤**必要**、关闭窗口用
 
 三轮**代码事实**（owner 边界、单写者单读者、无 control→agent 通道、无 Console relay、无协议
 变更）都没有被质疑；第 2 轮之后被质疑的只有本单元自己新写的行与本单元自己写的证据陈述，第 3 轮
-更是只有计数与标注。第 3 轮的修正提交后，同一位独立审查者被再次派发做**只读计数复核**（第 4 轮），
-其结论填入本节与 `verification.json`。
+更是只有计数与标注。第 3 轮的修正提交后，同一位独立审查者被再次派发做**只读计数复核**。
+
+第 4 轮（`874252c..753775d`）结论 **FAIL，2 处遗漏**：它确认 `verification.json` 的
+`per_file` / `per_file_sum` / `log_line`、`notes.md` §4c 与 §5 表格、`.appsdk` 与 `module-registry`
+的计数、`mutation_basis` 及其转移声明、追踪式红测推导（0/27 被遮罩、过滤 1/27）、废弃项删除、
+`review.md` 无占位、build/typecheck/gate 日志自带退出码、72/4 引用——这些全部正确，**同时
+指出两处修正没有落盘**：`docs/architecture/verification-map.json` 的 L10 门注仍写「28」与
+「3 failures」（此前脚本把 `n` 改完没写回 `g['note']`，属于作者脚本缺陷，不是审查者误读），
+`notes.md` §5 的红测段仍写「3 个失败」（与 §4c 矛盾）。两处已在本轮修正（提交 `HEAD`），
+第 5 轮做只读核对该文件落盘后的计数，结论填入本节与 `verification.json`。

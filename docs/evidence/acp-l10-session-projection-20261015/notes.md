@@ -199,11 +199,15 @@ retained；`failures()` 只被 handle 暴露、没有生产读者这件事写进
 | F4 迁移影响的四文件门 | 72 passed / 4 files |
 | `pnpm typecheck` | exit 0 |
 
-红测（mutation）证据按项记录：去掉 store 的跨 Session 校验与 CAS 校验 → 3 个失败；去掉
-publisher 的无变化早退与跨 Session 丢弃 → 2 个失败；去掉 publisher 的 pass 串行化 → 1 个
-失败；去掉投影的 online 闸门与归属校验 → 2 个失败；去掉 `releaseSessions` 里
-`channel.sessions.clear()` → **3 个**失败（关闭通道、引擎结束、关闭窗口采样三个用例）。
-全部恢复后重新跑绿。
+红测（mutation）证据按项记录，**每项标注量测所在的树**：去掉 store 的跨 Session 校验与
+CAS 校验 → 3 个失败（这两文件自 2349be7 未变，可转移）；去掉 publisher 的无变化早退与跨
+Session 丢弃 → **2 个**失败（在本 head 上重测，2 failed / 7）；去掉 publisher 的 pass 串行化
+→ **1 个**失败（本 head 重测，1 failed / 7）；去掉投影的 online 闸门与归属校验 → 2 个失败
+（两文件自 2349be7 未变，可转移）；去掉 `releaseSessions` 里 `channel.sessions.clear()` →
+**本 head 0 个失败**（恢复的 `closed` 过滤把它遮罩了，`channel.sessions` 只在 :563 与 :1131
+被读），**中间无过滤树 2 个失败**（26 用例）。真正被绑定的规则是过滤本身：去掉
+`openedSessions()` 的 `closed` 过滤 → **1 个**失败（关闭窗口用例，27 用例 head）。全部恢复后
+重新跑绿。
 
 关闭窗口的真实原因（第 2 轮 review 揭出，作者最初的「过滤不可达」判断是错的）：`close()` 先置
 `channel.closed = true`，**之后**才 `await` 两条持久 settle，最后才 `releaseSessions`；这两个
