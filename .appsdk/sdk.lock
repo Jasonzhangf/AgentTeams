@@ -1,7 +1,7 @@
 {
   "binary_ref": "project-sdk",
-  "bundle_digest": "sha256:868fe60e645e4215c87a511c04f940589d7d1096e1835e8d444da44357a85bd4",
-  "bundle_manifest_digest": "sha256:098e3fc2b0b82006bf064402927b0548aed7bd0231117a8b9b4c8755c736d918",
+  "bundle_digest": "sha256:62dbfd44f5c8ef38352420da3263ff397f206bf3fad0e5a9769f48a8f8eed09c",
+  "bundle_manifest_digest": "sha256:47142ab097093bab968410f4d296009e643fa7fc87acca4c24f8dd2f50a9d40b",
   "bundle_resources": {
     "contracts": [
       "contracts/sdk-bundle.manifest.json",
@@ -29,6 +29,11 @@
       "contracts/migrations/sdk-0.1.0011-to-0.1.0012.json",
       "contracts/migrations/sdk-0.1.0012-to-0.1.0013.json",
       "contracts/migrations/sdk-0.1.0013-to-0.1.0014.json",
+      "contracts/migrations/sdk-0.1.0014-to-0.1.0015.json",
+      "contracts/migrations/0.1.0014/governance-maps/resource-map.json",
+      "contracts/migrations/0.1.0014/governance-maps/function-map.json",
+      "contracts/migrations/0.1.0014/governance-maps/mainline-call-map.json",
+      "contracts/migrations/0.1.0014/governance-maps/verification-map.json",
       "contracts/migrations/0.1.0013/governance-maps/resource-map.json",
       "contracts/migrations/0.1.0013/governance-maps/function-map.json",
       "contracts/migrations/0.1.0013/governance-maps/mainline-call-map.json",
@@ -128,16 +133,17 @@
       "skills/project-memory/SKILL.md"
     ]
   },
-  "compiler_digest": "sha256:f1dc60aa28e1e7d33d14cef0995850c77c66bb33787a597deafd2150a07cb389",
+  "compiler_digest": "sha256:d8e7d54c552bd57cb2812e1703cce156b5c5447590a9dc9762d66aed0d60bf26",
   "contract_schema": 1,
-  "digest": "sha256:f1dc60aa28e1e7d33d14cef0995850c77c66bb33787a597deafd2150a07cb389",
+  "digest": "sha256:d8e7d54c552bd57cb2812e1703cce156b5c5447590a9dc9762d66aed0d60bf26",
   "previous_bundle_digest": "sha256:e9a816589ce03740b30bf847be4fbb6c4203c70d39b11ada2b723dc966d0a091",
   "previous_bundle_digests": [
     "sha256:e9a816589ce03740b30bf847be4fbb6c4203c70d39b11ada2b723dc966d0a091",
     "sha256:a51c01a3a2bbe4158d358db672b7e9683bfb8c714c97fed0600a413fe03b2aa1",
     "sha256:54e6ba9f8a0ff5b6816d7dbb68506a2144f60a7b322d9fc930ec5806853b4d0d",
-    "sha256:51b5490d407aaa502fb6c223449e94c3ca3b641f4428bd7a0dbbcb399d5ffd23"
+    "sha256:51b5490d407aaa502fb6c223449e94c3ca3b641f4428bd7a0dbbcb399d5ffd23",
+    "sha256:868fe60e645e4215c87a511c04f940589d7d1096e1835e8d444da44357a85bd4"
   ],
   "sdk": "appsdk",
-  "version": "0.1.0014"
+  "version": "0.1.0015"
 }
