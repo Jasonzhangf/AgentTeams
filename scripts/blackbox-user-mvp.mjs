@@ -2886,11 +2886,15 @@ async function bb09BrowserAcceptance(options) {
   const refreshedProvider = refreshedRows.find(row => row.agentId === workProviderId)
   assert(refreshedProvider !== undefined && /file-search/u.test(refreshedProvider.text),
     `the refreshed panel lost the Agent declaration: ${JSON.stringify(refreshedRows)}`)
-  // The rendered label spacing comes from the product locale, not a behavior
-  // contract; assert the observable service, resource, and capacity facts by value.
-  assert(/file-search/u.test(refreshedProvider.text) && /search-slot/u.test(refreshedProvider.text)
-    && /2\s*slot/u.test(refreshedProvider.text),
-    `the refreshed panel lost the declared resource detail: ${refreshedProvider.text}`)
+  camoClick(fixture, camo, evidenceDir, 'browser-refreshed-detail', profile,
+    `button[data-focus-key="agent:${workProviderId}:details"]`)
+  const refreshedDetailText = await camoEvaluate(fixture, camo, evidenceDir, 'browser-refreshed-detail-dom',
+    profile, `document.querySelector('.teams-drawer')?.textContent ?? ''`)
+  assert(/file-search/u.test(refreshedDetailText) && /search-slot/u.test(refreshedDetailText)
+    && /2\s*slot/u.test(refreshedDetailText),
+    `the refreshed panel lost the declared resource detail: ${String(refreshedDetailText).slice(0, 400)}`)
+  camoClick(fixture, camo, evidenceDir, 'browser-refreshed-detail-close', profile,
+    '.teams-drawer .teams-header-actions button:nth-of-type(2)')
 
   // (c) Configuration interaction: a real click opens the Console settings entry,
   // the settings toolbar selects a real Agent, a real click refreshes the catalog
