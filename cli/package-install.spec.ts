@@ -378,7 +378,7 @@ describe('agentteams install package', () => {
   it('produces the final SDK package by default', async () => {
     await execFileAsync(process.execPath, ['scripts/package-artifact.mjs'], { cwd: root, env: process.env, maxBuffer })
     const finalReceipt = await readJson(receiptPath)
-    expect(finalReceipt).toMatchObject({ mode: 'final', release_eligible: false, sdk: { included: true } })
+    expect(finalReceipt).toMatchObject({ mode: 'final', release_eligible: true, sdk: { included: true } })
     const required = [
       'runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner',
       'runtime/dagpipe/manifest.json',
@@ -405,7 +405,7 @@ describe('agentteams install package', () => {
     }
     await expect(runInstalledSdkSmoke()).resolves.toBeUndefined()
     const receipt = await readJson(installedSdkReceiptPath)
-    expect(receipt).toMatchObject({ mode: 'final', release_eligible: false, status: 'passed' })
+    expect(receipt).toMatchObject({ mode: 'final', release_eligible: true, status: 'passed' })
     expect(receipt.candidate).toEqual(finalReceipt.candidate)
   }, 300_000)
 
@@ -427,7 +427,7 @@ describe('agentteams install package', () => {
     expect(installedReceipt.mode).toBe(stagedReceipt.mode)
     expect(installedReceipt).toMatchObject({
       mode: 'final',
-      release_eligible: false,
+      release_eligible: true,
       lifecycle: {
         status: 'passed',
         start: { state: 'running' },

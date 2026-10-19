@@ -131,7 +131,7 @@ export function installedLifecycleReceipt({ receiptPath, expectedReceiptSha256, 
     assertCandidateIdentity(receiptCandidate, expectedCandidateIdentity, 'installed lifecycle receipt')
   }
   const lifecycle = receipt.lifecycle
-  if (receipt.release_eligible !== false) throw new Error('installed lifecycle receipt must remain a non-release base package receipt')
+  if (receipt.release_eligible !== (receipt.mode === 'final')) throw new Error('installed lifecycle receipt release eligibility does not match its package mode')
   if (lifecycle?.status !== 'passed') throw new Error('installed lifecycle receipt does not contain a passed installed start/restart')
   const start = lifecycle.start
   const restart = lifecycle.restart

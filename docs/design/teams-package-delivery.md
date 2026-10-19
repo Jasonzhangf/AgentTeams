@@ -156,7 +156,7 @@ manifest 与 lock 的唯一来源：
 | Rust runner 与 SDK | D3/U4 的 `runtime/dagpipe/build.mjs`、runner template、Cargo.lock与实际SDK解析receipt | 核对receipt对应binary，只把runner、产品manifest与其身份引用放入包 |
 | Work graphs | base 中已有 `agent-work.graph.json`；D1 closeout `94b4633` 已新增 `work-query.graph.json` | 原样复制两张最新 graph，不重写语义；实现前必须 rebase 到含 D1 closeout 的 main |
 
-`scripts/package-artifact.mjs` 必须对每个必需输入先检查存在性；任何缺失都抛错，不创建空目录、空 JS、假 manifest 或 probe binary。基础包模式只允许省略 `runtime/dagpipe/**`，并在 receipt 中标记 `release_eligible=false`。最终模式必须要求 runner、两张 graph 和 manifest 全部存在，否则 `release_eligible=false` 且不生成最终 tarball。
+`scripts/package-artifact.mjs` 必须对每个必需输入先检查存在性；任何缺失都抛错，不创建空目录、空 JS、假 manifest 或 probe binary。基础包模式只允许省略 `runtime/dagpipe/**`，并在 receipt 中标记 `release_eligible=false`。最终模式必须要求 runner、两张 graph 和 manifest 全部存在，否则 `release_eligible=false` 且不生成最终 tarball。全部要求通过时，最终 receipt 标记 `release_eligible=true`，该标记只允许内部 MVP 发布 tar 包消费这一层的 staged package；它不是已安装、已重启、已部署或已发布远端回执。
 
 ## 5. DAGpipe runner 与两图同包
 
