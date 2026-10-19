@@ -1,0 +1,144 @@
+{
+  "case": "BB09",
+  "fixture": "bb09",
+  "owner": "U5",
+  "observed_at": "2026-10-19T01:40:07.473Z",
+  "generation": 1,
+  "paths": {
+    "temporary_root": "/tmp/agentteams-u7-bb09-cFFUeR",
+    "installed_cli": "/tmp/agentteams-u7-bb09-cFFUeR/prefix/node_modules/.bin/agentteams",
+    "config": "/tmp/agentteams-u7-bb09-cFFUeR/home/.agentteams/config.toml",
+    "internal_state": "/tmp/agentteams-u7-bb09-cFFUeR/home/.agentteams/internal.toml"
+  },
+  "stop": {
+    "attempted": true,
+    "generation": 1,
+    "command": [
+      "/tmp/agentteams-u7-bb09-cFFUeR/prefix/node_modules/.bin/agentteams",
+      "stop",
+      "--config",
+      "/tmp/agentteams-u7-bb09-cFFUeR/home/.agentteams/config.toml",
+      "--generation",
+      "1"
+    ],
+    "exit_code": 0,
+    "signal": null,
+    "error": null,
+    "stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb09-cFFUeR/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-cFFUeR/home/.agentteams/internal.toml\n",
+    "stderr": ""
+  },
+  "terminal": {
+    "query_exit_code": 0,
+    "state": "stopped",
+    "stdout": "status state=stopped generation=2 config=/tmp/agentteams-u7-bb09-cFFUeR/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-cFFUeR/home/.agentteams/internal.toml pid=10457 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB09-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB09-Receiver role=receiver presence=offline generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=2 consoleCredential=missing\n",
+    "stderr": ""
+  },
+  "processes": [
+    {
+      "owner": "launcher",
+      "role": "launcher",
+      "pid": 10457,
+      "attribution": "internal.toml launcher row, generation 2",
+      "provenance": "internal-toml",
+      "before_stop": "gone",
+      "probe": {
+        "state": "gone",
+        "reason": "not-found"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-provider",
+      "pid": 10525,
+      "attribution": "internal.toml daemon bb-provider row, generation 2",
+      "provenance": "internal-toml",
+      "before_stop": "gone",
+      "probe": {
+        "state": "gone",
+        "reason": "not-found"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-receiver",
+      "pid": 10567,
+      "attribution": "internal.toml daemon bb-receiver row, generation 2",
+      "provenance": "internal-toml",
+      "before_stop": "gone",
+      "probe": {
+        "state": "gone",
+        "reason": "not-found"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "relay",
+      "pid": 10510,
+      "attribution": "internal.toml daemon relay row, generation 2",
+      "provenance": "internal-toml",
+      "before_stop": "gone",
+      "probe": {
+        "state": "gone",
+        "reason": "not-found"
+      }
+    }
+  ],
+  "listeners": [
+    {
+      "owner": "lifecycle",
+      "role": "relay",
+      "kind": "port",
+      "address": "56761",
+      "attribution": "internal.toml relay projection listen port",
+      "provenance": "internal-toml",
+      "before_stop": "gone",
+      "probe": {
+        "state": "gone",
+        "pids": [],
+        "reason": "no-match"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-provider",
+      "kind": "port",
+      "address": "56764",
+      "attribution": "internal.toml daemon bb-provider lease port",
+      "provenance": "internal-toml",
+      "before_stop": "gone",
+      "probe": {
+        "state": "gone",
+        "pids": [],
+        "reason": "no-match"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-receiver",
+      "kind": "port",
+      "address": "56765",
+      "attribution": "internal.toml daemon bb-receiver lease port",
+      "provenance": "internal-toml",
+      "before_stop": "gone",
+      "probe": {
+        "state": "gone",
+        "pids": [],
+        "reason": "no-match"
+      }
+    }
+  ],
+  "capture_errors": [],
+  "process_state": "gone",
+  "listener_state": "gone",
+  "terminal_state": "stopped",
+  "outcome": "cleaned",
+  "deleted": true,
+  "retained_obligations": [],
+  "evidence": "/tmp/1792373906853-82235/cases/BB09/bb09-final-cleanup.json",
+  "stopped": true,
+  "finalized_by": "bb09-final-final",
+  "deletion": {
+    "deleted": true,
+    "outcome": "cleaned"
+  }
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "agentId": "bb-provider",
+    "label": "BB09-Provider",
+    "presence": "online",
+    "text": "BB09-Provider (bb-provider)runtime · file-search连接详情配置"
+  },
+  {
+    "agentId": "bb-receiver",
+    "label": "BB09-Receiver",
+    "presence": "online",
+    "text": "BB09-Receiver (bb-receiver)runtime · 能力连接详情"
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-static-nocred-82235",
+    "--script",
+    "document.body.innerText"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-static-nocred-82235\",\n  \"target\": \"t_5109ed2364c9\",\n  \"result\": \"Authentication required\",\n  \"issuedAt\": \"2026-10-19T01:39:53.281Z\",\n  \"traceId\": \"cli-1792373993241\"\n}\n",
+  "stderr": ""
+}

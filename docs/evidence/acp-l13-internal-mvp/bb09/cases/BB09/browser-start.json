@@ -1,0 +1,15 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "start",
+    "--profile",
+    "bb09-main-82235",
+    "--url",
+    "http://bb-console:<redacted>@127.0.0.1:56766/",
+    "--headless"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"start\",\n  \"sessionId\": \"camoufox-85707\",\n  \"profile\": \"bb09-main-82235\",\n  \"target\": \"t_c005c4f4d284\",\n  \"ephemeral\": false,\n  \"reused\": false,\n  \"headless\": true,\n  \"url\": \"http://bb-console:<redacted>@127.0.0.1:56766/\",\n  \"issuedAt\": \"2026-10-19T01:38:42.931Z\",\n  \"traceId\": \"cli-1792373919097\"\n}\n",
+  "stderr": ""
+}

@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "evaluate",
+    "--profile",
+    "bb09-main-82235",
+    "--script",
+    "(() => { const select = document.querySelector('div.teams-config-toolbar select.teams-select'); if (select === null) return 'missing'; select.value = \"bb-provider\"; select.dispatchEvent(new Event('change', { bubbles: true })); return select.value })()"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-82235\",\n  \"target\": \"t_c005c4f4d284\",\n  \"result\": \"bb-provider\",\n  \"issuedAt\": \"2026-10-19T01:38:52.293Z\",\n  \"traceId\": \"cli-1792373932253\"\n}\n",
+  "stderr": ""
+}
