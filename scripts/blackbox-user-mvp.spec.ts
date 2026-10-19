@@ -609,20 +609,27 @@ describe('BB10 declared provider sources', () => {
     expect(parsed.baseUrl).toBe('https://example.invalid/v1')
     expect(parsed.defaultModel).toBe('sample-max')
     expect(parsed.authAlias).toBe('key1')
+    expect(parsed.authEntryCount).toBe(1)
     expect(parsed.secretKey).toBe('sample.key1')
     expect(parsed.secretFile).toBe('/tmp/bb10-spec-secret.conf')
   })
 
-  it('rejects a canonical source without a provider, auth table, unique entry or key', () => {
+  it('rejects a canonical source without a provider, auth table, entry or key', () => {
     expectSourceFailure(() => parseCanonicalProviderSource(canonicalSourceText({ withProvider: false }), 'declared.toml'),
       'canonical provider source is unusable')
     expectSourceFailure(() => parseCanonicalProviderSource(canonicalSourceText({ withAuth: false }), 'declared.toml'),
       'canonical provider source is unusable')
     expectSourceFailure(() => parseCanonicalProviderSource(canonicalSourceText({ entries: 'entries = []' }), 'declared.toml'),
-      'canonical credential entry is not unique')
-    expectSourceFailure(() => parseCanonicalProviderSource(canonicalSourceText({
+      'canonical credential entry is absent')
+    // A source that declares several entries is bound to its first entry only, so
+    // Teams holds exactly one credential and never rotates or retries keys.
+    const pooled = parseCanonicalProviderSource(canonicalSourceText({
       entries: 'entries = [{ alias = "k1", secretFile = "/tmp/a", secretKey = "k1" }, { alias = "k2", secretFile = "/tmp/b", secretKey = "k2" }]',
-    }), 'declared.toml'), 'canonical credential entry is not unique')
+    }), 'declared.toml')
+    expect(pooled.authAlias).toBe('k1')
+    expect(pooled.authEntryCount).toBe(2)
+    expect(pooled.secretFile).toBe('/tmp/a')
+    expect(pooled.secretKey).toBe('k1')
     expectSourceFailure(() => parseCanonicalProviderSource(canonicalSourceText({
       entries: 'entries = [{ alias = "k1", secretFile = "/tmp/a", secretKey = "" }]',
     }), 'declared.toml'), 'canonical provider source is unusable')
@@ -726,14 +733,15 @@ describe('BB10 isolated config and launch environment', () => {
     }, '/usr/bin/rg')
     expect(text).toContain('credentialEnv = "TEAMS_BB10_CANONICAL_API_KEY"')
     expect(text).toContain('provider = "rcc-4444"')
-    expect(text).toContain('model = "goaichat_openai.qwen3.8-max"')
-    expect(text).toContain('provider = "goaichat-openai"')
+    expect(text).toContain('model = "goaichat.qwen3.8-max"')
+    expect(text).toContain('provider = "goaichat"')
     expect(text).toContain('id = "sample-max"')
     expect(text).toContain('apiBaseUrl = "https://example.invalid/v1"')
     expect(text).toContain('searchExecutable = "/usr/bin/rg"')
-    // The exact catalog token is persisted: no `/` <-> `.` rewrite.
-    expect(text).not.toContain('goaichat_openai/qwen3.8-max')
-    expect(text).not.toContain('goaichat.openai.qwen3.8-max')
+    // The exact catalog token is persisted: no `/` <-> `.` rewrite, and the
+    // canonical model stays bare instead of borrowing the RCC provider prefix.
+    expect(text).not.toContain('goaichat/qwen3.8-max')
+    expect(text).not.toContain('goaichat.sample-max')
   })
 
   it('projects each caller-declared protocol without cross-provider inference', () => {
@@ -1077,8 +1085,8 @@ backup = { provider = "${sessionBackupProviderId}", model = "${sessionBackupMode
   it('switches canonical primary first and keeps the original RCC primary as a distinct backup', async () => {
     const root = temporaryRoot()
     const agentId = 'bb-provider'
-    const canonical = { providerInstanceId: 'goaichat-openai', modelId: 'qwen3.8-max' }
-    const rcc = { providerInstanceId: 'rcc-4444', modelId: 'goaichat_openai.qwen3.8-max' }
+    const canonical = { providerInstanceId: 'goaichat', modelId: 'glm-5.3' }
+    const rcc = { providerInstanceId: 'rcc-4444', modelId: 'goaichat.qwen3.8-max' }
     const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(root, 'config.json')))
     const binding = createConsoleConfigBinding({
       agentId,
@@ -1124,7 +1132,7 @@ backup = { provider = "${sessionBackupProviderId}", model = "${sessionBackupMode
 // A minimal, well-formed boundary receipt. Each test mutates exactly one field
 // so the single-owner PASS verdict must reject the mutation and nothing else.
 function passingRealAcceptance(): any {
-  const primary = { providerInstanceId: 'goaichat-openai', modelId: 'sample-max' }
+  const primary = { providerInstanceId: 'goaichat', modelId: 'sample-max' }
   return {
     status: 'passed',
     installed_identity: { installed_content_sha256: 'sha-1', expected_content_sha256: 'sha-1' },
