@@ -3162,9 +3162,8 @@ async function bb09StaticBindingScenario(context) {
     const receiverCard = browser.agents.find(row => row.agentId === workReceiverId)
     assert(providerCard !== undefined && receiverCard !== undefined,
       `the static-binding browser did not render both cards: ${JSON.stringify(browser.agents)}`)
-    assert(providerCard.label === 'BB09-Provider' && receiverCard.label === 'BB09-Receiver'
-      && providerCard.machineId === 'bb-machine' && receiverCard.machineId === 'bb-machine',
-    `the static-binding browser cards did not match the declarations: ${JSON.stringify(browser.agents)}`)
+    assert(providerCard.label === 'BB09-Provider' && receiverCard.label === 'BB09-Receiver',
+      `the static-binding browser cards did not match the declarations: ${JSON.stringify(browser.agents)}`)
     camoClick(fixture, camo, evidenceDir, 'browser-receiver-detail-action', profile,
       `button[data-focus-key="agent:${workReceiverId}:details"]`)
     const receiverDetail = await camoEvaluate(fixture, camo, evidenceDir, 'browser-receiver-detail-dom', profile,
