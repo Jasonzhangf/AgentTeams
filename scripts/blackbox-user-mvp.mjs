@@ -2856,10 +2856,10 @@ async function bb09BrowserAcceptance(options) {
     rendered: rows.find(row => row.agentId === workProviderId)?.text ?? '',
   })
   const providerText = rows.find(row => row.agentId === workProviderId)?.text ?? ''
-  // The rendered label spacing comes from the product locale, not a behavior contract;
-  // assert the observable service, resource, and capacity-with-unit facts by value.
-  assert(/file-search/u.test(providerText) && /search-slot/u.test(providerText) && /2\s*slot/u.test(providerText),
-    `the browser card did not render the declared service and resource detail: ${providerText}`)
+  // The live discovery row renders identity, presence and the capability id. The declared
+  // operations and capacity belong to the Agent drawer, which is asserted by real click below.
+  assert(/file-search/u.test(providerText),
+    `the browser row did not render the declared service: ${providerText}`)
   assert(!/剩余/u.test(providerText) && !/remaining/iu.test(providerText),
     `the browser card presented the declared capacity as remaining capacity: ${providerText}`)
 
