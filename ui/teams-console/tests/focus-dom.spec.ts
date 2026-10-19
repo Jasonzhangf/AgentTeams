@@ -1,5 +1,5 @@
 import { describe, expect, it, onTestFinished } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,6 +34,9 @@ describe('drawer keyboard focus in a real DOM', () => {
     onTestFinished(() => {
       rmSync(directory, { recursive: true, force: true })
     })
+    // The Chrome profile lives inside the removed directory: a fresh one per
+    // launch avoids the shared default profile's SingletonLock under parallelism.
+    mkdirSync(join(directory, 'profile'), { recursive: true })
     const page = join(directory, 'focus.html')
     writeFileSync(page, `<!doctype html>
 <html><body>
@@ -62,10 +65,14 @@ describe('drawer keyboard focus in a real DOM', () => {
   </script>
 </body></html>`)
     try {
+      // A dedicated throw-away profile per launch: concurrent headless Chrome
+      // instances share the default profile's SingletonLock and abort, so the
+      // parallel suite cannot run them without isolating each profile.
       const output = execFileSync(chromeExecutable(), [
         '--headless=new',
         '--disable-gpu',
         '--no-sandbox',
+        `--user-data-dir=${join(directory, 'profile')}`,
         '--dump-dom',
         pathToFileURL(page).toString(),
       ], { encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'ignore'] })

@@ -321,13 +321,22 @@ ${controllerScript}
 </body></html>`
 
 function runChrome(page: string): string {
-  return execFileSync(chromeExecutable(), [
-    '--headless=new',
-    '--disable-gpu',
-    '--no-sandbox',
-    '--dump-dom',
-    pathToFileURL(page).toString(),
-  ], { encoding: 'utf8', timeout: 25_000, stdio: ['ignore', 'pipe', 'ignore'] })
+  // Every launch gets its own throw-away profile. Concurrent headless Chrome
+  // instances otherwise contend on the shared default profile's SingletonLock
+  // and abort, which makes the parallel suite flaky rather than failing.
+  const profileDirectory = mkdtempSync(join(tmpdir(), 'teams-console-d07-profile-'))
+  try {
+    return execFileSync(chromeExecutable(), [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-sandbox',
+      `--user-data-dir=${profileDirectory}`,
+      '--dump-dom',
+      pathToFileURL(page).toString(),
+    ], { encoding: 'utf8', timeout: 25_000, stdio: ['ignore', 'pipe', 'ignore'] })
+  } finally {
+    rmSync(profileDirectory, { recursive: true, force: true })
+  }
 }
 
 describe('D07 four-page DOM contract in a real DOM', () => {

@@ -38,6 +38,28 @@ function chromeExecutable(): string {
   return executable
 }
 
+/**
+ * Dump the DOM of one local page with a dedicated throw-away Chrome profile.
+ * Concurrent headless instances otherwise contend on the default profile's
+ * SingletonLock and abort, so the parallel regression needs one profile per
+ * launch. The profile is removed again in the same call.
+ */
+function runChrome(page: string, timeoutMs: number): string {
+  const profileDirectory = mkdtempSync(join(tmpdir(), 'teams-console-render-profile-'))
+  try {
+    return execFileSync(chromeExecutable(), [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-sandbox',
+      `--user-data-dir=${profileDirectory}`,
+      '--dump-dom',
+      pathToFileURL(page).toString(),
+    ], { encoding: 'utf8', timeout: timeoutMs, stdio: ['ignore', 'pipe', 'ignore'] })
+  } finally {
+    rmSync(profileDirectory, { recursive: true, force: true })
+  }
+}
+
 const pageScript = (script: string): string => `<!doctype html>
 <html><body>
   <div id="card-root"></div>
@@ -87,13 +109,7 @@ describe('declared capability rendering in a real DOM', () => {
     })
     const page = join(directory, 'render.html')
     writeFileSync(page, pageScript(script))
-    const output = execFileSync(chromeExecutable(), [
-      '--headless=new',
-      '--disable-gpu',
-      '--no-sandbox',
-      '--dump-dom',
-      pathToFileURL(page).toString(),
-    ], { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'ignore'] })
+    const output = runChrome(page, 20_000)
     expect(output).toContain('data-card-detail="true"')
     expect(output).toContain('data-drawer-detail="true"')
     expect(output).toContain('data-absent-unavailable="true"')
@@ -156,13 +172,7 @@ ${script}
   </script>
 </body></html>`
     writeFileSync(page, busyWindowScript)
-    const output = execFileSync(chromeExecutable(), [
-      '--headless=new',
-      '--disable-gpu',
-      '--no-sandbox',
-      '--dump-dom',
-      pathToFileURL(page).toString(),
-    ], { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'ignore'] })
+    const output = runChrome(page, 20_000)
     expect(output).toContain('data-model-visible-busy="true"')
     expect(output).toContain('data-bind-disabled-busy="true"')
     expect(output).toContain('data-bind-disabled-busy-bound="true"')
