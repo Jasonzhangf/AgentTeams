@@ -1,0 +1,60 @@
+  -- running the project producer: pnpm build:governance
+PASS install — pnpm build:governance staged a final package — mode=final version=0.2.0-internal.1 content=812c607b62f07a1d… files=271
+PASS install — the packed tarball installs into an isolated prefix — tarball=agentteams-0.2.0-internal.1.tgz bytes=1557398 cli=/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-vCymvJ/prefix/node_modules/agentteams/cli/agentteams.mjs
+PASS install — the installed copy exposes the compiled Teams runtime modules — modules=negotiation,routePlan,directRoute,registration
+  -- installedRoot=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-vCymvJ/prefix/node_modules/agentteams
+  -- ownedRoot=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-vCymvJ
+  -- lanIp=192.168.0.3
+  -- agent A readiness: serving agent=reasoner-a engine=opencode engineInstance=opencode-reasoner-a-64aa8a5d-270d-49c1-b32c-cd52169d586d enginePid=60704 daemonPid=60671 listener=192.168.0.3:58302 localChannel=127.0.0.1:58337 lanChannel=wss://192.168.0.3:58302 capabilitiesRevision=2 registration=online dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-vCymvJ/agent-a/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-vCymvJ/agent-a.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1
+  -- agent B readiness: serving agent=reasoner-dsh engine=dsh engineInstance=dsh-reasoner-dsh-494dbd35-99e9-4f97-979c-4523db60b1f2 enginePid=61782 daemonPid=61741 listener=192.168.0.3:58303 localChannel=127.0.0.1:58346 lanChannel=wss://192.168.0.3:58303 capabilitiesRevision=2 registration=online dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-vCymvJ/agent-b/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-vCymvJ/agent-b.toml model=workbuddy/gpt-5.5 modelVerification=session/new configOptions effectiveRevision=1
+PASS A01 — one config starts exactly one daemon — agents: 1 --serve each; registry/control: 1 process each; engine children: a=1 b=1
+PASS A01 — independent identity per config — reasoner-a,reasoner-dsh,control-a,lan-registry
+PASS A01 — independent storage per config — agent-a/state,agent-b/state,control/state,registry-state
+PASS A01 — independent IP/port per config — a=192.168.0.3:58302 b=192.168.0.3:58303 control=127.0.0.1:58301 registry=127.0.0.1:58300
+PASS A01 — the installed CLI reads every daemon back — registry: state=running pid=60658 gen=1; control: state=running pid=62263 listener=127.0.0.1:58301
+PASS A01 — one config never starts a second daemon — control-as-agent refused (UNSUPPORTED_CONFIGURATION: --serve <engine> requires an agent daemon c); v3 refused (UNSUPPORTED_CONFIGURATION: version 3 multi-agent config is n)
+PASS A02 — both engines are real child processes of the installed CLI daemons — a=60671 /Users/fanzhang/.opencode/bin/opencode acp --pure b=pid 61782 owns agent-b/state/engine/teams-dsh-acp.patch.json
+PASS A02 — OpenCode completes a real prompt/process/reply through the installed CLI — session=ses_eae2c190df… permission options=once,always,reject stopReason=end_turn providerCalls=3
+PASS A02 — DSH completes a real prompt/process/reply through the installed CLI — session=92b19c71-7210-… model=["teams-workbuddy","gpt-5.5"] stopReason=end_turn attempt=1 (real provider route)
+PASS A03 — the config names the discovery server and registration is automatic — serverId=lan-registry endpoint=wss://127.0.0.1:58300 online=reasoner-a,reasoner-dsh,control-a
+PASS A04 — authenticate: a wrong credential is refused before any application frame — network: WSS connection failed; no connection.negotiated record
+PASS A04 — discovery, authenticate, negotiate and connect over the real LAN listener — state=agreed sourceRole=master targetRole=peer policyRevisions=3/1
+PASS A04 — both master and peer know their role — responder accept frame agreement=master->peer
+PASS A04 — roles are non-degenerate on the same daemon — leg1 master/peer; leg2 peer/master
+PASS A04 — a role never grants extra authority — master leg and peer leg both refused session/load with UNSUPPORTED_METHOD
+PASS A05 — bidirectional ACP response/update/callback over LAN — engine->client session/request_permission (once,always,reject) + client->engine reply -> stopReason=end_turn; session/update delivered
+PASS A05 — cancel ends an in-flight prompt with the real engine result — session/cancel notification -> stopReason=cancelled
+PASS A05 — unknown outcome is real and is never replayed — channel closed mid-prompt -> durable result.unknown outcome=unknown for ses_eae2c089…; no replay after reconnect
+PASS A06 — a blacklist entry is refused before any side effect — method:session/set_config_option -> CAPABILITY_DENIED; no request.dispatched record; provider calls unchanged at 11
+PASS A06 — an unexecutable native-tool policy refuses configuration — opencode unknown tool: UNSUPPORTED_POLICY: OpenCode adapter has no enforcement owner  | foreign engine: UNSUPPORTED_POLICY: OpenCode adapter cannot enforce a blac | dsh: UNSUPPORTED_POLICY: DSH ACP has no enforcement owner for b
+PASS A03 — heartbeat renews the server-owned presence lease — lastSeenAt advanced from 2026-10-19T01:43:20.101Z to 2026-10-19T01:43:35.101Z
+PASS A03 — a lapsed server-owned lease publishes the peer offline and keeps it visible — lease-probe presence=offline after 90s with its registration socket still online
+PASS A03 — restart and reconnect keep the directory entry visible — stopped pid 60671 -> presence offline (entry retained) -> restarted pid 87759 -> presence online
+PASS A05 — after an agent restart an old callback is rejected — callback id acp-callback-opencode-reasoner-a-64aa8a5d-270d-49c1-b32c-cd52169d586d-3 from engine instance opencode-reasoner-a-64… -> acp.error CALLBACK_UNAVAILABLE on engine instance opencode-reasoner-a-5a…
+PASS A10 — an established LAN channel survives the registry stopping — registry pid 60658 stopped; prompt on the pre-outage channel -> stopReason=end_turn
+PASS A03 — a registry outage degrades and a restart reconnects — degraded: registration state=reconnecting attempts=1 reconnects=0 endpoint=wss://127.0.0.1:58300 | restored: registration state=online attempts=0 reconnects=1 endpoint=wss://127.0.0.1:58300
+PASS A07 — the WebUI refuses an unauthenticated browser with the frozen Basic challenge — status=401 challenge=Basic realm="AgentTeams", charset="UTF-8"
+PASS A07 — the WebUI serves the console and its live page modules — 14 modules from /ui/browser.js; markers=8; live page modules served=1 (barrel-reachable: page-networking)
+PASS A07 — the WebUI serves real projection and history owner reads — projection v1 agents=0 connections=0; history records=2 registry transitions=2
+PASS A07 — the SSE endpoint streams a real { seq, projection } snapshot — seq=1 projectionVersion=1
+PASS A07 — the WebUI write commands are typed refusals, never fabricated effects — connection.connect=FORBIDDEN network.membership.apply=FORBIDDEN permission.reply=FORBIDDEN; out-of-vocabulary payload HTTP 400
+PASS A10 — communication continues after the WebUI client closes — every WebUI HTTP/SSE client connection this driver opened is closed; prompt on the established channel -> stopReason=end_turn
+GAP A07 — animation driven by real events — the shipped control daemon binds no Console or Session owner (runtime/control-process.ts:818 calls createControlOwner({ network: network.port, source: network.projection }) with no owner), so the projection carries no sessions, notifications or configs and no Session/permission/notification event can advance the SSE stream. The directory half is now real: GET /api/v1/projection carries the real D04 registration-directory agent rows and a real registration advances the SSE seq (1 -> 3) through the declared ControlProjectionSource watch. Real-event-driven animation is therefore still not delivered — only directory-change-driven refresh is. D06 requires a Session owner plus targeted ACP ingress, so this remains an UNMET REQUIREMENT owned by D06, not an environment limit
+GAP A07 — live-browser DOM against the installed artifact — this installed-tarball acceptance driver does not drive a browser, so no installed-artifact DOM or screenshot is claimed here. Source-level live-browser DOM IS proven separately at docs/evidence/acp-d08-browser-20261011/ (14 checks / 1 gap, exit 0, real Chrome over CDP); that is a different evidence level and does not close this item. The frozen DOM contract is owned by ui/teams-console/tests/render-d07.spec.ts
+GAP A07 — targeted interaction from the WebUI — the control daemon binds no Session owner, so every interaction write (permission.reply/session send) is a typed UNSUPPORTED_OPERATION refusal; no prompt can be targeted from the WebUI in this candidate
+PASS A08 — registered-online is a real directory fact, separate from any connection state — online=[reasoner-a,reasoner-dsh,control-a,lease-probe,observer] offline=[offline-probe]
+PASS A08 — live connection state and durable connection history are separate surfaces — live connections=0; durable kind=connection records=2
+PASS A08 — execution availability is proven from the engine, never inferred — available: model=probe/probe-model via session/new configOptions; unavailable: no readiness line, exit 1 (UNSUPPORTED_CONFIGURATION: engine.executable is not an executable file)
+PASS A08 — offline objects and historical connections stay visible — offline-probe presence=offline while still listed; 2 durable connection rows still served
+PASS A09 — history survives a UI refresh — 2 records retained byte-identical across a fresh authenticated stream + history read (now 2)
+PASS A10 — communication continues after the control daemon stops — control pid 62263 stopped and its listener 58301 closed; prompt on the established channel -> stopReason=end_turn
+FINDING A09 — a graceful stop+start reuses generation 1 — stopped owner generation 1, restarted owner generation 1; a crash restart advances the counter instead, so a stale --generation can collide after a graceful stop
+PASS A09 — history survives a control-owner stop and restart — stop -> pid 62263 generation 1, start -> pid 90407 generation 1; 2 records retained byte-identical (now 3)
+PASS A09 — a Session that cannot be resumed is never passed off as resumed — pre-restart session ses_eae2c09d… after restart -> SESSION_OWNERSHIP_CONFLICT; session/load -> UNSUPPORTED_METHOD
+PASS A11 — the LAN address is a real, connectable non-loopback listener — 192.168.0.3 is a non-loopback IPv4 and a raw TCP connect to the agent listener 192.168.0.3:58302 succeeded
+PASS A11 — the cross-device receipt is integrated and recorded gap-free — receipt docs/evidence/acp-a11-crossdevice-20261011/: 19 checks, 0 gaps, two distinct non-loopback hosts (Macstudio.local, jennys-macbook-air.anoa-buri.ts.net), byte-identical tarball and installed CLI on both
+FINDING A11 — the cross-device receipt is verified by reading, not by driving traffic — this driver on Macstudio-2.local exercised only 192.168.0.3 (tailscale 100.66.1.82); the cross-device exchange was driven by the A11 unit at commit 869aff8, whose receipt this driver now verifies by reading. Loopback and same-host non-loopback are never passed off as cross-device, and that exchange is not re-driven here
+
+D08 acceptance PASS: 45 checks (gaps: 3, findings: 2) in 134s
+cleanup: removed owned root /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/d08-acc-vCymvJ
+D08_EXIT=0
