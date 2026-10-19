@@ -403,7 +403,7 @@ export async function runInstalledSdkSmoke(options = {}) {
     receipt = {
       schema_version: 1,
       mode: 'final',
-      release_eligible: true,
+      release_eligible: false,
       status: 'passed',
       candidate: packageReceipt.candidate,
       package: packageReceipt.package ?? { name: 'agentteams', version: packageReceipt.version, pack_root: packageReceipt.pack_root },
@@ -426,7 +426,7 @@ export async function runInstalledSdkSmoke(options = {}) {
     receipt = {
       schema_version: 1,
       mode: 'final',
-      release_eligible: true,
+      release_eligible: false,
       status: 'failed',
       error: error instanceof Error ? error.message : String(error),
       cleanup: { temporary_root: temporaryRoot, removed: false },

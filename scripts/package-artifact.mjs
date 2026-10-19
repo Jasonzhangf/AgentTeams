@@ -217,8 +217,8 @@ const files = listFiles(output)
 const sdk = mode === 'final'
   ? {
       included: true,
-      release_eligible: true,
-      reason: 'final package stages the runner, five Work graphs and identity manifest; the internal MVP release-tarball gate consumes this package',
+      release_eligible: false,
+      reason: 'final package stages the runner, five Work graphs and identity manifest; staged bytes are not release-eligible before the installed release gate',
       receipt_path: relative(root, runnerBuild.receiptPath).split(sep).join('/'),
       receipt_sha256: hashFile(runnerBuild.receiptPath),
       runner_path: runnerBuild.receipt.artifact.installed_path,
@@ -236,7 +236,7 @@ const sdk = mode === 'final'
 const receipt = {
   schema_version: 1,
   mode,
-  release_eligible: mode === 'final',
+  release_eligible: false,
   version: manifest.version,
   candidate: currentCandidateIdentity(root),
   pack_root: relative(root, output).split(sep).join('/'),

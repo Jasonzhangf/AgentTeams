@@ -27,7 +27,9 @@ const expectedFiles = receipt.mode === 'base'
   : rootPackage.files
 assert.deepEqual(packageJson.files, expectedFiles)
 assert.deepEqual(packageJson.dependencies, rootPackage.dependencies)
-assert.equal(receipt.release_eligible, receipt.mode === 'final')
+// A staged pack is never release-eligible: only a separate release receipt that
+// consumes a passing installed release gate may claim that.
+assert.equal(receipt.release_eligible, false)
 assert.equal(receipt.version, rootPackage.version)
 assert.equal(existsSync(resolve(artifact, 'runtime', 'package.json')), false)
 assert.equal(existsSync(resolve(artifact, 'static', 'console.html')), false)

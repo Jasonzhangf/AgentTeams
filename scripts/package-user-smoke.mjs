@@ -800,7 +800,7 @@ export async function runPackageUserSmoke(options = {}) {
     receipt = {
       schema_version: 1,
       mode: packageReceipt.mode,
-      release_eligible: packageReceipt.release_eligible,
+      release_eligible: false,
       candidate: packageReceipt.candidate,
       package: { name: installedPackage.name, version: installedPackage.version, pack_root: relative(root, packRoot).split(sep).join('/') },
       pack: { root: relative(root, packRoot).split(sep).join('/'), content_sha256: packContent.sha256, files: packFiles },
@@ -833,7 +833,7 @@ export async function runPackageUserSmoke(options = {}) {
     receipt = {
       schema_version: 1,
       mode: packageReceipt.mode,
-      release_eligible: packageReceipt.release_eligible,
+      release_eligible: false,
       status: 'failed',
       error: error instanceof Error ? error.message : String(error),
       cleanup: { temporary_root: temporaryRoot, removed: false },
