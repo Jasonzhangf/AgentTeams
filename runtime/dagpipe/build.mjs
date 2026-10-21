@@ -12,7 +12,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -176,12 +176,7 @@ function relativeToRepo(path) {
 
 export async function buildRunner() {
   await mkdir(buildParent, { recursive: true });
-  // A fixed build root keeps the compiled runner byte-identical across builds. A random
-  // mkdtemp name leaks into the cargo debug paths, so every build produced a different
-  // package content hash and a release artifact could never be rebuilt or verified.
-  const buildRoot = join(buildParent, 'build');
-  await rm(buildRoot, { recursive: true, force: true });
-  await mkdir(buildRoot, { recursive: true });
+  const buildRoot = await mkdtemp(join(buildParent, 'build-'));
   const generatedManifestPath = join(buildRoot, 'Cargo.toml');
   const targetDir = join(buildRoot, 'target');
   const receiptPath = join(buildRoot, 'build-receipt.json');

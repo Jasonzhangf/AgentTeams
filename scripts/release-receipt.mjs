@@ -279,6 +279,20 @@ function main(argv) {
   })
   receipt.evidence_commit = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim()
 
+  // The staged package receipt under `generated/` is rebuilt by every governance
+  // run, so it is not a stable reference. Snapshot the exact receipt that produced
+  // this artifact so the binding is auditable after later evidence-only commits.
+  const snapshot = {
+    ...packageReceipt,
+    snapshot_of: packageReceiptPath.slice(root.length + 1),
+    snapshot_sha256: hashFile(packageReceiptPath),
+  }
+  receipt.package_receipt_snapshot = {
+    path: 'package-receipt.snapshot.json',
+    sha256: hashFile(packageReceiptPath),
+  }
+  writeFileSync(join(outDir, 'package-receipt.snapshot.json'), `${JSON.stringify(snapshot, null, 2)}\n`)
+
   writeFileSync(resolve(args.out), `${JSON.stringify(receipt, null, 2)}\n`)
   writeFileSync(`${tarball.path}.sha256`, `${tarball.sha256}  ${tarball.filename}\n`)
   console.log(`release tarball: ${tarball.path}`)

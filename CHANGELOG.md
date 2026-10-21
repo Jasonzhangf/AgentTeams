@@ -31,9 +31,6 @@ five Work graphs with their runner and identity manifest.
   belongs to the release receipt, which binds candidate, package content,
   tarball sha256 and the retained obligations. Smoke and lifecycle receipts no
   longer propagate a mode-derived flag.
-- The runner build uses a fixed build directory, so the compiled runner and the
-  package content hash are reproducible across builds. A random build directory
-  leaked into the cargo debug paths and changed the content hash every build.
 - The full regression runs Vitest with `--no-file-parallelism`. The real Chrome
   and package-install fixtures contend for host resources when many files run at
   once, which produced rotating false failures in the BB13 acceptance case.
@@ -64,5 +61,8 @@ five Work graphs with their runner and identity manifest.
 - The AppSDK rule audit for this candidate is retained, not delivered.
 - A graceful stop and start of the control owner reuses generation 1 (D08
   finding A09), so a stale `--generation` can collide after a graceful stop.
+- The compiled runner embeds a per-build directory name, so rebuilding the
+  package changes the package content hash. The release artifact is bound by its
+  tarball sha256, not by a rebuilt content hash.
 - The release tarball is an internal artifact. It is not published to any
   registry and is not deployed.
