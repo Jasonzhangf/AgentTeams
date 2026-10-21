@@ -1,13 +1,13 @@
 {
-  "command": "/tmp/agentteams-u7-bb09-refusal-NHJePO/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb09-refusal-I855DL/prefix/node_modules/.bin/agentteams",
   "args": [
     "console",
     "start",
     "--config",
-    "/tmp/agentteams-u7-bb09-refusal-NHJePO/home/.agentteams/config.toml"
+    "/tmp/agentteams-u7-bb09-refusal-I855DL/home/.agentteams/config.toml"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "console launcher=running console=enabled consoleState=online consoleGeneration=1 consoleCredential=configured consoleUrl=http://127.0.0.1:64591 consolePid=96850\n",
+  "stdout": "console launcher=running console=enabled consoleState=online consoleGeneration=1 consoleCredential=configured consoleUrl=http://127.0.0.1:59143 consolePid=18241\n",
   "stderr": ""
 }

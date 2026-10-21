@@ -5,6 +5,6 @@
   ],
   "status": 0,
   "signal": null,
-  "stdout": "{\"ok\":true,\"attempt\":\"attempt-1792602960730-322a8e15-1a54-4eae-be80-51b712cbf783\",\"candidate\":\"a56a10548334e88a0b2476a0a76a573351bbc206\",\"artifact_hash\":\"sha256:658b23b65b681f618893abddbb5ad419d7a733c61217b834682e8f8a213d7499\",\"records\":\"/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-u7-bb13-t6uQk1/.appsdk/records/pre-review-validation-record-teams-source-a56a10548334e88a0b2476a0a76a573351bbc206-attempt-1792602960730-322a8e15-1a54-4eae-be80-51b712cbf783.json\"}\n",
+  "stdout": "{\"ok\":true,\"attempt\":\"attempt-1792608614236-eaac390a-adfb-483f-b8aa-cafb2897c6fa\",\"candidate\":\"4e999fe91f77a302e796a8c9357276ec947c69bc\",\"artifact_hash\":\"sha256:b76e25e5b88532f467bdbfeddcd760099c62de79bbcec4a273d4425fd035bc9e\",\"records\":\"/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-u7-bb13-T86e2s/.appsdk/records/pre-review-validation-record-teams-source-4e999fe91f77a302e796a8c9357276ec947c69bc-attempt-1792608614236-eaac390a-adfb-483f-b8aa-cafb2897c6fa.json\"}\n",
   "stderr": ""
 }

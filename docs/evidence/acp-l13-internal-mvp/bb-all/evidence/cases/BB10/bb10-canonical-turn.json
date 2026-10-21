@@ -4,15 +4,15 @@
     "ok": true
   },
   "final": {
-    "eventId": "message.updated:ses_ea0922bbaffeghG4WKByVpGjpc:msg_15f6dd585001LPFosKtdr4zxzc",
-    "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+    "eventId": "message.updated:ses_ea03bd3b7ffeH8zSM294hrRXKA:msg_15fc42d88001ecpP3xnEH71eXY",
+    "sessionId": "ses_ea03bd3b7ffeH8zSM294hrRXKA",
     "agentId": "bb-provider",
     "kind": "final",
     "state": "completed",
-    "messageId": "msg_15f6dd585001LPFosKtdr4zxzc",
+    "messageId": "msg_15fc42d88001ecpP3xnEH71eXY",
     "finish": "stop"
   },
-  "assistant_text": "回声是声音碰到障碍物后被反射回来、并能与原声区分开的重复声音。",
+  "assistant_text": "回声是声音遇到障碍物反射回来、与原声相隔一定时间再次传入人耳的现象。",
   "assistant_parts": 2,
   "finish": "stop"
 }

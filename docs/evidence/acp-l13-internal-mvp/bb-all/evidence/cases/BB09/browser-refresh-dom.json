@@ -3,12 +3,12 @@
   "args": [
     "evaluate",
     "--profile",
-    "bb09-main-22006",
+    "bb09-main-58761",
     "--script",
     "JSON.stringify([...document.querySelectorAll('ul.teams-team-list li[data-agent-id]')].map(row => {\n  const strong = row.querySelector('strong')\n  const label = (strong?.textContent ?? '').trim()\n  const agentId = row.getAttribute('data-agent-id')\n  return {\n    agentId,\n    label: label.endsWith(' (' + agentId + ')') ? label.slice(0, -(' (' + agentId + ')').length) : null,\n    presence: row.getAttribute('data-presence'),\n    text: row.textContent ?? '',\n  }\n}))"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-22006\",\n  \"target\": \"t_4ce9f65aee04\",\n  \"result\": \"[{\\\"agentId\\\":\\\"bb-provider\\\",\\\"label\\\":\\\"BB09-Provider\\\",\\\"presence\\\":\\\"online\\\",\\\"text\\\":\\\"BB09-Provider (bb-provider)runtime · file-search连接详情配置\\\"},{\\\"agentId\\\":\\\"bb-receiver\\\",\\\"label\\\":\\\"BB09-Receiver\\\",\\\"presence\\\":\\\"online\\\",\\\"text\\\":\\\"BB09-Receiver (bb-receiver)runtime · 能力连接详情\\\"}]\",\n  \"issuedAt\": \"2026-10-21T17:04:37.016Z\",\n  \"traceId\": \"cli-1792602276979\"\n}\n",
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-58761\",\n  \"target\": \"t_8ff2e42ce2d9\",\n  \"result\": \"[{\\\"agentId\\\":\\\"bb-provider\\\",\\\"label\\\":\\\"BB09-Provider\\\",\\\"presence\\\":\\\"online\\\",\\\"text\\\":\\\"BB09-Provider (bb-provider)runtime · file-search连接详情配置\\\"},{\\\"agentId\\\":\\\"bb-receiver\\\",\\\"label\\\":\\\"BB09-Receiver\\\",\\\"presence\\\":\\\"online\\\",\\\"text\\\":\\\"BB09-Receiver (bb-receiver)runtime · 能力连接详情\\\"}]\",\n  \"issuedAt\": \"2026-10-21T18:39:18.514Z\",\n  \"traceId\": \"cli-1792607958476\"\n}\n",
   "stderr": ""
 }

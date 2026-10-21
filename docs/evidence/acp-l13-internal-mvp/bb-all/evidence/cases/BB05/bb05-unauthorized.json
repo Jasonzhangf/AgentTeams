@@ -1,10 +1,10 @@
 {
-  "command": "/tmp/agentteams-u7-bb05-uNlciH/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb05-d1zI0b/prefix/node_modules/.bin/agentteams",
   "args": [
     "work",
     "open",
     "--config",
-    "/tmp/agentteams-u7-bb05-uNlciH/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb05-d1zI0b/home/.agentteams/config.toml",
     "--receiver",
     "bb-intruder",
     "--provider",
@@ -25,5 +25,5 @@
   "status": 1,
   "signal": null,
   "stdout": "",
-  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"1bf01f88-dddb-42cd-a6a3-491ea5ad2c72\",\"attemptId\":\"7dd4b59b-b503-4248-9b3c-0efbbea2eda4\",\"workId\":\"c1f8c72e-8868-40d1-b7bb-9f4e76425f48\",\"requestId\":\"2f8f6059-c164-47fc-97b7-8181df30e7cd\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"Work proposal was rejected\",\"operation\":\"agentWork.propose\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"admit-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.propose\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"c9988c29-fc56-488b-be2e-1f1577733b9e\",\"attemptId\":\"a403ecde-e3b5-4197-b691-2ad0f0b75322\",\"workId\":\"9eff8247-ce1b-4b4d-bbbe-eb94f34dbe17\",\"requestId\":\"341ebd9c-9ba6-4718-bef7-30d55d73dda9\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"Work proposal was rejected\",\"operation\":\"agentWork.propose\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"admit-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.propose\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
 }

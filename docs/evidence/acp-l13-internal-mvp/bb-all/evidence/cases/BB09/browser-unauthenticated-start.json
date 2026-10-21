@@ -3,13 +3,13 @@
   "args": [
     "start",
     "--profile",
-    "bb09-nocred-22006",
+    "bb09-nocred-58761",
     "--url",
-    "http://127.0.0.1:64326/",
+    "http://127.0.0.1:58948/",
     "--headless"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "{\n  \"cmd\": \"start\",\n  \"sessionId\": \"camoufox-86242\",\n  \"profile\": \"bb09-nocred-22006\",\n  \"target\": \"t_e891544dd728\",\n  \"ephemeral\": false,\n  \"reused\": false,\n  \"headless\": true,\n  \"url\": \"http://127.0.0.1:64326/\",\n  \"issuedAt\": \"2026-10-21T17:04:51.407Z\",\n  \"traceId\": \"cli-1792602288758\"\n}\n",
+  "stdout": "{\n  \"cmd\": \"start\",\n  \"sessionId\": \"camoufox-9433\",\n  \"profile\": \"bb09-nocred-58761\",\n  \"target\": \"t_58e611d13511\",\n  \"ephemeral\": false,\n  \"reused\": false,\n  \"headless\": true,\n  \"url\": \"http://127.0.0.1:58948/\",\n  \"issuedAt\": \"2026-10-21T18:39:30.613Z\",\n  \"traceId\": \"cli-1792607968080\"\n}\n",
   "stderr": ""
 }

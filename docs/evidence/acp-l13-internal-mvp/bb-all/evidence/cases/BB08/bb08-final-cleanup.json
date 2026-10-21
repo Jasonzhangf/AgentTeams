@@ -1,41 +1,41 @@
 {
   "fixture": "bb08",
-  "observed_at": "2026-10-21T17:04:14.654Z",
+  "observed_at": "2026-10-21T18:38:58.687Z",
   "generation": 2,
   "paths": {
-    "temporary_root": "/tmp/agentteams-u7-bb08-9zEoFU",
-    "installed_cli": "/tmp/agentteams-u7-bb08-9zEoFU/prefix/node_modules/.bin/agentteams",
-    "config": "/tmp/agentteams-u7-bb08-9zEoFU/home/.agentteams/config.toml",
-    "internal_state": "/tmp/agentteams-u7-bb08-9zEoFU/home/.agentteams/internal.toml"
+    "temporary_root": "/tmp/agentteams-u7-bb08-XRx0XY",
+    "installed_cli": "/tmp/agentteams-u7-bb08-XRx0XY/prefix/node_modules/.bin/agentteams",
+    "config": "/tmp/agentteams-u7-bb08-XRx0XY/home/.agentteams/config.toml",
+    "internal_state": "/tmp/agentteams-u7-bb08-XRx0XY/home/.agentteams/internal.toml"
   },
   "stop": {
     "attempted": true,
     "generation": 2,
     "command": [
-      "/tmp/agentteams-u7-bb08-9zEoFU/prefix/node_modules/.bin/agentteams",
+      "/tmp/agentteams-u7-bb08-XRx0XY/prefix/node_modules/.bin/agentteams",
       "stop",
       "--config",
-      "/tmp/agentteams-u7-bb08-9zEoFU/home/.agentteams/config.toml",
+      "/tmp/agentteams-u7-bb08-XRx0XY/home/.agentteams/config.toml",
       "--generation",
       "2"
     ],
     "exit_code": 0,
     "signal": null,
     "error": null,
-    "stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb08-9zEoFU/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb08-9zEoFU/home/.agentteams/internal.toml pid=81867\n",
+    "stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb08-XRx0XY/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb08-XRx0XY/home/.agentteams/internal.toml pid=5443\n",
     "stderr": ""
   },
   "terminal": {
     "query_exit_code": 0,
     "state": "stopped",
-    "stdout": "status state=stopped generation=2 config=/tmp/agentteams-u7-bb08-9zEoFU/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb08-9zEoFU/home/.agentteams/internal.toml pid=81867 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/bb-account/custom/BB-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/bb-account/custom/BB-Receiver role=receiver presence=offline generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+    "stdout": "status state=stopped generation=2 config=/tmp/agentteams-u7-bb08-XRx0XY/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb08-XRx0XY/home/.agentteams/internal.toml pid=5443 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/bb-account/custom/BB-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/bb-account/custom/BB-Receiver role=receiver presence=offline generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
     "stderr": ""
   },
   "processes": [
     {
       "owner": "launcher",
       "role": "launcher",
-      "pid": 81867,
+      "pid": 5443,
       "attribution": "internal.toml launcher row, generation 2",
       "provenance": "internal-toml",
       "before_stop": "alive",
@@ -47,7 +47,7 @@
     {
       "owner": "lifecycle",
       "role": "bb-provider",
-      "pid": 81879,
+      "pid": 5454,
       "attribution": "internal.toml daemon bb-provider row, generation 2",
       "provenance": "internal-toml",
       "before_stop": "alive",
@@ -59,7 +59,7 @@
     {
       "owner": "lifecycle",
       "role": "bb-receiver",
-      "pid": 81915,
+      "pid": 5526,
       "attribution": "internal.toml daemon bb-receiver row, generation 2",
       "provenance": "internal-toml",
       "before_stop": "alive",
@@ -71,7 +71,7 @@
     {
       "owner": "lifecycle",
       "role": "relay",
-      "pid": 81872,
+      "pid": 5447,
       "attribution": "internal.toml daemon relay row, generation 2",
       "provenance": "internal-toml",
       "before_stop": "alive",
@@ -86,7 +86,7 @@
       "owner": "lifecycle",
       "role": "relay",
       "kind": "port",
-      "address": "64228",
+      "address": "58873",
       "attribution": "internal.toml relay projection listen port",
       "provenance": "internal-toml",
       "before_stop": "listening",
@@ -100,7 +100,7 @@
       "owner": "lifecycle",
       "role": "bb-provider",
       "kind": "port",
-      "address": "64232",
+      "address": "58876",
       "attribution": "internal.toml daemon bb-provider lease port",
       "provenance": "internal-toml",
       "before_stop": "listening",
@@ -114,7 +114,7 @@
       "owner": "lifecycle",
       "role": "bb-receiver",
       "kind": "port",
-      "address": "64233",
+      "address": "58877",
       "attribution": "internal.toml daemon bb-receiver lease port",
       "provenance": "internal-toml",
       "before_stop": "listening",
@@ -128,8 +128,8 @@
       "owner": "lifecycle",
       "role": "bb-provider",
       "kind": "socket",
-      "address": "127.0.0.1:64232",
-      "attribution": "socket owned by pid 81879",
+      "address": "127.0.0.1:58876",
+      "attribution": "socket owned by pid 5454",
       "provenance": "proved-pid-listener",
       "before_stop": "listening",
       "probe": {
@@ -142,8 +142,8 @@
       "owner": "lifecycle",
       "role": "bb-receiver",
       "kind": "socket",
-      "address": "127.0.0.1:64233",
-      "attribution": "socket owned by pid 81915",
+      "address": "127.0.0.1:58877",
+      "attribution": "socket owned by pid 5526",
       "provenance": "proved-pid-listener",
       "before_stop": "listening",
       "probe": {
@@ -156,8 +156,8 @@
       "owner": "lifecycle",
       "role": "relay",
       "kind": "socket",
-      "address": "127.0.0.1:64228",
-      "attribution": "socket owned by pid 81872",
+      "address": "127.0.0.1:58873",
+      "attribution": "socket owned by pid 5447",
       "provenance": "proved-pid-listener",
       "before_stop": "listening",
       "probe": {
@@ -174,7 +174,7 @@
   "outcome": "cleaned",
   "deleted": true,
   "retained_obligations": [],
-  "evidence": "/tmp/l13-bb-v3/evidence/cases/BB08/bb08-final-cleanup.json",
+  "evidence": "/tmp/l13-bb-v4/evidence/cases/BB08/bb08-final-cleanup.json",
   "stopped": true,
   "finalized_by": "bb08-final-final",
   "deletion": {

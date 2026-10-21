@@ -1,10 +1,10 @@
 {
-  "command": "/tmp/agentteams-u7-bb05-uNlciH/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb05-d1zI0b/prefix/node_modules/.bin/agentteams",
   "args": [
     "work",
     "open",
     "--config",
-    "/tmp/agentteams-u7-bb05-uNlciH/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb05-d1zI0b/home/.agentteams/config.toml",
     "--receiver",
     "bb-receiver",
     "--provider",
@@ -27,5 +27,5 @@
   "status": 1,
   "signal": null,
   "stdout": "",
-  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"f953c299-0768-4bcd-b4f5-53d51c017e49\",\"attemptId\":\"9e8821ea-109f-4a6a-9fc0-7795239785c6\",\"workId\":\"a1b85c26-9901-49bc-a6b6-31a8ab27cd58\",\"requestId\":\"6a0d69a2-c587-4198-8c07-0b1c864f5dca\",\"providerAgentId\":\"bb-ghost\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Provider bb-ghost was not found\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"1f852e22-29b0-4453-ba18-caf1eaf7b1b5\",\"attemptId\":\"8973af31-699a-437e-b985-47ac4fff59f4\",\"workId\":\"a98d4a50-51cc-4701-a715-c856e2e2dbc4\",\"requestId\":\"be5b6a40-008f-4618-a078-72764993dcb6\",\"providerAgentId\":\"bb-ghost\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Provider bb-ghost was not found\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
 }

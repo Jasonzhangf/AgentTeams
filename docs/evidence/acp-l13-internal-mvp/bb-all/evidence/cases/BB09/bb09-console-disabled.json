@@ -1,10 +1,10 @@
 {
-  "command": "/tmp/agentteams-u7-bb09-YyLbr2/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb09-Zj6uUu/prefix/node_modules/.bin/agentteams",
   "args": [
     "console",
     "start",
     "--config",
-    "/tmp/agentteams-u7-bb09-YyLbr2/home/.agentteams/config.toml"
+    "/tmp/agentteams-u7-bb09-Zj6uUu/home/.agentteams/config.toml"
   ],
   "status": 1,
   "signal": null,

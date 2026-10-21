@@ -1,16 +1,16 @@
 {
-  "command": "/tmp/agentteams-u7-bb07-yOnAC6/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb07-Hg008F/prefix/node_modules/.bin/agentteams",
   "args": [
     "work",
     "query",
     "--config",
-    "/tmp/agentteams-u7-bb07-yOnAC6/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb07-Hg008F/home/.agentteams/config.toml",
     "--receiver",
     "bb-receiver",
     "--service-selection",
     "capability",
     "--work-id",
-    "2e9c4cc5-fc33-42f8-9c73-c3db9d0788c2",
+    "b97e36c8-d40f-4cd4-9e45-8ae067750236",
     "--request-id",
     "bb07-unknown-request",
     "--provider",
@@ -27,5 +27,5 @@
   "status": 1,
   "signal": null,
   "stdout": "",
-  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"cb6c3f60-5f02-4116-816c-1677f0a1a92b\",\"attemptId\":\"046c4720-e8be-4b85-bf0d-f507b61a08de\",\"workId\":\"2e9c4cc5-fc33-42f8-9c73-c3db9d0788c2\",\"requestId\":\"bb07-unknown-request\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"linkGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"unknown request [\\\"2e9c4cc5-fc33-42f8-9c73-c3db9d0788c2\\\",\\\"bb07-unknown-request\\\"]\",\"operation\":\"agentWork.get\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"78687ae7-4d3a-4867-91a9-a50a3442547e\",\"attemptId\":\"6155857b-e7cf-4629-9e62-4a68f717ea1c\",\"workId\":\"b97e36c8-d40f-4cd4-9e45-8ae067750236\",\"requestId\":\"bb07-unknown-request\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"linkGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"unknown request [\\\"b97e36c8-d40f-4cd4-9e45-8ae067750236\\\",\\\"bb07-unknown-request\\\"]\",\"operation\":\"agentWork.get\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
 }

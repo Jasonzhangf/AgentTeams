@@ -4,12 +4,12 @@
     "result": {
       "kind": "session.create",
       "agentId": "bb-provider",
-      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "sessionId": "ses_ea03bd3b7ffeH8zSM294hrRXKA",
       "title": "BB10 real canonical model",
-      "directory": "/private/tmp/agentteams-u7-bb10-Dj1HBM/home/.agentteams/data/bb-provider",
+      "directory": "/private/tmp/agentteams-u7-bb10-zi7hHz/home/.agentteams/data/bb-provider",
       "time": {
-        "created": 1792602395718,
-        "updated": 1792602395718
+        "created": 1792608054345,
+        "updated": 1792608054345
       }
     }
   },

@@ -1,10 +1,10 @@
 {
-  "command": "/tmp/agentteams-u7-bb05-uNlciH/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb05-d1zI0b/prefix/node_modules/.bin/agentteams",
   "args": [
     "work",
     "open",
     "--config",
-    "/tmp/agentteams-u7-bb05-uNlciH/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb05-d1zI0b/home/.agentteams/config.toml",
     "--receiver",
     "bb-receiver",
     "--provider",
@@ -25,5 +25,5 @@
   "status": 1,
   "signal": null,
   "stdout": "",
-  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"4056c7d0-4f20-42bf-aa13-60cc042b298d\",\"attemptId\":\"e5b70bf7-1d81-4d39-b98d-d8bc9be87103\",\"workId\":\"82a14af4-5383-4010-b130-4f463850583d\",\"requestId\":\"39269494-e8b5-4945-8ee5-48282308ad45\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1001,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"STALE_GENERATION\",\"message\":\"Provider bb-provider generation 1001 is not current\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"241d6b5b-f61e-4182-8d9c-ac17640ae36a\",\"attemptId\":\"d2d619b9-0485-4e91-b696-426dc0fb73d5\",\"workId\":\"debf367a-c26d-403d-aeda-7fdabeb778bd\",\"requestId\":\"74077600-2a6a-448f-8bbd-2a3fef6c37e3\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1001,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"STALE_GENERATION\",\"message\":\"Provider bb-provider generation 1001 is not current\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
 }

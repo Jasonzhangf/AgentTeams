@@ -1,12 +1,12 @@
 {
-  "command": "/tmp/agentteams-u7-bb01-tF2Ovg/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb01-nhxmuV/prefix/node_modules/.bin/agentteams",
   "args": [
     "start",
     "--config",
-    "/tmp/agentteams-u7-bb01-tF2Ovg/home/.agentteams/config.toml"
+    "/tmp/agentteams-u7-bb01-nhxmuV/home/.agentteams/config.toml"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "started state=running generation=1 config=/tmp/agentteams-u7-bb01-tF2Ovg/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb01-tF2Ovg/home/.agentteams/internal.toml pid=24846\n",
+  "stdout": "started state=running generation=1 config=/tmp/agentteams-u7-bb01-nhxmuV/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb01-nhxmuV/home/.agentteams/internal.toml pid=62024\n",
   "stderr": ""
 }

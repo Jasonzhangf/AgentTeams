@@ -3,12 +3,12 @@
   "args": [
     "evaluate",
     "--profile",
-    "bb09-main-22006",
+    "bb09-main-58761",
     "--script",
     "(() => { const select = document.querySelector('div.teams-config-toolbar select.teams-select'); if (select === null) return 'missing'; select.value = \"bb-provider\"; select.dispatchEvent(new Event('change', { bubbles: true })); return select.value })()"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-22006\",\n  \"target\": \"t_4ce9f65aee04\",\n  \"result\": \"bb-provider\",\n  \"issuedAt\": \"2026-10-21T17:04:40.074Z\",\n  \"traceId\": \"cli-1792602280036\"\n}\n",
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-58761\",\n  \"target\": \"t_8ff2e42ce2d9\",\n  \"result\": \"bb-provider\",\n  \"issuedAt\": \"2026-10-21T18:39:21.485Z\",\n  \"traceId\": \"cli-1792607961448\"\n}\n",
   "stderr": ""
 }

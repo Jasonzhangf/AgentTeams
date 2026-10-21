@@ -2,42 +2,42 @@
   "stopped": true,
   "cleanup": {
     "fixture": "bb10-boundary",
-    "observed_at": "2026-10-21T17:09:34.218Z",
+    "observed_at": "2026-10-21T18:43:49.240Z",
     "generation": 3,
     "paths": {
-      "temporary_root": "/tmp/agentteams-u7-bb10-boundary-532MOT",
-      "installed_cli": "/tmp/agentteams-u7-bb10-boundary-532MOT/prefix/node_modules/.bin/agentteams",
-      "config": "/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml",
-      "internal_state": "/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml"
+      "temporary_root": "/tmp/agentteams-u7-bb10-boundary-tNUJBF",
+      "installed_cli": "/tmp/agentteams-u7-bb10-boundary-tNUJBF/prefix/node_modules/.bin/agentteams",
+      "config": "/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/config.toml",
+      "internal_state": "/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/internal.toml"
     },
     "stop": {
       "attempted": true,
       "generation": 3,
       "command": [
-        "/tmp/agentteams-u7-bb10-boundary-532MOT/prefix/node_modules/.bin/agentteams",
+        "/tmp/agentteams-u7-bb10-boundary-tNUJBF/prefix/node_modules/.bin/agentteams",
         "stop",
         "--config",
-        "/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml",
+        "/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/config.toml",
         "--generation",
         "3"
       ],
       "exit_code": 0,
       "signal": null,
       "error": null,
-      "stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml pid=42075\n",
+      "stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/internal.toml pid=47323\n",
       "stderr": ""
     },
     "terminal": {
       "query_exit_code": 0,
       "state": "stopped",
-      "stdout": "status state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml pid=42075 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB-Session role=provider presence=offline generation=1 capabilities=- endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB-Passive role=provider presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=3 consoleCredential=configured\n",
+      "stdout": "status state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/internal.toml pid=47323 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB-Session role=provider presence=offline generation=1 capabilities=- endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB-Passive role=provider presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=3 consoleCredential=configured\n",
       "stderr": ""
     },
     "processes": [
       {
         "owner": "launcher",
         "role": "launcher",
-        "pid": 42075,
+        "pid": 47323,
         "attribution": "internal.toml launcher row, generation 3",
         "provenance": "internal-toml",
         "before_stop": "alive",
@@ -49,7 +49,7 @@
       {
         "owner": "lifecycle",
         "role": "bb-provider",
-        "pid": 42094,
+        "pid": 47467,
         "attribution": "internal.toml daemon bb-provider row, generation 3",
         "provenance": "internal-toml",
         "before_stop": "alive",
@@ -61,7 +61,7 @@
       {
         "owner": "lifecycle",
         "role": "bb-receiver",
-        "pid": 42180,
+        "pid": 47481,
         "attribution": "internal.toml daemon bb-receiver row, generation 3",
         "provenance": "internal-toml",
         "before_stop": "alive",
@@ -73,7 +73,7 @@
       {
         "owner": "lifecycle",
         "role": "relay",
-        "pid": 42086,
+        "pid": 47406,
         "attribution": "internal.toml daemon relay row, generation 3",
         "provenance": "internal-toml",
         "before_stop": "alive",
@@ -85,7 +85,7 @@
       {
         "owner": "console",
         "role": "console",
-        "pid": 42301,
+        "pid": 47503,
         "attribution": "internal.toml [consoleRuntime] row",
         "provenance": "internal-toml",
         "before_stop": "alive",
@@ -97,8 +97,8 @@
       {
         "owner": "managed",
         "role": "managed-opencode:bb-provider",
-        "pid": 42683,
-        "attribution": "direct child of Agent bb-provider (pid 42094); command line runs the managed OpenCode substrate",
+        "pid": 47904,
+        "attribution": "direct child of Agent bb-provider (pid 47467); command line runs the managed OpenCode substrate",
         "provenance": "proved-agent-child",
         "before_stop": "alive",
         "probe": {
@@ -112,7 +112,7 @@
         "owner": "lifecycle",
         "role": "relay",
         "kind": "port",
-        "address": "49164",
+        "address": "59618",
         "attribution": "internal.toml relay projection listen port",
         "provenance": "internal-toml",
         "before_stop": "listening",
@@ -126,7 +126,7 @@
         "owner": "lifecycle",
         "role": "bb-provider",
         "kind": "port",
-        "address": "49167",
+        "address": "59621",
         "attribution": "internal.toml daemon bb-provider lease port",
         "provenance": "internal-toml",
         "before_stop": "listening",
@@ -140,7 +140,7 @@
         "owner": "lifecycle",
         "role": "bb-receiver",
         "kind": "port",
-        "address": "49168",
+        "address": "59622",
         "attribution": "internal.toml daemon bb-receiver lease port",
         "provenance": "internal-toml",
         "before_stop": "listening",
@@ -154,8 +154,8 @@
         "owner": "lifecycle",
         "role": "bb-provider",
         "kind": "socket",
-        "address": "127.0.0.1:49167",
-        "attribution": "socket owned by pid 42094",
+        "address": "127.0.0.1:59621",
+        "attribution": "socket owned by pid 47467",
         "provenance": "proved-pid-listener",
         "before_stop": "listening",
         "probe": {
@@ -168,8 +168,8 @@
         "owner": "lifecycle",
         "role": "bb-receiver",
         "kind": "socket",
-        "address": "127.0.0.1:49168",
-        "attribution": "socket owned by pid 42180",
+        "address": "127.0.0.1:59622",
+        "attribution": "socket owned by pid 47481",
         "provenance": "proved-pid-listener",
         "before_stop": "listening",
         "probe": {
@@ -182,8 +182,8 @@
         "owner": "lifecycle",
         "role": "relay",
         "kind": "socket",
-        "address": "127.0.0.1:49164",
-        "attribution": "socket owned by pid 42086",
+        "address": "127.0.0.1:59618",
+        "attribution": "socket owned by pid 47406",
         "provenance": "proved-pid-listener",
         "before_stop": "listening",
         "probe": {
@@ -196,8 +196,8 @@
         "owner": "console",
         "role": "console",
         "kind": "socket",
-        "address": "127.0.0.1:49169",
-        "attribution": "socket owned by pid 42301",
+        "address": "127.0.0.1:59623",
+        "attribution": "socket owned by pid 47503",
         "provenance": "proved-pid-listener",
         "before_stop": "listening",
         "probe": {
@@ -214,7 +214,7 @@
     "outcome": "cleaned",
     "deleted": true,
     "retained_obligations": [],
-    "evidence": "/tmp/l13-bb-v3/evidence/cases/BB10/boundary/bb10-boundary-cleanup.json",
+    "evidence": "/tmp/l13-bb-v4/evidence/cases/BB10/boundary/bb10-boundary-cleanup.json",
     "stopped": true,
     "finalized_by": "bb10-boundary-final-final",
     "deletion": {
@@ -222,15 +222,15 @@
       "outcome": "cleaned"
     }
   },
-  "stop_stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml pid=42075\n",
-  "stopped_stdout": "status state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml pid=42075 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB-Session role=provider presence=offline generation=1 capabilities=- endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB-Passive role=provider presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=3 consoleCredential=configured\n",
+  "stop_stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/internal.toml pid=47323\n",
+  "stopped_stdout": "status state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/internal.toml pid=47323 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB-Session role=provider presence=offline generation=1 capabilities=- endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB-Passive role=provider presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=3 consoleCredential=configured\n",
   "console_listener_gone": true,
   "owned_pids_after_stop": [
-    42094,
-    42180,
-    42086,
-    42301,
-    42683
+    47467,
+    47481,
+    47406,
+    47503,
+    47904
   ],
   "owned_pids_alive_after_stop": [],
   "temporary_root_removed": true

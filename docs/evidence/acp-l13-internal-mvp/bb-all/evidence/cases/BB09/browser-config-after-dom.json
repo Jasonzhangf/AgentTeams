@@ -3,12 +3,12 @@
   "args": [
     "evaluate",
     "--profile",
-    "bb09-main-22006",
+    "bb09-main-58761",
     "--script",
     "JSON.stringify({ catalog: document.querySelector('article.teams-provider-card .teams-catalog-state')?.textContent ?? null, models: [...document.querySelectorAll('article.teams-provider-card select.teams-select option')].map(option => option.value) })"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-22006\",\n  \"target\": \"t_4ce9f65aee04\",\n  \"result\": \"{\\\"catalog\\\":\\\"已加载\\\",\\\"models\\\":[\\\"\\\",\\\"bb-console-model\\\"]}\",\n  \"issuedAt\": \"2026-10-21T17:04:46.874Z\",\n  \"traceId\": \"cli-1792602286825\"\n}\n",
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-main-58761\",\n  \"target\": \"t_8ff2e42ce2d9\",\n  \"result\": \"{\\\"catalog\\\":\\\"已加载\\\",\\\"models\\\":[\\\"\\\",\\\"bb-console-model\\\"]}\",\n  \"issuedAt\": \"2026-10-21T18:39:26.646Z\",\n  \"traceId\": \"cli-1792607966608\"\n}\n",
   "stderr": ""
 }

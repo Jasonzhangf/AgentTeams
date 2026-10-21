@@ -1,9 +1,9 @@
 {
-  "command": "/tmp/agentteams-u7-bb07-failure-aBlN1T/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb07-failure-HYE3X8/prefix/node_modules/.bin/agentteams",
   "args": [
     "stop",
     "--config",
-    "/tmp/agentteams-u7-bb07-failure-aBlN1T/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb07-failure-HYE3X8/home/.agentteams/config.toml",
     "--generation",
     "1"
   ],

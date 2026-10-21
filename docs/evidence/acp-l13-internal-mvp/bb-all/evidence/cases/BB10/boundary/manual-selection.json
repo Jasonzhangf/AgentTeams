@@ -94,12 +94,12 @@
       "ok": true
     },
     "final": {
-      "eventId": "message.updated:ses_ea091c898ffeNeEFz83nTGmHHt:msg_15f6e38a10014eHN8Bqp5q2sby",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "eventId": "message.updated:ses_ea03b71b9ffeANmlCSeKH7xjTR:msg_15fc48f770010mru5Hu0DRUJjg",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "agentId": "bb-provider",
       "kind": "final",
       "state": "completed",
-      "messageId": "msg_15f6e38a10014eHN8Bqp5q2sby",
+      "messageId": "msg_15fc48f770010mru5Hu0DRUJjg",
       "finish": "stop"
     },
     "text": "bb-session-provider-ok"

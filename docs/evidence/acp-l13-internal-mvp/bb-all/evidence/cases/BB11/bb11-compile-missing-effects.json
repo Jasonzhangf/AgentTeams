@@ -1,9 +1,9 @@
 {
-  "command": "/private/tmp/agentteams-u7-bb11-YQCDkk/prefix/node_modules/agentteams/runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner",
+  "command": "/private/tmp/agentteams-u7-bb11-MGLmnw/prefix/node_modules/agentteams/runtime/dagpipe/bin/darwin-arm64/agentteams-dagpipe-runner",
   "args": [
     "compile",
     "--graph",
-    "/private/tmp/agentteams-u7-bb11-YQCDkk/prefix/node_modules/agentteams/runtime/dagpipe/graphs/agent-work.graph.json",
+    "/private/tmp/agentteams-u7-bb11-MGLmnw/prefix/node_modules/agentteams/runtime/dagpipe/graphs/agent-work.graph.json",
     "--capabilities",
     "[]"
   ],

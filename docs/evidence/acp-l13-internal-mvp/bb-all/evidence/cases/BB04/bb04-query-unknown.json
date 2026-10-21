@@ -1,10 +1,10 @@
 {
-  "command": "/tmp/agentteams-u7-bb04-OWAuVl/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb04-doi9x8/prefix/node_modules/.bin/agentteams",
   "args": [
     "work",
     "query",
     "--config",
-    "/tmp/agentteams-u7-bb04-OWAuVl/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb04-doi9x8/home/.agentteams/config.toml",
     "--receiver",
     "bb-receiver",
     "--work-id",
@@ -15,5 +15,5 @@
   "status": 1,
   "signal": null,
   "stdout": "",
-  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"012d4b1d-6c88-49fa-88e2-3201582d7463\",\"attemptId\":\"367d9759-2eb5-40c7-aa29-6c111f4989fd\",\"workId\":\"bb04-unknown-work\",\"requestId\":\"bb04-unknown-request\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"endpoint\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"FORBIDDEN: Work is not owned by this authenticated consumer\",\"operation\":\"agentWork.get\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"d2fc45dc-18be-4166-a3f6-af078bce9830\",\"attemptId\":\"78636cf6-d81d-48a5-a7ee-faafa93efe6c\",\"workId\":\"bb04-unknown-work\",\"requestId\":\"bb04-unknown-request\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"endpoint\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"FORBIDDEN: Work is not owned by this authenticated consumer\",\"operation\":\"agentWork.get\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
 }

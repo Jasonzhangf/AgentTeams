@@ -1,9 +1,9 @@
 {
-  "command": "/tmp/agentteams-u7-bb03-m03ZCS/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb03-e2GpXF/prefix/node_modules/.bin/agentteams",
   "args": [
     "start",
     "--config",
-    "/tmp/agentteams-u7-bb03-m03ZCS/home/.agentteams/config.toml"
+    "/tmp/agentteams-u7-bb03-e2GpXF/home/.agentteams/config.toml"
   ],
   "status": 1,
   "signal": null,

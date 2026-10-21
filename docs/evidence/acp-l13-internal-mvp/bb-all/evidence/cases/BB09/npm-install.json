@@ -3,12 +3,12 @@
   "args": [
     "install",
     "--prefix",
-    "/tmp/agentteams-u7-bb09-YyLbr2/prefix",
+    "/tmp/agentteams-u7-bb09-Zj6uUu/prefix",
     "--no-audit",
     "--no-fund",
     "--no-package-lock",
     "--no-save",
-    "/tmp/agentteams-u7-bb09-YyLbr2/pack/agentteams-0.2.0-internal.1.tgz"
+    "/tmp/agentteams-u7-bb09-Zj6uUu/pack/agentteams-0.2.0-internal.1.tgz"
   ],
   "status": 0,
   "signal": null,

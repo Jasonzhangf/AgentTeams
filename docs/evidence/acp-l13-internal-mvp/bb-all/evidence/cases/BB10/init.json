@@ -1,10 +1,10 @@
 {
-  "command": "/tmp/agentteams-u7-bb10-Dj1HBM/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb10-zi7hHz/prefix/node_modules/.bin/agentteams",
   "args": [
     "init"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "initialized /tmp/agentteams-u7-bb10-Dj1HBM/home/.agentteams/config.toml\nEdit config.toml, then run agentteams start, agentteams status, or agentteams stop.\n",
+  "stdout": "initialized /tmp/agentteams-u7-bb10-zi7hHz/home/.agentteams/config.toml\nEdit config.toml, then run agentteams start, agentteams status, or agentteams stop.\n",
   "stderr": ""
 }

@@ -1,9 +1,9 @@
 {
-  "command": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/prefix/node_modules/.bin/agentteams",
   "args": [
     "stop",
     "--config",
-    "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/home/.agentteams/config.toml",
     "--generation",
     "1000001"
   ],

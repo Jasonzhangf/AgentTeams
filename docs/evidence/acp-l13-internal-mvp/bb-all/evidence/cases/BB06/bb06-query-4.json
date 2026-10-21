@@ -1,18 +1,18 @@
 {
-  "command": "/tmp/agentteams-u7-bb06-Q9wi5Y/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb06-JgGioV/prefix/node_modules/.bin/agentteams",
   "args": [
     "work",
     "query",
     "--config",
-    "/tmp/agentteams-u7-bb06-Q9wi5Y/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb06-JgGioV/home/.agentteams/config.toml",
     "--receiver",
     "bb-receiver-1",
     "--service-selection",
     "capability",
     "--work-id",
-    "c43bf4af-c9a2-4229-b975-55eeb3828b09",
+    "abb454c0-b3b4-4c0e-93a5-58aef01a550b",
     "--request-id",
-    "1638501d-72de-4257-bd05-edbcae37d78a",
+    "5b743963-c35c-4fec-b911-ef92f991b948",
     "--provider",
     "bb-provider",
     "--provider-generation",
@@ -26,6 +26,6 @@
   ],
   "status": 0,
   "signal": null,
-  "stdout": "{\"status\":\"completed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"executionId\":\"7d343f43-0215-40a5-add2-26e59e96b5a9\",\"attemptId\":\"0a26867b-8394-4f99-a625-9cabc58c16ba\",\"workId\":\"c43bf4af-c9a2-4229-b975-55eeb3828b09\",\"requestId\":\"1638501d-72de-4257-bd05-edbcae37d78a\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"linkGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"browser\",\"capabilityVersion\":\"1\",\"operation\":\"context.create\",\"requestState\":\"succeeded\",\"observed\":true},\"business\":{\"contextId\":\"browser-context-5b706b5e-320e-44be-a70b-9acc8597636b\",\"profile\":\"teams-bb-provider-a97e73c419e02bb8ab34327c75a66b312f61a97302cd8f3d6f7e109d32023549\",\"raw\":{\"cmd\":\"start\",\"ephemeral\":false,\"headless\":true,\"issuedAt\":\"2026-10-21T17:03:15.389Z\",\"profile\":\"teams-bb-provider-a97e73c419e02bb8ab34327c75a66b312f61a97302cd8f3d6f7e109d32023549\",\"reused\":false,\"sessionId\":\"camoufox-56928\",\"target\":\"t_d8d46c4311ee\",\"traceId\":\"cli-1792602192513\",\"url\":\"http://127.0.0.1:63956/\"},\"sessionId\":\"camoufox-56928\"},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"completed\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"]}}\n",
+  "stdout": "{\"status\":\"completed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"executionId\":\"86210405-07c1-408a-8c66-53851ada7141\",\"attemptId\":\"426c6649-a439-41e7-a2a5-4c20bbd43d0f\",\"workId\":\"abb454c0-b3b4-4c0e-93a5-58aef01a550b\",\"requestId\":\"5b743963-c35c-4fec-b911-ef92f991b948\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"linkGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"browser\",\"capabilityVersion\":\"1\",\"operation\":\"context.create\",\"requestState\":\"succeeded\",\"observed\":true},\"business\":{\"contextId\":\"browser-context-8112d768-b15a-4f1d-b350-ec9235ec1731\",\"profile\":\"teams-bb-provider-1454283b58fa06370d0d5e7e70c6d9650daf25ba739e8eeb84d0bc5800b6c86b\",\"raw\":{\"cmd\":\"start\",\"ephemeral\":false,\"headless\":true,\"issuedAt\":\"2026-10-21T18:38:02.195Z\",\"profile\":\"teams-bb-provider-1454283b58fa06370d0d5e7e70c6d9650daf25ba739e8eeb84d0bc5800b6c86b\",\"reused\":false,\"sessionId\":\"camoufox-85484\",\"target\":\"t_3585ff247825\",\"traceId\":\"cli-1792607879236\",\"url\":\"http://127.0.0.1:58565/\"},\"sessionId\":\"camoufox-85484\"},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"completed\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"]}}\n",
   "stderr": ""
 }

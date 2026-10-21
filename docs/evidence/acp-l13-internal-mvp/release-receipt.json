@@ -1,22 +1,22 @@
 {
   "schema_version": 1,
   "kind": "agentteams-internal-mvp-release-receipt",
-  "generated_at": "2026-10-21T17:48:14.377Z",
+  "generated_at": "2026-10-21T19:27:28.302Z",
   "release_eligible": true,
   "scope": "internal-mvp",
   "version": "0.2.0-internal.1",
   "candidate": {
-    "head_commit": "ce9a1a49a389df7907aab4bbea5ab2c155356b11",
+    "head_commit": "22f66feb35ebe41c330e24b165cfb11b28019a1a",
     "base_commit": "b90c93427d4eb4a2399f8e0649f80e14b721f752",
-    "tree_hash": "a5826ddc9bccf2bc88b35b221c995623d05f112b",
-    "indexed_tree_hash": "a5826ddc9bccf2bc88b35b221c995623d05f112b",
+    "tree_hash": "2c680b2a2b52c4e670041a61a78bcc9693427640",
+    "indexed_tree_hash": "2c680b2a2b52c4e670041a61a78bcc9693427640",
     "source_state": "committed"
   },
   "package": {
     "name": "agentteams",
     "version": "0.2.0-internal.1",
     "pack_root": "generated/modules/teams-source/lib",
-    "content_sha256": "9fd3e52e89619b08955e79a2e029dbf961684435589d196094296fea792a2504",
+    "content_sha256": "f7a1c9b6c2cf5787d75469a0a4b7ff3c5bf8b2cb26964cbb7e347adf508963b6",
     "files": [
       "cli/agentteams.mjs",
       "console-host/lib/index.d.mts",
@@ -293,8 +293,8 @@
   },
   "tarball": {
     "filename": "agentteams-0.2.0-internal.1.tgz",
-    "sha256": "d7a5a3d2f6b46bb4432ffaf45b178b13eeb669eba997747667b685ea10bac567",
-    "size": 1557393,
+    "sha256": "3aeebbdb929beac2a817ab046b2cba80f6da1d1774a0043bcf71d0ae6d5f50e4",
+    "size": 1557395,
     "files": [
       "cli/agentteams.mjs",
       "console-host/lib/index.d.mts",
@@ -574,7 +574,12 @@
     "status": "passed",
     "start_generation": 1,
     "restart_generation": 2,
-    "installed_tarball_sha256": "d7a5a3d2f6b46bb4432ffaf45b178b13eeb669eba997747667b685ea10bac567"
+    "installed_tarball_sha256": "3aeebbdb929beac2a817ab046b2cba80f6da1d1774a0043bcf71d0ae6d5f50e4",
+    "scope": {
+      "entrypoint": "installed npm tarball CLI start/status/stop",
+      "fixture": "v3-user-intent-config-compiled-by-installed-runtime",
+      "final_user_config_evidence": false
+    }
   },
   "black_box": {
     "cases_total": 14,
@@ -638,7 +643,8 @@
           "passed"
         ]
       }
-    ]
+    ],
+    "note": "each case passed at least once on this package content; flaky_cases lists every case that failed in another run"
   },
   "retained_obligations": [
     {
@@ -655,7 +661,7 @@
       "obligation": "cross-device receipt",
       "scope": "Two physical hosts exchanging one ACP prompt on one package",
       "state": "retained",
-      "delivered": "A two-host receipt exists for package 0.1.0 at commit 8cb0238: Macstudio.local and jennys-macbook-air.anoa-buri.ts.net exchanged session/new, session/prompt, request_permission, update and end_turn, plus cancel.",
+      "delivered": "A two-host receipt exists for package 0.1.0 built from base commit 8cb0238: Macstudio.local and jennys-macbook-air.anoa-buri.ts.net exchanged session/new, session/prompt, request_permission, update and end_turn, plus cancel.",
       "missing": "No two-host run used package 0.2.0-internal.1 content. A static older receipt does not prove a cross-device exchange for this artifact.",
       "owner": "A11 cross-device unit",
       "evidence": "docs/evidence/acp-a11-crossdevice-20261011/verification.json and notes.md",
@@ -675,7 +681,12 @@
   "non_claims": [
     "the release tarball is not published to any registry or deployed host",
     "no cross-device receipt for this package content exists",
-    "source, test, build, installed, release and review evidence are separate layers"
+    "source, test, build, installed, release and review evidence are separate layers",
+    "the installed lifecycle evidence uses the fixture config named in installed_lifecycle.scope, not an operator-authored v4 config"
   ],
-  "evidence_commit": "ce9a1a49a389df7907aab4bbea5ab2c155356b11"
+  "evidence_commit": "22f66feb35ebe41c330e24b165cfb11b28019a1a",
+  "package_receipt_snapshot": {
+    "path": "package-receipt.snapshot.json",
+    "sha256": "ed7629bad68c4109b6b23431aae38cedd7cd1266035e45218bb6ab47a128abe8"
+  }
 }

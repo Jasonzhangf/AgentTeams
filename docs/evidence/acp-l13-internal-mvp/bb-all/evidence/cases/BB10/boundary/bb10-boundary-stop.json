@@ -1,14 +1,14 @@
 {
-  "command": "/tmp/agentteams-u7-bb10-boundary-532MOT/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb10-boundary-tNUJBF/prefix/node_modules/.bin/agentteams",
   "args": [
     "stop",
     "--config",
-    "/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/config.toml",
     "--generation",
     "3"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml pid=42075\n",
+  "stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/internal.toml pid=47323\n",
   "stderr": ""
 }

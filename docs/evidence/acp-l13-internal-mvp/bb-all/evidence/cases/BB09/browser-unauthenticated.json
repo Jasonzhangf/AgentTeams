@@ -3,12 +3,12 @@
   "args": [
     "evaluate",
     "--profile",
-    "bb09-nocred-22006",
+    "bb09-nocred-58761",
     "--script",
     "document.body.innerText"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-nocred-22006\",\n  \"target\": \"t_e891544dd728\",\n  \"result\": \"Authentication required\",\n  \"issuedAt\": \"2026-10-21T17:04:51.928Z\",\n  \"traceId\": \"cli-1792602291891\"\n}\n",
+  "stdout": "{\n  \"cmd\": \"evaluate\",\n  \"profile\": \"bb09-nocred-58761\",\n  \"target\": \"t_58e611d13511\",\n  \"result\": \"Authentication required\",\n  \"issuedAt\": \"2026-10-21T18:39:31.133Z\",\n  \"traceId\": \"cli-1792607971096\"\n}\n",
   "stderr": ""
 }

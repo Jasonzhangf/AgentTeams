@@ -1,14 +1,14 @@
 {
-  "command": "/tmp/agentteams-u7-bb09-YyLbr2/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb09-Zj6uUu/prefix/node_modules/.bin/agentteams",
   "args": [
     "stop",
     "--config",
-    "/tmp/agentteams-u7-bb09-YyLbr2/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb09-Zj6uUu/home/.agentteams/config.toml",
     "--generation",
     "2"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb09-YyLbr2/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-YyLbr2/home/.agentteams/internal.toml pid=16097\n",
+  "stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb09-Zj6uUu/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb09-Zj6uUu/home/.agentteams/internal.toml pid=29148\n",
   "stderr": ""
 }

@@ -35,7 +35,7 @@
   "sessions": [
     {
       "agentId": "bb-provider",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "title": "BB10 boundary manual selection"
     }
   ],
@@ -60,7 +60,7 @@
           "id": "bb-primary",
           "label": "BB Boundary Invalid Credential",
           "protocol": "openai-chat",
-          "apiBaseUrl": "http://127.0.0.1:49156/v1",
+          "apiBaseUrl": "http://127.0.0.1:59615/v1",
           "enabled": true,
           "authKind": "bearer",
           "catalogState": "ready",
@@ -75,7 +75,7 @@
           "id": "bb-backup",
           "label": "BB Backup",
           "protocol": "openai-chat",
-          "apiBaseUrl": "http://127.0.0.1:49154/v1",
+          "apiBaseUrl": "http://127.0.0.1:59613/v1",
           "enabled": true,
           "authKind": "none",
           "catalogState": "ready",
@@ -90,7 +90,7 @@
           "id": "bb-manual",
           "label": "BB Manual",
           "protocol": "openai-chat",
-          "apiBaseUrl": "http://127.0.0.1:49155/v1",
+          "apiBaseUrl": "http://127.0.0.1:59614/v1",
           "enabled": true,
           "authKind": "none",
           "catalogState": "empty",

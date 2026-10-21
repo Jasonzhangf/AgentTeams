@@ -1,12 +1,12 @@
 {
   "profiles": [
     {
-      "profile": "bb09-static-22006",
+      "profile": "bb09-static-58761",
       "stop_status": 0,
       "daemon_status": 0
     },
     {
-      "profile": "bb09-static-nocred-22006",
+      "profile": "bb09-static-nocred-58761",
       "stop_status": 2,
       "daemon_status": 0
     }

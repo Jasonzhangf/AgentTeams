@@ -2,42 +2,42 @@
   "case": "BB14",
   "fixture": "bb14-stale-generation",
   "owner": "U1+U7",
-  "observed_at": "2026-10-21T17:39:27.530Z",
+  "observed_at": "2026-10-21T19:15:51.754Z",
   "generation": 1,
   "paths": {
-    "temporary_root": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW",
-    "installed_cli": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/prefix/node_modules/.bin/agentteams",
-    "config": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml",
-    "internal_state": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/internal.toml"
+    "temporary_root": "/tmp/agentteams-u7-bb14-stale-generation-aGWH5g",
+    "installed_cli": "/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/prefix/node_modules/.bin/agentteams",
+    "config": "/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/home/.agentteams/config.toml",
+    "internal_state": "/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/home/.agentteams/internal.toml"
   },
   "stop": {
     "attempted": true,
     "generation": 1,
     "command": [
-      "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/prefix/node_modules/.bin/agentteams",
+      "/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/prefix/node_modules/.bin/agentteams",
       "stop",
       "--config",
-      "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml",
+      "/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/home/.agentteams/config.toml",
       "--generation",
       "1"
     ],
     "exit_code": 0,
     "signal": null,
     "error": null,
-    "stdout": "stopped state=stopped generation=1 config=/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/internal.toml pid=87223\n",
+    "stdout": "stopped state=stopped generation=1 config=/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/home/.agentteams/internal.toml pid=96843\n",
     "stderr": ""
   },
   "terminal": {
     "query_exit_code": 0,
     "state": "stopped",
-    "stdout": "status state=stopped generation=1 config=/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/internal.toml pid=87223 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/bb-account/custom/BB-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/bb-account/custom/BB-Receiver role=receiver presence=offline generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+    "stdout": "status state=stopped generation=1 config=/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/home/.agentteams/internal.toml pid=96843 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/bb-account/custom/BB-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/bb-account/custom/BB-Receiver role=receiver presence=offline generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
     "stderr": ""
   },
   "processes": [
     {
       "owner": "launcher",
       "role": "launcher",
-      "pid": 87223,
+      "pid": 96843,
       "attribution": "internal.toml launcher row, generation 1",
       "provenance": "internal-toml",
       "before_stop": "alive",
@@ -49,7 +49,7 @@
     {
       "owner": "lifecycle",
       "role": "bb-provider",
-      "pid": 87238,
+      "pid": 96886,
       "attribution": "internal.toml daemon bb-provider row, generation 1",
       "provenance": "internal-toml",
       "before_stop": "alive",
@@ -61,7 +61,7 @@
     {
       "owner": "lifecycle",
       "role": "bb-receiver",
-      "pid": 87247,
+      "pid": 97022,
       "attribution": "internal.toml daemon bb-receiver row, generation 1",
       "provenance": "internal-toml",
       "before_stop": "alive",
@@ -73,7 +73,7 @@
     {
       "owner": "lifecycle",
       "role": "relay",
-      "pid": 87236,
+      "pid": 96847,
       "attribution": "internal.toml daemon relay row, generation 1",
       "provenance": "internal-toml",
       "before_stop": "alive",
@@ -88,7 +88,7 @@
       "owner": "lifecycle",
       "role": "relay",
       "kind": "port",
-      "address": "63909",
+      "address": "57204",
       "attribution": "internal.toml relay projection listen port",
       "provenance": "internal-toml",
       "before_stop": "listening",
@@ -102,7 +102,7 @@
       "owner": "lifecycle",
       "role": "bb-provider",
       "kind": "port",
-      "address": "63913",
+      "address": "57207",
       "attribution": "internal.toml daemon bb-provider lease port",
       "provenance": "internal-toml",
       "before_stop": "listening",
@@ -116,7 +116,7 @@
       "owner": "lifecycle",
       "role": "bb-receiver",
       "kind": "port",
-      "address": "63914",
+      "address": "57208",
       "attribution": "internal.toml daemon bb-receiver lease port",
       "provenance": "internal-toml",
       "before_stop": "listening",
@@ -130,8 +130,8 @@
       "owner": "lifecycle",
       "role": "bb-provider",
       "kind": "socket",
-      "address": "127.0.0.1:63913",
-      "attribution": "socket owned by pid 87238",
+      "address": "127.0.0.1:57207",
+      "attribution": "socket owned by pid 96886",
       "provenance": "proved-pid-listener",
       "before_stop": "listening",
       "probe": {
@@ -144,8 +144,8 @@
       "owner": "lifecycle",
       "role": "bb-receiver",
       "kind": "socket",
-      "address": "127.0.0.1:63914",
-      "attribution": "socket owned by pid 87247",
+      "address": "127.0.0.1:57208",
+      "attribution": "socket owned by pid 97022",
       "provenance": "proved-pid-listener",
       "before_stop": "listening",
       "probe": {
@@ -158,8 +158,8 @@
       "owner": "lifecycle",
       "role": "relay",
       "kind": "socket",
-      "address": "127.0.0.1:63909",
-      "attribution": "socket owned by pid 87236",
+      "address": "127.0.0.1:57204",
+      "attribution": "socket owned by pid 96847",
       "provenance": "proved-pid-listener",
       "before_stop": "listening",
       "probe": {
@@ -176,7 +176,7 @@
   "outcome": "cleaned",
   "deleted": true,
   "retained_obligations": [],
-  "evidence": "/tmp/l13-bb-v3/evidence/cases/BB14/stale-generation/bb14-stale-recovery-cleanup.json",
+  "evidence": "/tmp/l13-bb-v4/evidence/cases/BB14/stale-generation/bb14-stale-recovery-cleanup.json",
   "stopped": true,
   "deletion": {
     "deleted": true,

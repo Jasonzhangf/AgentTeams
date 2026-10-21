@@ -1,14 +1,14 @@
 {
-  "command": "/tmp/agentteams-u7-bb06-Q9wi5Y/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb06-JgGioV/prefix/node_modules/.bin/agentteams",
   "args": [
     "work",
     "close",
     "--config",
-    "/tmp/agentteams-u7-bb06-Q9wi5Y/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb06-JgGioV/home/.agentteams/config.toml",
     "--receiver",
     "bb-receiver-1",
     "--work-id",
-    "c43bf4af-c9a2-4229-b975-55eeb3828b09",
+    "abb454c0-b3b4-4c0e-93a5-58aef01a550b",
     "--provider",
     "bb-provider",
     "--provider-generation",
@@ -22,6 +22,6 @@
   ],
   "status": 0,
   "signal": null,
-  "stdout": "{\"status\":\"completed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"agentteams.work-close\",\"graphVersion\":\"1\",\"executionId\":\"7e8f0516-8d70-4e1d-9fc9-1bff67d02424\",\"attemptId\":\"9e710f3d-b17f-4f78-8aa1-d03fbd6af675\",\"workId\":\"c43bf4af-c9a2-4229-b975-55eeb3828b09\",\"requestId\":\"b3771cd8-2479-4bbb-bd03-a2db96962972\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"browser\",\"capabilityVersion\":\"1\",\"operation\":\"context.create\",\"workClosure\":\"closed\"},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"completed\",\"graphId\":\"agentteams.work-close\",\"graphVersion\":\"1\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"close-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"close-work\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.close\",\"agentWork.dispose\"]}}\n",
+  "stdout": "{\"status\":\"completed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"agentteams.work-close\",\"graphVersion\":\"1\",\"executionId\":\"6c2c8479-9f4b-4875-921c-876594687ed0\",\"attemptId\":\"ddd75865-289a-499b-8b9f-5eef53850e57\",\"workId\":\"abb454c0-b3b4-4c0e-93a5-58aef01a550b\",\"requestId\":\"90f2551d-dbe8-4c37-8f59-572125f83c71\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"browser\",\"capabilityVersion\":\"1\",\"operation\":\"context.create\",\"workClosure\":\"closed\"},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"completed\",\"graphId\":\"agentteams.work-close\",\"graphVersion\":\"1\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"close-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"close-work\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.close\",\"agentWork.dispose\"]}}\n",
   "stderr": ""
 }

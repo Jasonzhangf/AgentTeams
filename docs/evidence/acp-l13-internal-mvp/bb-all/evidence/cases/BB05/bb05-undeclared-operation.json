@@ -1,10 +1,10 @@
 {
-  "command": "/tmp/agentteams-u7-bb05-uNlciH/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb05-d1zI0b/prefix/node_modules/.bin/agentteams",
   "args": [
     "work",
     "open",
     "--config",
-    "/tmp/agentteams-u7-bb05-uNlciH/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb05-d1zI0b/home/.agentteams/config.toml",
     "--receiver",
     "bb-receiver",
     "--provider",
@@ -25,5 +25,5 @@
   "status": 1,
   "signal": null,
   "stdout": "",
-  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"d3279be3-4c72-4298-bc18-bc88c5be39a5\",\"attemptId\":\"2baef570-a194-47b6-9117-57a452e3889f\",\"workId\":\"8682e442-9a01-4912-897a-f5f9d9bd92d1\",\"requestId\":\"ea91aa79-fcde-4950-80cc-8751a063446a\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"not-a-real-operation\",\"error\":{\"code\":\"UNSUPPORTED_OPERATION\",\"message\":\"Capability file-search does not support not-a-real-operation\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"3d4c9222-3644-49bc-8645-a4c428511ce2\",\"attemptId\":\"18eca1ee-6e29-47dc-a13a-2eb6a0c15e81\",\"workId\":\"bcd0441a-319e-4246-9c7d-b15e48b78782\",\"requestId\":\"b504a028-0861-44e8-be4c-6f93bcb772f6\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"not-a-real-operation\",\"error\":{\"code\":\"UNSUPPORTED_OPERATION\",\"message\":\"Capability file-search does not support not-a-real-operation\",\"operation\":\"agentWork.findProvider\"}},\"cleanup\":{\"channelsOpened\":0,\"channelsDisposed\":0},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\"],\"nodeCompletion\":[],\"hostOperations\":[\"agentWork.findProvider\"],\"errorKind\":\"operator\"}}\n"
 }

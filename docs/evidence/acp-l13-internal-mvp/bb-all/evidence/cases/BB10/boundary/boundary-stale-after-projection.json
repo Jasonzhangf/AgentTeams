@@ -19,7 +19,7 @@
         "droppedEvents": 50
       },
       "sessionEffectiveRevision": 3,
-      "currentSessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "currentSessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "providerId": "bb-manual",
       "modelId": "bb-manual-model"
     },
@@ -39,7 +39,7 @@
   "sessions": [
     {
       "agentId": "bb-provider",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "title": "BB10 boundary manual selection"
     }
   ],
@@ -64,7 +64,7 @@
           "id": "bb-primary",
           "label": "BB Primary",
           "protocol": "openai-chat",
-          "apiBaseUrl": "http://127.0.0.1:49153/v1",
+          "apiBaseUrl": "http://127.0.0.1:59612/v1",
           "enabled": true,
           "authKind": "none",
           "catalogState": "ready",
@@ -79,7 +79,7 @@
           "id": "bb-backup",
           "label": "BB Backup",
           "protocol": "openai-chat",
-          "apiBaseUrl": "http://127.0.0.1:49154/v1",
+          "apiBaseUrl": "http://127.0.0.1:59613/v1",
           "enabled": true,
           "authKind": "none",
           "catalogState": "ready",
@@ -94,7 +94,7 @@
           "id": "bb-manual",
           "label": "BB Manual",
           "protocol": "openai-chat",
-          "apiBaseUrl": "http://127.0.0.1:49155/v1",
+          "apiBaseUrl": "http://127.0.0.1:59614/v1",
           "enabled": true,
           "authKind": "none",
           "catalogState": "empty",
@@ -113,75 +113,75 @@
   "relations": [],
   "sessionEvents": [
     {
-      "eventId": "message.updated:ses_ea091c898ffeNeEFz83nTGmHHt:msg_DgfpUs5ZcMdGaqcJGBVOKvAvKp",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "eventId": "message.updated:ses_ea03b71b9ffeANmlCSeKH7xjTR:msg_nspd4ohUgJtg4z7ntwFC4qN5Re",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "agentId": "bb-provider",
       "kind": "message",
       "state": "pending",
-      "messageId": "msg_DgfpUs5ZcMdGaqcJGBVOKvAvKp",
+      "messageId": "msg_nspd4ohUgJtg4z7ntwFC4qN5Re",
       "role": "user"
     },
     {
-      "eventId": "message.part.updated:ses_ea091c898ffeNeEFz83nTGmHHt:msg_DgfpUs5ZcMdGaqcJGBVOKvAvKp",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "eventId": "message.part.updated:ses_ea03b71b9ffeANmlCSeKH7xjTR:msg_nspd4ohUgJtg4z7ntwFC4qN5Re",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "agentId": "bb-provider",
       "kind": "part",
       "state": "pending",
-      "messageId": "msg_DgfpUs5ZcMdGaqcJGBVOKvAvKp",
-      "partId": "prt_15f6e37be001qWRWPi0DfSsAV9",
+      "messageId": "msg_nspd4ohUgJtg4z7ntwFC4qN5Re",
+      "partId": "prt_15fc48ea2001zDT1FPMoKzMySq",
       "partType": "text",
       "text": "bb10 boundary manual selection probe"
     },
     {
-      "eventId": "message.updated:ses_ea091c898ffeNeEFz83nTGmHHt:msg_15f6e38a10014eHN8Bqp5q2sby",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "eventId": "message.updated:ses_ea03b71b9ffeANmlCSeKH7xjTR:msg_15fc48f770010mru5Hu0DRUJjg",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "agentId": "bb-provider",
       "kind": "message",
       "state": "pending",
-      "messageId": "msg_15f6e38a10014eHN8Bqp5q2sby",
+      "messageId": "msg_15fc48f770010mru5Hu0DRUJjg",
       "role": "assistant"
     },
     {
-      "eventId": "message.part.updated:ses_ea091c898ffeNeEFz83nTGmHHt:msg_15f6e38a10014eHN8Bqp5q2sby",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "eventId": "message.part.updated:ses_ea03b71b9ffeANmlCSeKH7xjTR:msg_15fc48f770010mru5Hu0DRUJjg",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "agentId": "bb-provider",
       "kind": "part",
       "state": "observed",
-      "messageId": "msg_15f6e38a10014eHN8Bqp5q2sby",
-      "partId": "prt_15f6e3da40015orW36YQB8OZcM",
+      "messageId": "msg_15fc48f770010mru5Hu0DRUJjg",
+      "partId": "prt_15fc49487001Pu7VD47DhrBzsZ",
       "partType": "step-start",
       "sourcePart": {
-        "id": "prt_15f6e3da40015orW36YQB8OZcM",
-        "messageID": "msg_15f6e38a10014eHN8Bqp5q2sby",
-        "sessionID": "ses_ea091c898ffeNeEFz83nTGmHHt",
+        "id": "prt_15fc49487001Pu7VD47DhrBzsZ",
+        "messageID": "msg_15fc48f770010mru5Hu0DRUJjg",
+        "sessionID": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
         "type": "step-start"
       }
     },
     {
-      "eventId": "message.part.updated:ses_ea091c898ffeNeEFz83nTGmHHt:msg_15f6e38a10014eHN8Bqp5q2sby",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "eventId": "message.part.updated:ses_ea03b71b9ffeANmlCSeKH7xjTR:msg_15fc48f770010mru5Hu0DRUJjg",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "agentId": "bb-provider",
       "kind": "part",
       "state": "completed",
-      "messageId": "msg_15f6e38a10014eHN8Bqp5q2sby",
-      "partId": "prt_15f6e3da5001Z2AUX3zDvaEjmV",
+      "messageId": "msg_15fc48f770010mru5Hu0DRUJjg",
+      "partId": "prt_15fc49488001HQ2WJ816rEQ6GN",
       "partType": "text",
       "text": "bb-session-provider-ok"
     },
     {
-      "eventId": "message.part.updated:ses_ea091c898ffeNeEFz83nTGmHHt:msg_15f6e38a10014eHN8Bqp5q2sby",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "eventId": "message.part.updated:ses_ea03b71b9ffeANmlCSeKH7xjTR:msg_15fc48f770010mru5Hu0DRUJjg",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "agentId": "bb-provider",
       "kind": "part",
       "state": "observed",
-      "messageId": "msg_15f6e38a10014eHN8Bqp5q2sby",
-      "partId": "prt_15f6e3daa001ZOg3WNiX7lMXpx",
+      "messageId": "msg_15fc48f770010mru5Hu0DRUJjg",
+      "partId": "prt_15fc4948c00105ka6rtWncpgXp",
       "partType": "step-finish",
       "sourcePart": {
-        "id": "prt_15f6e3daa001ZOg3WNiX7lMXpx",
+        "id": "prt_15fc4948c00105ka6rtWncpgXp",
         "reason": "stop",
-        "messageID": "msg_15f6e38a10014eHN8Bqp5q2sby",
-        "sessionID": "ses_ea091c898ffeNeEFz83nTGmHHt",
+        "messageID": "msg_15fc48f770010mru5Hu0DRUJjg",
+        "sessionID": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
         "type": "step-finish",
         "tokens": {
           "total": 2,
@@ -197,12 +197,12 @@
       }
     },
     {
-      "eventId": "message.updated:ses_ea091c898ffeNeEFz83nTGmHHt:msg_15f6e38a10014eHN8Bqp5q2sby",
-      "sessionId": "ses_ea091c898ffeNeEFz83nTGmHHt",
+      "eventId": "message.updated:ses_ea03b71b9ffeANmlCSeKH7xjTR:msg_15fc48f770010mru5Hu0DRUJjg",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
       "agentId": "bb-provider",
       "kind": "final",
       "state": "completed",
-      "messageId": "msg_15f6e38a10014eHN8Bqp5q2sby",
+      "messageId": "msg_15fc48f770010mru5Hu0DRUJjg",
       "finish": "stop"
     }
   ]

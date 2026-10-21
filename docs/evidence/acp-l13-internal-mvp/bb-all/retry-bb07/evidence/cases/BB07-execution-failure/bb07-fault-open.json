@@ -1,10 +1,10 @@
 {
-  "command": "/tmp/agentteams-u7-bb07-failure-dSGqVt/prefix/node_modules/.bin/agentteams",
+  "command": "/tmp/agentteams-u7-bb07-failure-xC2WeK/prefix/node_modules/.bin/agentteams",
   "args": [
     "work",
     "open",
     "--config",
-    "/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/config.toml",
+    "/tmp/agentteams-u7-bb07-failure-xC2WeK/home/.agentteams/config.toml",
     "--receiver",
     "bb-receiver",
     "--provider",
@@ -25,5 +25,5 @@
   "status": 1,
   "signal": null,
   "stdout": "",
-  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"ffa71d19-b3dc-4b76-8403-d27c0d7013ce\",\"attemptId\":\"dec93e8c-358f-4593-adc6-1383c96d4a8f\",\"workId\":\"bf2d42b8-7246-499e-b599-4be9e10f2e17\",\"requestId\":\"4dfecc18-a8f9-42de-a6d8-e6deb06ee749\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"deliveryState\":\"unconfirmed\",\"error\":{\"code\":\"UNAVAILABLE\",\"message\":\"network: connection stopped locally\",\"deliveryState\":\"unconfirmed\",\"operation\":\"agentWork.request\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"admit-work\",\"request-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"admit-work\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.propose\",\"agentWork.request\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
+  "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"614869f7-43fe-425b-bd5a-457464eb4309\",\"attemptId\":\"b465d385-1e3c-4304-abf7-0ef729dbd692\",\"workId\":\"2ce33aff-d7c6-49ae-ab1f-230eed538bac\",\"requestId\":\"dabd956e-4cdf-4ed7-9719-256b46c1ac14\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"deliveryState\":\"unconfirmed\",\"error\":{\"code\":\"UNAVAILABLE\",\"message\":\"network: connection stopped locally\",\"deliveryState\":\"unconfirmed\",\"operation\":\"agentWork.request\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"admit-work\",\"request-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"admit-work\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.propose\",\"agentWork.request\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}\n"
 }

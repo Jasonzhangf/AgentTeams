@@ -3,15 +3,15 @@
   "args": [
     "install",
     "--prefix",
-    "/tmp/agentteams-u7-bb07-JiChXa/prefix",
+    "/tmp/agentteams-u7-bb07-zRNXJt/prefix",
     "--no-audit",
     "--no-fund",
     "--no-package-lock",
     "--no-save",
-    "/tmp/agentteams-u7-bb07-JiChXa/pack/agentteams-0.2.0-internal.1.tgz"
+    "/tmp/agentteams-u7-bb07-zRNXJt/pack/agentteams-0.2.0-internal.1.tgz"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "\nadded 10 packages in 9s\n",
+  "stdout": "\nadded 10 packages in 12s\n",
   "stderr": ""
 }

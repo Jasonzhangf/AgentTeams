@@ -4,12 +4,12 @@
     "result": {
       "kind": "session.create",
       "agentId": "bb-provider",
-      "sessionId": "ses_ea091b23effekJIcKL30r4iYpb",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
       "title": "BB10 boundary no implicit failover",
-      "directory": "/private/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/data/bb-provider",
+      "directory": "/private/tmp/agentteams-u7-bb10-boundary-tNUJBF/home/.agentteams/data/bb-provider",
       "time": {
-        "created": 1792602426817,
-        "updated": 1792602426817
+        "created": 1792608085081,
+        "updated": 1792608085081
       }
     }
   },

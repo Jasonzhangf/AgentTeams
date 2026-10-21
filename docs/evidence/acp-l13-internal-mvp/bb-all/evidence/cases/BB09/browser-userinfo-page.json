@@ -3,10 +3,10 @@
   "args": [
     "get-page-info",
     "--profile",
-    "bb09-main-22006"
+    "bb09-main-58761"
   ],
   "status": 0,
   "signal": null,
-  "stdout": "{\n  \"cmd\": \"get-page-info\",\n  \"profile\": \"bb09-main-22006\",\n  \"target\": \"t_4ce9f65aee04\",\n  \"info\": {\n    \"cmd\": \"get-page-info\",\n    \"ok\": true,\n    \"target\": \"t_4ce9f65aee04\",\n    \"page\": \"page_ee4fa84f8e03\",\n    \"url\": \"http://127.0.0.1:64326/\",\n    \"title\": \"AgentTeams Console\",\n    \"viewportWidth\": 1440,\n    \"viewportHeight\": 864,\n    \"scrollWidth\": 1440,\n    \"scrollHeight\": 864,\n    \"scrollX\": 0,\n    \"scrollY\": 0,\n    \"readyState\": \"complete\"\n  },\n  \"issuedAt\": \"2026-10-21T17:04:30.684Z\",\n  \"traceId\": \"cli-1792602270629\"\n}\n",
+  "stdout": "{\n  \"cmd\": \"get-page-info\",\n  \"profile\": \"bb09-main-58761\",\n  \"target\": \"t_8ff2e42ce2d9\",\n  \"info\": {\n    \"cmd\": \"get-page-info\",\n    \"ok\": true,\n    \"target\": \"t_8ff2e42ce2d9\",\n    \"page\": \"page_5734070da161\",\n    \"url\": \"http://127.0.0.1:58948/\",\n    \"title\": \"AgentTeams Console\",\n    \"viewportWidth\": 1440,\n    \"viewportHeight\": 768,\n    \"scrollWidth\": 1440,\n    \"scrollHeight\": 768,\n    \"scrollX\": 0,\n    \"scrollY\": 0,\n    \"readyState\": \"complete\"\n  },\n  \"issuedAt\": \"2026-10-21T18:39:13.601Z\",\n  \"traceId\": \"cli-1792607953559\"\n}\n",
   "stderr": ""
 }
