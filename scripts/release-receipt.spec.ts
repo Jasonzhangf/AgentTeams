@@ -37,7 +37,7 @@ function inputs() {
       receipt_path: 'docs/evidence/x/installed.json',
       lifecycle: { status: 'passed', start: { state: 'running', generation: 1 }, restart: { state: 'running', generation: 2 } },
       package: { version: '0.2.0-internal.1' },
-      tarball: { content_sha256: content, sha256: 'e'.repeat(64) },
+      tarball: { content_sha256: content, sha256: 'f'.repeat(64) },
       candidate,
     },
     blackBoxRuns: [blackBoxRun(allCases)],
@@ -100,6 +100,18 @@ describe('assembleReleaseReceipt', () => {
     const input = inputs()
     input.installedLifecycle.tarball.content_sha256 = '0'.repeat(64)
     expect(() => assembleReleaseReceipt(input)).toThrow(/installed different package content/u)
+  })
+
+  it('refuses an installed lifecycle that installed a different tarball', () => {
+    const input = inputs()
+    input.installedLifecycle.tarball.sha256 = '1'.repeat(64)
+    expect(() => assembleReleaseReceipt(input)).toThrow(/different tarball than the release tarball/u)
+  })
+
+  it('refuses an installed lifecycle from another package version', () => {
+    const input = inputs()
+    input.installedLifecycle.package.version = '0.1.0'
+    expect(() => assembleReleaseReceipt(input)).toThrow(/does not match the staged package/u)
   })
 
   it('refuses a black-box run from another candidate', () => {

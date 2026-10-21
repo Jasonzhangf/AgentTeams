@@ -8,8 +8,9 @@
  * `pnpm verify` fail in a fresh checkout even though no product file changed.
  *
  * The project installs its pinned binary at `.appsdk/sdk.bin`. This entry uses that
- * binary when it exists and falls back to `PATH` otherwise, so `verify` behaves the
- * same on a developer machine and in a fresh clone.
+ * binary when it exists and falls back to `PATH` otherwise. A fresh clone still
+ * needs the pinned binary installed (or a matching `appsdk` on `PATH`); the BB13
+ * acceptance fixture mirrors the pin into its clone for exactly that reason.
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'

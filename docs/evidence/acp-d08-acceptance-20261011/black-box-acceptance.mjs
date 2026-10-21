@@ -793,6 +793,8 @@ try {
   note(`installedRoot=${installedRoot}`)
   note(`ownedRoot=${ownedRoot}`)
   note(`lanIp=${lanIp}`)
+  note(`real dsh provider route: base=${PROVIDER_BASE_URL} model=${PROVIDER_MODEL} credentialRef=${DSH_CREDENTIAL_REF}`)
+  note('this run installs the build it stages itself; it is behavioral acceptance at the installed layer, not release-artifact acceptance. The release receipt binds the release tarball and the installed lifecycle separately')
 
   const registryTls = generateTls(tlsDir, 'registry', '127.0.0.1')
   const agentATls = generateTls(tlsDir, 'agent-a', lanIp)
@@ -1859,15 +1861,17 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
     'the integrated A11 receipt does not record host A installed CLI sha256')
   assert(artifact.hostBInstalledCliSha256 === artifact.hostAInstalledCliSha256,
     'the integrated A11 receipt records different installed CLI sha256 on the two hosts, so its identical-artifact claim is false')
+  // The receipt records no commit field, so name the documented base commit from the
+  // A11 unit notes instead of inventing one from an unrelated hash.
   const receiptCommit = typeof receipt.candidate === 'string'
     ? receipt.candidate.match(/\b[0-9a-f]{40}\b/u)?.[0]
     : typeof receipt.candidate?.head_commit === 'string' ? receipt.candidate.head_commit
-      : typeof receipt.commit === 'string' ? receipt.commit : undefined
+      : typeof receipt.commit === 'string' ? receipt.commit : 'base commit 8cb0238 (docs/evidence/acp-a11-crossdevice-20261011/notes.md)'
   gap('A11 — cross-device exchange for this candidate',
     `the integrated cross-device receipt is valid only for its own ${receipt.version ?? artifact.version} artifact at `
-      + `${receiptCommit ?? 'an unrecorded commit'} (${artifact.contentSha256?.slice(0, 16) ?? '<no package content>'}` + '...); '
+      + `${receiptCommit} (content sha256 ${artifact.contentSha256 ?? '<none>'}, artifact sha256 ${artifact.hostASha256 ?? '<none>'}); `
       + `this run installs ${stagedPackage.version} at ${stagedPackage.candidateCommit} `
-      + `(${stagedPackage.contentSha256.slice(0, 16)}...). A static old receipt cannot prove a cross-device exchange on this artifact.`)
+      + `(${stagedPackage.contentSha256}). A static old receipt cannot prove a cross-device exchange on this artifact.`)
 
   const elapsed = Math.round((Date.now() - started) / 1000)
   // The retained log is the only machine record of this run, so it carries the full
@@ -1875,7 +1879,7 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   process.stdout.write(`\nD08 artifact: candidate=${stagedPackage.candidateCommit} version=${stagedPackage.version}`
     + ` content=${stagedPackage.contentSha256} tarball=${stagedPackage.tarball.filename}`
     + ` sha256=${stagedPackage.tarball.sha256} bytes=${stagedPackage.tarball.size}\n`)
-  process.stdout.write(`\nD08 acceptance PASS: ${checks.length} checks (gaps: ${gaps.length}, findings: ${findings.length}) in ${elapsed}s\n`)
+  process.stdout.write(`\nD08 acceptance PASS with open items: ${checks.length} checks (gaps: ${gaps.length}, findings: ${findings.length}) in ${elapsed}s\n`)
 } catch (error) {
   process.stderr.write(`\nD08 acceptance FAIL [${step}]: ${error instanceof Error ? error.message : String(error)}\n`)
   if (error instanceof Error && error.stack) process.stderr.write(`${error.stack}\n`)

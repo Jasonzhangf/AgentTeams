@@ -146,6 +146,9 @@ export function assembleReleaseReceipt({ packageReceipt, installedLifecycle, bla
 
   requireText(tarball?.filename, 'the release tarball name')
   requireText(tarball?.sha256, 'the release tarball hash')
+  if (installedLifecycle.tarball?.sha256 !== tarball.sha256) {
+    fail('the installed lifecycle receipt installed a different tarball than the release tarball')
+  }
   if (!Array.isArray(tarball.files) || tarball.files.length === 0) fail('the release tarball file list is empty')
   const staged = [...(packageReceipt.files ?? [])].sort()
   const packed = [...tarball.files].sort()
@@ -183,6 +186,9 @@ export function assembleReleaseReceipt({ packageReceipt, installedLifecycle, bla
       start_generation: installedLifecycle.lifecycle.start?.generation,
       restart_generation: installedLifecycle.lifecycle.restart?.generation,
       installed_tarball_sha256: installedLifecycle.tarball?.sha256,
+      // The installed lifecycle proves this tarball installs, starts and restarts
+      // with the fixture config it names. It is not proof for every config shape.
+      scope: installedLifecycle.lifecycle_scope ?? { note: 'the installed receipt records no lifecycle scope' },
     },
     black_box: {
       cases_total: caseIds.length,
@@ -190,12 +196,14 @@ export function assembleReleaseReceipt({ packageReceipt, installedLifecycle, bla
       cases: caseIds,
       runs,
       flaky_cases: flaky,
+      note: 'each case passed at least once on this package content; flaky_cases lists every case that failed in another run',
     },
     retained_obligations: obligations,
     non_claims: [
       'the release tarball is not published to any registry or deployed host',
       'no cross-device receipt for this package content exists',
       'source, test, build, installed, release and review evidence are separate layers',
+      'the installed lifecycle evidence uses the fixture config named in installed_lifecycle.scope, not an operator-authored v4 config',
     ],
   }
 }

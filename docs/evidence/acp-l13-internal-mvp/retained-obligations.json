@@ -16,7 +16,7 @@
       "obligation": "cross-device receipt",
       "scope": "Two physical hosts exchanging one ACP prompt on one package",
       "state": "retained",
-      "delivered": "A two-host receipt exists for package 0.1.0 at commit 8cb0238: Macstudio.local and jennys-macbook-air.anoa-buri.ts.net exchanged session/new, session/prompt, request_permission, update and end_turn, plus cancel.",
+      "delivered": "A two-host receipt exists for package 0.1.0 built from base commit 8cb0238: Macstudio.local and jennys-macbook-air.anoa-buri.ts.net exchanged session/new, session/prompt, request_permission, update and end_turn, plus cancel.",
       "missing": "No two-host run used package 0.2.0-internal.1 content. A static older receipt does not prove a cross-device exchange for this artifact.",
       "owner": "A11 cross-device unit",
       "evidence": "docs/evidence/acp-a11-crossdevice-20261011/verification.json and notes.md",
