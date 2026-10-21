@@ -76,6 +76,7 @@
  *        DSH_CREDENTIALS_FILE   (default ~/.dsh/.credentials.yaml)
  */
 import { spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { createServer as createHttpServer } from 'node:http'
 import { createConnection, createServer as createNetServer } from 'node:net'
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -361,6 +362,12 @@ let cliRunCounter = 0
 let installedRoot
 let CLI
 let CLI_ROOT
+/**
+ * The staged package this run installs. The cross-device section at the end needs the
+ * current artifact identity to compare against the older integrated receipt, and the
+ * staging function owns that read.
+ */
+let stagedPackage
 
 /** The installed runtime modules this driver imports as the artifact under test. */
 const installed = {}
@@ -437,6 +444,12 @@ async function stageAndInstall() {
   assert(receipt.release_eligible === false,
     'a staged package receipt must stay non-release; release eligibility belongs to a separate release receipt')
   assert(typeof receipt.content_sha256 === 'string' && receipt.content_sha256.length === 64, 'the staged receipt has no content hash')
+  stagedPackage = {
+    mode: receipt.mode,
+    version: receipt.version,
+    contentSha256: receipt.content_sha256,
+    candidateCommit: receipt.candidate?.head_commit,
+  }
   assert(existsSync(join(packRoot, 'generated', 'runtime-lib', 'runtime', 'acp-serve.js')), 'the staged package is missing the compiled ACP serve runtime')
   assert(existsSync(join(packRoot, 'generated', 'runtime-lib', 'network', 'teams-negotiation.js')), 'the staged package is missing the compiled Teams negotiation runtime')
   check('install — pnpm build:governance staged a final package',
@@ -451,6 +464,11 @@ async function stageAndInstall() {
   assert(existsSync(tarball), `packed tarball is missing: ${tarball}`)
   assert(packed[0].files.some(entry => entry.path === 'cli/agentteams.mjs'), 'the tarball does not contain the CLI entrypoint')
   assert(packed[0].files.some(entry => entry.path.startsWith('generated/runtime-lib/')), 'the tarball does not contain the compiled runtime')
+  stagedPackage.tarball = {
+    filename: packed[0].filename,
+    size: packed[0].size,
+    sha256: createHash('sha256').update(readFileSync(tarball)).digest('hex'),
+  }
 
   step = 'isolated install'
   const install = spawnSync('npm', ['install', '--prefix', prefixRoot, '--no-audit', '--no-fund', '--no-package-lock', '--no-save', tarball], { encoding: 'utf8', timeout: 600_000 })
@@ -1848,10 +1866,15 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   gap('A11 — cross-device exchange for this candidate',
     `the integrated cross-device receipt is valid only for its own ${receipt.version ?? artifact.version} artifact at `
       + `${receiptCommit ?? 'an unrecorded commit'} (${artifact.contentSha256?.slice(0, 16) ?? '<no package content>'}` + '...); '
-      + `the current candidate is ${receipt.version} at ${receipt.candidate.head_commit} `
-      + `(${receipt.content_sha256.slice(0, 16)}...). A static old receipt cannot prove a cross-device exchange on the current artifact.`)
+      + `this run installs ${stagedPackage.version} at ${stagedPackage.candidateCommit} `
+      + `(${stagedPackage.contentSha256.slice(0, 16)}...). A static old receipt cannot prove a cross-device exchange on this artifact.`)
 
   const elapsed = Math.round((Date.now() - started) / 1000)
+  // The retained log is the only machine record of this run, so it carries the full
+  // candidate and artifact binding instead of a sampled hash.
+  process.stdout.write(`\nD08 artifact: candidate=${stagedPackage.candidateCommit} version=${stagedPackage.version}`
+    + ` content=${stagedPackage.contentSha256} tarball=${stagedPackage.tarball.filename}`
+    + ` sha256=${stagedPackage.tarball.sha256} bytes=${stagedPackage.tarball.size}\n`)
   process.stdout.write(`\nD08 acceptance PASS: ${checks.length} checks (gaps: ${gaps.length}, findings: ${findings.length}) in ${elapsed}s\n`)
 } catch (error) {
   process.stderr.write(`\nD08 acceptance FAIL [${step}]: ${error instanceof Error ? error.message : String(error)}\n`)
