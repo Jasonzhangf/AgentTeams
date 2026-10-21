@@ -5910,11 +5910,17 @@ async function runBB13(context) {
       const source = join(root, packageDir, 'node_modules')
       if (existsSync(source)) symlinkSync(source, join(fixtureRoot, packageDir, 'node_modules'), 'dir')
     }
+    // The project installs its pinned AppSDK binary at `.appsdk/sdk.bin` and the
+    // lifecycle verify stage needs that exact binary. A clone has no local install,
+    // and the `appsdk` on PATH may be another build that rewrites tracked governance
+    // files. Mirror the project's own pin, exactly like the dependency links above.
+    const pinnedSdk = join(root, '.appsdk', 'sdk.bin')
+    if (existsSync(pinnedSdk)) symlinkSync(pinnedSdk, join(fixtureRoot, '.appsdk', 'sdk.bin'), 'file')
     // The repository ignores node_modules as a directory, so a node_modules symlink
     // is still untracked. The lifecycle adapter requires a fully clean candidate, so
     // exclude the fixture's own dependency links without touching tracked files.
     const excludePath = join(fixtureRoot, '.git', 'info', 'exclude')
-    writeFileSync(excludePath, `${readFileSync(excludePath, 'utf8')}node_modules\n`, { encoding: 'utf8' })
+    writeFileSync(excludePath, `${readFileSync(excludePath, 'utf8')}node_modules\n.appsdk/sdk.bin\n`, { encoding: 'utf8' })
 
     // Uniform capture/assert vocabulary: every phase snapshots candidate identity,
     // input hashes, history/reuse lengths, invocation counts and both stage
