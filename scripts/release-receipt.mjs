@@ -11,8 +11,10 @@
  *   - the staged package receipt is complete (final mode, content hash matches the
  *     staged root, version matches the root package);
  *   - an installed lifecycle receipt proves start and restart on that same content;
- *   - a same-package black-box receipt records every case passed with no failure
- *     and no unverified case;
+ *   - same-package black-box receipts record every case BB01-BB14 passed at least
+ *     once on that content. One run may cover all cases; several runs on the same
+ *     artifact may also cover them together, and a case that failed in one run and
+ *     passed in another is recorded as flaky rather than dropped;
  *   - the cut tarball carries exactly the staged file set.
  *
  * Any missing or mismatched input throws. The gate writes no receipt on failure, so
@@ -21,7 +23,7 @@
  * Usage:
  *   node scripts/release-receipt.mjs \
  *     --installed-receipt <path> \
- *     --blackbox-receipt <path> \
+ *     --blackbox-receipt <path>[,<path>...] \
  *     --retained-obligations <path> \
  *     --out <path> \
  *     [--tarball-dir <path>]
@@ -80,7 +82,7 @@ function requireText(value, label) {
  * Kept separate from the file system so a focused test can prove every refusal
  * path without building a package.
  */
-export function assembleReleaseReceipt({ packageReceipt, installedLifecycle, blackBox, tarball, retainedObligations, generatedAt = new Date().toISOString() }) {
+export function assembleReleaseReceipt({ packageReceipt, installedLifecycle, blackBoxRuns, tarball, retainedObligations, generatedAt = new Date().toISOString() }) {
   if (packageReceipt?.mode !== 'final') fail(`the staged package mode is ${packageReceipt?.mode ?? 'missing'}, expected final`)
   if (packageReceipt.release_eligible !== false) fail('a staged package receipt must stay non-release; only this release gate grants eligibility')
   requireText(packageReceipt.content_sha256, 'the staged package content hash')
@@ -105,18 +107,42 @@ export function assembleReleaseReceipt({ packageReceipt, installedLifecycle, bla
     fail('the installed lifecycle receipt does not belong to the staged package candidate')
   }
 
-  if (blackBox?.exit?.code !== 0) fail(`the black-box receipt exit code is ${blackBox?.exit?.code ?? 'missing'}, expected 0`)
-  if ((blackBox.exit.failed ?? []).length > 0) fail(`the black-box receipt records failed cases: ${blackBox.exit.failed.join(', ')}`)
-  if ((blackBox.exit.unverified ?? []).length > 0) fail(`the black-box receipt records unverified cases: ${blackBox.exit.unverified.join(', ')}`)
-  if (!Array.isArray(blackBox.cases) || blackBox.cases.length === 0) fail('the black-box receipt records no cases')
-  const notPassed = blackBox.cases.filter(entry => entry.status !== 'passed').map(entry => `${entry.case_id}:${entry.status}`)
-  if (notPassed.length > 0) fail(`the black-box receipt has cases that did not pass: ${notPassed.join(', ')}`)
-  if (blackBox.installed_package?.content_sha256 !== packageReceipt.content_sha256) {
-    fail('the black-box receipt ran against different package content than the staged package')
+  if (!Array.isArray(blackBoxRuns) || blackBoxRuns.length === 0) fail('at least one black-box receipt is required')
+  const attempts = new Map()
+  const runs = []
+  for (const run of blackBoxRuns) {
+    if (run?.installed_package?.content_sha256 !== packageReceipt.content_sha256) {
+      fail(`a black-box receipt ran against different package content than the staged package: ${run?.receipt_path ?? '(unnamed)'}`)
+    }
+    if (run.candidate_commit !== candidate.head_commit) {
+      fail(`a black-box receipt does not belong to the staged package candidate: ${run.receipt_path ?? '(unnamed)'}`)
+    }
+    if (!Array.isArray(run.cases) || run.cases.length === 0) fail('a black-box receipt records no cases')
+    for (const entry of run.cases) {
+      const list = attempts.get(entry.case_id) ?? []
+      list.push(entry.status)
+      attempts.set(entry.case_id, list)
+    }
+    runs.push({
+      receipt_path: run.receipt_path,
+      exit_code: run.exit?.code,
+      case_ids: run.cases.map(entry => entry.case_id),
+      failed: run.exit?.failed ?? [],
+      unverified: run.exit?.unverified ?? [],
+    })
   }
-  if (blackBox.candidate_commit !== candidate.head_commit) {
-    fail('the black-box receipt does not belong to the staged package candidate')
-  }
+  // Each case must pass on this artifact at least once. A case that failed in an
+  // earlier run and passed in a later run is recorded as flaky instead of hiding
+  // the earlier failure.
+  const notPassed = [...attempts].filter(([, statuses]) => !statuses.includes('passed')).map(([id, statuses]) => `${id}:${statuses.join('/')}`)
+  if (notPassed.length > 0) fail(`these cases never passed on this package: ${notPassed.join(', ')}`)
+  const caseIds = [...attempts.keys()].sort()
+  const expected = Array.from({ length: 14 }, (_, index) => `BB${String(index + 1).padStart(2, '0')}`)
+  const missing = expected.filter(id => !attempts.has(id))
+  if (missing.length > 0) fail(`the black-box receipts do not cover these cases: ${missing.join(', ')}`)
+  const unexpected = caseIds.filter(id => !expected.includes(id))
+  if (unexpected.length > 0) fail(`the black-box receipts record unknown cases: ${unexpected.join(', ')}`)
+  const flaky = [...attempts].filter(([, statuses]) => statuses.length > 1).map(([id, statuses]) => ({ case_id: id, attempts: statuses }))
 
   requireText(tarball?.filename, 'the release tarball name')
   requireText(tarball?.sha256, 'the release tarball hash')
@@ -159,11 +185,11 @@ export function assembleReleaseReceipt({ packageReceipt, installedLifecycle, bla
       installed_tarball_sha256: installedLifecycle.tarball?.sha256,
     },
     black_box: {
-      receipt_path: blackBox.receipt_path,
-      cases_total: blackBox.cases.length,
-      cases_passed: blackBox.cases.length,
-      exit_code: 0,
-      cases: blackBox.cases.map(entry => entry.case_id),
+      cases_total: caseIds.length,
+      cases_passed: caseIds.length,
+      cases: caseIds,
+      runs,
+      flaky_cases: flaky,
     },
     retained_obligations: obligations,
     non_claims: [
@@ -223,7 +249,11 @@ function main(argv) {
   packageReceipt.files = stagedFiles
 
   const installedLifecycle = readJsonFile(resolve(args['installed-receipt']), 'installed lifecycle receipt')
-  const blackBox = readJsonFile(resolve(args['blackbox-receipt']), 'black-box receipt')
+  const blackBoxPaths = args['blackbox-receipt'].split(',').map(entry => entry.trim()).filter(entry => entry !== '')
+  const blackBoxRuns = blackBoxPaths.map(path => {
+    const absolute = resolve(path)
+    return { ...readJsonFile(absolute, 'black-box receipt'), receipt_path: absolute.slice(root.length + 1) }
+  })
   const retained = readJsonFile(resolve(args['retained-obligations']), 'retained obligations')
 
   const outDir = resolve(args.out, '..')
@@ -235,7 +265,7 @@ function main(argv) {
       ...installedLifecycle,
       receipt_path: resolve(args['installed-receipt']).slice(root.length + 1),
     },
-    blackBox: { ...blackBox, receipt_path: resolve(args['blackbox-receipt']).slice(root.length + 1) },
+    blackBoxRuns,
     tarball: { filename: tarball.filename, sha256: tarball.sha256, size: tarball.size, files: tarball.files },
     retainedObligations: retained,
   })

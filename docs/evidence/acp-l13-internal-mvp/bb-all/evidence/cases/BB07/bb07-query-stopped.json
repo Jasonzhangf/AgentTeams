@@ -1,0 +1,31 @@
+{
+  "command": "/tmp/agentteams-u7-bb07-yOnAC6/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "query",
+    "--config",
+    "/tmp/agentteams-u7-bb07-yOnAC6/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver",
+    "--service-selection",
+    "capability",
+    "--work-id",
+    "2e9c4cc5-fc33-42f8-9c73-c3db9d0788c2",
+    "--request-id",
+    "c1b59d05-7800-4a76-9cb2-ca1c52738c96",
+    "--provider",
+    "bb-provider",
+    "--provider-generation",
+    "1",
+    "--capability-id",
+    "file-search",
+    "--capability-version",
+    "1",
+    "--operation",
+    "search"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "local Work control is unavailable: no running launcher published a control socket\n"
+}

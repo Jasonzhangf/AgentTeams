@@ -1,0 +1,203 @@
+{
+  "case": "BB07",
+  "fixture": "bb07-failure",
+  "owner": "D3/U4",
+  "observed_at": "2026-10-21T17:03:58.812Z",
+  "generation": 1,
+  "paths": {
+    "temporary_root": "/tmp/agentteams-u7-bb07-failure-aBlN1T",
+    "installed_cli": "/tmp/agentteams-u7-bb07-failure-aBlN1T/prefix/node_modules/.bin/agentteams",
+    "config": "/tmp/agentteams-u7-bb07-failure-aBlN1T/home/.agentteams/config.toml",
+    "internal_state": "/tmp/agentteams-u7-bb07-failure-aBlN1T/home/.agentteams/internal.toml"
+  },
+  "stop": {
+    "attempted": true,
+    "generation": 1,
+    "command": [
+      "/tmp/agentteams-u7-bb07-failure-aBlN1T/prefix/node_modules/.bin/agentteams",
+      "stop",
+      "--config",
+      "/tmp/agentteams-u7-bb07-failure-aBlN1T/home/.agentteams/config.toml",
+      "--generation",
+      "1"
+    ],
+    "exit_code": 1,
+    "signal": null,
+    "error": "local daemon exit remains unconfirmed\n",
+    "stdout": "",
+    "stderr": ""
+  },
+  "terminal": {
+    "query_exit_code": 0,
+    "state": "failed",
+    "stdout": "status state=failed generation=1 config=/tmp/agentteams-u7-bb07-failure-aBlN1T/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-failure-aBlN1T/home/.agentteams/internal.toml pid=72799 error=local daemon exit remains unconfirmed endpoints=missing console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+    "stderr": ""
+  },
+  "processes": [
+    {
+      "owner": "launcher",
+      "role": "launcher",
+      "pid": 72799,
+      "attribution": "internal.toml launcher row, generation 1",
+      "provenance": "internal-toml",
+      "before_stop": "alive",
+      "probe": {
+        "state": "alive",
+        "reason": "signal-0"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-provider",
+      "pid": 72808,
+      "attribution": "internal.toml daemon bb-provider row, generation 1",
+      "provenance": "internal-toml",
+      "before_stop": "alive",
+      "probe": {
+        "state": "alive",
+        "reason": "signal-0"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-receiver",
+      "pid": 72855,
+      "attribution": "internal.toml daemon bb-receiver row, generation 1",
+      "provenance": "internal-toml",
+      "before_stop": "alive",
+      "probe": {
+        "state": "gone",
+        "reason": "not-found"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "relay",
+      "pid": 72802,
+      "attribution": "internal.toml daemon relay row, generation 1",
+      "provenance": "internal-toml",
+      "before_stop": "alive",
+      "probe": {
+        "state": "gone",
+        "reason": "not-found"
+      }
+    }
+  ],
+  "listeners": [
+    {
+      "owner": "lifecycle",
+      "role": "relay",
+      "kind": "port",
+      "address": "64167",
+      "attribution": "internal.toml relay projection listen port",
+      "provenance": "internal-toml",
+      "before_stop": "listening",
+      "probe": {
+        "state": "gone",
+        "pids": [],
+        "reason": "no-match"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-provider",
+      "kind": "port",
+      "address": "64172",
+      "attribution": "internal.toml daemon bb-provider lease port",
+      "provenance": "internal-toml",
+      "before_stop": "listening",
+      "probe": {
+        "state": "listening",
+        "pids": [
+          72808
+        ],
+        "reason": "lsof"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-receiver",
+      "kind": "port",
+      "address": "64173",
+      "attribution": "internal.toml daemon bb-receiver lease port",
+      "provenance": "internal-toml",
+      "before_stop": "listening",
+      "probe": {
+        "state": "gone",
+        "pids": [],
+        "reason": "no-match"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-provider",
+      "kind": "socket",
+      "address": "127.0.0.1:64172",
+      "attribution": "socket owned by pid 72808",
+      "provenance": "proved-pid-listener",
+      "before_stop": "listening",
+      "probe": {
+        "state": "listening",
+        "pids": [
+          72808
+        ],
+        "reason": "lsof-pid"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-receiver",
+      "kind": "socket",
+      "address": "127.0.0.1:64173",
+      "attribution": "socket owned by pid 72855",
+      "provenance": "proved-pid-listener",
+      "before_stop": "listening",
+      "probe": {
+        "state": "gone",
+        "pids": [],
+        "reason": "pid-listener-gone"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "relay",
+      "kind": "socket",
+      "address": "127.0.0.1:64167",
+      "attribution": "socket owned by pid 72802",
+      "provenance": "proved-pid-listener",
+      "before_stop": "listening",
+      "probe": {
+        "state": "gone",
+        "pids": [],
+        "reason": "pid-listener-gone"
+      }
+    }
+  ],
+  "capture_errors": [],
+  "process_state": "alive",
+  "listener_state": "alive",
+  "terminal_state": "failed",
+  "outcome": "retained",
+  "deleted": false,
+  "retained_obligations": [
+    {
+      "owner": "D3/U4",
+      "reason": "cleanup outcome is retained",
+      "recovery_action": "inspect the retained fixture root, use the public stop entrypoint with the recorded generation, then re-run the case",
+      "release_condition": "a subsequent observation confirms processes, listeners and terminal state are all released"
+    }
+  ],
+  "evidence": "/tmp/l13-bb-v3/evidence/cases/BB07-execution-failure/bb07-failure-final-cleanup.json",
+  "stopped": false,
+  "deletion": {
+    "deleted": false,
+    "outcome": "retained",
+    "reason": "cleanup did not confirm every owned resource was released",
+    "paths": {
+      "temporary_root": "/tmp/agentteams-u7-bb07-failure-aBlN1T",
+      "installed_cli": "/tmp/agentteams-u7-bb07-failure-aBlN1T/prefix/node_modules/.bin/agentteams",
+      "config": "/tmp/agentteams-u7-bb07-failure-aBlN1T/home/.agentteams/config.toml",
+      "internal_state": "/tmp/agentteams-u7-bb07-failure-aBlN1T/home/.agentteams/internal.toml"
+    }
+  }
+}

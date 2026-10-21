@@ -1,0 +1,11 @@
+{
+  "accepted_revision": 1,
+  "primary": {
+    "providerInstanceId": "bb-primary",
+    "modelId": "bb-primary-model"
+  },
+  "backup": {
+    "providerInstanceId": "bb-backup",
+    "modelId": "bb-backup-model"
+  }
+}

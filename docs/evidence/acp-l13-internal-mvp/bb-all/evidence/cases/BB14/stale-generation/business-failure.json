@@ -1,0 +1,7 @@
+{
+  "owner": "U1+U7",
+  "marker": "BB14 stale-generation negative business failure",
+  "real_generation": 1,
+  "attempted_generation": 1000001,
+  "evidence_dir": "/tmp/l13-bb-v3/evidence/cases/BB14/stale-generation"
+}

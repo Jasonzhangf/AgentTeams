@@ -1,0 +1,13 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "daemon",
+    "stop",
+    "--profile",
+    "teams-bb-provider-bedbd0e6e2b634b9a17ff9b5cc9c4955111eea8f6c87d232506f947d06553038"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"kind\": \"result\",\n  \"cmd\": \"daemon\",\n  \"result\": {\n    \"cmd\": \"daemon.stop\",\n    \"profile\": \"teams-bb-provider-bedbd0e6e2b634b9a17ff9b5cc9c4955111eea8f6c87d232506f947d06553038\",\n    \"status\": \"not_running\"\n  }\n}\n",
+  "stderr": ""
+}

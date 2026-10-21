@@ -1,0 +1,14 @@
+{
+  "command": "git",
+  "args": [
+    "clone",
+    "--quiet",
+    "--no-local",
+    "/Volumes/Intel/playground/agentteams/acp-l13-internal-mvp",
+    "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/agentteams-u7-bb13-t6uQk1"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "",
+  "stderr": ""
+}

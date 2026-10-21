@@ -1,0 +1,237 @@
+{
+  "stopped": true,
+  "cleanup": {
+    "fixture": "bb10-boundary",
+    "observed_at": "2026-10-21T17:09:34.218Z",
+    "generation": 3,
+    "paths": {
+      "temporary_root": "/tmp/agentteams-u7-bb10-boundary-532MOT",
+      "installed_cli": "/tmp/agentteams-u7-bb10-boundary-532MOT/prefix/node_modules/.bin/agentteams",
+      "config": "/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml",
+      "internal_state": "/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml"
+    },
+    "stop": {
+      "attempted": true,
+      "generation": 3,
+      "command": [
+        "/tmp/agentteams-u7-bb10-boundary-532MOT/prefix/node_modules/.bin/agentteams",
+        "stop",
+        "--config",
+        "/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml",
+        "--generation",
+        "3"
+      ],
+      "exit_code": 0,
+      "signal": null,
+      "error": null,
+      "stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml pid=42075\n",
+      "stderr": ""
+    },
+    "terminal": {
+      "query_exit_code": 0,
+      "state": "stopped",
+      "stdout": "status state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml pid=42075 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB-Session role=provider presence=offline generation=1 capabilities=- endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB-Passive role=provider presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=3 consoleCredential=configured\n",
+      "stderr": ""
+    },
+    "processes": [
+      {
+        "owner": "launcher",
+        "role": "launcher",
+        "pid": 42075,
+        "attribution": "internal.toml launcher row, generation 3",
+        "provenance": "internal-toml",
+        "before_stop": "alive",
+        "probe": {
+          "state": "gone",
+          "reason": "not-found"
+        }
+      },
+      {
+        "owner": "lifecycle",
+        "role": "bb-provider",
+        "pid": 42094,
+        "attribution": "internal.toml daemon bb-provider row, generation 3",
+        "provenance": "internal-toml",
+        "before_stop": "alive",
+        "probe": {
+          "state": "gone",
+          "reason": "not-found"
+        }
+      },
+      {
+        "owner": "lifecycle",
+        "role": "bb-receiver",
+        "pid": 42180,
+        "attribution": "internal.toml daemon bb-receiver row, generation 3",
+        "provenance": "internal-toml",
+        "before_stop": "alive",
+        "probe": {
+          "state": "gone",
+          "reason": "not-found"
+        }
+      },
+      {
+        "owner": "lifecycle",
+        "role": "relay",
+        "pid": 42086,
+        "attribution": "internal.toml daemon relay row, generation 3",
+        "provenance": "internal-toml",
+        "before_stop": "alive",
+        "probe": {
+          "state": "gone",
+          "reason": "not-found"
+        }
+      },
+      {
+        "owner": "console",
+        "role": "console",
+        "pid": 42301,
+        "attribution": "internal.toml [consoleRuntime] row",
+        "provenance": "internal-toml",
+        "before_stop": "alive",
+        "probe": {
+          "state": "gone",
+          "reason": "not-found"
+        }
+      },
+      {
+        "owner": "managed",
+        "role": "managed-opencode:bb-provider",
+        "pid": 42683,
+        "attribution": "direct child of Agent bb-provider (pid 42094); command line runs the managed OpenCode substrate",
+        "provenance": "proved-agent-child",
+        "before_stop": "alive",
+        "probe": {
+          "state": "gone",
+          "reason": "not-found"
+        }
+      }
+    ],
+    "listeners": [
+      {
+        "owner": "lifecycle",
+        "role": "relay",
+        "kind": "port",
+        "address": "49164",
+        "attribution": "internal.toml relay projection listen port",
+        "provenance": "internal-toml",
+        "before_stop": "listening",
+        "probe": {
+          "state": "gone",
+          "pids": [],
+          "reason": "no-match"
+        }
+      },
+      {
+        "owner": "lifecycle",
+        "role": "bb-provider",
+        "kind": "port",
+        "address": "49167",
+        "attribution": "internal.toml daemon bb-provider lease port",
+        "provenance": "internal-toml",
+        "before_stop": "listening",
+        "probe": {
+          "state": "gone",
+          "pids": [],
+          "reason": "no-match"
+        }
+      },
+      {
+        "owner": "lifecycle",
+        "role": "bb-receiver",
+        "kind": "port",
+        "address": "49168",
+        "attribution": "internal.toml daemon bb-receiver lease port",
+        "provenance": "internal-toml",
+        "before_stop": "listening",
+        "probe": {
+          "state": "gone",
+          "pids": [],
+          "reason": "no-match"
+        }
+      },
+      {
+        "owner": "lifecycle",
+        "role": "bb-provider",
+        "kind": "socket",
+        "address": "127.0.0.1:49167",
+        "attribution": "socket owned by pid 42094",
+        "provenance": "proved-pid-listener",
+        "before_stop": "listening",
+        "probe": {
+          "state": "gone",
+          "pids": [],
+          "reason": "pid-listener-gone"
+        }
+      },
+      {
+        "owner": "lifecycle",
+        "role": "bb-receiver",
+        "kind": "socket",
+        "address": "127.0.0.1:49168",
+        "attribution": "socket owned by pid 42180",
+        "provenance": "proved-pid-listener",
+        "before_stop": "listening",
+        "probe": {
+          "state": "gone",
+          "pids": [],
+          "reason": "pid-listener-gone"
+        }
+      },
+      {
+        "owner": "lifecycle",
+        "role": "relay",
+        "kind": "socket",
+        "address": "127.0.0.1:49164",
+        "attribution": "socket owned by pid 42086",
+        "provenance": "proved-pid-listener",
+        "before_stop": "listening",
+        "probe": {
+          "state": "gone",
+          "pids": [],
+          "reason": "pid-listener-gone"
+        }
+      },
+      {
+        "owner": "console",
+        "role": "console",
+        "kind": "socket",
+        "address": "127.0.0.1:49169",
+        "attribution": "socket owned by pid 42301",
+        "provenance": "proved-pid-listener",
+        "before_stop": "listening",
+        "probe": {
+          "state": "gone",
+          "pids": [],
+          "reason": "pid-listener-gone"
+        }
+      }
+    ],
+    "capture_errors": [],
+    "process_state": "gone",
+    "listener_state": "gone",
+    "terminal_state": "stopped",
+    "outcome": "cleaned",
+    "deleted": true,
+    "retained_obligations": [],
+    "evidence": "/tmp/l13-bb-v3/evidence/cases/BB10/boundary/bb10-boundary-cleanup.json",
+    "stopped": true,
+    "finalized_by": "bb10-boundary-final-final",
+    "deletion": {
+      "deleted": true,
+      "outcome": "cleaned"
+    }
+  },
+  "stop_stdout": "stopped state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml pid=42075\n",
+  "stopped_stdout": "status state=stopped generation=3 config=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb10-boundary-532MOT/home/.agentteams/internal.toml pid=42075 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/local/custom/BB-Session role=provider presence=offline generation=1 capabilities=- endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/local/custom/BB-Passive role=provider presence=offline generation=1 capabilities=- console=enabled consoleState=stopped consoleGeneration=3 consoleCredential=configured\n",
+  "console_listener_gone": true,
+  "owned_pids_after_stop": [
+    42094,
+    42180,
+    42086,
+    42301,
+    42683
+  ],
+  "owned_pids_alive_after_stop": [],
+  "temporary_root_removed": true
+}

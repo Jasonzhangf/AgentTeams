@@ -1,0 +1,14 @@
+{
+  "command": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "stop",
+    "--config",
+    "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml",
+    "--generation",
+    "1000001"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "stale local supervisor generation expected=1000001 current=1\n"
+}

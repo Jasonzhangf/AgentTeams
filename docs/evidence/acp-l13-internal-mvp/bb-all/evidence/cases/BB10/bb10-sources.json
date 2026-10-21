@@ -1,0 +1,31 @@
+{
+  "opencode_executable": "/Users/fanzhang/.opencode/bin/opencode",
+  "rcc": {
+    "source": "/Volumes/extension/.rcc/config.toml",
+    "server_id": "routecodex_v3_4444",
+    "base_url": "http://127.0.0.1:4444/v1",
+    "protocol": "openai-chat",
+    "bind": "0.0.0.0",
+    "port": 4444,
+    "selected_model": "goaichat.qwen3.8-max",
+    "catalog_url": "http://127.0.0.1:4444/v1/models",
+    "catalog_status": 200,
+    "catalog_model_count": 13
+  },
+  "canonical": {
+    "source": "/Volumes/extension/.rcc/provider/goaichat/config.v2.toml",
+    "provider_id": "goaichat",
+    "protocol": "openai-chat",
+    "base_url": "https://llm.goaichat.top/v1",
+    "default_model": "glm-5.3",
+    "auth_alias": "key1",
+    "auth_entry_count": 3,
+    "secret_key": "goaichat.key1",
+    "secret_file": "/Volumes/extension/.rcc/secrets/v3/provider-auth.conf",
+    "credential_env": "TEAMS_BB10_CANONICAL_API_KEY",
+    "credential_length": 67,
+    "catalog_url": "https://llm.goaichat.top/v1/models",
+    "catalog_status": 401,
+    "catalog_model_count": 0
+  }
+}

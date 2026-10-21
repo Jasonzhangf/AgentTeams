@@ -1,0 +1,728 @@
+{
+  "schema_version": 1,
+  "driver": "scripts/blackbox-user-mvp.mjs",
+  "generated_at": "2026-10-21T17:42:45.140Z",
+  "candidate": {
+    "head_commit": "ce9a1a49a389df7907aab4bbea5ab2c155356b11",
+    "base_commit": "b90c93427d4eb4a2399f8e0649f80e14b721f752",
+    "tree_hash": "a5826ddc9bccf2bc88b35b221c995623d05f112b",
+    "indexed_tree_hash": "a5826ddc9bccf2bc88b35b221c995623d05f112b",
+    "source_state": "committed"
+  },
+  "candidate_commit": "ce9a1a49a389df7907aab4bbea5ab2c155356b11",
+  "candidate_tree_hash": "a5826ddc9bccf2bc88b35b221c995623d05f112b",
+  "installed_package": {
+    "pack_root": "/Volumes/Intel/playground/agentteams/acp-l13-internal-mvp/generated/modules/teams-source/lib",
+    "package_receipt": "/Volumes/Intel/playground/agentteams/acp-l13-internal-mvp/generated/modules/teams-source/package-receipt.json",
+    "content_sha256": "9fd3e52e89619b08955e79a2e029dbf961684435589d196094296fea792a2504",
+    "mode": "final",
+    "version": "0.2.0-internal.1"
+  },
+  "cases": [
+    {
+      "case_id": "BB07",
+      "owner": "D3/U4",
+      "capability_gate": "installed Work unknown and recovery query",
+      "status": "passed",
+      "public_input": {
+        "package": "/Volumes/Intel/playground/agentteams/acp-l13-internal-mvp/generated/modules/teams-source/lib",
+        "receiver": "bb-receiver",
+        "commands": [
+          "agentteams work open --receiver bb-receiver --operation search --demands [...] --payload {\"query\":\"marker-alpha\"}",
+          "agentteams stop --generation <g1>",
+          "agentteams work query --service-selection capability --work-id <W> --request-id <R> --provider bb-provider --provider-generation <g> ... (while stopped, typed failure)",
+          "agentteams start",
+          "agentteams work query --service-selection capability --work-id <W> --request-id <R> ... (recovery)",
+          "agentteams work query ... --request-id bb07-unknown-request (typed failure)"
+        ]
+      },
+      "external_observation": {
+        "installed_content_sha256": "9fd3e52e89619b08955e79a2e029dbf961684435589d196094296fea792a2504",
+        "opened": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-local-work",
+            "graphId": "agentteams.work-open",
+            "graphVersion": "1",
+            "executionId": "5e92b889-f03f-4366-98d8-895c5686d7b1",
+            "attemptId": "f66b2bf4-d88a-44a0-a0d1-17e6b7a1ebc6",
+            "workId": "1806903a-4dda-4ea7-b04e-ab87e3e5131c",
+            "requestId": "9af8ea2e-f8bc-4a1b-8933-d587b1308d3c",
+            "providerAgentId": "bb-provider",
+            "targetGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "workClosure": "retained"
+          },
+          "business": {
+            "exitCode": 0,
+            "matches": [
+              {
+                "line": 1,
+                "path": "./a.txt",
+                "raw": {
+                  "data": {
+                    "absolute_offset": 0,
+                    "line_number": 1,
+                    "lines": {
+                      "text": "marker-alpha\n"
+                    },
+                    "path": {
+                      "text": "./a.txt"
+                    },
+                    "submatches": [
+                      {
+                        "end": 12,
+                        "match": {
+                          "text": "marker-alpha"
+                        },
+                        "start": 0
+                      }
+                    ]
+                  },
+                  "type": "match"
+                },
+                "text": "marker-alpha\n"
+              }
+            ],
+            "query": "marker-alpha",
+            "status": "matched",
+            "stderr": "",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./a.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./a.txt\"},\"lines\":{\"text\":\"marker-alpha\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"marker-alpha\"},\"start\":0,\"end\":12}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./a.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":23375,\"human\":\"0.000023s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":13,\"bytes_printed\":242,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003289s\",\"nanos\":3288958,\"secs\":0},\"stats\":{\"bytes_printed\":242,\"bytes_searched\":13,\"elapsed\":{\"human\":\"0.000023s\",\"nanos\":23375,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "truncated": false
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.work-open",
+            "graphVersion": "1",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "return-held-work"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "admit-work",
+              "request-work",
+              "return-held-work"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.propose",
+              "agentWork.request",
+              "agentWork.dispose"
+            ]
+          }
+        },
+        "stopped_stdout": "status state=stopped generation=2 config=/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/internal.toml pid=51548 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/bb-account/custom/BB-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/bb-account/custom/BB-Receiver role=receiver presence=offline generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+        "query_while_stopped": {
+          "status": 1,
+          "stderr": "local Work control is unavailable: no running launcher published a control socket"
+        },
+        "restart_generation": {
+          "from": 1,
+          "to": 2
+        },
+        "recovered": {
+          "status": "completed",
+          "control": {
+            "projectId": "agentteams-local-work",
+            "graphId": "agentteams.work-query",
+            "graphVersion": "1",
+            "executionId": "baa05c14-84a8-4408-8a1e-961aad64bfb3",
+            "attemptId": "399d8a4c-ac3b-41ad-a258-ddbb9443f9b3",
+            "workId": "1806903a-4dda-4ea7-b04e-ab87e3e5131c",
+            "requestId": "9af8ea2e-f8bc-4a1b-8933-d587b1308d3c",
+            "providerAgentId": "bb-provider",
+            "targetGeneration": 1,
+            "linkGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "requestState": "succeeded",
+            "observed": true
+          },
+          "business": {
+            "exitCode": 0,
+            "matches": [
+              {
+                "line": 1,
+                "path": "./a.txt",
+                "raw": {
+                  "data": {
+                    "absolute_offset": 0,
+                    "line_number": 1,
+                    "lines": {
+                      "text": "marker-alpha\n"
+                    },
+                    "path": {
+                      "text": "./a.txt"
+                    },
+                    "submatches": [
+                      {
+                        "end": 12,
+                        "match": {
+                          "text": "marker-alpha"
+                        },
+                        "start": 0
+                      }
+                    ]
+                  },
+                  "type": "match"
+                },
+                "text": "marker-alpha\n"
+              }
+            ],
+            "query": "marker-alpha",
+            "status": "matched",
+            "stderr": "",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./a.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./a.txt\"},\"lines\":{\"text\":\"marker-alpha\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"marker-alpha\"},\"start\":0,\"end\":12}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./a.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":23375,\"human\":\"0.000023s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":13,\"bytes_printed\":242,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003289s\",\"nanos\":3288958,\"secs\":0},\"stats\":{\"bytes_printed\":242,\"bytes_searched\":13,\"elapsed\":{\"human\":\"0.000023s\",\"nanos\":23375,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "truncated": false
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "completed",
+            "graphId": "agentteams.work-query",
+            "graphVersion": "1",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "query-request",
+              "return-observation"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link",
+              "query-request",
+              "return-observation"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.get",
+              "agentWork.dispose"
+            ]
+          }
+        },
+        "unknown_request": {
+          "status": "failed",
+          "control": {
+            "projectId": "agentteams-local-work",
+            "graphId": "",
+            "graphVersion": "",
+            "executionId": "d90e520d-8d8d-4751-9857-d0278af1bd89",
+            "attemptId": "143a0d43-ab1c-48d7-bd38-7567476036fd",
+            "workId": "1806903a-4dda-4ea7-b04e-ab87e3e5131c",
+            "requestId": "bb07-unknown-request",
+            "providerAgentId": "bb-provider",
+            "targetGeneration": 1,
+            "linkGeneration": 1,
+            "serviceSelection": "capability",
+            "capabilityId": "file-search",
+            "capabilityVersion": "1",
+            "operation": "search",
+            "error": {
+              "code": "NOT_FOUND",
+              "message": "unknown request [\"1806903a-4dda-4ea7-b04e-ab87e3e5131c\",\"bb07-unknown-request\"]",
+              "operation": "agentWork.get"
+            }
+          },
+          "cleanup": {
+            "channelsOpened": 1,
+            "channelsDisposed": 1
+          },
+          "evidence": {
+            "execution": "failed",
+            "graphId": "",
+            "graphVersion": "",
+            "nodeSchedule": [
+              "resolve-service",
+              "open-link",
+              "query-request"
+            ],
+            "nodeCompletion": [
+              "resolve-service",
+              "open-link"
+            ],
+            "hostOperations": [
+              "agentWork.findProvider",
+              "agentWork.open",
+              "agentWork.get",
+              "agentWork.dispose"
+            ],
+            "errorKind": "operator"
+          }
+        },
+        "provider_ledger": {
+          "path": "/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/data/bb-provider/work.json",
+          "works": 1,
+          "requests_for_work": 1
+        },
+        "stop_stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/internal.toml pid=51548\n",
+        "owned_pids_after_stop": [
+          51548,
+          51556,
+          51602,
+          51748
+        ],
+        "owned_pids_alive_after_stop": [],
+        "temporary_root_removed": true,
+        "execution_failure": {
+          "status": "passed",
+          "public_input": {
+            "package": "/Volumes/Intel/playground/agentteams/acp-l13-internal-mvp/generated/modules/teams-source/lib",
+            "receiver": "bb-receiver",
+            "commands": [
+              "agentteams work open --provider bb-provider --provider-generation <g> --operation search ...",
+              "SIGTERM to the exact provider PID from internal.toml",
+              "SIGTERM to the exact still-active real rg PID from the wrapper record",
+              "agentteams stop --generation <g>",
+              "agentteams start",
+              "agentteams work query --service-selection capability --work-id <W> --request-id <R> ...",
+              "agentteams stop --generation <g2>"
+            ]
+          },
+          "external_observation": {
+            "installed_content_sha256": "9fd3e52e89619b08955e79a2e029dbf961684435589d196094296fea792a2504",
+            "config_sha256": "b0e757c6700f2c0c69d7b03d53241012c79576bd8c7139a6a46590e7438d6c82",
+            "search_wrapper": {
+              "executable": "/tmp/agentteams-u7-bb07-failure-dSGqVt/search-barrier-bb07/search-wrapper",
+              "real_executable": "/opt/homebrew/bin/rg",
+              "launch_count_before_query": 1,
+              "launch_count_after_query": 1,
+              "final_record": {
+                "at": "2026-10-21T17:43:16.739Z",
+                "wrapper_pid": 56767,
+                "real_executable": "/opt/homebrew/bin/rg",
+                "argv": [
+                  "--json",
+                  "--fixed-strings",
+                  "--no-follow",
+                  "--color",
+                  "never",
+                  "--max-count",
+                  "100",
+                  "--",
+                  "marker-alpha",
+                  "."
+                ],
+                "real_pid": 57374,
+                "real_exit": null,
+                "real_signal": "SIGTERM"
+              }
+            },
+            "provider_fault": {
+              "pid": 56026,
+              "generation": 1,
+              "start_token": "fcf753fb-f6c3-43e9-a6ff-355ae68d9d72",
+              "entry_path": "/private/tmp/agentteams-u7-bb07-failure-dSGqVt/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
+              "projection_path": "/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/.internal/projections/bb-provider.json",
+              "command": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /private/tmp/agentteams-u7-bb07-failure-dSGqVt/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js --config /tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/.internal/projections/bb-provider.json --launcher-start-token fcf753fb-f6c3-43e9-a6ff-355ae68d9d72",
+              "signal": "SIGTERM",
+              "at": "2026-10-21T17:43:16.738Z"
+            },
+            "external_execution": {
+              "pid": 57374,
+              "wrapper_pid": 56767,
+              "provider_pid": 56026,
+              "owner": "provider Work owner (bb-provider)",
+              "fixture_owner": "driver BB07 execution-failure fixture",
+              "state_before_release": "T",
+              "responsibility": "driver must explicitly terminate this still-active external execution and retain the provider ledger failure",
+              "release_action": "SIGTERM to the exact real rg PID after provider stop admission",
+              "exit_confirmed": true,
+              "wrapper_exit_observed": true,
+              "real_exit_observed": true
+            },
+            "original_cli": {
+              "status": 1,
+              "signal": null,
+              "stdout": "",
+              "stderr": "{\"status\":\"failed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"\",\"graphVersion\":\"\",\"executionId\":\"ffa71d19-b3dc-4b76-8403-d27c0d7013ce\",\"attemptId\":\"dec93e8c-358f-4593-adc6-1383c96d4a8f\",\"workId\":\"bf2d42b8-7246-499e-b599-4be9e10f2e17\",\"requestId\":\"4dfecc18-a8f9-42de-a6d8-e6deb06ee749\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"file-search\",\"capabilityVersion\":\"1\",\"operation\":\"search\",\"deliveryState\":\"unconfirmed\",\"error\":{\"code\":\"UNAVAILABLE\",\"message\":\"network: connection stopped locally\",\"deliveryState\":\"unconfirmed\",\"operation\":\"agentWork.request\"}},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"failed\",\"graphId\":\"\",\"graphVersion\":\"\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"admit-work\",\"request-work\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"admit-work\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.propose\",\"agentWork.request\",\"agentWork.dispose\"],\"errorKind\":\"operator\"}}",
+              "receipt": {
+                "status": "failed",
+                "control": {
+                  "projectId": "agentteams-local-work",
+                  "graphId": "",
+                  "graphVersion": "",
+                  "executionId": "ffa71d19-b3dc-4b76-8403-d27c0d7013ce",
+                  "attemptId": "dec93e8c-358f-4593-adc6-1383c96d4a8f",
+                  "workId": "bf2d42b8-7246-499e-b599-4be9e10f2e17",
+                  "requestId": "4dfecc18-a8f9-42de-a6d8-e6deb06ee749",
+                  "providerAgentId": "bb-provider",
+                  "targetGeneration": 1,
+                  "serviceSelection": "capability",
+                  "capabilityId": "file-search",
+                  "capabilityVersion": "1",
+                  "operation": "search",
+                  "deliveryState": "unconfirmed",
+                  "error": {
+                    "code": "UNAVAILABLE",
+                    "message": "network: connection stopped locally",
+                    "deliveryState": "unconfirmed",
+                    "operation": "agentWork.request"
+                  }
+                },
+                "cleanup": {
+                  "channelsOpened": 1,
+                  "channelsDisposed": 1
+                },
+                "evidence": {
+                  "execution": "failed",
+                  "graphId": "",
+                  "graphVersion": "",
+                  "nodeSchedule": [
+                    "resolve-service",
+                    "open-link",
+                    "admit-work",
+                    "request-work"
+                  ],
+                  "nodeCompletion": [
+                    "resolve-service",
+                    "open-link",
+                    "admit-work"
+                  ],
+                  "hostOperations": [
+                    "agentWork.findProvider",
+                    "agentWork.open",
+                    "agentWork.propose",
+                    "agentWork.request",
+                    "agentWork.dispose"
+                  ],
+                  "errorKind": "operator"
+                }
+              }
+            },
+            "provider_ledger_after_fault": {
+              "path": "/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/data/bb-provider/work.json",
+              "failed_request": {
+                "control": {
+                  "workId": "bf2d42b8-7246-499e-b599-4be9e10f2e17",
+                  "requestId": "4dfecc18-a8f9-42de-a6d8-e6deb06ee749",
+                  "operation": "search",
+                  "targetGeneration": 1,
+                  "demands": [
+                    {
+                      "resourceId": "search-slot",
+                      "amount": 1
+                    }
+                  ]
+                },
+                "payload": {
+                  "query": "marker-alpha"
+                },
+                "state": "failed",
+                "allocationIds": [
+                  "allocation-cc3af384-c121-49ba-87a0-d83ca98ef9a5"
+                ],
+                "error": {
+                  "code": "UPSTREAM_ERROR",
+                  "message": "PROCESS_ERROR: /tmp/agentteams-u7-bb07-failure-dSGqVt/search-barrier-bb07/search-wrapper exited unsuccessfully",
+                  "execution": {
+                    "kind": "cli",
+                    "code": "PROCESS_ERROR",
+                    "message": "/tmp/agentteams-u7-bb07-failure-dSGqVt/search-barrier-bb07/search-wrapper exited unsuccessfully",
+                    "exitCode": null,
+                    "signal": "SIGTERM",
+                    "stdout": "",
+                    "stderr": ""
+                  }
+                }
+              }
+            },
+            "fault_stop": {
+              "stdout": "stopped state=failed generation=1 config=/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/internal.toml error=local agent exited unexpectedly code=0 signal=null\n",
+              "stopped_stdout": "status state=failed generation=1 config=/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/internal.toml pid=56009 error=local agent exited unexpectedly code=0 signal=null endpoints=missing console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+              "pids": [
+                56026,
+                56035,
+                56010
+              ]
+            },
+            "restart_generation": {
+              "from": 1,
+              "to": 2
+            },
+            "recovered": {
+              "status": "completed",
+              "control": {
+                "projectId": "agentteams-local-work",
+                "graphId": "agentteams.work-query",
+                "graphVersion": "1",
+                "executionId": "df177a9b-1b09-48ca-9622-c0dbd15004c9",
+                "attemptId": "edbba88c-eec2-47c4-a1ad-c0711b880e08",
+                "workId": "bf2d42b8-7246-499e-b599-4be9e10f2e17",
+                "requestId": "4dfecc18-a8f9-42de-a6d8-e6deb06ee749",
+                "providerAgentId": "bb-provider",
+                "targetGeneration": 1,
+                "linkGeneration": 1,
+                "serviceSelection": "capability",
+                "capabilityId": "file-search",
+                "capabilityVersion": "1",
+                "operation": "search",
+                "requestState": "failed",
+                "observed": true,
+                "error": {
+                  "code": "UPSTREAM_ERROR",
+                  "execution": {
+                    "code": "PROCESS_ERROR",
+                    "exitCode": null,
+                    "kind": "cli",
+                    "message": "/tmp/agentteams-u7-bb07-failure-dSGqVt/search-barrier-bb07/search-wrapper exited unsuccessfully",
+                    "signal": "SIGTERM",
+                    "stderr": "",
+                    "stdout": ""
+                  },
+                  "message": "PROCESS_ERROR: /tmp/agentteams-u7-bb07-failure-dSGqVt/search-barrier-bb07/search-wrapper exited unsuccessfully"
+                }
+              },
+              "cleanup": {
+                "channelsOpened": 1,
+                "channelsDisposed": 1
+              },
+              "evidence": {
+                "execution": "completed",
+                "graphId": "agentteams.work-query",
+                "graphVersion": "1",
+                "nodeSchedule": [
+                  "resolve-service",
+                  "open-link",
+                  "query-request",
+                  "return-observation"
+                ],
+                "nodeCompletion": [
+                  "resolve-service",
+                  "open-link",
+                  "query-request",
+                  "return-observation"
+                ],
+                "hostOperations": [
+                  "agentWork.findProvider",
+                  "agentWork.open",
+                  "agentWork.get",
+                  "agentWork.dispose"
+                ]
+              }
+            },
+            "final_stop_stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/internal.toml pid=59207\n",
+            "final_stopped_stdout": "status state=stopped generation=2 config=/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-failure-dSGqVt/home/.agentteams/internal.toml pid=59207 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/bb-account/custom/BB-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/bb-account/custom/BB-Receiver role=receiver presence=offline generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+            "owned_pids_after_stop": [
+              59207,
+              59210,
+              59211,
+              59228
+            ],
+            "owned_pids_alive_after_stop": [],
+            "temporary_root_removed": false
+          },
+          "evidence_path": "/tmp/l13-bb07-try1/evidence/cases/BB07-execution-failure"
+        }
+      },
+      "evidence_path": "/tmp/l13-bb07-try1/evidence/cases/BB07",
+      "cleanup": {
+        "fixture": "bb07",
+        "observed_at": "2026-10-21T17:43:01.522Z",
+        "generation": 2,
+        "paths": {
+          "temporary_root": "/tmp/agentteams-u7-bb07-JiChXa",
+          "installed_cli": "/tmp/agentteams-u7-bb07-JiChXa/prefix/node_modules/.bin/agentteams",
+          "config": "/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/config.toml",
+          "internal_state": "/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/internal.toml"
+        },
+        "stop": {
+          "attempted": true,
+          "generation": 2,
+          "command": [
+            "/tmp/agentteams-u7-bb07-JiChXa/prefix/node_modules/.bin/agentteams",
+            "stop",
+            "--config",
+            "/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/config.toml",
+            "--generation",
+            "2"
+          ],
+          "exit_code": 0,
+          "signal": null,
+          "error": null,
+          "stdout": "stopped state=stopped generation=2 config=/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/internal.toml pid=51548\n",
+          "stderr": ""
+        },
+        "terminal": {
+          "query_exit_code": 0,
+          "state": "stopped",
+          "stdout": "status state=stopped generation=2 config=/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-JiChXa/home/.agentteams/internal.toml pid=51548 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/bb-account/custom/BB-Provider role=provider presence=offline generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/bb-account/custom/BB-Receiver role=receiver presence=offline generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+          "stderr": ""
+        },
+        "processes": [
+          {
+            "owner": "launcher",
+            "role": "launcher",
+            "pid": 51548,
+            "attribution": "internal.toml launcher row, generation 2",
+            "provenance": "internal-toml",
+            "before_stop": "alive",
+            "probe": {
+              "state": "gone",
+              "reason": "not-found"
+            }
+          },
+          {
+            "owner": "lifecycle",
+            "role": "bb-provider",
+            "pid": 51602,
+            "attribution": "internal.toml daemon bb-provider row, generation 2",
+            "provenance": "internal-toml",
+            "before_stop": "alive",
+            "probe": {
+              "state": "gone",
+              "reason": "not-found"
+            }
+          },
+          {
+            "owner": "lifecycle",
+            "role": "bb-receiver",
+            "pid": 51748,
+            "attribution": "internal.toml daemon bb-receiver row, generation 2",
+            "provenance": "internal-toml",
+            "before_stop": "alive",
+            "probe": {
+              "state": "gone",
+              "reason": "not-found"
+            }
+          },
+          {
+            "owner": "lifecycle",
+            "role": "relay",
+            "pid": 51556,
+            "attribution": "internal.toml daemon relay row, generation 2",
+            "provenance": "internal-toml",
+            "before_stop": "alive",
+            "probe": {
+              "state": "gone",
+              "reason": "not-found"
+            }
+          }
+        ],
+        "listeners": [
+          {
+            "owner": "lifecycle",
+            "role": "relay",
+            "kind": "port",
+            "address": "64536",
+            "attribution": "internal.toml relay projection listen port",
+            "provenance": "internal-toml",
+            "before_stop": "listening",
+            "probe": {
+              "state": "gone",
+              "pids": [],
+              "reason": "no-match"
+            }
+          },
+          {
+            "owner": "lifecycle",
+            "role": "bb-provider",
+            "kind": "port",
+            "address": "64539",
+            "attribution": "internal.toml daemon bb-provider lease port",
+            "provenance": "internal-toml",
+            "before_stop": "listening",
+            "probe": {
+              "state": "gone",
+              "pids": [],
+              "reason": "no-match"
+            }
+          },
+          {
+            "owner": "lifecycle",
+            "role": "bb-receiver",
+            "kind": "port",
+            "address": "64540",
+            "attribution": "internal.toml daemon bb-receiver lease port",
+            "provenance": "internal-toml",
+            "before_stop": "listening",
+            "probe": {
+              "state": "gone",
+              "pids": [],
+              "reason": "no-match"
+            }
+          },
+          {
+            "owner": "lifecycle",
+            "role": "bb-provider",
+            "kind": "socket",
+            "address": "127.0.0.1:64539",
+            "attribution": "socket owned by pid 51602",
+            "provenance": "proved-pid-listener",
+            "before_stop": "listening",
+            "probe": {
+              "state": "gone",
+              "pids": [],
+              "reason": "pid-listener-gone"
+            }
+          },
+          {
+            "owner": "lifecycle",
+            "role": "bb-receiver",
+            "kind": "socket",
+            "address": "127.0.0.1:64540",
+            "attribution": "socket owned by pid 51748",
+            "provenance": "proved-pid-listener",
+            "before_stop": "listening",
+            "probe": {
+              "state": "gone",
+              "pids": [],
+              "reason": "pid-listener-gone"
+            }
+          },
+          {
+            "owner": "lifecycle",
+            "role": "relay",
+            "kind": "socket",
+            "address": "127.0.0.1:64536",
+            "attribution": "socket owned by pid 51556",
+            "provenance": "proved-pid-listener",
+            "before_stop": "listening",
+            "probe": {
+              "state": "gone",
+              "pids": [],
+              "reason": "pid-listener-gone"
+            }
+          }
+        ],
+        "capture_errors": [],
+        "process_state": "gone",
+        "listener_state": "gone",
+        "terminal_state": "stopped",
+        "outcome": "cleaned",
+        "deleted": true,
+        "retained_obligations": [],
+        "evidence": "/tmp/l13-bb07-try1/evidence/cases/BB07/bb07-final-cleanup.json",
+        "stopped": true,
+        "finalized_by": "bb07-final-final",
+        "deletion": {
+          "deleted": true,
+          "outcome": "cleaned"
+        }
+      }
+    }
+  ],
+  "exit": {
+    "code": 0,
+    "failed": [],
+    "unverified": []
+  }
+}

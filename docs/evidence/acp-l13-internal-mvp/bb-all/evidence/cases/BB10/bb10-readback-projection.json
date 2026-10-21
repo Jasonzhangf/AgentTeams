@@ -1,0 +1,326 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB10-Real",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "current",
+      "sessionObservation": {
+        "state": "degraded",
+        "reason": "projection-loss",
+        "detail": "unsupported OpenCode event message.part.delta",
+        "droppedEvents": 96
+      },
+      "sessionEffectiveRevision": 2,
+      "currentSessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "providerId": "goaichat",
+      "modelId": "glm-5.3"
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB10-Passive",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [
+    {
+      "agentId": "bb-provider",
+      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "title": "BB10 real canonical model"
+    },
+    {
+      "agentId": "bb-provider",
+      "sessionId": "ses_ea092878affeyHW0m66cpg16zQ",
+      "title": "BB10 real RCC model"
+    }
+  ],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 2,
+      "applyState": "clean",
+      "acceptedBinding": {
+        "primary": {
+          "providerInstanceId": "goaichat",
+          "modelId": "glm-5.3"
+        },
+        "backup": {
+          "providerInstanceId": "rcc-4444",
+          "modelId": "goaichat.qwen3.8-max"
+        }
+      },
+      "effectiveRevision": 2,
+      "providers": [
+        {
+          "id": "rcc-4444",
+          "label": "RCC 4444",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:4444/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "goaichat.qwen3.8-max",
+              "label": "RCC canonical model"
+            },
+            {
+              "id": "goaichat.deepseek-v4-pro",
+              "label": "goaichat.deepseek-v4-pro"
+            },
+            {
+              "id": "goaichat.deepseek-v4.1-flash",
+              "label": "goaichat.deepseek-v4.1-flash"
+            },
+            {
+              "id": "goaichat.glm-5.3",
+              "label": "goaichat.glm-5.3"
+            },
+            {
+              "id": "gonode.deepseek-v4-pro",
+              "label": "gonode.deepseek-v4-pro"
+            },
+            {
+              "id": "gonode.deepseek-v4.1-flash",
+              "label": "gonode.deepseek-v4.1-flash"
+            },
+            {
+              "id": "inferai.deepseek-v4-pro",
+              "label": "inferai.deepseek-v4-pro"
+            },
+            {
+              "id": "inferai.deepseek-v4.1-flash",
+              "label": "inferai.deepseek-v4.1-flash"
+            },
+            {
+              "id": "inxk.deepseek-v4-pro",
+              "label": "inxk.deepseek-v4-pro"
+            },
+            {
+              "id": "inxk.deepseek-v4.1-flash",
+              "label": "inxk.deepseek-v4.1-flash"
+            },
+            {
+              "id": "xmcc.deepseek-v4.1-flash",
+              "label": "xmcc.deepseek-v4.1-flash"
+            },
+            {
+              "id": "xmcc.kimi-k3",
+              "label": "xmcc.kimi-k3"
+            },
+            {
+              "id": "gpt-5.5",
+              "label": "gpt-5.5"
+            }
+          ]
+        },
+        {
+          "id": "goaichat",
+          "label": "GoAIChat OpenAI",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "https://llm.goaichat.top/v1",
+          "enabled": true,
+          "authKind": "bearer",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "glm-5.3",
+              "label": "GoAIChat default model"
+            },
+            {
+              "id": "deepseek-v4-flash",
+              "label": "deepseek-v4-flash"
+            },
+            {
+              "id": "deepseek-v4-pro",
+              "label": "deepseek-v4-pro"
+            },
+            {
+              "id": "glm-5.2",
+              "label": "glm-5.2"
+            },
+            {
+              "id": "kimi-k2.6",
+              "label": "kimi-k2.6"
+            },
+            {
+              "id": "kimi-k2.7-code",
+              "label": "kimi-k2.7-code"
+            },
+            {
+              "id": "minimax-m3",
+              "label": "minimax-m3"
+            },
+            {
+              "id": "qwen3.7-plus",
+              "label": "qwen3.7-plus"
+            },
+            {
+              "id": "qwen3.6-plus",
+              "label": "qwen3.6-plus"
+            },
+            {
+              "id": "qwen3.7-max",
+              "label": "qwen3.7-max"
+            },
+            {
+              "id": "qwen3.8-max",
+              "label": "qwen3.8-max"
+            },
+            {
+              "id": "deepseek-v4-flash-0731",
+              "label": "deepseek-v4-flash-0731"
+            },
+            {
+              "id": "deepseek-v4-pro-0813",
+              "label": "deepseek-v4-pro-0813"
+            },
+            {
+              "id": "kimi-k3",
+              "label": "kimi-k3"
+            },
+            {
+              "id": "qwen3.8-max-0902",
+              "label": "qwen3.8-max-0902"
+            },
+            {
+              "id": "qwen3.8-flash",
+              "label": "qwen3.8-flash"
+            },
+            {
+              "id": "glm-5.3-flash",
+              "label": "glm-5.3-flash"
+            },
+            {
+              "id": "deepseek-v4.1-flash",
+              "label": "deepseek-v4.1-flash"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": [],
+  "sessionEvents": [
+    {
+      "eventId": "message.updated:ses_ea0922bbaffeghG4WKByVpGjpc:msg_DQwlw283KjZIAYKY6G8nH1rWt0",
+      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_DQwlw283KjZIAYKY6G8nH1rWt0",
+      "role": "user"
+    },
+    {
+      "eventId": "message.part.updated:ses_ea0922bbaffeghG4WKByVpGjpc:msg_DQwlw283KjZIAYKY6G8nH1rWt0",
+      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "pending",
+      "messageId": "msg_DQwlw283KjZIAYKY6G8nH1rWt0",
+      "partId": "prt_15f6dd4a20010UY2M5vZA60mUc",
+      "partType": "text",
+      "text": "请用一句简短中文解释什么是回声。不要调用工具，也不要读写文件。"
+    },
+    {
+      "eventId": "message.updated:ses_ea0922bbaffeghG4WKByVpGjpc:msg_15f6dd585001LPFosKtdr4zxzc",
+      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_15f6dd585001LPFosKtdr4zxzc",
+      "role": "assistant"
+    },
+    {
+      "eventId": "message.part.updated:ses_ea0922bbaffeghG4WKByVpGjpc:msg_15f6dd585001LPFosKtdr4zxzc",
+      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_15f6dd585001LPFosKtdr4zxzc",
+      "partId": "prt_15f6deec5001MWTcv8P0cuoo2A",
+      "partType": "step-start",
+      "sourcePart": {
+        "id": "prt_15f6deec5001MWTcv8P0cuoo2A",
+        "messageID": "msg_15f6dd585001LPFosKtdr4zxzc",
+        "sessionID": "ses_ea0922bbaffeghG4WKByVpGjpc",
+        "type": "step-start"
+      }
+    },
+    {
+      "eventId": "message.part.updated:ses_ea0922bbaffeghG4WKByVpGjpc:msg_15f6dd585001LPFosKtdr4zxzc",
+      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg_15f6dd585001LPFosKtdr4zxzc",
+      "partId": "prt_15f6deeca001sbrgGfNTqzeBMD",
+      "partType": "reasoning",
+      "text": "The user asks to explain \"echo\" (回声) in one short Chinese sentence, without calling tools or reading/writing files. Just answer."
+    },
+    {
+      "eventId": "message.part.updated:ses_ea0922bbaffeghG4WKByVpGjpc:msg_15f6dd585001LPFosKtdr4zxzc",
+      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg_15f6dd585001LPFosKtdr4zxzc",
+      "partId": "prt_15f6df1e5001SKqs3089ReyTg5",
+      "partType": "text",
+      "text": "回声是声音碰到障碍物后被反射回来、并能与原声区分开的重复声音。"
+    },
+    {
+      "eventId": "message.part.updated:ses_ea0922bbaffeghG4WKByVpGjpc:msg_15f6dd585001LPFosKtdr4zxzc",
+      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_15f6dd585001LPFosKtdr4zxzc",
+      "partId": "prt_15f6df314001WVcVmYhwkzeOQY",
+      "partType": "step-finish",
+      "sourcePart": {
+        "id": "prt_15f6df314001WVcVmYhwkzeOQY",
+        "reason": "stop",
+        "messageID": "msg_15f6dd585001LPFosKtdr4zxzc",
+        "sessionID": "ses_ea0922bbaffeghG4WKByVpGjpc",
+        "type": "step-finish",
+        "tokens": {
+          "total": 20447,
+          "input": 20399,
+          "output": 19,
+          "reasoning": 29,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0
+      }
+    },
+    {
+      "eventId": "message.updated:ses_ea0922bbaffeghG4WKByVpGjpc:msg_15f6dd585001LPFosKtdr4zxzc",
+      "sessionId": "ses_ea0922bbaffeghG4WKByVpGjpc",
+      "agentId": "bb-provider",
+      "kind": "final",
+      "state": "completed",
+      "messageId": "msg_15f6dd585001LPFosKtdr4zxzc",
+      "finish": "stop"
+    }
+  ]
+}

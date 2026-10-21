@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "click",
+    "--profile",
+    "bb09-static-22006",
+    "--selector",
+    "button[data-focus-key=\"agent:bb-provider:details\"]"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"click\",\n  \"profile\": \"bb09-static-22006\",\n  \"target\": \"t_32ca13aede9c\",\n  \"selector\": \"button[data-focus-key=\\\"agent:bb-provider:details\\\"]\",\n  \"text\": null,\n  \"button\": \"left\",\n  \"dialogAction\": null,\n  \"dialogText\": null,\n  \"dialog\": null,\n  \"timeout\": null,\n  \"clicked\": true,\n  \"issuedAt\": \"2026-10-21T17:05:33.443Z\",\n  \"traceId\": \"cli-1792602333372\"\n}\n",
+  "stderr": ""
+}

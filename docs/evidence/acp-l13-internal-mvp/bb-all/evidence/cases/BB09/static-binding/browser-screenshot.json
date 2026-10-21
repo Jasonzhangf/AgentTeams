@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "screenshot",
+    "--profile",
+    "bb09-static-22006",
+    "--path",
+    "/tmp/l13-bb-v3/evidence/cases/BB09/static-binding/browser-page.png"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"screenshot\",\n  \"profile\": \"bb09-static-22006\",\n  \"target\": \"t_32ca13aede9c\",\n  \"path\": \"/tmp/l13-bb-v3/evidence/cases/BB09/static-binding/browser-page.png\",\n  \"saved\": true,\n  \"issuedAt\": \"2026-10-21T17:05:38.532Z\",\n  \"traceId\": \"cli-1792602338485\"\n}\n",
+  "stderr": ""
+}

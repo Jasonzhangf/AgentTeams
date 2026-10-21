@@ -1,0 +1,14 @@
+{
+  "command": "/tmp/agentteams-u7-bb07-failure-aBlN1T/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "stop",
+    "--config",
+    "/tmp/agentteams-u7-bb07-failure-aBlN1T/home/.agentteams/config.toml",
+    "--generation",
+    "1"
+  ],
+  "status": 1,
+  "signal": null,
+  "stdout": "",
+  "stderr": "local daemon exit remains unconfirmed\n"
+}

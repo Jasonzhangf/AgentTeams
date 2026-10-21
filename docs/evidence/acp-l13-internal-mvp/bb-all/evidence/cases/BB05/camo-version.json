@@ -1,0 +1,10 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "--version"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "0.4.10\n",
+  "stderr": ""
+}

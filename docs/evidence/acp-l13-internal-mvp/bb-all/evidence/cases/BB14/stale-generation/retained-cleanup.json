@@ -1,0 +1,208 @@
+{
+  "case": "BB14",
+  "fixture": "bb14-stale-generation",
+  "owner": "U1+U7",
+  "observed_at": "2026-10-21T17:39:25.938Z",
+  "generation": 1,
+  "paths": {
+    "temporary_root": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW",
+    "installed_cli": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/prefix/node_modules/.bin/agentteams",
+    "config": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml",
+    "internal_state": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/internal.toml"
+  },
+  "stop": {
+    "attempted": true,
+    "generation": 1000001,
+    "exit_code": 1,
+    "command": [
+      "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/prefix/node_modules/.bin/agentteams",
+      "stop",
+      "--config",
+      "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml",
+      "--generation",
+      "1000001"
+    ],
+    "error": "stale local supervisor generation expected=1000001 current=1\n"
+  },
+  "terminal": {
+    "query_exit_code": 0,
+    "state": "running",
+    "stdout": "status state=running generation=1 config=/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/internal.toml pid=87223 endpoint=bb-provider identity=bb-local/bb-machine/bb-provider/bb-account/custom/BB-Provider role=provider presence=online generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=bb-receiver identity=bb-local/bb-machine/bb-receiver/bb-account/custom/BB-Receiver role=receiver presence=online generation=1 capabilities=- console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+    "stderr": ""
+  },
+  "processes": [
+    {
+      "owner": "launcher",
+      "role": "launcher",
+      "pid": 87223,
+      "attribution": "internal.toml launcher row, generation 1",
+      "provenance": "internal-toml",
+      "before_stop": "alive",
+      "probe": {
+        "state": "alive",
+        "reason": "signal-0"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-provider",
+      "pid": 87238,
+      "attribution": "internal.toml daemon bb-provider row, generation 1",
+      "provenance": "internal-toml",
+      "before_stop": "alive",
+      "probe": {
+        "state": "alive",
+        "reason": "signal-0"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-receiver",
+      "pid": 87247,
+      "attribution": "internal.toml daemon bb-receiver row, generation 1",
+      "provenance": "internal-toml",
+      "before_stop": "alive",
+      "probe": {
+        "state": "alive",
+        "reason": "signal-0"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "relay",
+      "pid": 87236,
+      "attribution": "internal.toml daemon relay row, generation 1",
+      "provenance": "internal-toml",
+      "before_stop": "alive",
+      "probe": {
+        "state": "alive",
+        "reason": "signal-0"
+      }
+    }
+  ],
+  "listeners": [
+    {
+      "owner": "lifecycle",
+      "role": "relay",
+      "kind": "port",
+      "address": "63909",
+      "attribution": "internal.toml relay projection listen port",
+      "provenance": "internal-toml",
+      "before_stop": "listening",
+      "probe": {
+        "state": "listening",
+        "pids": [
+          87236
+        ],
+        "reason": "lsof"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-provider",
+      "kind": "port",
+      "address": "63913",
+      "attribution": "internal.toml daemon bb-provider lease port",
+      "provenance": "internal-toml",
+      "before_stop": "listening",
+      "probe": {
+        "state": "listening",
+        "pids": [
+          87238
+        ],
+        "reason": "lsof"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-receiver",
+      "kind": "port",
+      "address": "63914",
+      "attribution": "internal.toml daemon bb-receiver lease port",
+      "provenance": "internal-toml",
+      "before_stop": "listening",
+      "probe": {
+        "state": "listening",
+        "pids": [
+          87247
+        ],
+        "reason": "lsof"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-provider",
+      "kind": "socket",
+      "address": "127.0.0.1:63913",
+      "attribution": "socket owned by pid 87238",
+      "provenance": "proved-pid-listener",
+      "before_stop": "listening",
+      "probe": {
+        "state": "listening",
+        "pids": [
+          87238
+        ],
+        "reason": "lsof-pid"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "bb-receiver",
+      "kind": "socket",
+      "address": "127.0.0.1:63914",
+      "attribution": "socket owned by pid 87247",
+      "provenance": "proved-pid-listener",
+      "before_stop": "listening",
+      "probe": {
+        "state": "listening",
+        "pids": [
+          87247
+        ],
+        "reason": "lsof-pid"
+      }
+    },
+    {
+      "owner": "lifecycle",
+      "role": "relay",
+      "kind": "socket",
+      "address": "127.0.0.1:63909",
+      "attribution": "socket owned by pid 87236",
+      "provenance": "proved-pid-listener",
+      "before_stop": "listening",
+      "probe": {
+        "state": "listening",
+        "pids": [
+          87236
+        ],
+        "reason": "lsof-pid"
+      }
+    }
+  ],
+  "capture_errors": [],
+  "process_state": "alive",
+  "listener_state": "alive",
+  "terminal_state": "unknown",
+  "outcome": "retained",
+  "deleted": false,
+  "retained_obligations": [
+    {
+      "owner": "U1+U7",
+      "reason": "cleanup outcome is retained",
+      "recovery_action": "inspect the retained fixture root, use the public stop entrypoint with the recorded generation, then re-run the case",
+      "release_condition": "a subsequent observation confirms processes, listeners and terminal state are all released"
+    }
+  ],
+  "evidence": "/tmp/l13-bb-v3/evidence/cases/BB14/stale-generation/bb14-stale-retained-cleanup.json",
+  "stopped": false,
+  "deletion": {
+    "deleted": false,
+    "outcome": "retained",
+    "reason": "cleanup did not confirm every owned resource was released",
+    "paths": {
+      "temporary_root": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW",
+      "installed_cli": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/prefix/node_modules/.bin/agentteams",
+      "config": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/config.toml",
+      "internal_state": "/tmp/agentteams-u7-bb14-stale-generation-ey3LrW/home/.agentteams/internal.toml"
+    }
+  }
+}

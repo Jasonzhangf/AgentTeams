@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "mode": "final",
-  "release_eligible": true,
+  "release_eligible": false,
   "candidate": {
-    "head_commit": "6771f9876744b2aebfe2d86b57e8e96854f04654",
+    "head_commit": "ce9a1a49a389df7907aab4bbea5ab2c155356b11",
     "base_commit": "b90c93427d4eb4a2399f8e0649f80e14b721f752",
-    "tree_hash": "7a595ef84dbfcd32e9cfe17d43e4bf476193e55a",
-    "indexed_tree_hash": "7a595ef84dbfcd32e9cfe17d43e4bf476193e55a",
+    "tree_hash": "a5826ddc9bccf2bc88b35b221c995623d05f112b",
+    "indexed_tree_hash": "a5826ddc9bccf2bc88b35b221c995623d05f112b",
     "source_state": "committed"
   },
   "package": {
@@ -16,7 +16,7 @@
   },
   "pack": {
     "root": "generated/modules/teams-source/lib",
-    "content_sha256": "90688a444d6acd2c417edc7682ea66df7830504de1eacbe4ff478c8de3cec89d",
+    "content_sha256": "9fd3e52e89619b08955e79a2e029dbf961684435589d196094296fea792a2504",
     "files": [
       "cli/agentteams.mjs",
       "console-host/lib/index.d.mts",
@@ -293,8 +293,8 @@
   },
   "tarball": {
     "filename": "agentteams-0.2.0-internal.1.tgz",
-    "sha256": "5bfb08ee8cfa1cc3ac627e3bb50068aadb88a2893b177d312922271deb8d7c60",
-    "content_sha256": "90688a444d6acd2c417edc7682ea66df7830504de1eacbe4ff478c8de3cec89d",
+    "sha256": "d7a5a3d2f6b46bb4432ffaf45b178b13eeb669eba997747667b685ea10bac567",
+    "content_sha256": "9fd3e52e89619b08955e79a2e029dbf961684435589d196094296fea792a2504",
     "files": [
       "cli/agentteams.mjs",
       "console-host/lib/index.d.mts",
@@ -570,22 +570,22 @@
     ]
   },
   "install": {
-    "prefix": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/prefix",
-    "cli_realpath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/prefix/node_modules/agentteams/cli/agentteams.mjs",
-    "installed_content_sha256": "90688a444d6acd2c417edc7682ea66df7830504de1eacbe4ff478c8de3cec89d",
+    "prefix": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/prefix",
+    "cli_realpath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/prefix/node_modules/agentteams/cli/agentteams.mjs",
+    "installed_content_sha256": "9fd3e52e89619b08955e79a2e029dbf961684435589d196094296fea792a2504",
     "installed_files": 271
   },
   "cli": {
     "init": {
-      "stdout": "initialized /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/config.toml\nEdit config.toml, then run agentteams start, agentteams status, or agentteams stop.\n",
+      "stdout": "initialized /var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/config.toml\nEdit config.toml, then run agentteams start, agentteams status, or agentteams stop.\n",
       "stderr": ""
     },
     "status": {
-      "stdout": "status state=stopped generation=0 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/internal.toml endpoints=missing console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+      "stdout": "status state=stopped generation=0 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/internal.toml endpoints=missing console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
       "stderr": ""
     },
     "stop": {
-      "stdout": "stopped state=stopped generation=0 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/internal.toml\n",
+      "stdout": "stopped state=stopped generation=0 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/internal.toml\n",
       "stderr": ""
     }
   },
@@ -598,7 +598,7 @@
     "crossSite": 401
   },
   "cleanup": {
-    "temporary_root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS",
+    "temporary_root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh",
     "removed": true
   },
   "lifecycle": {
@@ -607,15 +607,15 @@
       "kind": "v3",
       "note": "installed v3 user-intent fixture compiled by the installed runtime; internal ports and declarations are read back from internal.toml",
       "ports": {
-        "relay": 53021,
-        "installed-provider": 53038,
-        "installed-receiver": 53039
+        "relay": 63455,
+        "installed-provider": 63462,
+        "installed-receiver": 63463
       }
     },
     "start": {
       "state": "running",
       "generation": 1,
-      "pid": 26319,
+      "pid": 17272,
       "endpoints": [
         {
           "agentId": "installed-provider",
@@ -636,39 +636,39 @@
           "capabilities": []
         }
       ],
-      "internalPath": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/internal.toml",
+      "internalPath": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/internal.toml",
       "launcher": {
-        "pid": 26319,
+        "pid": 17272,
         "generation": 1,
-        "startToken": "fb82ce61-84e7-415b-80e2-d63b15ac3a20"
+        "startToken": "692fe51c-bf90-4db8-8169-d493fddac3e4"
       },
       "processes": [
         {
           "id": "relay",
-          "pid": 26357,
-          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/prefix/node_modules/agentteams/generated/runtime-lib/server/relay-process.js",
+          "pid": 17278,
+          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/prefix/node_modules/agentteams/generated/runtime-lib/server/relay-process.js",
           "generation": 1,
-          "startToken": "fb82ce61-84e7-415b-80e2-d63b15ac3a20"
+          "startToken": "692fe51c-bf90-4db8-8169-d493fddac3e4"
         },
         {
           "id": "installed-provider",
-          "pid": 26395,
-          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
+          "pid": 17281,
+          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
           "generation": 1,
-          "startToken": "fb82ce61-84e7-415b-80e2-d63b15ac3a20"
+          "startToken": "692fe51c-bf90-4db8-8169-d493fddac3e4"
         },
         {
           "id": "installed-receiver",
-          "pid": 26470,
-          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
+          "pid": 17392,
+          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
           "generation": 1,
-          "startToken": "fb82ce61-84e7-415b-80e2-d63b15ac3a20"
+          "startToken": "692fe51c-bf90-4db8-8169-d493fddac3e4"
         }
       ],
       "ports": {
-        "relay": 53021,
-        "installed-provider": 53038,
-        "installed-receiver": 53039
+        "relay": 63455,
+        "installed-provider": 63462,
+        "installed-receiver": 63463
       },
       "services": {
         "installed-provider": [
@@ -690,19 +690,19 @@
         "installed-receiver": []
       },
       "command": {
-        "stdout": "started state=running generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/internal.toml pid=26319\n",
+        "stdout": "started state=running generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/internal.toml pid=17272\n",
         "stderr": ""
       }
     },
     "stop": {
       "generation": 1,
-      "stdout": "stopped state=stopped generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/internal.toml pid=26319\n",
+      "stdout": "stopped state=stopped generation=1 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/internal.toml pid=17272\n",
       "stderr": ""
     },
     "restart": {
       "state": "running",
       "generation": 2,
-      "pid": 28856,
+      "pid": 19335,
       "endpoints": [
         {
           "agentId": "installed-provider",
@@ -723,39 +723,39 @@
           "capabilities": []
         }
       ],
-      "internalPath": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/internal.toml",
+      "internalPath": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/internal.toml",
       "launcher": {
-        "pid": 28856,
+        "pid": 19335,
         "generation": 2,
-        "startToken": "51789621-9bad-42e8-9952-5da0a14f512a"
+        "startToken": "743677cc-70bb-481c-a2ea-7c29b98f5b5f"
       },
       "processes": [
         {
           "id": "relay",
-          "pid": 28904,
-          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/prefix/node_modules/agentteams/generated/runtime-lib/server/relay-process.js",
+          "pid": 19336,
+          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/prefix/node_modules/agentteams/generated/runtime-lib/server/relay-process.js",
           "generation": 2,
-          "startToken": "51789621-9bad-42e8-9952-5da0a14f512a"
+          "startToken": "743677cc-70bb-481c-a2ea-7c29b98f5b5f"
         },
         {
           "id": "installed-provider",
-          "pid": 28937,
-          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
+          "pid": 19338,
+          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
           "generation": 2,
-          "startToken": "51789621-9bad-42e8-9952-5da0a14f512a"
+          "startToken": "743677cc-70bb-481c-a2ea-7c29b98f5b5f"
         },
         {
           "id": "installed-receiver",
-          "pid": 29008,
-          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
+          "pid": 19343,
+          "entryPath": "/private/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/prefix/node_modules/agentteams/generated/runtime-lib/runtime/agent-process.js",
           "generation": 2,
-          "startToken": "51789621-9bad-42e8-9952-5da0a14f512a"
+          "startToken": "743677cc-70bb-481c-a2ea-7c29b98f5b5f"
         }
       ],
       "ports": {
-        "relay": 53021,
-        "installed-provider": 53038,
-        "installed-receiver": 53039
+        "relay": 63455,
+        "installed-provider": 63462,
+        "installed-receiver": 63463
       },
       "services": {
         "installed-provider": [
@@ -777,14 +777,14 @@
         "installed-receiver": []
       },
       "command": {
-        "stdout": "started state=running generation=2 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/internal.toml pid=28856\n",
+        "stdout": "started state=running generation=2 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/internal.toml pid=19335\n",
         "stderr": ""
       }
     },
     "work": {
       "submit": {
-        "workId": "312f205b-174d-4bf5-9076-9e7ef4d93eea",
-        "requestId": "b3164dad-8561-4c69-ba95-8603d8d2ab73",
+        "workId": "87a6dac3-8eaa-430f-81db-1a5d947deba5",
+        "requestId": "9d7b4ba1-58d3-48dd-be4f-b7d964a37557",
         "providerAgentId": "installed-provider",
         "capabilityId": "file-search",
         "capabilityVersion": "1",
@@ -824,17 +824,17 @@
           "query": "needle",
           "status": "matched",
           "stderr": "",
-          "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./needle.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"lines\":{\"text\":\"installed work needle\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"needle\"},\"start\":15,\"end\":21}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":12583,\"human\":\"0.000013s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":22,\"bytes_printed\":256,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.005386s\",\"nanos\":5386458,\"secs\":0},\"stats\":{\"bytes_printed\":256,\"bytes_searched\":22,\"elapsed\":{\"human\":\"0.000013s\",\"nanos\":12583,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+          "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./needle.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"lines\":{\"text\":\"installed work needle\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"needle\"},\"start\":15,\"end\":21}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":12834,\"human\":\"0.000013s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":22,\"bytes_printed\":256,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003388s\",\"nanos\":3387709,\"secs\":0},\"stats\":{\"bytes_printed\":256,\"bytes_searched\":22,\"elapsed\":{\"human\":\"0.000013s\",\"nanos\":12834,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
           "truncated": false
         }
       },
       "second_submit": {
-        "workId": "19343540-65ba-4271-b819-4e6eafd8ba7f",
-        "requestId": "aaa4126b-a802-4f57-888f-9a527eeb8896"
+        "workId": "5cd98b31-7ef2-4d80-96fe-41b91030ea3a",
+        "requestId": "2469907d-0074-49ab-b452-7bf330b94701"
       },
       "query": {
-        "workId": "312f205b-174d-4bf5-9076-9e7ef4d93eea",
-        "requestId": "b3164dad-8561-4c69-ba95-8603d8d2ab73",
+        "workId": "87a6dac3-8eaa-430f-81db-1a5d947deba5",
+        "requestId": "9d7b4ba1-58d3-48dd-be4f-b7d964a37557",
         "observed": true,
         "business": {
           "exitCode": 0,
@@ -870,14 +870,14 @@
           "query": "needle",
           "status": "matched",
           "stderr": "",
-          "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./needle.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"lines\":{\"text\":\"installed work needle\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"needle\"},\"start\":15,\"end\":21}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":12583,\"human\":\"0.000013s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":22,\"bytes_printed\":256,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.005386s\",\"nanos\":5386458,\"secs\":0},\"stats\":{\"bytes_printed\":256,\"bytes_searched\":22,\"elapsed\":{\"human\":\"0.000013s\",\"nanos\":12583,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+          "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./needle.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"lines\":{\"text\":\"installed work needle\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"needle\"},\"start\":15,\"end\":21}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":12834,\"human\":\"0.000013s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":22,\"bytes_printed\":256,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003388s\",\"nanos\":3387709,\"secs\":0},\"stats\":{\"bytes_printed\":256,\"bytes_searched\":22,\"elapsed\":{\"human\":\"0.000013s\",\"nanos\":12834,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
           "truncated": false
         }
       },
       "persistent": {
         "open": {
-          "workId": "033884b7-83c3-42d5-a0d9-36ac8c00aebe",
-          "requestId": "50b11751-f011-474f-8b08-e574d1e1e0f1",
+          "workId": "c0ea6eb5-51c5-4c3a-9ee8-f74453f3df90",
+          "requestId": "3de12adb-9466-4509-9733-7921dbd54189",
           "providerAgentId": "installed-provider",
           "targetGeneration": 1,
           "targetGenerationSource": "typed local daemon status projection",
@@ -919,13 +919,13 @@
             "query": "needle",
             "status": "matched",
             "stderr": "",
-            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./needle.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"lines\":{\"text\":\"installed work needle\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"needle\"},\"start\":15,\"end\":21}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":11583,\"human\":\"0.000012s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":22,\"bytes_printed\":256,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003428s\",\"nanos\":3427667,\"secs\":0},\"stats\":{\"bytes_printed\":256,\"bytes_searched\":22,\"elapsed\":{\"human\":\"0.000012s\",\"nanos\":11583,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./needle.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"lines\":{\"text\":\"installed work needle\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"needle\"},\"start\":15,\"end\":21}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./needle.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":14167,\"human\":\"0.000014s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":22,\"bytes_printed\":256,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003581s\",\"nanos\":3581250,\"secs\":0},\"stats\":{\"bytes_printed\":256,\"bytes_searched\":22,\"elapsed\":{\"human\":\"0.000014s\",\"nanos\":14167,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
             "truncated": false
           }
         },
         "request": {
-          "requestId": "16680a8f-a0ce-4d81-8c94-31275e4530a7",
-          "workId": "033884b7-83c3-42d5-a0d9-36ac8c00aebe",
+          "requestId": "0416946b-4ddd-4825-9a44-8deb1c274204",
+          "workId": "c0ea6eb5-51c5-4c3a-9ee8-f74453f3df90",
           "workClosure": "retained",
           "business": {
             "exitCode": 0,
@@ -961,17 +961,17 @@
             "query": "beta",
             "status": "matched",
             "stderr": "",
-            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./beta.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"lines\":{\"text\":\"installed work beta\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"beta\"},\"start\":15,\"end\":19}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":20500,\"human\":\"0.000021s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":20,\"bytes_printed\":248,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.002822s\",\"nanos\":2822333,\"secs\":0},\"stats\":{\"bytes_printed\":248,\"bytes_searched\":20,\"elapsed\":{\"human\":\"0.000021s\",\"nanos\":20500,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
+            "stdout": "{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"./beta.txt\"}}}\n{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"lines\":{\"text\":\"installed work beta\\n\"},\"line_number\":1,\"absolute_offset\":0,\"submatches\":[{\"match\":{\"text\":\"beta\"},\"start\":15,\"end\":19}]}}\n{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"./beta.txt\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":24875,\"human\":\"0.000025s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":20,\"bytes_printed\":248,\"matched_lines\":1,\"matches\":1}}}\n{\"data\":{\"elapsed_total\":{\"human\":\"0.003375s\",\"nanos\":3375083,\"secs\":0},\"stats\":{\"bytes_printed\":248,\"bytes_searched\":20,\"elapsed\":{\"human\":\"0.000025s\",\"nanos\":24875,\"secs\":0},\"matched_lines\":1,\"matches\":1,\"searches\":1,\"searches_with_match\":1}},\"type\":\"summary\"}\n",
             "truncated": false
           }
         },
         "query": {
-          "workId": "033884b7-83c3-42d5-a0d9-36ac8c00aebe",
-          "requestId": "16680a8f-a0ce-4d81-8c94-31275e4530a7",
+          "workId": "c0ea6eb5-51c5-4c3a-9ee8-f74453f3df90",
+          "requestId": "0416946b-4ddd-4825-9a44-8deb1c274204",
           "observed": true
         },
         "close": {
-          "workId": "033884b7-83c3-42d5-a0d9-36ac8c00aebe",
+          "workId": "c0ea6eb5-51c5-4c3a-9ee8-f74453f3df90",
           "workClosure": "closed"
         },
         "unresolvable_provider_open_failed_before_dispatch": true,
@@ -992,8 +992,8 @@
       "status": "online",
       "credential": "configured",
       "generation": 1,
-      "pid": 26556,
-      "url": "http://127.0.0.1:53040",
+      "pid": 17477,
+      "url": "http://127.0.0.1:63464",
       "unauthenticated": 401,
       "authenticated": 200,
       "crossSite": 401,
@@ -1007,7 +1007,7 @@
     },
     "final_stop": {
       "generation": 2,
-      "stdout": "stopped state=stopped generation=2 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at9okCPS/home/.agentteams/internal.toml pid=28856\n",
+      "stdout": "stopped state=stopped generation=2 config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/config.toml internal=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/atzAPCKh/home/.agentteams/internal.toml pid=19335\n",
       "stderr": ""
     }
   },
