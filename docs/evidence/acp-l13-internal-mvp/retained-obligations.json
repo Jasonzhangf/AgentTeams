@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "note": "Obligations this internal MVP release keeps open. The release receipt copies this list verbatim so a reader cannot mistake the release for full delivery.",
+  "retained": [
+    {
+      "obligation": "sessionEvents projection",
+      "scope": "Console event stream",
+      "state": "partial",
+      "delivered": "The control daemon reads observed Session and permission rows from declared peers, and a directory registration advances the SSE sequence.",
+      "missing": "The projection does not carry a full Session, permission and notification event stream, and configs stay empty. No tested UI path consumes a Session event end to end.",
+      "owner": "D06 Session owner plus control projection",
+      "evidence": "docs/evidence/acp-l13-internal-mvp/d08/acceptance.log (A07 gaps), runtime/control-process.ts readObservedSessionProjection",
+      "release_action": "Keep as retained obligation. Do not describe live Session event animation as delivered."
+    },
+    {
+      "obligation": "cross-device receipt",
+      "scope": "Two physical hosts exchanging one ACP prompt on one package",
+      "state": "retained",
+      "delivered": "A two-host receipt exists for package 0.1.0 at commit 8cb0238: Macstudio.local and jennys-macbook-air.anoa-buri.ts.net exchanged session/new, session/prompt, request_permission, update and end_turn, plus cancel.",
+      "missing": "No two-host run used package 0.2.0-internal.1 content. A static older receipt does not prove a cross-device exchange for this artifact.",
+      "owner": "A11 cross-device unit",
+      "evidence": "docs/evidence/acp-a11-crossdevice-20261011/verification.json and notes.md",
+      "release_action": "Keep the D08 A11 item as a gap for this package and name the receipt's own package version in the release notes."
+    },
+    {
+      "obligation": "AppSDK rule audit",
+      "scope": "SDK governance rules for this candidate",
+      "state": "retained",
+      "delivered": "The AppSDK lifecycle module teams-source stages and verifies the package, and the governance build passes.",
+      "missing": "A rule-by-rule audit of this candidate against the SDK rule set was not performed, and the AppSDK status record still reports delivery_not_evaluated.",
+      "owner": "AppSDK governance owner",
+      "evidence": ".appsdk/project.json and the governance build receipt",
+      "release_action": "Keep as retained obligation. The release claims no AppSDK rule audit."
+    }
+  ]
+}

@@ -431,8 +431,11 @@ async function stageAndInstall() {
   assert(existsSync(receiptPath), `package receipt is missing: ${receiptPath}`)
   const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'))
   assert(receipt.mode === 'final', `staged package mode is ${receipt.mode}, expected final`)
-  assert(receipt.release_eligible === true,
-    'a complete final staged receipt must be eligible for the internal MVP release tarball; this flag makes no installed, replay or remote receipt claim')
+  // A staged pack is never release-eligible by itself: the release receipt grants that only
+  // after installed lifecycle and release-tarball gates pass. This driver verifies the staged
+  // package is complete and installable; it does not inflate eligibility.
+  assert(receipt.release_eligible === false,
+    'a staged package receipt must stay non-release; release eligibility belongs to a separate release receipt')
   assert(typeof receipt.content_sha256 === 'string' && receipt.content_sha256.length === 64, 'the staged receipt has no content hash')
   assert(existsSync(join(packRoot, 'generated', 'runtime-lib', 'runtime', 'acp-serve.js')), 'the staged package is missing the compiled ACP serve runtime')
   assert(existsSync(join(packRoot, 'generated', 'runtime-lib', 'network', 'teams-negotiation.js')), 'the staged package is missing the compiled Teams negotiation runtime')
