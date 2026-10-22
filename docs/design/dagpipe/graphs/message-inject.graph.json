@@ -1,0 +1,97 @@
+{
+  "id": "agentteams.message-inject",
+  "version": "1",
+  "inputs": [{ "id": "group.message.received", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-target",
+      "operator": "teams.authorize-inject-target",
+      "operator_version": "1",
+      "inputs": ["group.message.received"],
+      "output": { "id": "inject.target.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "map-session",
+      "operator": "teams.map-issue-session",
+      "operator_version": "1",
+      "inputs": ["inject.target.authorized"],
+      "output": { "id": "inject.session.mapped", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-mode",
+      "operator": "teams.decide-injection-mode",
+      "operator_version": "1",
+      "inputs": ["inject.session.mapped"],
+      "output": { "id": "inject.mode.decided", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "await-capacity",
+      "operator": "teams.await-injection-capacity",
+      "operator_version": "1",
+      "inputs": ["inject.mode.decided"],
+      "output": { "id": "inject.capacity.available", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "inject-prompt",
+      "operator": "teams.inject-acp-prompt",
+      "operator_version": "1",
+      "inputs": ["inject.capacity.available"],
+      "output": { "id": "inject.prompt.sent", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "collect-result",
+      "operator": "teams.collect-turn-result",
+      "operator_version": "1",
+      "inputs": ["inject.prompt.sent"],
+      "output": { "id": "inject.turn.result", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "return-result",
+      "operator": "teams.return-inject-result",
+      "operator_version": "1",
+      "inputs": ["inject.turn.result"],
+      "output": { "id": "inject.result.returned", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-inject-outcome",
+      "operator_version": "1",
+      "inputs": ["inject.result.returned"],
+      "output": { "id": "message.inject.result", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-target", "to": "map-session", "arc_id": "inject.target.authorized" },
+    { "from": "map-session", "to": "decide-mode", "arc_id": "inject.session.mapped" },
+    { "from": "decide-mode", "to": "await-capacity", "arc_id": "inject.mode.decided" },
+    { "from": "await-capacity", "to": "inject-prompt", "arc_id": "inject.capacity.available" },
+    { "from": "inject-prompt", "to": "collect-result", "arc_id": "inject.prompt.sent" },
+    { "from": "collect-result", "to": "return-result", "arc_id": "inject.turn.result" },
+    { "from": "return-result", "to": "decide-outcome", "arc_id": "inject.result.returned" }
+  ],
+  "outputs": ["message.inject.result"]
+}

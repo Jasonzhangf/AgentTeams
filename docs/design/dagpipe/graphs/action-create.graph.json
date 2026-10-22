@@ -1,0 +1,75 @@
+{
+  "id": "agentteams.action-create",
+  "version": "1",
+  "inputs": [{ "id": "action.create.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-command",
+      "operator": "teams.authorize-action-command",
+      "operator_version": "1",
+      "inputs": ["action.create.intent"],
+      "output": { "id": "action.command.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "resolve-authority",
+      "operator": "teams.resolve-command-edge",
+      "operator_version": "1",
+      "inputs": ["action.command.authorized"],
+      "output": { "id": "action.authority.resolved", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "create-action",
+      "operator": "teams.create-action",
+      "operator_version": "1",
+      "inputs": ["action.authority.resolved"],
+      "output": { "id": "action.created", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "persist-action",
+      "operator": "teams.persist-action",
+      "operator_version": "1",
+      "inputs": ["action.created"],
+      "output": { "id": "action.persisted", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "notify-assignee",
+      "operator": "teams.notify-action-assignee",
+      "operator_version": "1",
+      "inputs": ["action.persisted"],
+      "output": { "id": "action.assignee.notified", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-action-create-outcome",
+      "operator_version": "1",
+      "inputs": ["action.assignee.notified"],
+      "output": { "id": "action.create.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-command", "to": "resolve-authority", "arc_id": "action.command.authorized" },
+    { "from": "resolve-authority", "to": "create-action", "arc_id": "action.authority.resolved" },
+    { "from": "create-action", "to": "persist-action", "arc_id": "action.created" },
+    { "from": "persist-action", "to": "notify-assignee", "arc_id": "action.persisted" },
+    { "from": "notify-assignee", "to": "decide-outcome", "arc_id": "action.assignee.notified" }
+  ],
+  "outputs": ["action.create.receipt"]
+}

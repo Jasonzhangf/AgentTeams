@@ -1,0 +1,53 @@
+{
+  "id": "agentteams.issue-query",
+  "version": "1",
+  "inputs": [{ "id": "issue.query.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-reader",
+      "operator": "teams.authorize-issue-read",
+      "operator_version": "1",
+      "inputs": ["issue.query.intent"],
+      "output": { "id": "issue.query.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "read-vikunja",
+      "operator": "teams.read-vikunja-state",
+      "operator_version": "1",
+      "inputs": ["issue.query.authorized"],
+      "output": { "id": "issue.vikunja.state", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "project-state",
+      "operator": "teams.project-session-state",
+      "operator_version": "1",
+      "inputs": ["issue.vikunja.state"],
+      "output": { "id": "issue.session.projected", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-issue-query-outcome",
+      "operator_version": "1",
+      "inputs": ["issue.session.projected"],
+      "output": { "id": "issue.query.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-reader", "to": "read-vikunja", "arc_id": "issue.query.authorized" },
+    { "from": "read-vikunja", "to": "project-state", "arc_id": "issue.vikunja.state" },
+    { "from": "project-state", "to": "decide-outcome", "arc_id": "issue.session.projected" }
+  ],
+  "outputs": ["issue.query.receipt"]
+}

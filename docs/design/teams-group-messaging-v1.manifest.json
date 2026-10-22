@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "manifest_id": "teams-group-messaging-v1",
+  "status": "design",
+  "revision": 5,
+  "supersedes": "revision 4; see docs/design/teams-group-messaging-v1-audit-feedback.md and the revision 3, revision 4 and revision 5 review findings",
+  "canonical_doc": "docs/design/teams-group-messaging-v1.md",
+  "owner_modules": ["control-protocol", "server", "network", "runtime", "config"],
+  "resources": [
+    "group-membership",
+    "issue-session",
+    "action",
+    "group-message",
+    "message-watermark",
+    "delivery-record",
+    "injection-binding",
+    "vikunja-issue-link"
+  ],
+  "chains": [
+    {
+      "chain_id": "group-membership-v1",
+      "status": "design",
+      "graph_files": [
+        "docs/design/dagpipe/graphs/group-create.graph.json",
+        "docs/design/dagpipe/graphs/group-invite.graph.json",
+        "docs/design/dagpipe/graphs/group-invite-response.graph.json"
+      ],
+      "steps": ["create", "invite", "respond", "persist-membership", "publish-member"]
+    },
+    {
+      "chain_id": "group-message-v1",
+      "status": "design",
+      "graph_files": [
+        "docs/design/dagpipe/graphs/group-message-send.graph.json",
+        "docs/design/dagpipe/graphs/group-message-deliver.graph.json"
+      ],
+      "steps": ["authorize", "validate-references", "dedup-commit", "append", "deliver", "ack", "advance-watermark"]
+    },
+    {
+      "chain_id": "issue-session-v1",
+      "status": "design",
+      "graph_files": [
+        "docs/design/dagpipe/graphs/issue-create.graph.json",
+        "docs/design/dagpipe/graphs/issue-query.graph.json",
+        "docs/design/dagpipe/graphs/issue-close.graph.json",
+        "docs/design/dagpipe/graphs/issue-reopen.graph.json"
+      ],
+      "steps": ["create-or-reference", "readback", "open-session", "query", "close", "reopen"]
+    },
+    {
+      "chain_id": "action-lifecycle-v1",
+      "status": "design",
+      "graph_files": [
+        "docs/design/dagpipe/graphs/action-create.graph.json",
+        "docs/design/dagpipe/graphs/action-execute.graph.json"
+      ],
+      "steps": ["authorize-command", "resolve-channel", "create-action", "notify", "execute", "submit-result", "close-action"]
+    },
+    {
+      "chain_id": "message-inject-v1",
+      "status": "design",
+      "graph_files": ["docs/design/dagpipe/graphs/message-inject.graph.json"],
+      "steps": ["authorize-target", "map-session", "decide-mode", "await-capacity", "inject", "collect-result", "return-result"]
+    },
+    {
+      "chain_id": "vikunja-convergence-v1",
+      "status": "design",
+      "graph_files": ["docs/design/dagpipe/graphs/vikunja-webhook.graph.json"],
+      "steps": ["receive", "verify", "translate", "project-state"]
+    }
+  ],
+  "boundaries": {
+    "message_visibility": "group-shared",
+    "at_target_is_action_target_not_private_chat": true,
+    "send_requires_explicit_action_fields": ["issue", "action", "initiator", "targets", "reason", "expectedResult", "replyRequired"],
+    "action_is_single_source_of_truth_for_responsibility": true,
+    "message_targets_derived_from_action_or_strictly_checked": true,
+    "execution_condition": "valid-action-and-current-agent-is-assignee",
+    "reply_required_gates_execution": false,
+    "receiving_message_alone_triggers_action": false,
+    "auto_reply_between_agents": false,
+    "one_issue_one_session": true,
+    "group_has_many_issue_sessions": true,
+    "vikunja_owns_issue_open_closed_state": true,
+    "teams_keeps_second_editable_issue_state": false,
+    "action_completion_closes_issue": false,
+    "issue_close_authority": "session-initiator",
+    "issue_reopen_authority": "session-initiator",
+    "late_message_after_close": "history-only-no-action-no-auto-reopen",
+    "message_idempotency_key": "commitId",
+    "request_id_is_idempotency_key": false,
+    "hub_send_receipt_means": "durably-accepted",
+    "daemon_ack_after_local_inbox_persisted": true,
+    "delivery_guarantee": "at-least-once-with-dedup",
+    "exactly_once_across_engine_side_effects": false,
+    "unknown_result_requires_readback_and_dedup": true,
+    "cancel_request_equals_prompt_ended": false,
+    "inject_requires_explicit_action_target": true,
+    "preempt_unrelated_human_session": false,
+    "inject_scope": "issue-session-bound-local-acp-session",
+    "issue_closed_and_physical_stop_reported_separately": true,
+    "vikunja_write_failure_fakes_close": false,
+    "reuse_registration_client_connection": true,
+    "second_relay_socket": false,
+    "external_op_execution_owner_per_op": true,
+    "hub_delegates_external_op_and_projects_result": true,
+    "external_close_converges_via_polling_in_batch_1": true,
+    "webhook_is_batch_3_accelerator": true,
+    "external_close_runs_common_cancellation": true,
+    "idempotency_keys_for_issue_action_comment": ["commitId", "resultCommitId"],
+    "external_change_persisted_before_call": true,
+    "unknown_result_readback_not_blind_retry": true,
+    "action_registry_persisted_in_actions_json": true,
+    "external_ops_persisted_in_external_ops_json": true,
+    "inject_returns_result_submit_is_single_owner": true,
+    "persistence_root": "registry dataDirectory, default ~/.agentteams",
+    "single_writer_per_jsonl": true,
+    "message_acceptance_watermark_and_result_evidence_separate": true,
+    "roles": ["master", "peer"],
+    "command_edge_explicit_masters_of": true,
+    "command_authority_not_derived_from_role_name": true,
+    "group_admin_action_command_issue_close_separate": true,
+    "peer_can_refuse_action": false,
+    "peer_can_report_blocked_or_failed": true,
+    "master_can_refuse_peer_request_with_reason": true,
+    "permission_conditional_on_masters_of": true,
+    "command_edge_direction": {
+      "master_to_peer": "master.mastersOf contains peer",
+      "peer_to_master_request": "target master.mastersOf contains requesting peer"
+    },
+    "require_bidirectional_command_edge": false,
+    "owner_or_admin_does_not_bypass_command_edge": true,
+    "reentry_filtered_by_member_validity_interval": true,
+    "leave_cancel_request_vs_execution_stopped_separate": true,
+    "delivery_success_receipt_not_earlier_than_watermark_advance": true,
+    "close_reopen_has_monotonic_op_seq": true,
+    "stale_open_close_op_is_not_rewritten": true,
+    "opposite_external_state_with_unknown_order_reports_conflict_or_unknown": true,
+    "cancel_requires_execution_stopped_confirmation": true,
+    "inflight_cancel_states": ["cancel_requested", "cancelled", "unknown"],
+    "result_during_cancel_requested_is_kept": true,
+    "op_receipt_authenticated_to_assigned_owner": true,
+    "op_deterministic_failure_uses_typed_error": true,
+    "mutation_recovery_reads_before_reassigning_owner": true,
+    "read_only_query_may_change_owner": true
+  },
+  "required_gates": [
+    "teams-group-membership",
+    "teams-group-message-reliability",
+    "teams-issue-session",
+    "teams-action-lifecycle",
+    "teams-message-inject",
+    "teams-vikunja-minimal",
+    "teams-group-dag-outcome"
+  ],
+  "design_defaults": {
+    "cli_only": true,
+    "mcp_tools": false,
+    "skills": false,
+    "transport": "existing agentteams WSS+TLS channel over RegistrationClient",
+    "peer_to_peer_in_scope": false,
+    "offline_cache_root": "~/.agentteams",
+    "injection_modes": ["queue", "steer"],
+    "steer_semantics": "cancel-then-wait-for-terminal-then-inject",
+    "queue_semantics": "inject-on-idle",
+    "reply_binding": "actionId",
+    "followup_creates_new_action": true,
+    "comment_audit_result_ends_own_action": true,
+    "tailscale": "external-install-bind-interface-only",
+    "vikunja_webhook_receiver": "agent-daemon",
+    "batches": {
+      "batch_1": "human-operable issue and action loop with minimal Vikunja issue lifecycle, operation idempotency, action persistence and external close convergence via state polling",
+      "batch_2": "model execution: ACP session mapping, queue/steer, discussion/comment/audit, result write-back, close cancellation",
+      "batch_3": "Vikunja webhook acceleration, deployment verification, extensions"
+    }
+  },
+  "pending_decisions": [
+    {
+      "topic": "logical session to local ACP session mapping",
+      "recommendation": "one issue session to one local ACP session, created or resumed by sessionId",
+      "batch": 2
+    }
+  ],
+  "confirmed_decisions": [
+    {
+      "topic": "peer-to-peer permissions",
+      "decision": "no command edge; both sides request through a common master or the session initiator",
+      "confirmed_by": "user"
+    },
+    {
+      "topic": "multiple masters command relation",
+      "decision": "multiple masters allowed, each commands only its explicitly listed peers; conflicts are per-action, no global arbitration",
+      "confirmed_by": "user"
+    },
+    {
+      "topic": "Vikunja identity and comment ownership",
+      "decision": "one Vikunja token per account; comment attributed to the token user; agent identity recorded as a stable reference in the comment body",
+      "confirmed_by": "user"
+    },
+    {
+      "topic": "non-initiator close permission limit",
+      "decision": "only the initiator closes or reopens; non-initiators request close, initiator executes; initiator may delegate explicitly to a named member",
+      "confirmed_by": "user"
+    },
+    {
+      "topic": "capacity and retention",
+      "decision": "configurable per scope; explicit gap report when watermark is below retention start",
+      "confirmed_by": "user"
+    }
+  ],
+  "evidence_boundary": {
+    "design_only": true,
+    "implementation_started": false,
+    "services_run": false,
+    "runtime_acceptance_claimed": false,
+    "graph_validation": "dagpipe graph validate over the thirteen design graphs"
+  }
+}

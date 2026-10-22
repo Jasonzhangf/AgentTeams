@@ -1,0 +1,64 @@
+{
+  "id": "agentteams.group-message-send",
+  "version": "1",
+  "inputs": [{ "id": "group.message.send.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-sender",
+      "operator": "teams.authorize-group-member",
+      "operator_version": "1",
+      "inputs": ["group.message.send.intent"],
+      "output": { "id": "group.send.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "validate-references",
+      "operator": "teams.validate-message-references",
+      "operator_version": "1",
+      "inputs": ["group.send.authorized"],
+      "output": { "id": "group.references.validated", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "dedup-commit",
+      "operator": "teams.dedup-message-commit",
+      "operator_version": "1",
+      "inputs": ["group.references.validated"],
+      "output": { "id": "group.commit.deduped", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "append-message",
+      "operator": "teams.append-group-message",
+      "operator_version": "1",
+      "inputs": ["group.commit.deduped"],
+      "output": { "id": "group.message.accepted", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-send-outcome",
+      "operator_version": "1",
+      "inputs": ["group.message.accepted"],
+      "output": { "id": "group.message.send.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-sender", "to": "validate-references", "arc_id": "group.send.authorized" },
+    { "from": "validate-references", "to": "dedup-commit", "arc_id": "group.references.validated" },
+    { "from": "dedup-commit", "to": "append-message", "arc_id": "group.commit.deduped" },
+    { "from": "append-message", "to": "decide-outcome", "arc_id": "group.message.accepted" }
+  ],
+  "outputs": ["group.message.send.receipt"]
+}

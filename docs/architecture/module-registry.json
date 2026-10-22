@@ -326,6 +326,188 @@
         "server/**",
         "ui/**"
       ]
+    },
+    {
+      "module_id": "group-messaging",
+      "owner": "server",
+      "status": "design",
+      "design_doc": "docs/design/teams-group-messaging-v1.md",
+      "note": "Owns the group messaging design artifacts only until implementation splits them across group-wire, group-registry, issue-session, action-registry, message-log, message-router, group-channel, agent-messaging, local-message-socket, vikunja-sync and vikunja-intent. Design status; no runtime behavior is delivered.",
+      "owned_paths": [
+        "docs/design/teams-group-messaging-v1.md",
+        "docs/design/teams-group-messaging-v1.manifest.json",
+        "docs/design/dagpipe/graphs/group-create.graph.json",
+        "docs/design/dagpipe/graphs/group-invite.graph.json",
+        "docs/design/dagpipe/graphs/group-invite-response.graph.json",
+        "docs/design/dagpipe/graphs/group-message-send.graph.json",
+        "docs/design/dagpipe/graphs/group-message-deliver.graph.json",
+        "docs/design/dagpipe/graphs/issue-create.graph.json",
+        "docs/design/dagpipe/graphs/issue-query.graph.json",
+        "docs/design/dagpipe/graphs/action-create.graph.json",
+        "docs/design/dagpipe/graphs/action-execute.graph.json",
+        "docs/design/dagpipe/graphs/issue-close.graph.json",
+        "docs/design/dagpipe/graphs/issue-reopen.graph.json",
+        "docs/design/dagpipe/graphs/message-inject.graph.json",
+        "docs/design/dagpipe/graphs/vikunja-webhook.graph.json"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "agent-host/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "group-wire",
+      "owner": "control-protocol",
+      "status": "implemented",
+      "note": "Batch 1 closed wire frames, codecs, action transition table and execution gating.",
+      "owned_paths": [
+        "control-protocol/group-wire.spec.ts",
+        "control-protocol/group-wire.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "network/**",
+        "runtime/**"
+      ]
+    },
+    {
+      "module_id": "group-registry",
+      "owner": "server",
+      "status": "implemented",
+      "note": "Batch 1 group, invitation, interval and command-edge truth.",
+      "owned_paths": [
+        "server/group-registry.spec.ts",
+        "server/group-registry.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "issue-session",
+      "owner": "server",
+      "status": "implemented",
+      "note": "Batch 1 issue-session projection, open/close intents and read-back convergence.",
+      "owned_paths": [
+        "server/issue-session.spec.ts",
+        "server/issue-session.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "action-registry",
+      "owner": "server",
+      "status": "implemented",
+      "note": "Batch 1 action records, transitions, cancel semantics and result idempotency.",
+      "owned_paths": [
+        "server/action-registry.spec.ts",
+        "server/action-registry.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "message-log",
+      "owner": "server",
+      "status": "implemented",
+      "note": "Batch 1 per-group append-only message log, watermarks and retention gaps.",
+      "owned_paths": [
+        "server/message-log.spec.ts",
+        "server/message-log.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "message-router",
+      "owner": "server",
+      "status": "implemented",
+      "note": "Batch 1 push selection, dedupe and membership validation for group messages.",
+      "owned_paths": [
+        "server/message-router.spec.ts",
+        "server/message-router.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "group-channel",
+      "owner": "network",
+      "status": "partial",
+      "note": "Transport, request correlation and push subscription are delivered. The registration connection is not yet its only user, so it is not wired into a daemon.",
+      "owned_paths": [
+        "network/group-channel.ts",
+        "network/group-channel.spec.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "agent/**"
+      ]
+    },
+    {
+      "module_id": "agent-messaging",
+      "owner": "runtime",
+      "status": "implemented",
+      "note": "Batch 1 CLI frame relay and external op execution. Session mapping, queue and steer are batch 2.",
+      "owned_paths": [
+        "runtime/agent-messaging.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "network/**"
+      ]
+    },
+    {
+      "module_id": "local-message-socket",
+      "owner": "runtime",
+      "status": "implemented",
+      "note": "Batch 1 CLI to daemon Unix socket with typed error mapping.",
+      "owned_paths": [
+        "runtime/local-message-socket.spec.ts",
+        "runtime/local-message-socket.ts"
+      ],
+      "forbidden_paths": [
+        "server/**"
+      ]
+    },
+    {
+      "module_id": "vikunja-sync",
+      "owner": "runtime",
+      "status": "implemented",
+      "note": "Batch 1 Vikunja create, read, comment, close and reopen with unknown results.",
+      "owned_paths": [
+        "runtime/vikunja-sync.spec.ts",
+        "runtime/vikunja-sync.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "network/**"
+      ]
+    },
+    {
+      "module_id": "vikunja-intent",
+      "owner": "config",
+      "status": "implemented",
+      "note": "Batch 1 [vikunja] config compile and validation. Not consumed by daemon-intent yet.",
+      "owned_paths": [
+        "config/vikunja-intent.spec.ts",
+        "config/vikunja-intent.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "runtime/**"
+      ]
     }
   ]
 }

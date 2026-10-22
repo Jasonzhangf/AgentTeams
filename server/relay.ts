@@ -11,6 +11,7 @@ import { assertEndpointIdentity } from '../control-protocol/endpoint-ref.ts'
 import type {
   AgentDeclaration,
   AuthenticatedAgent,
+  JsonValue,
   RelayGrant,
   RelayPeer,
   RelayServerControl,
@@ -56,9 +57,35 @@ export interface RelayServerOptions {
   readonly peerTtlMs?: number
   readonly authenticate: (credential: Credential) => MaybePromise<AuthenticatedAgent | null>
   readonly authorizeTarget?: (source: AuthenticatedAgent, target: RelayPeer) => MaybePromise<boolean>
+  readonly groupHub?: GroupHubFactory
   readonly now?: () => Date
   readonly idFactory?: () => string
 }
+
+export interface GroupHubPush {
+  readonly agentId: string
+  readonly frame: unknown
+}
+
+export type GroupHubResult =
+  | { readonly ok: true; readonly reply?: unknown; readonly pushes?: readonly GroupHubPush[] }
+  | { readonly ok: false; readonly error: ServiceError }
+
+export interface GroupHubBridge {
+  send(agentId: string, frame: unknown): void
+  isOnline(agentId: string): boolean
+}
+
+/** Transport-agnostic group application. The relay owns sockets and envelopes; the hub owns group semantics. */
+export interface GroupHub {
+  handle(actor: AuthenticatedAgent, frame: unknown): Promise<GroupHubResult>
+}
+
+/**
+ * The hub is built with the relay bridge so it can delegate `op.execute` while a
+ * request is still pending. The bridge is the only socket knowledge the hub has.
+ */
+export type GroupHubFactory = (bridge: GroupHubBridge) => GroupHub
 
 export interface RelayServer {
   readonly url: string
@@ -192,6 +219,7 @@ function parseControlMessage(data: RawData, isBinary: boolean): Record<string, u
     'relay.directory': ['kind', 'requestId', 'subscribe'],
     'relay.connect': ['kind', 'requestId', 'generation', 'targetAgentId', 'targetGeneration'],
     'relay.open': ['kind', 'requestId', 'grantId', 'generation'],
+    'relay.group': ['kind', 'requestId', 'frame'],
   }
   const allowed = fields[kind]
   if (allowed) knownFields(input, allowed, `control message ${kind}`)
@@ -254,11 +282,17 @@ class RelayServerImpl implements RelayServer {
   private closePromise?: Promise<void>
   private leaseTimer?: ReturnType<typeof setTimeout>
 
+  private readonly groupHub?: GroupHub
+
   constructor(
     private readonly options: RelayServerOptions,
     private readonly httpsServer: HttpsServer,
     private readonly wsServer: InstanceType<typeof WebSocketServer>,
   ) {
+    this.groupHub = options.groupHub?.({
+      send: (agentId, frame) => this.sendToAgent(agentId, frame),
+      isOnline: (agentId) => this.socketForAgent(agentId) !== undefined,
+    })
     this.now = options.now ?? (() => new Date())
     this.idFactory = options.idFactory ?? randomUUID
     this.peerTtlMs = options.peerTtlMs ?? DEFAULT_PEER_TTL_MS
@@ -439,6 +473,10 @@ class RelayServerImpl implements RelayServer {
     // directory snapshot or be granted a connection.
     this.sweepPeerLeases()
     if (input.kind !== 'relay.login') this.assertCurrentControl(state)
+    if (input.kind === 'relay.group') {
+      await this.handleGroup(state, input)
+      return
+    }
     switch (input.kind) {
       case 'relay.login':
         throw new RelayFailure('CONFLICT', 'control connection is already admitted')
@@ -520,6 +558,49 @@ class RelayServerImpl implements RelayServer {
       .filter((peer) => peer.declaration.identity.accountId === state.auth?.accountId && peer.declaration.scopeId === state.auth?.scopeId)
       .map((peer) => projectPeerEndpoints(peer, state.auth!))
     this.send(state.socket, { kind: 'relay.directory', requestId, revision: this.revision, peers })
+  }
+
+  /**
+   * Group handling is not part of the socket queue: an external operation can
+   * wait for a receipt that arrives on the same control connection, so blocking
+   * the queue would deadlock the receiver.
+   */
+  private handleGroup(state: RelaySocketState, input: Record<string, unknown>): void {
+    void this.dispatchGroup(state, input).catch((error: unknown) => {
+      const requestId = typeof input.requestId === 'string' ? input.requestId : undefined
+      this.handleFailure(state, error instanceof RelayFailure
+        ? error
+        : new RelayFailure('UPSTREAM_ERROR', error instanceof Error ? error.message : 'group handler failed', requestId))
+    })
+  }
+
+  private async dispatchGroup(state: RelaySocketState, input: Record<string, unknown>): Promise<void> {
+    const requestId = string(input.requestId, 'requestId')
+    if (!state.auth) throw new RelayFailure('UNAUTHENTICATED', 'control identity is unavailable', requestId)
+    const hub = this.groupHub
+    if (!hub) throw new RelayFailure('UNSUPPORTED_OPERATION', 'group messaging is not configured', requestId)
+    const result = await hub.handle(state.auth, input.frame)
+    if (!result.ok) {
+      this.send(state.socket, { kind: 'relay.error', requestId, error: result.error })
+      return
+    }
+    if (result.reply !== undefined) {
+      this.send(state.socket, { kind: 'relay.group.reply', requestId, frame: result.reply as JsonValue })
+    }
+    for (const push of result.pushes ?? []) this.sendToAgent(push.agentId, push.frame)
+  }
+
+  /** The one bridge between the hub and relay sockets. */
+  private sendToAgent(agentId: string, frame: unknown): void {
+    const target = this.socketForAgent(agentId)
+    if (target) this.send(target.socket, { kind: 'relay.group.push', frame: frame as JsonValue })
+  }
+
+  private socketForAgent(agentId: string): RelaySocketState | undefined {
+    for (const state of this.controls.values()) {
+      if (state.auth?.agentId === agentId && open(state.socket) && this.activeByIdentity.get(state.identityKey ?? '') === state) return state
+    }
+    return undefined
   }
 
   private async connect(state: RelaySocketState, input: Record<string, unknown>): Promise<void> {

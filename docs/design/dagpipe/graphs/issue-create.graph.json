@@ -1,0 +1,64 @@
+{
+  "id": "agentteams.issue-create",
+  "version": "1",
+  "inputs": [{ "id": "issue.create.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-initiator",
+      "operator": "teams.authorize-issue-init",
+      "operator_version": "1",
+      "inputs": ["issue.create.intent"],
+      "output": { "id": "issue.creation.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "create-reference",
+      "operator": "teams.create-reference-vikunja",
+      "operator_version": "1",
+      "inputs": ["issue.creation.authorized"],
+      "output": { "id": "issue.vikunja.written", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "readback-confirm",
+      "operator": "teams.readback-vikunja-state",
+      "operator_version": "1",
+      "inputs": ["issue.vikunja.written"],
+      "output": { "id": "issue.vikunja.confirmed", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "open-session",
+      "operator": "teams.open-issue-session",
+      "operator_version": "1",
+      "inputs": ["issue.vikunja.confirmed"],
+      "output": { "id": "issue.session.opened", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-issue-create-outcome",
+      "operator_version": "1",
+      "inputs": ["issue.session.opened"],
+      "output": { "id": "issue.create.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-initiator", "to": "create-reference", "arc_id": "issue.creation.authorized" },
+    { "from": "create-reference", "to": "readback-confirm", "arc_id": "issue.vikunja.written" },
+    { "from": "readback-confirm", "to": "open-session", "arc_id": "issue.vikunja.confirmed" },
+    { "from": "open-session", "to": "decide-outcome", "arc_id": "issue.session.opened" }
+  ],
+  "outputs": ["issue.create.receipt"]
+}

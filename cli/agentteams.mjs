@@ -952,8 +952,17 @@ export async function agentteamsCommand(argv = process.argv.slice(2), options = 
   throw new AgentTeamsCliError(`unsupported command: ${parsed.command}`)
 }
 
+// The group messaging surface lives in its own modules. `status` stays with the
+// local process lifecycle above, so the two never compete for one name.
+const GROUP_FAMILY = new Set(['join', 'group', 'issue', 'action', 'msg'])
+
 export async function main(argv = process.argv.slice(2), options = {}) {
   try {
+    if (argv.length > 0 && GROUP_FAMILY.has(argv[0])) {
+      // Both modules read process.argv themselves and act on load.
+      await import(argv[0] === 'join' ? './join.mjs' : './group.mjs')
+      return
+    }
     const output = await agentteamsCommand(argv, options)
     if (output !== undefined) console.log(output)
   } catch (error) {
