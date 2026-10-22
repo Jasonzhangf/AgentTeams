@@ -5,6 +5,9 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseDaemonConfigText, resolveDaemonIntent, type DaemonIntentV4, type RegistryDaemonIntent } from '../config/daemon-intent.ts'
 import { createRelayServer, type RelayServer } from '../server/relay.ts'
+import { createGroupHub } from '../server/group-hub.ts'
+import { groupPaths, readJsonFile, writeJsonFile } from '../server/group-store.ts'
+import type { GroupHubSnapshot } from '../server/group-hub.ts'
 import {
   RegistryIntentFault,
   createRegistryRelayOptions,
@@ -357,7 +360,21 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
   try {
     const credentials = await loadRegistryCredentials(plan, { env })
     const [key, cert] = await Promise.all([readFile(plan.tls.keyFile), readFile(plan.tls.certFile)])
-    server = await createRelayServer(createRegistryRelayOptions(plan, { credentials, tls: { key, cert } }))
+    const options = createRegistryRelayOptions(plan, { credentials, tls: { key, cert } })
+    const groupData = join(intent.daemon.dataDirectory, 'group-state')
+    const store = {
+      load: () => readJsonFile<GroupHubSnapshot>(join(groupData, 'group-hub.json')),
+      save: (snapshot: GroupHubSnapshot) => writeJsonFile(join(groupData, 'group-hub.json'), snapshot),
+    }
+    server = await createRelayServer({
+      ...options,
+      groupHub: (bridge) => createGroupHub({
+        store,
+        sendToAgent: bridge.send,
+        isOnline: bridge.isOnline,
+        externalOpTimeoutMs: 10_000,
+      }),
+    })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await writeRegistryState(statePath, { ...base, pid: process.pid, state: 'failed', error: message, updatedAt: new Date().toISOString() })

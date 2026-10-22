@@ -6,7 +6,9 @@ import { advanceWatermark, appendMessage, createMessageLog, pageMessages, type M
 import {
   activeMemberIds,
   canCloseIssue,
+  canCommand,
   canManageGroup,
+  canRequest,
   createGroupRegistry,
   groupOf,
   inviteMember,
@@ -32,6 +34,7 @@ import {
   listActions,
   refuseAction,
   reportAction,
+  startAction,
   submitActionResult,
   type ActionRegistryState,
 } from './action-registry.ts'
@@ -71,11 +74,15 @@ export interface GroupHubDeps {
   readonly store?: GroupHubStore
   readonly now?: () => Date
   readonly idFactory?: () => string
-  /** Online agents for push selection. The composition layer owns presence. */
-  readonly onlineAgentIds?: () => readonly string[]
+  /** Pushes one frame to a named agent; the relay bridge or a test double. */
+  readonly sendToAgent?: (agentId: string, frame: unknown) => void
+  /** Presence for push selection and delegation refusal. */
+  readonly isOnline?: (agentId: string) => boolean
+  /** A delegation that never returns a receipt becomes unknown after this delay. */
+  readonly externalOpTimeoutMs?: number
   /**
-   * Delegates one external write to its execution owner and resolves with the
-   * owner receipt. A plain ServiceError means the op never left the hub.
+   * Direct delegation seam for tests and for a single-process composition.
+   * Without it the hub delegates over the bridge and waits for the receipt frame.
    */
   readonly executeExternalOp?: (op: ExternalOp) => Promise<ExternalOpReceipt | ServiceError>
 }
@@ -108,14 +115,19 @@ export class GroupHubImpl implements GroupHub {
   private readonly now: () => Date
   private readonly idFactory: () => string
   private readonly store?: GroupHubStore
-  private readonly onlineAgentIds: () => readonly string[]
+  private readonly sendToAgent?: (agentId: string, frame: unknown) => void
+  private readonly isOnline: (agentId: string) => boolean
+  private readonly externalOpTimeoutMs: number
   private readonly executeExternalOp?: (op: ExternalOp) => Promise<ExternalOpReceipt | ServiceError>
+  private readonly waiting = new Map<string, (receipt: ExternalOpReceipt) => void>()
 
   constructor(deps: GroupHubDeps = {}) {
     this.now = deps.now ?? (() => new Date())
     this.idFactory = deps.idFactory ?? (() => crypto.randomUUID())
     this.store = deps.store
-    this.onlineAgentIds = deps.onlineAgentIds ?? (() => [])
+    this.sendToAgent = deps.sendToAgent
+    this.isOnline = deps.isOnline ?? (() => false)
+    this.externalOpTimeoutMs = deps.externalOpTimeoutMs ?? 10_000
     this.executeExternalOp = deps.executeExternalOp
     const snapshot = deps.store?.load()
     this.registry = snapshot
@@ -165,11 +177,41 @@ export class GroupHubImpl implements GroupHub {
         case 'action.report': return this.reportOrRefuse(actor, input, 'report')
         case 'action.refuse': return this.reportOrRefuse(actor, input, 'refuse')
         case 'action.list': return ok({ kind: 'action.list', requestId: text(input.requestId, 'requestId'), actions: listActions(this.actions, optionalText(input.sessionId)) })
+        case 'op.confirmed':
+        case 'op.failed':
+        case 'op.unknown': return this.receipt(actor, input)
         default: return err('UNSUPPORTED_OPERATION', `unsupported group frame ${String(input.kind)}`)
       }
     } catch (error) {
       return err('INVALID_INPUT', error instanceof Error ? error.message : String(error))
     }
+  }
+
+  /**
+   * A delegated owner returns one receipt. Only the owner of that operation may
+   * move the projection; a late or foreign receipt changes nothing.
+   */
+  private receipt(actor: Actor, input: Record<string, unknown>): GroupHubResult {
+    const opId = text(input.opId, 'opId')
+    const commitId = text(input.commitId, 'commitId')
+    const kind = String(input.kind)
+    const failure = kind === 'op.failed'
+      ? readServiceError(input.error)
+      : undefined
+    if (kind === 'op.failed' && !failure) return err('INVALID_INPUT', 'op.failed requires a typed error')
+    const receipt: ExternalOpReceipt = {
+      opId, commitId, fromAgentId: actor.agentId,
+      state: kind === 'op.confirmed' ? 'confirmed' : kind === 'op.failed' ? 'failed' : 'unknown',
+      ...(kind === 'op.confirmed' ? { result: (input.result ?? null) as JsonValue } : {}),
+      ...(failure === undefined ? {} : { error: failure }),
+      ...(kind === 'op.unknown' ? { reason: optionalText(input.reason) ?? 'unknown' } : {}),
+    }
+    const resolve = this.waiting.get(opId)
+    if (resolve) {
+      this.waiting.delete(opId)
+      resolve(receipt)
+    }
+    return { ok: true }
   }
 
   private save(): void {
@@ -246,12 +288,14 @@ export class GroupHubImpl implements GroupHub {
     const actionId = optionalText(input.actionId)
     const action: Action | undefined = actionId === undefined ? undefined : this.actions.actions.get(actionId)
     if (actionId !== undefined && !action) return err('NOT_FOUND', `unknown action ${actionId}`)
+    const targetAgentIds: readonly string[] = action ? [action.assigneeAgentId] : (input.targetAgentIds as readonly string[])
+    const sessionId = action ? action.sessionId : optionalText(input.sessionId)
     const appended = appendMessage(this.logOf(groupId), {
       commitId, groupId,
-      ...(optionalText(input.sessionId) === undefined ? {} : { sessionId: optionalText(input.sessionId) as string }),
+      ...(sessionId === undefined ? {} : { sessionId }),
       ...(actionId === undefined ? {} : { actionId }),
       fromAgentId: actor.agentId,
-      targetAgentIds: input.targetAgentIds as readonly string[],
+      targetAgentIds,
       replyRequired: input.replyRequired,
       ...(optionalText(input.replyRequiredReason) === undefined ? {} : { replyRequiredReason: optionalText(input.replyRequiredReason) as string }),
       body,
@@ -259,7 +303,7 @@ export class GroupHubImpl implements GroupHub {
       ...(optionalText(input.inReplyToMessageId) === undefined ? {} : { inReplyToMessageId: optionalText(input.inReplyToMessageId) as string }),
     })
     this.setLog(groupId, appended.state)
-    const routed = routeGroupMessage({ group, message: appended.message, ...(action ? { action } : {}), onlineAgentIds: this.onlineAgentIds() })
+    const routed = routeGroupMessage({ group, message: appended.message, ...(action ? { action } : {}), onlineAgentIds: activeMemberIds(group).filter((agentId) => this.isOnline(agentId)) })
     this.save()
     const pushes = routed.pushAgentIds.map((agentId) => ({ agentId, frame: { kind: 'message.received', groupId, message: appended.message } }))
     return ok({ kind: 'message.sent', requestId: text(input.requestId, 'requestId'), messageId: appended.message.messageId, sequence: appended.message.sequence }, pushes)
@@ -303,6 +347,10 @@ export class GroupHubImpl implements GroupHub {
     const groupId = text(input.groupId, 'groupId')
     const commitId = text(input.commitId, 'commitId')
     const issueId = text(input.vikunjaIssueId, 'vikunjaIssueId')
+    // A reference into a group the actor does not belong to is a cross-group write.
+    if (!memberActiveAt(groupOf(this.registry, groupId), actor.agentId, this.now().toISOString())) {
+      return err('FORBIDDEN', `${actor.agentId} is not an active member of ${groupId}`)
+    }
     const sessionId = `${groupId}:referenced:${issueId}`
     this.sessions = openIssueSession(this.sessions, { sessionId, groupId, vikunjaProjectId: 'referenced', vikunjaIssueId: issueId, initiatorAgentId: actor.agentId }, this.now().toISOString())
     this.save()
@@ -313,6 +361,10 @@ export class GroupHubImpl implements GroupHub {
     const sessionId = text(input.sessionId, 'sessionId')
     const session = this.sessions.sessions.get(sessionId)
     if (!session) return err('NOT_FOUND', `unknown session ${sessionId}`)
+    // Off-group history is not readable just because the session id is known.
+    if (!memberActiveAt(groupOf(this.registry, session.groupId), actor.agentId, this.now().toISOString())) {
+      return err('FORBIDDEN', `${actor.agentId} is not an active member of ${session.groupId}`)
+    }
     return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session })
   }
 
@@ -360,6 +412,11 @@ export class GroupHubImpl implements GroupHub {
     if (!session) return err('NOT_FOUND', `unknown session ${sessionId}`)
     const group = groupOf(this.registry, session.groupId)
     if (!memberActiveAt(group, assigneeAgentId, this.now().toISOString())) return err('INVALID_INPUT', `${assigneeAgentId} is not an active member`)
+    // One `mastersOf` edge serves both directions: a master commands its peer, a
+    // peer requests its master. No edge means no authority in either direction.
+    if (!canCommand(group, actor.agentId, assigneeAgentId) && !canRequest(group, actor.agentId, assigneeAgentId)) {
+      return err('FORBIDDEN', `${actor.agentId} has no command or request edge to ${assigneeAgentId}`)
+    }
     if (typeof input.replyRequired !== 'boolean') return err('INVALID_INPUT', 'replyRequired must be a boolean')
     const reason = text(input.reason, 'reason')
     const expectedResult = text(input.expectedResult, 'expectedResult')
@@ -383,12 +440,19 @@ export class GroupHubImpl implements GroupHub {
     const action = this.actions.actions.get(actionId)
     if (!action) return err('NOT_FOUND', `unknown action ${actionId}`)
     if (action.assigneeAgentId !== actor.agentId) return err('FORBIDDEN', `${actor.agentId} is not the assignee of ${actionId}`)
+    const session = this.sessions.sessions.get(action.sessionId)
     const delegated = await this.delegate('action.result', resultCommitId, actor.agentId, {
-      actionId, resultCommitId, sessionId: action.sessionId, resultBody: optionalText(input.resultBody) ?? '',
+      actionId, resultCommitId, sessionId: action.sessionId,
+      resultBody: optionalText(input.resultBody) ?? '',
+      ...(session === undefined ? {} : { vikunjaIssueId: session.vikunjaIssueId }),
     })
     if (!delegated.ok) return delegated.result
     const resultRef = optionalText((delegated.result as Record<string, unknown> | undefined)?.resultRef) ?? `result:${resultCommitId}`
-    this.actions = submitActionResult(this.actions, { actionId, resultCommitId, resultRef }, this.now().toISOString()).state
+    const now = this.now().toISOString()
+    // A master assignment cannot be refused, so a result from `pending` starts
+    // the action instead of failing the transition.
+    if (this.actions.actions.get(actionId)?.state === 'pending') this.actions = startAction(this.actions, actionId, now)
+    this.actions = submitActionResult(this.actions, { actionId, resultCommitId, resultRef }, now).state
     this.save()
     const updated = actionOf(this.actions, actionId)
     return ok({ kind: 'action.updated', requestId: text(input.requestId, 'requestId'), action: updated }, [
@@ -405,6 +469,11 @@ export class GroupHubImpl implements GroupHub {
       if (input.report !== 'blocked' && input.report !== 'failed') return err('INVALID_INPUT', 'report must be blocked or failed')
       this.actions = reportAction(this.actions, actionId, input.report, this.now().toISOString())
     } else {
+      // A master assignment cannot be refused; only a peer request can be.
+      const group = groupOf(this.registry, this.sessions.sessions.get(action.sessionId)?.groupId ?? '')
+      if (!canRequest(group, action.initiatorAgentId, actor.agentId)) {
+        return err('FORBIDDEN', `${actor.agentId} cannot refuse ${actionId}; only a master may refuse a peer request`)
+      }
       this.actions = refuseAction(this.actions, actionId, this.now().toISOString())
     }
     this.save()
@@ -412,6 +481,26 @@ export class GroupHubImpl implements GroupHub {
     return ok({ kind: 'action.updated', requestId: text(input.requestId, 'requestId'), action: updated }, [
       { agentId: updated.initiatorAgentId, frame: { kind: 'action.changed', action: updated } },
     ])
+  }
+
+  /**
+   * Sends `op.execute` to the owner over the bridge and waits for that owner's
+   * receipt. A timeout is unknown, not success.
+   */
+  private delegatedReceipt(op: ExternalOp): Promise<ExternalOpReceipt | ServiceError> {
+    if (!this.sendToAgent) return Promise.resolve({ code: 'UNAVAILABLE', message: 'no group bridge is configured' })
+    if (!this.isOnline(op.ownerAgentId)) return Promise.resolve({ code: 'UNAVAILABLE', message: `execution owner ${op.ownerAgentId} is offline` })
+    return new Promise<ExternalOpReceipt | ServiceError>((resolve) => {
+      const timer = setTimeout(() => {
+        this.waiting.delete(op.opId)
+        resolve({ code: 'UNAVAILABLE', message: `no receipt for ${op.opId} within ${this.externalOpTimeoutMs}ms` })
+      }, this.externalOpTimeoutMs)
+      this.waiting.set(op.opId, (receipt) => {
+        clearTimeout(timer)
+        resolve(receipt)
+      })
+      this.sendToAgent?.(op.ownerAgentId, { kind: 'op.execute', opId: op.opId, opKind: op.kind, params: op.params })
+    })
   }
 
   /**
@@ -425,11 +514,12 @@ export class GroupHubImpl implements GroupHub {
     ownerAgentId: string,
     params: Record<string, unknown>,
   ): Promise<{ readonly ok: true; readonly result: JsonValue | undefined } | { readonly ok: false; readonly result: GroupHubResult }> {
-    if (!this.executeExternalOp) return { ok: false, result: err('UNAVAILABLE', `no external executor is configured for ${kind}`) }
     const begun = beginExternalOp(this.ledger, { opId: this.idFactory(), commitId, kind, ownerAgentId, params: params as JsonValue }, this.now().toISOString())
     const operations = new Map(this.ledger.operations).set(begun.op.opId, begun.op)
     this.ledger = markExternalOpInflight({ operations }, begun.op.opId, this.now().toISOString())
-    const receipt = await this.executeExternalOp(begun.op)
+    const receipt = this.executeExternalOp
+      ? await this.executeExternalOp(begun.op)
+      : await this.delegatedReceipt(begun.op)
     if ('code' in receipt) return { ok: false, result: err(receipt.code, receipt.message) }
     if (receipt.state === 'unknown') {
       this.save()
@@ -446,6 +536,14 @@ export class GroupHubImpl implements GroupHub {
     }
     return { ok: true, result: receipt.result }
   }
+}
+
+function readServiceError(value: unknown): ServiceError | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  return typeof record.code === 'string' && typeof record.message === 'string'
+    ? { code: record.code as ServiceError['code'], message: record.message }
+    : undefined
 }
 
 function readObservedState(result: JsonValue | undefined): IssueState | undefined {

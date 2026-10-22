@@ -5,6 +5,7 @@ import { createGroupHub, type GroupHubSnapshot, type GroupHubStore } from './gro
 
 const OWNER = { agentId: 'agent-a', accountId: 'acct', scopeId: 'scope' }
 const PEER = { agentId: 'agent-b', accountId: 'acct', scopeId: 'scope' }
+const MASTER = { agentId: 'agent-c', accountId: 'acct', scopeId: 'scope' }
 
 function memoryStore(): GroupHubStore & { readonly snapshots: GroupHubSnapshot[] } {
   const snapshots: GroupHubSnapshot[] = []
@@ -20,7 +21,7 @@ function hubWith(executor?: (op: ExternalOp) => Promise<ExternalOpReceipt | { co
   const store = memoryStore()
   const hub = createGroupHub({
     store,
-    onlineAgentIds: () => online,
+    isOnline: (id) => online.includes(id),
     ...(executor === undefined ? {} : { executeExternalOp: executor }),
     now: () => new Date('2026-10-22T00:00:00.000Z'),
     idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
@@ -49,6 +50,16 @@ async function groupWithPeer() {
   await hub.handle(OWNER, { kind: 'group.invite', requestId: 'r-invite', groupId, agentId: 'agent-b', role: 'peer' })
   await hub.handle(PEER, { kind: 'group.respond', requestId: 'r-respond', groupId, accept: true })
   return { hub, store, groupId }
+}
+
+/**
+ * Adds a master that explicitly commands the peer. One `mastersOf` edge serves
+ * both directions, so this group also lets the peer request that master.
+ */
+async function addMaster(hub: ReturnType<typeof createGroupHub>, groupId: string, online: readonly string[] = ['agent-a', 'agent-b', 'agent-c']) {
+  await hub.handle(OWNER, { kind: 'group.invite', requestId: 'r-master', groupId, agentId: 'agent-c', role: 'master', mastersOf: ['agent-b'] })
+  await hub.handle(MASTER, { kind: 'group.respond', requestId: 'r-master-ok', groupId, accept: true })
+  return online
 }
 
 describe('group lifecycle', () => {
@@ -123,7 +134,7 @@ describe('issue and action through the delegated owner', () => {
   it('projects a session only after the delegated create is confirmed', async () => {
     const { hub, groupId } = await groupWithPeer()
     const withExecutor = createGroupHub({
-      onlineAgentIds: () => ['agent-a', 'agent-b'],
+      isOnline: (id) => ['agent-a', 'agent-b'].includes(id),
       now: () => new Date('2026-10-22T00:00:00.000Z'),
       idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
       executeExternalOp: async (op) => confirmed(op, { issueId: '42' }),
@@ -142,7 +153,7 @@ describe('issue and action through the delegated owner', () => {
   it('does not project closed when the external state still reports open', async () => {
     const groupId = 'g1'
     const withExecutor = createGroupHub({
-      onlineAgentIds: () => ['agent-a', 'agent-b'],
+      isOnline: (id) => ['agent-a', 'agent-b'].includes(id),
       now: () => new Date('2026-10-22T00:00:00.000Z'),
       idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
       executeExternalOp: async (op) => confirmed(op, op.kind === 'issue.close'
@@ -166,7 +177,7 @@ describe('issue and action through the delegated owner', () => {
 
   it('rejects a receipt that does not come from the delegated owner', async () => {
     const wrongOwner = createGroupHub({
-      onlineAgentIds: () => ['agent-a', 'agent-b'],
+      isOnline: (id) => ['agent-a', 'agent-b'].includes(id),
       now: () => new Date('2026-10-22T00:00:00.000Z'),
       idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
       executeExternalOp: async (op) => confirmed(op, { issueId: '42' }, 'agent-mallory'),
@@ -184,27 +195,36 @@ describe('issue and action through the delegated owner', () => {
   it('refuses an action change from a member that is not the assignee', async () => {
     const { hub, groupId } = await groupWithPeer()
     const withExecutor = createGroupHub({
-      onlineAgentIds: () => ['agent-a', 'agent-b'],
+      isOnline: (id) => ['agent-a', 'agent-b'].includes(id),
       now: () => new Date('2026-10-22T00:00:00.000Z'),
       idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
       executeExternalOp: async (op) => confirmed(op, { issueId: '42' }),
     })
     const groupId2 = await withPeer(withExecutor)
+    await addMaster(withExecutor, groupId2)
     const issue = await withExecutor.handle(OWNER, {
       kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId: groupId2,
       vikunjaProjectId: 'p1', title: 'ship', body: 'body',
     })
     const sessionId = (issue.reply as { session: { sessionId: string } }).session.sessionId
-    const action = await withExecutor.handle(OWNER, {
+    const action = await withExecutor.handle(MASTER, {
       kind: 'action.create', requestId: 'r2', commitId: 'ac1', sessionId,
       assigneeAgentId: 'agent-b', actionKind: 'review', reason: 'check the plan', expectedResult: 'a verdict', replyRequired: true,
     })
     expect(action.ok).toBe(true)
     const actionId = (action.reply as { action: { actionId: string } }).action.actionId
-    const wrong = await withExecutor.handle(OWNER, { kind: 'action.refuse', requestId: 'r3', actionId, reason: 'no' })
+    // A peer cannot refuse a master assignment; it can only report.
+    const wrong = await withExecutor.handle(PEER, { kind: 'action.refuse', requestId: 'r3', actionId, reason: 'no' })
     expect(wrong.ok).toBe(false)
     expect(wrong.ok ? '' : wrong.error.code).toBe('FORBIDDEN')
-    const refused = await withExecutor.handle(PEER, { kind: 'action.refuse', requestId: 'r4', actionId, reason: 'no' })
+    // The same edge lets the peer request the master, and the master may refuse.
+    const request = await withExecutor.handle(PEER, {
+      kind: 'action.create', requestId: 'r4', commitId: 'ac2', sessionId,
+      assigneeAgentId: 'agent-c', actionKind: 'reply', reason: 'need a decision', expectedResult: 'an answer', replyRequired: true,
+    })
+    expect(request.ok).toBe(true)
+    const requestId = (request.reply as { action: { actionId: string } }).action.actionId
+    const refused = await withExecutor.handle(MASTER, { kind: 'action.refuse', requestId: 'r5', actionId: requestId, reason: 'out of scope' })
     expect(refused.ok).toBe(true)
     expect((refused.reply as { action: { state: string } }).action.state).toBe('refused')
   })
@@ -215,7 +235,7 @@ describe('persistence and restart', () => {
     const store = memoryStore()
     const deps = {
       store,
-      onlineAgentIds: () => ['agent-a', 'agent-b'] as const,
+      isOnline: (id) => ['agent-a', 'agent-b'].includes(id),
       now: () => new Date('2026-10-22T00:00:00.000Z'),
       idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
     }

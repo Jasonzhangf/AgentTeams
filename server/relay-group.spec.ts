@@ -112,7 +112,7 @@ afterEach(async () => {
 
 async function startRelay() {
   const hub = createGroupHub({
-    onlineAgentIds: () => ['agent-a', 'agent-b'],
+    isOnline: (id) => ['agent-a', 'agent-b'].includes(id),
     now: () => new Date('2026-10-22T00:00:00.000Z'),
     idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
   })
@@ -124,7 +124,7 @@ async function startRelay() {
     maxBufferedAmount: 4 * 1024, maxPendingMessages: 8, maxPendingBytes: 16 * 1024,
     grantTtlMs: 60_000,
     authenticate: (credential) => (credential === undefined ? null : agents.get(credential) ?? null),
-    groupHub: hub,
+    groupHub: () => hub,
   })
 }
 
