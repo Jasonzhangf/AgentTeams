@@ -413,3 +413,30 @@
 - 未收口：本 note 的提交会再次推进 main；`5abd96e`（managed OpenCode readiness 时序敏感）仍开；
   `c520894` 等 issue 引用的仓库外 receipt 根目录已被回收，仓库内只剩 primary receipt；
   `runtime/darwin-arm64` 链接产物的不可复现性未修复。
+
+## 2026-10-22 群组消息第一批交付（设计 revision 5 第 18 节）
+
+- 目标：完成 `docs/design/teams-group-messaging-v1.md` revision 5 的第一批「人工可操作的 issue/action 闭环」，
+  不改需求、不启动生产 daemon、不部署。
+- 交付（源码级并入 `main`）：群组线协议与编解码、群注册表与权限边、issue 会话、action 注册表、
+  消息日志与水印、消息路由、组通道、本地消息套接字、Vikunja 读写与配置意图、CLI `join`/`group`/`issue`/`action`/`msg`/`status`，
+  以及 relay 分派。第 18 节 18 条验收全过，含 3 条反例；黑盒环用真实 CLI、真实 TLS relay 与本地
+  Vikunja HTTP 替身跑通建群、建 issue、派遣并执行 action、写回、关闭与回读。
+- 可靠性要点：每个外部操作只有一个执行 owner；账本按 commit id 幂等并先落盘再发请求；
+  开闭意图入快照并在重启后把 pending/inflight 收敛为 unknown；回执按 owner、opId、commitId 鉴权后才唤醒等待方；
+  投影只由确认过的回读推进，缺回读即 unknown；关闭/重开只认发起者，客户端 `delegates` 一律忽略；
+  写读操作校验活跃成员；水印按数组序列化，重启后仍可 ack 与翻页；群状态按 `<data>/groups/<account>/<scope>/` 分目录。
+- 证据：`docs/design/teams-group-messaging-v1-batch1-evidence.md` 记录 18 条分层证据与未覆盖项。
+  受影响测试 21 个文件 273 条全过，`tsc --noEmit` 干净；`pnpm verify` 退出 0，
+  全量回归 1424 条通过（142 个文件），编译库与打包运行时 smoke 通过。
+- 独立 review：两次 milestone review，第一次 10 条 blocking，修复后第二次 PASS、剩余 blocking 0。
+- 交付与回执：分支 `codex/group-messaging-design` 10 个提交以 `--no-ff` 并入 `main`，
+  `main == origin/main == 46f2cdcd30f6bd4b69e13915405accce56d44a3a`。
+- 未收口（已写入证据文档）：生产装配 `network/group-channel.ts` 尚未在 daemon 复用注册连接，
+  `runtime/agent-messaging.ts` 仍自开一条 relay 连接；每个作用域仍是单个 `group-hub.json`，
+  未拆成设计里的 per-group jsonl；`socketForAgent` 仍只按 agentId 匹配；
+  `issue.reference` 的 `vikunjaProjectId` 仍是占位值；`join` 与 agent-messaging 的 TLS 校验当前关闭；
+  真实 Vikunja 实例与 webhook 签名未核验。
+- 环境备注：本机负载高时 `runtime/managed-opencode-session.spec.ts` 与
+  `opencode-adapter/tests/acp-engine.real.spec.ts` 会因真实 OpenCode 启动超时偶发失败，
+  单独运行均通过；这两个 owner 不在本批提交范围内。
