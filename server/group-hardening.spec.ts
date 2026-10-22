@@ -112,6 +112,23 @@ describe('review findings 1 and 3: only a read-back moves a projection', () => {
     expect((queried.reply as { session: { state: string } }).session.state).toBe('open')
   })
 
+  it('refuses to complete an action whose result has no read-back', async () => {
+    const hub = hubWith(jsonStore(), async (op) => (op.kind === 'issue.create'
+      ? confirmed(op, { issueId: '42' })
+      : confirmed(op, {})))
+    const { sessionId } = await groupAndSession(hub)
+    const created = await hub.handle(MASTER, {
+      kind: 'action.create', requestId: 'a0', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'review', reason: 'r', expectedResult: 'e', replyRequired: false,
+    })
+    const actionId = (created.reply as { action: { actionId: string } }).action.actionId
+    const submitted = await hub.handle(PEER, { kind: 'action.submit', requestId: 'a1', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(submitted.ok).toBe(false)
+    const listed = await hub.handle(MASTER, { kind: 'action.list', requestId: 'a2', sessionId })
+    const state = (listed.reply as { actions: readonly { actionId: string; state: string }[] }).actions.find((a) => a.actionId === actionId)?.state
+    expect(state).toBe('unknown')
+  })
+
   it('keeps the projection open when a close is unconfirmable across a restart', async () => {
     const store = jsonStore()
     const hub = hubWith(store, async (op) => (op.kind === 'issue.close'
@@ -209,6 +226,39 @@ describe('acceptance 8: a read converges the projection to the external state', 
     const queried = await hub.handle(MASTER, { kind: 'issue.query', requestId: 'q1', sessionId })
     expect(queried.ok).toBe(true)
     expect((queried.reply as { session: { state: string } }).session.state).toBe('open')
+  })
+})
+
+describe('acceptance 8 over the bridge: the read receipt is accepted', () => {
+  it('converges from a read delegated to the owner', async () => {
+    let external: 'open' | 'closed' = 'open'
+    const store = jsonStore()
+    const responder = (agentId: string, frame: Record<string, unknown>) => {
+      const params = (frame.params ?? {}) as Record<string, unknown>
+      const commitId = typeof params.commitId === 'string' ? params.commitId : String(frame.opId)
+      const result = frame.opKind === 'issue.query' ? { issueId: '42', actualState: external }
+        : frame.opKind === 'issue.create' ? { issueId: '42' }
+          : frame.opKind === 'issue.close' ? { issueId: '42', expectedState: 'closed', actualState: 'closed' }
+            : frame.opKind === 'issue.reopen' ? { issueId: '42', expectedState: 'open', actualState: 'open' }
+              : { resultRef: 'comment:1' }
+      const actor = { agentId, accountId: 'acct', scopeId: 'scope' }
+      queueMicrotask(() => { void hub.handle(actor, { kind: 'op.confirmed', opId: String(frame.opId), commitId, result }) })
+    }
+    const hub = createGroupHub({
+      store,
+      isOnline: () => true,
+      externalOpTimeoutMs: 1_000,
+      sendToAgent: (agentId, frame) => responder(agentId, frame as Record<string, unknown>),
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
+    })
+    const { sessionId } = await groupAndSession(hub)
+    // The initiator closes in Vikunja. The owner echoes the query commit id, so
+    // the hub accepts the receipt and converges.
+    external = 'closed'
+    const queried = await hub.handle(MASTER, { kind: 'issue.query', requestId: 'q1', sessionId })
+    expect(queried.ok).toBe(true)
+    expect((queried.reply as { session: { state: string } }).session.state).toBe('closed')
   })
 })
 

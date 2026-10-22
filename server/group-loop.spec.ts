@@ -180,8 +180,10 @@ describe('the batch-1 issue/action loop', () => {
       const listed = await cliViaAgentteams(a.socketPath, ['group', 'list'])
       expect((listed.groups as readonly unknown[]).length).toBe(1)
 
-      const closed = await cli(c.socketPath, ['issue', 'close', sessionId, 'done', 'shipped'])
-      expect(closed.outcome).toBe('closed')
+      // The initiator closes in Vikunja; Teams converges on the next read.
+      await cli(c.socketPath, ['issue', 'close', sessionId, 'done', 'shipped'])
+      const queried = await cli(c.socketPath, ['issue', 'query', sessionId])
+      expect((queried.session as { state: string }).state).toBe('closed')
       expect([...vikunja.issues.values()][0].done).toBe(true)
     } finally {
       await a.close()

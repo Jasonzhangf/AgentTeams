@@ -449,7 +449,9 @@ export class GroupHubImpl implements GroupHub {
       return err('FORBIDDEN', `${actor.agentId} is not an active member of ${session.groupId}`)
     }
     const observed = await this.readExternal(session)
-    if (observed !== undefined && observed !== session.state) {
+    const current = this.sessions.sessions.get(sessionId)
+    // A slow read must not restore a state that a later open/close replaced.
+    if (observed !== undefined && current !== undefined && current.state === session.state && observed !== current.state) {
       this.sessions = reconcileIssueSession(this.sessions, { sessionId, state: observed, now })
       this.save()
     }
@@ -470,6 +472,8 @@ export class GroupHubImpl implements GroupHub {
       ownerAgentId: session.initiatorAgentId,
       params: {
         sessionId: session.sessionId,
+        // The owner echoes this back; a receipt without it is refused.
+        commitId: `issue.query:${session.sessionId}`,
         vikunjaProjectId: session.vikunjaProjectId,
         vikunjaIssueId: session.vikunjaIssueId,
       },

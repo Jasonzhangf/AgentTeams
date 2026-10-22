@@ -20,7 +20,7 @@
 | 5 | `server/message-log.spec.ts` returns the original record for a repeated commit and rejects different content;rebuilds from increasing records。`server/group-hardening.spec.ts` keeps watermarks across a snapshot round-trip(重启后状态可读)| 单元 + hub |
 | 6 | `server/group-acceptance.spec.ts` item 6 does not report completion when the result write fails | hub |
 | 7 | `server/group-acceptance.spec.ts` item 7 does not confirm a close whose external write failed | hub |
-| 8 | `server/group-hardening.spec.ts` closes and reopens the session from an observed Vikunja state;keeps the projection when the read fails(状态读取收敛)。`server/group-acceptance.spec.ts` item 8 does not rerun a completed action after a reopen | hub |
+| 8 | `server/group-hardening.spec.ts` closes and reopens the session from an observed Vikunja state;keeps the projection when the read fails;converges from a read delegated to the owner over the bridge。`server/group-loop.spec.ts` 用真实 CLI 与替身走 `issue query` 收敛;`server/group-acceptance.spec.ts` item 8 does not rerun a completed action after a reopen | hub + 黑盒 |
 | 9 | `server/group-acceptance.spec.ts` item 9 denies a cross-group reference and an unauthorised assignment。`network/group-channel.spec.ts` rejects the matching waiter with the relay ServiceError instead of resolving a success | hub + 单元 |
 | 10 | `server/message-log.spec.ts` reports a retention gap explicitly after trimming;does not report a gap when the cursor already covers the missing range | 单元 |
 | 11 | `server/action-registry.spec.ts` still executes when replyRequired is false。`server/group-acceptance.spec.ts` item 11 executes an action whose replyRequired is false | 单元 + hub |
