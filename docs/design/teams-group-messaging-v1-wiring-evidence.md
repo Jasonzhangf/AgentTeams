@@ -92,6 +92,15 @@ queue/steer、讨论与 comment 执行)不在本文件范围内。
 - `runtime/acp-serve.spec.ts` 新增组合用例:注册启用时 `groupSocketPath` 非空、位于数据目录,
   且注册不可达时 CLI 请求得到 typed 错误而不是本地伪成功。
 
+## 5. TLS 校验默认开启
+
+- `runtime/agent-messaging.ts` 不再自开连接,因此不再有关闭校验的路径。
+- `cli/join.mjs` 的连通性探测默认校验对端证书。自签 relay 用 `--ca <pem>` 显式信任;
+  `--insecure` 是唯一的绕过方式,并且会在 stderr 明说已绕过。`probe` 对 IP 主机不再发送
+  SNI(RFC 6066),改由证书的 IP SAN 匹配。
+- 证据:`cli/join.spec.ts` 覆盖默认校验下自签 relay 被拒且不写配置、`--ca` 下真实握手成功、
+  `--insecure` 成功并打印绕过提示。
+
 ## 未收口
 
 - 推送的 account/scope 精确按键(见第 4 节)。
@@ -102,7 +111,5 @@ queue/steer、讨论与 comment 执行)不在本文件范围内。
   有人复用同一个请求 id,迟到的错误会归到新请求上;仓内所有请求 id 都是 randomUUID,该情形
   在现有路径上不可达。真正的逐请求取消仍是通道自己的超时。
 - `acp-serve` 内真实 relay 的端到端用例(见第 1 节);新增用例只覆盖注册不可达的分支。
-- `join` 的 TLS 校验仍关闭(`cli/join.mjs` 的 `rejectUnauthorized: false`);本轮只移除了
-  `agent-messaging` 的自开连接,`join` 的配置生成与连通性探测没有改。
 - 真实 Vikunja 实例与 webhook 签名未核验,仍只有本地 HTTP 替身。
 - 设计第二批(模型执行:Session 映射、queue/steer、讨论与 comment 执行)未开始。

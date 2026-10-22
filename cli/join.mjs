@@ -11,6 +11,7 @@
 import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { isIP } from 'node:net'
 import { connect as tlsConnect } from 'node:tls'
 
 const ENGINE_KINDS = new Set(['opencode', 'dsh'])
@@ -40,6 +41,10 @@ function parse(argv) {
   const name = take(argv, '--name', false)
   const configPath = resolve(take(argv, '--config', false) ?? 'agentteams.toml')
   const noStart = argv.includes('--no-start')
+  // Verification is the default. A self-signed relay is trusted explicitly with
+  // --ca; --insecure is the one bypass and it says so on stderr.
+  const insecure = argv.includes('--insecure')
+  const caPath = take(argv, '--ca', false)
   if (!/^wss:\/\/[^/\s]+$/u.test(remote)) fail('--remote must be a wss URL')
   const endpointMatch = /^([^:\s]+):(\d{1,5})$/u.exec(endpoint)
   if (!endpointMatch) fail('--endpoint must be ip:port')
@@ -50,14 +55,30 @@ function parse(argv) {
   if (name === undefined || name.length === 0) fail('--name is required')
   const agentId = name
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(agentId)) fail('--name must be a simple agent id')
-  return { remote, endpoint: endpointMatch[0], ip: endpointMatch[1], port, serve, agentId, configPath, noStart }
+  return {
+    remote, endpoint: endpointMatch[0], ip: endpointMatch[1], port, serve, agentId, configPath, noStart, insecure,
+    ...(caPath === undefined ? {} : { caPath: resolve(caPath) }),
+  }
 }
 
-/** A real TLS handshake against the relay; any admitted socket proves reachability. */
-function probe(remote, timeoutMs = 5_000) {
+/**
+ * A real TLS handshake against the relay; any admitted socket proves reachability.
+ * The peer certificate is verified unless the caller asked for the explicit
+ * bypass, so a hostname or trust mismatch fails here instead of at first use.
+ */
+function probe(remote, options, timeoutMs = 5_000) {
   const url = new URL(remote)
+  const ca = options.caPath === undefined ? undefined : readFileSync(options.caPath)
   return new Promise((resolve) => {
-    const socket = tlsConnect({ host: url.hostname, port: Number(url.port || 443), servername: url.hostname, rejectUnauthorized: false })
+    const socket = tlsConnect({
+      host: url.hostname,
+      port: Number(url.port || 443),
+      // RFC 6066 forbids an IP literal as the SNI name; the certificate is then
+      // matched against the IP subject alternative name.
+      ...(isIP(url.hostname) === 0 ? { servername: url.hostname } : {}),
+      ...(ca === undefined ? {} : { ca }),
+      rejectUnauthorized: options.insecure !== true,
+    })
     const done = (reachable, reason) => {
       socket.destroy()
       resolve({ reachable, ...(reason === undefined ? {} : { reason }) })
@@ -136,7 +157,8 @@ const existing = readIdentity(options.configPath)
 if (existing !== undefined && existing !== null && existing.id !== options.agentId) {
   fail(`${options.configPath} declares ${existing.id}, not ${options.agentId}; refusing to rebuild it`)
 }
-const reachability = await probe(options.remote)
+if (options.insecure) process.stderr.write('join: TLS verification bypassed (--insecure)\n')
+const reachability = await probe(options.remote, options)
 if (!reachability.reachable) {
   // The previous config stays untouched when the relay is unreachable.
   fail(`relay ${options.remote} is unreachable: ${reachability.reason ?? 'no reason'}`)

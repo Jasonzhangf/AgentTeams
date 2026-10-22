@@ -1,5 +1,5 @@
 import { execFileSync, execFile } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer as createTlsServer } from 'node:tls'
 import { tmpdir } from 'node:os'
 import { join as joinPath } from 'node:path'
@@ -14,12 +14,15 @@ let cert: Buffer
 let server: ReturnType<typeof createTlsServer> | undefined
 let url: string
 let closedUrl: string
+let caPath: string
 
 beforeAll(async () => {
   directory = mkdtempSync(joinPath(tmpdir(), 'join-'))
   const keyPath = joinPath(directory, 'key.pem')
   const certPath = joinPath(directory, 'cert.pem')
-  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost', '-keyout', keyPath, '-out', certPath, '-days', '1'], { stdio: 'ignore' })
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost',
+    '-addext', 'subjectAltName=IP:127.0.0.1,DNS:localhost', '-keyout', keyPath, '-out', certPath, '-days', '1'], { stdio: 'ignore' })
+  caPath = certPath
   key = readFileSync(keyPath)
   cert = readFileSync(certPath)
   server = createTlsServer({ key, cert }, (socket) => socket.end())
@@ -47,7 +50,7 @@ async function runJoin(args: readonly string[]): Promise<{ code: number; stdout:
 describe('agentteams join', () => {
   it('writes a v4 agent config after a real TLS handshake', async () => {
     const configPath = joinPath(directory, 'agent-a.toml')
-    const result = await runJoin(['--remote', url, '--endpoint', '127.0.0.1:7445', '--serve', 'dsh', '--name', 'reasoner-a', '--config', configPath, '--no-start'])
+    const result = await runJoin(['--remote', url, '--ca', caPath, '--endpoint', '127.0.0.1:7445', '--serve', 'dsh', '--name', 'reasoner-a', '--config', configPath, '--no-start'])
     expect(result.code).toBe(0)
     expect(result.stdout).toContain('reachable=true')
     const text = readFileSync(configPath, 'utf8')
@@ -61,7 +64,7 @@ describe('agentteams join', () => {
 
   it('is reachable through the agentteams entry as a subcommand', async () => {
     const configPath = joinPath(directory, 'agent-d.toml')
-    const { stdout } = await execFileAsync(process.execPath, ['cli/agentteams.mjs', 'join', '--remote', url, '--endpoint', '127.0.0.1:7446', '--serve', 'opencode', '--name', 'reasoner-d', '--config', configPath, '--no-start'], { encoding: 'utf8', cwd: process.cwd(), timeout: 20_000 })
+    const { stdout } = await execFileAsync(process.execPath, ['cli/agentteams.mjs', 'join', '--remote', url, '--ca', caPath, '--endpoint', '127.0.0.1:7446', '--serve', 'opencode', '--name', 'reasoner-d', '--config', configPath, '--no-start'], { encoding: 'utf8', cwd: process.cwd(), timeout: 20_000 })
     expect(stdout).toContain('reachable=true')
     expect(readFileSync(configPath, 'utf8')).toContain('kind = "opencode"')
   })
@@ -84,5 +87,24 @@ describe('agentteams join', () => {
     expect(result.code).not.toBe(0)
     expect(result.stderr).toContain('unreachable')
     expect(readFileSync(configPath, 'utf8')).toBe(before)
+  })
+
+  it('verifies the relay certificate by default and refuses an untrusted peer', async () => {
+    const configPath = joinPath(directory, 'agent-e.toml')
+    // The relay is self-signed and no anchor is given, so verification must fail
+    // and the config must not be written.
+    const result = await runJoin(['--remote', url, '--endpoint', '127.0.0.1:7447', '--serve', 'dsh', '--name', 'reasoner-e', '--config', configPath, '--no-start'])
+    expect(result.code).not.toBe(0)
+    expect(result.stderr).toContain('unreachable')
+    expect(existsSync(configPath)).toBe(false)
+  })
+
+  it('reaches the relay only when the bypass is asked for explicitly', async () => {
+    const configPath = joinPath(directory, 'agent-f.toml')
+    const result = await runJoin(['--remote', url, '--insecure', '--endpoint', '127.0.0.1:7448', '--serve', 'dsh', '--name', 'reasoner-f', '--config', configPath, '--no-start'])
+    expect(result.code).toBe(0)
+    // The bypass is announced, never silent.
+    expect(result.stderr).toContain('TLS verification bypassed')
+    expect(existsSync(configPath)).toBe(true)
   })
 })
