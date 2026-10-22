@@ -167,8 +167,12 @@ describe('the batch-1 issue/action loop', () => {
       await cli(a.socketPath, ['group', 'invite', groupId, 'agent-c', 'master', '--masters', 'agent-b'])
       await cli(c.socketPath, ['group', 'accept', groupId])
 
-      const session = await cli(c.socketPath, ['issue', 'create', groupId, 'p1', 'ship it', 'please ship'])
+      const session = await cli(c.socketPath, ['issue', 'create', groupId, 'p1', 'ship it', 'please ship', '--commit', 'cli-retry-1'])
       const sessionId = (session.session as { sessionId: string }).sessionId
+      expect(vikunja.issues.size).toBe(1)
+      // A CLI retry that reuses its commit id must not open a second issue.
+      const retried = await cli(c.socketPath, ['issue', 'create', groupId, 'p1', 'ship it', 'please ship', '--commit', 'cli-retry-1'])
+      expect((retried.session as { sessionId: string }).sessionId).toBe(sessionId)
       expect(vikunja.issues.size).toBe(1)
 
       const action = await cli(c.socketPath, ['action', 'create', sessionId, 'agent-b', 'review', 'check the plan', 'a verdict', '--reply'])

@@ -234,9 +234,10 @@ function main(argv) {
 const argv = process.argv.slice(2)
 main(argv)
   .then((reply) => {
-    // A parsed reply means the daemon settled the intent; the next identical
-    // command is a new intent. A timeout or transport failure keeps it.
-    if (pendingSignature !== undefined) clearCommit(pendingSignature)
+    // Only a real reply clears the pending commit: an error reply may mean the
+    // write reached the hub but could not be confirmed, so a retry must reuse
+    // the same commit. A timeout or transport failure also keeps it.
+    if (pendingSignature !== undefined && reply.kind !== 'relay.error') clearCommit(pendingSignature)
     if (reply.kind === 'relay.error') {
       process.stderr.write(`${reply.error?.code ?? 'ERROR'}: ${reply.error?.message ?? 'unknown'}\n`)
       process.exitCode = 1
