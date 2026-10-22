@@ -149,6 +149,73 @@ describe('section 18 acceptance items', () => {
   })
 })
 
+describe('section 18 acceptance items with a loop-level shape', () => {
+  it('item 2 ends the action at its own result and never auto-answers', async () => {
+    const hub = build(async (op) => issueOk(op))
+    const groupId = await group(hub)
+    const sessionId = await session(hub, groupId)
+    const created = await hub.handle(MASTER, {
+      kind: 'action.create', requestId: 'a0', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    const actionId = (created.reply as { action: { actionId: string } }).action.actionId
+    await hub.handle(PEER, { kind: 'action.submit', requestId: 'a1', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    // The result ends the action; the hub sends no follow-up message.
+    const page = await hub.handle(MASTER, { kind: 'message.page', requestId: 'p0', groupId })
+    expect((page.reply as { messages: readonly unknown[] }).messages).toHaveLength(0)
+  })
+
+  it('item 4 keeps two assignees independent', async () => {
+    const hub = build(async (op) => issueOk(op))
+    const groupId = await group(hub)
+    const sessionId = await session(hub, groupId)
+    const toPeer = await hub.handle(MASTER, {
+      kind: 'action.create', requestId: 'a0', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'review', reason: 'r', expectedResult: 'e', replyRequired: false,
+    })
+    const toMaster = await hub.handle(PEER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac2', sessionId,
+      assigneeAgentId: 'agent-c', actionKind: 'reply', reason: 'r', expectedResult: 'e', replyRequired: false,
+    })
+    const peerAction = (toPeer.reply as { action: { actionId: string } }).action.actionId
+    const masterAction = (toMaster.reply as { action: { actionId: string } }).action.actionId
+    await hub.handle(PEER, { kind: 'action.submit', requestId: 'a2', resultCommitId: 'rc1', actionId: peerAction, resultBody: 'done' })
+    const listed = await hub.handle(MASTER, { kind: 'action.list', requestId: 'a3', sessionId })
+    const states = new Map((listed.reply as { actions: readonly { actionId: string; state: string }[] }).actions.map((a) => [a.actionId, a.state]))
+    expect(states.get(peerAction)).toBe('completed')
+    expect(states.get(masterAction)).toBe('pending')
+  })
+
+  it('item 8 does not rerun a completed action after a reopen', async () => {
+    const hub = build(async (op) => issueOk(op))
+    const groupId = await group(hub)
+    const sessionId = await session(hub, groupId)
+    const created = await hub.handle(MASTER, {
+      kind: 'action.create', requestId: 'a0', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'review', reason: 'r', expectedResult: 'e', replyRequired: false,
+    })
+    const actionId = (created.reply as { action: { actionId: string } }).action.actionId
+    await hub.handle(PEER, { kind: 'action.submit', requestId: 'a1', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    await hub.handle(MASTER, { kind: 'issue.close', requestId: 'c0', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'x' })
+    await hub.handle(MASTER, { kind: 'issue.reopen', requestId: 'o0', commitId: 'oc1', sessionId, reason: 'again' })
+    const listed = await hub.handle(MASTER, { kind: 'action.list', requestId: 'a2', sessionId })
+    const state = (listed.reply as { actions: readonly { actionId: string; state: string }[] }).actions.find((a) => a.actionId === actionId)?.state
+    expect(state).toBe('completed')
+  })
+
+  it('item 12 creates one session for a repeated issue.create commit', async () => {
+    const hub = build(async (op) => issueOk(op))
+    const groupId = await group(hub)
+    const first = await hub.handle(MASTER, { kind: 'issue.create', requestId: 'i0', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 'ship', body: 'b' })
+    const second = await hub.handle(MASTER, { kind: 'issue.create', requestId: 'i1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 'ship', body: 'b' })
+    const firstId = (first.reply as { session: { sessionId: string } }).session.sessionId
+    const secondId = (second.reply as { session: { sessionId: string } }).session.sessionId
+    expect(secondId).toBe(firstId)
+    const listed = await hub.handle(MASTER, { kind: 'issue.query', requestId: 'q0', sessionId: firstId })
+    expect((listed.reply as { session: { sessionId: string } }).session.sessionId).toBe(firstId)
+  })
+})
+
 describe('the three required counter-examples', () => {
   it('counter-example 16: a stale close never overwrites a newer reopen', () => {
     // The close is ordinal 1, the reopen already reached ordinal 2.

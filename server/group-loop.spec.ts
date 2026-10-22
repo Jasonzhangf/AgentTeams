@@ -96,6 +96,12 @@ async function cli(socketPath: string, args: readonly string[]): Promise<Record<
   return JSON.parse(stdout.trim()) as Record<string, unknown>
 }
 
+/** The same surface through the `agentteams` entry, to prove the dispatch. */
+async function cliViaAgentteams(socketPath: string, args: readonly string[]): Promise<Record<string, unknown>> {
+  const { stdout } = await execFileAsync(process.execPath, ['cli/agentteams.mjs', ...args, '--socket', socketPath], { encoding: 'utf8', cwd: process.cwd(), timeout: 20_000 })
+  return JSON.parse(stdout.trim()) as Record<string, unknown>
+}
+
 let directory: string
 let relay: RelayServer | undefined
 let vikunja: Awaited<ReturnType<typeof startVikunjaStub>> | undefined
@@ -170,6 +176,9 @@ describe('the batch-1 issue/action loop', () => {
 
       await cli(b.socketPath, ['action', 'submit', actionId, 'looks good'])
       expect([...vikunja.issues.values()][0].comments.length).toBe(1)
+
+      const listed = await cliViaAgentteams(a.socketPath, ['group', 'list'])
+      expect((listed.groups as readonly unknown[]).length).toBe(1)
 
       const closed = await cli(c.socketPath, ['issue', 'close', sessionId, 'done', 'shipped'])
       expect(closed.outcome).toBe('closed')

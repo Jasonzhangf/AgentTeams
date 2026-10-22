@@ -24,6 +24,7 @@ import {
   createIssueSessionRegistry,
   openIssueSession,
   reopenIssueSession,
+  sessionForIssue,
   sessionOfIssue,
   type IssueSessionRegistry,
 } from './issue-session.ts'
@@ -333,6 +334,14 @@ export class GroupHubImpl implements GroupHub {
     const commitId = text(input.commitId, 'commitId')
     const projectId = text(input.vikunjaProjectId, 'vikunjaProjectId')
     const title = text(input.title, 'title')
+    // A retried create must not open a second issue: the confirmed commit decides.
+    for (const operation of this.ledger.operations.values()) {
+      if (operation.kind !== 'issue.create' || operation.commitId !== commitId || operation.state !== 'confirmed') continue
+      const issueId = optionalText((operation.result as Record<string, unknown> | undefined)?.issueId)
+      if (issueId === undefined) continue
+      const existing = sessionForIssue(this.sessions, groupId, projectId, issueId)
+      return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: existing })
+    }
     const delegated = await this.delegate('issue.create', commitId, actor.agentId, { groupId, commitId, vikunjaProjectId: projectId, title, body: optionalText(input.body) ?? '' })
     if (!delegated.ok) return delegated.result
     const issueId = optionalText((delegated.result as Record<string, unknown> | undefined)?.issueId)
