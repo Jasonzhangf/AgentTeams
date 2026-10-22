@@ -200,6 +200,7 @@ describe('the batch-1 issue/action loop', () => {
       maxPayload: 1024 * 1024, maxConnections: 16, maxGrants: 2,
       maxBufferedAmount: 4 * 1024, maxPendingMessages: 8, maxPendingBytes: 16 * 1024, grantTtlMs: 60_000,
       authenticate: (credential) => (credential === undefined ? null : agents.get(credential) ?? null),
+      groupScope: { accountId: 'account-a', scopeId: 'scope-a' },
       groupHub: (bridge) => createGroupHub({
         store: {
           load: () => { try { return JSON.parse(readFileSync(hubState, 'utf8')) as GroupHubSnapshot } catch { return undefined } },

@@ -369,6 +369,8 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
     })
     server = await createRelayServer({
       ...options,
+      // Pushes and group frames are addressed inside this one account and scope.
+      groupScope: { accountId: intent.daemon.accountId, scopeId: intent.daemon.scopeId },
       groupHub: (bridge) => createGroupHub({
         store,
         sendToAgent: bridge.send,

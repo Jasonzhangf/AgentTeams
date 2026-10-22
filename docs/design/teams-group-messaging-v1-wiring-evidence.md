@@ -101,11 +101,21 @@ queue/steer、讨论与 comment 执行)不在本文件范围内。
 - 证据:`cli/join.spec.ts` 覆盖默认校验下自签 relay 被拒且不写配置、`--ca` 下真实握手成功、
   `--insecure` 成功并打印绕过提示。
 
+## 3. 推送按 account+scope 定址
+
+relay 的群组面只服务一个账户与作用域:`RelayServerOptions.groupScope` 与 `groupHub` 必须成对
+给出,缺一个直接拒绝启动。推送用 `accountId`+`scopeId`+`agentId` 的精确身份键查在线连接,不再
+按 agentId 扫全部连接再猜;群帧也只在同一作用域内受理,其他作用域的群请求得到 `FORBIDDEN`。
+这样同名 agentId 在别的账户下既收不到推送,也读不到群组树。
+
+证据:`server/relay-group.spec.ts` 同时让 `account-a/scope-a` 的 `agent-b` 和
+`account-b/scope-b` 的同名 `agent-b` 上线,发一条只发给 `agent-b` 的消息,断言作用域内的那个
+收到 `message.received`,作用域外的那个既没收到推送、其 `group.list` 也被 `FORBIDDEN` 拒绝。
+`server/group-loop.spec.ts` 在真实注册连接与真实 store 上同样带 `groupScope` 跑通全链路。
+
 ## 未收口
 
-- 推送的 account/scope 精确按键(见第 4 节):群记录不带 account/scope,成员的 agentId 在群内
-  唯一,因此按 agentId 定址仍是当前契约。要按作用域按键,须先让群记录携带成员的作用域,
-  这属于设计变更,需要先确认。
+
 - `issue.reference` 只对"跨类型复用 commit"(create 的 commit 用于 reference)报冲突;两次
   reference 用同一 commit 指向不同 issue 时会各建一个会话。CLI 的稳定 commit 由目标推导,
   现有路径不会触发;要强制 §9 的内容冲突需给引用也记 commit。

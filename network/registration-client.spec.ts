@@ -51,6 +51,7 @@ async function startRelay(options: { readonly port?: number; readonly peerTtlMs?
     grantTtlMs: 10_000,
     ...(options.peerTtlMs === undefined ? {} : { peerTtlMs: options.peerTtlMs }),
     ...(options.groupHub === undefined ? {} : { groupHub: options.groupHub }),
+    ...(options.groupHub === undefined ? {} : { groupScope: { accountId: 'account', scopeId: 'scope' } }),
     authenticate: options.authenticate ?? (credential => credential?.startsWith('Bearer ')
       ? { accountId: 'account', scopeId: credential.slice(7).startsWith('b-') ? 'scope-b' : 'scope', agentId: credential.slice(7) }
       : null),

@@ -58,6 +58,12 @@ export interface RelayServerOptions {
   readonly authenticate: (credential: Credential) => MaybePromise<AuthenticatedAgent | null>
   readonly authorizeTarget?: (source: AuthenticatedAgent, target: RelayPeer) => MaybePromise<boolean>
   readonly groupHub?: GroupHubFactory
+  /**
+   * The one account and scope the group surface serves. Group records and pushes
+   * are scoped: a push is addressed inside this scope only, so one agent id in
+   * another account can never receive it. Required with `groupHub`.
+   */
+  readonly groupScope?: { readonly accountId: string; readonly scopeId: string }
   readonly now?: () => Date
   readonly idFactory?: () => string
 }
@@ -579,6 +585,12 @@ class RelayServerImpl implements RelayServer {
     if (!state.auth) throw new RelayFailure('UNAUTHENTICATED', 'control identity is unavailable', requestId)
     const hub = this.groupHub
     if (!hub) throw new RelayFailure('UNSUPPORTED_OPERATION', 'group messaging is not configured', requestId)
+    // The group tree and its pushes belong to one account and scope. An identity
+    // outside it is refused instead of reading or writing another scope's groups.
+    const scope = this.options.groupScope
+    if (scope === undefined || state.auth.accountId !== scope.accountId || state.auth.scopeId !== scope.scopeId) {
+      throw new RelayFailure('FORBIDDEN', 'group messaging is outside the authenticated scope', requestId)
+    }
     const result = await hub.handle(state.auth, input.frame)
     if (!result.ok) {
       this.send(state.socket, { kind: 'relay.error', requestId, error: result.error })
@@ -597,19 +609,17 @@ class RelayServerImpl implements RelayServer {
   }
 
   /**
-   * One live control for an agent id inside one account and scope.
+   * The live control for one agent inside the group surface's account and scope.
    *
-   * The same agent id may exist in two scopes. A push is addressed by agent id
-   * only, so an ambiguous match is refused instead of delivered to a guess. The
-   * correct delivery is to name the scope on the push path, which stays open.
+   * The lookup is an exact identity key, so the same agent id in another account
+   * or scope is never a candidate: a push cannot be misrouted across accounts.
    */
   private socketForAgent(agentId: string): RelaySocketState | undefined {
-    const matches = [...this.controls.values()].filter((state) =>
-      state.auth?.agentId === agentId && open(state.socket) && this.activeByIdentity.get(state.identityKey ?? '') === state)
-    if (matches.length === 0) return undefined
-    const scopes = new Set(matches.map(state => `${state.auth?.accountId ?? ''}\u0000${state.auth?.scopeId ?? ''}`))
-    if (scopes.size > 1) return undefined
-    return matches[0]
+    const scope = this.options.groupScope
+    if (scope === undefined) return undefined
+    const state = this.activeByIdentity.get(identityKey({ accountId: scope.accountId, scopeId: scope.scopeId, agentId }))
+    if (state === undefined || !open(state.socket)) return undefined
+    return state
   }
 
   private async connect(state: RelaySocketState, input: Record<string, unknown>): Promise<void> {
@@ -931,6 +941,11 @@ export async function createRelayServer(options: RelayServerOptions): Promise<Re
   if (!Number.isInteger(options.grantTtlMs) || options.grantTtlMs < 1) throw new Error('relay: grantTtlMs must be positive')
   if (options.peerTtlMs !== undefined && (!Number.isSafeInteger(options.peerTtlMs) || options.peerTtlMs < 1 || options.peerTtlMs > MAX_TIMER_MS)) {
     throw new Error('relay: peerTtlMs must be a positive safe integer within the Node timer range')
+  }
+  // A group surface without its scope cannot address a push unambiguously, so
+  // the pair is required together instead of guessed at send time.
+  if ((options.groupHub === undefined) !== (options.groupScope === undefined)) {
+    throw new Error('relay: groupHub and groupScope are required together')
   }
   const httpsServer = createServer({ key: options.key, cert: options.cert })
   const wsServer = new WebSocketServer({ server: httpsServer, maxPayload: options.maxPayload })

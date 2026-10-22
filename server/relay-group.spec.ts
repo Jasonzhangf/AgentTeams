@@ -21,10 +21,10 @@ let directory: string
 let relay: RelayServer | undefined
 const sockets: WebSocket[] = []
 
-function declaration(agentId: string): AgentDeclaration {
+function declaration(agentId: string, accountId = 'account-a', scopeId = 'scope-a'): AgentDeclaration {
   return {
-    identity: { hostId: `host-${agentId}`, machineId: `machine-${agentId}`, agentId, accountId: 'account-a', agentKind: 'custom', label: agentId },
-    scopeId: 'scope-a',
+    identity: { hostId: `host-${agentId}`, machineId: `machine-${agentId}`, agentId, accountId, agentKind: 'custom', label: agentId },
+    scopeId,
     revision: 1,
     capabilities: [],
     routes: [],
@@ -68,6 +68,20 @@ function nextPush(socket: WebSocket): Promise<GroupWireReply> {
   })
 }
 
+function nextError(socket: WebSocket, requestId: string): Promise<{ code: string; message: string }> {
+  return new Promise((resolve, reject) => {
+    const onMessage = (data: WebSocket.RawData, binary: boolean) => {
+      if (binary) return
+      const message = JSON.parse(data.toString()) as RelayServerControl
+      if (message.kind !== 'relay.error' || message.requestId !== requestId) return
+      socket.off('message', onMessage)
+      resolve(message.error)
+    }
+    socket.on('message', onMessage)
+    socket.on('error', reject)
+  })
+}
+
 function admitted(socket: WebSocket): Promise<void> {
   return new Promise((resolve, reject) => {
     const onMessage = (data: WebSocket.RawData) => {
@@ -81,9 +95,9 @@ function admitted(socket: WebSocket): Promise<void> {
   })
 }
 
-async function login(socket: WebSocket, agentId: string): Promise<void> {
+async function login(socket: WebSocket, agentId: string, accountId = 'account-a', scopeId = 'scope-a'): Promise<void> {
   const ready = admitted(socket)
-  socket.send(JSON.stringify({ kind: 'relay.login', protocolVersion: 2, declaration: declaration(agentId) }))
+  socket.send(JSON.stringify({ kind: 'relay.login', protocolVersion: 2, declaration: declaration(agentId, accountId, scopeId) }))
   await ready
 }
 
@@ -125,6 +139,7 @@ async function startRelay() {
     grantTtlMs: 60_000,
     authenticate: (credential) => (credential === undefined ? null : agents.get(credential) ?? null),
     groupHub: () => hub,
+    groupScope: { accountId: 'account-a', scopeId: 'scope-a' },
   })
 }
 
@@ -154,6 +169,61 @@ describe('group frames over the real relay', () => {
     expect(sent.kind).toBe('message.sent')
     const push = await pushed
     expect(push.kind).toBe('message.received')
+  })
+
+  it('delivers a push only to the group scope, never to the same id in another account', async () => {
+    const hub = createGroupHub({
+      isOnline: (id) => ['agent-a', 'agent-b'].includes(id),
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
+    })
+    const agents = new Map<string, AuthenticatedAgent>([
+      ['Bearer agent-a', { accountId: 'account-a', scopeId: 'scope-a', agentId: 'agent-a' }],
+      ['Bearer agent-b', { accountId: 'account-a', scopeId: 'scope-a', agentId: 'agent-b' }],
+      // Same agent id in another account and scope.
+      ['Bearer agent-b-other', { accountId: 'account-b', scopeId: 'scope-b', agentId: 'agent-b' }],
+    ])
+    relay = await createRelayServer({
+      host: '127.0.0.1', port: 0, key, cert,
+      maxPayload: 1024 * 1024, maxConnections: 16, maxGrants: 2,
+      maxBufferedAmount: 4 * 1024, maxPendingMessages: 8, maxPendingBytes: 16 * 1024,
+      grantTtlMs: 60_000,
+      authenticate: (credential) => (credential === undefined ? null : agents.get(credential) ?? null),
+      groupHub: () => hub,
+      groupScope: { accountId: 'account-a', scopeId: 'scope-a' },
+    })
+
+    const foreign = await open('Bearer agent-b-other')
+    await login(foreign, 'agent-b', 'account-b', 'scope-b')
+    const a = await open('Bearer agent-a')
+    const b = await open('Bearer agent-b')
+    await login(a, 'agent-a')
+    await login(b, 'agent-b')
+
+    const created = await call(a, 'r1', { kind: 'group.create', requestId: 'r1', name: 'release' })
+    const groupId = (created as { group: { groupId: string } }).group.groupId
+    await call(a, 'r2', { kind: 'group.invite', requestId: 'r2', groupId, agentId: 'agent-b', role: 'peer' })
+    await call(b, 'r3', { kind: 'group.respond', requestId: 'r3', groupId, accept: true })
+
+    const scoped = nextPush(b)
+    let foreignPushed = false
+    foreign.on('message', (data: WebSocket.RawData, binary: boolean) => {
+      if (binary) return
+      const message = JSON.parse(data.toString()) as RelayServerControl
+      if (message.kind === 'relay.group.push') foreignPushed = true
+    })
+    const sent = await call(a, 'r4', {
+      kind: 'message.send', requestId: 'r4', commitId: 'c1', groupId,
+      targetAgentIds: ['agent-b'], replyRequired: false, body: 'scoped',
+    })
+    expect(sent.kind).toBe('message.sent')
+    expect((await scoped).kind).toBe('message.received')
+    // A group frame from outside the group scope is refused with a typed error,
+    // so the foreign identity cannot read the group tree either.
+    const refused = nextError(foreign, 'r5')
+    foreign.send(JSON.stringify({ kind: 'relay.group', requestId: 'r5', frame: { kind: 'group.list', requestId: 'r5' } }))
+    expect((await refused)).toEqual({ code: 'FORBIDDEN', message: expect.any(String) })
+    expect(foreignPushed).toBe(false)
   })
 
   it('answers an invalid group frame with a typed relay error', async () => {
