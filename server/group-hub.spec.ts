@@ -132,14 +132,14 @@ describe('messages', () => {
 
 describe('issue and action through the delegated owner', () => {
   it('projects a session only after the delegated create is confirmed', async () => {
-    const { hub, groupId } = await groupWithPeer()
     const withExecutor = createGroupHub({
       isOnline: (id) => ['agent-a', 'agent-b'].includes(id),
       now: () => new Date('2026-10-22T00:00:00.000Z'),
       idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
       executeExternalOp: async (op) => confirmed(op, { issueId: '42' }),
     })
-    await withExecutor.handle(OWNER, { kind: 'group.create', requestId: 'r0', name: 'release' })
+    const createdGroup = await withExecutor.handle(OWNER, { kind: 'group.create', requestId: 'r0', name: 'release' })
+    const groupId = (createdGroup.reply as { group: { groupId: string } }).group.groupId
     const created = await withExecutor.handle(OWNER, {
       kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId,
       vikunjaProjectId: 'p1', title: 'ship', body: 'body',
@@ -151,7 +151,6 @@ describe('issue and action through the delegated owner', () => {
   })
 
   it('does not project closed when the external state still reports open', async () => {
-    const groupId = 'g1'
     const withExecutor = createGroupHub({
       isOnline: (id) => ['agent-a', 'agent-b'].includes(id),
       now: () => new Date('2026-10-22T00:00:00.000Z'),
@@ -160,7 +159,8 @@ describe('issue and action through the delegated owner', () => {
         ? { issueId: '42', expectedState: 'closed', actualState: 'open' }
         : { issueId: '42' }),
     })
-    await withExecutor.handle(OWNER, { kind: 'group.create', requestId: 'r0', name: 'release' })
+    const createdGroup = await withExecutor.handle(OWNER, { kind: 'group.create', requestId: 'r0', name: 'release' })
+    const groupId = (createdGroup.reply as { group: { groupId: string } }).group.groupId
     const created = await withExecutor.handle(OWNER, {
       kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId,
       vikunjaProjectId: 'p1', title: 'ship', body: 'body',

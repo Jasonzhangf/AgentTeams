@@ -17,20 +17,20 @@
 | 2 | `server/group-acceptance.spec.ts` item 2 ends the action at its own result and never auto-answers | hub |
 | 3 | `server/group-hub.spec.ts` refuses an action change from a member that is not the assignee(peer 拒绝 master 指派被拒、master 拒绝 peer 请求成立) | hub |
 | 4 | `server/group-acceptance.spec.ts` item 4 keeps two assignees independent | hub |
-| 5 | `server/message-log.spec.ts` returns the original record for a repeated commit and rejects different content;rebuilds from increasing records。`server/group-hub.spec.ts` reloads the last snapshot so a restart keeps groups and messages | 单元 + hub |
+| 5 | `server/message-log.spec.ts` returns the original record for a repeated commit and rejects different content;rebuilds from increasing records。`server/group-hardening.spec.ts` keeps watermarks across a snapshot round-trip(重启后状态可读)| 单元 + hub |
 | 6 | `server/group-acceptance.spec.ts` item 6 does not report completion when the result write fails | hub |
 | 7 | `server/group-acceptance.spec.ts` item 7 does not confirm a close whose external write failed | hub |
-| 8 | `server/issue-session.spec.ts` applies a readback only when the state matches and the ordinal confirms the intent。`server/group-acceptance.spec.ts` item 8 does not rerun a completed action after a reopen | 单元 + hub |
+| 8 | `server/group-hardening.spec.ts` closes and reopens the session from an observed Vikunja state;keeps the projection when the read fails(状态读取收敛)。`server/group-acceptance.spec.ts` item 8 does not rerun a completed action after a reopen | hub |
 | 9 | `server/group-acceptance.spec.ts` item 9 denies a cross-group reference and an unauthorised assignment。`network/group-channel.spec.ts` rejects the matching waiter with the relay ServiceError instead of resolving a success | hub + 单元 |
 | 10 | `server/message-log.spec.ts` reports a retention gap explicitly after trimming;does not report a gap when the cursor already covers the missing range | 单元 |
 | 11 | `server/action-registry.spec.ts` still executes when replyRequired is false。`server/group-acceptance.spec.ts` item 11 executes an action whose replyRequired is false | 单元 + hub |
-| 12 | `server/group-external-ops.spec.ts` records an operation before the call and returns the stored record on repeat。`server/group-acceptance.spec.ts` item 12 creates one session for a repeated issue.create commit;item 6 覆盖结果写失败不完成 | 单元 + hub |
-| 13 | `server/group-acceptance.spec.ts` item 13 stops new admission on a closed session。`server/group-external-ops.spec.ts` lists actions whose stop was not confirmed;`server/issue-session.spec.ts` keeps the projection alone when a confirmation is unknown or conflicted。第一批没有执行队列与在飞执行,那两部分属第二批 | hub + 单元 |
-| 14 | `server/group-external-ops.spec.ts` exposes pending and inflight as unknown and leaves confirmed alone。`server/group-hub.spec.ts` reloads the last snapshot so a restart keeps groups and messages | 单元 + hub |
+| 12 | `server/group-hardening.spec.ts` does not repeat the write when the first outcome was unknown;keeps the recorded operation across a restart。`server/group-acceptance.spec.ts` item 12 creates one session for a repeated issue.create commit | 单元 + hub |
+| 13 | `server/group-acceptance.spec.ts` item 13 stops new admission on a closed session。`server/group-external-ops.spec.ts` lists actions whose stop was not confirmed。第一批没有执行队列与在飞执行,取消队列与在飞通知属第二批 | hub + 单元 |
+| 14 | `server/group-external-ops.spec.ts` exposes pending and inflight as unknown and leaves confirmed alone。`server/group-hardening.spec.ts` keeps the recorded operation across a restart(ops 从快照恢复为 unknown,不重放)| 单元 + hub |
 | 15 | `server/group-registry.spec.ts` uses one directional edge for assignment and request。`server/group-acceptance.spec.ts` item 15 covers both directions with one edge and rejects an unrelated pair | 单元 + hub + 黑盒(loop 的 `--masters` 建边) |
-| 16 | `server/group-acceptance.spec.ts` counter-example 16: a stale close never overwrites a newer reopen;counter-example 16 at the hub: an unconfirmable close is unknown, not closed。`server/group-external-ops.spec.ts` reports conflict for a stale close after a newer reopen | hub + 单元 |
+| 16 | `server/group-hardening.spec.ts` keeps the projection open when a close is unconfirmable across a restart(回执丢失 + 外部已重开,回读后保持 open,旧关闭记为 unknown)。`server/group-acceptance.spec.ts` counter-example 16 断言冲突判定 | hub + 单元 |
 | 17 | `server/group-acceptance.spec.ts` counter-example 17: cancel is observable in three steps and a real result is kept。`server/action-registry.spec.ts` never moves in_progress directly to cancelled;keeps unknown non-terminal and records the unconfirmed stop fact | hub 边界 + 单元 |
-| 18 | `server/group-acceptance.spec.ts` counter-example 18: a forged receipt cannot move the projection。`server/group-hub.spec.ts` rejects a receipt that does not come from the delegated owner。`server/group-external-ops.spec.ts` rejects a receipt from a member that is not the delegated owner;rejects a receipt naming a different commit id | hub + 单元 |
+| 18 | `server/group-acceptance.spec.ts` counter-example 18: a forged receipt cannot move the projection(未知 opId 与非 owner 都返回 FORBIDDEN,投影不变)。`server/group-hub.spec.ts` rejects a receipt that does not come from the delegated owner。`server/group-external-ops.spec.ts` rejects a receipt from a member that is not the delegated owner;rejects a receipt naming a different commit id | hub + 单元 |
 
 ## 三个反例的明确位置
 

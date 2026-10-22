@@ -309,13 +309,16 @@ export function canManageGroup(group: Group, agentId: string): boolean {
   return owner !== undefined && hasOpenInterval(owner)
 }
 
-/** Only the session initiator may close or reopen, unless it explicitly delegated. */
+/**
+ * Close and reopen belong to the session initiator alone (design 7.3). A caller
+ * cannot widen this by sending a delegate list; only the recorded initiator and
+ * an active membership pass.
+ */
 export function canCloseIssue(
   session: Pick<IssueSession, 'initiatorAgentId'>,
   actorAgentId: string,
-  delegates: readonly string[] = [],
 ): boolean {
-  return session.initiatorAgentId === actorAgentId || delegates.includes(actorAgentId)
+  return session.initiatorAgentId === actorAgentId
 }
 
 /** True when the member held a valid interval at the given instant. */

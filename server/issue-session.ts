@@ -345,6 +345,70 @@ export function decideExternalState(input: ExternalStateDecisionInput): External
   }
 }
 
+/** Marks one recorded intent unknown without touching the projection. */
+export function markIssueOperationUnknown(
+  state: IssueSessionRegistry,
+  commitId: string,
+  now: string,
+): IssueSessionRegistry {
+  timestampOf(now, 'now')
+  const operation = operationOf(state, requireText(commitId, 'commitId'))
+  if (!operation) fail(`unknown operation commitId ${commitId}`)
+  if (operation.state === 'confirmed' || operation.state === 'failed') return state
+  return replaceOperation(state, { ...operation, state: 'unknown', updatedAt: now })
+}
+
+/** Settles one intent that the external write did not confirm. */
+export function settleIssueOperation(
+  state: IssueSessionRegistry,
+  commitId: string,
+  outcome: 'failed' | 'unknown',
+  now: string,
+): IssueSessionRegistry {
+  timestampOf(now, 'now')
+  const operation = operationOf(state, requireText(commitId, 'commitId'))
+  if (!operation) fail(`unknown operation commitId ${commitId}`)
+  if (operation.state === 'confirmed') return state
+  return replaceOperation(state, { ...operation, state: outcome, updatedAt: now })
+}
+
+/** A restart re-exposes every recorded but unconfirmed intent as unknown. */
+export function reconcileIssueSessions(state: IssueSessionRegistry, now: string): IssueSessionRegistry {
+  timestampOf(now, 'now')
+  let operations = state.operations
+  for (const operation of state.operations) {
+    if (operation.state === 'pending' || operation.state === 'inflight') {
+      operations = operations.map(entry => (entry.opId === operation.opId ? { ...entry, state: 'unknown', updatedAt: now } : entry))
+    }
+  }
+  return operations === state.operations ? state : { sessions: state.sessions, operations }
+}
+
+/**
+ * Applies an observed external state from a read. Vikunja owns open/closed, so a
+ * confirmed read converges the projection without writing anything back.
+ */
+export function reconcileIssueSession(
+  state: IssueSessionRegistry,
+  input: { readonly sessionId: string; readonly state: IssueState; readonly now: string },
+): IssueSessionRegistry {
+  timestampOf(input.now, 'now')
+  const session = sessionOf(state, input.sessionId)
+  if (session.state === input.state) return state
+  const closedAt = input.state === 'closed' ? (session.closedAt ?? input.now) : undefined
+  return replaceSession(state, {
+    sessionId: session.sessionId,
+    groupId: session.groupId,
+    vikunjaProjectId: session.vikunjaProjectId,
+    vikunjaIssueId: session.vikunjaIssueId,
+    initiatorAgentId: session.initiatorAgentId,
+    state: input.state,
+    openedAt: session.openedAt,
+    ...(closedAt === undefined ? {} : { closedAt }),
+    lastOpSeq: session.lastOpSeq,
+  })
+}
+
 /**
  * Applies a confirmed readback. Only an applied decision changes the projection;
  * conflict and unknown mark the operation unknown and leave the projection alone.

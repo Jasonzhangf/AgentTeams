@@ -180,6 +180,7 @@ describe('group registry leave and reentry', () => {
     expect(listGroups(state, 'agent-c')).toHaveLength(0)
     expect(canCloseIssue({ initiatorAgentId: 'agent-a' }, 'agent-a')).toBe(true)
     expect(canCloseIssue({ initiatorAgentId: 'agent-a' }, 'agent-b')).toBe(false)
-    expect(canCloseIssue({ initiatorAgentId: 'agent-a' }, 'agent-b', ['agent-b'])).toBe(true)
+    // A client-supplied delegate list never grants close authority.
+    expect(canCloseIssue({ initiatorAgentId: 'agent-a' }, 'agent-b')).toBe(false)
   })
 })

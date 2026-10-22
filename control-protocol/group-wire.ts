@@ -388,7 +388,7 @@ export function parseGroupWireRequest(textValue: string): GroupWireRequest {
     }
     case 'message.ack': {
       assertEnvelopeKeys(frame, keys('groupId', 'upToSequence'), 'Message ack request')
-      return { kind, requestId, groupId: text(frame.groupId, 'Group id'), upToSequence: ordinal(frame.upToSequence, 'Ack sequence') }
+      return { kind, requestId, groupId: text(frame.groupId, 'Group id'), upToSequence: positiveOrdinal(frame.upToSequence, 'Ack sequence') }
     }
     case 'message.page': {
       assertEnvelopeKeys(frame, keys('groupId', 'cursor'), 'Message page request')
@@ -684,5 +684,7 @@ export function canTransitionAction(from: ActionState, to: ActionState): boolean
 
 /** Reply-required never gates execution; it only decides whether the initiator expects an answer. */
 export function actionNeedsExecutionFor(action: Action, agentId: string): boolean {
-  return action.assigneeAgentId === agentId && !isTerminalActionState(action.state)
+  // Only work that has not run yet may start. A failed, blocked, unknown or
+  // cancel_requested action needs a read-back or a new action, never a re-run.
+  return action.assigneeAgentId === agentId && isPendingExecution(action.state)
 }

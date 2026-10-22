@@ -121,6 +121,17 @@ export function externalOpFor(ledger: ExternalOpLedger, opId: string): ExternalO
   return ledger.operations.get(opId)
 }
 
+/**
+ * One commit id names one external effect. A retry finds the recorded operation
+ * instead of issuing a second write, even when the first reply was lost.
+ */
+export function externalOpForCommit(ledger: ExternalOpLedger, commitId: string, kind: ExternalOpKind): ExternalOp | undefined {
+  for (const op of ledger.operations.values()) {
+    if (op.commitId === commitId && op.kind === kind) return op
+  }
+  return undefined
+}
+
 export type Convergence = 'applied' | 'conflict' | 'unknown'
 
 export interface ConvergenceInput {

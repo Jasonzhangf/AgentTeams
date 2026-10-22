@@ -1,8 +1,8 @@
 import type { JsonValue, ServiceError } from '../control-protocol/agent-services.ts'
-import type { Action, ExternalOp, Group, GroupInvitation, IssueSession, IssueState } from '../control-protocol/group-wire.ts'
+import type { Action, ExternalOp, Group, GroupInvitation, IssueSession, IssueState, Message, MessageWatermark } from '../control-protocol/group-wire.ts'
 import type { ExternalOpReceipt } from './group-external-ops.ts'
 import type { GroupHub, GroupHubResult, GroupHubPush } from './relay.ts'
-import { advanceWatermark, appendMessage, createMessageLog, pageMessages, type MessageLogState } from './message-log.ts'
+import { advanceWatermark, appendMessage, createMessageLog, pageMessages, restoreMessageLog, type MessageLogState } from './message-log.ts'
 import {
   activeMemberIds,
   canCloseIssue,
@@ -23,9 +23,13 @@ import {
   confirmIssueOperation,
   createIssueSessionRegistry,
   openIssueSession,
+  reconcileIssueSession,
+  reconcileIssueSessions,
   reopenIssueSession,
   sessionForIssue,
   sessionOfIssue,
+  settleIssueOperation,
+  type IssueSessionOperation,
   type IssueSessionRegistry,
 } from './issue-session.ts'
 import {
@@ -37,6 +41,7 @@ import {
   reportAction,
   startAction,
   submitActionResult,
+  transitionAction,
   type ActionRegistryState,
 } from './action-registry.ts'
 import { routeGroupMessage } from './message-router.ts'
@@ -44,7 +49,9 @@ import {
   authenticateExternalOpReceipt,
   beginExternalOp,
   createExternalOpLedger,
+  externalOpForCommit,
   markExternalOpInflight,
+  reconcileAfterRestart,
   type ExternalOpLedger,
 } from './group-external-ops.ts'
 
@@ -57,12 +64,23 @@ import {
  * external write that cannot be confirmed is reported unknown, never success.
  */
 
+/** A JSON-safe message log: a Map cannot survive `JSON.stringify`. */
+export interface MessageLogSnapshot {
+  readonly groupId: string
+  readonly messages: readonly Message[]
+  readonly revision: number
+  readonly retentionStartSequence: number
+  readonly watermarks: readonly MessageWatermark[]
+}
+
 export interface GroupHubSnapshot {
   readonly groups: readonly Group[]
   readonly invitations: readonly GroupInvitation[]
   readonly sessions: readonly IssueSession[]
+  /** Open and close intents, so a stale close still loses after a restart. */
+  readonly operations: readonly IssueSessionOperation[]
   readonly actions: readonly Action[]
-  readonly logs: readonly MessageLogState[]
+  readonly logs: readonly MessageLogSnapshot[]
   readonly ops: readonly ExternalOp[]
 }
 
@@ -134,14 +152,28 @@ export class GroupHubImpl implements GroupHub {
     this.registry = snapshot
       ? { groups: new Map(snapshot.groups.map((group) => [group.groupId, group])), invitations: [...snapshot.invitations] }
       : createGroupRegistry()
+    const restoredAt = this.now().toISOString()
     this.sessions = snapshot
-      ? { sessions: new Map(snapshot.sessions.map((session) => [session.sessionId, session])), operations: [] }
+      ? reconcileIssueSessions(
+          { sessions: new Map(snapshot.sessions.map((session) => [session.sessionId, session])), operations: [...(snapshot.operations ?? [])] },
+          restoredAt,
+        )
       : createIssueSessionRegistry()
     this.actions = snapshot
       ? { actions: new Map(snapshot.actions.map((action) => [action.actionId, action])) }
       : createActionRegistry()
-    this.logs = snapshot ? new Map(snapshot.logs.map((log) => [log.groupId, log])) : new Map()
-    this.ledger = snapshot ? { operations: new Map(snapshot.ops.map((op) => [op.opId, op])) } : createExternalOpLedger()
+    this.logs = snapshot
+      ? new Map(snapshot.logs.map((log) => [log.groupId, restoreMessageLog({
+          groupId: log.groupId,
+          messages: log.messages,
+          retentionStartSequence: log.retentionStartSequence,
+          watermarks: log.watermarks,
+        })]))
+      : new Map()
+    // Nothing in flight survives a restart as a live write: it is unknown and read back.
+    this.ledger = snapshot
+      ? reconcileAfterRestart({ operations: new Map(snapshot.ops.map((op) => [op.opId, op])) }, restoredAt)
+      : createExternalOpLedger()
   }
 
   snapshot(): GroupHubSnapshot {
@@ -149,8 +181,15 @@ export class GroupHubImpl implements GroupHub {
       groups: [...this.registry.groups.values()],
       invitations: this.registry.invitations,
       sessions: [...this.sessions.sessions.values()],
+      operations: this.sessions.operations,
       actions: [...this.actions.actions.values()],
-      logs: [...this.logs.values()],
+      logs: [...this.logs.values()].map((log) => ({
+        groupId: log.groupId,
+        messages: log.messages,
+        revision: log.revision,
+        retentionStartSequence: log.retentionStartSequence,
+        watermarks: [...log.watermarks.values()],
+      })),
       ops: [...this.ledger.operations.values()],
     }
   }
@@ -170,14 +209,14 @@ export class GroupHubImpl implements GroupHub {
         case 'message.ack': return this.ack(actor, input)
         case 'issue.create': return await this.createIssue(actor, input)
         case 'issue.reference': return this.referenceIssue(actor, input)
-        case 'issue.query': return this.queryIssue(actor, input)
+        case 'issue.query': return await this.queryIssue(actor, input)
         case 'issue.close': return await this.closeOrReopen(actor, input, 'close')
         case 'issue.reopen': return await this.closeOrReopen(actor, input, 'reopen')
         case 'action.create': return this.createAction(actor, input)
         case 'action.submit': return await this.submitAction(actor, input)
         case 'action.report': return this.reportOrRefuse(actor, input, 'report')
         case 'action.refuse': return this.reportOrRefuse(actor, input, 'refuse')
-        case 'action.list': return ok({ kind: 'action.list', requestId: text(input.requestId, 'requestId'), actions: listActions(this.actions, optionalText(input.sessionId)) })
+        case 'action.list': return this.listActionsFor(actor, input)
         case 'op.confirmed':
         case 'op.failed':
         case 'op.unknown': return this.receipt(actor, input)
@@ -207,6 +246,12 @@ export class GroupHubImpl implements GroupHub {
       ...(failure === undefined ? {} : { error: failure }),
       ...(kind === 'op.unknown' ? { reason: optionalText(input.reason) ?? 'unknown' } : {}),
     }
+    // Authenticate before touching the waiter: a forged receipt must not consume
+    // the slot and drop the receipt the real owner is about to send.
+    const operation = this.ledger.operations.get(opId)
+    if (!operation) return err('FORBIDDEN', `receipt names an unknown operation ${opId}`)
+    if (operation.ownerAgentId !== actor.agentId) return err('FORBIDDEN', `receipt for ${opId} did not come from its owner`)
+    if (operation.commitId !== commitId) return err('FORBIDDEN', `receipt for ${opId} names a different commit id`)
     const resolve = this.waiting.get(opId)
     if (resolve) {
       this.waiting.delete(opId)
@@ -217,6 +262,25 @@ export class GroupHubImpl implements GroupHub {
 
   private save(): void {
     this.store?.save(this.snapshot())
+  }
+
+  private isActiveMember(actor: Actor, groupId: string): boolean {
+    const group = this.registry.groups.get(groupId)
+    return group !== undefined && memberActiveAt(group, actor.agentId, this.now().toISOString())
+  }
+
+  /** Actions are readable only inside the groups the actor belongs to. */
+  private listActionsFor(actor: Actor, input: Record<string, unknown>): GroupHubResult {
+    const sessionId = optionalText(input.sessionId)
+    if (sessionId !== undefined && !this.sessions.sessions.has(sessionId)) return err('NOT_FOUND', `unknown session ${sessionId}`)
+    const now = this.now().toISOString()
+    const visible = listActions(this.actions, sessionId).filter((action) => {
+      const session = this.sessions.sessions.get(action.sessionId)
+      if (!session) return false
+      const group = this.registry.groups.get(session.groupId)
+      return group !== undefined && memberActiveAt(group, actor.agentId, now)
+    })
+    return ok({ kind: 'action.list', requestId: text(input.requestId, 'requestId'), actions: visible })
   }
 
   private logOf(groupId: string): MessageLogState {
@@ -312,6 +376,7 @@ export class GroupHubImpl implements GroupHub {
 
   private page(actor: Actor, input: Record<string, unknown>): GroupHubResult {
     const groupId = text(input.groupId, 'groupId')
+    if (!this.isActiveMember(actor, groupId)) return err('FORBIDDEN', `${actor.agentId} is not an active member of ${groupId}`)
     const cursor = typeof input.cursor === 'number' && Number.isSafeInteger(input.cursor) ? input.cursor : undefined
     const page = pageMessages(this.logOf(groupId), cursor === undefined ? {} : { cursor })
     return ok({
@@ -323,6 +388,7 @@ export class GroupHubImpl implements GroupHub {
 
   private ack(actor: Actor, input: Record<string, unknown>): GroupHubResult {
     const groupId = text(input.groupId, 'groupId')
+    if (!this.isActiveMember(actor, groupId)) return err('FORBIDDEN', `${actor.agentId} is not an active member of ${groupId}`)
     if (typeof input.upToSequence !== 'number' || !Number.isSafeInteger(input.upToSequence)) return err('INVALID_INPUT', 'upToSequence must be a safe integer')
     this.setLog(groupId, advanceWatermark(this.logOf(groupId), { agentId: actor.agentId, upToSequence: input.upToSequence }, this.now().toISOString()))
     this.save()
@@ -334,11 +400,14 @@ export class GroupHubImpl implements GroupHub {
     const commitId = text(input.commitId, 'commitId')
     const projectId = text(input.vikunjaProjectId, 'vikunjaProjectId')
     const title = text(input.title, 'title')
-    // A retried create must not open a second issue: the confirmed commit decides.
-    for (const operation of this.ledger.operations.values()) {
-      if (operation.kind !== 'issue.create' || operation.commitId !== commitId || operation.state !== 'confirmed') continue
-      const issueId = optionalText((operation.result as Record<string, unknown> | undefined)?.issueId)
-      if (issueId === undefined) continue
+    if (!this.isActiveMember(actor, groupId)) return err('FORBIDDEN', `${actor.agentId} is not an active member of ${groupId}`)
+    // One commit id names one issue. A confirmed retry returns it, an unclear one
+    // must be read back instead of issuing a second create.
+    const recorded = externalOpForCommit(this.ledger, commitId, 'issue.create')
+    if (recorded) {
+      if (recorded.state !== 'confirmed') return err('UPSTREAM_ERROR', `issue.create for ${commitId} is ${recorded.state}; read back before retrying`)
+      const issueId = optionalText((recorded.result as Record<string, unknown> | undefined)?.issueId)
+      if (issueId === undefined) return err('UPSTREAM_ERROR', 'the recorded create has no issue id')
       const existing = sessionForIssue(this.sessions, groupId, projectId, issueId)
       return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: existing })
     }
@@ -366,15 +435,57 @@ export class GroupHubImpl implements GroupHub {
     return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: sessionOfIssue(this.sessions, sessionId) })
   }
 
-  private queryIssue(actor: Actor, input: Record<string, unknown>): GroupHubResult {
+  /**
+   * A read of the external state. Vikunja owns open/closed, so a confirmed read
+   * converges the projection within one poll. A failed read changes nothing.
+   */
+  private async queryIssue(actor: Actor, input: Record<string, unknown>): Promise<GroupHubResult> {
     const sessionId = text(input.sessionId, 'sessionId')
     const session = this.sessions.sessions.get(sessionId)
     if (!session) return err('NOT_FOUND', `unknown session ${sessionId}`)
     // Off-group history is not readable just because the session id is known.
-    if (!memberActiveAt(groupOf(this.registry, session.groupId), actor.agentId, this.now().toISOString())) {
+    const now = this.now().toISOString()
+    if (!memberActiveAt(groupOf(this.registry, session.groupId), actor.agentId, now)) {
       return err('FORBIDDEN', `${actor.agentId} is not an active member of ${session.groupId}`)
     }
-    return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session })
+    const observed = await this.readExternal(session)
+    if (observed !== undefined && observed !== session.state) {
+      this.sessions = reconcileIssueSession(this.sessions, { sessionId, state: observed, now })
+      this.save()
+    }
+    return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: sessionOfIssue(this.sessions, sessionId) })
+  }
+
+  /**
+   * One read-only external query. A read may be re-issued at any time, so it is
+   * kept out of the durable ledger and removed as soon as it settles.
+   */
+  private async readExternal(session: IssueSession): Promise<IssueState | undefined> {
+    const now = this.now().toISOString()
+    const op: ExternalOp = {
+      opId: this.idFactory(),
+      commitId: `issue.query:${session.sessionId}`,
+      kind: 'issue.query',
+      state: 'inflight',
+      ownerAgentId: session.initiatorAgentId,
+      params: {
+        sessionId: session.sessionId,
+        vikunjaProjectId: session.vikunjaProjectId,
+        vikunjaIssueId: session.vikunjaIssueId,
+      },
+      updatedAt: now,
+    }
+    // Present for receipt authentication only; never saved.
+    this.ledger = { operations: new Map(this.ledger.operations).set(op.opId, op) }
+    try {
+      const receipt = this.executeExternalOp ? await this.executeExternalOp(op) : await this.delegatedReceipt(op)
+      if ('code' in receipt || receipt.state !== 'confirmed') return undefined
+      return readObservedState(receipt.result)
+    } finally {
+      const operations = new Map(this.ledger.operations)
+      operations.delete(op.opId)
+      this.ledger = { operations }
+    }
   }
 
   private async closeOrReopen(actor: Actor, input: Record<string, unknown>, direction: 'close' | 'reopen'): Promise<GroupHubResult> {
@@ -383,22 +494,37 @@ export class GroupHubImpl implements GroupHub {
     const reason = text(input.reason, 'reason')
     const session = this.sessions.sessions.get(sessionId)
     if (!session) return err('NOT_FOUND', `unknown session ${sessionId}`)
-    const delegates = Array.isArray(input.delegates) ? input.delegates.filter((id): id is string => typeof id === 'string') : []
-    if (!canCloseIssue(session, actor.agentId, delegates)) return err('FORBIDDEN', `${actor.agentId} cannot ${direction} session ${sessionId}`)
     const now = this.now().toISOString()
+    if (!this.isActiveMember(actor, session.groupId)) return err('FORBIDDEN', `${actor.agentId} is not an active member of ${session.groupId}`)
+    // Close and reopen belong to the recorded initiator. A client-supplied
+    // delegate list never widens that.
+    if (!canCloseIssue(session, actor.agentId)) return err('FORBIDDEN', `${actor.agentId} cannot ${direction} session ${sessionId}`)
     this.sessions = direction === 'close'
       ? closeIssueSession(this.sessions, { sessionId, commitId, reason, conclusion: optionalText(input.conclusion) ?? '' }, now)
       : reopenIssueSession(this.sessions, { sessionId, commitId, reason }, now)
     const operation = this.sessions.operations.find((entry) => entry.commitId === commitId)
     if (!operation) return err('UPSTREAM_ERROR', `missing open/close operation for ${commitId}`)
+    // The intent is durable before the write, so recovery can read it back.
+    this.save()
     const targetState: IssueState = direction === 'close' ? 'closed' : 'open'
     const delegated = await this.delegate(direction === 'close' ? 'issue.close' : 'issue.reopen', commitId, actor.agentId, {
       sessionId, commitId, opSeq: operation.opSeq, targetState,
       vikunjaProjectId: session.vikunjaProjectId, vikunjaIssueId: session.vikunjaIssueId,
       reason, ...(direction === 'close' ? { conclusion: optionalText(input.conclusion) ?? '' } : {}),
-    })
-    if (!delegated.ok) return delegated.result
-    const actual = readObservedState(delegated.result) ?? targetState
+    }, operation.opSeq)
+    if (!delegated.ok) {
+      this.sessions = settleIssueOperation(this.sessions, commitId, 'unknown', now)
+      this.save()
+      return delegated.result
+    }
+    // Only the read-back state may move the projection. An owner receipt that
+    // names no observed state is unknown, never the intended state.
+    const actual = readObservedState(delegated.result)
+    if (actual === undefined) {
+      this.sessions = settleIssueOperation(this.sessions, commitId, 'unknown', now)
+      this.save()
+      return err('UPSTREAM_ERROR', `${direction} was not confirmed by a read-back; outcome is unknown`)
+    }
     const confirmed = confirmIssueOperation(this.sessions, { commitId, externalState: actual, externalOpSeq: operation.opSeq }, this.now().toISOString())
     this.sessions = confirmed.state
     this.save()
@@ -457,9 +583,22 @@ export class GroupHubImpl implements GroupHub {
       resultBody: optionalText(input.resultBody) ?? '',
       ...(session === undefined ? {} : { vikunjaIssueId: session.vikunjaIssueId }),
     })
-    if (!delegated.ok) return delegated.result
-    const resultRef = optionalText((delegated.result as Record<string, unknown> | undefined)?.resultRef) ?? `result:${resultCommitId}`
     const now = this.now().toISOString()
+    if (!delegated.ok) {
+      if (this.actions.actions.get(actionId)?.state === 'pending') this.actions = startAction(this.actions, actionId, now)
+      this.actions = transitionAction(this.actions, actionId, 'unknown', now)
+      this.save()
+      return delegated.result
+    }
+    // The comment id is the only proof the result reached Vikunja. Without it the
+    // action is unknown, never complete.
+    const resultRef = optionalText((delegated.result as Record<string, unknown> | undefined)?.resultRef)
+    if (resultRef === undefined) {
+      if (this.actions.actions.get(actionId)?.state === 'pending') this.actions = startAction(this.actions, actionId, now)
+      this.actions = transitionAction(this.actions, actionId, 'unknown', now)
+      this.save()
+      return err('UPSTREAM_ERROR', 'action result was not confirmed by a read-back; outcome is unknown')
+    }
     // A master assignment cannot be refused, so a result from `pending` starts
     // the action instead of failing the transition.
     if (this.actions.actions.get(actionId)?.state === 'pending') this.actions = startAction(this.actions, actionId, now)
@@ -524,14 +663,33 @@ export class GroupHubImpl implements GroupHub {
     commitId: string,
     ownerAgentId: string,
     params: Record<string, unknown>,
+    opSeq?: number,
   ): Promise<{ readonly ok: true; readonly result: JsonValue | undefined } | { readonly ok: false; readonly result: GroupHubResult }> {
-    const begun = beginExternalOp(this.ledger, { opId: this.idFactory(), commitId, kind, ownerAgentId, params: params as JsonValue }, this.now().toISOString())
+    const now = this.now().toISOString()
+    // One commit id names one external effect. A retry reads the record instead
+    // of writing a second issue or comment.
+    const existing = externalOpForCommit(this.ledger, commitId, kind)
+    if (existing) {
+      if (existing.state === 'confirmed') return { ok: true, result: existing.result }
+      if (existing.state !== 'failed') return { ok: false, result: err('UPSTREAM_ERROR', `${kind} for ${commitId} is ${existing.state}; read back before retrying`) }
+    }
+    const begun = beginExternalOp(this.ledger, {
+      opId: this.idFactory(), commitId, kind, ownerAgentId,
+      ...(opSeq === undefined ? {} : { opSeq }),
+      params: params as JsonValue,
+    }, now)
     const operations = new Map(this.ledger.operations).set(begun.op.opId, begun.op)
-    this.ledger = markExternalOpInflight({ operations }, begun.op.opId, this.now().toISOString())
+    this.ledger = markExternalOpInflight({ operations }, begun.op.opId, now)
+    // Persist before the awaited write: a crash leaves a recorded unknown op.
+    this.save()
     const receipt = this.executeExternalOp
       ? await this.executeExternalOp(begun.op)
       : await this.delegatedReceipt(begun.op)
-    if ('code' in receipt) return { ok: false, result: err(receipt.code, receipt.message) }
+    if ('code' in receipt) {
+      this.ledger = { operations: new Map(this.ledger.operations).set(begun.op.opId, { ...begun.op, state: 'unknown', updatedAt: now }) }
+      this.save()
+      return { ok: false, result: err(receipt.code, receipt.message) }
+    }
     if (receipt.state === 'unknown') {
       this.save()
       return { ok: false, result: err('UPSTREAM_ERROR', `${kind} outcome is unknown; read back before retrying`) }

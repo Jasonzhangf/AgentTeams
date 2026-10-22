@@ -46,7 +46,9 @@ function parse(argv) {
   const port = Number(endpointMatch[2])
   if (port < 1 || port > 65_535) fail('--endpoint port is out of range')
   if (!ENGINE_KINDS.has(serve)) fail('--serve must be opencode or dsh')
-  const agentId = name ?? `agent-${endpointMatch[1].replace(/\./gu, '-')}-${port}`
+  // Never invent an identity: two hosts on one address must not collide.
+  if (name === undefined || name.length === 0) fail('--name is required')
+  const agentId = name
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(agentId)) fail('--name must be a simple agent id')
   return { remote, endpoint: endpointMatch[0], ip: endpointMatch[1], port, serve, agentId, configPath, noStart }
 }

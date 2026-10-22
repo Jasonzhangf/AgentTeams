@@ -279,14 +279,23 @@ describe('the three required counter-examples', () => {
   })
 
   it('counter-example 18: a forged receipt cannot move the projection', async () => {
-    const hub = build(async (op) => issueOk(op))
+    let issued: ExternalOp | undefined
+    const hub = build(async (op) => { if (op.kind === 'issue.create') issued = op; return issueOk(op) })
     const groupId = await group(hub)
     const sessionId = await session(hub, groupId)
-    // A member that is not the delegated owner sends a matching op receipt.
-    const forged = await hub.handle(OWNER, {
-      kind: 'op.confirmed', opId: 'id-1', commitId: 'ic1', result: { issueId: 'evil' },
+    // An invented op id is refused before it can touch the projection.
+    const invented = await hub.handle(OWNER, {
+      kind: 'op.confirmed', opId: 'op-does-not-exist', commitId: 'ic1', result: { issueId: 'evil' },
     })
-    expect(forged.ok).toBe(true)
+    expect(invented.ok).toBe(false)
+    expect(invented.ok ? '' : invented.error.code).toBe('FORBIDDEN')
+    // A member that is not the delegated owner names the real op and is refused.
+    if (issued === undefined) throw new Error('no create op was issued')
+    const forged = await hub.handle(PEER, {
+      kind: 'op.confirmed', opId: issued.opId, commitId: issued.commitId, result: { issueId: 'evil' },
+    })
+    expect(forged.ok).toBe(false)
+    expect(forged.ok ? '' : forged.error.code).toBe('FORBIDDEN')
     const queried = await hub.handle(MASTER, { kind: 'issue.query', requestId: 'q0', sessionId })
     expect((queried.reply as { session: { vikunjaIssueId: string } }).session.vikunjaIssueId).toBe('42')
     // The pure authenticator agrees.
