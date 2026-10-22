@@ -95,8 +95,12 @@ queue/steer、讨论与 comment 执行)不在本文件范围内。
 ## 未收口
 
 - 推送的 account/scope 精确按键(见第 4 节)。
-- `relay-client` 对已放弃的群请求最多记住 256 条、每条约 5 分钟,过期即遗忘;这类请求的迟到
-  回执不会再被归到别的请求上。真正的逐请求取消仍是通道自己的超时。
+- `issue.reference` 只对"跨类型复用 commit"(create 的 commit 用于 reference)报冲突;两次
+  reference 用同一 commit 指向不同 issue 时会各建一个会话。CLI 的稳定 commit 由目标推导,
+  现有路径不会触发;要强制 §9 的内容冲突需给引用也记 commit。
+- `relay-client` 对已放弃的群请求最多记住 256 条、每条约 5 分钟,过期即遗忘。在这段时间内若
+  有人复用同一个请求 id,迟到的错误会归到新请求上;仓内所有请求 id 都是 randomUUID,该情形
+  在现有路径上不可达。真正的逐请求取消仍是通道自己的超时。
 - `acp-serve` 内真实 relay 的端到端用例(见第 1 节);新增用例只覆盖注册不可达的分支。
 - `join` 的 TLS 校验仍关闭(`cli/join.mjs` 的 `rejectUnauthorized: false`);本轮只移除了
   `agent-messaging` 的自开连接,`join` 的配置生成与连通性探测没有改。

@@ -214,6 +214,11 @@ describe('group file store', () => {
     store.save(snapshot([message(1), message(2), message(3)]))
     const trimmed = snapshot([message(1), message(2), message(3)])
     store.save({ ...trimmed, logs: [{ ...trimmed.logs[0]!, messages: [message(2), message(3)], retentionStartSequence: 2 }] })
+    // The exact state a crash before the rewrite leaves: the retention start is
+    // already past record 1 while the file still holds it.
+    const groupRoot = join(directory, 'groups', 'acct', 'scope', 'g1')
+    writeFileSync(join(groupRoot, 'log.json'), `${JSON.stringify({ version: 1, retentionStartSequence: 2 })}\n`)
+    writeFileSync(join(groupRoot, 'messages.jsonl'), `${[message(1), message(2), message(3)].map(entry => JSON.stringify(entry)).join('\n')}\n`)
     const reopened = createGroupFileStore({ dataDirectory: directory, accountId: 'acct', scopeId: 'scope' })
     const loaded = reopened.load()
     // The trimmed record does not come back from the file.

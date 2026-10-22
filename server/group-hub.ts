@@ -457,7 +457,13 @@ export class GroupHubImpl implements GroupHub {
     const bound = [...this.sessions.sessions.values()].find(entry =>
       entry.groupId === groupId && entry.vikunjaProjectId === projectId && entry.vikunjaIssueId === issueId)
     if (bound !== undefined) {
-      return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: bound })
+      // The just-read state still converges the projection; the reference must
+      // not return a stale open for an issue Vikunja already closed.
+      if (observed !== undefined && observed !== bound.state) {
+        this.sessions = reconcileIssueSession(this.sessions, { sessionId: bound.sessionId, state: observed, now })
+        this.save()
+      }
+      return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: sessionOfIssue(this.sessions, bound.sessionId) })
     }
     this.sessions = openIssueSession(this.sessions, { sessionId, groupId, vikunjaProjectId: projectId, vikunjaIssueId: issueId, initiatorAgentId: actor.agentId }, now)
     // Vikunja owns the open/closed truth, so a closed issue opens a closed session.
