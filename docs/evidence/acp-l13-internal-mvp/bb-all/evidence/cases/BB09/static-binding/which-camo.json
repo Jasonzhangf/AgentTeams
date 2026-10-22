@@ -1,0 +1,10 @@
+{
+  "command": "which",
+  "args": [
+    "camo"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "/opt/homebrew/bin/camo\n",
+  "stderr": ""
+}

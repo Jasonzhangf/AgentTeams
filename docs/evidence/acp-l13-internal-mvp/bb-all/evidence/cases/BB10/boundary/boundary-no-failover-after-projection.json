@@ -1,0 +1,306 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "kind": "runtime",
+      "agentId": "bb-provider",
+      "machineId": "bb-machine",
+      "label": "BB-Session",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": true,
+      "sessionAvailability": "current",
+      "sessionObservation": {
+        "state": "degraded",
+        "reason": "projection-loss",
+        "detail": "unsupported OpenCode event server.heartbeat",
+        "droppedEvents": 57
+      },
+      "sessionEffectiveRevision": 4,
+      "currentSessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "providerId": "bb-manual",
+      "modelId": "bb-manual-model"
+    },
+    {
+      "kind": "runtime",
+      "agentId": "bb-receiver",
+      "machineId": "bb-machine",
+      "label": "BB-Passive",
+      "presence": "online",
+      "capabilities": [],
+      "capabilityDetails": [],
+      "generation": 1,
+      "sessionCapable": false,
+      "sessionAvailability": "not-applicable"
+    }
+  ],
+  "sessions": [
+    {
+      "agentId": "bb-provider",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "title": "BB10 boundary no implicit failover"
+    },
+    {
+      "agentId": "bb-provider",
+      "sessionId": "ses_ea03b71b9ffeANmlCSeKH7xjTR",
+      "title": "BB10 boundary manual selection"
+    }
+  ],
+  "configs": [
+    {
+      "agentId": "bb-provider",
+      "acceptedRevision": 4,
+      "applyState": "clean",
+      "acceptedBinding": {
+        "primary": {
+          "providerInstanceId": "bb-manual",
+          "modelId": "bb-manual-model"
+        },
+        "backup": {
+          "providerInstanceId": "bb-backup",
+          "modelId": "bb-backup-model"
+        }
+      },
+      "effectiveRevision": 4,
+      "providers": [
+        {
+          "id": "bb-primary",
+          "label": "BB Boundary Invalid Credential",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:59615/v1",
+          "enabled": true,
+          "authKind": "bearer",
+          "catalogState": "error",
+          "error": {
+            "code": "UNAUTHENTICATED",
+            "message": "config: model catalog request returned HTTP 401",
+            "status": 401,
+            "providerInstanceId": "bb-primary"
+          },
+          "models": [
+            {
+              "id": "bb-primary-model",
+              "label": "BB Primary Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-backup",
+          "label": "BB Backup",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:59613/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "ready",
+          "models": [
+            {
+              "id": "bb-backup-model",
+              "label": "BB Backup Model"
+            }
+          ]
+        },
+        {
+          "id": "bb-manual",
+          "label": "BB Manual",
+          "protocol": "openai-chat",
+          "apiBaseUrl": "http://127.0.0.1:59614/v1",
+          "enabled": true,
+          "authKind": "none",
+          "catalogState": "empty",
+          "models": [
+            {
+              "id": "bb-manual-model",
+              "label": "BB Boundary Manual Model"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notifications": [],
+  "works": [],
+  "relations": [],
+  "sessionEvents": [
+    {
+      "eventId": "message.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_4etMa5LSywypV3CtMrCehhm0rf",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_4etMa5LSywypV3CtMrCehhm0rf",
+      "role": "user"
+    },
+    {
+      "eventId": "message.part.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_4etMa5LSywypV3CtMrCehhm0rf",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "pending",
+      "messageId": "msg_4etMa5LSywypV3CtMrCehhm0rf",
+      "partId": "prt_15fc4a4b2001f3vGch0IzkFt4C",
+      "partType": "text",
+      "text": "bb10 boundary manual warmup probe"
+    },
+    {
+      "eventId": "message.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_15fc4a593001j8Kt5PHWqpg671",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_15fc4a593001j8Kt5PHWqpg671",
+      "role": "assistant"
+    },
+    {
+      "eventId": "message.part.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_15fc4a593001j8Kt5PHWqpg671",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_15fc4a593001j8Kt5PHWqpg671",
+      "partId": "prt_15fc4aaa8001BScgU1myo1ajvE",
+      "partType": "step-start",
+      "sourcePart": {
+        "id": "prt_15fc4aaa8001BScgU1myo1ajvE",
+        "messageID": "msg_15fc4a593001j8Kt5PHWqpg671",
+        "sessionID": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+        "type": "step-start"
+      }
+    },
+    {
+      "eventId": "message.part.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_15fc4a593001j8Kt5PHWqpg671",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg_15fc4a593001j8Kt5PHWqpg671",
+      "partId": "prt_15fc4aaa9001rL6AeypMgf4GPe",
+      "partType": "text",
+      "text": "bb-session-provider-ok"
+    },
+    {
+      "eventId": "message.part.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_15fc4a593001j8Kt5PHWqpg671",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "observed",
+      "messageId": "msg_15fc4a593001j8Kt5PHWqpg671",
+      "partId": "prt_15fc4aaac001vmVJ4LedCUZVk8",
+      "partType": "step-finish",
+      "sourcePart": {
+        "id": "prt_15fc4aaac001vmVJ4LedCUZVk8",
+        "reason": "stop",
+        "messageID": "msg_15fc4a593001j8Kt5PHWqpg671",
+        "sessionID": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+        "type": "step-finish",
+        "tokens": {
+          "total": 2,
+          "input": 1,
+          "output": 1,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "cost": 0
+      }
+    },
+    {
+      "eventId": "message.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_15fc4a593001j8Kt5PHWqpg671",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "final",
+      "state": "completed",
+      "messageId": "msg_15fc4a593001j8Kt5PHWqpg671",
+      "finish": "stop"
+    },
+    {
+      "eventId": "message.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_sKnNvwQ292gdEA5TPfGjoRGeGV",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_sKnNvwQ292gdEA5TPfGjoRGeGV",
+      "role": "user"
+    },
+    {
+      "eventId": "message.part.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_sKnNvwQ292gdEA5TPfGjoRGeGV",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "part",
+      "state": "pending",
+      "messageId": "msg_sKnNvwQ292gdEA5TPfGjoRGeGV",
+      "partId": "prt_15fc4ab050013CSjsxcL2M1SO7",
+      "partType": "text",
+      "text": "bb10 boundary no implicit failover probe"
+    },
+    {
+      "eventId": "message.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_15fc4ab09001MuWUk5Jm6RMxc6",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "message",
+      "state": "pending",
+      "messageId": "msg_15fc4ab09001MuWUk5Jm6RMxc6",
+      "role": "assistant"
+    },
+    {
+      "eventId": "session.error:ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "kind": "error",
+      "state": "failed",
+      "error": {
+        "name": "APIError",
+        "data": {
+          "message": "bb session provider stub failure",
+          "statusCode": 500,
+          "isRetryable": true,
+          "responseHeaders": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Wed, 21 Oct 2026 18:42:35 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked"
+          },
+          "responseBody": "{\"error\":{\"message\":\"bb session provider stub failure\",\"type\":\"api_error\"}}",
+          "metadata": {
+            "url": "http://127.0.0.1:59614/v1/chat/completions"
+          }
+        }
+      },
+      "correlation": {
+        "kind": "session",
+        "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR"
+      }
+    },
+    {
+      "eventId": "message.updated:ses_ea03b5ba7fferozPNXIeGJsyZR:msg_15fc4ab09001MuWUk5Jm6RMxc6",
+      "sessionId": "ses_ea03b5ba7fferozPNXIeGJsyZR",
+      "agentId": "bb-provider",
+      "kind": "final",
+      "state": "failed",
+      "messageId": "msg_15fc4ab09001MuWUk5Jm6RMxc6",
+      "error": {
+        "name": "APIError",
+        "data": {
+          "message": "bb session provider stub failure",
+          "statusCode": 500,
+          "isRetryable": true,
+          "responseHeaders": {
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "date": "Wed, 21 Oct 2026 18:42:35 GMT",
+            "keep-alive": "timeout=5",
+            "transfer-encoding": "chunked"
+          },
+          "responseBody": "{\"error\":{\"message\":\"bb session provider stub failure\",\"type\":\"api_error\"}}",
+          "metadata": {
+            "url": "http://127.0.0.1:59614/v1/chat/completions"
+          }
+        }
+      }
+    }
+  ]
+}

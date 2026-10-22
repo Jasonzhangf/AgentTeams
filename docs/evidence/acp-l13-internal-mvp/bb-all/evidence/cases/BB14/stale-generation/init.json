@@ -1,0 +1,10 @@
+{
+  "command": "/tmp/agentteams-u7-bb14-stale-generation-aGWH5g/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "init"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "initialized /tmp/agentteams-u7-bb14-stale-generation-aGWH5g/home/.agentteams/config.toml\nEdit config.toml, then run agentteams start, agentteams status, or agentteams stop.\n",
+  "stderr": ""
+}

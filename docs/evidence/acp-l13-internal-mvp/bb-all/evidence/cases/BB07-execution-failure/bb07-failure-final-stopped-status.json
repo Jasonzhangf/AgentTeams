@@ -1,0 +1,12 @@
+{
+  "command": "/tmp/agentteams-u7-bb07-failure-HYE3X8/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "status",
+    "--config",
+    "/tmp/agentteams-u7-bb07-failure-HYE3X8/home/.agentteams/config.toml"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "status state=failed generation=1 config=/tmp/agentteams-u7-bb07-failure-HYE3X8/home/.agentteams/config.toml internal=/tmp/agentteams-u7-bb07-failure-HYE3X8/home/.agentteams/internal.toml pid=99023 error=local daemon exit remains unconfirmed endpoints=missing console=disabled consoleState=disabled consoleGeneration=0 consoleCredential=missing\n",
+  "stderr": ""
+}

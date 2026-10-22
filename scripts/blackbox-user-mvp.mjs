@@ -2731,16 +2731,23 @@ function assertNoSecretInEvidence(directory, secrets) {
   }
 }
 
-const bb09AgentRowsScript = `JSON.stringify([...document.querySelectorAll('article.teams-agent-card')].map(card => {
-  const keys = [...card.querySelectorAll('button[data-focus-key]')].map(node => node.dataset.focusKey)
-  const details = keys.find(key => /^agent:.+:details$/u.test(key))
-  const presence = card.querySelector('.teams-presence')
+/**
+ * The frozen D07 discovery row markers. The Console lands on the discovery page
+ * in the live state, so the observed row is the `li` this query reads, not the
+ * non-live topology `article.teams-agent-card` the earlier revision recovered the
+ * agent id from. The label is rendered as `<label> (<agentId>)` by
+ * renderDiscovery, so it is parsed back out of the row text; machineId stays a
+ * projection-side fact, because the discovery row never renders it.
+ */
+const bb09AgentRowsScript = `JSON.stringify([...document.querySelectorAll('ul.teams-team-list li[data-agent-id]')].map(row => {
+  const strong = row.querySelector('strong')
+  const label = (strong?.textContent ?? '').trim()
+  const agentId = row.getAttribute('data-agent-id')
   return {
-    agentId: details === undefined ? null : details.replace(/^agent:/u, '').replace(/:details$/u, ''),
-    label: card.querySelector('.teams-identity-copy strong')?.textContent ?? null,
-    machineId: (card.querySelector('.teams-identity-copy span')?.textContent ?? '').split(' · ')[0],
-    presence: presence === null ? null : [...presence.classList].find(name => name.startsWith('teams-presence-'))?.slice('teams-presence-'.length) ?? null,
-    text: card.textContent ?? '',
+    agentId,
+    label: label.endsWith(' (' + agentId + ')') ? label.slice(0, -(' (' + agentId + ')').length) : null,
+    presence: row.getAttribute('data-presence'),
+    text: row.textContent ?? '',
   }
 }))`
 
@@ -2809,10 +2816,16 @@ async function bb09BrowserAcceptance(options) {
     assert(projectionRow !== undefined, `the owner projection has no row for the real daemon ${agentId}`)
     assert(projectionRow.presence === 'online', `the owner projection reports ${agentId} as ${projectionRow.presence}`)
     assert(domRow.presence === 'online', `the browser rendered ${agentId} as ${domRow.presence}`)
-    assert(domRow.label === projectionRow.label && domRow.machineId === projectionRow.machineId,
-      `the browser row for ${agentId} did not match the owner projection: ${JSON.stringify(domRow)}`)
+    assert(domRow.label === projectionRow.label,
+      `the browser row for ${agentId} did not match the owner projection label: ${JSON.stringify(domRow)}`)
+    // The owner machine id is a browser-fetched projection fact. The frozen D07
+    // discovery row renders only the agent id, label and presence, so the machine
+    // id correspondence is asserted against the projection here and against the
+    // browser-visible drawer at the observation step below.
+    assert(typeof projectionRow.machineId === 'string' && projectionRow.machineId.length > 0,
+      `the owner projection published no machine id for ${agentId}: ${JSON.stringify(projectionRow)}`)
   }
-  observed.agents = rows.map(row => ({ agentId: row.agentId, label: row.label, machineId: row.machineId, presence: row.presence }))
+  observed.agents = rows.map(row => ({ agentId: row.agentId, label: row.label, presence: row.presence }))
 
   // (a) Authoritative declaration detail: the owner projection must carry the
   // producer's declared services/resources, the rendered card must show the
@@ -2843,10 +2856,10 @@ async function bb09BrowserAcceptance(options) {
     rendered: rows.find(row => row.agentId === workProviderId)?.text ?? '',
   })
   const providerText = rows.find(row => row.agentId === workProviderId)?.text ?? ''
-  // The rendered label spacing comes from the product locale, not a behavior contract;
-  // assert the observable service, resource, and capacity-with-unit facts by value.
-  assert(/file-search/u.test(providerText) && /search-slot/u.test(providerText) && /2\s*slot/u.test(providerText),
-    `the browser card did not render the declared service and resource detail: ${providerText}`)
+  // The live discovery row renders identity, presence and the capability id. The declared
+  // operations and capacity belong to the Agent drawer, which is asserted by real click below.
+  assert(/file-search/u.test(providerText),
+    `the browser row did not render the declared service: ${providerText}`)
   assert(!/剩余/u.test(providerText) && !/remaining/iu.test(providerText),
     `the browser card presented the declared capacity as remaining capacity: ${providerText}`)
 
@@ -2862,6 +2875,8 @@ async function bb09BrowserAcceptance(options) {
     `the Agent drawer did not show the agent declaration: ${String(detailText).slice(0, 400)}`)
   assert(/search-slot/u.test(detailText),
     `the Agent drawer did not show the declared resource: ${String(detailText).slice(0, 400)}`)
+  assert(detailText.includes(providerProjection.machineId),
+    `the Agent drawer did not publish the owner machine id ${providerProjection.machineId}`)
   camoClick(fixture, camo, evidenceDir, 'browser-detail-close', profile,
     '.teams-drawer .teams-header-actions button:nth-of-type(2)')
   camoClick(fixture, camo, evidenceDir, 'browser-refresh-action', profile,
@@ -2871,11 +2886,15 @@ async function bb09BrowserAcceptance(options) {
   const refreshedProvider = refreshedRows.find(row => row.agentId === workProviderId)
   assert(refreshedProvider !== undefined && /file-search/u.test(refreshedProvider.text),
     `the refreshed panel lost the Agent declaration: ${JSON.stringify(refreshedRows)}`)
-  // The rendered label spacing comes from the product locale, not a behavior
-  // contract; assert the observable service, resource, and capacity facts by value.
-  assert(/file-search/u.test(refreshedProvider.text) && /search-slot/u.test(refreshedProvider.text)
-    && /2\s*slot/u.test(refreshedProvider.text),
-    `the refreshed panel lost the declared resource detail: ${refreshedProvider.text}`)
+  camoClick(fixture, camo, evidenceDir, 'browser-refreshed-detail', profile,
+    `button[data-focus-key="agent:${workProviderId}:details"]`)
+  const refreshedDetailText = await camoEvaluate(fixture, camo, evidenceDir, 'browser-refreshed-detail-dom',
+    profile, `document.querySelector('.teams-drawer')?.textContent ?? ''`)
+  assert(/file-search/u.test(refreshedDetailText) && /search-slot/u.test(refreshedDetailText)
+    && /2\s*slot/u.test(refreshedDetailText),
+    `the refreshed panel lost the declared resource detail: ${String(refreshedDetailText).slice(0, 400)}`)
+  camoClick(fixture, camo, evidenceDir, 'browser-refreshed-detail-close', profile,
+    '.teams-drawer .teams-header-actions button:nth-of-type(2)')
 
   // (c) Configuration interaction: a real click opens the Console settings entry,
   // the settings toolbar selects a real Agent, a real click refreshes the catalog
@@ -3143,9 +3162,8 @@ async function bb09StaticBindingScenario(context) {
     const receiverCard = browser.agents.find(row => row.agentId === workReceiverId)
     assert(providerCard !== undefined && receiverCard !== undefined,
       `the static-binding browser did not render both cards: ${JSON.stringify(browser.agents)}`)
-    assert(providerCard.label === 'BB09-Provider' && receiverCard.label === 'BB09-Receiver'
-      && providerCard.machineId === 'bb-machine' && receiverCard.machineId === 'bb-machine',
-    `the static-binding browser cards did not match the declarations: ${JSON.stringify(browser.agents)}`)
+    assert(providerCard.label === 'BB09-Provider' && receiverCard.label === 'BB09-Receiver',
+      `the static-binding browser cards did not match the declarations: ${JSON.stringify(browser.agents)}`)
     camoClick(fixture, camo, evidenceDir, 'browser-receiver-detail-action', profile,
       `button[data-focus-key="agent:${workReceiverId}:details"]`)
     const receiverDetail = await camoEvaluate(fixture, camo, evidenceDir, 'browser-receiver-detail-dom', profile,
@@ -4606,15 +4624,16 @@ async function runBB10Boundary(context, evidenceDir) {
 // (`status: 'unverified'`), never a fabricated success and never a silent skip.
 // ---------------------------------------------------------------------------
 
-const canonicalProviderId = 'goaichat-openai'
+const canonicalProviderId = 'goaichat'
 const rccProviderId = 'rcc-4444'
 const canonicalCredentialEnv = 'TEAMS_BB10_CANONICAL_API_KEY'
 const rccConfigSourcePath = '/Volumes/extension/.rcc/config.toml'
-const canonicalProviderSourcePath = '/Volumes/extension/.rcc/provider/goaichat_openai/config.v2.toml'
+const canonicalProviderSourcePath = '/Volumes/extension/.rcc/provider/goaichat/config.v2.toml'
 const rccServerId = 'routecodex_v3_4444'
-// Confirmed against the then-current catalog at implementation time. Teams
-// persists and sends exactly this token: no `/` <-> `.` rewrite, no guessing.
-const rccSelectedModelToken = 'goaichat_openai.qwen3.8-max'
+// The RCC API token this case persists and sends, taken from the then-current
+// catalog (`GET <baseUrl>/models`). Teams persists and sends exactly this token:
+// no `/` <-> `.` rewrite, no guessing.
+const rccSelectedModelToken = 'goaichat.qwen3.8-max'
 const bb10DispatchTimeoutMs = 120_000
 const bb10VisibleTaskPrompt = '请用一句简短中文解释什么是回声。不要调用工具，也不要读写文件。'
 const bb10BoundarySyntheticCredentialEnv = 'AGENTTEAMS_BB10_BOUNDARY_SYNTHETIC_KEY'
@@ -4669,16 +4688,29 @@ function parseCanonicalProviderSource(text, label) {
   const provider = root.provider
   if (!bb10Record(provider)) bb10SourceFailure(capability, `${label} declares no [provider] table`)
   const id = bb10RequiredText(provider.id, capability, `${label} provider.id`)
-  const type = bb10RequiredText(provider.type, capability, `${label} provider.type`)
-  const baseUrl = bb10RequiredText(provider.baseURL, capability, `${label} provider.baseURL`)
   const defaultModel = bb10RequiredText(provider.defaultModel, capability, `${label} provider.defaultModel`)
+  // Newer declared sources nest the interface contract under
+  // `[provider.interfaces.openai]` (type + baseURL) instead of on `[provider]`
+  // itself. Both shapes describe the same canonical endpoint; accept either.
+  const interfaceRecord = bb10Record(provider.interfaces) ? provider.interfaces.openai : undefined
+  const type = bb10RequiredText(
+    interfaceRecord !== undefined && bb10Record(interfaceRecord) ? interfaceRecord.type : provider.type,
+    capability, `${label} provider type`)
+  const baseUrl = bb10RequiredText(
+    interfaceRecord !== undefined && bb10Record(interfaceRecord) ? interfaceRecord.baseURL : provider.baseURL,
+    capability, `${label} provider.baseURL`)
   const auth = provider.auth
   if (!bb10Record(auth)) bb10SourceFailure(capability, `${label} declares no [provider.auth] table`)
   const entries = auth.entries
-  if (!Array.isArray(entries) || entries.length !== 1) {
-    bb10SourceFailure('canonical credential entry is not unique',
-      `${label} declares ${Array.isArray(entries) ? entries.length : 'no'} auth entries; exactly one is required`)
+  if (!Array.isArray(entries) || entries.length === 0) {
+    bb10SourceFailure('canonical credential entry is absent',
+      `${label} declares no auth entries; at least one declared entry is required`)
   }
+  // Teams binds exactly one credential, so the case reads only the first declared
+  // entry. A source that declares a pool uses that pool through its own rotation;
+  // this case never reads, tries or enumerates a second entry or another
+  // provider's key, and it records the declared count so the single binding stays
+  // visible in evidence.
   const entry = entries[0]
   if (!bb10Record(entry)) bb10SourceFailure(capability, `${label} auth entry is not a table`)
   const alias = bb10RequiredText(entry.alias, capability, `${label} auth entry alias`)
@@ -4686,7 +4718,7 @@ function parseCanonicalProviderSource(text, label) {
   const secretKey = bb10RequiredText(entry.secretKey, capability, `${label} auth entry secretKey`)
   return {
     label, id, instanceId: id.replace(/_/gu, '-'), type, protocol: bb10ProtocolFromSource(type, label),
-    baseUrl, defaultModel, authAlias: alias, secretFile, secretKey,
+    baseUrl, defaultModel, authAlias: alias, authEntryCount: entries.length, secretFile, secretKey,
   }
 }
 
@@ -4829,6 +4861,7 @@ async function resolveBb10Preconditions(evidenceDir) {
       catalog_url: rccCatalog.url, catalog_status: rccCatalog.status, catalog_model_count: rccCatalog.ids.length },
     canonical: { source: canonicalProviderSourcePath, provider_id: canonical.id, protocol: canonical.protocol,
       base_url: canonical.baseUrl, default_model: canonical.defaultModel, auth_alias: canonical.authAlias,
+      auth_entry_count: canonical.authEntryCount,
       secret_key: canonical.secretKey, secret_file: canonical.secretFile, credential_env: canonicalCredentialEnv,
       credential_length: credentialValue.length, catalog_url: canonicalCatalog.url,
       catalog_status: canonicalCatalog.status, catalog_model_count: canonicalCatalog.ids.length },
@@ -5295,15 +5328,20 @@ async function runBB10(context) {
       evidence_path: evidenceDir,
     }
   } finally {
-    const finalCleanup = await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb10-final',
-      { caseId: 'BB10', owner: 'U2+U6' })
-    // An early unverified return carries a promised cleanup string; supersede it
-    // with the observed cleanup so no terminal ever advertises an action it did
-    // not take.
-    if (result !== undefined) {
-      attachCleanupObservation(result, finalCleanup)
-    } else {
-      supersedePromisedCleanup(evidenceDir, 'bb10-unverified.json', finalCleanup)
+    // A precondition failure returns before any fixture exists, so no owned
+    // resource must be stopped or deleted; its promised cleanup stays the
+    // observed one and the terminal already records that no fixture was created.
+    if (fixture !== undefined) {
+      const finalCleanup = await finalizeCaseCleanup(fixture, lifecycle, evidenceDir, 'bb10-final',
+        { caseId: 'BB10', owner: 'U2+U6' })
+      // An early unverified return carries a promised cleanup string; supersede it
+      // with the observed cleanup so no terminal ever advertises an action it did
+      // not take.
+      if (result !== undefined) {
+        attachCleanupObservation(result, finalCleanup)
+      } else {
+        supersedePromisedCleanup(evidenceDir, 'bb10-unverified.json', finalCleanup)
+      }
     }
   }
   return result
@@ -5872,11 +5910,17 @@ async function runBB13(context) {
       const source = join(root, packageDir, 'node_modules')
       if (existsSync(source)) symlinkSync(source, join(fixtureRoot, packageDir, 'node_modules'), 'dir')
     }
+    // The project installs its pinned AppSDK binary at `.appsdk/sdk.bin` and the
+    // lifecycle verify stage needs that exact binary. A clone has no local install,
+    // and the `appsdk` on PATH may be another build that rewrites tracked governance
+    // files. Mirror the project's own pin, exactly like the dependency links above.
+    const pinnedSdk = join(root, '.appsdk', 'sdk.bin')
+    if (existsSync(pinnedSdk)) symlinkSync(pinnedSdk, join(fixtureRoot, '.appsdk', 'sdk.bin'), 'file')
     // The repository ignores node_modules as a directory, so a node_modules symlink
     // is still untracked. The lifecycle adapter requires a fully clean candidate, so
     // exclude the fixture's own dependency links without touching tracked files.
     const excludePath = join(fixtureRoot, '.git', 'info', 'exclude')
-    writeFileSync(excludePath, `${readFileSync(excludePath, 'utf8')}node_modules\n`, { encoding: 'utf8' })
+    writeFileSync(excludePath, `${readFileSync(excludePath, 'utf8')}node_modules\n.appsdk/sdk.bin\n`, { encoding: 'utf8' })
 
     // Uniform capture/assert vocabulary: every phase snapshots candidate identity,
     // input hashes, history/reuse lengths, invocation counts and both stage

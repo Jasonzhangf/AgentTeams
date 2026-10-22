@@ -218,7 +218,7 @@ const sdk = mode === 'final'
   ? {
       included: true,
       release_eligible: false,
-      reason: 'final package stages the reviewed runner, five Work graphs and identity manifest; user entrypoint acceptance remains open',
+      reason: 'final package stages the runner, five Work graphs and identity manifest; staged bytes are not release-eligible before the installed release gate',
       receipt_path: relative(root, runnerBuild.receiptPath).split(sep).join('/'),
       receipt_sha256: hashFile(runnerBuild.receiptPath),
       runner_path: runnerBuild.receipt.artifact.installed_path,

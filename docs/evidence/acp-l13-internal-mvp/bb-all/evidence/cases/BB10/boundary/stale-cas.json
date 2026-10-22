@@ -1,0 +1,62 @@
+{
+  "stale_revision": 1,
+  "current_revision": 3,
+  "request": {
+    "kind": "config.bindModel",
+    "agentId": "bb-provider",
+    "expectedRevision": 1,
+    "providerId": "bb-primary",
+    "modelId": "bb-primary-model"
+  },
+  "reply": {
+    "ok": false,
+    "error": {
+      "code": "REVISION_CONFLICT",
+      "message": "config: revision conflict expected=1 current=3"
+    }
+  },
+  "before": {
+    "config": {
+      "acceptedRevision": 3,
+      "effectiveRevision": 3,
+      "applyState": "clean"
+    },
+    "agent": {
+      "providerId": "bb-manual",
+      "modelId": "bb-manual-model",
+      "sessionEffectiveRevision": 3
+    },
+    "binding": {
+      "primary": {
+        "providerInstanceId": "bb-manual",
+        "modelId": "bb-manual-model"
+      },
+      "backup": {
+        "providerInstanceId": "bb-backup",
+        "modelId": "bb-backup-model"
+      }
+    }
+  },
+  "after": {
+    "config": {
+      "acceptedRevision": 3,
+      "effectiveRevision": 3,
+      "applyState": "clean"
+    },
+    "agent": {
+      "providerId": "bb-manual",
+      "modelId": "bb-manual-model",
+      "sessionEffectiveRevision": 3
+    },
+    "binding": {
+      "primary": {
+        "providerInstanceId": "bb-manual",
+        "modelId": "bb-manual-model"
+      },
+      "backup": {
+        "providerInstanceId": "bb-backup",
+        "modelId": "bb-backup-model"
+      }
+    }
+  }
+}

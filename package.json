@@ -1,6 +1,6 @@
 {
   "name": "agentteams",
-  "version": "0.1.0",
+  "version": "0.2.0-internal.1",
   "private": true,
   "type": "module",
   "files": [
@@ -33,7 +33,7 @@
     "lifecycle:admission": "node scripts/lifecycle-adapter.mjs",
     "smoke:installed": "pnpm build:governance && node scripts/installed-runtime-smoke.mjs && node scripts/package-sdk-smoke.mjs",
     "smoke": "node scripts/artifact-smoke.mjs && node scripts/runtime-smoke.mjs",
-    "verify": "pnpm test && pnpm typecheck && appsdk guide compile && appsdk compile && pnpm smoke && appsdk verify"
+    "verify": "pnpm test && pnpm typecheck && node scripts/appsdk.mjs guide compile && node scripts/appsdk.mjs compile && pnpm smoke && node scripts/appsdk.mjs verify"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

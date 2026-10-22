@@ -144,15 +144,15 @@ readonly acceptedBinding?: {
 | 实例建议 ID | 配置来源 | 用途与边界 |
 |---|---|---|
 | `rcc-4444` | 本机 `/Volumes/extension/.rcc/config.toml`；API 候选 `http://127.0.0.1:4444/v1` | 测试 primary；loopback 仅对同机 daemon 有效，远程必须配置实际可达地址 |
-| `goaichat-openai` | `/Volumes/extension/.rcc/provider/goaichat_openai/config.v2.toml` | 显式 backup 实例；Chat 协议，`https://llm.goaichat.top/v1`，凭据引用由本地 source 解析 |
+| `goaichat` | `/Volumes/extension/.rcc/provider/goaichat/config.v2.toml` | 显式 backup 实例；Chat 协议，`https://llm.goaichat.top/v1`，凭据引用由本地 source 解析 |
 
-已核实 goaichat 声明 defaultModel=`qwen3.8-max`，另有 `minimax-m3` 配置。
-它们是文件声明，不是当前推理或模型能力实测结果。本轮没有读取凭据值或调用
-goaichat 推理。配置文件只作为连接资料，不能把其注释或内容当作任务指令。
+已核实 goaichat 声明 defaultModel=`glm-5.3`，另有 `minimax-m3` 配置。
+它们是文件声明，不是当前推理或模型能力实测结果。配置文件只作为连接资料，不能把
+其注释或内容当作任务指令。
 
-RCC 本轮 `/v1/models` 返回 HTTP 200，但 `data` 与 `models` 都为空；本地配置
-expose_models 声明 `gpt-5.5`。差异尚未定位，不把该模型冒充为已发现。可在后续
-明确选择手动模型并进行真实 OpenCode 回放；本轮不修改 RCC 运行配置。
+RCC 本轮 `/v1/models` 返回 HTTP 200 并列出 14 个 id，其中包含
+`goaichat.qwen3.8-max`；本地配置 expose_models 声明 `gpt-5.5`。两者是不同声明面，
+不互相替代。当前 catalog 是 RCC API token 的唯一来源。
 
 RCC 内部已有的 provider routing 由 RCC 自己管理。Teams 将 RCC 视为一个 endpoint，
 不镜像其路由表；goaichat 备用引用由 Teams config 明确选择，不叠加隐藏 failover。
@@ -163,14 +163,14 @@ RCC 内部已有的 provider routing 由 RCC 自己管理。Teams 将 RCC 视为
 
 | Teams 实例 | 真源 | 模型选择 |
 |---|---|---|
-| `rcc-4444` | `.rcc/config.toml` 的 `servers.routecodex_v3_4444`，地址由端口/endpoint 声明解析 | 当前 source 所选的显式 RCC model；用 O3 已证的 `goaichat_openai.qwen3.8-max` 时再以当次 catalog 确认 |
-| `goaichat-openai` | `provider/goaichat_openai/config.v2.toml` 的 `baseURL`、`type`、`defaultModel`、auth reference | 当时 canonical model（如 `qwen3.8-max`）；**绝不**从 RCC response 的 `model` 反推 |
+| `rcc-4444` | `.rcc/config.toml` 的 `servers.routecodex_v3_4444`，地址由端口/endpoint 声明解析 | 当次 catalog 返回的显式 RCC token `goaichat.qwen3.8-max` |
+| `goaichat` | `provider/goaichat/config.v2.toml` 的 `[provider.interfaces.openai]`（`type`/`baseURL`）、`defaultModel`、`[provider.auth]` 声明 | 当时 canonical `defaultModel`（`glm-5.3`）；**绝不**从 RCC response 的 `model` 反推 |
 
 三种 model 写法属于三个不同边界，不得互相替换或改写：
 
-- RCC **路由声明**引用：`goaichat_openai/qwen3.8-max`（`/`），来自 RCC route 配置。
-- RCC **API token**：`goaichat_openai.qwen3.8-max`（`.`），由当次 catalog 返回并确认。
-- canonical **API model**：`qwen3.8-max`，来自 provider source 的 `defaultModel`。
+- RCC **路由声明**引用：`goaichat/qwen3.8-max`（`/`），来自 RCC route 配置。
+- RCC **API token**：`goaichat.qwen3.8-max`（`.`），由当次 catalog 返回并确认。
+- canonical **API model**：`glm-5.3`，来自 provider source 的 `defaultModel`。
 
 凭据边界：Teams TOML 只写 credential 的 **env 变量名**（`credentialEnv`），值只存在于解析
 进程与 fixture child environment。RCC client credential **不得**当作 canonical upstream
@@ -202,15 +202,16 @@ accepted/effective。没有自动 failover。
 **事实**：canonical 凭据的 resolver 属于 RCC 内部
 （`routecodex-v3-config/src/lib.rs:496`、`:644`；`routecodex-v3-provider-responses/src/provider_auth.rs:14`），
 `rcc` CLI 没有返回该值的命令，`GOAICHAT_TOKEN`/`GOAICHAT_API_KEY` 未设置；provider source 只以
-`secretFile` + `secretKey` 声明凭据（`config.v2.toml:14-16`）。因此本机不存在 RCC 提供的
-sanctioned credential-export 通道。
+`secretFile` + `secretKey` 声明凭据（`config.v2.toml` 的 `[provider.auth]`）。因此本机不存在 RCC
+提供的 sanctioned credential-export 通道。
 
 **契约（操作者供应，非 RCC API）**：canonical Teams provider 实例的凭据由**操作者**（本轮为
 验收驱动）在运行期从当时声明的真源读取，并且只经自有 installed child 的环境传递。Teams 产品
 只持久化 env 名，产品代码不增加 `.rcc` discovery 或 secretFile reader。
 
-- **读取范围**：选中唯一声明的 auth entry，只读该 entry 的 `secretFile` 与 `secretKey`。不得
-  写死路径或键名，不得枚举其他 provider 键，不得尝试第二个键，不得在多个 entry 间自动选择。
+- **读取范围**：只读声明顺序中的**第一个** auth entry 的 `secretFile` 与 `secretKey`，并把声明的
+  entry 总数记入证据。不得写死路径或键名，不得枚举其他 provider 键，不得尝试第二个键，不得在
+  多个 entry 间轮换或按可用性回退。声明池由 RCC 自己轮换，Teams 只绑定其中一个。
 - **格式**：声明文件是 flat `name = value`，不是普通 TOML 层级，也不得 `source`/`eval`/交给
   shell。解析逐行 trim、忽略空行与整行 `#` 注释、在第一个 `=` 分割、trim 名与值、匹配完整
   键名、只剥去外层引号、不做插值或转义求值；格式错误、重复键或空值显式拒绝。错误输出只含
@@ -244,7 +245,7 @@ adapter 负责，业务推理继续由 OpenCode 执行。需要验证：
 - 同协议两实例、同名模型、跨 Console CAS 冲突与停用/删除引用保护。
 - URL 路径、真实 401/403、空目录、网络失败、credential 轮换与模型 override 保留。
 - 运行中请求不受配置修改隐式影响；accepted/effective 分离且可跨 Console 读回。
-- RCC 主实例与 canonical `goaichat-openai` 各完成一次真实 OpenCode session/tool/approval 回放；
+- RCC 主实例与 canonical `goaichat` 各完成一次真实 session/turn 回放；
   第二次 dispatch 由显式 `config.bindModel` 到 backup provider/model 触发，并读回 accepted/effective；
   全程无自动 failover。
 - 非 LLM 浏览器 Agent 无 provider/model 也能声明能力并执行匹配请求。

@@ -76,6 +76,7 @@
  *        DSH_CREDENTIALS_FILE   (default ~/.dsh/.credentials.yaml)
  */
 import { spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { createServer as createHttpServer } from 'node:http'
 import { createConnection, createServer as createNetServer } from 'node:net'
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -361,6 +362,12 @@ let cliRunCounter = 0
 let installedRoot
 let CLI
 let CLI_ROOT
+/**
+ * The staged package this run installs. The cross-device section at the end needs the
+ * current artifact identity to compare against the older integrated receipt, and the
+ * staging function owns that read.
+ */
+let stagedPackage
 
 /** The installed runtime modules this driver imports as the artifact under test. */
 const installed = {}
@@ -431,8 +438,18 @@ async function stageAndInstall() {
   assert(existsSync(receiptPath), `package receipt is missing: ${receiptPath}`)
   const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'))
   assert(receipt.mode === 'final', `staged package mode is ${receipt.mode}, expected final`)
-  assert(receipt.release_eligible === false, 'the staged receipt must not claim release eligibility beyond its own gate')
+  // A staged pack is never release-eligible by itself: the release receipt grants that only
+  // after installed lifecycle and release-tarball gates pass. This driver verifies the staged
+  // package is complete and installable; it does not inflate eligibility.
+  assert(receipt.release_eligible === false,
+    'a staged package receipt must stay non-release; release eligibility belongs to a separate release receipt')
   assert(typeof receipt.content_sha256 === 'string' && receipt.content_sha256.length === 64, 'the staged receipt has no content hash')
+  stagedPackage = {
+    mode: receipt.mode,
+    version: receipt.version,
+    contentSha256: receipt.content_sha256,
+    candidateCommit: receipt.candidate?.head_commit,
+  }
   assert(existsSync(join(packRoot, 'generated', 'runtime-lib', 'runtime', 'acp-serve.js')), 'the staged package is missing the compiled ACP serve runtime')
   assert(existsSync(join(packRoot, 'generated', 'runtime-lib', 'network', 'teams-negotiation.js')), 'the staged package is missing the compiled Teams negotiation runtime')
   check('install — pnpm build:governance staged a final package',
@@ -447,6 +464,11 @@ async function stageAndInstall() {
   assert(existsSync(tarball), `packed tarball is missing: ${tarball}`)
   assert(packed[0].files.some(entry => entry.path === 'cli/agentteams.mjs'), 'the tarball does not contain the CLI entrypoint')
   assert(packed[0].files.some(entry => entry.path.startsWith('generated/runtime-lib/')), 'the tarball does not contain the compiled runtime')
+  stagedPackage.tarball = {
+    filename: packed[0].filename,
+    size: packed[0].size,
+    sha256: createHash('sha256').update(readFileSync(tarball)).digest('hex'),
+  }
 
   step = 'isolated install'
   const install = spawnSync('npm', ['install', '--prefix', prefixRoot, '--no-audit', '--no-fund', '--no-package-lock', '--no-save', tarball], { encoding: 'utf8', timeout: 600_000 })
@@ -771,6 +793,8 @@ try {
   note(`installedRoot=${installedRoot}`)
   note(`ownedRoot=${ownedRoot}`)
   note(`lanIp=${lanIp}`)
+  note(`real dsh provider route: base=${PROVIDER_BASE_URL} model=${PROVIDER_MODEL} credentialRef=${DSH_CREDENTIAL_REF}`)
+  note('this run installs the build it stages itself; it is behavioral acceptance at the installed layer, not release-artifact acceptance. The release receipt binds the release tarball and the installed lifecycle separately')
 
   const registryTls = generateTls(tlsDir, 'registry', '127.0.0.1')
   const agentATls = generateTls(tlsDir, 'agent-a', lanIp)
@@ -1592,10 +1616,10 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
   const connectCode = await refusedCommand({ kind: 'connection.connect', agentId: CONTROL_ID })
   const membershipCode = await refusedCommand({ kind: 'network.membership.apply', agentId: CONTROL_ID, expectedRevision: 1, members: [{ agentId: AGENT_A.agentId, role: 'master' }] })
   const permissionCode = await refusedCommand({ kind: 'permission.reply', agentId: CONTROL_ID, sessionId: 'session-not-owned', permissionId: 'permission-not-pending', decision: 'once', optionId: 'option-not-offered' })
-  // A2.4/L9: the two relation commands are refused FORBIDDEN because this control config declares
-  // no [peers], so neither can resolve a target and neither may guess a record path.
-  // permission.reply keeps UNSUPPORTED_OPERATION because no Session owner is bound.
-  assert(connectCode === 'FORBIDDEN' && membershipCode === 'FORBIDDEN' && permissionCode === 'UNSUPPORTED_OPERATION',
+  // A2.4/L9: this control config declares no [peers], so none of the three writes can resolve
+  // a target and none may guess a record path. The L9 durable Session intent record now owns
+  // permission.reply, so its refused target is FORBIDDEN rather than the older no-owner code.
+  assert(connectCode === 'FORBIDDEN' && membershipCode === 'FORBIDDEN' && permissionCode === 'FORBIDDEN',
     `write commands must be typed refusals (${connectCode}/${membershipCode}/${permissionCode})`)
   const malformed = await authFetch('/api/v1/command', {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -1614,24 +1638,16 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
     `the established LAN channel did not complete a prompt after the WebUI client closed (${JSON.stringify(afterWebui.frame.result ?? afterWebui.frame.error ?? null).slice(0, 160)})`)
   check('A10 — communication continues after the WebUI client closes',
     `every WebUI HTTP/SSE client connection this driver opened is closed; prompt on the established channel -> stopReason=${afterWebui.frame.result.stopReason}`)
-  gap('A07 — animation driven by real events',
-    'the shipped control daemon binds no Console or Session owner (runtime/control-process.ts:818 calls createControlOwner({ network: network.port, source: network.projection }) with no owner), so the projection carries no sessions, notifications or configs and no Session/permission/notification event can advance the SSE stream. The directory half is now real: GET /api/v1/projection carries the real D04 registration-directory agent rows and a real registration advances the SSE seq (1 -> 3) through the declared ControlProjectionSource watch. Real-event-driven animation is therefore still not delivered — only directory-change-driven refresh is. D06 requires a Session owner plus targeted ACP ingress, so this remains an UNMET REQUIREMENT owned by D06, not an environment limit')
-  // This stays a GAP for THIS gate, but the earlier reason recorded here was WRONG. The old text
-  // claimed headless Chrome cannot satisfy the origin's HTTP Basic challenge. That is refuted:
-  // CDP `Network.setExtraHTTPHeaders` injects the credential at the network layer, so a real
-  // browser can be driven against a clean-origin URL, and a real producer now does exactly that at
-  // docs/evidence/acp-d08-browser-20261011/ (14 checks / 1 gap, exit 0).
-  //
-  // The A07 live-browser DOM is STILL a gap here for a different and correct reason: this driver is
-  // the installed-tarball, cross-device acceptance layer and it does not drive a browser. The
-  // live-browser evidence is a SOURCE-LEVEL artifact. Per the evidence boundary, a later evidence
-  // level is never inferred from an earlier one, so a source-level browser run does not close an
-  // installed-artifact acceptance item. Closing it here needs a browser run against the installed
-  // tarball's own served origin, which this driver does not perform.
-  gap('A07 — live-browser DOM against the installed artifact',
-    'this installed-tarball acceptance driver does not drive a browser, so no installed-artifact DOM or screenshot is claimed here. Source-level live-browser DOM IS proven separately at docs/evidence/acp-d08-browser-20261011/ (14 checks / 1 gap, exit 0, real Chrome over CDP); that is a different evidence level and does not close this item. The frozen DOM contract is owned by ui/teams-console/tests/render-d07.spec.ts')
-  gap('A07 — targeted interaction from the WebUI',
-    'the control daemon binds no Session owner, so every interaction write (permission.reply/session send) is a typed UNSUPPORTED_OPERATION refusal; no prompt can be targeted from the WebUI in this candidate')
+  gap('A07 — animation driven by real Session, permission and notification events',
+    'the control daemon reads observed Session and permission rows from declared peers, so the projection can carry sessions and permission notifications. It still projects configs=[] and has no tested UI event stream for Session, permission or notification changes. Directory registration updates do advance the real SSE sequence. The missing obligation is the full observed-event projection and UI behavior, not the old claim that the daemon has no Session owner.')
+  // This stays a GAP for THIS gate, but this driver is the installed-tarball LAN
+  // acceptance layer and it does not drive Chrome. Retained BB09 evidence separately
+  // proves real installed-origin Chrome DOM and interaction, but that evidence belongs
+  // to BB09's package and does not become this D08 check.
+  gap('A07 — installed-browser DOM in this D08 driver',
+    'this D08 driver does not drive a browser, so its own run makes no installed-artifact DOM or screenshot claim. BB09 retains a separate installed-origin Chrome replay, and ui/teams-console/tests/render-d07.spec.ts owns the frozen DOM contract.')
+  gap('A07 — targeted Session interaction from the WebUI',
+    'the control daemon now records Session intents and refuses an undeclared target with typed FORBIDDEN, but this D08 config declares no peer Session owner. No Session prompt, permission decision or cancel is delivered end to end from the WebUI in this run.')
 
   /* -------------------------------------------------------------------------------------
    * A08 — three separate surfaces; offline objects and historical connections visible
@@ -1810,18 +1826,13 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
    * Cross-device boundary (satisfied by an integrated receipt, never inferred from the LAN result above)
    * ----------------------------------------------------------------------------------- */
 
-  /* The earlier text here said "only one physical host is available". That premise was FALSE:
+  /* Earlier runs said "only one physical host is available". That premise was false:
    * a real two-host receipt exists (HOST A Macstudio.local 100.66.1.82, HOST B
-   * jennys-macbook-air.anoa-buri.ts.net 100.93.143.20), produced by the A11 unit at
-   * commit 869aff8 and merged into this candidate: real ACP session/new -> session/prompt ->
-   * session/request_permission -> session/update -> end_turn, plus a session/cancel path, with
-   * byte-identical tarball and CLI sha256 on both hosts.
-   *
-   * That receipt is a SEPARATE evidence unit that this driver does not drive. So this check
-   * verifies the integrated receipt instead of recording a gap for it: it is present in this
-   * tree, it names two distinct non-loopback peers, and it carries no recorded gaps. A run
-   * without the receipt fails rather than silently dropping to a gap, and the residual boundary
-   * is reported as a finding so a finding is never confused with a gap. */
+   * jennys-macbook-air.anoa-buri.ts.net 100.93.143.20), produced for package 0.1.0 by
+   * the A11 unit at commit 869aff8. This driver still checks that the integrated
+   * receipt is structurally complete. It records a gap because those two devices did
+   * not exercise this candidate's package, and reading an old receipt cannot upgrade
+   * a cross-device exchange to the current artifact. */
   const receiptUrl = new URL('../acp-a11-crossdevice-20261011/verification.json', import.meta.url)
   let receipt
   try {
@@ -1850,16 +1861,25 @@ id = ${JSON.stringify(PROVIDER_MODEL)}
     'the integrated A11 receipt does not record host A installed CLI sha256')
   assert(artifact.hostBInstalledCliSha256 === artifact.hostAInstalledCliSha256,
     'the integrated A11 receipt records different installed CLI sha256 on the two hosts, so its identical-artifact claim is false')
-  check('A11 — the cross-device receipt is integrated and recorded gap-free',
-    `receipt docs/evidence/acp-a11-crossdevice-20261011/: ${receipt.checks.length} checks, ${receipt.gaps.length} gaps, `
-      + `two distinct non-loopback hosts (${receiptHostA}, ${receiptHostB}), byte-identical tarball and installed CLI on both`)
-  finding('A11 — the cross-device receipt is verified by reading, not by driving traffic',
-    `this driver on ${hostname} exercised only ${lanIp} (tailscale 100.66.1.82); the cross-device exchange was driven by the `
-      + 'A11 unit at commit 869aff8, whose receipt this driver now verifies by reading. Loopback and same-host '
-      + 'non-loopback are never passed off as cross-device, and that exchange is not re-driven here')
+  // The receipt records no commit field, so name the documented base commit from the
+  // A11 unit notes instead of inventing one from an unrelated hash.
+  const receiptCommit = typeof receipt.candidate === 'string'
+    ? receipt.candidate.match(/\b[0-9a-f]{40}\b/u)?.[0]
+    : typeof receipt.candidate?.head_commit === 'string' ? receipt.candidate.head_commit
+      : typeof receipt.commit === 'string' ? receipt.commit : 'base commit 8cb0238 (docs/evidence/acp-a11-crossdevice-20261011/notes.md)'
+  gap('A11 — cross-device exchange for this candidate',
+    `the integrated cross-device receipt is valid only for its own ${receipt.version ?? artifact.version} artifact at `
+      + `${receiptCommit} (content sha256 ${artifact.contentSha256 ?? '<none>'}, artifact sha256 ${artifact.hostASha256 ?? '<none>'}); `
+      + `this run installs ${stagedPackage.version} at ${stagedPackage.candidateCommit} `
+      + `(${stagedPackage.contentSha256}). A static old receipt cannot prove a cross-device exchange on this artifact.`)
 
   const elapsed = Math.round((Date.now() - started) / 1000)
-  process.stdout.write(`\nD08 acceptance PASS: ${checks.length} checks (gaps: ${gaps.length}, findings: ${findings.length}) in ${elapsed}s\n`)
+  // The retained log is the only machine record of this run, so it carries the full
+  // candidate and artifact binding instead of a sampled hash.
+  process.stdout.write(`\nD08 artifact: candidate=${stagedPackage.candidateCommit} version=${stagedPackage.version}`
+    + ` content=${stagedPackage.contentSha256} tarball=${stagedPackage.tarball.filename}`
+    + ` sha256=${stagedPackage.tarball.sha256} bytes=${stagedPackage.tarball.size}\n`)
+  process.stdout.write(`\nD08 acceptance PASS with open items: ${checks.length} checks (gaps: ${gaps.length}, findings: ${findings.length}) in ${elapsed}s\n`)
 } catch (error) {
   process.stderr.write(`\nD08 acceptance FAIL [${step}]: ${error instanceof Error ? error.message : String(error)}\n`)
   if (error instanceof Error && error.stack) process.stderr.write(`${error.stack}\n`)

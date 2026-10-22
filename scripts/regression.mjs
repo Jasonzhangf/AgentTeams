@@ -8,7 +8,10 @@ const project = JSON.parse(readFileSync(resolve(root, '.appsdk/project.json'), '
 const module = project.modules.find(item => item.module_id === 'teams-source')
 assert.ok(module, 'teams-source contract missing')
 process.stderr.write('Regression gate: TEAMS_CONSOLE_REAL_DOM=1 (real Chrome required)\n')
-const result = spawnSync('pnpm', ['exec', 'vitest', 'run', '--config', 'vitest.config.ts', '--reporter=json'], {
+// Package-install rebuilds generated/ while live Chrome and managed-engine fixtures
+// contend for host resources. File-parallel execution made those independent suites
+// fail only as a group, so the gate runs files one at a time and keeps every test.
+const result = spawnSync('pnpm', ['exec', 'vitest', 'run', '--config', 'vitest.config.ts', '--no-file-parallelism', '--reporter=json'], {
   cwd: root,
   encoding: 'utf8',
   env: { ...process.env, TEAMS_CONSOLE_REAL_DOM: '1' },

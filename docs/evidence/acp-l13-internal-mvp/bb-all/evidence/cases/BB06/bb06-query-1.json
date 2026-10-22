@@ -1,0 +1,31 @@
+{
+  "command": "/tmp/agentteams-u7-bb06-JgGioV/prefix/node_modules/.bin/agentteams",
+  "args": [
+    "work",
+    "query",
+    "--config",
+    "/tmp/agentteams-u7-bb06-JgGioV/home/.agentteams/config.toml",
+    "--receiver",
+    "bb-receiver-1",
+    "--service-selection",
+    "capability",
+    "--work-id",
+    "cdd5af68-3575-45d7-b796-cb40e9f583fe",
+    "--request-id",
+    "ab0f522c-2ef8-41f2-8647-ff979a5f95d3",
+    "--provider",
+    "bb-provider",
+    "--provider-generation",
+    "1",
+    "--capability-id",
+    "browser",
+    "--capability-version",
+    "1",
+    "--operation",
+    "context.create"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\"status\":\"completed\",\"control\":{\"projectId\":\"agentteams-local-work\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"executionId\":\"ab26747b-8e28-47bd-95c1-2789e7a1b9d8\",\"attemptId\":\"74980a8e-32fc-4308-b759-30a68a5e9064\",\"workId\":\"cdd5af68-3575-45d7-b796-cb40e9f583fe\",\"requestId\":\"ab0f522c-2ef8-41f2-8647-ff979a5f95d3\",\"providerAgentId\":\"bb-provider\",\"targetGeneration\":1,\"linkGeneration\":1,\"serviceSelection\":\"capability\",\"capabilityId\":\"browser\",\"capabilityVersion\":\"1\",\"operation\":\"context.create\",\"requestState\":\"succeeded\",\"observed\":true},\"business\":{\"contextId\":\"browser-context-7d6b9c7d-212f-4492-9a09-37ca0f96eee9\",\"profile\":\"teams-bb-provider-c7d3963367816a13bfb180d456a2cf57233307bc290e8a3e7dd403d3c60b3ebb\",\"raw\":{\"cmd\":\"start\",\"ephemeral\":false,\"headless\":true,\"issuedAt\":\"2026-10-21T18:37:55.345Z\",\"profile\":\"teams-bb-provider-c7d3963367816a13bfb180d456a2cf57233307bc290e8a3e7dd403d3c60b3ebb\",\"reused\":false,\"sessionId\":\"camoufox-85484\",\"target\":\"t_7dd8ace9316f\",\"traceId\":\"cli-1792607872051\",\"url\":\"http://127.0.0.1:58565/\"},\"sessionId\":\"camoufox-85484\"},\"cleanup\":{\"channelsOpened\":1,\"channelsDisposed\":1},\"evidence\":{\"execution\":\"completed\",\"graphId\":\"agentteams.work-query\",\"graphVersion\":\"1\",\"nodeSchedule\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"nodeCompletion\":[\"resolve-service\",\"open-link\",\"query-request\",\"return-observation\"],\"hostOperations\":[\"agentWork.findProvider\",\"agentWork.open\",\"agentWork.get\",\"agentWork.dispose\"]}}\n",
+  "stderr": ""
+}

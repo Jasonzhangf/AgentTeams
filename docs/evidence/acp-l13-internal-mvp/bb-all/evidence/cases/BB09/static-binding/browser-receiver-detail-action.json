@@ -1,0 +1,14 @@
+{
+  "command": "/opt/homebrew/bin/camo",
+  "args": [
+    "click",
+    "--profile",
+    "bb09-static-58761",
+    "--selector",
+    "button[data-focus-key=\"agent:bb-receiver:details\"]"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "{\n  \"cmd\": \"click\",\n  \"profile\": \"bb09-static-58761\",\n  \"target\": \"t_1b33fc3eda0a\",\n  \"selector\": \"button[data-focus-key=\\\"agent:bb-receiver:details\\\"]\",\n  \"text\": null,\n  \"button\": \"left\",\n  \"dialogAction\": null,\n  \"dialogText\": null,\n  \"dialog\": null,\n  \"timeout\": null,\n  \"clicked\": true,\n  \"issuedAt\": \"2026-10-21T18:40:18.515Z\",\n  \"traceId\": \"cli-1792608018476\"\n}\n",
+  "stderr": ""
+}

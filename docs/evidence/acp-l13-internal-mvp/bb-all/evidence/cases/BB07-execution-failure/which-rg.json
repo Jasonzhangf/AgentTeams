@@ -1,0 +1,10 @@
+{
+  "command": "which",
+  "args": [
+    "rg"
+  ],
+  "status": 0,
+  "signal": null,
+  "stdout": "/opt/homebrew/bin/rg\n",
+  "stderr": ""
+}

@@ -571,4 +571,16 @@ describe('agentteams install package', () => {
       expectedCandidateIdentity: packageReceipt.candidate,
     })).toThrow(/restart did not prove a new launcher/u)
   })
+
+  it('records a passed final installed lifecycle receipt for the internal release evidence', async () => {
+    const receipt = await readJson(installedReceiptPath)
+    const destination = process.env.AGENTTEAMS_INSTALLED_EVIDENCE_RECEIPT
+    if (destination === undefined) {
+      expect(receipt).toMatchObject({ mode: 'final', release_eligible: false, lifecycle: { status: 'passed' } })
+      return
+    }
+    await mkdir(resolve(destination, '..'), { recursive: true })
+    await writeFile(destination, `${JSON.stringify(receipt, null, 2)}\n`)
+    expect(await readJson(destination)).toEqual(receipt)
+  })
 })
