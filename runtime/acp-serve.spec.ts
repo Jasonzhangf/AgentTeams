@@ -31,6 +31,7 @@ import {
   type ServeEngineAdapter,
 } from './acp-serve.ts'
 import type { AgentRegistration } from './registry-registration.ts'
+import { sendLocalMessageRequest } from './local-message-socket.ts'
 
 /**
  * `--serve <engine>` entry evidence (owner: runtime).
@@ -1228,6 +1229,46 @@ describe('--serve LAN and local channel composition', () => {
 
     await handle.stop()
     expect(existsSync(join(directory, 'state', 'engine', 'fake-engine.pid'))).toBe(false)
+  })
+
+  it('composes the CLI group surface on the registration connection and refuses a request while it is offline', async () => {
+    const directory = await temporaryDirectory()
+    const fakeEngine = await writeFakeDshEngine(directory)
+    const port = await availableLoopbackPort()
+    const tls = generateTls(directory, '127.0.0.1')
+    const configPath = join(directory, 'agent-discovery.toml')
+    await writeFile(configPath, `${dshAgentConfig({
+      executable: fakeEngine,
+      port,
+      dataDirectory: join(directory, 'state'),
+      workspace: join(directory, 'workspace'),
+      baseUrl: 'http://127.0.0.1:1/v1',
+    })}
+[discovery]
+serverId = "loopback-registry"
+endpoint = "wss://127.0.0.1:1"
+credentialRef = "env:PROBE_REGISTRATION"
+tlsTrustRef = ${JSON.stringify(tls.certRef)}
+`)
+    const handle = await startAcpServe(await readAcpServeIntent({ engine: 'dsh', configPath }), {
+      env: lanEnv(),
+      initializeTimeoutMs: 15_000,
+      stopTimeoutMs: 5_000,
+    })
+    handles.add(handle)
+    // Registration is enabled, so the CLI group surface exists; the socket is a
+    // real filesystem socket under the daemon's data directory.
+    expect(handle.registration.state).not.toBe('disabled')
+    expect(handle.groupSocketPath).not.toBeNull()
+    expect(handle.groupSocketPath?.startsWith(join(directory, 'state'))).toBe(true)
+    // No registry is reachable, so a group request fails with a typed error
+    // instead of being answered by a local stand-in.
+    await expect(sendLocalMessageRequest({
+      socketPath: handle.groupSocketPath!,
+      request: { kind: 'group.list', requestId: 'cli-offline' },
+      timeoutMs: 2_000,
+    })).rejects.toBeDefined()
+    await handle.stop()
   })
 
   it('attempts every declared peer at start and records a typed failure instead of skipping', async () => {

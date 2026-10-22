@@ -68,10 +68,36 @@ queue/steer、讨论与 comment 执行)不在本文件范围内。
 - 证据:`server/group-hardening.spec.ts` 四条新用例覆盖绑定真实项目与状态、未确认不建会话、
   缺项目拒绝、重复引用不二次回读。
 
+## 复核修复
+
+独立复核 4216fb1 判 FAIL,三条阻断已修:
+
+1. `issue.query` 的回执丢掉 `projectId`,导致真实路径每次 `issue.reference` 都报
+   `UPSTREAM_ERROR`。现在 `runOp` 把 `projectId` 原样带回;新增两条证据——
+   `runtime/agent-messaging.spec.ts` 用本地 Vikunja 替身走 `runOp` 断言回执含项目,
+   `server/group-loop.spec.ts` 用真实 CLI 引用一个本群从未创建过的 issue,断言会话绑定
+   回读到的 `p9` 与 `closed`。
+2. 崩溃留下的半行尾只从内存丢弃,下次追加会拼进半行并把整条记录弄坏。现在加载时
+   `repairJsonLinesTail` 先把文件截到最后一条完整行,再追加;丢弃次数写进 `log.json` 的
+   `repairedTails`。`server/group-file-store.spec.ts` 覆盖"修复后追加不损坏""再加一条不丢"。
+3. 保留起点在重启后被还原成完整历史,`restoreMessageLog` 会拒绝启动。现在加载按
+   `retentionStartSequence` 过滤并重写文件,保存时保留窗口一变就整file重写。
+   `server/group-file-store.spec.ts` 覆盖"裁剪后重启不复活""保留窗口内仍只追加",
+   并把加载结果送进 `createGroupHub` 与 `restoreMessageLog` 证明能启动。
+
+同时收紧的复核意见:
+
+- `issue.reference` 引用本群已绑定的 issue 时返回原会话,不再因唯一性检查报错。
+- `acp-serve` 启动失败路径现在关闭已开的 CLI 套接字;去掉没有消费者的 `onError`。
+- `runtime/acp-serve.spec.ts` 新增组合用例:注册启用时 `groupSocketPath` 非空、位于数据目录,
+  且注册不可达时 CLI 请求得到 typed 错误而不是本地伪成功。
+
 ## 未收口
 
 - 推送的 account/scope 精确按键(见第 4 节)。
-- `acp-serve` 内真实 relay 的端到端用例(见第 1 节)。
+- `relay-client` 对已放弃的群请求最多记住 256 条、每条约 5 分钟,过期即遗忘;这类请求的迟到
+  回执不会再被归到别的请求上。真正的逐请求取消仍是通道自己的超时。
+- `acp-serve` 内真实 relay 的端到端用例(见第 1 节);新增用例只覆盖注册不可达的分支。
 - `join` 的 TLS 校验仍关闭(`cli/join.mjs` 的 `rejectUnauthorized: false`);本轮只移除了
   `agent-messaging` 的自开连接,`join` 的配置生成与连通性探测没有改。
 - 真实 Vikunja 实例与 webhook 签名未核验,仍只有本地 HTTP 替身。

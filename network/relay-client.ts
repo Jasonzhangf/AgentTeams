@@ -63,7 +63,12 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
   const identity = structuredClone(options.declaration.identity)
   const scopeId = options.declaration.scopeId
   const pending = new Map<string, Pending>()
+  // Outstanding group request ids, so a reply or a group error can be routed to
+  // the group owner. A request whose caller gave up is remembered for one TTL so
+  // a late error still goes to the group owner instead of failing the control
+  // loop, then forgotten: the set never grows without bound.
   const groupRequests = new Set<string>()
+  const expiredGroupRequests = new Map<string, number>()
   const groupHandlers = new Set<(message: RelayGroupMessage) => void>()
   const data = new Map<string, WssConnection>()
   const opening = new Set<string>()
@@ -78,6 +83,26 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
   let publishing = false
   let closing = false
   let declarationRevision = options.declaration.revision
+  /** How long a given-up group request id is still routed to the group owner. */
+  const EXPIRED_GROUP_REQUEST_TTL_MS = 300_000
+  /** Bound on remembered ids whose caller already gave up. */
+  const EXPIRED_GROUP_REQUESTS = 256
+  const expireGroupRequests = (now: number): void => {
+    for (const [requestId, deadline] of expiredGroupRequests) {
+      if (deadline > now) break
+      expiredGroupRequests.delete(requestId)
+    }
+  }
+  const forgetGroupRequest = (requestId: string, now: number): boolean => {
+    groupRequests.delete(requestId)
+    expiredGroupRequests.set(requestId, now + EXPIRED_GROUP_REQUEST_TTL_MS)
+    while (expiredGroupRequests.size > EXPIRED_GROUP_REQUESTS) {
+      const oldest = expiredGroupRequests.keys().next()
+      if (oldest.done === true) break
+      expiredGroupRequests.delete(oldest.value)
+    }
+    return true
+  }
   const notifyGroup = (message: RelayGroupMessage): void => {
     for (const handler of [...groupHandlers]) {
       try { handler(message) } catch { /* An observer must not break the shared control pump. */ }
@@ -93,6 +118,7 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
       for (const requestId of groupRequests) notifyGroup({ kind: 'relay.error', requestId, error: failure })
     }
     groupRequests.clear()
+    expiredGroupRequests.clear()
     dataLifetime.abort()
     shutdown = (async () => {
       await Promise.all([login.transport.close(), ...[...data.values()].map(socket => socket.close()),
@@ -126,7 +152,14 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
           // A group failure belongs to its request, not to the protocol request table.
           // Reporting it to the group owner keeps the control connection alive.
           if (message.requestId !== undefined && groupRequests.has(message.requestId)) {
-            groupRequests.delete(message.requestId)
+            forgetGroupRequest(message.requestId, Date.now())
+            notifyGroup({ kind: 'relay.error', requestId: message.requestId, error: message.error })
+            continue
+          }
+          // A late error for a group request whose caller already gave up still
+          // belongs to the group owner; it must not fail the control loop.
+          if (message.requestId !== undefined && expiredGroupRequests.has(message.requestId)) {
+            expiredGroupRequests.delete(message.requestId)
             notifyGroup({ kind: 'relay.error', requestId: message.requestId, error: message.error })
             continue
           }
@@ -160,7 +193,10 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
           void Promise.resolve(options.onEvent?.(message)).catch(error =>
             stop(error instanceof Error ? error : new Error('relay: event receiver failed')))
         } else if (message.kind === 'relay.group.reply' || message.kind === 'relay.group.push') {
-          if (message.kind === 'relay.group.reply') groupRequests.delete(message.requestId)
+          if (message.kind === 'relay.group.reply') {
+            groupRequests.delete(message.requestId)
+            expiredGroupRequests.delete(message.requestId)
+          }
           notifyGroup(message)
         } else throw new RelayProtocolError('INVALID_INPUT', 'relay: unexpected admitted-control message')
       }
@@ -275,6 +311,7 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
       if (closing) throw new RelayProtocolError('UNAVAILABLE', 'relay: client is closing')
       if (typeof requestId !== 'string' || requestId.length === 0) throw new RelayProtocolError('INVALID_INPUT', 'relay: group request id must be a non-empty string')
       if (groupRequests.has(requestId)) throw new RelayProtocolError('CONFLICT', `relay: group request ${requestId} is already outstanding`)
+      expireGroupRequests(Date.now())
       groupRequests.add(requestId)
       try {
         await send({ kind: 'relay.group', requestId, frame })

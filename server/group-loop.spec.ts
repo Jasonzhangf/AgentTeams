@@ -25,8 +25,15 @@ import type { AgentMessaging } from '../runtime/agent-messaging.ts'
 
 interface Recorded { readonly method: string; readonly path: string; readonly body: string; readonly auth: string }
 
-function startVikunjaStub(): { readonly baseUrl: string; readonly issues: Map<string, { done: boolean; comments: string[] }>; readonly calls: Recorded[]; close(): void } {
-  const issues = new Map<string, { done: boolean; comments: string[] }>()
+/** Vikunja reports a project as a number; a non-numeric id stays a string. */
+function projectIdValue(projectId: string): number | string {
+  return /^\d+$/.test(projectId) ? Number(projectId) : projectId
+}
+
+function startVikunjaStub(): { readonly baseUrl: string; readonly issues: Map<string, { done: boolean; comments: string[]; projectId: string }>; readonly calls: Recorded[]; close(): void } {
+  const issues = new Map<string, { done: boolean; comments: string[]; projectId: string }>()
+  // An issue that existed before this group: referencing it must read its project.
+  issues.set('99', { done: true, comments: [], projectId: 'p9' })
   const calls: Recorded[] = []
   let nextId = 0
   const server = createServer((req, res) => {
@@ -41,8 +48,9 @@ function startVikunjaStub(): { readonly baseUrl: string; readonly issues: Map<st
       if (req.method === 'PUT' && /\/api\/v1\/projects\/[^/]+\/tasks$/.test(req.url ?? '')) {
         const id = String(++nextId)
         const parsed = JSON.parse(body)
-        issues.set(id, { done: false, comments: [] })
-        send(201, { id: Number(id), title: parsed.title, description: parsed.description, done: false })
+        const projectId = req.url!.split('/')[4] ?? ''
+        issues.set(id, { done: false, comments: [], projectId })
+        send(201, { id: Number(id), title: parsed.title, description: parsed.description, done: false, project_id: projectIdValue(projectId) })
         return
       }
       if (req.method === 'PUT' && /\/api\/v1\/tasks\/[^/]+\/comments$/.test(req.url ?? '')) {
@@ -65,7 +73,7 @@ function startVikunjaStub(): { readonly baseUrl: string; readonly issues: Map<st
         const id = match[1]
         const issue = issues.get(id)
         if (!issue) { send(404, { message: 'not found' }); return }
-        send(200, { id: Number(id), title: 't', done: issue.done })
+        send(200, { id: Number(id), title: 't', done: issue.done, project_id: projectIdValue(issue.projectId) })
         return
       }
       send(404, { message: `unhandled ${req.method} ${req.url}` })
@@ -225,26 +233,38 @@ describe('the batch-1 issue/action loop', () => {
 
       const session = await cli(c.messaging.socketPath, ['issue', 'create', groupId, 'p1', 'ship it', 'please ship', '--commit', 'cli-retry-1'])
       const sessionId = (session.session as { sessionId: string }).sessionId
-      expect(vikunja.issues.size).toBe(1)
+      // One issue was created here; issue 99 existed before this group.
+      expect([...vikunja.issues.keys()].sort()).toEqual(['1', '99'])
       // A CLI retry that reuses its commit id must not open a second issue.
       const retried = await cli(c.messaging.socketPath, ['issue', 'create', groupId, 'p1', 'ship it', 'please ship', '--commit', 'cli-retry-1'])
       expect((retried.session as { sessionId: string }).sessionId).toBe(sessionId)
-      expect(vikunja.issues.size).toBe(1)
+      expect(vikunja.issues.size).toBe(2)
 
       const action = await cli(c.messaging.socketPath, ['action', 'create', sessionId, 'agent-b', 'review', 'check the plan', 'a verdict', '--reply'])
       const actionId = (action.action as { actionId: string }).actionId
 
       await cli(b.messaging.socketPath, ['action', 'submit', actionId, 'looks good'])
-      expect([...vikunja.issues.values()][0].comments.length).toBe(1)
+      expect(vikunja.issues.get('1')?.comments.length).toBe(1)
 
       const listed = await cliViaAgentteams(a.messaging.socketPath, ['group', 'list'])
       expect((listed.groups as readonly unknown[]).length).toBe(1)
+
+      // Referencing an issue this group never created binds the project and state
+      // the read reports; both come from Vikunja, not from a placeholder.
+      const referenced = await cli(c.messaging.socketPath, ['issue', 'reference', groupId, '99'])
+      const reference = referenced.session as { vikunjaProjectId: string; vikunjaIssueId: string; state: string }
+      expect(reference.vikunjaIssueId).toBe('99')
+      expect(reference.vikunjaProjectId).toBe('p9')
+      expect(reference.state).toBe('closed')
+      // Referencing the issue this group already created keeps its session.
+      const same = await cli(c.messaging.socketPath, ['issue', 'reference', groupId, '1'])
+      expect((same.session as { sessionId: string }).sessionId).toBe(sessionId)
 
       // The initiator closes in Vikunja; Teams converges on the next read.
       await cli(c.messaging.socketPath, ['issue', 'close', sessionId, 'done', 'shipped'])
       const queried = await cli(c.messaging.socketPath, ['issue', 'query', sessionId])
       expect((queried.session as { state: string }).state).toBe('closed')
-      expect([...vikunja.issues.values()][0].done).toBe(true)
+      expect(vikunja.issues.get('1')?.done).toBe(true)
     } finally {
       await a.close()
       await b.close()

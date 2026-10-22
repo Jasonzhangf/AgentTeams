@@ -1493,7 +1493,6 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
         groupChannel = createRegistrationGroupChannel(registration.client, {
           requestTimeoutMs: 30_000,
           maxPendingRequests: 32,
-          onError: error => { options.onRegistrationStatus?.(registration!.status) },
         })
         groupMessaging = await startGroupAgentMessaging({
           registration: registration.client,
@@ -1721,6 +1720,9 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       }
     } catch (cause) {
       if (egress !== undefined) await egress.close().catch(() => undefined)
+      // A partially started serve releases the CLI socket it opened.
+      if (groupMessaging !== undefined) await groupMessaging.close().catch(() => undefined)
+      if (groupChannel !== undefined) groupChannel.close()
       if (registration !== undefined && registration.state === 'enabled') {
         await registration.client.stop().catch(() => undefined)
       }

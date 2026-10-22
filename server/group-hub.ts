@@ -452,6 +452,13 @@ export class GroupHubImpl implements GroupHub {
       return err('UPSTREAM_ERROR', `issue ${issueId} was read without its project; the reference is not confirmed`)
     }
     const observed = readObservedState(facts as JsonValue)
+    // An issue this group already bound keeps its session: a reference is a bind,
+    // not a second session for the same issue.
+    const bound = [...this.sessions.sessions.values()].find(entry =>
+      entry.groupId === groupId && entry.vikunjaProjectId === projectId && entry.vikunjaIssueId === issueId)
+    if (bound !== undefined) {
+      return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: bound })
+    }
     this.sessions = openIssueSession(this.sessions, { sessionId, groupId, vikunjaProjectId: projectId, vikunjaIssueId: issueId, initiatorAgentId: actor.agentId }, now)
     // Vikunja owns the open/closed truth, so a closed issue opens a closed session.
     if (observed === 'closed') {

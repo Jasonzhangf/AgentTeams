@@ -100,7 +100,12 @@ async function vikunjaStub(): Promise<{ baseUrl: string; calls: string[] }> {
       if (request.method === 'PUT' && /\/api\/v1\/projects\/[^/]+\/tasks$/u.test(request.url ?? '')) {
         const parsed = JSON.parse(body) as { readonly title?: string; readonly description?: string }
         response.writeHead(201, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ id: 7, title: parsed.title, description: parsed.description, done: false }))
+        response.end(JSON.stringify({ id: 7, title: parsed.title, description: parsed.description, done: false, project_id: 1 }))
+        return
+      }
+      if (request.method === 'GET' && /\/api\/v1\/tasks\/7$/u.test(request.url ?? '')) {
+        response.writeHead(200, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ id: 7, title: 'ship it', description: '', done: true, project_id: 1 }))
         return
       }
       response.writeHead(404, { 'content-type': 'application/json' })
@@ -180,5 +185,34 @@ it('rejects the CLI request with a typed channel failure instead of a success', 
   await expect(sendLocalMessageRequest({ socketPath, request: { kind: 'group.list', requestId: 'cli-2' }, timeoutMs: 1_000 }))
     .rejects.toMatchObject({ code: 'FORBIDDEN', message: failure.message, serviceError: failure })
   expect(instance.lastError()).toEqual(failure)
+  await instance.close()
+})
+
+it('confirms an issue.query with the owning project so a reference can bind it', async () => {
+  const directory = await socketRoot()
+  const socketPath = join(directory, 'message.sock')
+  const vikunja = await vikunjaStub()
+  const fake = fakeChannel()
+  const instance = await createAgentMessaging({
+    channel: fake.channel,
+    declaration: declaration('agent-a'),
+    socketPath,
+    vikunja: { baseUrl: vikunja.baseUrl, token: 'token-a' },
+  })
+  messaging.push(instance)
+  await instance.start()
+
+  fake.deliver({ kind: 'op.execute', opId: 'op-2', opKind: 'issue.query', params: { commitId: 'commit-10', vikunjaIssueId: '7' } })
+  await waitFor(() => fake.sent.length > 0)
+  await new Promise<void>(resolve => setTimeout(resolve, 20))
+
+  // The project rides back with the read; without it the hub cannot bind a reference.
+  expect(fake.sent).toEqual([{
+    kind: 'op.confirmed',
+    opId: 'op-2',
+    commitId: 'commit-10',
+    result: { issueId: '7', actualState: 'closed', projectId: '1' },
+  }])
+  expect(vikunja.calls).toEqual(['GET /api/v1/tasks/7'])
   await instance.close()
 })

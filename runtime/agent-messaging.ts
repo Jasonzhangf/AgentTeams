@@ -177,7 +177,20 @@ export async function createAgentMessaging(options: AgentMessagingOptions): Prom
       }
       if (opKind === 'issue.query') {
         const result = await vikunja.readState({ issueId: String(params.vikunjaIssueId ?? '') })
-        if (result.status === 'ok') return { kind: 'op.confirmed', opId, commitId, result: { issueId: result.value.issueId, actualState: result.value.state } }
+        if (result.status === 'ok') {
+          // The owning project rides back so a reference can bind it; without it
+          // the hub cannot tell which project the issue belongs to.
+          return {
+            kind: 'op.confirmed',
+            opId,
+            commitId,
+            result: {
+              issueId: result.value.issueId,
+              actualState: result.value.state,
+              ...(result.value.projectId === undefined ? {} : { projectId: result.value.projectId }),
+            },
+          }
+        }
         if (result.status === 'failed') return { kind: 'op.failed', opId, commitId, error: result.error }
         return { kind: 'op.unknown', opId, commitId, reason: 'issue.query outcome is not confirmable' }
       }

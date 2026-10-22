@@ -8,8 +8,10 @@ import {
   groupPaths,
   readJsonFile,
   readJsonLines,
+  repairJsonLinesTail,
   watermarkFile,
   writeJsonFile,
+  writeJsonLines,
   type GroupPaths,
 } from './group-store.ts'
 import type { GroupHubSnapshot, GroupHubStore, MessageLogSnapshot } from './group-hub.ts'
@@ -52,6 +54,13 @@ interface OpsDocument {
 interface LogDocument {
   readonly version: number
   readonly retentionStartSequence: number
+  /** How many crash-truncated tails this group's log has dropped and repaired. */
+  readonly repairedTails?: number
+}
+
+interface LogCursor {
+  readonly last: number
+  readonly retention: number
 }
 
 export interface GroupFileStoreOptions {
@@ -96,14 +105,22 @@ function readDocument<T>(path: string, label: string): T | undefined {
   return value as T
 }
 
-function readMessages(paths: GroupPaths): readonly Message[] {
+/**
+ * Reads the physical log, repairing a crash-truncated final line first so a
+ * later append cannot merge into it. Records below the retention start are
+ * dropped from the file as well: the file is the retained window, not history.
+ *
+ * Returns the retained records and whether the file had to be rewritten.
+ */
+function readRetainedMessages(paths: GroupPaths, retentionStartSequence: number): {
+  readonly messages: readonly Message[]
+  readonly droppedTail: boolean
+  readonly droppedRetained: boolean
+} {
+  const droppedBytes = repairJsonLinesTail(paths.messagesFile)
   const read = readJsonLines<Message>(paths.messagesFile)
-  // A crash can leave a partial final line. The log owner rejects the same
-  // record, so the store does not hide it: only the truncated tail is dropped.
-  if (read.truncatedTail) {
-    return read.records
-  }
-  return read.records
+  const retained = read.records.filter(message => message.sequence >= retentionStartSequence)
+  return { messages: retained, droppedTail: droppedBytes > 0, droppedRetained: retained.length !== read.records.length }
 }
 
 function readWatermarks(paths: GroupPaths): readonly { readonly agentId: string; readonly groupId: string; readonly upToSequence: number; readonly updatedAt: string }[] {
@@ -127,9 +144,11 @@ export function createGroupFileStore(options: GroupFileStoreOptions): GroupHubSt
   const root = scopeRoot(options)
   const groupsFile = join(root, 'groups.json')
   const orphanOpsFile = join(root, 'orphan-ops.json')
-  // The highest message sequence already appended per group, so a save never
-  // rewrites or renumbers an earlier record.
-  let appended: Map<string, number> | undefined
+  // The last sequence appended per group and the retention start the physical
+  // file already reflects, so a save never renumbers a record and a retention
+  // advance rewrites the file instead of resurrecting trimmed lines.
+  let written: Map<string, LogCursor> | undefined
+  let repaired: Map<string, number> = new Map()
 
   const load = (): GroupHubSnapshot | undefined => {
     const document = readDocument<GroupsDocument>(groupsFile, 'groups')
@@ -156,21 +175,38 @@ export function createGroupFileStore(options: GroupFileStoreOptions): GroupHubSt
       if (actionDocument !== undefined) actions.push(...list(actionDocument.actions, 'actions') as readonly Action[])
       const opDocument = readDocument<OpsDocument>(paths.externalOpsFile, `external ops ${group.groupId}`)
       if (opDocument !== undefined) ops.push(...list(opDocument.ops, 'external ops') as readonly ExternalOp[])
-      const logDocument = readDocument<LogDocument>(join(paths.root, 'log.json'), `log ${group.groupId}`)
-      const messages = readMessages(paths)
+      const logFile = join(paths.root, 'log.json')
+      const logDocument = readDocument<LogDocument>(logFile, `log ${group.groupId}`)
+      const retentionStartSequence = logDocument?.retentionStartSequence ?? 1
+      const retained = readRetainedMessages(paths, retentionStartSequence)
+      // A repair is recorded, not silent: the count survives in log.json and the
+      // file is rewritten so the next append starts on a record boundary.
+      if (retained.droppedTail || retained.droppedRetained) {
+        writeJsonLines(paths.messagesFile, retained.messages)
+      }
+      if (retained.droppedTail) {
+        repaired.set(group.groupId, (logDocument?.repairedTails ?? 0) + 1)
+        writeJsonFile(logFile, {
+          version: SCHEMA_VERSION,
+          retentionStartSequence,
+          repairedTails: (logDocument?.repairedTails ?? 0) + 1,
+        } satisfies LogDocument)
+      } else if (logDocument !== undefined) {
+        repaired.set(group.groupId, logDocument.repairedTails ?? 0)
+      }
       logs.push({
         groupId: group.groupId,
-        messages,
-        revision: messages.length + 1,
-        retentionStartSequence: logDocument?.retentionStartSequence ?? 1,
+        messages: retained.messages,
+        revision: retained.messages.length + 1,
+        retentionStartSequence,
         watermarks: readWatermarks(paths),
       })
     }
     const orphanDocument = readDocument<OpsDocument>(orphanOpsFile, 'orphan ops')
     if (orphanDocument !== undefined) ops.push(...list(orphanDocument.ops, 'orphan ops') as readonly ExternalOp[])
-    appended = new Map(logs.map(log => {
-      const last = log.messages.reduce((max, message) => Math.max(max, message.sequence), 0)
-      return [log.groupId, last] as const
+    written = new Map(logs.map(log => {
+      const last = log.messages.reduce((max, message) => Math.max(max, message.sequence), log.retentionStartSequence - 1)
+      return [log.groupId, { last, retention: log.retentionStartSequence }] as const
     }))
     return { groups, invitations, sessions, operations, actions, logs, ops }
   }
@@ -179,7 +215,7 @@ export function createGroupFileStore(options: GroupFileStoreOptions): GroupHubSt
     ensureDirectory(root)
     writeJsonFile(groupsFile, { version: SCHEMA_VERSION, groups: snapshot.groups, invitations: snapshot.invitations } satisfies GroupsDocument)
     const sessionGroups = new Map(snapshot.sessions.map(session => [session.sessionId, session.groupId] as const))
-    const written = appended ?? new Map<string, number>()
+    const cursors = written ?? new Map<string, LogCursor>()
     const present = new Set(snapshot.groups.map(group => group.groupId))
     const orphans = snapshot.ops.filter(op => {
       const groupId = groupOfOp(op, sessionGroups)
@@ -202,12 +238,28 @@ export function createGroupFileStore(options: GroupFileStoreOptions): GroupHubSt
       } satisfies OpsDocument)
       const state = snapshot.logs.find(log => log.groupId === group.groupId)
       if (state !== undefined) {
-        writeJsonFile(join(paths.root, 'log.json'), { version: SCHEMA_VERSION, retentionStartSequence: state.retentionStartSequence } satisfies LogDocument)
-        const last = written.get(group.groupId) ?? 0
-        for (const message of state.messages) {
-          if (message.sequence > last) appendJsonLine(paths.messagesFile, message)
+        const repairedTails = repaired.get(group.groupId) ?? 0
+        const cursor = cursors.get(group.groupId)
+        // Only records inside the retained window belong in the file.
+        const retained = state.messages.filter(message => message.sequence >= state.retentionStartSequence)
+        if (cursor === undefined || cursor.retention !== state.retentionStartSequence) {
+          // The retained window moved, so the file is rewritten: appending would
+          // leave trimmed lines behind for the next load to resurrect.
+          writeJsonLines(paths.messagesFile, retained)
+        } else {
+          for (const message of retained) {
+            if (message.sequence > cursor.last) appendJsonLine(paths.messagesFile, message)
+          }
         }
-        written.set(group.groupId, state.messages.reduce((max, message) => Math.max(max, message.sequence), last))
+        writeJsonFile(join(paths.root, 'log.json'), {
+          version: SCHEMA_VERSION,
+          retentionStartSequence: state.retentionStartSequence,
+          ...(repairedTails === 0 ? {} : { repairedTails }),
+        } satisfies LogDocument)
+        cursors.set(group.groupId, {
+          last: retained.reduce((max, message) => Math.max(max, message.sequence), state.retentionStartSequence - 1),
+          retention: state.retentionStartSequence,
+        })
         const expected = new Set<string>()
         for (const watermark of state.watermarks) {
           const path = watermarkFile(paths, watermark.agentId)
@@ -229,7 +281,7 @@ export function createGroupFileStore(options: GroupFileStoreOptions): GroupHubSt
     } else {
       writeJsonFile(orphanOpsFile, { version: SCHEMA_VERSION, ops: orphans } satisfies OpsDocument)
     }
-    appended = written
+    written = cursors
   }
 
   return { load, save }

@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Action, ExternalOp, Group, IssueSession, Message } from '../control-protocol/group-wire.ts'
 import type { IssueSessionOperation } from './issue-session.ts'
 import { createGroupFileStore } from './group-file-store.ts'
-import type { GroupHubSnapshot } from './group-hub.ts'
+import { createGroupHub, type GroupHubSnapshot } from './group-hub.ts'
+import { restoreMessageLog } from './message-log.ts'
 
 const directories: string[] = []
 
@@ -25,8 +26,8 @@ const group: Group = {
   ownerAgentId: 'agent-a',
   createdAt: '2026-10-22T00:00:00.000Z',
   members: [
-    { agentId: 'agent-a', role: 'master', joinedAt: '2026-10-22T00:00:00.000Z' },
-    { agentId: 'agent-b', role: 'peer', joinedAt: '2026-10-22T00:00:00.000Z' },
+    { agentId: 'agent-a', role: 'master', mastersOf: [], intervals: [{ joinedAt: '2026-10-22T00:00:00.000Z' }] },
+    { agentId: 'agent-b', role: 'peer', mastersOf: [], intervals: [{ joinedAt: '2026-10-22T00:00:00.000Z' }] },
   ],
 }
 
@@ -79,7 +80,7 @@ function message(sequence: number): Message {
     targetAgentIds: ['agent-b'],
     replyRequired: false,
     body: `body ${sequence}`,
-    createdAt: `2026-10-22T00:0${sequence}:00.000Z`,
+    sentAt: `2026-10-22T00:0${sequence}:00.000Z`,
   }
 }
 
@@ -184,7 +185,7 @@ describe('group file store', () => {
     expect(readdirSync(join(directory, 'groups', 'acct', 'scope')).includes('orphan-ops.json')).toBe(true)
   })
 
-  it('keeps a truncated message tail visible as a log read instead of inventing a record', () => {
+  it('repairs a crash-truncated tail so the next append stays on a record boundary', () => {
     const directory = workspace()
     const store = createGroupFileStore({ dataDirectory: directory, accountId: 'acct', scopeId: 'scope' })
     store.save(snapshot([message(1), message(2)]))
@@ -192,5 +193,57 @@ describe('group file store', () => {
     writeFileSync(path, `${readFileSync(path, 'utf8')}{"messageId":"m3"`)
     const loaded = store.load()
     expect(loaded?.logs[0]?.messages.map(entry => entry.messageId)).toEqual(['m1', 'm2'])
+    // The partial line is gone from the file, not only from memory.
+    expect(readFileSync(path, 'utf8').endsWith('\n')).toBe(true)
+    // Appending after the repair must not merge into the dropped bytes.
+    store.save(snapshot([message(1), message(2), message(3)]))
+    expect(readFileSync(path, 'utf8').trimEnd().split('\n')).toHaveLength(3)
+    expect(createGroupFileStore({ dataDirectory: directory, accountId: 'acct', scopeId: 'scope' }).load()?.logs[0]?.messages.map(entry => entry.messageId))
+      .toEqual(['m1', 'm2', 'm3'])
+    // The repair is recorded rather than silent.
+    expect(JSON.parse(readFileSync(join(directory, 'groups', 'acct', 'scope', 'g1', 'log.json'), 'utf8'))).toMatchObject({ repairedTails: 1 })
+    // One record appended to a truncated tail cannot be lost.
+    writeFileSync(path, `${readFileSync(path, 'utf8')}{"messageId":"m4"`)
+    const again = createGroupFileStore({ dataDirectory: directory, accountId: 'acct', scopeId: 'scope' }).load()
+    expect(again?.logs[0]?.messages.map(entry => entry.messageId)).toEqual(['m1', 'm2', 'm3'])
+  })
+
+  it('keeps a trimmed log trimmed across a restart and lets the hub start', async () => {
+    const directory = workspace()
+    const store = createGroupFileStore({ dataDirectory: directory, accountId: 'acct', scopeId: 'scope' })
+    store.save(snapshot([message(1), message(2), message(3)]))
+    const trimmed = snapshot([message(1), message(2), message(3)])
+    store.save({ ...trimmed, logs: [{ ...trimmed.logs[0]!, messages: [message(2), message(3)], retentionStartSequence: 2 }] })
+    const reopened = createGroupFileStore({ dataDirectory: directory, accountId: 'acct', scopeId: 'scope' })
+    const loaded = reopened.load()
+    // The trimmed record does not come back from the file.
+    expect(loaded?.logs[0]?.messages.map(entry => entry.messageId)).toEqual(['m2', 'm3'])
+    expect(loaded?.logs[0]?.retentionStartSequence).toBe(2)
+    expect(readFileSync(join(directory, 'groups', 'acct', 'scope', 'g1', 'messages.jsonl'), 'utf8').trimEnd().split('\n')).toHaveLength(2)
+    // A hub built from this snapshot starts, and the gap stays explicit: the
+    // watermark that predates the retained window is reported, not silently moved.
+    const hub = createGroupHub({ store: reopened, isOnline: () => true, now: () => new Date('2026-10-22T00:00:00.000Z'), idFactory: () => 'id-1' })
+    const page = await hub.handle({ agentId: 'agent-a', accountId: 'acct', scopeId: 'scope' }, { kind: 'message.page', requestId: 'p1', groupId: 'g1' })
+    if (!page.ok) throw new Error(page.error.message)
+    expect(() => restoreMessageLog({
+      groupId: 'g1',
+      messages: loaded?.logs[0]?.messages ?? [],
+      retentionStartSequence: loaded?.logs[0]?.retentionStartSequence,
+      watermarks: loaded?.logs[0]?.watermarks ?? [],
+    })).not.toThrow()
+  })
+
+  it('appends inside a retained window without rewriting the surviving records', () => {
+    const directory = workspace()
+    const store = createGroupFileStore({ dataDirectory: directory, accountId: 'acct', scopeId: 'scope' })
+    const base = snapshot([message(1), message(2), message(3)])
+    store.save({ ...base, logs: [{ ...base.logs[0]!, messages: [message(2), message(3)], retentionStartSequence: 2 }] })
+    const path = join(directory, 'groups', 'acct', 'scope', 'g1', 'messages.jsonl')
+    const before = readFileSync(path, 'utf8')
+    const next = snapshot([message(2), message(3), message(4)])
+    store.save({ ...next, logs: [{ ...next.logs[0]!, messages: [message(2), message(3), message(4)], retentionStartSequence: 2 }] })
+    const after = readFileSync(path, 'utf8')
+    expect(after.startsWith(before)).toBe(true)
+    expect(after.trimEnd().split('\n')).toHaveLength(3)
   })
 })

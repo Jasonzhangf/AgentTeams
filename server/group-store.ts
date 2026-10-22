@@ -67,6 +67,32 @@ export function appendJsonLine(path: string, value: unknown): void {
   appendFileSync(path, `${JSON.stringify(value)}\n`, { mode: FILE_MODE })
 }
 
+/** Rewrite a whole JSONL file through a temporary sibling, then rename. */
+export function writeJsonLines(path: string, records: readonly unknown[]): void {
+  ensureDirectory(dirname(path))
+  const temporary = `${path}.tmp-${process.pid}`
+  writeFileSync(temporary, records.map(record => `${JSON.stringify(record)}\n`).join(''), { mode: FILE_MODE })
+  chmodSync(temporary, FILE_MODE)
+  renameSync(temporary, path)
+}
+
+/**
+ * Drop a partial final line left by a crash. Returns how many bytes were
+ * dropped, or zero when the file already ends on a record boundary. The caller
+ * records the drop; this only repairs the physical file so a later append cannot
+ * merge into the partial line.
+ */
+export function repairJsonLinesTail(path: string): number {
+  if (!existsSync(path)) return 0
+  const text = readFileSync(path, 'utf8')
+  if (text.length === 0 || text.endsWith('\n')) return 0
+  const boundary = text.lastIndexOf('\n')
+  const kept = boundary < 0 ? '' : text.slice(0, boundary + 1)
+  writeFileSync(path, kept, { mode: FILE_MODE })
+  chmodSync(path, FILE_MODE)
+  return text.length - kept.length
+}
+
 export interface LogRead<T> {
   readonly records: readonly T[]
   /** A crash can leave a partial final line. It is dropped and reported, never repaired silently. */
