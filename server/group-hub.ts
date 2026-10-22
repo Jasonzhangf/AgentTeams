@@ -419,6 +419,8 @@ export class GroupHubImpl implements GroupHub {
     if (kind !== 'reply' && kind !== 'review' && kind !== 'comment' && kind !== 'audit' && kind !== 'followup') return err('INVALID_INPUT', 'unknown action kind')
     const session = this.sessions.sessions.get(sessionId)
     if (!session) return err('NOT_FOUND', `unknown session ${sessionId}`)
+    // External close stops new admission: a closed session takes no new action.
+    if (session.state === 'closed') return err('CONFLICT', `session ${sessionId} is closed; reopen it before creating an action`)
     const group = groupOf(this.registry, session.groupId)
     if (!memberActiveAt(group, assigneeAgentId, this.now().toISOString())) return err('INVALID_INPUT', `${assigneeAgentId} is not an active member`)
     // One `mastersOf` edge serves both directions: a master commands its peer, a

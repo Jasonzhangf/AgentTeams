@@ -214,6 +214,19 @@ describe('section 18 acceptance items with a loop-level shape', () => {
     const listed = await hub.handle(MASTER, { kind: 'issue.query', requestId: 'q0', sessionId: firstId })
     expect((listed.reply as { session: { sessionId: string } }).session.sessionId).toBe(firstId)
   })
+
+  it('item 13 stops new admission on a closed session', async () => {
+    const hub = build(async (op) => issueOk(op))
+    const groupId = await group(hub)
+    const sessionId = await session(hub, groupId)
+    await hub.handle(MASTER, { kind: 'issue.close', requestId: 'c0', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'x' })
+    const created = await hub.handle(MASTER, {
+      kind: 'action.create', requestId: 'a0', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'review', reason: 'r', expectedResult: 'e', replyRequired: false,
+    })
+    expect(created.ok).toBe(false)
+    expect(created.ok ? '' : created.error.code).toBe('CONFLICT')
+  })
 })
 
 describe('the three required counter-examples', () => {
