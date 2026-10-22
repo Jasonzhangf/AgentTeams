@@ -103,7 +103,9 @@ queue/steer、讨论与 comment 执行)不在本文件范围内。
 
 ## 未收口
 
-- 推送的 account/scope 精确按键(见第 4 节)。
+- 推送的 account/scope 精确按键(见第 4 节):群记录不带 account/scope,成员的 agentId 在群内
+  唯一,因此按 agentId 定址仍是当前契约。要按作用域按键,须先让群记录携带成员的作用域,
+  这属于设计变更,需要先确认。
 - `issue.reference` 只对"跨类型复用 commit"(create 的 commit 用于 reference)报冲突;两次
   reference 用同一 commit 指向不同 issue 时会各建一个会话。CLI 的稳定 commit 由目标推导,
   现有路径不会触发;要强制 §9 的内容冲突需给引用也记 commit。
