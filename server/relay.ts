@@ -596,11 +596,20 @@ class RelayServerImpl implements RelayServer {
     if (target) this.send(target.socket, { kind: 'relay.group.push', frame: frame as JsonValue })
   }
 
+  /**
+   * One live control for an agent id inside one account and scope.
+   *
+   * The same agent id may exist in two scopes. A push is addressed by agent id
+   * only, so an ambiguous match is refused instead of delivered to a guess. The
+   * correct delivery is to name the scope on the push path, which stays open.
+   */
   private socketForAgent(agentId: string): RelaySocketState | undefined {
-    for (const state of this.controls.values()) {
-      if (state.auth?.agentId === agentId && open(state.socket) && this.activeByIdentity.get(state.identityKey ?? '') === state) return state
-    }
-    return undefined
+    const matches = [...this.controls.values()].filter((state) =>
+      state.auth?.agentId === agentId && open(state.socket) && this.activeByIdentity.get(state.identityKey ?? '') === state)
+    if (matches.length === 0) return undefined
+    const scopes = new Set(matches.map(state => `${state.auth?.accountId ?? ''}\u0000${state.auth?.scopeId ?? ''}`))
+    if (scopes.size > 1) return undefined
+    return matches[0]
   }
 
   private async connect(state: RelaySocketState, input: Record<string, unknown>): Promise<void> {

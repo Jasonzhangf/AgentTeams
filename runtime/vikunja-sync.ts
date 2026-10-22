@@ -54,6 +54,8 @@ export interface VikunjaIssue {
 export interface VikunjaIssueState {
   readonly issueId: string
   readonly state: IssueState
+  /** Present when the server reported the owning project; a reference needs it. */
+  readonly projectId?: string
 }
 
 export interface VikunjaComment {
@@ -138,6 +140,7 @@ interface ParsedIssue {
   readonly title: string
   readonly state: IssueState
   readonly description: string
+  readonly projectId?: string
 }
 
 interface ParsedComment {
@@ -167,11 +170,13 @@ function parseIssueRecord(value: unknown): ParsedIssue | undefined {
   if (!isRecord(value)) return undefined
   const issueId = identifier(value.id)
   if (issueId === undefined || typeof value.done !== 'boolean') return undefined
+  const projectId = identifier(value.project_id)
   return {
     issueId,
     title: typeof value.title === 'string' ? value.title : '',
     state: value.done ? 'closed' : 'open',
     description: typeof value.description === 'string' ? value.description : '',
+    ...(projectId === undefined ? {} : { projectId }),
   }
 }
 
@@ -355,7 +360,9 @@ export function createVikunjaSync(options: VikunjaSyncOptions): VikunjaSync {
     const issueId = requiredValue(input.issueId, 'issue id')
     return read('vikunja issue read', `/api/v1/tasks/${encodeURIComponent(issueId)}`, value => {
       const issue = parseIssueRecord(value)
-      return issue === undefined ? undefined : { issueId: issue.issueId, state: issue.state }
+      return issue === undefined
+        ? undefined
+        : { issueId: issue.issueId, state: issue.state, ...(issue.projectId === undefined ? {} : { projectId: issue.projectId }) }
     })
   }
 

@@ -4,6 +4,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { parse as parseToml } from 'toml'
 import type { RelationRole } from '../control-protocol/teams-connection.ts'
 import type { AcpPolicyIntent } from './acp-policy.ts'
+import { parseVikunjaIntent, VikunjaIntentError, type VikunjaIntent } from './vikunja-intent.ts'
 import type {
   AgentModelBinding,
   ConfigErrorCode,
@@ -137,6 +138,8 @@ export interface AgentDaemonIntent {
   readonly providers: Readonly<Record<string, ProviderInstance>>
   readonly models: readonly ModelEntry[]
   readonly model?: AgentModelBinding
+  /** Optional `[vikunja]` section (A5). Absence means no external issue capability. */
+  readonly vikunja?: VikunjaIntent
 }
 
 export interface ControlDaemonIntent {
@@ -686,7 +689,7 @@ function parseAgent(
   daemon: DaemonIdentity<'agent'>,
   context: DaemonIntentContext | undefined,
 ): AgentDaemonIntent {
-  fields(root, ['version', 'daemon', 'engine', 'listen', 'acp', 'relations', 'admissions', 'discovery', 'peers', 'providers', 'models', 'model'], 'agent daemon')
+  fields(root, ['version', 'daemon', 'engine', 'listen', 'acp', 'relations', 'admissions', 'discovery', 'peers', 'providers', 'models', 'model', 'vikunja'], 'agent daemon')
   const engine = root.engine === undefined ? undefined : parseEngine(root.engine)
   const listen = root.listen === undefined ? undefined : parseListen(root.listen, 'listen')
   const acp = parseAcp(root.acp)
@@ -695,6 +698,15 @@ function parseAgent(
   const providers = Object.fromEntries(Object.entries(providersInput).map(([id, value]) => [id, parseProvider(id, value)]))
   const models = parseModels(root.models)
   const model = root.model === undefined ? undefined : parseModel(root.model)
+  // The section owner keeps its own error type; the daemon config reports the
+  // same code through its single error vocabulary.
+  let vikunja: VikunjaIntent | undefined
+  try {
+    vikunja = parseVikunjaIntent(root.vikunja)
+  } catch (cause) {
+    if (cause instanceof VikunjaIntentError) throw new DaemonIntentError(cause.code, cause.message)
+    throw cause
+  }
   const intent: AgentDaemonIntent = {
     version: DAEMON_INTENT_VERSION,
     daemon,
@@ -708,6 +720,7 @@ function parseAgent(
     providers,
     models,
     ...(model === undefined ? {} : { model }),
+    ...(vikunja === undefined ? {} : { vikunja }),
   }
   assertAgentIntentPolicy(intent)
   assertIdentityRelations({ daemon, peers: intent.peers, admissions: intent.admissions })

@@ -8,7 +8,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AuthenticatedAgent, AgentDeclaration } from '../control-protocol/agent-services.ts'
 import { createGroupHub, type GroupHubSnapshot } from './group-hub.ts'
 import { createRelayServer, type RelayServer } from './relay.ts'
-import { createAgentMessaging, localSocketPathFor } from '../runtime/agent-messaging.ts'
+import type { GroupChannel } from '../network/group-channel.ts'
+import {
+  createRegistrationGroupChannel,
+  forwardRegistrationStatus,
+  startGroupAgentMessaging,
+} from '../runtime/group-messaging.ts'
+import { createRegistrationClient, type RegistrationClient } from '../network/registration-client.ts'
+import type { AgentMessaging } from '../runtime/agent-messaging.ts'
 
 /**
  * Batch-1 black-box loop: a real relay with the real hub, two real agent
@@ -102,6 +109,58 @@ async function cliViaAgentteams(socketPath: string, args: readonly string[]): Pr
   return JSON.parse(stdout.trim()) as Record<string, unknown>
 }
 
+/**
+ * Composes one daemon over its registration connection: the group channel rides
+ * the registration client, and agent-messaging consumes that channel. This is
+ * the real batch-2 wiring the CLI exercises below.
+ */
+async function startMessaging(options: {
+  readonly agentId: string
+  readonly dataDirectory: string
+  readonly ca: Buffer
+  readonly vikunja: { readonly baseUrl: string; readonly token: string }
+}): Promise<{ readonly messaging: AgentMessaging; readonly registration: RegistrationClient; readonly channel: GroupChannel; close(): Promise<void> }> {
+  let channel: GroupChannel | undefined
+  const registration = createRegistrationClient({
+    declaration: declaration(options.agentId),
+    endpoint: relay!.url,
+    credential: `Bearer ${options.agentId}`,
+    ca: options.ca,
+    heartbeatIntervalMs: 5_000,
+    admissionTimeoutMs: 1_000,
+    requestTimeoutMs: 5_000,
+    maxPendingRequests: 16,
+    maxDataConnections: 4,
+    connectTimeoutMs: 1_000,
+    maxMessageBytes: 1_048_576,
+    maxBufferedBytes: 1_048_576,
+    maxPendingFrames: 32,
+    reconnect: { initialDelayMs: 50, maxDelayMs: 100, maxAttempts: 20 },
+    onStatus: status => forwardRegistrationStatus(channel, status),
+  })
+  channel = createRegistrationGroupChannel(registration, { requestTimeoutMs: 15_000, maxPendingRequests: 16 })
+  const groupChannel = channel
+  await registration.start()
+  // The same composition the daemon uses: local socket on the shared channel.
+  const messaging = await startGroupAgentMessaging({
+    registration,
+    channel: groupChannel,
+    declaration: declaration(options.agentId),
+    dataDirectory: options.dataDirectory,
+    vikunja: options.vikunja,
+  })
+  return {
+    messaging,
+    registration,
+    channel: groupChannel,
+    close: async () => {
+      await messaging.close()
+      groupChannel.close()
+      await registration.stop()
+    },
+  }
+}
+
 let directory: string
 let relay: RelayServer | undefined
 let vikunja: Awaited<ReturnType<typeof startVikunjaStub>> | undefined
@@ -110,7 +169,7 @@ beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'group-loop-'))
   const keyPath = join(directory, 'key.pem')
   const certPath = join(directory, 'cert.pem')
-  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost', '-keyout', keyPath, '-out', certPath, '-days', '1'], { stdio: 'ignore' })
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1', '-keyout', keyPath, '-out', certPath, '-days', '1'], { stdio: 'ignore' })
   writeFileSync(join(directory, 'key.pem'), readFileSync(keyPath))
 })
 
@@ -143,50 +202,47 @@ describe('the batch-1 issue/action loop', () => {
         externalOpTimeoutMs: 15_000,
       }),
     })
-    const a = await createAgentMessaging({
-      relayUrl: relay.url, credential: 'Bearer agent-a', declaration: declaration('agent-a'),
-      socketPath: localSocketPathFor(join(directory, 'a')), vikunja: { baseUrl: vikunja.baseUrl, token: 'token-a' },
+    const a = await startMessaging({
+      agentId: 'agent-a', dataDirectory: join(directory, 'a'), ca: cert,
+      vikunja: { baseUrl: vikunja.baseUrl, token: 'token-a' },
     })
-    const c = await createAgentMessaging({
-      relayUrl: relay.url, credential: 'Bearer agent-c', declaration: declaration('agent-c'),
-      socketPath: localSocketPathFor(join(directory, 'c')), vikunja: { baseUrl: vikunja.baseUrl, token: 'token-c' },
+    const c = await startMessaging({
+      agentId: 'agent-c', dataDirectory: join(directory, 'c'), ca: cert,
+      vikunja: { baseUrl: vikunja.baseUrl, token: 'token-c' },
     })
-    const b = await createAgentMessaging({
-      relayUrl: relay.url, credential: 'Bearer agent-b', declaration: declaration('agent-b'),
-      socketPath: localSocketPathFor(join(directory, 'b')), vikunja: { baseUrl: vikunja.baseUrl, token: 'token-b' },
+    const b = await startMessaging({
+      agentId: 'agent-b', dataDirectory: join(directory, 'b'), ca: cert,
+      vikunja: { baseUrl: vikunja.baseUrl, token: 'token-b' },
     })
-    await a.start()
-    await b.start()
-    await c.start()
     try {
-      const created = await cli(a.socketPath, ['group', 'create', 'release'])
+      const created = await cli(a.messaging.socketPath, ['group', 'create', 'release'])
       const groupId = (created.group as { groupId: string }).groupId
-      await cli(a.socketPath, ['group', 'invite', groupId, 'agent-b', 'peer'])
-      await cli(b.socketPath, ['group', 'accept', groupId])
+      await cli(a.messaging.socketPath, ['group', 'invite', groupId, 'agent-b', 'peer'])
+      await cli(b.messaging.socketPath, ['group', 'accept', groupId])
       // One explicit mastersOf edge makes C the assigning master over B.
-      await cli(a.socketPath, ['group', 'invite', groupId, 'agent-c', 'master', '--masters', 'agent-b'])
-      await cli(c.socketPath, ['group', 'accept', groupId])
+      await cli(a.messaging.socketPath, ['group', 'invite', groupId, 'agent-c', 'master', '--masters', 'agent-b'])
+      await cli(c.messaging.socketPath, ['group', 'accept', groupId])
 
-      const session = await cli(c.socketPath, ['issue', 'create', groupId, 'p1', 'ship it', 'please ship', '--commit', 'cli-retry-1'])
+      const session = await cli(c.messaging.socketPath, ['issue', 'create', groupId, 'p1', 'ship it', 'please ship', '--commit', 'cli-retry-1'])
       const sessionId = (session.session as { sessionId: string }).sessionId
       expect(vikunja.issues.size).toBe(1)
       // A CLI retry that reuses its commit id must not open a second issue.
-      const retried = await cli(c.socketPath, ['issue', 'create', groupId, 'p1', 'ship it', 'please ship', '--commit', 'cli-retry-1'])
+      const retried = await cli(c.messaging.socketPath, ['issue', 'create', groupId, 'p1', 'ship it', 'please ship', '--commit', 'cli-retry-1'])
       expect((retried.session as { sessionId: string }).sessionId).toBe(sessionId)
       expect(vikunja.issues.size).toBe(1)
 
-      const action = await cli(c.socketPath, ['action', 'create', sessionId, 'agent-b', 'review', 'check the plan', 'a verdict', '--reply'])
+      const action = await cli(c.messaging.socketPath, ['action', 'create', sessionId, 'agent-b', 'review', 'check the plan', 'a verdict', '--reply'])
       const actionId = (action.action as { actionId: string }).actionId
 
-      await cli(b.socketPath, ['action', 'submit', actionId, 'looks good'])
+      await cli(b.messaging.socketPath, ['action', 'submit', actionId, 'looks good'])
       expect([...vikunja.issues.values()][0].comments.length).toBe(1)
 
-      const listed = await cliViaAgentteams(a.socketPath, ['group', 'list'])
+      const listed = await cliViaAgentteams(a.messaging.socketPath, ['group', 'list'])
       expect((listed.groups as readonly unknown[]).length).toBe(1)
 
       // The initiator closes in Vikunja; Teams converges on the next read.
-      await cli(c.socketPath, ['issue', 'close', sessionId, 'done', 'shipped'])
-      const queried = await cli(c.socketPath, ['issue', 'query', sessionId])
+      await cli(c.messaging.socketPath, ['issue', 'close', sessionId, 'done', 'shipped'])
+      const queried = await cli(c.messaging.socketPath, ['issue', 'query', sessionId])
       expect((queried.session as { state: string }).state).toBe('closed')
       expect([...vikunja.issues.values()][0].done).toBe(true)
     } finally {

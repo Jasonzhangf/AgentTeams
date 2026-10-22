@@ -2,10 +2,11 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { createRelayServer, type RelayServer, type RelayServerOptions } from '../server/relay.ts'
 import type { RelayGrant } from '../control-protocol/agent-services.ts'
-import { createRelayClient, type RelayClient, type RelayClientOptions } from './relay-client.ts'
+import { createRelayClient, type RelayClient, type RelayClientOptions, type RelayGroupMessage } from './relay-client.ts'
+import { WssConnectionError, type WssConnection, type WssFrame } from './wss-connection.ts'
 import { startAgentDaemon } from '../runtime/agent-daemon.ts'
 import { createWorkChannel } from './work-channel.ts'
 import { createWorkIngress } from '../agent-host/work-ingress.ts'
@@ -51,6 +52,71 @@ async function peer(id: string, onEvent?: RelayClientOptions['onEvent']) {
   const client = await createRelayClient(clientOptions(id, onEvent))
   clients.push(client)
   return client
+}
+
+interface FakeControlTransport {
+  readonly connection: WssConnection
+  readonly sent: string[]
+  push(frame: unknown): void
+}
+
+/** In-memory control transport for the pump test; no socket is opened. */
+function fakeControlTransport(): FakeControlTransport {
+  const queue: WssFrame[] = []
+  const sent: string[] = []
+  let reader: ((frame: WssFrame) => void) | undefined
+  let rejectRead: ((error: Error) => void) | undefined
+  let resolveClosed!: (error: WssConnectionError) => void
+  let stopped = false
+  const closed = new Promise<WssConnectionError>(resolve => { resolveClosed = resolve })
+  const deliver = (): void => {
+    if (reader === undefined) return
+    const next = queue.shift()
+    if (next === undefined) return
+    const pending = reader
+    reader = undefined
+    rejectRead = undefined
+    pending(next)
+  }
+  return {
+    connection: {
+      closed,
+      read: async () => {
+        if (stopped) throw new WssConnectionError('UNAVAILABLE', 'fake transport is closed')
+        const frame = queue.shift()
+        if (frame !== undefined) return frame
+        return await new Promise<WssFrame>((resolve, reject) => { reader = resolve; rejectRead = reject })
+      },
+      send: async frame => {
+        if (stopped) throw new WssConnectionError('UNAVAILABLE', 'fake transport is closed')
+        sent.push(frame.bytes.toString('utf8'))
+      },
+      close: async () => {
+        if (stopped) return
+        stopped = true
+        const failure = new WssConnectionError('UNAVAILABLE', 'fake transport is closed')
+        rejectRead?.(failure)
+        reader = undefined
+        rejectRead = undefined
+        resolveClosed(failure)
+      },
+    },
+    sent,
+    push: frame => {
+      const text = JSON.stringify(frame)
+      if (text === undefined) throw new Error('fake transport cannot serialize the frame')
+      queue.push({ bytes: Buffer.from(text), binary: false })
+      deliver()
+    },
+  }
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error('condition was not reached')
+    await new Promise<void>(resolve => setTimeout(resolve, 5))
+  }
 }
 
 it('exchanges a correlated Console command through actual TLS Relay and closes the one-request sockets', async () => {
@@ -391,4 +457,57 @@ it('rejects a correlated Work reply that belongs to a different Work', async () 
     control: { workId: 'wrong-work', requestId: 'r', state: 'succeeded' }, payload: 'wrong result' })) })
   await response
   await channel.closed
+})
+
+it('routes group replies, pushes and correlated errors to the handler on the same fake control connection', async () => {
+  const fake = fakeControlTransport()
+  vi.resetModules()
+  vi.doMock('./relay-login.ts', () => ({
+    loginRelay: async () => ({ receipt: { connectionId: 'fake-control', generation: 1 }, transport: fake.connection }),
+  }))
+  try {
+    const { createRelayClient: createFakeRelayClient } = await import('./relay-client.ts')
+    const client = await createFakeRelayClient({
+      transport: { endpoint: 'wss://127.0.0.1:1', credential: 'Bearer group', ca: cert, connectTimeoutMs: 1000,
+        maxMessageBytes: 65536, maxBufferedBytes: 65536, maxPendingFrames: 16 },
+      admissionTimeoutMs: 1000, requestTimeoutMs: 1000, maxPendingRequests: 8, maxDataConnections: 8,
+      declaration: { identity: { hostId: 'group', machineId: 'group', agentId: 'group', accountId: 'account', agentKind: 'custom', label: 'group' },
+        scopeId: 'scope', revision: 1, capabilities: [], routes: [] },
+    })
+    const received: RelayGroupMessage[] = []
+    client.onGroup(message => received.push(message))
+
+    await client.sendGroup('g1', { kind: 'group.list', requestId: 'g1' })
+    expect(fake.sent.map(text => JSON.parse(text))).toEqual([
+      { kind: 'relay.group', requestId: 'g1', frame: { kind: 'group.list', requestId: 'g1' } },
+    ])
+
+    fake.push({ kind: 'relay.group.reply', requestId: 'g1', frame: { kind: 'group.list', requestId: 'g1', groups: [] } })
+    fake.push({ kind: 'relay.group.push', frame: { kind: 'issue.changed', sessionId: 'session-a', state: 'closed' } })
+    await waitFor(() => received.length === 2)
+    expect(received[0]).toMatchObject({ kind: 'relay.group.reply', requestId: 'g1', frame: { kind: 'group.list' } })
+    expect(received[1]).toMatchObject({ kind: 'relay.group.push', frame: { kind: 'issue.changed' } })
+
+    await client.sendGroup('g2', { kind: 'group.leave', requestId: 'g2', groupId: 'group-a' })
+    fake.push({ kind: 'relay.error', requestId: 'g2', error: { code: 'FORBIDDEN', message: 'only an admin may remove a member' } })
+    await waitFor(() => received.length === 3)
+    expect(received[2]).toEqual({ kind: 'relay.error', requestId: 'g2', error: { code: 'FORBIDDEN', message: 'only an admin may remove a member' } })
+
+    // A correlated group error rejects that request only; the control client stays usable.
+    await client.sendGroup('g3', { kind: 'group.list', requestId: 'g3' })
+    expect(fake.sent).toHaveLength(3)
+    expect(await Promise.race([
+      client.closed.then(() => 'closed'),
+      new Promise<'open'>(resolve => setTimeout(() => resolve('open'), 20)),
+    ])).toBe('open')
+
+    const closing = client.close()
+    await waitFor(() => fake.sent.some(text => text.includes('relay.logout')))
+    const logout = JSON.parse(fake.sent.find(text => text.includes('relay.logout'))!) as { requestId: string }
+    fake.push({ kind: 'relay.logged-out', requestId: logout.requestId })
+    await closing
+  } finally {
+    vi.doUnmock('./relay-login.ts')
+    vi.resetModules()
+  }
 })

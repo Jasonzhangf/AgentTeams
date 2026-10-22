@@ -6,8 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { parseDaemonConfigText, resolveDaemonIntent, type DaemonIntentV4, type RegistryDaemonIntent } from '../config/daemon-intent.ts'
 import { createRelayServer, type RelayServer } from '../server/relay.ts'
 import { createGroupHub } from '../server/group-hub.ts'
-import { groupPaths, readJsonFile, writeJsonFile } from '../server/group-store.ts'
-import type { GroupHubSnapshot } from '../server/group-hub.ts'
+import { createGroupFileStore } from '../server/group-file-store.ts'
 import {
   RegistryIntentFault,
   createRegistryRelayOptions,
@@ -361,12 +360,13 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
     const credentials = await loadRegistryCredentials(plan, { env })
     const [key, cert] = await Promise.all([readFile(plan.tls.keyFile), readFile(plan.tls.certFile)])
     const options = createRegistryRelayOptions(plan, { credentials, tls: { key, cert } })
-    // One group state per account and scope: two accounts never share a file.
-    const groupData = join(intent.daemon.dataDirectory, 'groups', intent.daemon.accountId, intent.daemon.scopeId)
-    const store = {
-      load: () => readJsonFile<GroupHubSnapshot>(join(groupData, 'group-hub.json')),
-      save: (snapshot: GroupHubSnapshot) => writeJsonFile(join(groupData, 'group-hub.json'), snapshot),
-    }
+    // One group tree per account and scope, split by group: a registry restart
+    // recovers the same truth from the same files the design names.
+    const store = createGroupFileStore({
+      dataDirectory: intent.daemon.dataDirectory,
+      accountId: intent.daemon.accountId,
+      scopeId: intent.daemon.scopeId,
+    })
     server = await createRelayServer({
       ...options,
       groupHub: (bridge) => createGroupHub({

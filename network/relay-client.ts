@@ -1,13 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import { setMaxListeners } from 'node:events'
-import type { AgentDeclaration, RelayClientControl, RelayGrant, RelayPeer, RelayServerControl } from '../control-protocol/agent-services.ts'
-import { parseAgentDeclaration, parseRelayServerControl } from '../control-protocol/relay-codec.ts'
+import type { AgentDeclaration, JsonValue, RelayClientControl, RelayGrant, RelayPeer, RelayServerControl, ServiceError } from '../control-protocol/agent-services.ts'
+import { encodeRelayClientControl, parseAgentDeclaration, parseRelayServerControl } from '../control-protocol/relay-codec.ts'
 import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
 import { loginRelay, type RelayLoginOptions } from './relay-login.ts'
 import { connectWss, type WssConnection } from './wss-connection.ts'
 
 type Event = Extract<RelayServerControl, { kind: 'relay.changed' | 'relay.offer' | 'relay.closed' }>
 type Reply = Extract<RelayServerControl, { kind: 'relay.directory' | 'relay.grant' | 'relay.logged-out' }>
+/** Group traffic shares the admitted control connection; an error carries the correlated failure. */
+export type RelayGroupMessage =
+  | { readonly kind: 'relay.group.reply'; readonly requestId: string; readonly frame: JsonValue }
+  | { readonly kind: 'relay.group.push'; readonly frame: JsonValue }
+  | { readonly kind: 'relay.error'; readonly requestId?: string; readonly error: ServiceError }
 export interface RelayClientOptions extends RelayLoginOptions {
   readonly requestTimeoutMs: number
   readonly maxPendingRequests: number
@@ -28,6 +33,10 @@ export interface RelayClient {
   openData(grant: RelayGrant): Promise<WssConnection>
   presence(): Promise<void>
   publish(declaration: AgentDeclaration): Promise<void>
+  /** Writes one group request frame on this control connection. The reply arrives through `onGroup`. */
+  sendGroup(requestId: string, frame: JsonValue): Promise<void>
+  /** Receives group replies, pushes, correlated errors and the typed stop report. Returns a detach function. */
+  onGroup(handler: (message: RelayGroupMessage) => void): () => void
   close(): Promise<void>
 }
 interface Pending {
@@ -35,6 +44,10 @@ interface Pending {
   readonly resolve: (value: Reply) => void
   readonly reject: (error: Error) => void
   timer?: ReturnType<typeof setTimeout>
+}
+
+function serviceFailure(error: Error): ServiceError {
+  return { code: error instanceof RelayProtocolError ? error.code : 'UNAVAILABLE', message: error.message }
 }
 
 export async function createRelayClient(input: RelayClientOptions): Promise<RelayClient> {
@@ -50,6 +63,8 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
   const identity = structuredClone(options.declaration.identity)
   const scopeId = options.declaration.scopeId
   const pending = new Map<string, Pending>()
+  const groupRequests = new Set<string>()
+  const groupHandlers = new Set<(message: RelayGroupMessage) => void>()
   const data = new Map<string, WssConnection>()
   const opening = new Set<string>()
   const connecting = new Set<Promise<WssConnection>>()
@@ -63,11 +78,21 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
   let publishing = false
   let closing = false
   let declarationRevision = options.declaration.revision
+  const notifyGroup = (message: RelayGroupMessage): void => {
+    for (const handler of [...groupHandlers]) {
+      try { handler(message) } catch { /* An observer must not break the shared control pump. */ }
+    }
+  }
   const stop = (error: Error): Promise<void> => {
     if (shutdown) return shutdown
     stopped = error
     for (const request of pending.values()) { clearTimeout(request.timer); request.reject(error) }
     pending.clear()
+    if (groupRequests.size > 0) {
+      const failure = serviceFailure(error)
+      for (const requestId of groupRequests) notifyGroup({ kind: 'relay.error', requestId, error: failure })
+    }
+    groupRequests.clear()
     dataLifetime.abort()
     shutdown = (async () => {
       await Promise.all([login.transport.close(), ...[...data.values()].map(socket => socket.close()),
@@ -80,7 +105,7 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
   const send = (message: RelayClientControl, allowDuringClose = false) => {
     if (stopped) return Promise.reject(stopped)
     if (closing && !allowDuringClose) return Promise.reject(new RelayProtocolError('UNAVAILABLE', 'relay: client is closing'))
-    return login.transport.send({ bytes: Buffer.from(JSON.stringify(message)), binary: false })
+    return login.transport.send({ bytes: Buffer.from(encodeRelayClientControl(message)), binary: false })
   }
   const checkGrant = (grant: RelayGrant) => {
     if (grant.accountId !== identity.accountId || grant.scopeId !== scopeId ||
@@ -98,6 +123,13 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
         const message = parseRelayServerControl(frame.bytes.toString('utf8'))
         if (message.kind === 'relay.error') {
           const error = new RelayProtocolError(message.error.code, message.error.message)
+          // A group failure belongs to its request, not to the protocol request table.
+          // Reporting it to the group owner keeps the control connection alive.
+          if (message.requestId !== undefined && groupRequests.has(message.requestId)) {
+            groupRequests.delete(message.requestId)
+            notifyGroup({ kind: 'relay.error', requestId: message.requestId, error: message.error })
+            continue
+          }
           const request = message.requestId === undefined ? undefined : pending.get(message.requestId)
           if (!request) throw error
           pending.delete(message.requestId!)
@@ -127,6 +159,9 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
           // Observe async failure rather than leaving an unhandled rejection and a false live client.
           void Promise.resolve(options.onEvent?.(message)).catch(error =>
             stop(error instanceof Error ? error : new Error('relay: event receiver failed')))
+        } else if (message.kind === 'relay.group.reply' || message.kind === 'relay.group.push') {
+          if (message.kind === 'relay.group.reply') groupRequests.delete(message.requestId)
+          notifyGroup(message)
         } else throw new RelayProtocolError('INVALID_INPUT', 'relay: unexpected admitted-control message')
       }
     } catch (error) { await stop(error instanceof Error ? error : new Error('relay: control loop failed')) }
@@ -234,6 +269,24 @@ export async function createRelayClient(input: RelayClientOptions): Promise<Rela
           JSON.stringify(peer.declaration) === JSON.stringify(value))) throw new RelayProtocolError('UNAVAILABLE', 'relay: publication readback mismatch')
         declarationRevision = value.revision
       } finally { publishing = false }
+    },
+    sendGroup: async (requestId, frame) => {
+      if (stopped) throw stopped
+      if (closing) throw new RelayProtocolError('UNAVAILABLE', 'relay: client is closing')
+      if (typeof requestId !== 'string' || requestId.length === 0) throw new RelayProtocolError('INVALID_INPUT', 'relay: group request id must be a non-empty string')
+      if (groupRequests.has(requestId)) throw new RelayProtocolError('CONFLICT', `relay: group request ${requestId} is already outstanding`)
+      groupRequests.add(requestId)
+      try {
+        await send({ kind: 'relay.group', requestId, frame })
+      } catch (error) {
+        groupRequests.delete(requestId)
+        throw error
+      }
+    },
+    onGroup: handler => {
+      if (typeof handler !== 'function') throw new RelayProtocolError('INVALID_INPUT', 'relay: group handler must be a function')
+      groupHandlers.add(handler)
+      return () => { groupHandlers.delete(handler) }
     },
     close: () => {
       if (gracefulShutdown) return gracefulShutdown

@@ -184,6 +184,28 @@ describe('daemon intent parser', () => {
     expect(agent.models).toEqual([])
   })
 
+  it('parses the optional [vikunja] section for an agent daemon only', () => {
+    const absent = parseDaemonIntent(agentConfig) as AgentDaemonIntent
+    expect(absent.vikunja).toBeUndefined()
+
+    const withVikunja = parseDaemonIntent({
+      ...agentConfig,
+      vikunja: { baseUrl: 'https://vikunja.example.test/teams', tokenRef: 'env:VIKUNJA_TOKEN', projectId: '42' },
+    }) as AgentDaemonIntent
+    expect(withVikunja.vikunja).toEqual({
+      baseUrl: 'https://vikunja.example.test/teams',
+      tokenRef: 'env:VIKUNJA_TOKEN',
+      projectId: '42',
+    })
+
+    // A control or registry daemon never accepts the agent-only section.
+    expect(errorCode(() => parseDaemonIntent({ ...controlConfig, vikunja: { baseUrl: 'https://vikunja.example.test', tokenRef: 'env:T' } })))
+      .toBe('INVALID_INPUT')
+    // An inline secret is refused by the section owner, not silently kept.
+    expect(errorCode(() => parseDaemonIntent({ ...agentConfig, vikunja: { baseUrl: 'https://vikunja.example.test', tokenRef: 'plain-token' } })))
+      .toBe('INVALID_INPUT')
+  })
+
   it('parses control and registry shapes without creating a second provider shape', () => {
     const control = parseDaemonIntent(controlConfig)
     const registry = parseDaemonIntent(registryConfig)

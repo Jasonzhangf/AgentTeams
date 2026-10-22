@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
-import { createRelayServer, type RelayServer } from '../server/relay.ts'
+import { createRelayServer, type GroupHubFactory, type RelayServer } from '../server/relay.ts'
 import { declarationWithPublishedSurfaces } from '../runtime/registry-registration.ts'
-import { createRelayClient, type RelayClient } from './relay-client.ts'
+import { createRelayClient, type RelayClient, type RelayGroupMessage } from './relay-client.ts'
 import {
   createRegistrationClient,
   type RegistrationClient,
@@ -36,7 +36,7 @@ afterEach(async () => {
 })
 afterAll(() => rmSync(directory, { recursive: true, force: true }))
 
-async function startRelay(options: { readonly port?: number; readonly peerTtlMs?: number; readonly authenticate?: (credential: string | undefined) => { accountId: string; scopeId: string; agentId: string } | null } = {}) {
+async function startRelay(options: { readonly port?: number; readonly peerTtlMs?: number; readonly groupHub?: GroupHubFactory; readonly authenticate?: (credential: string | undefined) => { accountId: string; scopeId: string; agentId: string } | null } = {}) {
   relay = await createRelayServer({
     host: '127.0.0.1',
     port: options.port ?? 0,
@@ -50,6 +50,7 @@ async function startRelay(options: { readonly port?: number; readonly peerTtlMs?
     maxPendingBytes: 131_072,
     grantTtlMs: 10_000,
     ...(options.peerTtlMs === undefined ? {} : { peerTtlMs: options.peerTtlMs }),
+    ...(options.groupHub === undefined ? {} : { groupHub: options.groupHub }),
     authenticate: options.authenticate ?? (credential => credential?.startsWith('Bearer ')
       ? { accountId: 'account', scopeId: credential.slice(7).startsWith('b-') ? 'scope-b' : 'scope', agentId: credential.slice(7) }
       : null),
@@ -124,6 +125,15 @@ async function waitForStatus(client: RegistrationClient, predicate: (status: Ret
     await delay(10)
   }
   throw new Error(`registration client did not reach the expected status: ${JSON.stringify(client.status())}`)
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 4_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (predicate()) return
+    await delay(10)
+  }
+  throw new Error('condition was not reached')
 }
 
 it('registers automatically, heartbeats its lease, and reports typed online health', async () => {
@@ -234,6 +244,42 @@ it('reconnects to the same configured server after a registry restart', async ()
   await waitForStatus(client, status => status.state === 'online')
   expect(client.status()).toMatchObject({ state: 'online', endpoint: `wss://127.0.0.1:${port}`, generation: 1 })
   expect(client.status().reconnects).toBe(1)
+})
+
+it('keeps the group handler across a reconnect and reports the dropped connection', async () => {
+  const port = await freePort()
+  const groupHub: GroupHubFactory = () => ({
+    handle: async (_actor, frame) => {
+      const requestId = typeof frame === 'object' && frame !== null && 'requestId' in frame
+        ? String((frame as { readonly requestId?: unknown }).requestId)
+        : 'group'
+      return { ok: true, reply: { kind: 'group.list', requestId, groups: [] } }
+    },
+  })
+  await startRelay({ port, groupHub })
+  const client = await registration({ heartbeatIntervalMs: 50, reconnect: { initialDelayMs: 100, maxDelayMs: 100, maxAttempts: 10 } })
+  const events: RelayGroupMessage[] = []
+  const detach = client.onGroup(message => events.push(message))
+  expect(await client.start()).toMatchObject({ state: 'online' })
+
+  await client.sendGroup('r1', { kind: 'group.list', requestId: 'r1' })
+  await waitFor(() => events.some(event => event.kind === 'relay.group.reply' && event.requestId === 'r1'))
+  expect(events[0]).toEqual({ kind: 'relay.group.reply', requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1', groups: [] } })
+
+  await relay!.close()
+  await waitForState(client, 'reconnecting')
+  // The drop reaches the same handler as a typed failure, not as silence.
+  expect(events.filter(event => event.kind === 'relay.error')).toContainEqual(expect.objectContaining({
+    kind: 'relay.error', error: expect.objectContaining({ code: 'UNAVAILABLE' }),
+  }))
+  await expect(client.sendGroup('r-offline', { kind: 'group.list', requestId: 'r-offline' })).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+
+  await startRelay({ port, groupHub })
+  await waitForStatus(client, status => status.state === 'online')
+  await client.sendGroup('r2', { kind: 'group.list', requestId: 'r2' })
+  await waitFor(() => events.some(event => event.kind === 'relay.group.reply' && event.requestId === 'r2'))
+  detach()
+  await client.stop()
 })
 
 it('isolates a registry outage from the engine loop and rejects an unauthorized credential', async () => {

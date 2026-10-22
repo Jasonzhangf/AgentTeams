@@ -121,6 +121,7 @@ export type RelayClientControl =
   | { readonly kind: 'relay.directory'; readonly requestId: string; readonly subscribe: boolean }
   | { readonly kind: 'relay.connect'; readonly requestId: string; readonly generation: number; readonly targetAgentId: string; readonly targetGeneration: number }
   | { readonly kind: 'relay.open'; readonly requestId: string; readonly grantId: string; readonly generation: number }
+  | { readonly kind: 'relay.group'; readonly requestId: string; readonly frame: JsonValue }
 export type RelayServerControl =
   | { readonly kind: 'relay.admitted'; readonly connectionId: string; readonly generation: number }
   | { readonly kind: 'relay.logged-out'; readonly requestId: string }

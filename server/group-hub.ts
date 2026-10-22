@@ -208,7 +208,7 @@ export class GroupHubImpl implements GroupHub {
         case 'message.page': return this.page(actor, input)
         case 'message.ack': return this.ack(actor, input)
         case 'issue.create': return await this.createIssue(actor, input)
-        case 'issue.reference': return this.referenceIssue(actor, input)
+        case 'issue.reference': return await this.referenceIssue(actor, input)
         case 'issue.query': return await this.queryIssue(actor, input)
         case 'issue.close': return await this.closeOrReopen(actor, input, 'close')
         case 'issue.reopen': return await this.closeOrReopen(actor, input, 'reopen')
@@ -421,16 +421,42 @@ export class GroupHubImpl implements GroupHub {
     return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: sessionOfIssue(this.sessions, sessionId) })
   }
 
-  private referenceIssue(actor: Actor, input: Record<string, unknown>): GroupHubResult {
+  /**
+   * Binds an existing issue to a session. The project and the state come from a
+   * confirmed read; a reference the read cannot confirm stays unbound.
+   */
+  private async referenceIssue(actor: Actor, input: Record<string, unknown>): Promise<GroupHubResult> {
     const groupId = text(input.groupId, 'groupId')
     const commitId = text(input.commitId, 'commitId')
     const issueId = text(input.vikunjaIssueId, 'vikunjaIssueId')
+    const now = this.now().toISOString()
     // A reference into a group the actor does not belong to is a cross-group write.
-    if (!memberActiveAt(groupOf(this.registry, groupId), actor.agentId, this.now().toISOString())) {
+    if (!memberActiveAt(groupOf(this.registry, groupId), actor.agentId, now)) {
       return err('FORBIDDEN', `${actor.agentId} is not an active member of ${groupId}`)
     }
     const sessionId = `${groupId}:referenced:${issueId}`
-    this.sessions = openIssueSession(this.sessions, { sessionId, groupId, vikunjaProjectId: 'referenced', vikunjaIssueId: issueId, initiatorAgentId: actor.agentId }, this.now().toISOString())
+    const existing = this.sessions.sessions.get(sessionId)
+    if (existing) {
+      return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: existing })
+    }
+    const recorded = externalOpForCommit(this.ledger, commitId, 'issue.create')
+    if (recorded?.state === 'confirmed') {
+      return err('CONFLICT', `commit ${commitId} already opened another session`)
+    }
+    const facts = await this.confirmRead(`issue.reference:${commitId}`, actor.agentId, { groupId, commitId, vikunjaIssueId: issueId })
+    if (facts === undefined) {
+      return err('RESULT_UNKNOWN', `issue ${issueId} was not read back; the reference is not confirmed`)
+    }
+    const projectId = optionalText(facts.projectId)
+    if (projectId === undefined) {
+      return err('UPSTREAM_ERROR', `issue ${issueId} was read without its project; the reference is not confirmed`)
+    }
+    const observed = readObservedState(facts as JsonValue)
+    this.sessions = openIssueSession(this.sessions, { sessionId, groupId, vikunjaProjectId: projectId, vikunjaIssueId: issueId, initiatorAgentId: actor.agentId }, now)
+    // Vikunja owns the open/closed truth, so a closed issue opens a closed session.
+    if (observed === 'closed') {
+      this.sessions = reconcileIssueSession(this.sessions, { sessionId, state: 'closed', now })
+    }
     this.save()
     return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: sessionOfIssue(this.sessions, sessionId) })
   }
@@ -459,24 +485,23 @@ export class GroupHubImpl implements GroupHub {
   }
 
   /**
-   * One read-only external query. A read may be re-issued at any time, so it is
-   * kept out of the durable ledger and removed as soon as it settles.
+   * One read-only external query, kept out of the durable ledger because it may
+   * be re-issued at any time. Returns the confirmed result, never an intent.
    */
-  private async readExternal(session: IssueSession): Promise<IssueState | undefined> {
+  private async confirmRead(
+    commitId: string,
+    ownerAgentId: string,
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown> | undefined> {
     const now = this.now().toISOString()
     const op: ExternalOp = {
       opId: this.idFactory(),
-      commitId: `issue.query:${session.sessionId}`,
+      commitId,
       kind: 'issue.query',
       state: 'inflight',
-      ownerAgentId: session.initiatorAgentId,
-      params: {
-        sessionId: session.sessionId,
-        // The owner echoes this back; a receipt without it is refused.
-        commitId: `issue.query:${session.sessionId}`,
-        vikunjaProjectId: session.vikunjaProjectId,
-        vikunjaIssueId: session.vikunjaIssueId,
-      },
+      ownerAgentId,
+      // The owner echoes the commit id back; a receipt without it is refused.
+      params: { ...params, commitId } as JsonValue,
       updatedAt: now,
     }
     // Present for receipt authentication only; never saved.
@@ -484,12 +509,24 @@ export class GroupHubImpl implements GroupHub {
     try {
       const receipt = this.executeExternalOp ? await this.executeExternalOp(op) : await this.delegatedReceipt(op)
       if ('code' in receipt || receipt.state !== 'confirmed') return undefined
-      return readObservedState(receipt.result)
+      const result = receipt.result
+      return typeof result === 'object' && result !== null && !Array.isArray(result)
+        ? (result as Record<string, unknown>)
+        : undefined
     } finally {
       const operations = new Map(this.ledger.operations)
       operations.delete(op.opId)
       this.ledger = { operations }
     }
+  }
+
+  private async readExternal(session: IssueSession): Promise<IssueState | undefined> {
+    const result = await this.confirmRead(`issue.query:${session.sessionId}`, session.initiatorAgentId, {
+      sessionId: session.sessionId,
+      vikunjaProjectId: session.vikunjaProjectId,
+      vikunjaIssueId: session.vikunjaIssueId,
+    })
+    return readObservedState(result as JsonValue | undefined)
   }
 
   private async closeOrReopen(actor: Actor, input: Record<string, unknown>, direction: 'close' | 'reopen'): Promise<GroupHubResult> {

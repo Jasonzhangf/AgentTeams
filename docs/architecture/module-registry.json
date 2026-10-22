@@ -444,8 +444,8 @@
     {
       "module_id": "group-channel",
       "owner": "network",
-      "status": "partial",
-      "note": "Transport, request correlation and push subscription are delivered. The registration connection is not yet its only user, so it is not wired into a daemon.",
+      "status": "implemented",
+      "note": "Group request/reply and push channel over a borrowed transport. Used by group-messaging; opens no socket.",
       "owned_paths": [
         "network/group-channel.ts",
         "network/group-channel.spec.ts"
@@ -459,7 +459,7 @@
       "module_id": "agent-messaging",
       "owner": "runtime",
       "status": "implemented",
-      "note": "Batch 1 CLI frame relay and external op execution. Session mapping, queue and steer are batch 2.",
+      "note": "CLI frame relay, local socket and external op execution over an injected channel. Opens no socket. Session mapping and queue stay in batch 2.",
       "owned_paths": [
         "runtime/agent-messaging.ts"
       ],
@@ -499,7 +499,7 @@
       "module_id": "vikunja-intent",
       "owner": "config",
       "status": "implemented",
-      "note": "Batch 1 [vikunja] config compile and validation. Not consumed by daemon-intent yet.",
+      "note": "The optional agent-only [vikunja] section (A5), compiled by config and consumed by acp-serve.",
       "owned_paths": [
         "config/vikunja-intent.spec.ts",
         "config/vikunja-intent.ts"
@@ -507,6 +507,21 @@
       "forbidden_paths": [
         "server/**",
         "runtime/**"
+      ]
+    },
+    {
+      "module_id": "group-file-store",
+      "owner": "server",
+      "status": "implemented",
+      "note": "Per-group persistence for the hub: groups.json, per-group sessions, actions, external ops, an append-only message log and per-agent watermarks.",
+      "owned_paths": [
+        "server/group-file-store.ts",
+        "server/group-file-store.spec.ts"
+      ],
+      "forbidden_paths": [
+        "runtime/**",
+        "network/**",
+        "agent/**"
       ]
     }
   ]

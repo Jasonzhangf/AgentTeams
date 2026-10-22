@@ -275,3 +275,59 @@ describe('review finding 10: only unstarted work is executable', () => {
     }
   })
 })
+
+describe('issue.reference needs a confirmed read of the target issue', () => {
+  async function groupFor(hub: ReturnType<typeof createGroupHub>): Promise<string> {
+    const created = await hub.handle(OWNER, { kind: 'group.create', requestId: 'g0', name: 'release' })
+    if (!created.ok) throw new Error('create failed')
+    return (created.reply as { group: { groupId: string } }).group.groupId
+  }
+
+  it('binds the real project and state from a confirmed read', async () => {
+    const hub = hubWith(jsonStore(), async (op) => (op.kind === 'issue.query'
+      ? confirmed(op, { issueId: '99', projectId: 'p9', actualState: 'closed' })
+      : issueOk(op)))
+    const groupId = await groupFor(hub)
+    const referenced = await hub.handle(OWNER, { kind: 'issue.reference', requestId: 'r0', commitId: 'rc1', groupId, vikunjaIssueId: '99' })
+    expect(referenced.ok).toBe(true)
+    const session = (referenced.reply as { session: { vikunjaProjectId: string; state: string } }).session
+    expect(session.vikunjaProjectId).toBe('p9')
+    expect(session.state).toBe('closed')
+  })
+
+  it('keeps an unconfirmed reference unbound instead of inventing a session', async () => {
+    const hub = hubWith(jsonStore(), async (op) => (op.kind === 'issue.query'
+      ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' } as ExternalOpReceipt
+      : issueOk(op)))
+    const groupId = await groupFor(hub)
+    const referenced = await hub.handle(OWNER, { kind: 'issue.reference', requestId: 'r0', commitId: 'rc1', groupId, vikunjaIssueId: '99' })
+    expect(referenced.ok).toBe(false)
+    if (!referenced.ok) expect(referenced.error.code).toBe('RESULT_UNKNOWN')
+  })
+
+  it('refuses a reference the read confirms without a project', async () => {
+    const hub = hubWith(jsonStore(), async (op) => (op.kind === 'issue.query'
+      ? confirmed(op, { issueId: '99', actualState: 'open' })
+      : issueOk(op)))
+    const groupId = await groupFor(hub)
+    const referenced = await hub.handle(OWNER, { kind: 'issue.reference', requestId: 'r0', commitId: 'rc1', groupId, vikunjaIssueId: '99' })
+    expect(referenced.ok).toBe(false)
+    if (!referenced.ok) expect(referenced.error.code).toBe('UPSTREAM_ERROR')
+  })
+
+  it('returns the same session for a repeated reference without a second read', async () => {
+    let reads = 0
+    const hub = hubWith(jsonStore(), async (op) => {
+      if (op.kind === 'issue.query') { reads += 1; return confirmed(op, { issueId: '99', projectId: 'p9', actualState: 'open' }) }
+      return issueOk(op)
+    })
+    const groupId = await groupFor(hub)
+    const first = await hub.handle(OWNER, { kind: 'issue.reference', requestId: 'r0', commitId: 'rc1', groupId, vikunjaIssueId: '99' })
+    const second = await hub.handle(OWNER, { kind: 'issue.reference', requestId: 'r1', commitId: 'rc1', groupId, vikunjaIssueId: '99' })
+    expect(first.ok && second.ok).toBe(true)
+    const one = (first.reply as { session: { sessionId: string } }).session.sessionId
+    const two = (second.reply as { session: { sessionId: string } }).session.sessionId
+    expect(two).toBe(one)
+    expect(reads).toBe(1)
+  })
+})

@@ -2,6 +2,7 @@ import type {
   AgentDeclaration,
   CliExecutionFailure,
   JsonValue,
+  RelayClientControl,
   RelayGrant,
   RelayPeer,
   RelayServerControl,
@@ -238,6 +239,33 @@ function parseText(text: string): unknown {
   } catch {
     invalid('relay server control is not valid JSON')
   }
+}
+
+export type RelayGroupClientControl = Extract<RelayClientControl, { kind: 'relay.group' }>
+
+/** Encodes one client control frame as the relay JSON envelope; there is no second wrapper. */
+export function encodeRelayClientControl(message: RelayClientControl): string {
+  try {
+    assertJsonValue(message, 'relay client control')
+  } catch (error) {
+    invalid(error instanceof Error ? error.message : 'relay client control must contain only JSON values')
+  }
+  return JSON.stringify(message)
+}
+
+/** Encodes the one group request frame carried on the client's registration connection. */
+export function encodeRelayGroupControl(message: RelayGroupClientControl): string {
+  return encodeRelayClientControl(message)
+}
+
+/** Decodes the group request frame the relay accepts from an already registered client. */
+export function parseRelayGroupControl(text: string): RelayGroupClientControl {
+  const input = object(parseText(text), 'relay.group')
+  if (input.kind !== 'relay.group') invalid('relay.group kind is required')
+  knownFields(input, ['kind', 'requestId', 'frame'], 'relay.group')
+  const requestId = stringValue(input.requestId, 'relay.group.requestId')
+  jsonValue(input.frame, 'relay.group.frame')
+  return { kind: 'relay.group', requestId, frame: input.frame as JsonValue }
 }
 
 export function parseRelayServerControl(text: string): RelayServerControl {

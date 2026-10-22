@@ -1,6 +1,6 @@
-import type { AgentDeclaration, RelayPeer, ServiceError } from '../control-protocol/agent-services.ts'
+import type { AgentDeclaration, JsonValue, RelayPeer, ServiceError } from '../control-protocol/agent-services.ts'
 import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
-import { createRelayClient, type RelayClient, type RelayClientOptions, type RelayDirectorySnapshot } from './relay-client.ts'
+import { createRelayClient, type RelayClient, type RelayClientOptions, type RelayDirectorySnapshot, type RelayGroupMessage } from './relay-client.ts'
 
 /**
  * Network owns the registration client transport and its health. It consumes an
@@ -85,6 +85,10 @@ export interface RegistrationClient {
    * that does not preserve identity/scope or advance the revision.
    */
   publish(declaration: AgentDeclaration): Promise<void>
+  /** Writes one group request frame on the live registration connection. Never opens a second socket. */
+  sendGroup(requestId: string, frame: JsonValue): Promise<void>
+  /** Receives group replies, pushes, correlated errors and the stop report from the live connection. */
+  onGroup(handler: (message: RelayGroupMessage) => void): () => void
   stop(): Promise<void>
 }
 
@@ -149,6 +153,8 @@ export function createRegistrationClient(options: RegistrationClientOptions): Re
   let heartbeatPending = false
   let stopping = false
   let closedResolved = false
+  const groupHandlers = new Set<(message: RelayGroupMessage) => void>()
+  let detachGroup: (() => void) | undefined
   let resolveClosed!: (status: RegistrationStatus) => void
   const closed = new Promise<RegistrationStatus>(resolve => { resolveClosed = resolve })
 
@@ -176,6 +182,27 @@ export function createRegistrationClient(options: RegistrationClientOptions): Re
     clearRetry()
     publish()
     if (!closedResolved) { closedResolved = true; resolveClosed(status()) }
+  }
+
+  /** One dispatcher per live relay client; every registered consumer sees each group event. */
+  const attachGroup = (client: RelayClient): void => {
+    detachGroup?.()
+    detachGroup = client.onGroup(message => {
+      for (const handler of [...groupHandlers]) {
+        try { handler(message) } catch { /* An observer must not break the registration pump. */ }
+      }
+    })
+  }
+  const detachGroupHandlers = (): void => {
+    detachGroup?.()
+    detachGroup = undefined
+  }
+  /** A dropped registration connection is a typed group failure, not silence. */
+  const reportGroupDrop = (reason: Error): void => {
+    const error = describeFailure(reason)
+    for (const handler of [...groupHandlers]) {
+      try { handler({ kind: 'relay.error', error }) } catch { /* An observer must not break the retry loop. */ }
+    }
   }
 
   const relayOptions = (): RelayClientOptions => ({
@@ -217,6 +244,8 @@ export function createRegistrationClient(options: RegistrationClientOptions): Re
     const client = relay
     relay = undefined
     clearHeartbeat()
+    detachGroupHandlers()
+    reportGroupDrop(reason)
     if (client !== undefined) void client.close().catch(() => undefined)
     recordFailure(reason)
   }
@@ -266,6 +295,9 @@ export function createRegistrationClient(options: RegistrationClientOptions): Re
     state = 'online'
     publish()
     startHeartbeat(client)
+    // Group consumers keep one registration across reconnects: re-attach on this
+    // transition, never open a second socket for the same session.
+    attachGroup(client)
     void client.closed.then(reason => { if (relay === client) onDisconnect(reason) })
   }
 
@@ -285,6 +317,16 @@ export function createRegistrationClient(options: RegistrationClientOptions): Re
     directory: async subscribe => await onlineRelay().directory(subscribe),
     directorySnapshot: async subscribe => await onlineRelay().directorySnapshot(subscribe),
     publish: async declaration => { await onlineRelay().publish(declaration) },
+    sendGroup: async (requestId, frame) => { await onlineRelay().sendGroup(requestId, frame) },
+    onGroup: handler => {
+      if (typeof handler !== 'function') throw new RelayProtocolError('INVALID_INPUT', 'registration: group handler must be a function')
+      groupHandlers.add(handler)
+      if (state === 'online' && relay !== undefined && detachGroup === undefined) attachGroup(relay)
+      return () => {
+        groupHandlers.delete(handler)
+        if (groupHandlers.size === 0) detachGroupHandlers()
+      }
+    },
     stop: async () => {
       if (stopping) { await closed; return }
       stopping = true
@@ -293,6 +335,7 @@ export function createRegistrationClient(options: RegistrationClientOptions): Re
       const client = relay
       relay = undefined
       if (client !== undefined) await client.close().catch(() => undefined)
+      detachGroupHandlers()
       if (state !== 'failed') state = 'stopped'
       publish()
       if (!closedResolved) { closedResolved = true; resolveClosed(status()) }

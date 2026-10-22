@@ -1,20 +1,39 @@
-import WebSocket from 'ws'
-import type { AgentDeclaration, ServiceError } from '../control-protocol/agent-services.ts'
-import type { GroupWireReply, GroupWireRequest } from '../control-protocol/group-wire.ts'
-import { parseGroupWireReply } from '../control-protocol/group-wire.ts'
+import type { AgentDeclaration, ServiceError, ServiceErrorCode } from '../control-protocol/agent-services.ts'
+import type { ExternalOpReply, GroupWireReply, GroupWireRequest } from '../control-protocol/group-wire.ts'
 import { startLocalMessageSocket, type LocalMessageSocketServer } from './local-message-socket.ts'
 import { createVikunjaSync, type VikunjaSync } from './vikunja-sync.ts'
 
 /**
  * The agent-side group messaging composition.
  *
- * It owns one control connection to the relay and one local socket for the CLI.
- * A CLI request is forwarded over the relay as a `relay.group` frame and the
- * reply is returned to the caller. When the hub delegates an external write
- * (`op.execute`), this process runs it against Vikunja and returns exactly one
- * receipt: confirmed, failed with a typed error, or unknown. Ambiguity is never
- * turned into success.
+ * It owns one local socket for the CLI. The registration connection is injected
+ * as a group channel: this module never opens, authenticates or restarts a relay
+ * socket. A CLI request is forwarded over that channel and the reply is returned
+ * to the caller. When the hub delegates an external write (`op.execute`), this
+ * process runs it against Vikunja and returns exactly one receipt: confirmed,
+ * failed with a typed error, or unknown. Ambiguity is never turned into success.
  */
+
+/** The only server push this daemon executes itself. */
+export interface AgentMessagingPush {
+  readonly kind: 'op.execute'
+  readonly opId: string
+  readonly opKind: string
+  readonly params: Record<string, unknown>
+}
+
+/**
+ * Injected group transport owned by the registration client. The channel owns
+ * request correlation, timeouts, reconnect attachment and the relay socket.
+ */
+export interface AgentMessagingChannel {
+  /** Sends one CLI request and resolves with its correlated reply, or rejects with a typed failure. */
+  request(frame: GroupWireRequest): Promise<GroupWireReply>
+  /** Sends one external operation receipt. A receipt has no correlated group reply. */
+  send(frame: ExternalOpReply): Promise<void>
+  /** Subscribes to server pushes. Returns a detach function. */
+  subscribe(listener: (push: AgentMessagingPush) => void): () => void
+}
 
 export interface AgentMessagingVikunjaOptions {
   readonly baseUrl: string
@@ -22,12 +41,10 @@ export interface AgentMessagingVikunjaOptions {
 }
 
 export interface AgentMessagingOptions {
-  readonly relayUrl: string
-  readonly credential: string
+  readonly channel: AgentMessagingChannel
   readonly declaration: AgentDeclaration
   readonly socketPath: string
   readonly vikunja?: AgentMessagingVikunjaOptions
-  readonly requestTimeoutMs?: number
   /** Abort one delegated write after this long and report unknown. */
   readonly externalOpTimeoutMs?: number
 }
@@ -41,55 +58,91 @@ export interface AgentMessaging {
   lastError(): ServiceError | undefined
 }
 
-interface Pending {
-  readonly resolve: (reply: GroupWireReply) => void
-  readonly reject: (error: Error) => void
-  readonly timer: ReturnType<typeof setTimeout>
+/** A channel failure already typed by its owner; the local socket returns the same ServiceError. */
+class AgentMessagingChannelError extends Error {
+  readonly code: ServiceErrorCode
+  readonly serviceError: ServiceError
+
+  constructor(serviceError: ServiceError, options?: ErrorOptions) {
+    super(serviceError.message, options)
+    this.name = 'AgentMessagingChannelError'
+    this.code = serviceError.code
+    this.serviceError = serviceError
+  }
 }
 
-function serviceError(code: ServiceError['code'], message: string): ServiceError {
+const serviceErrorCodes: readonly ServiceErrorCode[] = [
+  'INVALID_INPUT', 'UNAUTHENTICATED', 'FORBIDDEN', 'NOT_FOUND', 'UNSUPPORTED_VERSION',
+  'UNSUPPORTED_OPERATION', 'STALE_GENERATION', 'REVISION_CONFLICT', 'RESOURCE_EXHAUSTED',
+  'CONFLICT', 'RESULT_UNKNOWN', 'UNAVAILABLE', 'UPSTREAM_ERROR',
+]
+
+function isServiceErrorCode(value: unknown): value is ServiceErrorCode {
+  return typeof value === 'string' && (serviceErrorCodes as readonly string[]).includes(value)
+}
+
+function serviceErrorOf(cause: unknown, fallback: ServiceErrorCode): ServiceError {
+  if (cause instanceof AgentMessagingChannelError) return cause.serviceError
+  if (cause instanceof Error) {
+    const serviceError = (cause as { readonly serviceError?: unknown }).serviceError
+    if (typeof serviceError === 'object' && serviceError !== null) {
+      const code = (serviceError as { readonly code?: unknown }).code
+      const message = (serviceError as { readonly message?: unknown }).message
+      if (isServiceErrorCode(code) && typeof message === 'string') return { code, message }
+    }
+    const code = (cause as { readonly code?: unknown }).code
+    return { code: isServiceErrorCode(code) ? code : fallback, message: cause.message }
+  }
+  return { code: fallback, message: String(cause) }
+}
+
+function serviceError(code: ServiceErrorCode, message: string): ServiceError {
   return { code, message }
 }
 
 export async function createAgentMessaging(options: AgentMessagingOptions): Promise<AgentMessaging> {
-  const requestTimeoutMs = options.requestTimeoutMs ?? 30_000
   const externalOpTimeoutMs = options.externalOpTimeoutMs ?? 15_000
   const agentId = options.declaration.identity.agentId
-  const pending = new Map<string, Pending>()
-  let socket: WebSocket | undefined
+  const channel = options.channel
+  if (channel === undefined || typeof channel.request !== 'function' || typeof channel.send !== 'function' ||
+    typeof channel.subscribe !== 'function') {
+    throw new AgentMessagingChannelError(serviceError('INVALID_INPUT', 'agent-messaging: an injected group channel with request, send and subscribe is required'))
+  }
+  const inFlight = new Map<string, (cause: unknown) => void>()
   let server: LocalMessageSocketServer | undefined
+  let detachPush: (() => void) | undefined
   let lastError: ServiceError | undefined
   let closing = false
   const vikunja: VikunjaSync | undefined = options.vikunja === undefined
     ? undefined
     : createVikunjaSync({ baseUrl: options.vikunja.baseUrl, token: options.vikunja.token, timeoutMs: externalOpTimeoutMs })
 
-  const send = (frame: Record<string, unknown>): void => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error('agent-messaging: relay connection is not open')
-    socket.send(JSON.stringify(frame))
-  }
-
+  /** The only CLI request path: the channel owns correlation and its deadline. */
   const request = (frame: GroupWireRequest): Promise<GroupWireReply> => {
+    if (closing) {
+      const failure = serviceError('UNAVAILABLE', 'agent-messaging is closing')
+      lastError = failure
+      return Promise.reject(new AgentMessagingChannelError(failure))
+    }
     return new Promise<GroupWireReply>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        pending.delete(frame.requestId)
-        reject(serviceError('RESULT_UNKNOWN', `no reply for ${frame.requestId} within ${requestTimeoutMs}ms`) as unknown as Error)
-      }, requestTimeoutMs)
-      pending.set(frame.requestId, { resolve, reject, timer })
-      try {
-        send({ kind: 'relay.group', requestId: frame.requestId, frame })
-      } catch (error) {
-        clearTimeout(timer)
-        pending.delete(frame.requestId)
-        reject(error instanceof Error ? error : new Error(String(error)))
+      const fail = (cause: unknown): void => {
+        const failure = serviceErrorOf(cause, 'UNAVAILABLE')
+        if (!inFlight.delete(frame.requestId)) return
+        lastError = failure
+        reject(new AgentMessagingChannelError(failure, cause instanceof Error ? { cause } : undefined))
       }
+      inFlight.set(frame.requestId, fail)
+      void channel.request(frame).then(
+        reply => { if (inFlight.delete(frame.requestId)) resolve(reply) },
+        fail,
+      )
     })
   }
 
-  const runOp = async (frame: { readonly opId: string; readonly opKind: string; readonly params: Record<string, unknown> }): Promise<Record<string, unknown>> => {
+  const runOp = async (frame: AgentMessagingPush): Promise<ExternalOpReply> => {
     const { opId, opKind, params } = frame
     const commitId = typeof params.commitId === 'string' ? params.commitId : typeof params.resultCommitId === 'string' ? params.resultCommitId : opId
-    const unavailable = (): Record<string, unknown> => ({ kind: 'op.failed', opId, commitId, error: serviceError('UNAVAILABLE', 'Vikunja is not configured for this daemon') })
+    const unavailable = (): ExternalOpReply => ({ kind: 'op.failed', opId, commitId, error: serviceError('UNAVAILABLE', 'Vikunja is not configured for this daemon') })
     if (!vikunja) return unavailable()
     try {
       if (opKind === 'issue.create') {
@@ -129,100 +182,44 @@ export async function createAgentMessaging(options: AgentMessagingOptions): Prom
         return { kind: 'op.unknown', opId, commitId, reason: 'issue.query outcome is not confirmable' }
       }
       return { kind: 'op.failed', opId, commitId, error: serviceError('UNSUPPORTED_OPERATION', `unsupported external op ${opKind}`) }
-    } catch (error) {
-      return { kind: 'op.unknown', opId, commitId, reason: error instanceof Error ? error.message : 'external op failed unexpectedly' }
+    } catch (cause) {
+      return { kind: 'op.unknown', opId, commitId, reason: cause instanceof Error ? cause.message : 'external op failed unexpectedly' }
     }
   }
 
-  const onRelayMessage = (data: WebSocket.RawData, binary: boolean): void => {
-    if (binary) return
-    let message: Record<string, unknown>
-    try {
-      message = JSON.parse(data.toString()) as Record<string, unknown>
-    } catch {
-      return
-    }
-    if (message.kind === 'relay.group.reply') {
-      const requestId = typeof message.requestId === 'string' ? message.requestId : undefined
-      const entry = requestId === undefined ? undefined : pending.get(requestId)
-      if (entry === undefined || requestId === undefined) return
-      clearTimeout(entry.timer)
-      pending.delete(requestId)
-      try {
-        entry.resolve(parseGroupWireReply(JSON.stringify(message.frame)))
-      } catch (error) {
-        entry.reject(error instanceof Error ? error : new Error(String(error)))
-      }
-      return
-    }
-    if (message.kind === 'relay.group.push') {
-      const frame = message.frame as Record<string, unknown> | undefined
-      if (frame?.kind === 'op.execute') {
-        const opId = String(frame.opId ?? '')
-        void runOp({ opId, opKind: String(frame.opKind ?? ''), params: (frame.params ?? {}) as Record<string, unknown> })
-          .then((outcome) => send({ kind: 'relay.group', requestId: `op:${opId}`, frame: outcome }))
-          .catch((error: unknown) => {
-            lastError = serviceError('UPSTREAM_ERROR', error instanceof Error ? error.message : 'op execution failed')
-          })
-      }
-      return
-    }
-    if (message.kind === 'relay.error') {
-      const error = message.error as ServiceError | undefined
-      if (error) lastError = error
-      const requestId = typeof message.requestId === 'string' ? message.requestId : undefined
-      const entry = requestId === undefined ? undefined : pending.get(requestId)
-      if (entry && requestId) {
-        clearTimeout(entry.timer)
-        pending.delete(requestId)
-        entry.reject(Object.assign(new Error(error?.message ?? 'relay error'), { serviceError: error }))
-      }
-    }
+  const onPush = (push: AgentMessagingPush): void => {
+    if (closing) return
+    void runOp(push)
+      .then(outcome => channel.send(outcome))
+      .catch(cause => { lastError = serviceErrorOf(cause, 'UPSTREAM_ERROR') })
   }
 
   const start = async (): Promise<void> => {
-    socket = new WebSocket(options.relayUrl, { rejectUnauthorized: false, headers: { authorization: options.credential } })
-    socket.on('error', (error) => { lastError = serviceError('UNAVAILABLE', error.message) })
-    await new Promise<void>((resolve, reject) => {
-      socket!.once('open', () => resolve())
-      socket!.once('error', reject)
-    })
-    socket.on('message', onRelayMessage)
-    const admitted = new Promise<void>((resolve, reject) => {
-      const onMessage = (data: WebSocket.RawData) => {
-        try {
-          const message = JSON.parse(data.toString()) as Record<string, unknown>
-          if (message.kind !== 'relay.admitted') return
-          socket!.off('message', onMessage)
-          resolve()
-        } catch (error) {
-          reject(error instanceof Error ? error : new Error(String(error)))
-        }
-      }
-      socket!.on('message', onMessage)
-    })
-    send({ kind: 'relay.login', protocolVersion: 2, declaration: options.declaration })
-    await admitted
-    server = await startLocalMessageSocket({
-      socketPath: options.socketPath,
-      handler: (frame) => request(frame),
-    })
+    if (closing) throw new AgentMessagingChannelError(serviceError('UNAVAILABLE', 'agent-messaging is closing'))
+    detachPush = channel.subscribe(onPush)
+    try {
+      server = await startLocalMessageSocket({
+        socketPath: options.socketPath,
+        handler: (frame) => request(frame),
+      })
+    } catch (cause) {
+      detachPush()
+      detachPush = undefined
+      throw cause
+    }
   }
 
   const close = async (): Promise<void> => {
     if (closing) return
     closing = true
-    for (const [requestId, entry] of pending) {
-      clearTimeout(entry.timer)
-      entry.reject(Object.assign(new Error('agent-messaging is closing'), { serviceError: serviceError('UNAVAILABLE', 'agent-messaging is closing') }))
-      pending.delete(requestId)
-    }
+    detachPush?.()
+    detachPush = undefined
+    const failure = serviceError('UNAVAILABLE', 'agent-messaging is closing')
+    lastError = failure
+    for (const fail of [...inFlight.values()]) fail(new AgentMessagingChannelError(failure))
+    inFlight.clear()
     await server?.close()
     server = undefined
-    if (socket) {
-      socket.terminate()
-      socket = undefined
-    }
   }
 
   return {

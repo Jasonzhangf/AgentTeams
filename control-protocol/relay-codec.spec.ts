@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentDeclaration, RelayServerControl } from './agent-services.ts'
+import type { AgentDeclaration, RelayClientControl, RelayServerControl } from './agent-services.ts'
 import { parseRelayAdmission } from './relay-admission.ts'
-import { parseAgentDeclaration, parseRelayServerControl } from './relay-codec.ts'
+import {
+  encodeRelayClientControl,
+  encodeRelayGroupControl,
+  parseAgentDeclaration,
+  parseRelayGroupControl,
+  parseRelayServerControl,
+} from './relay-codec.ts'
 
 const schema = JSON.parse('{"__proto__":{"type":"string"},"targetGeneration":7,"business":{"array":[1,null,true]}}') as AgentDeclaration['capabilities'][number]['operations'][number]['inputSchema']
 
@@ -54,7 +60,15 @@ const serverFrames: readonly RelayServerControl[] = [
   { kind: 'relay.opened', requestId: 'open-a', grantId: 'grant-a' },
   { kind: 'relay.closed', grantId: 'grant-a', error: { code: 'UNAVAILABLE', message: 'closed' } },
   { kind: 'relay.error', requestId: 'request-a', error: { code: 'FORBIDDEN', message: 'denied' } },
+  { kind: 'relay.group.reply', requestId: 'group-a', frame: { kind: 'group.list', requestId: 'group-a', groups: [] } },
+  { kind: 'relay.group.push', frame: { kind: 'issue.changed', sessionId: 'session-a', state: 'closed' } },
 ]
+
+const groupControl = {
+  kind: 'relay.group',
+  requestId: 'group-a',
+  frame: { kind: 'group.list', requestId: 'group-a' },
+} satisfies RelayClientControl
 
 describe('relay protocol codec', () => {
   it('preserves valid nested business schemas and control-like property names', () => {
@@ -76,6 +90,13 @@ describe('relay protocol codec', () => {
 
   it('parses every relay server control shape', () => {
     for (const frame of serverFrames) expect(parseRelayServerControl(JSON.stringify(frame))).toEqual(frame)
+  })
+
+  it('round-trips the relay.group client frame with the relay envelope shape', () => {
+    const encoded = encodeRelayGroupControl(groupControl)
+    expect(encoded).toBe('{"kind":"relay.group","requestId":"group-a","frame":{"kind":"group.list","requestId":"group-a"}}')
+    expect(parseRelayGroupControl(encoded)).toEqual(groupControl)
+    expect(parseRelayGroupControl(encodeRelayClientControl(groupControl))).toEqual(groupControl)
   })
 
   it('rejects unknown envelope fields and invalid peer or grant values', () => {

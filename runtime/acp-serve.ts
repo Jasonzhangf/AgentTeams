@@ -48,6 +48,13 @@ import { createDshEngineAdapter } from '../dsh-adapter/index.ts'
 import { createDirectWssListener, type DirectWssAdmission, type DirectWssListener } from '../network/direct-listener.ts'
 import type { AccountDirectorySnapshot } from '../network/account-directory.ts'
 import type { RegistrationStatus } from '../network/registration-client.ts'
+import type { GroupChannel } from '../network/group-channel.ts'
+import {
+  createRegistrationGroupChannel,
+  forwardRegistrationStatus,
+  startGroupAgentMessaging,
+} from './group-messaging.ts'
+import type { AgentMessaging } from './agent-messaging.ts'
 import { createTeamsConnectionHistory, type TeamsConnectionHistory } from '../network/teams-connection-history.ts'
 import { createTeamsConnectionLedger, openTeamsIngress, type TeamsConnectionLedger } from '../network/teams-ingress.ts'
 import { createTeamsStatusPort, type TeamsStatusPort } from '../network/teams-status.ts'
@@ -212,6 +219,8 @@ export interface AcpServeHandle {
   readonly capabilitiesRevision: string
   /** Live registration status; `disabled` when the config declares no `[discovery]`. */
   readonly registration: RegistrationStatus
+  /** The CLI socket the group surface listens on, or null when it is not composed. */
+  readonly groupSocketPath: string | null
   /** Read-only D06 handoff over the live ledger and the durable history. */
   readonly teamsStatus: TeamsStatusPort
   /**
@@ -1440,6 +1449,8 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     let lan: ServeLanChannel | undefined
     let registration: AgentRegistration | undefined
     let egress: ServeEgressOwner | undefined
+    let groupChannel: GroupChannel | undefined
+    let groupMessaging: AgentMessaging | undefined
     try {
       if (listenerClass === 'lan') {
         lan = await buildLanChannel({
@@ -1463,8 +1474,35 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       // background, so a registry outage never stops the engine.
       registration = await startDaemonRegistration(agent, {
         env,
-        ...(options.onRegistrationStatus === undefined ? {} : { onStatus: options.onRegistrationStatus }),
+        onStatus: status => {
+          options.onRegistrationStatus?.(status)
+          // The group channel follows the shared connection; it owns no socket.
+          forwardRegistrationStatus(groupChannel, status)
+        },
       })
+      if (registration.state === 'enabled') {
+        // The CLI group surface rides the registration connection. Without a
+        // `[vikunja]` section the daemon still answers group requests; it just
+        // reports every external write as unavailable instead of faking one.
+        const vikunja = agent.vikunja === undefined
+          ? undefined
+          : {
+              baseUrl: agent.vikunja.baseUrl,
+              token: await resolveCredentialReference(agent.vikunja.tokenRef, env),
+            }
+        groupChannel = createRegistrationGroupChannel(registration.client, {
+          requestTimeoutMs: 30_000,
+          maxPendingRequests: 32,
+          onError: error => { options.onRegistrationStatus?.(registration!.status) },
+        })
+        groupMessaging = await startGroupAgentMessaging({
+          registration: registration.client,
+          channel: groupChannel,
+          declaration,
+          dataDirectory: agent.daemon.dataDirectory,
+          ...(vikunja === undefined ? {} : { vikunja }),
+        })
+      }
       if (registration.state === 'enabled' && registration.status.state === 'online') {
         // Publish only after the listener is bound and the client is online. The
         // real bound LAN port (port 0 binds an ephemeral one) is the route.
@@ -1618,6 +1656,11 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           // writing, and a pass never rejects: a refused publish is recorded as a typed refusal
           // on `sessionObservation.failures()`, which the handle exposes for a caller to read.
           await sessionObservation.publish()
+          // The CLI socket closes before the connection it answers on.
+          await groupMessaging?.close().catch(() => undefined)
+          groupMessaging = undefined
+          groupChannel?.close()
+          groupChannel = undefined
           if (registration !== undefined && registration.state === 'enabled') {
             await registration.client.stop().catch(() => undefined)
           }
@@ -1632,6 +1675,7 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
 
       return {
         agentId: agent.daemon.id,
+        groupSocketPath: groupMessaging?.socketPath ?? null,
         engineKind: engine.kind,
         engineInstanceId,
         enginePid: daemon.handle.pid,
