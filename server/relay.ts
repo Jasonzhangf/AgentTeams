@@ -11,6 +11,7 @@ import { assertEndpointIdentity } from '../control-protocol/endpoint-ref.ts'
 import type {
   AgentDeclaration,
   AuthenticatedAgent,
+  JsonValue,
   RelayGrant,
   RelayPeer,
   RelayServerControl,
@@ -56,8 +57,23 @@ export interface RelayServerOptions {
   readonly peerTtlMs?: number
   readonly authenticate: (credential: Credential) => MaybePromise<AuthenticatedAgent | null>
   readonly authorizeTarget?: (source: AuthenticatedAgent, target: RelayPeer) => MaybePromise<boolean>
+  readonly groupHub?: GroupHub
   readonly now?: () => Date
   readonly idFactory?: () => string
+}
+
+export interface GroupHubPush {
+  readonly agentId: string
+  readonly frame: unknown
+}
+
+export type GroupHubResult =
+  | { readonly ok: true; readonly reply: unknown; readonly pushes?: readonly GroupHubPush[] }
+  | { readonly ok: false; readonly error: ServiceError }
+
+/** Transport-agnostic group application. The relay owns sockets and envelopes; the hub owns group semantics. */
+export interface GroupHub {
+  handle(actor: AuthenticatedAgent, frame: unknown): Promise<GroupHubResult>
 }
 
 export interface RelayServer {
@@ -192,6 +208,7 @@ function parseControlMessage(data: RawData, isBinary: boolean): Record<string, u
     'relay.directory': ['kind', 'requestId', 'subscribe'],
     'relay.connect': ['kind', 'requestId', 'generation', 'targetAgentId', 'targetGeneration'],
     'relay.open': ['kind', 'requestId', 'grantId', 'generation'],
+    'relay.group': ['kind', 'requestId', 'frame'],
   }
   const allowed = fields[kind]
   if (allowed) knownFields(input, allowed, `control message ${kind}`)
@@ -439,6 +456,10 @@ class RelayServerImpl implements RelayServer {
     // directory snapshot or be granted a connection.
     this.sweepPeerLeases()
     if (input.kind !== 'relay.login') this.assertCurrentControl(state)
+    if (input.kind === 'relay.group') {
+      await this.handleGroup(state, input)
+      return
+    }
     switch (input.kind) {
       case 'relay.login':
         throw new RelayFailure('CONFLICT', 'control connection is already admitted')
@@ -520,6 +541,30 @@ class RelayServerImpl implements RelayServer {
       .filter((peer) => peer.declaration.identity.accountId === state.auth?.accountId && peer.declaration.scopeId === state.auth?.scopeId)
       .map((peer) => projectPeerEndpoints(peer, state.auth!))
     this.send(state.socket, { kind: 'relay.directory', requestId, revision: this.revision, peers })
+  }
+
+  private async handleGroup(state: RelaySocketState, input: Record<string, unknown>): Promise<void> {
+    const requestId = string(input.requestId, 'requestId')
+    if (!state.auth) throw new RelayFailure('UNAUTHENTICATED', 'control identity is unavailable', requestId)
+    const hub = this.options.groupHub
+    if (!hub) throw new RelayFailure('UNSUPPORTED_OPERATION', 'group messaging is not configured', requestId)
+    const result = await hub.handle(state.auth, input.frame)
+    if (result.ok) {
+      this.send(state.socket, { kind: 'relay.group.reply', requestId, frame: result.reply as JsonValue })
+      for (const push of result.pushes ?? []) {
+        const target = this.socketForAgent(push.agentId)
+        if (target) this.send(target.socket, { kind: 'relay.group.push', frame: push.frame as JsonValue })
+      }
+      return
+    }
+    this.send(state.socket, { kind: 'relay.error', requestId, error: result.error })
+  }
+
+  private socketForAgent(agentId: string): RelaySocketState | undefined {
+    for (const state of this.controls.values()) {
+      if (state.auth?.agentId === agentId && open(state.socket) && this.activeByIdentity.get(state.identityKey ?? '') === state) return state
+    }
+    return undefined
   }
 
   private async connect(state: RelaySocketState, input: Record<string, unknown>): Promise<void> {

@@ -290,6 +290,15 @@ export function parseRelayServerControl(text: string): RelayServerControl {
       if (input.requestId !== undefined) stringValue(input.requestId, 'requestId')
       parseServiceError(input.error, 'error')
       return input as unknown as RelayServerControl
+    case 'relay.group.reply':
+      knownFields(input, ['kind', 'requestId', 'frame'], kind)
+      stringValue(input.requestId, 'requestId')
+      jsonValue(input.frame, 'frame')
+      return input as unknown as RelayServerControl
+    case 'relay.group.push':
+      knownFields(input, ['kind', 'frame'], kind)
+      jsonValue(input.frame, 'frame')
+      return input as unknown as RelayServerControl
     default:
       invalid(`unknown relay server control: ${kind}`)
   }

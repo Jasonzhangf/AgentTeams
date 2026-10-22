@@ -131,6 +131,8 @@ export type RelayServerControl =
   | { readonly kind: 'relay.opened'; readonly requestId: string; readonly grantId: string }
   | { readonly kind: 'relay.closed'; readonly grantId: string; readonly error?: ServiceError }
   | { readonly kind: 'relay.error'; readonly requestId?: string; readonly error: ServiceError }
+  | { readonly kind: 'relay.group.reply'; readonly requestId: string; readonly frame: JsonValue }
+  | { readonly kind: 'relay.group.push'; readonly frame: JsonValue }
 
 /** Route control is never inferred from opaque data bytes. Encoding belongs to the transport adapter. */
 export interface RelayDataControl { readonly grantId: string; readonly generation: number }

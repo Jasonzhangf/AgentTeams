@@ -389,7 +389,7 @@ issue.reference { requestId, commitId, groupId, vikunjaIssueId }
 issue.query     { requestId, sessionId }
 issue.close     { requestId, commitId, sessionId, reason, conclusion, evidence }
 issue.reopen    { requestId, commitId, sessionId, reason, remainingActions? }
-action.create   { requestId, commitId, sessionId, assigneeAgentId, kind, reason,
+action.create   { requestId, commitId, sessionId, assigneeAgentId, actionKind, reason,
                   expectedResult, replyRequired, replyRequiredReason,
                   inReplyToActionId? }
 action.submit   { requestId, resultCommitId, actionId, resultBody, evidence }
@@ -404,16 +404,29 @@ action.refuse   { requestId, actionId, reason }
 hub 到客户端:
 
 ```text
-group.created / group.invited / group.member / group.changed
-message.sent     { requestId, messageId, sequence }         // 持久接受回执
+group.created    { requestId, group }
+group.invited    { requestId, invitation }
+group.member     { requestId, group }
+group.changed    { group }                                   // 成员关系变化推送
+group.list       { requestId, groups }
+message.sent     { requestId, messageId, sequence }          // 持久接受回执
+message.acked    { requestId, groupId, upToSequence }        // 水位已推进
 message.received { groupId, message }                        // 投递推送
-message.page     { requestId, messages, revision, hasMore }
-issue.changed    { sessionId, state }
+message.page     { requestId, messages, revision, hasMore, gapBeforeSequence? }
+issue.changed    { sessionId, state }                        // 开闭投影变化推送
+issue.session    { requestId, session }                      // create/reference/query 回执
+issue.closed     { requestId, session, outcome }             // closed|conflict|failed|unknown
+issue.reopened   { requestId, session, outcome }             // reopened|conflict|failed|unknown
 action.created   { requestId, action }
-action.changed   { action }
+action.updated   { requestId, action }                       // submit/report/refuse 回执
+action.changed   { action }                                  // 行动状态变化推送
+action.list      { requestId, actions }
 op.execute       { opId, kind, params }                      // 仅发给被委派的执行 owner
 relay.error      { requestId?, error }
 ```
+
+每个带 requestId 的请求都有同 requestId 的回执或 relay.error;无 requestId 的帧只作推送,
+不能被当成某次请求的答复。
 
 执行 owner 到 hub:
 
