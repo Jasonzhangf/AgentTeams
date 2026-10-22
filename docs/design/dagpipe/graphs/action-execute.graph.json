@@ -1,0 +1,75 @@
+{
+  "id": "agentteams.action-execute",
+  "version": "1",
+  "inputs": [{ "id": "action.execute.tick", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "load-action",
+      "operator": "teams.load-action",
+      "operator_version": "1",
+      "inputs": ["action.execute.tick"],
+      "output": { "id": "action.loaded", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "execute",
+      "operator": "teams.execute-action",
+      "operator_version": "1",
+      "inputs": ["action.loaded"],
+      "output": { "id": "action.executed", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "submit-vikunja",
+      "operator": "teams.submit-action-result",
+      "operator_version": "1",
+      "inputs": ["action.executed"],
+      "output": { "id": "action.result.written", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "readback-confirm",
+      "operator": "teams.readback-vikunja-comment",
+      "operator_version": "1",
+      "inputs": ["action.result.written"],
+      "output": { "id": "action.result.confirmed", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "close-action",
+      "operator": "teams.close-action",
+      "operator_version": "1",
+      "inputs": ["action.result.confirmed"],
+      "output": { "id": "action.closed", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-action-execute-outcome",
+      "operator_version": "1",
+      "inputs": ["action.closed"],
+      "output": { "id": "action.execute.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "load-action", "to": "execute", "arc_id": "action.loaded" },
+    { "from": "execute", "to": "submit-vikunja", "arc_id": "action.executed" },
+    { "from": "submit-vikunja", "to": "readback-confirm", "arc_id": "action.result.written" },
+    { "from": "readback-confirm", "to": "close-action", "arc_id": "action.result.confirmed" },
+    { "from": "close-action", "to": "decide-outcome", "arc_id": "action.closed" }
+  ],
+  "outputs": ["action.execute.receipt"]
+}

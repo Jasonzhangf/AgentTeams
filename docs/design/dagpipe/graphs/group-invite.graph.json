@@ -1,0 +1,53 @@
+{
+  "id": "agentteams.group-invite",
+  "version": "1",
+  "inputs": [{ "id": "group.invite.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-inviter",
+      "operator": "teams.authorize-group-admin",
+      "operator_version": "1",
+      "inputs": ["group.invite.intent"],
+      "output": { "id": "group.invite.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "record-invite",
+      "operator": "teams.record-group-invite",
+      "operator_version": "1",
+      "inputs": ["group.invite.authorized"],
+      "output": { "id": "group.invite.recorded", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "persist-invite",
+      "operator": "teams.persist-group-invite",
+      "operator_version": "1",
+      "inputs": ["group.invite.recorded"],
+      "output": { "id": "group.invite.persisted", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-invite-outcome",
+      "operator_version": "1",
+      "inputs": ["group.invite.persisted"],
+      "output": { "id": "group.invite.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-inviter", "to": "record-invite", "arc_id": "group.invite.authorized" },
+    { "from": "record-invite", "to": "persist-invite", "arc_id": "group.invite.recorded" },
+    { "from": "persist-invite", "to": "decide-outcome", "arc_id": "group.invite.persisted" }
+  ],
+  "outputs": ["group.invite.receipt"]
+}

@@ -1,0 +1,75 @@
+{
+  "id": "agentteams.group-invite-response",
+  "version": "1",
+  "inputs": [{ "id": "group.invite.response", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-invitee",
+      "operator": "teams.authorize-invitee",
+      "operator_version": "1",
+      "inputs": ["group.invite.response"],
+      "output": { "id": "group.response.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "validate-invite",
+      "operator": "teams.validate-group-invite",
+      "operator_version": "1",
+      "inputs": ["group.response.authorized"],
+      "output": { "id": "group.response.validated", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "apply-response",
+      "operator": "teams.apply-group-response",
+      "operator_version": "1",
+      "inputs": ["group.response.validated"],
+      "output": { "id": "group.response.applied", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "persist-membership",
+      "operator": "teams.persist-group-membership",
+      "operator_version": "1",
+      "inputs": ["group.response.applied"],
+      "output": { "id": "group.membership.persisted", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "publish-member",
+      "operator": "teams.publish-group-member",
+      "operator_version": "1",
+      "inputs": ["group.membership.persisted"],
+      "output": { "id": "group.membership.published", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-response-outcome",
+      "operator_version": "1",
+      "inputs": ["group.membership.published"],
+      "output": { "id": "group.response.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-invitee", "to": "validate-invite", "arc_id": "group.response.authorized" },
+    { "from": "validate-invite", "to": "apply-response", "arc_id": "group.response.validated" },
+    { "from": "apply-response", "to": "persist-membership", "arc_id": "group.response.applied" },
+    { "from": "persist-membership", "to": "publish-member", "arc_id": "group.membership.persisted" },
+    { "from": "publish-member", "to": "decide-outcome", "arc_id": "group.membership.published" }
+  ],
+  "outputs": ["group.response.receipt"]
+}

@@ -1,0 +1,64 @@
+{
+  "id": "agentteams.issue-reopen",
+  "version": "1",
+  "inputs": [{ "id": "issue.reopen.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-initiator",
+      "operator": "teams.authorize-issue-reopen",
+      "operator_version": "1",
+      "inputs": ["issue.reopen.intent"],
+      "output": { "id": "issue.reopen.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "reopen-vikunja",
+      "operator": "teams.reopen-vikunja-issue",
+      "operator_version": "1",
+      "inputs": ["issue.reopen.authorized"],
+      "output": { "id": "issue.vikunja.reopen.written", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "readback-confirm",
+      "operator": "teams.readback-vikunja-reopen",
+      "operator_version": "1",
+      "inputs": ["issue.vikunja.reopen.written"],
+      "output": { "id": "issue.vikunja.reopen.confirmed", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "restore-session",
+      "operator": "teams.restore-issue-session",
+      "operator_version": "1",
+      "inputs": ["issue.vikunja.reopen.confirmed"],
+      "output": { "id": "issue.session.restored", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-issue-reopen-outcome",
+      "operator_version": "1",
+      "inputs": ["issue.session.restored"],
+      "output": { "id": "issue.reopen.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-initiator", "to": "reopen-vikunja", "arc_id": "issue.reopen.authorized" },
+    { "from": "reopen-vikunja", "to": "readback-confirm", "arc_id": "issue.vikunja.reopen.written" },
+    { "from": "readback-confirm", "to": "restore-session", "arc_id": "issue.vikunja.reopen.confirmed" },
+    { "from": "restore-session", "to": "decide-outcome", "arc_id": "issue.session.restored" }
+  ],
+  "outputs": ["issue.reopen.receipt"]
+}

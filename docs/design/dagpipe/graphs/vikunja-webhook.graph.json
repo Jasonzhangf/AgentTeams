@@ -1,0 +1,64 @@
+{
+  "id": "agentteams.vikunja-webhook",
+  "version": "1",
+  "inputs": [{ "id": "vikunja.webhook.request", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "receive-webhook",
+      "operator": "teams.receive-vikunja-webhook",
+      "operator_version": "1",
+      "inputs": ["vikunja.webhook.request"],
+      "output": { "id": "webhook.received", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "verify-signature",
+      "operator": "teams.verify-vikunja-signature",
+      "operator_version": "1",
+      "inputs": ["webhook.received"],
+      "output": { "id": "webhook.verified", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "translate-event",
+      "operator": "teams.translate-vikunja-event",
+      "operator_version": "1",
+      "inputs": ["webhook.verified"],
+      "output": { "id": "webhook.translated", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "project-state",
+      "operator": "teams.project-session-state",
+      "operator_version": "1",
+      "inputs": ["webhook.translated"],
+      "output": { "id": "session.state.projected", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-webhook-outcome",
+      "operator_version": "1",
+      "inputs": ["session.state.projected"],
+      "output": { "id": "vikunja.webhook.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "receive-webhook", "to": "verify-signature", "arc_id": "webhook.received" },
+    { "from": "verify-signature", "to": "translate-event", "arc_id": "webhook.verified" },
+    { "from": "translate-event", "to": "project-state", "arc_id": "webhook.translated" },
+    { "from": "project-state", "to": "decide-outcome", "arc_id": "session.state.projected" }
+  ],
+  "outputs": ["vikunja.webhook.receipt"]
+}

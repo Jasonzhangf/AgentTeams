@@ -1,0 +1,75 @@
+{
+  "id": "agentteams.issue-close",
+  "version": "1",
+  "inputs": [{ "id": "issue.close.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-initiator",
+      "operator": "teams.authorize-issue-close",
+      "operator_version": "1",
+      "inputs": ["issue.close.intent"],
+      "output": { "id": "issue.close.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "cancel-queued",
+      "operator": "teams.cancel-queued-actions",
+      "operator_version": "1",
+      "inputs": ["issue.close.authorized"],
+      "output": { "id": "issue.queued.cancelled", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "dispose-inflight",
+      "operator": "teams.dispose-inflight-actions",
+      "operator_version": "1",
+      "inputs": ["issue.queued.cancelled"],
+      "output": { "id": "issue.inflight.disposed", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "close-vikunja",
+      "operator": "teams.close-vikunja-issue",
+      "operator_version": "1",
+      "inputs": ["issue.inflight.disposed"],
+      "output": { "id": "issue.vikunja.close.written", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "readback-confirm",
+      "operator": "teams.readback-vikunja-close",
+      "operator_version": "1",
+      "inputs": ["issue.vikunja.close.written"],
+      "output": { "id": "issue.vikunja.close.confirmed", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-issue-close-outcome",
+      "operator_version": "1",
+      "inputs": ["issue.vikunja.close.confirmed"],
+      "output": { "id": "issue.close.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-initiator", "to": "cancel-queued", "arc_id": "issue.close.authorized" },
+    { "from": "cancel-queued", "to": "dispose-inflight", "arc_id": "issue.queued.cancelled" },
+    { "from": "dispose-inflight", "to": "close-vikunja", "arc_id": "issue.inflight.disposed" },
+    { "from": "close-vikunja", "to": "readback-confirm", "arc_id": "issue.vikunja.close.written" },
+    { "from": "readback-confirm", "to": "decide-outcome", "arc_id": "issue.vikunja.close.confirmed" }
+  ],
+  "outputs": ["issue.close.receipt"]
+}

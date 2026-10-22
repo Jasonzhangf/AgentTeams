@@ -326,6 +326,189 @@
         "server/**",
         "ui/**"
       ]
+    },
+    {
+      "module_id": "group-messaging",
+      "owner": "server",
+      "status": "design",
+      "design_doc": "docs/design/teams-group-messaging-v1.md",
+      "note": "Owns the group messaging design artifacts only until implementation splits them across group-wire, group-registry, issue-session, action-registry, message-log, message-router, group-channel, agent-messaging, local-message-socket, vikunja-sync and vikunja-intent. Design status; no runtime behavior is delivered.",
+      "owned_paths": [
+        "docs/design/teams-group-messaging-v1.md",
+        "docs/design/teams-group-messaging-v1.manifest.json",
+        "docs/design/dagpipe/graphs/group-create.graph.json",
+        "docs/design/dagpipe/graphs/group-invite.graph.json",
+        "docs/design/dagpipe/graphs/group-invite-response.graph.json",
+        "docs/design/dagpipe/graphs/group-message-send.graph.json",
+        "docs/design/dagpipe/graphs/group-message-deliver.graph.json",
+        "docs/design/dagpipe/graphs/issue-create.graph.json",
+        "docs/design/dagpipe/graphs/issue-query.graph.json",
+        "docs/design/dagpipe/graphs/action-create.graph.json",
+        "docs/design/dagpipe/graphs/action-execute.graph.json",
+        "docs/design/dagpipe/graphs/issue-close.graph.json",
+        "docs/design/dagpipe/graphs/issue-reopen.graph.json",
+        "docs/design/dagpipe/graphs/message-inject.graph.json",
+        "docs/design/dagpipe/graphs/vikunja-webhook.graph.json"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "agent-host/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "group-wire",
+      "owner": "control-protocol",
+      "status": "design",
+      "note": "Sole type and codec owner for group, issue, action and message frames. Holds no state.",
+      "owned_paths": [
+        "control-protocol/group-wire.ts",
+        "control-protocol/group-wire.spec.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "network/**",
+        "runtime/**"
+      ]
+    },
+    {
+      "module_id": "group-registry",
+      "owner": "server",
+      "status": "design",
+      "note": "Sole truth for groups, members and the explicit mastersOf command edge.",
+      "owned_paths": [
+        "server/group-registry.ts",
+        "server/group-registry.spec.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "issue-session",
+      "owner": "server",
+      "status": "design",
+      "note": "Sole truth for the one-to-one session and Vikunja issue binding plus the local state projection. Vikunja keeps the issue state; this module only mirrors it after a readback.",
+      "owned_paths": [
+        "server/issue-session.ts",
+        "server/issue-session.spec.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "action-registry",
+      "owner": "server",
+      "status": "design",
+      "note": "Sole truth for actions: stable actionId, initiator, assignee, reason, expected result, reply requirement, inReplyTo and terminal state. Never owns issue open or closed state.",
+      "owned_paths": [
+        "server/action-registry.ts",
+        "server/action-registry.spec.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "message-log",
+      "owner": "server",
+      "status": "design",
+      "note": "Append-only group message log, per member watermark, backlog selection and explicit retention gap reporting.",
+      "owned_paths": [
+        "server/message-log.ts",
+        "server/message-log.spec.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "message-router",
+      "owner": "server",
+      "status": "design",
+      "note": "Group-visible routing and explicit action target dispatch. Never infers targets from message body.",
+      "owned_paths": [
+        "server/message-router.ts",
+        "server/message-router.spec.ts"
+      ],
+      "forbidden_paths": [
+        "agent/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "group-channel",
+      "owner": "network",
+      "status": "design",
+      "note": "Client side group, issue, action and message channel over the existing registration connection. Opens no second Relay socket.",
+      "owned_paths": [
+        "network/group-channel.ts",
+        "network/group-channel.spec.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "agent/**"
+      ]
+    },
+    {
+      "module_id": "agent-messaging",
+      "owner": "runtime",
+      "status": "design",
+      "note": "Daemon side subscription, queue, ACP injection, reply binding and result write-back. Injects only explicit action targets into the session bound to that issue.",
+      "owned_paths": [
+        "runtime/agent-messaging.ts",
+        "runtime/agent-messaging.spec.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "network/**"
+      ]
+    },
+    {
+      "module_id": "local-message-socket",
+      "owner": "runtime",
+      "status": "design",
+      "note": "CLI to daemon local channel for group, issue and action commands, following the runtime/local-work-control.ts socket pattern.",
+      "owned_paths": [
+        "runtime/local-message-socket.ts",
+        "runtime/local-message-socket.spec.ts"
+      ],
+      "forbidden_paths": [
+        "server/**"
+      ]
+    },
+    {
+      "module_id": "vikunja-sync",
+      "owner": "runtime",
+      "status": "design",
+      "note": "Minimal Vikunja write and read capability: create or reference issue, read state, write comment result, close, reopen. Reports unknown results instead of faking success.",
+      "owned_paths": [
+        "runtime/vikunja-sync.ts",
+        "runtime/vikunja-sync.spec.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "network/**"
+      ]
+    },
+    {
+      "module_id": "vikunja-intent",
+      "owner": "config",
+      "status": "design",
+      "note": "Compiles and validates the optional [vikunja] config section for agent kind daemons. This is D00 amendment A5 and needs its own record.",
+      "owned_paths": [
+        "config/vikunja-intent.ts",
+        "config/vikunja-intent.spec.ts"
+      ],
+      "forbidden_paths": [
+        "server/**",
+        "runtime/**"
+      ]
     }
   ]
 }

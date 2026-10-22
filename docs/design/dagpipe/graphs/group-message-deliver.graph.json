@@ -1,0 +1,86 @@
+{
+  "id": "agentteams.group-message-deliver",
+  "version": "1",
+  "inputs": [{ "id": "group.delivery.tick", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "read-watermark",
+      "operator": "teams.read-member-watermark",
+      "operator_version": "1",
+      "inputs": ["group.delivery.tick"],
+      "output": { "id": "group.watermark.read", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "detect-gap",
+      "operator": "teams.detect-retention-gap",
+      "operator_version": "1",
+      "inputs": ["group.watermark.read"],
+      "output": { "id": "group.gap.detected", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "select-backlog",
+      "operator": "teams.select-group-backlog",
+      "operator_version": "1",
+      "inputs": ["group.gap.detected"],
+      "output": { "id": "group.backlog.selected", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "deliver-push",
+      "operator": "teams.deliver-group-push",
+      "operator_version": "1",
+      "inputs": ["group.backlog.selected"],
+      "output": { "id": "group.push.attempted", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "await-ack",
+      "operator": "teams.await-group-ack",
+      "operator_version": "1",
+      "inputs": ["group.push.attempted"],
+      "output": { "id": "group.ack.outcome", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "advance-watermark",
+      "operator": "teams.advance-member-watermark",
+      "operator_version": "1",
+      "inputs": ["group.ack.outcome"],
+      "output": { "id": "group.watermark.advanced", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-delivery-outcome",
+      "operator_version": "1",
+      "inputs": ["group.watermark.advanced"],
+      "output": { "id": "group.delivery.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "read-watermark", "to": "detect-gap", "arc_id": "group.watermark.read" },
+    { "from": "detect-gap", "to": "select-backlog", "arc_id": "group.gap.detected" },
+    { "from": "select-backlog", "to": "deliver-push", "arc_id": "group.backlog.selected" },
+    { "from": "deliver-push", "to": "await-ack", "arc_id": "group.push.attempted" },
+    { "from": "await-ack", "to": "advance-watermark", "arc_id": "group.ack.outcome" },
+    { "from": "advance-watermark", "to": "decide-outcome", "arc_id": "group.watermark.advanced" }
+  ],
+  "outputs": ["group.delivery.receipt"]
+}

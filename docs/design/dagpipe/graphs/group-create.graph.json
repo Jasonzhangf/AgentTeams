@@ -1,0 +1,53 @@
+{
+  "id": "agentteams.group-create",
+  "version": "1",
+  "inputs": [{ "id": "group.create.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-initiator",
+      "operator": "teams.authorize-group-init",
+      "operator_version": "1",
+      "inputs": ["group.create.intent"],
+      "output": { "id": "group.creation.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "create-group",
+      "operator": "teams.create-group",
+      "operator_version": "1",
+      "inputs": ["group.creation.authorized"],
+      "output": { "id": "group.created", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "persist-group",
+      "operator": "teams.persist-group",
+      "operator_version": "1",
+      "inputs": ["group.created"],
+      "output": { "id": "group.persisted", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-group-outcome",
+      "operator_version": "1",
+      "inputs": ["group.persisted"],
+      "output": { "id": "group.create.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-initiator", "to": "create-group", "arc_id": "group.creation.authorized" },
+    { "from": "create-group", "to": "persist-group", "arc_id": "group.created" },
+    { "from": "persist-group", "to": "decide-outcome", "arc_id": "group.persisted" }
+  ],
+  "outputs": ["group.create.receipt"]
+}
