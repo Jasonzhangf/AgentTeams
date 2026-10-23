@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teams 群组消息:真实使用流程</title>
+<style>
+  :root {
+    --boundary-fill: #E9EEF5; --boundary-stroke: #64748B;
+    --action-fill: #E8F1FF;   --action-stroke: #2563EB;
+    --decision-fill: #FFF4CC; --decision-stroke: #D97706;
+    --data-fill: #F1EAFE;     --data-stroke: #7C3AED;
+    --success-fill: #E8F7EE;  --success-stroke: #16A34A;
+    --failure-fill: #FDECEC;  --failure-stroke: #DC2626;
+    --ink: #0F172A; --edge: #475569; --muted: #64748B;
+    --page: #F6F8FB; --card: #FFFFFF; --line: #E2E8F0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page); color: var(--ink);
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  header.page {
+    background: var(--card); border-bottom: 1px solid var(--line);
+    padding: 28px 24px 22px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: .2px; }
+  .purpose { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+  .meta b { color: var(--ink); font-weight: 600; }
+  .badge {
+    display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px;
+    background: var(--success-fill); color: var(--success-stroke); border: 1px solid var(--success-stroke);
+  }
+  main { padding: 22px 24px 40px; }
+  section.card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 20px 24px; margin: 0 0 20px;
+  }
+  .card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .card-head h2 { font-size: 17px; margin: 0; }
+  .card-head .kind { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+  .card p.note { margin: 0 0 18px; color: var(--muted); font-size: 13.5px; }
+  .card p.evidence { margin: 18px 0 0; padding-top: 12px; border-top: 1px dashed var(--line); color: var(--muted); font-size: 12.5px; }
+  .card p.evidence code { color: var(--ink); }
+
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .node {
+    width: min(560px, 100%); padding: 10px 14px; text-align: center;
+    color: var(--ink); border-width: 1.5px; border-style: solid;
+    font-size: 14px; line-height: 1.45;
+  }
+  .node small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .node.boundary { background: var(--boundary-fill); border-color: var(--boundary-stroke); border-radius: 999px; }
+  .node.action   { background: var(--action-fill);   border-color: var(--action-stroke);   border-radius: 8px; }
+  .node.success  { background: var(--success-fill);  border-color: var(--success-stroke);  border-radius: 999px; }
+  .node.failure  { background: var(--failure-fill);  border-color: var(--failure-stroke);  border-radius: 999px; }
+  .node.data     { background: var(--data-fill);     border-color: var(--data-stroke);     border-radius: 50% / 14%; padding: 14px 20px; }
+  .node.decision {
+    background: transparent; border: none; position: relative;
+    width: min(540px, 100%); min-height: 92px; margin: 10px 0; padding: 26px 64px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .node.decision::before {
+    content: ""; position: absolute; inset: 0;
+    background: var(--decision-fill); border: 1.5px solid var(--decision-stroke);
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  }
+  .node.decision > span { position: relative; z-index: 1; }
+  .conn { width: 2px; height: 22px; background: var(--edge); position: relative; flex: none; }
+  .conn::after {
+    content: ""; position: absolute; left: 50%; bottom: -1px; transform: translateX(-50%);
+    border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid var(--edge);
+  }
+  .conn.short { height: 16px; }
+  .branches { display: flex; gap: 28px; justify-content: center; width: 100%; flex-wrap: wrap; margin-top: 2px; }
+  .branch { display: flex; flex-direction: column; align-items: center; flex: 1 1 240px; max-width: 380px; }
+  .branch .node { width: 100%; }
+  .branch.wide { max-width: 760px; flex: 2 1 520px; }
+  .branch .branches { flex-wrap: nowrap; gap: 14px; width: 100%; margin-top: 0; }
+  .branch .branches .branch { flex: 1 1 0; min-width: 0; max-width: none; }
+  .branch .branches .node { padding: 8px 10px; font-size: 13px; }
+  .edge-label {
+    font-size: 12px; color: var(--muted); background: var(--card);
+    border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; margin-bottom: -1px; z-index: 1;
+  }
+  .chain { display: flex; flex-direction: column; align-items: center; width: 100%; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 16px; height: 16px; border-width: 1.5px; border-style: solid; display: inline-block; }
+  .swatch.boundary { background: var(--boundary-fill); border-color: var(--boundary-stroke); border-radius: 999px; }
+  .swatch.action { background: var(--action-fill); border-color: var(--action-stroke); border-radius: 4px; }
+  .swatch.decision { background: var(--decision-fill); border-color: var(--decision-stroke); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+  .swatch.data { background: var(--data-fill); border-color: var(--data-stroke); border-radius: 50% / 30%; }
+  .swatch.success { background: var(--success-fill); border-color: var(--success-stroke); border-radius: 999px; }
+  .swatch.failure { background: var(--failure-fill); border-color: var(--failure-stroke); border-radius: 999px; }
+
+  .boundary-note {
+    background: #FFFFFF; border: 1px solid var(--line); border-left: 3px solid var(--decision-stroke);
+    border-radius: 8px; padding: 12px 14px; margin: 0 0 20px; font-size: 13.5px;
+  }
+  .boundary-note ul { margin: 6px 0 0; padding-left: 18px; }
+  .boundary-note li { margin: 3px 0; }
+  footer.page { padding: 0 24px 36px; color: var(--muted); font-size: 12.5px; }
+  @media (max-width: 640px) {
+    .branches { gap: 16px; }
+    .node.decision { padding: 20px 30px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <div class="wrap">
+    <h1>Teams 群组消息:真实使用流程</h1>
+    <p class="purpose">按 <code>docs/design/teams-group-messaging-v1.md</code> 已交付的第二批装配,从操作者第一次加入 relay,到建群、建议题会话、派行动、发消息与重启恢复的完整可执行路径。图为当前实现,不是设计草案。</p>
+    <div class="meta">
+      <span>状态 <b class="badge">current</b></span>
+      <span>依据 <b>main @ 7a224dd</b></span>
+      <span>图数 <b>8</b></span>
+      <span>入口 <b>agentteams CLI</b></span>
+      <span>证据 <b>pnpm verify 1447 通过 / 0 失败</b></span>
+    </div>
+    <div class="legend" aria-label="图例">
+      <span><i class="swatch boundary"></i>入口 / 出口</span>
+      <span><i class="swatch action"></i>动作</span>
+      <span><i class="swatch decision"></i>判断</span>
+      <span><i class="swatch data"></i>数据 / 落盘</span>
+      <span><i class="swatch success"></i>成功结果</span>
+      <span><i class="swatch failure"></i>拒绝 / 失败</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="boundary-note">
+    <b>读图须知</b>
+    <ul>
+      <li>命令都是当前 CLI 真实子命令(<code>cli/group.mjs</code>、<code>cli/join.mjs</code>);每个动作对应的帧与落盘位置写在图下的证据行。</li>
+      <li>本机没有启动生产 daemon,也没有部署。图描述的是已合入源码的行为与测试覆盖。</li>
+      <li>真实 Vikunja 实例与 webhook 签名未核验,图中涉及时标注为本地 HTTP 替身;这是唯一未核验的链路。</li>
+    </ul>
+  </div>
+
+  <section class="card">
+    <div class="card-head"><h2>图 1 · 一次真实使用的全链路</h2><span class="kind">总览</span></div>
+    <p class="note">一个人从零开始用完这套能力的顺序。前两步只做一次,后面是每次协作的重复循环。</p>
+    <div class="flow">
+      <div class="node boundary">操作者拿到 relay 地址与自己的 agent 名</div>
+      <div class="conn"></div>
+      <div class="node action">agentteams join:校验证书,写配置,启动 daemon</div>
+      <div class="conn"></div>
+      <div class="node action">daemon 连上 relay 并完成注册与身份声明</div>
+      <div class="conn"></div>
+      <div class="node action">建群:group create / invite / accept</div>
+      <div class="conn"></div>
+      <div class="node action">建议题会话:issue create 或 issue reference</div>
+      <div class="conn"></div>
+      <div class="node action">派行动:action create,承办方 submit / report</div>
+      <div class="conn"></div>
+      <div class="node action">发消息与补拉:msg send,对方 msg inbox</div>
+      <div class="conn"></div>
+      <div class="node success">任务结束:issue close,必要时 group leave</div>
+    </div>
+    <p class="evidence">证据:<code>cli/agentteams.mjs:957</code> 把 join / group / issue / action / msg 分流到两个模块;<code>cli/group.mjs:8-29</code> 列出全部子命令。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>图 2 · 加入与上线</h2><span class="kind">一次性的接入</span></div>
+    <p class="note">证书校验默认开启。自签 relay 要显式给 <code>--ca</code>;只有 <code>--insecure</code> 是旁路,并且它会自己说出来。校验失败时已有配置一个字节都不改。</p>
+    <div class="flow">
+      <div class="node boundary">agentteams join --remote wss://… --endpoint ip:port --serve opencode|dsh --name &lt;agentId&gt;</div>
+      <div class="conn"></div>
+      <div class="node action">对 relay 做真实 TLS 握手,默认校验证书链与主机名<small>--ca 提供信任锚;--insecure 是唯一旁路并打印提示;IP 字面量不发 SNI</small></div>
+      <div class="conn"></div>
+      <div class="node decision"><span>证书与主机名校验通过?</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">否</span>
+          <div class="conn short"></div>
+          <div class="node failure">报错退出,已存在的 agentteams.toml 保持原样</div>
+        </div>
+        <div class="branch">
+          <span class="edge-label">是</span>
+          <div class="conn short"></div>
+          <div class="node action">原子写入或更新 agentteams.toml</div>
+          <div class="conn"></div>
+          <div class="node action">分离启动 daemon:<small>agentteams start --config;--no-start 只写配置不启动</small></div>
+          <div class="conn"></div>
+          <div class="node action">daemon 连 relay WebSocket,连接层固定校验对端证书</div>
+          <div class="conn"></div>
+          <div class="node action">注册并声明身份 account + scope + agentId</div>
+          <div class="conn"></div>
+          <div class="node success">在线:CLI 群组面监听本地 socket,群流量走同一条注册连接</div>
+        </div>
+      </div>
+    </div>
+    <p class="evidence">证据:<code>cli/join.mjs:69-100</code>(探测与默认校验)、<code>:160-167</code>(失败时不写配置)、<code>network/wss-connection.ts:57</code>(连接层固定 <code>rejectUnauthorized: true</code>)、<code>runtime/group-messaging.ts:84-104</code>(群面挂在注册连接上,复用 <code>registration.sendGroup</code>)。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>图 3 · 建群与成员</h2><span class="kind">群组生命周期</span></div>
+    <p class="note">只有群主或管理员能邀请人。成员角色是 master 或 peer,主从关系只允许一条有向边,用 <code>--masters-of</code> 指定。</p>
+    <div class="flow">
+      <div class="node boundary">agentteams group create &lt;name&gt; --socket &lt;path&gt;</div>
+      <div class="conn"></div>
+      <div class="node action">创建者成为 owner,群写入 groups.json</div>
+      <div class="conn"></div>
+      <div class="node action">group invite &lt;groupId&gt; &lt;agentId&gt; master|peer [--masters-of a,b]</div>
+      <div class="conn"></div>
+      <div class="node decision"><span>邀请者是 owner 或 admin?</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">否</span>
+          <div class="conn short"></div>
+          <div class="node failure">FORBIDDEN,邀请不发出</div>
+        </div>
+        <div class="branch wide">
+          <span class="edge-label">是</span>
+          <div class="conn short"></div>
+          <div class="node action">发出 group.invite,被邀请方收到邀请</div>
+          <div class="conn"></div>
+          <div class="node decision"><span>被邀请者响应</span></div>
+          <div class="branches">
+            <div class="branch">
+              <span class="edge-label">accept</span>
+              <div class="conn short"></div>
+              <div class="node action">成员入册:master 或 peer,可带一条 mastersOf 有向边</div>
+              <div class="conn"></div>
+              <div class="node success">group list 能看到这个群;历史与已读水位按成员保留</div>
+              <div class="conn"></div>
+              <div class="node action">之后随时 group leave 退出<small>保留群与历史,不删除他人证据</small></div>
+            </div>
+            <div class="branch">
+              <span class="edge-label">decline</span>
+              <div class="conn short"></div>
+              <div class="node failure">邀请作废,不产生成员</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="evidence">证据:<code>cli/group.mjs:146-157</code>(create / invite / accept / decline / leave 帧)、<code>server/group-hub.ts:203-206</code>(hub 分流)、<code>docs/design/teams-group-messaging-v1.md</code> 第 5 节(角色与唯一主从边)。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>图 4 · 议题会话:新建与引用回读</h2><span class="kind">issue</span></div>
+    <p class="note">两条入口都落在同一个 session 上。新建会先让 Vikunja 建 issue 并回读确认;引用会回读目标 issue 的真实项目,不再写 <code>referenced</code> 占位。</p>
+    <div class="flow">
+      <div class="node boundary">入口 A:issue create &lt;groupId&gt; &lt;projectId&gt; &lt;title&gt; [body]</div>
+      <div class="conn"></div>
+      <div class="node action">按 commitId 去重,重复提交返回同一结果</div>
+      <div class="conn"></div>
+      <div class="node action">委托 Vikunja 建 issue<small>本地 HTTP 替身;真实实例未核验</small></div>
+      <div class="conn"></div>
+      <div class="node decision"><span>回读确认到真实 issue?</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">否</span>
+          <div class="conn short"></div>
+          <div class="node failure">显式 unknown:保留待确认状态,不写占位、不假装成功</div>
+        </div>
+        <div class="branch">
+          <span class="edge-label">是</span>
+          <div class="conn short"></div>
+          <div class="node action">建 session,绑定回读到的 projectId 与 issue 编号</div>
+        </div>
+      </div>
+      <div class="conn" style="margin-top:14px"></div>
+      <div class="node boundary">入口 B:issue reference &lt;groupId&gt; &lt;issueId&gt;</div>
+      <div class="conn"></div>
+      <div class="node action">回读目标 issue 的真实项目与当前状态</div>
+      <div class="conn"></div>
+      <div class="node decision"><span>回读里拿得到所属项目?</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">否</span>
+          <div class="conn short"></div>
+          <div class="node failure">拒绝绑定:没有项目的 issue 不建会话</div>
+        </div>
+        <div class="branch">
+          <span class="edge-label">是</span>
+          <div class="conn short"></div>
+          <div class="node action">按引用归属绑定 session;重复引用返回原会话并同步已读</div>
+        </div>
+      </div>
+      <div class="conn" style="margin-top:14px"></div>
+      <div class="node data">会话状态:sessionId / 项目 / issue 状态 / 已读水位</div>
+      <div class="conn"></div>
+      <div class="node action">issue query 回读并收敛投影</div>
+      <div class="conn"></div>
+      <div class="node action">issue close &lt;reason&gt; &lt;conclusion&gt; 或 issue reopen &lt;reason&gt;<small>只有会话发起人能关与重开</small></div>
+      <div class="conn"></div>
+      <div class="node success">会话收口,历史与结论留档</div>
+    </div>
+    <p class="evidence">证据:<code>cli/group.mjs:160-179</code>(issue 全部子命令)、<code>server/group-hub.ts:430-497</code>(create / reference 回读与 project 校验)、<code>server/group-hub.ts:481-497</code>(query 收敛投影)。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>图 5 · 行动闭环</h2><span class="kind">action</span></div>
+    <p class="note">发起方在会话里派一件具体的事,承办方只能提交结果、报阻塞或拒绝。结果按 resultCommitId 幂等入账。</p>
+    <div class="flow">
+      <div class="node boundary">action create &lt;sessionId&gt; &lt;assignee&gt; &lt;kind&gt; &lt;reason&gt; &lt;expectedResult&gt; [--reply]</div>
+      <div class="conn"></div>
+      <div class="node action">写入 actions.json,指定唯一承办方</div>
+      <div class="conn"></div>
+      <div class="node decision"><span>带 --reply,需要书面回复?</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">是</span>
+          <div class="conn short"></div>
+          <div class="node action">回复要求随行动进入消息流,承办方必须回执</div>
+        </div>
+        <div class="branch">
+          <span class="edge-label">否</span>
+          <div class="conn short"></div>
+          <div class="node action">只推进行动状态,不额外要求消息</div>
+        </div>
+      </div>
+      <div class="conn" style="margin-top:14px"></div>
+      <div class="node action">承办方执行:action submit &lt;actionId&gt; &lt;resultBody&gt;</div>
+      <div class="conn"></div>
+      <div class="node decision"><span>执行结果</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">成功</span>
+          <div class="conn short"></div>
+          <div class="node action">resultCommitId 幂等入账,结果挂回会话</div>
+          <div class="conn"></div>
+          <div class="node success">action list 显示已完成</div>
+        </div>
+        <div class="branch">
+          <span class="edge-label">受阻 / 失败 / 拒绝</span>
+          <div class="conn short"></div>
+          <div class="node failure">action report blocked|failed,或 action refuse &lt;reason&gt;</div>
+          <div class="conn"></div>
+          <div class="node action">发起方 action create 重派,或随会话关闭收口</div>
+        </div>
+      </div>
+    </div>
+    <p class="evidence">证据:<code>cli/group.mjs:188-206</code>(action 子命令与 <code>--reply</code>)、<code>server/group-hub.ts</code> 行动处理与 <code>resultCommitId</code> 幂等键。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>图 6 · 消息送达与离线补拉</h2><span class="kind">message</span></div>
+    <p class="note">在线就推,离线就留档等对方补拉。推送按 account + scope + agentId 精确寻址,同名 agent 在别的账号下收不到。</p>
+    <div class="flow">
+      <div class="node boundary">agentteams msg send &lt;groupId&gt; &lt;body&gt; [--action id] [--reply]</div>
+      <div class="conn"></div>
+      <div class="node action">message.send 按 commitId 去重,同一提交只写一条</div>
+      <div class="conn"></div>
+      <div class="node data">追加 messages.jsonl,推进已读水位与序列号</div>
+      <div class="conn"></div>
+      <div class="node action">选投递对象:群内当前活跃成员<small>有 --action 时只发给该行动承办方</small></div>
+      <div class="conn"></div>
+      <div class="node decision"><span>目标成员此刻在线?</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">在线</span>
+          <div class="conn short"></div>
+          <div class="node action">relay 用身份键精确找到连接</div>
+          <div class="conn"></div>
+          <div class="node success">推送 message.received,对方立即看到</div>
+        </div>
+        <div class="branch">
+          <span class="edge-label">离线</span>
+          <div class="conn short"></div>
+          <div class="node data">消息留在日志里,不推送</div>
+          <div class="conn"></div>
+          <div class="node action">对方上线后 msg inbox &lt;groupId&gt; [--cursor n] 补拉</div>
+          <div class="conn"></div>
+          <div class="node success">按游标分页补齐,与在线推送是同一套成员与作用域约束</div>
+        </div>
+      </div>
+    </div>
+    <p class="evidence">证据:<code>cli/group.mjs:205-222</code>(send / inbox 帧)、<code>server/group-hub.ts:344-385</code>(发送、追加、路由与分页)、<code>server/relay.ts:617-622</code>(精确身份键寻址)、<code>server/relay-group.spec.ts</code> 跨账号不串线用例。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>图 7 · 落盘与重启恢复</h2><span class="kind">持久化</span></div>
+    <p class="note">每个群一套文件,不再有单体 group-hub.json。重启先修尾部再对账,无法确认的写显式标成 unknown。</p>
+    <div class="flow">
+      <div class="node boundary">daemon 启动或重启</div>
+      <div class="conn"></div>
+      <div class="node data">groups/&lt;accountId&gt;/&lt;scopeId&gt;/groups.json<small>群清单与成员</small></div>
+      <div class="conn"></div>
+      <div class="node data">每群目录:sessions.json / actions.json / external-ops.json<small>会话、行动、外部操作台账</small></div>
+      <div class="conn"></div>
+      <div class="node data">messages.jsonl + watermarks/&lt;agentId&gt;.json<small>只追加日志与每人已读水位</small></div>
+      <div class="conn"></div>
+      <div class="node decision"><span>日志尾部有崩溃截断?</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">是</span>
+          <div class="conn short"></div>
+          <div class="node action">修掉半行并记录修复事实</div>
+        </div>
+        <div class="branch">
+          <span class="edge-label">否</span>
+          <div class="conn short"></div>
+          <div class="node action">直接进入对账</div>
+        </div>
+      </div>
+      <div class="conn" style="margin-top:14px"></div>
+      <div class="node action">对账:上次遗留的 pending / inflight 操作标为 unknown</div>
+      <div class="conn"></div>
+      <div class="node decision"><span>存在无法确认的外部写?</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">是</span>
+          <div class="conn short"></div>
+          <div class="node failure">保留 unknown,先回读确认再允许重试</div>
+          <div class="conn"></div>
+          <div class="node success">恢复完成</div>
+        </div>
+        <div class="branch">
+          <span class="edge-label">否</span>
+          <div class="conn short"></div>
+          <div class="node success">恢复完成,重放请求按 commitId 去重不再写</div>
+        </div>
+      </div>
+    </div>
+    <p class="evidence">证据:<code>server/group-store.ts:25-35</code>(目录布局)、<code>server/group-file-store.ts:115-124</code> 与 <code>:180-196</code>(尾部修复)、<code>:243-261</code>(保留窗口移动时重写,被裁剪行不回生)、<code>server/group-hub.ts:157-175</code>(启动对账)。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>图 8 · 安全边界:谁会收到这次群推送</h2><span class="kind">定址与作用域</span></div>
+    <p class="note">一次群帧到达 relay 后,先看身份是否落在组作用域内,再用身份键找连接。同名 agent 在另一个账号下既不收推送,也读不到群树。</p>
+    <div class="flow">
+      <div class="node boundary">一次群请求或推送目标到达 relay</div>
+      <div class="conn"></div>
+      <div class="node decision"><span>认证身份的 account + scope 与组作用域一致?</span></div>
+      <div class="branches">
+        <div class="branch">
+          <span class="edge-label">否</span>
+          <div class="conn short"></div>
+          <div class="node failure">FORBIDDEN:不查群、不投递</div>
+        </div>
+        <div class="branch wide">
+          <span class="edge-label">是</span>
+          <div class="conn short"></div>
+          <div class="node action">用 [accountId, scopeId, agentId] 身份键查在线连接</div>
+          <div class="conn"></div>
+          <div class="node decision"><span>该键没有连接?<small>例如同名 agent 只活在别的账号</small></span></div>
+          <div class="branches">
+            <div class="branch">
+              <span class="edge-label">是</span>
+              <div class="conn short"></div>
+              <div class="node action">当作离线:不投递,留给补拉</div>
+            </div>
+            <div class="branch">
+              <span class="edge-label">否</span>
+              <div class="conn short"></div>
+              <div class="node success">投递推送或处理群帧,只有作用域内那一个连接收到</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="evidence">证据:<code>server/relay.ts:235-237</code>(身份键)、<code>:590-593</code>(作用域外 FORBIDDEN)、<code>:617-622</code>(精确查找)、<code>:947-948</code>(groupHub 与 groupScope 必须成对)、<code>server/relay-group.spec.ts:186-226</code>(同名跨账号用例)。</p>
+  </section>
+
+</main>
+
+<footer class="page wrap">
+  <p>依据:已合入 main 的 7a224dd;受影响测试 179 通过,<code>pnpm verify</code> 1447 通过 0 失败,<code>tsc --noEmit</code> 干净。图为源码与测试所描述的当前行为,未启动生产 daemon、未部署。</p>
+  <p>唯一未核验:真实 Vikunja 实例与 webhook 签名,目前只有本地 HTTP 替身。下一批(模型执行:Session 映射、queue/steer、讨论与 comment 执行)未开始。</p>
+</footer>
+
+</body>
+</html>
