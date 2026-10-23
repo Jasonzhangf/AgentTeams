@@ -93,13 +93,15 @@
   .row:last-child{border-bottom:0}
   .row:hover{background:var(--surface-hover)}
   .row.selected{background:var(--blue-soft)}
-  .row .who{min-width:0;flex:0 0 178px}
+  .row .who{min-width:0;flex:0 0 172px}
   .row .who .name{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13.5px}
   .row .who .id{color:var(--subtle);font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .caps{display:flex;gap:5px;flex-wrap:wrap;flex:1 1 auto;min-width:0}
   .cap{font-size:11.5px;padding:1px 7px;border-radius:var(--radius-xs);background:var(--surface-muted);color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .cap.b{background:var(--blue-soft);color:var(--blue-ink)}
-  .presence{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);flex:none;width:96px}
+  .presence{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);flex:none;width:104px}
+  .row input.pickbox{width:15px;height:15px;flex:none;margin:0}
+  .server-row{grid-template-columns:1.6fr 1fr .7fr .6fr auto}
   .role{font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);flex:none}
   .role.owner{background:var(--amber-soft);border-color:#efd9a9;color:#8a5a08}
   .role.admin{background:var(--blue-soft);border-color:#c7dafc;color:var(--blue-ink)}
@@ -195,6 +197,21 @@
   .mark{font-weight:650}
   .mark.y{color:var(--green)} .mark.n{color:var(--subtle)}
 
+  /* relay management */
+  .server-list{display:flex;flex-direction:column}
+  .server-row{display:grid;grid-template-columns:1.5fr 1.3fr .8fr .7fr auto;align-items:center;gap:14px;padding:13px 14px;border-bottom:1px solid var(--line)}
+  .server-row:last-child{border-bottom:0}.server-row:hover{background:var(--surface-hover)}
+  .server-main{display:flex;align-items:center;gap:10px;min-width:0}.server-main b{display:block;font-size:13.5px}.server-main small{display:block;color:var(--subtle);font-family:ui-monospace,Menlo,monospace;font-size:11px}
+  .health{font-size:11.5px;padding:2px 8px;border-radius:999px;white-space:nowrap}.health.ok{background:var(--green-soft);color:#0d7a41}.health.warn{background:var(--amber-soft);color:#7a5010}.health.bad{background:var(--red-soft);color:#a32828}.health.off{background:var(--surface-muted);color:var(--muted)}
+  .agent-server{font-size:11px;color:var(--subtle);margin:10px 14px 4px;font-weight:650;letter-spacing:.02em}
+  .selectbar{display:none;align-items:center;gap:10px;margin:0 22px 12px;padding:9px 12px;background:var(--blue-soft);border:1px solid #c9dbfb;border-radius:var(--radius);color:var(--blue-ink)}
+  .selectbar.show{display:flex}.selectbar strong{font-size:13px}.selectbar .grow{flex:1}
+  .session-grid{display:grid;grid-template-columns:1fr;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .session-card{border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px;background:var(--surface)}.session-card.running{border-color:#b7d0fa}.session-card .sc-head{display:flex;align-items:center;gap:7px}.session-card .sc-head b{font-size:12.5px}.session-card .sc-head .health{margin-left:auto}.session-card small{display:block;color:var(--subtle);font-family:ui-monospace,Menlo,monospace;font-size:10.5px;margin-top:3px}.session-card p{margin:6px 0 7px;color:var(--muted);font-size:11.5px}.turnstrip{display:flex;gap:3px}.turnstrip i{width:16px;height:5px;border-radius:3px;background:var(--surface-muted)}.turnstrip i.done{background:var(--green)}.turnstrip i.run{background:var(--blue)}.turnstrip i.wait{background:var(--amber)}
+  .turn{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:10px 12px;max-width:96%}.turn-head{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11.5px;margin-bottom:7px}.turn-head b{color:var(--text);font-size:12.5px}.turn-head .grow{flex:1}.turn-target{font-size:11px;padding:2px 7px;border-radius:999px;background:var(--blue-soft);color:var(--blue-ink)}.turn-note{font-size:11.5px;color:var(--subtle);margin:0 0 8px}.turn .msg{max-width:100%;margin:7px 0}
+  .mention-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.mention-tools span{font-size:11px;color:var(--subtle)}
+  @media (max-width:1280px){.server-row{grid-template-columns:1.4fr 1.2fr .7fr auto}}
+
   /* modal */
   .scrim{position:fixed;inset:0;background:rgba(20,26,34,.34);display:none;align-items:center;justify-content:center;padding:24px;z-index:40}
   .scrim.show{display:flex}
@@ -268,14 +285,17 @@
 
   <div class="shell">
     <nav class="nav" aria-label="主导航">
+      <button data-screen="servers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="6" rx="1.6"/><rect x="3" y="14" width="18" height="6" rx="1.6"/><path d="M7 7h.01M7 17h.01"/></svg><span>服务器</span><i class="count" id="navServerCount">4</i>
+      </button>
       <button class="active" data-screen="discover" aria-current="page">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>发现</span>
       </button>
+      <button data-screen="group">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.6-2.9 2.8-4.6 5.5-4.6s4.9 1.7 5.5 4.6"/><path d="M16 4.6a3 3 0 0 1 0 5.8M18 14.6c2 .5 3.4 2 3.9 4.4"/></svg><span>群聊</span><i class="count">1</i>
+      </button>
       <button data-screen="direct">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></svg><span>单聊</span><i class="count">2</i>
-      </button>
-      <button data-screen="group">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.6-2.9 2.8-4.6 5.5-4.6s4.9 1.7 5.5 4.6"/><path d="M16 4.6a3 3 0 0 1 0 5.8M18 14.6c2 .5 3.4 2 3.9 4.4"/></svg><span>群组</span><i class="count">1</i>
       </button>
       <button data-screen="roles">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4.5 6.3v5c0 4.4 3.1 8.1 7.5 9.7 4.4-1.6 7.5-5.3 7.5-9.7v-5L12 3Z"/><path d="m9.2 12 2 2 3.6-3.8"/></svg><span>成员与角色</span>
@@ -291,19 +311,39 @@
 
     <main class="main">
 
+      <!-- ============ 0. Relay 服务器 ============ -->
+      <section class="screen" id="screen-servers" aria-label="Relay 服务器">
+        <div class="page-head">
+          <div><h1>Relay 服务器</h1><p>配置、连接并管理 Relay。服务器负责发现、作用域和连接路由；Agent 的能力准入仍由 Agent 自己决定。</p></div>
+          <div class="actions"><button class="btn" data-open="relayCapModal">能力与限制</button><button class="btn primary" data-open="relayModal">添加 Relay</button></div>
+        </div>
+        <div class="split" style="grid-template-columns:minmax(0,1fr) 320px">
+          <div class="panel">
+            <div class="panel-head"><b>已配置服务器</b><span>·</span><span>4 台，2 台已连接</span></div>
+            <div class="server-list">
+              <div class="server-row"><div class="server-main"><span class="avatar g">RA</span><div><b>relay-primary</b><small>wss://relay-a.example:8443</small></div></div><span class="health ok"><i class="dot on" style="display:inline-block"></i> healthy</span><span>4 个 agents</span><span>2 秒前</span><div><button class="btn sm" data-server-action="disconnect">断开</button><button class="btn sm" data-open="relayCapModal">管理能力</button></div></div>
+              <div class="server-row"><div class="server-main"><span class="avatar">RB</span><div><b>relay-secondary</b><small>wss://relay-b.example:8443</small></div></div><span class="health ok"><i class="dot on" style="display:inline-block"></i> healthy</span><span>2 个 agents</span><span>8 秒前</span><div><button class="btn sm" data-server-action="disconnect">断开</button><button class="btn sm" data-open="relayCapModal">管理能力</button></div></div>
+              <div class="server-row"><div class="server-main"><span class="avatar a">RL</span><div><b>relay-lab</b><small>wss://10.0.4.21:9443</small></div></div><span class="health bad"><i class="dot off" style="display:inline-block"></i> TLS 错误</span><span>0 个 agents</span><span>刚刚</span><div><button class="btn sm primary" data-server-action="connect">重试连接</button><button class="btn sm" data-open="relayModal">配置</button></div></div>
+              <div class="server-row"><div class="server-main"><span class="avatar m">RE</span><div><b>relay-edge</b><small>wss://edge.example:443</small></div></div><span class="health off"><i class="dot off" style="display:inline-block"></i> 未连接</span><span>—</span><span>昨天</span><div><button class="btn sm primary" data-server-action="connect">连接</button><button class="btn sm" data-open="relayModal">配置</button></div></div>
+            </div>
+          </div>
+          <aside class="side"><div class="panel"><div class="panel-head"><b>当前连接</b></div><div class="kv"><span>服务器</span><span>relay-primary</span></div><div class="kv"><span>作用域</span><span>account-a / scope-a</span></div><div class="kv"><span>TLS</span><span><span class="tag green">已校验</span></span></div><div class="kv"><span>在线 agents</span><span>3 / 4</span></div><div class="note">切换服务器不会迁移群组历史。每个 Relay 的目录、作用域和连接状态独立管理。</div></div><div class="panel"><div class="panel-head"><b>服务器能力</b></div><div class="kv"><span>目录发现</span><span class="tag green">启用</span></div><div class="kv"><span>在线推送</span><span class="tag green">启用</span></div><div class="kv"><span>离线补拉</span><span class="tag green">启用</span></div><div class="kv"><span>议题/行动</span><span class="tag amber">未核验</span></div><button class="btn sm" style="margin:6px 12px 10px" data-open="relayCapModal">编辑能力与限制</button></div></aside>
+        </div>
+      </section>
+
       <!-- ============ 1. 发现 ============ -->
       <section class="screen active" id="screen-discover" aria-label="发现">
         <div class="page-head">
           <div>
             <h1>发现</h1>
-            <p>本作用域内已上报声明的 Agent。在线状态来自心跳,能力和容量来自各自声明。</p>
+            <p>按服务器列出目录。登录过的 Agent 显示健康与在线状态；勾选多个 Agent 可以一次邀请入群。</p>
           </div>
           <div class="actions">
             <button class="btn" data-open="dmModal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></svg>新建单聊
             </button>
             <button class="btn primary" data-open="groupModal">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>新建群组
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>新建群聊
             </button>
           </div>
         </div>
@@ -312,69 +352,102 @@
           <div class="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
             <label class="sr" for="q">搜索 Agent</label>
-            <input id="q" placeholder="搜索名称或 agent id">
+            <input id="q" placeholder="搜索名称、agent id 或服务器">
           </div>
-          <button class="chip active" data-cap="all">全部 <span class="n">5</span></button>
+          <button class="chip active" data-cap="all">全部 <span class="n">6</span></button>
           <button class="chip" data-cap="browser">browser/v1</button>
           <button class="chip" data-cap="file-search">file-search/v1</button>
           <button class="chip" data-cap="acp">acp 会话</button>
           <label class="toggle"><input type="checkbox" id="onlineOnly"> 只看在线</label>
           <div class="grow"></div>
-          <span class="pill" id="discoverCount">5 个 Agent</span>
+          <span class="pill" id="discoverCount">6 个 Agent</span>
+        </div>
+
+        <div class="selectbar" id="selectBar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:15px;height:15px"><path d="m4 13 5 5 11-11"/></svg>
+          <strong id="selectCount">已选 0 个 Agent</strong>
+          <span class="grow"></span>
+          <button class="btn sm" id="clearSelect">清空</button>
+          <button class="btn primary sm" id="inviteSelected">邀请入群</button>
         </div>
 
         <div class="split">
           <div class="panel">
-            <div class="panel-head"><b>Agent 目录</b><span>·</span><span>按最近心跳排序</span></div>
+            <div class="panel-head"><b>服务器目录</b><span>·</span><span>按服务器分组，服务器内按最近心跳排序</span></div>
             <div class="list" id="agentList">
-              <div class="row selected" data-cap="browser" data-online="1">
+              <div class="agent-server">relay-primary · wss://relay-a.example:8443 · 4 个 agents</div>
+              <div class="row selected" data-cap="browser" data-online="1" data-server="relay-primary">
+                <input type="checkbox" class="pickbox" aria-label="选择 camo-browser" style="accent-color:var(--blue)">
                 <span class="avatar">CB</span>
                 <div class="who"><div class="name">camo-browser <span class="role peer">peer</span></div><div class="id">camo-browser · host-07</div></div>
                 <div class="caps"><span class="cap b">browser/v1</span><span class="cap">context ×2</span></div>
                 <div class="presence"><i class="dot on"></i>12 秒前</div>
+                <span class="health ok">健康</span>
                 <div class="row-actions">
                   <button class="btn sm" data-open="dmModal">单聊</button>
                   <button class="btn sm" data-invite="camo-browser">邀请入群</button>
                 </div>
               </div>
-              <div class="row" data-cap="file-search" data-online="1">
-                <span class="avatar g">RS</span>
-                <div class="who"><div class="name">rg-search <span class="role peer">peer</span></div><div class="id">rg-search · host-02</div></div>
-                <div class="caps"><span class="cap b">file-search/v1</span><span class="cap">并发 ×8</span></div>
-                <div class="presence"><i class="dot on"></i>3 秒前</div>
-                <div class="row-actions">
-                  <button class="btn sm" data-open="dmModal">单聊</button>
-                  <button class="btn sm" data-invite="rg-search">邀请入群</button>
-                </div>
-              </div>
-              <div class="row" data-cap="acp" data-online="1">
+              <div class="row" data-cap="acp" data-online="1" data-server="relay-primary">
+                <input type="checkbox" class="pickbox" aria-label="选择 ship-it" style="accent-color:var(--blue)">
                 <span class="avatar a">SI</span>
                 <div class="who"><div class="name">ship-it <span class="role master">master</span></div><div class="id">ship-it · host-11</div></div>
                 <div class="caps"><span class="cap b">acp/dsh</span><span class="cap">会话 ×4</span></div>
                 <div class="presence"><i class="dot on"></i>41 秒前</div>
+                <span class="health ok">健康</span>
                 <div class="row-actions">
                   <button class="btn sm" data-open="dmModal">单聊</button>
                   <button class="btn sm" data-invite="ship-it">邀请入群</button>
                 </div>
               </div>
-              <div class="row" data-cap="acp" data-online="0">
+              <div class="row" data-cap="acp" data-online="1" data-server="relay-primary">
+                <input type="checkbox" class="pickbox" aria-label="选择 design-desk" style="accent-color:var(--blue)">
                 <span class="avatar m">DD</span>
                 <div class="who"><div class="name">design-desk <span class="role peer">peer</span></div><div class="id">design-desk · host-04</div></div>
                 <div class="caps"><span class="cap b">acp/opencode</span><span class="cap">会话 ×2</span></div>
                 <div class="presence"><i class="dot warn"></i>心跳 6 分钟</div>
+                <span class="health warn">心跳偏旧</span>
                 <div class="row-actions">
                   <button class="btn sm" data-open="dmModal">单聊</button>
                   <button class="btn sm" data-invite="design-desk">邀请入群</button>
                 </div>
               </div>
-              <div class="row" data-cap="file-search" data-online="0">
+              <div class="row" data-cap="file-search" data-online="0" data-server="relay-primary">
+                <input type="checkbox" class="pickbox" aria-label="选择 build-runner" style="accent-color:var(--blue)">
                 <span class="avatar m">BR</span>
                 <div class="who"><div class="name">build-runner</div><div class="id">build-runner · host-09</div></div>
                 <div class="caps"><span class="cap b">file-search/v1</span><span class="cap">shell/v1</span></div>
                 <div class="presence"><i class="dot off"></i>离线 2 小时</div>
+                <span class="health off">离线</span>
                 <div class="row-actions">
                   <button class="btn sm" data-open="dmModal">单聊</button>
                   <button class="btn sm" data-invite="build-runner">邀请入群</button>
+                </div>
+              </div>
+
+              <div class="agent-server">relay-secondary · wss://relay-b.example:8443 · 2 个 agents</div>
+              <div class="row" data-cap="file-search" data-online="1" data-server="relay-secondary">
+                <input type="checkbox" class="pickbox" aria-label="选择 rg-search" style="accent-color:var(--blue)">
+                <span class="avatar g">RS</span>
+                <div class="who"><div class="name">rg-search <span class="role peer">peer</span></div><div class="id">rg-search · host-02</div></div>
+                <div class="caps"><span class="cap b">file-search/v1</span><span class="cap">并发 ×8</span></div>
+                <div class="presence"><i class="dot on"></i>3 秒前</div>
+                <span class="health ok">健康</span>
+                <div class="row-actions">
+                  <button class="btn sm" data-open="dmModal">单聊</button>
+                  <button class="btn sm" data-invite="rg-search">邀请入群</button>
+                </div>
+              </div>
+              <div class="row" data-cap="acp" data-online="1" data-server="relay-secondary">
+                <input type="checkbox" class="pickbox" aria-label="选择 doc-writer" style="accent-color:var(--blue)">
+                <span class="avatar">DW</span>
+                <div class="who"><div class="name">doc-writer <span class="role peer">peer</span></div><div class="id">doc-writer · host-15</div></div>
+                <div class="caps"><span class="cap b">acp/dsh</span><span class="cap">会话 ×1</span></div>
+                <div class="presence"><i class="dot on"></i>19 秒前</div>
+                <span class="health ok">健康</span>
+                <div class="row-actions">
+                  <button class="btn sm" data-open="dmModal">单聊</button>
+                  <button class="btn sm" data-invite="doc-writer">邀请入群</button>
                 </div>
               </div>
             </div>
@@ -390,20 +463,21 @@
             <div class="panel">
               <div class="panel-head"><span class="avatar">CB</span><b>camo-browser</b><span class="role peer" style="margin-left:auto">peer</span></div>
               <div class="kv"><span>agent id</span><span style="font-family:ui-monospace,Menlo,monospace">camo-browser</span></div>
+              <div class="kv"><span>服务器</span><span>relay-primary</span></div>
               <div class="kv"><span>主机</span><span>host-07</span></div>
               <div class="kv"><span>能力</span><span>browser/v1</span></div>
               <div class="kv"><span>资源</span><span>context 1 / 2</span></div>
-              <div class="kv"><span>最近心跳</span><span>12 秒前</span></div>
-              <div class="kv"><span>上行连接</span><span>注册连接 · 已认证</span></div>
-              <div class="note">能力与容量来自该 Agent 自己的声明;本页只读,不改对方策略。邀请是否成功以对方接受为准。</div>
+              <div class="kv"><span>登录状态</span><span>已登录 · 注册连接已认证</span></div>
+              <div class="kv"><span>健康</span><span><span class="health ok">健康</span> 12 秒前心跳</span></div>
+              <div class="note">健康看心跳与连接错误；在线只看当前可达。两者分开显示，避免把"能连上"当成"正在工作"。</div>
             </div>
             <div class="panel">
               <div class="panel-head"><b>可执行操作</b></div>
               <div style="padding:6px 10px 12px;display:flex;flex-direction:column;gap:6px">
                 <button class="btn" data-open="dmModal">开始单聊</button>
-                <button class="btn" data-invite="camo-browser">邀请进入群组</button>
+                <button class="btn" data-invite="camo-browser">邀请进入群聊</button>
               </div>
-              <div class="note warn">真实 Vikunja 实例与 webhook 签名未核验;议题相关字段在界面上按"未核验"标注。</div>
+              <div class="note warn">真实 Vikunja 实例与 webhook 签名未核验；议题相关字段在界面上按"未核验"标注。</div>
             </div>
           </aside>
         </div>
@@ -411,10 +485,10 @@
         <details class="notes">
           <summary>设计说明与真实动作映射</summary>
           <ul>
-            <li>发现页数据对应 <code>group.list</code> 之外的目录读取与注册状态;能力/资源标签来自 Agent 声明,不由 Console 推断。</li>
-            <li>"只看在线"使用 presence 心跳;心跳超过阈值显示为黄色"心跳偏旧",断连显示灰色离线。</li>
-            <li>邀请入口对应 <code>group.invite</code>;仅 owner / admin 可用,切到 peer 身份点击会得到 FORBIDDEN 提示。</li>
-            <li>单聊入口对应 <code>msg send</code> / <code>msg inbox</code>;群聊对应同一套群消息与行动、议题能力。</li>
+            <li>目录按 Relay 服务器分组;每个 Agent 记录所属服务器、登录状态、健康与在线。健康来自心跳与连接错误,不由界面推断。</li>
+            <li>勾选多个 Agent 后按 <code>group.invite</code> 批量邀请;同一批邀请可以给每人不同初始角色。</li>
+            <li>邀请入口仅 owner / admin 可用,切到 peer 身份点击会得到 FORBIDDEN 提示。</li>
+            <li>单聊对应 <code>msg send</code> / <code>msg inbox</code>;群聊为每个成员开独立会话,见群聊页的轮次与进度卡。</li>
             <li>本稿为设计稿,数据为演示数据;未连接真实 daemon。</li>
           </ul>
         </details>
@@ -505,108 +579,28 @@
         </div>
       </section>
 
-      <!-- ============ 3. 群组 ============ -->
-      <section class="screen" id="screen-group" aria-label="群组">
+
+      <!-- ============ 3. 群聊 ============ -->
+      <section class="screen" id="screen-group" aria-label="群聊">
         <div class="group-head">
           <span class="avatar g">R4</span>
-          <div>
-            <h2>release-4.2 <span class="tag">4 成员</span></h2>
-            <div class="sub">owner: me · master: ship-it(对 camo-browser 有一条有向边)</div>
-          </div>
-          <div class="actions">
-            <button class="btn sm" data-screen-jump="roles">成员与角色</button>
-            <button class="btn sm">群设置</button>
-          </div>
+          <div><h2><span id="groupName">release-4.2</span> <span class="tag">4 成员</span> <button class="btn sm ghost" data-open="renameModal">重命名</button></h2><div class="sub">relay-primary · 每个成员一个独立 session，互不共享上下文</div></div>
+          <div class="actions"><button class="btn sm" data-open="historyModal">历史管理</button><button class="btn sm" data-screen-jump="roles">成员与角色</button></div>
         </div>
-        <div class="chat">
-          <div class="pane" aria-label="群组列表">
-            <div class="panel-head" style="border-bottom:1px solid var(--line)"><b>群组</b><span style="margin-left:auto">1</span></div>
-            <div class="conv active"><span class="avatar g">R4</span><div class="t"><b>release-4.2</b><p>ship-it:行动已提交</p></div><div class="meta"><span>14:31</span><span class="badge">4</span></div></div>
-          </div>
-
+        <div class="chat" style="grid-template-columns:220px minmax(0,1fr) 300px">
+          <div class="pane" aria-label="群聊列表"><div class="panel-head"><b>群聊</b><span style="margin-left:auto">1</span></div><div class="conv active"><span class="avatar g">R4</span><div class="t"><b id="convName">release-4.2</b><p>第 4 轮 · 2 个会话在跑</p></div><div class="meta"><span>14:31</span><span class="badge">4</span></div></div><div class="note">每个群聊是独立会话空间。改名只影响当前群聊，不改变成员、session 或历史。</div></div>
           <div class="pane" style="flex:1 1 auto;min-width:0">
-            <div class="banner warn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4 2.9 20h18.2L12 4Z"/><path d="M12 10v4M12 17h.01"/></svg>
-              <span class="grow">议题 sync 有一条外部写入未确认:Vikunja 侧可能已建 issue #129。先回读确认再重试。</span>
-              <button class="btn sm ghost" data-dismiss="banner">先回读</button>
-            </div>
+            <div class="banner warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4 2.9 20h18.2L12 4Z"/><path d="M12 10v4M12 17h.01"/></svg><span class="grow">议题 sync 有一条外部写入未确认：Vikunja 侧可能已建 issue #129。先回读确认再重试。</span><button class="btn sm ghost" data-dismiss="banner">先回读</button></div>
             <div class="thread" id="grpThread">
               <div class="day">今天 14:05</div>
-              <div class="sys">ship-it 加入群组,角色 master</div>
-              <div class="msg">
-                <span class="avatar a">SI</span>
-                <div>
-                  <div class="head"><b>ship-it</b><span class="role master">master</span><span>14:07</span></div>
-                  <div class="bubble">4.2 的发布清单我整理了一半,卡在浏览器验证这块。</div>
-                  <div class="status">已送达</div>
-                </div>
-              </div>
-              <div class="sys">me 把 design-desk 的角色改为 peer → admin</div>
-              <div class="msg mine">
-                <span class="avatar">ME</span>
-                <div>
-                  <div class="head"><span>14:12</span><b>me</b><span class="role owner">owner</span></div>
-                  <div class="bubble">@camo-browser 帮忙把首页快照发一下,顺便看下 navigation 有没有退化。</div>
-                  <div class="status"><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 13 5 5 11-11"/></svg></span>已读 14:12 · 3/4</div>
-                </div>
-              </div>
-              <div class="msg">
-                <span class="avatar">CB</span>
-                <div>
-                  <div class="head"><b>camo-browser</b><span class="role peer">peer</span><span>14:22</span></div>
-                  <div class="bubble">快照在这里,首页 DOM 没变化。</div>
-                  <div class="status">已送达</div>
-                </div>
-              </div>
-
-              <div class="card action">
-                <div class="ct">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px"><path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
-                  <b>行动</b><span class="tag amber">需要书面回复</span><span>承接人 ship-it</span>
-                </div>
-                <h4>核对 4.2 发布清单</h4>
-                <p>reason:发布前需要一次交叉核对。expected:逐项确认并给出结论。</p>
-                <div class="cfoot">
-                  <span class="tag">action a-17</span>
-                  <span class="tag green">submitted 14:29</span>
-                  <button class="btn sm">查看结果</button>
-                  <button class="btn sm">在群里回复</button>
-                </div>
-              </div>
-
-              <div class="card issue">
-                <div class="ct">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>
-                  <b>议题会话</b><span class="tag">Vikunja · 未核验</span>
-                </div>
-                <h4>#128 首页导航退化</h4>
-                <p>project p1 · state open · 发起人 me · 只有发起人能关闭或重开</p>
-                <div class="cfoot">
-                  <button class="btn sm">回读状态</button>
-                  <button class="btn sm">创建行动</button>
-                </div>
-              </div>
-
-              <div class="sys">design-desk 心跳中断,已标记为离线</div>
+              <div class="turn"><div class="turn-head"><b>第 1 轮</b><span>me 发起 · 14:05</span><span class="grow"></span><span class="turn-target">4 个会话已同步</span></div><p class="turn-note">建群：为每个成员开一个独立 session，并注入群聊历史起点。</p><div class="sys">ship-it 加入群聊，角色 master · session g4-2/ship-it</div><div class="sys">camo-browser 加入群聊，角色 peer · session g4-2/camo-browser</div><div class="sys">design-desk 加入群聊，角色 admin · session g4-2/design-desk</div></div>
+              <div class="turn"><div class="turn-head"><b>第 2 轮</b><span>ship-it 发起 · 14:07</span><span class="grow"></span><span class="turn-target">全体 4 个会话</span></div><p class="turn-note">无 @，所以不需要任何人必须回复；其余三个会话只收到背景更新。</p><div class="msg"><span class="avatar a">SI</span><div><div class="head"><b>ship-it</b><span class="role master">master</span><span>14:07</span></div><div class="bubble">4.2 的发布清单我整理了一半，卡在浏览器验证这块。</div><div class="status">已同步到 3 个会话 · 无人必答</div></div></div></div>
+              <div class="turn"><div class="turn-head"><b>第 3 轮</b><span>me 发起 · 14:12</span><span class="grow"></span><span class="turn-target">@camo-browser 必答</span></div><p class="turn-note">@ 表示要求回复。camo-browser 必须回；ship-it 与 design-desk 收到“本轮不需要回复”。</p><div class="msg mine"><span class="avatar">ME</span><div><div class="head"><span>14:12</span><b>me</b><span class="role owner">owner</span></div><div class="bubble">@camo-browser 帮忙把首页快照发一下，顺便看下 navigation 有没有退化。</div><div class="status">4 个会话已投递</div></div></div><div class="msg"><span class="avatar">CB</span><div><div class="head"><b>camo-browser</b><span class="role peer">peer</span><span>14:22</span><span class="tag green">必答 · 已回</span></div><div class="bubble">快照在这里，首页 DOM 没变化。</div><div class="status">已回收到群 · 另 2 个会话同步了这条回复</div></div></div><div class="sys">ship-it、design-desk 本轮未要求回复，已静默同步</div></div>
+              <div class="turn"><div class="turn-head"><b>第 4 轮</b><span>me 发起 · 14:29</span><span class="grow"></span><span class="turn-target">@ship-it 必答</span></div><p class="turn-note">这一轮只有 ship-it 被要求回复；design-desk 离线，历史会在它上线后补发。</p><div class="card action"><div class="ct"><b>行动</b><span class="tag amber">需要书面回复</span><span>承接人 ship-it</span></div><h4>核对 4.2 发布清单</h4><p>reason：发布前需要一次交叉核对。expected：逐项确认并给出结论。</p><div class="cfoot"><span class="tag">action a-17</span><span class="tag green">submitted 14:29</span><button class="btn sm">查看结果</button><button class="btn sm">在群里回复</button></div></div><div class="card issue"><div class="ct"><b>议题会话</b><span class="tag">Vikunja · 未核验</span></div><h4>#128 首页导航退化</h4><p>project p1 · state open · 发起人 me · 只有发起人能关闭或重开</p><div class="cfoot"><button class="btn sm">回读状态</button><button class="btn sm">创建行动</button></div></div><div class="sys">design-desk 离线：第 3–4 轮历史待补发（2 轮）</div></div>
             </div>
-            <div class="composer">
-              <label class="sr" for="grpInput">输入群消息</label>
-              <textarea id="grpInput" placeholder="发消息到 release-4.2。@ 提及成员。"></textarea>
-              <div class="bar">
-                <span>在线成员立即推送,离线成员上线后补拉</span>
-                <span class="send"><button class="btn primary sm" id="grpSend">发送</button></span>
-              </div>
-            </div>
+            <div class="composer"><label class="sr" for="grpInput">输入群消息</label><textarea id="grpInput" placeholder="发消息到 release-4.2。@ 成员表示要求它必须回复。"></textarea><div class="bar"><div class="mention-tools"><span>@ 要求回复：</span><button class="btn sm" data-mention="camo-browser">@camo-browser</button><button class="btn sm" data-mention="ship-it">@ship-it</button><button class="btn sm" data-mention="design-desk">@design-desk</button></div><span class="send"><button class="btn primary sm" id="grpSend">发送</button></span></div></div>
           </div>
-
-          <div class="pane side-pane members" aria-label="成员">
-            <div class="panel-head"><b>成员</b><span style="margin-left:auto">4</span></div>
-            <div class="m"><span class="avatar">ME</span><div class="t"><b>me</b><span>owner · 在线</span></div><span class="role owner">owner</span></div>
-            <div class="m"><span class="avatar a">SI</span><div class="t"><b>ship-it</b><span>master · 在线</span></div><span class="role master">master</span></div>
-            <div class="m"><span class="avatar">CB</span><div class="t"><b>camo-browser</b><span>peer · 在线</span></div><span class="role peer">peer</span></div>
-            <div class="m"><span class="avatar m">DD</span><div class="t"><b>design-desk</b><span>admin · 离线</span></div><span class="role admin">admin</span></div>
-            <div class="note">主从只有一条有向边:ship-it → camo-browser。改角色只影响协调关系,不改变资源准入。</div>
-          </div>
+          <div class="pane side-pane" aria-label="会话进度"><div class="panel-head"><b>会话进度</b><span style="margin-left:auto;font-size:11.5px">每成员独立 session</span></div><div class="session-grid"><div class="session-card running"><div class="sc-head"><span class="avatar">CB</span><b>camo-browser</b><span class="health ok">执行中</span></div><small>g4-2/camo-browser</small><p>第 4 轮 · 正在读取第 3 轮快照结果</p><div class="turnstrip"><i class="done"></i><i class="done"></i><i class="done"></i><i class="run"></i></div></div><div class="session-card running"><div class="sc-head"><span class="avatar a">SI</span><b>ship-it</b><span class="health ok">执行中</span></div><small>g4-2/ship-it</small><p>第 4 轮 · 核对发布清单第 3 项</p><div class="turnstrip"><i class="done"></i><i class="done"></i><i class="done"></i><i class="run"></i></div></div><div class="session-card"><div class="sc-head"><span class="avatar m">DD</span><b>design-desk</b><span class="health off">离线</span></div><small>g4-2/design-desk</small><p>待补发 2 轮历史，上线后自动同步</p><div class="turnstrip"><i class="done"></i><i class="done"></i><i class="wait"></i><i class="wait"></i></div></div><div class="session-card"><div class="sc-head"><span class="avatar">ME</span><b>me</b><span class="health ok">空闲</span></div><small>g4-2/me</small><p>第 4 轮 · 等 ship-it 的书面结论</p><div class="turnstrip"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i></div></div></div><div class="panel-head" style="border-top:1px solid var(--line)"><b>历史</b></div><div class="kv"><span>总轮次</span><span>4</span></div><div class="kv"><span>已同步会话</span><span>3 / 4</span></div><div class="kv"><span>待补发</span><span><span class="tag amber">2 轮</span></span></div><button class="btn sm" style="margin:8px 12px 10px" data-open="historyModal">按会话补发</button></div>
         </div>
       </section>
 
@@ -695,22 +689,22 @@
         <div class="page-head">
           <div>
             <h1>新建</h1>
-            <p>两件事分开做:建群组,或者建一段单聊。创建不会替对方做接受决定。</p>
+            <p>两件事分开做：建群聊，或者建一段单聊。创建不会替对方做接受决定。</p>
           </div>
         </div>
         <div class="split" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
           <div class="panel" style="padding:16px">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-              <span class="avatar g">G</span><b>新建群组</b>
+              <span class="avatar g">G</span><b>新建群聊</b>
             </div>
-            <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">选成员并给每人一个初始角色,生成邀请让对方接受。</p>
-            <button class="btn primary" data-open="groupModal">开始创建群组</button>
+            <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">选成员并给每人一个初始角色，生成邀请让对方接受；接受后为每人开独立 session。</p>
+            <button class="btn primary" data-open="groupModal">开始创建群聊</button>
           </div>
           <div class="panel" style="padding:16px">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
               <span class="avatar">D</span><b>新建单聊</b>
             </div>
-            <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">单聊立刻可用,不需要对方先接受;对方离线时消息留档等补拉。</p>
+            <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px">单聊立刻可用，不需要对方先接受；对方离线时消息留档等补拉。</p>
             <button class="btn" data-open="dmModal">选择 Agent 开始单聊</button>
           </div>
         </div>
@@ -722,12 +716,13 @@
         <div class="split" style="grid-template-columns:minmax(0,1fr) 320px">
           <div class="panel">
             <div class="panel-head"><b>连接</b></div>
-            <div class="kv"><span>relay</span><span style="font-family:ui-monospace,Menlo,monospace">wss://relay.example:8443</span></div>
-            <div class="kv"><span>TLS</span><span>校验证书(未使用 --insecure)</span></div>
+            <div class="kv"><span>当前 relay</span><span style="font-family:ui-monospace,Menlo,monospace">relay-primary</span></div>
+            <div class="kv"><span>端点</span><span style="font-family:ui-monospace,Menlo,monospace">wss://relay-a.example:8443</span></div>
+            <div class="kv"><span>TLS</span><span>校验证书，未使用 insecure</span></div>
             <div class="kv"><span>注册</span><span><i class="dot on" style="display:inline-block"></i> registered</span></div>
             <div class="kv"><span>凭据</span><span>环境引用 TEAMS_TOKEN</span></div>
             <div class="panel-head" style="border-top:1px solid var(--line)"><b>本机数据</b></div>
-            <div class="kv"><span>群组文件</span><span style="font-family:ui-monospace,Menlo,monospace">data/groups/account-a/scope-a</span></div>
+            <div class="kv"><span>群组文件</span><span style="font-family:ui-monospace,Menlo,monospace">data/groups/&lt;account&gt;/&lt;scope&gt;</span></div>
             <div class="kv"><span>消息日志</span><span style="font-family:ui-monospace,Menlo,monospace">messages.jsonl</span></div>
             <div class="kv"><span>未确认写</span><span><span class="tag amber">1 条</span> 需回读后处理</span></div>
           </div>
@@ -806,200 +801,61 @@
   </div>
 </div>
 
-<!-- 邀请(从发现页触发,演示权限) -->
-<div class="scrim" id="inviteModal" role="dialog" aria-modal="true" aria-labelledby="inviteTitle">
-  <div class="modal" style="width:min(460px,100%)">
-    <header><h3 id="inviteTitle">邀请成员</h3><button class="btn ghost x" data-close aria-label="关闭">✕</button></header>
-    <div class="body">
-      <div class="field"><label for="inviteTarget">Agent</label><input id="inviteTarget" value="rg-search" readonly></div>
-      <div class="field"><label for="inviteRole">初始角色</label><select id="inviteRole"><option>peer</option><option>master</option><option>admin</option></select></div>
-      <div class="note">只有 owner 与 admin 能邀请。对方接受后才成为成员。</div>
-    </div>
-    <footer><span class="grow"></span><button class="btn" data-close>取消</button><button class="btn primary" id="sendInvite">发送邀请</button></footer>
-  </div>
-</div>
+<!-- 批量邀请 -->
+<div class="scrim" id="inviteModal" role="dialog" aria-modal="true" aria-labelledby="inviteTitle"><div class="modal" style="width:min(620px,100%)"><header><h3 id="inviteTitle">批量邀请 Agent 入群</h3><button class="btn ghost x" data-close aria-label="关闭">✕</button></header><div class="body"><div class="field"><label for="inviteGroup">目标群聊</label><select id="inviteGroup"><option>release-4.2</option><option>新建群聊：release-4.3</option></select></div><div class="field"><label>已选 Agent（每个 Agent 可单独分配角色）</label><div class="pick" id="inviteSelection"><label><input type="checkbox" checked><span class="avatar" style="width:22px;height:22px;font-size:10px">CB</span> camo-browser <span class="role-sel">peer</span></label><label><input type="checkbox" checked><span class="avatar a" style="width:22px;height:22px;font-size:10px">SI</span> ship-it <span class="role-sel">master</span></label></div><span class="hint">在发现页勾选的 Agent 会带到这里。取消勾选表示本轮不邀请它。</span></div><div class="note">批量邀请只创建邀请。对方接受后，群聊会为每个成员建立一个新的独立 session，并按历史策略发送 turn。只有 owner 与 admin 能邀请。</div></div><footer><span class="grow"></span><button class="btn" data-close>取消</button><button class="btn primary" id="sendInvite">发送邀请</button></footer></div></div>
+
+<!-- Relay 配置 -->
+<div class="scrim" id="relayModal" role="dialog" aria-modal="true" aria-labelledby="relayTitle"><div class="modal"><header><h3 id="relayTitle">配置 Relay 服务器</h3><button class="btn ghost x" data-close aria-label="关闭">✕</button></header><div class="body"><div class="field"><label for="relayName">显示名称</label><input id="relayName" value="relay-primary"></div><div class="field"><label for="relayEndpoint">WSS endpoint</label><input id="relayEndpoint" value="wss://relay-a.example:8443"><span class="hint">默认校验 TLS；自签证书请指定 CA 文件，不用 insecure 逃过校验。</span></div><div class="field"><label for="relayCa">CA 文件</label><input id="relayCa" value="/etc/teams/relay-ca.pem"><span class="hint">只保存文件引用，不在 WebUI 展示证书私钥。</span></div><div class="field"><label for="relayCredential">凭据引用</label><input id="relayCredential" value="TEAMS_RELAY_TOKEN"><span class="hint">使用环境或系统 Secret 引用，不能把 token 写进业务消息。</span></div><div class="field"><label for="relayScope">默认 account / scope</label><input id="relayScope" value="account-a / scope-a"></div><div class="note">保存配置不会自动迁移群聊历史。连接成功后才读取该服务器目录。</div></div><footer><span class="grow"></span><button class="btn" data-close>取消</button><button class="btn primary" id="saveRelay">保存并连接</button></footer></div></div>
+
+<!-- Relay 能力与限制 -->
+<div class="scrim" id="relayCapModal" role="dialog" aria-modal="true" aria-labelledby="relayCapTitle"><div class="modal"><header><h3 id="relayCapTitle">Relay 能力与限制 · relay-primary</h3><button class="btn ghost x" data-close aria-label="关闭">✕</button></header><div class="body"><div class="field"><label>服务器能力</label><div class="pick"><label><input type="checkbox" checked>目录发现与 scope 广播</label><label><input type="checkbox" checked>注册连接在线推送</label><label><input type="checkbox" checked>离线消息补拉</label><label><input type="checkbox" checked>群组 / action 路由</label><label><input type="checkbox">Vikunja webhook 代理 <span class="tag amber" style="margin-left:auto">未核验</span></label></div></div><div class="field"><label>连接与授权限制</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label class="field"><span>maxConnections</span><input value="64"></label><label class="field"><span>maxGrants</span><input value="32"></label><label class="field"><span>maxPayload</span><input value="1 MiB"></label><label class="field"><span>grantTtlMs</span><input value="5000"></label></div></div><div class="note">这些是 Relay 连接/路由边界，不授予 provider Agent 额外执行权限。保存后需要重新建立连接才生效。</div></div><footer><span class="grow"></span><button class="btn" data-close>取消</button><button class="btn primary" id="saveRelayCap">保存限制</button></footer></div></div>
+
+<!-- 群聊重命名 -->
+<div class="scrim" id="renameModal" role="dialog" aria-modal="true" aria-labelledby="renameTitle"><div class="modal" style="width:min(460px,100%)"><header><h3 id="renameTitle">重命名群聊</h3><button class="btn ghost x" data-close aria-label="关闭">✕</button></header><div class="body"><div class="field"><label for="renameInput">群聊名称</label><input id="renameInput" value="release-4.2"><span class="hint">只改显示名称；每个成员的独立 session、turn 和历史不变。</span></div></div><footer><span class="grow"></span><button class="btn" data-close>取消</button><button class="btn primary" id="saveRename">保存名称</button></footer></div></div>
+
+<!-- 历史管理 -->
+<div class="scrim" id="historyModal" role="dialog" aria-modal="true" aria-labelledby="historyTitle"><div class="modal" style="width:min(700px,100%)"><header><h3 id="historyTitle">群聊历史与独立 session</h3><button class="btn ghost x" data-close aria-label="关闭">✕</button></header><div class="body"><div class="note">每次群聊更新会成为一个 turn，并按成员分别输入对应 session。补发只针对选中的 session，不改变其他成员的上下文。</div><table class="t"><thead><tr><th>Agent</th><th>独立 session</th><th>已同步</th><th>待补发</th><th>状态</th><th></th></tr></thead><tbody><tr><td><b>camo-browser</b></td><td><code>g4-2/camo-browser</code></td><td>4 / 4</td><td>0</td><td><span class="health ok">在线</span></td><td><button class="btn sm" data-history="camo-browser">查看</button></td></tr><tr><td><b>ship-it</b></td><td><code>g4-2/ship-it</code></td><td>4 / 4</td><td>0</td><td><span class="health ok">执行中</span></td><td><button class="btn sm" data-history="ship-it">查看</button></td></tr><tr><td><b>design-desk</b></td><td><code>g4-2/design-desk</code></td><td>2 / 4</td><td><span class="tag amber">2 轮</span></td><td><span class="health off">离线</span></td><td><button class="btn sm" data-history="design-desk">补发历史</button></td></tr></tbody></table><div class="field"><label>历史策略</label><select><option>成员上线后自动补发缺失轮次</option><option>只补发被 @ 的轮次</option><option>手动确认后补发</option></select><span class="hint">“只补发被 @ 的轮次”只适合不需要完整上下文的 Agent；默认保留完整历史。</span></div></div><footer><span class="grow"></span><button class="btn" data-close>关闭</button><button class="btn primary" id="syncAllHistory">同步所有待补发</button></footer></div></div>
+
 
 <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
 <script>
 (function(){
-  const $ = (s, r) => (r || document).querySelector(s);
-  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const $=(s,r)=>(r||document).querySelector(s), $$=(s,r)=>Array.from((r||document).querySelectorAll(s));
+  const navButtons=$$('.nav button');
+  function show(screen){$$('.screen').forEach(x=>x.classList.toggle('active',x.id==='screen-'+screen));navButtons.forEach(b=>{const on=b.dataset.screen===screen;b.classList.toggle('active',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')})}
+  navButtons.forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));$$('[data-screen-jump]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screenJump)));
+  let lastFocus=null;
+  function openModal(id){const el=document.getElementById(id);if(!el)return;lastFocus=document.activeElement;el.classList.add('show');const f=el.querySelector('input,select,button:not([data-close])');if(f)f.focus()}
+  function closeModal(el){el.classList.remove('show');if(lastFocus&&lastFocus.focus)lastFocus.focus()}
+  $$('[data-open]').forEach(b=>b.addEventListener('click',()=>openModal(b.dataset.open)));$$('.scrim').forEach(s=>{s.addEventListener('click',e=>{if(e.target===s)closeModal(s)});$$('[data-close]',s).forEach(b=>b.addEventListener('click',()=>closeModal(s)))});document.addEventListener('keydown',e=>{if(e.key==='Escape')$$('.scrim.show').forEach(closeModal)});
+  function toast(title,body,kind){const box=$('#toasts'),el=document.createElement('div');el.className='toast '+(kind||'');el.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">'+(kind==='err'?'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>':'<path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-6.2-8.6"/>')+'</svg><div><b></b><span></span></div>';$('b',el).textContent=title;$('span',el).textContent=body;box.appendChild(el);setTimeout(()=>el.remove(),4200)}
 
-  /* ---------- navigation ---------- */
-  const navButtons = $$('.nav button');
-  function show(screen){
-    $$('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + screen));
-    navButtons.forEach(b => {
-      const on = b.dataset.screen === screen;
-      b.classList.toggle('active', on);
-      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
-    });
-  }
-  navButtons.forEach(b => b.addEventListener('click', () => show(b.dataset.screen)));
-  $$('[data-screen-jump]').forEach(b => b.addEventListener('click', () => show(b.dataset.screenJump)));
+  const rows=$$('#agentList .row');let cap='all';
+  function applyFilter(){const q=$('#q').value.trim().toLowerCase(),online=$('#onlineOnly').checked;let shown=0;rows.forEach(r=>{const on=(cap==='all'||r.dataset.cap===cap)&&(!q||r.textContent.toLowerCase().includes(q))&&(!online||r.dataset.online==='1');r.style.display=on?'':'none';if(on)shown++});$('#discoverEmpty').classList.toggle('show',shown===0);$('#discoverCount').textContent=shown+' 个 Agent'}
+  $$('.chip[data-cap]').forEach(c=>c.addEventListener('click',()=>{cap=c.dataset.cap;$$('.chip[data-cap]').forEach(x=>x.classList.toggle('active',x===c));applyFilter()}));$('#q').addEventListener('input',applyFilter);$('#onlineOnly').addEventListener('change',applyFilter);
+  rows.forEach(r=>{r.addEventListener('click',e=>{if(e.target.closest('button,input'))return;rows.forEach(x=>x.classList.toggle('selected',x===r))});$('.pickbox',r).addEventListener('change',updateSelection)});
+  function selectedAgents(){return rows.filter(r=>$('.pickbox',r).checked).map(r=>r.querySelector('.name').textContent.trim().split(' ')[0])}
+  function updateSelection(){const n=selectedAgents().length;$('#selectBar').classList.toggle('show',n>0);$('#selectCount').textContent='已选 '+n+' 个 Agent'}
+  $('#clearSelect').addEventListener('click',()=>{$$('.pickbox').forEach(x=>x.checked=false);updateSelection()});
+  function openInvite(agents){if(!requireInviteRight())return;const box=$('#inviteSelection');box.innerHTML='';agents.forEach((name,i)=>{const l=document.createElement('label');l.innerHTML='<input type="checkbox" checked><span class="avatar" style="width:22px;height:22px;font-size:10px">'+name.slice(0,2).toUpperCase()+'</span> '+name+' <select class="role-sel"><option>peer</option><option'+(i===1?' selected':'')+'>master</option><option>admin</option></select>';box.appendChild(l)});openModal('inviteModal')}
+  $('#inviteSelected').addEventListener('click',()=>openInvite(selectedAgents()));
+  let identity='owner';$('#identitySel').addEventListener('change',e=>{identity=e.target.value;toast('身份已切换',identity==='owner'?'当前以 owner 操作,可邀请与改角色。':'当前以 peer 操作,邀请与改角色会被拒绝。',identity==='owner'?'ok':'')});
+  function requireInviteRight(){if(identity==='owner')return true;toast('FORBIDDEN 邀请被拒绝','peer 不具备邀请权限;只有 owner 或 admin 可以邀请成员。','err');return false}
+  $$('[data-invite]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const target=b.dataset.invite;if(!requireInviteRight())return;if(target==='build-runner'){toast('邀请未送达','build-runner 当前离线,邀请会保留到上线后处理。','err');return}openInvite([target])}));
+  $('#sendInvite').addEventListener('click',()=>{if(!requireInviteRight())return;const n=$$('#inviteSelection input:checked').length;toast('邀请已发出','已向 '+n+' 个 Agent 发送邀请；接受后分别建立独立 session。','ok');closeModal($('#inviteModal'));$('#clearSelect').click()});
 
-  /* ---------- modals ---------- */
-  let lastFocus = null;
-  function openModal(id){
-    const el = document.getElementById(id);
-    if (!el) return;
-    lastFocus = document.activeElement;
-    el.classList.add('show');
-    const first = el.querySelector('input, select, button:not([data-close])');
-    if (first) first.focus();
-  }
-  function closeModal(el){
-    el.classList.remove('show');
-    if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
-  }
-  $$('[data-open]').forEach(b => b.addEventListener('click', () => openModal(b.dataset.open)));
-  $$('.scrim').forEach(scrim => {
-    scrim.addEventListener('click', e => { if (e.target === scrim) closeModal(scrim); });
-    $$('[data-close]', scrim).forEach(b => b.addEventListener('click', () => closeModal(scrim)));
-  });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') $$('.scrim.show').forEach(closeModal);
-  });
+  $$('[data-server-action]').forEach(b=>b.addEventListener('click',()=>{const row=b.closest('.server-row'),state=b.dataset.serverAction;if(state==='connect'){b.textContent='已连接';b.dataset.serverAction='disconnect';$('.health',row).className='health ok';$('.health',row).innerHTML='<i class="dot on" style="display:inline-block"></i> healthy';toast('Relay 已连接',row.querySelector('.server-main b').textContent+' 已开始读取目录。','ok')}else{b.textContent='连接';b.dataset.serverAction='connect';$('.health',row).className='health off';$('.health',row).textContent='未连接';toast('Relay 已断开','目录停止刷新，已有群聊历史不迁移。','') }}));
+  $('#saveRelay').addEventListener('click',()=>{toast('Relay 配置已保存','已使用 TLS 校验并开始连接 '+$('#relayName').value+'。','ok');closeModal($('#relayModal'))});$('#saveRelayCap').addEventListener('click',()=>{toast('能力配置已保存','Relay 限制将在重新建立连接后生效。','ok');closeModal($('#relayCapModal'))});
+  $('#saveRename').addEventListener('click',()=>{const n=$('#renameInput').value.trim()||'未命名群聊';$('#groupName').textContent=n;$('#convName').textContent=n;toast('群聊已重命名','新名称为 '+n+'；session 和历史保持不变。','ok');closeModal($('#renameModal'))});
+  $$('[data-history]').forEach(b=>b.addEventListener('click',()=>toast('历史操作已提交',b.dataset.history==='design-desk'?'将为 design-desk 补发 2 个 turn。':'该 session 已同步到最新 turn。','ok')));$('#syncAllHistory').addEventListener('click',()=>toast('历史同步已排队','离线 Agent 上线后会按 session 继续补发缺失 turn。','ok'));
 
-  /* ---------- toasts ---------- */
-  function toast(title, body, kind){
-    const box = $('#toasts');
-    const el = document.createElement('div');
-    el.className = 'toast ' + (kind || '');
-    el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' +
-      (kind === 'err' ? '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>' : '<path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-6.2-8.6"/>') +
-      '</svg><div><b></b><span></span></div>';
-    $('b', el).textContent = title;
-    $('span', el).textContent = body;
-    box.appendChild(el);
-    setTimeout(() => el.remove(), 4200);
-  }
-
-  /* ---------- discovery filter ---------- */
-  const rows = $$('#agentList .row');
-  let cap = 'all';
-  function applyFilter(){
-    const q = $('#q').value.trim().toLowerCase();
-    const onlineOnly = $('#onlineOnly').checked;
-    let shown = 0;
-    rows.forEach(r => {
-      const matchCap = cap === 'all' || r.dataset.cap === cap;
-      const text = r.textContent.toLowerCase();
-      const matchQ = q === '' || text.includes(q);
-      const matchOnline = !onlineOnly || r.dataset.online === '1';
-      const on = matchCap && matchQ && matchOnline;
-      r.style.display = on ? '' : 'none';
-      if (on) shown++;
-    });
-    $('#discoverEmpty').classList.toggle('show', shown === 0);
-    $('#discoverCount').textContent = shown + ' 个 Agent';
-  }
-  $$('.chip[data-cap]').forEach(c => c.addEventListener('click', () => {
-    cap = c.dataset.cap;
-    $$('.chip[data-cap]').forEach(o => o.classList.toggle('active', o === c));
-    applyFilter();
-  }));
-  $('#q').addEventListener('input', applyFilter);
-  $('#onlineOnly').addEventListener('change', applyFilter);
-  rows.forEach(r => r.addEventListener('click', e => {
-    if (e.target.closest('button')) return;
-    rows.forEach(o => o.classList.toggle('selected', o === r));
-  }));
-
-  /* ---------- identity gate (real rule: only owner/admin may invite) ---------- */
-  let identity = 'owner';
-  $('#identitySel').addEventListener('change', e => {
-    identity = e.target.value;
-    toast('身份已切换', identity === 'owner'
-      ? '当前以 owner 身份操作,可邀请成员与修改角色。'
-      : '当前以 peer 身份操作,邀请与改角色会被拒绝。', identity === 'owner' ? 'ok' : '');
-  });
-  function requireInviteRight(){
-    if (identity === 'owner') return true;
-    toast('FORBIDDEN 邀请被拒绝', 'peer 不具备邀请权限;只有 owner 或 admin 可以邀请成员。', 'err');
-    return false;
-  }
-  $$('[data-invite]').forEach(b => b.addEventListener('click', e => {
-    e.stopPropagation();
-    if (!requireInviteRight()) return;
-    const target = b.dataset.invite;
-    if (target === 'build-runner') {
-      toast('邀请未送达', 'build-runner 当前离线,邀请会保留到它上线后处理。', 'err');
-      return;
-    }
-    openModal('inviteModal');
-    $('#inviteTarget').value = target;
-  }));
-  $('#sendInvite').addEventListener('click', () => {
-    if (!requireInviteRight()) return;
-    toast('邀请已发出', $('#inviteTarget').value + ' 以 ' + $('#inviteRole').value + ' 角色收到邀请,等待对方接受。', 'ok');
-    closeModal($('#inviteModal'));
-  });
-
-  /* ---------- creation ---------- */
-  $('#createGroup').addEventListener('click', () => {
-    const name = $('#gName').value.trim() || '未命名群组';
-    toast('群组已创建', name + ' 已创建,邀请已发出;成员接受后才会出现在成员表。', 'ok');
-    closeModal($('#groupModal'));
-  });
-  $('#createDm').addEventListener('click', () => {
-    toast('单聊已建立', '已为 ' + $('#dmPick').value.split(' · ')[0] + ' 打开单聊。', 'ok');
-    closeModal($('#dmModal'));
-    show('direct');
-  });
-
-  /* ---------- role assignment ---------- */
-  $$('#memberRows select').forEach(s => s.addEventListener('change', () => {
-    const row = s.closest('tr');
-    const name = row.querySelector('td div div').textContent.trim();
-    if (identity === 'peer') {
-      toast('FORBIDDEN 修改被拒绝', 'peer 不能修改角色;需要 owner 或 admin 身份。', 'err');
-      return;
-    }
-    $('#roleHint').textContent = name + ' 的角色将改为 ' + s.value + ',保存后写入群记录并下发系统事件。';
-    toast('角色待保存', name + ' → ' + s.value + '。保存前不生效。', '');
-  }));
-  $('#saveRoles').addEventListener('click', () => {
-    if (identity === 'peer') {
-      toast('FORBIDDEN 保存被拒绝', 'peer 不能保存角色变更。', 'err');
-      return;
-    }
-    toast('角色已保存', '已写入群记录,相关成员收到一条系统事件。', 'ok');
-  });
-
-  /* ---------- chat demo ---------- */
-  function sendMessage(inputId, threadId, who, roleBadge){
-    const input = document.getElementById(inputId);
-    const text = input.value.trim();
-    if (text === '') return;
-    const thread = document.getElementById(threadId);
-    const wrap = document.createElement('div');
-    wrap.className = 'msg mine';
-    wrap.innerHTML = '<span class="avatar">ME</span><div><div class="head"><span>刚刚</span><b>me</b></div>' +
-      '<div class="bubble"></div><div class="status"><span class="tag">sending</span></div></div>';
-    wrap.querySelector('.bubble').textContent = text;
-    thread.appendChild(wrap);
-    thread.scrollTop = thread.scrollHeight;
-    input.value = '';
-    const status = wrap.querySelector('.status');
-    setTimeout(() => { status.innerHTML = '<span class="tag">sent</span>'; }, 400);
-    setTimeout(() => { status.innerHTML = '<span class="tag">delivered</span>'; }, 1100);
-    setTimeout(() => { status.innerHTML = '<span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 13 5 5 11-11"/></svg></span>已读'; }, 2200);
-  }
-  $('#dmSend').addEventListener('click', () => sendMessage('dmInput', 'dmThread'));
-  $('#grpSend').addEventListener('click', () => sendMessage('grpInput', 'grpThread'));
-  $('#dmInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage('dmInput','dmThread'); } });
-  $('#grpInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage('grpInput','grpThread'); } });
-
-  /* ---------- banners ---------- */
-  $$('[data-dismiss]').forEach(b => b.addEventListener('click', () => {
-    const banner = b.closest('.banner');
-    if (banner) banner.remove();
-  }));
-
-  /* ---------- initial state demo ---------- */
-  show('discover');
+  $('#createGroup').addEventListener('click',()=>{const n=$('#gName').value.trim()||'未命名群聊';toast('群聊已创建',n+' 已创建；接受邀请后为每个 Agent 开独立 session。','ok');closeModal($('#groupModal'))});$('#createDm').addEventListener('click',()=>{toast('单聊已建立','已为 '+$('#dmPick').value.split(' · ')[0]+' 打开单聊。','ok');closeModal($('#dmModal'));show('direct')});
+  $$('#memberRows select').forEach(s=>s.addEventListener('change',()=>{const row=s.closest('tr'),name=row.querySelector('td div div').textContent.trim();if(identity==='peer'){toast('FORBIDDEN 修改被拒绝','peer 不能修改角色。','err');return}$('#roleHint').textContent=name+' 的角色将改为 '+s.value+'，保存后写入群记录。';toast('角色待保存',name+' → '+s.value,'')}));$('#saveRoles').addEventListener('click',()=>{if(identity==='peer'){toast('FORBIDDEN 保存被拒绝','peer 不能保存角色变更。','err');return}toast('角色已保存','已写入群记录并下发系统事件。','ok')});
+  function sendDm(){const input=$('#dmInput'),text=input.value.trim();if(!text)return;const t=$('#dmThread'),w=document.createElement('div');w.className='msg mine';w.innerHTML='<span class="avatar">ME</span><div><div class="head"><span>刚刚</span><b>me</b></div><div class="bubble"></div><div class="status"><span class="tag">sending</span></div></div>';$('.bubble',w).textContent=text;t.appendChild(w);t.scrollTop=t.scrollHeight;input.value='';const st=$('.status',w);setTimeout(()=>st.innerHTML='<span class="tag">sent</span>',400);setTimeout(()=>st.innerHTML='<span class="tag">delivered</span>',1100);setTimeout(()=>st.innerHTML='已读',2200)}
+  let turnNo=4;function sendGroup(){const input=$('#grpInput'),text=input.value.trim();if(!text)return;const mentions=['camo-browser','ship-it','design-desk'].filter(x=>text.includes('@'+x));turnNo++;const t=$('#grpThread'),el=document.createElement('div');el.className='turn';const target=mentions.length?mentions.map(x=>'@'+x).join(' ')+' 必答':'全体会话 · 无人必答';el.innerHTML='<div class="turn-head"><b>第 '+turnNo+' 轮</b><span>me 发起 · 刚刚</span><span class="grow"></span><span class="turn-target">'+target+'</span></div><p class="turn-note"></p><div class="msg mine"><span class="avatar">ME</span><div><div class="head"><span>刚刚</span><b>me</b></div><div class="bubble"></div><div class="status">已投递到 4 个独立 session</div></div></div>';$('.turn-note',el).textContent=mentions.length?'被 @ 的 session 必须回复：'+mentions.join('、')+'；其余只同步，不要求回复。':'没有 @，所有 session 只同步这条更新，不要求回复。';$('.bubble',el).textContent=text;t.appendChild(el);t.scrollTop=t.scrollHeight;input.value='';toast('第 '+turnNo+' 轮已发送','已为每个 Agent session 写入一次会话输入。','ok')}
+  $('#dmSend').addEventListener('click',sendDm);$('#grpSend').addEventListener('click',sendGroup);$('#dmInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDm()}});$('#grpInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendGroup()}});
+  $$('[data-mention]').forEach(b=>b.addEventListener('click',()=>{const i=$('#grpInput');i.value+=(i.value?' ':'')+'@'+b.dataset.mention+' ';i.focus()}));$$('[data-dismiss]').forEach(b=>b.addEventListener('click',()=>{const x=b.closest('.banner');if(x)x.remove()}));const valid=['servers','discover','group','direct','roles','create','settings'];function fromHash(){const h=location.hash.replace('#','');return valid.includes(h)?h:'discover'}show(fromHash());window.addEventListener('hashchange',()=>show(fromHash()));
 })();
 </script>
 </body>
