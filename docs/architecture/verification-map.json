@@ -267,7 +267,7 @@
         "lifecycle admission rejects an installed receipt whose pack, tarball, or installed-content hash is missing or belongs to another candidate",
         "installed Console serves authenticated public assets and rejects unauthorized/cross-site requests",
         "default final mode calls the real U4 builder and consumes the exact runner build receipt with immutable unique build directories; final mode is release_eligible=false and never revives fixed .build/current or a duplicate scheduling/owner layer",
-        "the final pack stages the compiled runtime/dagpipe host and protocol plus their transitive packages/shared/src/network runtime modules, the runner, manifest, and five Work graphs; AppSDK artifact_paths bind those exact staged final outputs",
+        "the final pack stages the compiled packages/dagpipe/src host and protocol at generated/runtime-lib/packages/dagpipe/src plus their transitive shared and network runtime modules under generated/runtime-lib, together with the runner binary, manifest and five Work graphs under runtime/dagpipe; AppSDK artifact_paths bind those exact staged final outputs",
         "the installed SDK consumer packs and installs that same final tarball outside the source tree, imports the installed host/protocol, runs the packaged runner to a real provider rg marker, proves missing operator and missing effects compile negatives, and rejects missing runner/manifest/graph, dropped manifest graph entries, and runner/graph hash mismatches",
         "base lifecycle and final SDK consumer receipts remain separate evidence; the installed SDK consumer does not close public CLI Work, BB01, BB13, or BB14"
       ]
