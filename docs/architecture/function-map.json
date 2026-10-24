@@ -1591,7 +1591,7 @@
       "required_gates": [
         "teams-acp-d01-host"
       ],
-      "note": "D01 (merged 7d0bca4, fixed 75a6cf4) implements the engine-independent newline-delimited JSON AcpDuplex over an engine child's stdio, reusing the frozen control-protocol AcpDuplex/AcpFrame/AcpError instead of redeclaring them: original JSON-RPC id type and legal extension members are preserved, CRLF is tolerated, one frame is bounded by maxFrameBytes, transport faults are typed, and clean EOF settles as { kind: 'eof' }. acp-adapter/test-peer.mjs is a labeled test peer, not an engine and not inference evidence. Status is partial, not implemented: the D03 DSH adapter (see dsh_launch_compilation) and the D02 OpenCode adapter (see acp_engine_adapter_opencode) each supply a real EngineLaunchSpec, but this transport gate proves no engine inference by itself."
+      "note": "D01 (merged 7d0bca4, fixed 75a6cf4) implements the engine-independent newline-delimited JSON AcpDuplex over an engine child's stdio, reusing the frozen AcpDuplex/AcpFrame/AcpError declarations from `packages/shared/src/acp.ts` instead of redeclaring them: original JSON-RPC id type and legal extension members are preserved, CRLF is tolerated, one frame is bounded by maxFrameBytes, transport faults are typed, and clean EOF settles as { kind: 'eof' }. acp-adapter/test-peer.mjs is a labeled test peer, not an engine and not inference evidence. Status is partial, not implemented: the D03 DSH adapter (see dsh_launch_compilation) and the D02 OpenCode adapter (see acp_engine_adapter_opencode) each supply a real EngineLaunchSpec, but this transport gate proves no engine inference by itself."
     },
     {
       "function_id": "acp_host_session_semantics",
