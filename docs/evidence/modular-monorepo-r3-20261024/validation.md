@@ -78,3 +78,16 @@ teams-source 平级）由 `appsdk compile`/`verify` 与 `smoke:installed` 的实
 `packages/dagpipe/tests/dagpipe-build.spec.ts`；`regression.json` 的 144 条 testResults 同时包含
 `packages/dagpipe/tests/dagpipe-build.spec.ts` 与 `runtime/dagpipe-work.spec.ts`，
 迁移后的构建回归未被漏发现。
+
+## 6. 独立审阅与集成
+
+- 独立里程碑 Review（只读、不改代码、不跑全量构建）：首轮 FAIL，两条 P1 均为架构图事实错误
+  （resource-map 把安装包产物写成 `packages/dagpipe/src/`；function-map 与 mainline-call-map
+  四条 UI 路径仍指 `src/client/`），另有 3 条 P2。修复后复核又指出同一类残留（
+  `function-map` 的 D07/DSH/Work 三处、`module-registry` 两处、`verification-map` 三条历史跑数
+  记录、以及 `master-host` 把 `packages/shared/src/console-api.ts` 写成 console-host 包内文件），
+  全部按最小改动修正。
+- 最终 Review 结论 PASS，无 P1；3 条 P2 为建议或既有（`.appsdk/maps/module-registry.json` 的
+  `packages/**` 覆盖偏宽、`bootstrap` 无对应目录、若干 design doc 历史失效证据引用）。
+- 集成：PR #26 以 merge commit 合入 `origin/main` = `873fd40`；`git diff 57f7e2b origin/main`
+  为空，合并结果与已验收候选同树。

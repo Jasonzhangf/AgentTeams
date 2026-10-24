@@ -1,7 +1,7 @@
 # AgentTeams 模块化 monorepo 设计 v1
 
-状态：design candidate r3（验收官 Alice 2026-10-24 定向复核 PASS，可按授权进入实现；
-实现后的测试、安装、正式 Review 与集成交付仍按项目合同，本 PASS 不替代）。
+状态：delivered（设计 r3 经验收官 Alice 定向复核 PASS；实现经独立里程碑 Review PASS，
+已通过 PR #26 合入 `origin/main` 873fd40）。
 基线：`origin/main` 89cd91d。本文件只描述结构落地方案，不替代任何已合入契约。
 
 ## 0. 修订记录
@@ -11,6 +11,8 @@
 - r2：全部相对导入、显式 consumer 清单、repoRoot 三层、单一 tarball + 隔离安装回放。
 - r3（本轮）：dagpipe→runtime 相对路径改为三层；vitest include 显式加 packages/dagpipe/tests；
   teams-source 保留为完整安装准入单元。验收官 r3 PASS（设计定向复核）。
+- r4（交付轮）：实现落地后补锁文件两个 workspace importer（验收官仲裁 P1），补独立
+  里程碑 Review 指出的架构图路径与安装包布局描述，并按交付合同合并推送。
 
 ### 0.1 r2 对 r1 的修订（逐条回应 NEEDS-FIX，保留记录）
 
@@ -259,20 +261,21 @@ AppSDK 契约的实际约束（与 §6 预期的差异，按 SDK 真实规则收
 `teams-package-install`、`teams-source-artifact`、`teams-dagpipe-runner-build`、
 `teams-work-sdk-installed`、`teams-static-ui-replay`）作为失败出口，未新建无关治理图。
 
-### 提交前阻塞（验收仲裁通道）
+### 交付记录
 
-代码与门禁已全部就绪，但本里程碑的提交仍在等验收官 Alice 的仲裁，仲裁通道在实施期间失效：
+实施期间的验收仲裁通道曾失效：collab 身份绑定里的旧网关命名空间 `rt-c71a724c-2e6e-4d0c-800a-6198b9a1b98a`
+在当前运行时 `rt-21a037a7-5ed8-4cbd-ac5c-8256709894a1` 下报 `unknown-runtime`，且网关一度不含
+collab 期望的 `enqueue_wake`/`agent_facts`，`collab context`、`--provide`、`--recover-communication`、
+`--op` 均返回 `IDENTITY_RESTORE_CONFLICT`。按职责边界未重启 collab daemon，也未手改身份绑定；
+宿主对齐后通道自行恢复，仲裁与提交流程按原计划走完。
 
-- 我的 collab 身份绑定里保存的网关命名空间是 `rt-c71a724c-2e6e-4d0c-800a-6198b9a1b98a`；
-  DSH 网关在 2026-10-23 21:37 重启后当前运行时是 `rt-21a037a7-5ed8-4cbd-ac5c-8256709894a1`，
-  `register-peer` 对旧运行时返回 `unknown-runtime`。
-- 同时当前网关的能力集是 `agent.list`、`agent.get`、`agent.notify`、`agent.interrupt`、
-  `event.agent-status`，已不含 collab 期望的 `enqueue_wake` 与 `agent_facts`（实测两个方法均返回
-  `unknown-op`），collab 因此判定 `IDENTITY_RESTORE_CONFLICT: DSH communication API differs from the current binding`。
-- `collab context`、`--provide`（新旧两种锚点写法）、`--recover-communication`、`--op` 续跑均返回同一冲突；
-  按职责边界未重启 collab daemon，也未手改身份绑定。
+交付事实：
 
-恢复条件：宿主把 collab 服务与当前网关版本对齐（或恢复网关的 `enqueue_wake`/`agent_facts`），
-之后 `collab context` 一次即回到正常，再按流程完成仲裁与提交。候选取证不受影响：
-所有改动已 staged 在 `feat/modular-monorepo` 分支，`pnpm verify`、`pnpm smoke:installed`、
-`appsdk compile|verify` 均为本候选实测结果。
+- 里程碑提交 `735fe8c`：三项移动（shared 抽包、dagpipe 抽包、UI 按职责拆分）与消费者、门禁、
+  五张架构图、AppSDK 模块、设计文档同步，223 文件、+1255/−527。
+- 验收官仲裁 P1（新增 workspace 包缺锁文件 importer）修复后定向复核 PASS。
+- 独立里程碑 Review 首轮 FAIL（架构图路径与安装包布局描述），修复分三个提交：
+  `333021f`、`49f95ec`、`8d58bd7`、`57f7e2b`；最终 Review PASS（无 P1，3 条 P2 为建议或既有）。
+- 集成：PR #26 以 merge commit 合入 `origin/main`，合并结果 `873fd40`；合并树与已验收候选
+  `57f7e2b` 完全一致（`git diff` 为空），故候选上的实测证据对合并结果同样成立。
+- 证据：`docs/evidence/modular-monorepo-r3-20261024/validation.md`。
