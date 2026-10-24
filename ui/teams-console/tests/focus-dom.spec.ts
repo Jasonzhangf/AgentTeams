@@ -21,7 +21,7 @@ function chromeExecutable(): string {
 
 describe('drawer keyboard focus in a real DOM', () => {
   it('moves outside focus into the drawer and wraps forward and backward Tab', { timeout: 20_000 }, () => {
-    const source = readFileSync(join(import.meta.dirname, '../src/client/focus.ts'), 'utf8')
+    const source = readFileSync(join(import.meta.dirname, '../src/state/focus.ts'), 'utf8')
       .replace('export function containDrawerTab', 'function containDrawerTab')
     if (process.env.TEAMS_CONSOLE_REAL_DOM !== '1') {
       expect(source).toContain('if (!drawer.contains(active))')

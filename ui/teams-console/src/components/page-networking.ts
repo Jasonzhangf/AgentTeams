@@ -1,4 +1,4 @@
-import type { ConsoleProjectionV1 } from './protocol.ts'
+import type { ConsoleProjectionV1 } from '../client/protocol.ts'
 
 /** One agent the operator places in the membership draft, with its assigned role. */
 export interface NetworkMemberDraft {

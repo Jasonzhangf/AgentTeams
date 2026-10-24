@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentDeclaration, RelayPeer } from '../control-protocol/agent-services.ts'
-import { admitEndpointReference } from '../control-protocol/endpoint-ref.ts'
+import type { AgentDeclaration, RelayPeer } from '../packages/shared/src/agent-services.ts'
+import { admitEndpointReference } from '../packages/shared/src/endpoint-ref.ts'
 import { compileDeclarationEndpoints, projectPeerEndpoints } from './endpoint-discovery.ts'
 
 const declaration = (overrides: Partial<AgentDeclaration> = {}): AgentDeclaration => ({

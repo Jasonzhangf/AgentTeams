@@ -1,4 +1,4 @@
-import type { CapabilityDeclaration, OperationDeclaration } from '../control-protocol/agent-services.ts'
+import type { CapabilityDeclaration, OperationDeclaration } from '../packages/shared/src/agent-services.ts'
 import { closeSync, fsyncSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { mkdirSync } from 'node:fs'

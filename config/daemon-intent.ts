@@ -2,7 +2,7 @@ import { isIP } from 'node:net'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
 import { parse as parseToml } from 'toml'
-import type { RelationRole } from '../control-protocol/teams-connection.ts'
+import type { RelationRole } from '../packages/shared/src/teams-connection.ts'
 import type { AcpPolicyIntent } from './acp-policy.ts'
 import { parseVikunjaIntent, VikunjaIntentError, type VikunjaIntent } from './vikunja-intent.ts'
 import type {

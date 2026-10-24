@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
-import type { AcpFault } from '../control-protocol/acp.ts'
-import { AcpError } from '../control-protocol/acp.ts'
-import type { TeamsAgreement, TeamsConnectionFrame } from '../control-protocol/teams-connection.ts'
-import { parseTeamsConnectionFrame } from '../control-protocol/teams-connection.ts'
+import type { AuthenticatedAgent } from '../packages/shared/src/agent-services.ts'
+import type { AcpFault } from '../packages/shared/src/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
+import type { TeamsAgreement, TeamsConnectionFrame } from '../packages/shared/src/teams-connection.ts'
+import { parseTeamsConnectionFrame } from '../packages/shared/src/teams-connection.ts'
 import {
   negotiatedAgreement,
   negotiationFault,

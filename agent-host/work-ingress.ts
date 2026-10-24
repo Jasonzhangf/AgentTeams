@@ -1,5 +1,5 @@
-import type { AuthenticatedAgent, ServiceError } from '../control-protocol/agent-services.ts'
-import type { WorkWireReply, WorkWireRequest } from '../control-protocol/work-wire.ts'
+import type { AuthenticatedAgent, ServiceError } from '../packages/shared/src/agent-services.ts'
+import type { WorkWireReply, WorkWireRequest } from '../packages/shared/src/work-wire.ts'
 import { isWorkServiceError } from '../agent/work-resource.ts'
 import { WorkHostError, type WorkHost } from './work-host.ts'
 

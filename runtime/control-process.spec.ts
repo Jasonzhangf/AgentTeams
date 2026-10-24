@@ -25,7 +25,7 @@ import { createAcpHistoryStore } from './acp-history-store.ts'
 import { createTeamsConnectionHistory } from '../network/teams-connection-history.ts'
 import { readRelationsIntentRecord, relationsIntentScopePath } from '../config/relations-intent-store.ts'
 import { readSessionIntentRecord, sessionIntentScopePath } from '../config/session-intent-store.ts'
-import type { HistoryQuery, ConsoleProjectionSnapshot, TeamsConnectionStatus } from '../control-protocol/teams-state.ts'
+import type { HistoryQuery, ConsoleProjectionSnapshot, TeamsConnectionStatus } from '../packages/shared/src/teams-state.ts'
 
 let directory: string
 let key: string
@@ -320,7 +320,7 @@ it('streams the SSE projection and closes the stream on owner loss', async () =>
   const frames = body.split('\n\n').filter(Boolean)
   expect(frames.length).toBeGreaterThanOrEqual(3)
   // The event name is the contract the UI live client subscribes to
-  // (ui/teams-console/src/client/{live-client,observation}.ts listen for `snapshot`, and the
+  // (ui/teams-console/src/client/live-client.ts and ui/teams-console/src/state/observation.ts listen for `snapshot`, and the
   // sink method is onSnapshot for the frozen ConsoleProjectionSnapshot). A named SSE event with
   // no matching listener is dropped silently, so this name is asserted here and in
   // console-host/tests/http-api.spec.ts.

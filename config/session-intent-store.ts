@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import type { JsonValue } from '../control-protocol/agent-services.ts'
+import type { JsonValue } from '../packages/shared/src/agent-services.ts'
 import type { ConfigApplyError, ConfigApplyResult } from './runtime-config.ts'
 import { RuntimeConfigError } from './runtime-config.ts'
 import { writeRecordAtomically } from './durable-record.ts'

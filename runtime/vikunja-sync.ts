@@ -1,5 +1,5 @@
-import type { ServiceError, ServiceErrorCode } from '../control-protocol/agent-services.ts'
-import type { IssueState } from '../control-protocol/group-wire.ts'
+import type { ServiceError, ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
+import type { IssueState } from '../packages/shared/src/group-wire.ts'
 
 /**
  * Minimal Vikunja write and read capability (design 8.1, 11.1, 11.2, 13.1, 15).

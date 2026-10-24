@@ -1,5 +1,5 @@
-import type { JsonValue, ServiceError } from '../control-protocol/agent-services.ts'
-import type { Action, ExternalOp, Group, GroupInvitation, IssueSession, IssueState, Message, MessageWatermark } from '../control-protocol/group-wire.ts'
+import type { JsonValue, ServiceError } from '../packages/shared/src/agent-services.ts'
+import type { Action, ExternalOp, Group, GroupInvitation, IssueSession, IssueState, Message, MessageWatermark } from '../packages/shared/src/group-wire.ts'
 import type { ExternalOpReceipt } from './group-external-ops.ts'
 import type { GroupHub, GroupHubResult, GroupHubPush } from './relay.ts'
 import { advanceWatermark, appendMessage, createMessageLog, pageMessages, restoreMessageLog, type MessageLogState } from './message-log.ts'

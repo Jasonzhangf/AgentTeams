@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Action } from '../control-protocol/group-wire.ts'
+import type { Action } from '../packages/shared/src/group-wire.ts'
 import {
   applyCancelConfirmation,
   authenticateExternalOpReceipt,

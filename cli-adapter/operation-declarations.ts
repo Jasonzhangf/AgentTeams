@@ -1,4 +1,4 @@
-import type { JsonValue, OperationDeclaration } from '../control-protocol/agent-services.ts'
+import type { JsonValue, OperationDeclaration } from '../packages/shared/src/agent-services.ts'
 import type { CliOperation } from './contracts.ts'
 
 const text = { type: 'string' }

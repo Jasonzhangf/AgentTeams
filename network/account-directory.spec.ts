@@ -8,7 +8,7 @@ import {
   refreshAccountDirectory,
   resolveHostFromDirectory,
 } from './account-directory.ts'
-import type { RelayPeer } from '../control-protocol/agent-services.ts'
+import type { RelayPeer } from '../packages/shared/src/agent-services.ts'
 
 const baseHost = {
   hostId: 'host-a',

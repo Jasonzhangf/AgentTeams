@@ -5,7 +5,7 @@
   "functions": [
     {
       "function_id": "work_graph_execution",
-      "owner": "runtime",
+      "owner": "packages/dagpipe",
       "status": "partial",
       "paths": [
         "docs/design/teams-behavior-contracts.md",
@@ -15,7 +15,7 @@
         "docs/design/dagpipe/graphs/work-request.graph.json",
         "docs/design/dagpipe/graphs/work-close.graph.json",
         "docs/design/dagpipe/graphs/work-query.graph.json",
-        "runtime/dagpipe/**",
+        "packages/dagpipe/src/**",
         "runtime/dagpipe-work.spec.ts",
         "runtime/agent-work-client.ts",
         "runtime/agent-work-client.spec.ts"
@@ -30,10 +30,11 @@
       ],
       "required_gates": [
         "teams-behavior-dag-topology",
-        "teams-work-sdk-installed"
+        "teams-work-sdk-installed",
+        "teams-dagpipe-runner-build"
       ],
       "design_doc": "docs/design/teams-behavior-contracts.md",
-      "note": "Source-level library consumer is implemented and author-verified: runtime/dagpipe/build.mjs builds the project runner against the installed pipeline_runtime 0.1.1, runner.rs registers the fixed ten-Operator registry used by all five graphs, and host.ts dispatches typed stdio calls to the public AgentWorkClient. runtime/dagpipe-work.spec.ts exercises real Relay/TLS local sockets and the provider ledger for one-shot submit/query and persistent open/request/query/close, including stale or incomplete bindings, compile rejection, malformed runner frames, and transport-unconfirmed retention. AgentWorkClient capability selection is implemented and tested. The CLI/launcher socket/receiver wiring and the installed runner/graph/manifest pack are delivered for the exact candidate: the installed package user smoke reaches the installed receiver daemon, runs the installed DAGpipe runner, and completes public submit/query plus persistent open/request/query/close with real provider results. teams-work-sdk-installed remains unsatisfied because the BB04-BB07/BB11 driver and its installed product-runner evidence are not implemented; Console-offline Work and final user acceptance also remain PENDING. BB06 round 12: buildCompletedReceipt (runtime/dagpipe/host.ts:685-756) projects the provider typed refusal from control.reply.error into the existing receipt.control.error when no closeError exists, keeps closeError precedence and the close-failure expression, and changes no status/request/work/binding/business/cleanup/identity semantics; no runner, admission, ledger, retry or CLI second projection changes. No second map or runtime registry is introduced."
+      "note": "Source-level library consumer is implemented and author-verified: packages/dagpipe/src/build.mjs builds the project runner against the installed pipeline_runtime 0.1.1, runner.rs registers the fixed ten-Operator registry used by all five graphs, and host.ts dispatches typed stdio calls to the public AgentWorkClient. runtime/dagpipe-work.spec.ts exercises real Relay/TLS local sockets and the provider ledger for one-shot submit/query and persistent open/request/query/close, including stale or incomplete bindings, compile rejection, malformed runner frames, and transport-unconfirmed retention. AgentWorkClient capability selection is implemented and tested. The CLI/launcher socket/receiver wiring and the installed runner/graph/manifest pack are delivered for the exact candidate: the installed package user smoke reaches the installed receiver daemon, runs the installed DAGpipe runner, and completes public submit/query plus persistent open/request/query/close with real provider results. teams-work-sdk-installed remains unsatisfied because the BB04-BB07/BB11 driver and its installed product-runner evidence are not implemented; Console-offline Work and final user acceptance also remain PENDING. BB06 round 12: buildCompletedReceipt (packages/dagpipe/src/host.ts:685-756) projects the provider typed refusal from control.reply.error into the existing receipt.control.error when no closeError exists, keeps closeError precedence and the close-failure expression, and changes no status/request/work/binding/business/cleanup/identity semantics; no runner, admission, ledger, retry or CLI second projection changes. No second map or runtime registry is introduced."
     },
     {
       "function_id": "local_control_socket_transport",
@@ -102,11 +103,11 @@
     },
     {
       "function_id": "endpoint_discovery_admission",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/endpoint-ref.ts",
-        "control-protocol/endpoint-ref.spec.ts",
+        "packages/shared/src/endpoint-ref.ts",
+        "packages/shared/src/endpoint-ref.spec.ts",
         "server/endpoint-discovery.ts",
         "server/endpoint-discovery.spec.ts",
         "server/relay.ts"
@@ -128,8 +129,8 @@
       "owner": "agent",
       "status": "partial",
       "paths": [
-        "control-protocol/agent-services.ts",
-        "control-protocol/work-wire.ts",
+        "packages/shared/src/agent-services.ts",
+        "packages/shared/src/work-wire.ts",
         "agent/work-resource.ts",
         "agent-host/work-host.ts",
         "runtime/agent-work-client.ts",
@@ -358,11 +359,11 @@
     },
     {
       "function_id": "console_remote_request_codec",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/console-wire.ts",
-        "control-protocol/console-wire.spec.ts"
+        "packages/shared/src/console-wire.ts",
+        "packages/shared/src/console-wire.spec.ts"
       ],
       "entry_symbols": [
         "parseConsoleWireRequest",
@@ -476,11 +477,11 @@
     },
     {
       "function_id": "service_error_execution_details",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/agent-services.ts",
-        "control-protocol/relay-codec.ts"
+        "packages/shared/src/agent-services.ts",
+        "packages/shared/src/relay-codec.ts"
       ],
       "entry_symbols": [
         "parseServiceError"
@@ -508,10 +509,10 @@
     },
     {
       "function_id": "work_wire_codec",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/work-wire.ts"
+        "packages/shared/src/work-wire.ts"
       ],
       "entry_symbols": [
         "parseWorkWireFrame"
@@ -589,11 +590,11 @@
     },
     {
       "function_id": "console_api_v1_contract",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/console-api.ts",
-        "control-protocol/console-api.spec.ts"
+        "packages/shared/src/console-api.ts",
+        "packages/shared/src/console-api.spec.ts"
       ],
       "entry_symbols": [
         "parseConsoleCommand",
@@ -629,10 +630,10 @@
     },
     {
       "function_id": "relay_control_codec",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "implemented",
       "paths": [
-        "control-protocol/relay-codec.ts"
+        "packages/shared/src/relay-codec.ts"
       ],
       "entry_symbols": [
         "parseRelayServerControl",
@@ -707,10 +708,10 @@
     },
     {
       "function_id": "relay_admission_schema",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "implemented",
       "paths": [
-        "control-protocol/relay-admission.ts"
+        "packages/shared/src/relay-admission.ts"
       ],
       "entry_symbols": [
         "parseRelayAdmission"
@@ -736,10 +737,10 @@
     },
     {
       "function_id": "agent_service_contracts_r1",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "design",
       "paths": [
-        "control-protocol/agent-services.ts"
+        "packages/shared/src/agent-services.ts"
       ],
       "entry_symbols": [],
       "design_doc": "docs/design/teams-service-contracts-r1.md",
@@ -1056,13 +1057,13 @@
     },
     {
       "function_id": "control_protocol_schema",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "implemented",
       "paths": [
-        "control-protocol/frames.ts",
-        "control-protocol/agent-message.ts",
-        "control-protocol/json-value.ts",
-        "control-protocol/channel-state.ts"
+        "packages/shared/src/frames.ts",
+        "packages/shared/src/agent-message.ts",
+        "packages/shared/src/json-value.ts",
+        "packages/shared/src/channel-state.ts"
       ],
       "entry_symbols": [
         "parseTargetControlFrame",
@@ -1139,7 +1140,7 @@
       "owner": "agent",
       "status": "partial",
       "paths": [
-        "ui/teams-console/src/client/model.ts"
+        "ui/teams-console/src/state/model.ts"
       ],
       "entry_symbols": [
         "projectAgentCurrentSessions"
@@ -1291,8 +1292,8 @@
       "owner": "ui",
       "status": "partial",
       "paths": [
-        "ui/teams-console/src/client/Drawer.tsx",
-        "ui/teams-console/src/client/controller.ts"
+        "ui/teams-console/src/components/render.ts",
+        "ui/teams-console/src/state/controller.ts"
       ],
       "entry_symbols": [
         "pushDrawer",
@@ -1513,11 +1514,11 @@
     },
     {
       "function_id": "acp_frame_contract",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/acp.ts",
-        "control-protocol/acp.spec.ts",
+        "packages/shared/src/acp.ts",
+        "packages/shared/src/acp.spec.ts",
         "docs/design/teams-acp-daemon-config-v4.md"
       ],
       "entry_symbols": [
@@ -1532,10 +1533,10 @@
     },
     {
       "function_id": "engine_adapter_port",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "design",
       "paths": [
-        "control-protocol/engine.ts",
+        "packages/shared/src/engine.ts",
         "docs/design/teams-acp-daemon-config-v4.md"
       ],
       "entry_symbols": [
@@ -1552,13 +1553,13 @@
     },
     {
       "function_id": "teams_connection_negotiation",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "design",
       "paths": [
-        "control-protocol/teams-connection.ts",
-        "control-protocol/teams-connection.spec.ts",
-        "control-protocol/teams-state.ts",
-        "control-protocol/teams-state.spec.ts",
+        "packages/shared/src/teams-connection.ts",
+        "packages/shared/src/teams-connection.spec.ts",
+        "packages/shared/src/teams-state.ts",
+        "packages/shared/src/teams-state.spec.ts",
         "docs/design/teams-acp-daemon-config-v4.md"
       ],
       "entry_symbols": [
@@ -1590,7 +1591,7 @@
       "required_gates": [
         "teams-acp-d01-host"
       ],
-      "note": "D01 (merged 7d0bca4, fixed 75a6cf4) implements the engine-independent newline-delimited JSON AcpDuplex over an engine child's stdio, reusing the frozen control-protocol AcpDuplex/AcpFrame/AcpError instead of redeclaring them: original JSON-RPC id type and legal extension members are preserved, CRLF is tolerated, one frame is bounded by maxFrameBytes, transport faults are typed, and clean EOF settles as { kind: 'eof' }. acp-adapter/test-peer.mjs is a labeled test peer, not an engine and not inference evidence. Status is partial, not implemented: the D03 DSH adapter (see dsh_launch_compilation) and the D02 OpenCode adapter (see acp_engine_adapter_opencode) each supply a real EngineLaunchSpec, but this transport gate proves no engine inference by itself."
+      "note": "D01 (merged 7d0bca4, fixed 75a6cf4) implements the engine-independent newline-delimited JSON AcpDuplex over an engine child's stdio, reusing the frozen AcpDuplex/AcpFrame/AcpError declarations from `packages/shared/src/acp.ts` instead of redeclaring them: original JSON-RPC id type and legal extension members are preserved, CRLF is tolerated, one frame is bounded by maxFrameBytes, transport faults are typed, and clean EOF settles as { kind: 'eof' }. acp-adapter/test-peer.mjs is a labeled test peer, not an engine and not inference evidence. Status is partial, not implemented: the D03 DSH adapter (see dsh_launch_compilation) and the D02 OpenCode adapter (see acp_engine_adapter_opencode) each supply a real EngineLaunchSpec, but this transport gate proves no engine inference by itself."
     },
     {
       "function_id": "acp_host_session_semantics",
@@ -1853,7 +1854,7 @@
         "teams-acp-d03-dsh"
       ],
       "design_doc": "docs/design/teams-acp-daemon-config-v4.md",
-      "note": "D03 (frozen candidate 60bf76b) compiles the one EngineLaunchSpec for kind `dsh` on the frozen control-protocol/engine.ts port: executable plus `--profile acp --patch <ownedDirectory>/teams-dsh-acp.patch.json`, cwd = the session workspace, `DSH_HOME` = the daemon-owned directory, `DSH_PERMISSION_MODE=workspace-write` and `DSH_TELEMETRY_DISABLED=1`, with the patch file emitted mode 0600. The launch policy is asserted before any file is written or child spawned (enabled must be true, callbackExecutor must be controller, a blacklisted key must have an enforcement owner, and a required key outside the DSH surface fails as UNSUPPORTED_CAPABILITY). It also declares enforceablePolicies, derived from the same dshHasPolicyEnforcementOwner rule over its declared surface, so the blacklist classes the D01 host really enforces (including capability: and client-capability: keys) are accepted while a key with no enforcement owner is still refused; the adapter owns that set and the runtime never substitutes declaredMethods. It declares no second stdio transport, Session path or config source."
+      "note": "D03 (frozen candidate 60bf76b) compiles the one EngineLaunchSpec for kind `dsh` on the frozen packages/shared/src/engine.ts port: executable plus `--profile acp --patch <ownedDirectory>/teams-dsh-acp.patch.json`, cwd = the session workspace, `DSH_HOME` = the daemon-owned directory, `DSH_PERMISSION_MODE=workspace-write` and `DSH_TELEMETRY_DISABLED=1`, with the patch file emitted mode 0600. The launch policy is asserted before any file is written or child spawned (enabled must be true, callbackExecutor must be controller, a blacklisted key must have an enforcement owner, and a required key outside the DSH surface fails as UNSUPPORTED_CAPABILITY). It also declares enforceablePolicies, derived from the same dshHasPolicyEnforcementOwner rule over its declared surface, so the blacklist classes the D01 host really enforces (including capability: and client-capability: keys) are accepted while a key with no enforcement owner is still refused; the adapter owns that set and the runtime never substitutes declaredMethods. It declares no second stdio transport, Session path or config source."
     },
     {
       "function_id": "dsh_effectiveness_verification",
@@ -2116,7 +2117,7 @@
         "teams-acp-d07-webui"
       ],
       "design_doc": "docs/design/teams-acp-daemon-config-v4.md",
-      "note": "D07 UI owner binding for the four discovery/networking/interaction/history pages: four data-team-page buttons, data-team-page-view, four independent state bands, data-team-observation and data-team-cancel, owner-data rendering, sessionStorage draft/page/focus persistence, engine-option-derived permission choices on both the session drawer and the notification list with no fabricated button, honest typed refusal surfacing, and real-Chrome DOM marker tests. The additive TeamsConsoleClientV1 extension keeps the canonical createConsoleHttpClient unchanged. The four page VIEWS are rendered inline by src/client/render.ts; src/client/page-networking.ts is the only extracted page module with a live consumer, and the teams-acp-d07-webui gate now protects 13 spec files (66 tests)."
+      "note": "D07 UI owner binding for the four discovery/networking/interaction/history pages: four data-team-page buttons, data-team-page-view, four independent state bands, data-team-observation and data-team-cancel, owner-data rendering, sessionStorage draft/page/focus persistence, engine-option-derived permission choices on both the session drawer and the notification list with no fabricated button, honest typed refusal surfacing, and real-Chrome DOM marker tests. The additive TeamsConsoleClientV1 extension keeps the canonical createConsoleHttpClient unchanged. The four page VIEWS are rendered inline by ui/teams-console/src/components/render.ts; ui/teams-console/src/components/page-networking.ts is the only extracted page module with a live consumer, and the teams-acp-d07-webui gate now protects 13 spec files (66 tests)."
     },
     {
       "function_id": "teams_webui_blackbox_driver",

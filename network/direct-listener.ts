@@ -3,8 +3,8 @@ import { once } from 'node:events'
 import { createServer } from 'node:https'
 import type { IncomingMessage } from 'node:http'
 import WebSocket, { WebSocketServer, type RawData } from 'ws'
-import { parseTargetControlFrame, type TargetControlFrame } from '../control-protocol/frames.ts'
-import type { AuthenticatedAgent, ServiceErrorCode } from '../control-protocol/agent-services.ts'
+import { parseTargetControlFrame, type TargetControlFrame } from '../packages/shared/src/frames.ts'
+import type { AuthenticatedAgent, ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
 import {
   assertTargetGeneration,
   beginTargetTransport,

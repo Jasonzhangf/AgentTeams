@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import type { ServiceErrorCode } from '../control-protocol/agent-services.ts'
+import type { ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
 
 export type ProviderProtocol = 'openai-chat' | 'openai-responses'
 

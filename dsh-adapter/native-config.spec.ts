@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AcpError } from '../control-protocol/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
 import type { VersionedRuntimeConfig } from '../config/runtime-config.ts'
 import { compileDshNativeConfig, dshProviderRoute } from './native-config.ts'
 

@@ -4,7 +4,7 @@ import { createConnection, createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, it } from 'vitest'
-import type { GroupWireReply, GroupWireRequest } from '../control-protocol/group-wire.ts'
+import type { GroupWireReply, GroupWireRequest } from '../packages/shared/src/group-wire.ts'
 import {
   LocalMessageSocketError,
   sendLocalMessageRequest,

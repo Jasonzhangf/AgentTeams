@@ -17,7 +17,8 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const moduleRoot = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(moduleRoot, '..', '..');
+// packages/dagpipe/src -> repo root is three levels up.
+const repoRoot = resolve(moduleRoot, '..', '..', '..');
 const runnerRoot = join(moduleRoot, 'runner');
 const templatePath = join(runnerRoot, 'Cargo.toml.template');
 const lockPath = join(runnerRoot, 'Cargo.lock');

@@ -1,6 +1,6 @@
-import { parseConsoleWireReply, parseConsoleWireRequest, type ConsoleWireReply, type ConsoleWireRequest } from '../control-protocol/console-wire.ts'
-import { assertJsonValue } from '../control-protocol/json-value.ts'
-import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
+import { parseConsoleWireReply, parseConsoleWireRequest, type ConsoleWireReply, type ConsoleWireRequest } from '../packages/shared/src/console-wire.ts'
+import { assertJsonValue } from '../packages/shared/src/json-value.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
 import type { WssConnection } from './wss-connection.ts'
 
 function assertTimeoutMs(timeoutMs: number): void {

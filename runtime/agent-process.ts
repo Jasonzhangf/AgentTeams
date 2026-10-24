@@ -5,8 +5,8 @@ import { delimiter, dirname, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { object, text, number, loadDirectListenerConfig, loadRelayConfig, type DirectListenerConfig } from './process-config.ts'
-import { parseAgentDeclaration, RelayProtocolError } from '../control-protocol/relay-codec.ts'
-import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
+import { parseAgentDeclaration, RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
+import type { AgentDeclaration } from '../packages/shared/src/agent-services.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 import { createWorkHost } from '../agent-host/work-host.ts'
 import { createWorkIngress } from '../agent-host/work-ingress.ts'
@@ -25,8 +25,8 @@ import type {
   JsonValue,
   SessionCancelUnknownDetail,
   SessionObservationState,
-} from '../control-protocol/console-api.ts'
-import { projectCapabilityDetails } from '../control-protocol/console-api.ts'
+} from '../packages/shared/src/console-api.ts'
+import { projectCapabilityDetails } from '../packages/shared/src/console-api.ts'
 type ConsoleServiceErrorCode = ConsoleServiceError['code']
 import { projectConsoleWorkObservations } from './console-work-projection.ts'
 import type { RelayClientOptions } from '../network/relay-client.ts'
@@ -58,11 +58,11 @@ import { createTomlRuntimeConfigPersistence, defaultLocalConfigPath } from './lo
 import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
 import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
 import { createDirectWssListener, type DirectWssListener } from '../network/direct-listener.ts'
-import type { ResourceDemand } from '../control-protocol/agent-services.ts'
+import type { ResourceDemand } from '../packages/shared/src/agent-services.ts'
 import { type LocalServiceIntent } from './local-config.ts'
 import type { LocalDaemonEndpointProjection, LocalWorkChildReply, LocalWorkChildRequest } from './local-supervisor.ts'
 import { failedLocalWorkReceipt, type LocalWorkControlReply, type LocalWorkControlRequest } from './local-work-control.ts'
-import { runWorkExecution, type ProjectExecutionReceipt, type WorkExecutionRequest } from './dagpipe/host.ts'
+import { runWorkExecution, type ProjectExecutionReceipt, type WorkExecutionRequest } from '../packages/dagpipe/src/host.ts'
 
 export interface AgentConnectionIntent {
   readonly targetAgentId: string

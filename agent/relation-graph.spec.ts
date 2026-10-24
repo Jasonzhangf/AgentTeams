@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CapabilityDeclaration } from '../control-protocol/agent-services.ts'
+import type { CapabilityDeclaration } from '../packages/shared/src/agent-services.ts'
 import { createRelationStore, matchCapability, projectCapabilityUseGraph, reportCapabilityUseByConsumer, reportCapabilityUseByProvider, revokeRelation, setRelationAvailability, updateRelation } from './relation-graph.ts'
 
 const base = { relationId: 'rel-1', consumer: 'planner', provider: 'reviewer', capabilityId: 'review', capabilityVersion: '1.0.0', relationPermission: 'granted' as const, reportedAt: '2026-09-01T17:00:00Z', reportRevision: 1 }

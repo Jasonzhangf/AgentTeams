@@ -9,7 +9,7 @@ import {
   onMessage,
   onOpenAck,
   openChannel,
-} from '../control-protocol/channel-state.ts'
+} from '../packages/shared/src/channel-state.ts'
 
 export interface SessionChannelRegistry {
   readonly channels: ReadonlyMap<string, ChannelState>

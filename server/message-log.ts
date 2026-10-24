@@ -1,5 +1,5 @@
-import type { Message, MessageWatermark } from '../control-protocol/group-wire.ts'
-import { parseGroupMessage } from '../control-protocol/group-wire.ts'
+import type { Message, MessageWatermark } from '../packages/shared/src/group-wire.ts'
+import { parseGroupMessage } from '../packages/shared/src/group-wire.ts'
 
 /**
  * Append-only group message log for the group messaging increment.

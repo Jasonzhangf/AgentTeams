@@ -1,4 +1,4 @@
-import type { AuthenticatedAgent, JsonValue } from '../control-protocol/agent-services.ts'
+import type { AuthenticatedAgent, JsonValue } from '../packages/shared/src/agent-services.ts'
 import type {
   AcpChannelRef,
   AcpDelivery,
@@ -7,10 +7,10 @@ import type {
   AcpIngress,
   AcpRpcId,
   HistoryRecord,
-} from '../control-protocol/acp.ts'
-import { AcpError, parseAcpFrame } from '../control-protocol/acp.ts'
-import type { ConsolePermissionOption } from '../control-protocol/console-api.ts'
-import type { EngineHandle } from '../control-protocol/engine.ts'
+} from '../packages/shared/src/acp.ts'
+import { AcpError, parseAcpFrame } from '../packages/shared/src/acp.ts'
+import type { ConsolePermissionOption } from '../packages/shared/src/console-api.ts'
+import type { EngineHandle } from '../packages/shared/src/engine.ts'
 import type { AcpPolicySnapshot } from '../config/acp-policy.ts'
 import type { AcpHistoryPort } from './acp-history.ts'
 

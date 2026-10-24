@@ -1,7 +1,7 @@
-import type { AuthenticatedAgent, ServiceErrorCode } from '../control-protocol/agent-services.ts'
-import type { ConsoleClientV1, ConsoleCommandV1 } from '../control-protocol/console-api.ts'
-import { parseConsoleWireRequest, type ConsoleWireReply, type ConsoleWireRequest } from '../control-protocol/console-wire.ts'
-import { assertJsonValue } from '../control-protocol/json-value.ts'
+import type { AuthenticatedAgent, ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
+import type { ConsoleClientV1, ConsoleCommandV1 } from '../packages/shared/src/console-api.ts'
+import { parseConsoleWireRequest, type ConsoleWireReply, type ConsoleWireRequest } from '../packages/shared/src/console-wire.ts'
+import { assertJsonValue } from '../packages/shared/src/json-value.ts'
 
 export type ConsoleAccess =
   | { readonly kind: 'observe'; readonly agentId: string }

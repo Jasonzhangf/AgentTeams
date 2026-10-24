@@ -2,13 +2,13 @@ import { chmod, lstat, mkdir, stat, unlink } from 'node:fs/promises'
 import { createConnection, createServer, type Server, type Socket } from 'node:net'
 import { dirname } from 'node:path'
 import type { Duplex } from 'node:stream'
-import type { ServiceError, ServiceErrorCode } from '../control-protocol/agent-services.ts'
+import type { ServiceError, ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
 import {
   parseGroupWireReply,
   parseGroupWireRequest,
   type GroupWireReply,
   type GroupWireRequest,
-} from '../control-protocol/group-wire.ts'
+} from '../packages/shared/src/group-wire.ts'
 
 /**
  * Local CLI -> daemon group messaging socket.

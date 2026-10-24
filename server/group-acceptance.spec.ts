@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ExternalOp } from '../control-protocol/group-wire.ts'
+import type { ExternalOp } from '../packages/shared/src/group-wire.ts'
 import {
   applyCancelConfirmation,
   authenticateExternalOpReceipt,
@@ -8,7 +8,7 @@ import {
 } from './group-external-ops.ts'
 import { createAction, createActionRegistry, startAction, submitActionResult } from './action-registry.ts'
 import { createGroupHub, type GroupHubSnapshot, type GroupHubStore } from './group-hub.ts'
-import { canTransitionAction } from '../control-protocol/group-wire.ts'
+import { canTransitionAction } from '../packages/shared/src/group-wire.ts'
 
 /**
  * Batch-1 acceptance evidence. Each test names the design item it proves. The

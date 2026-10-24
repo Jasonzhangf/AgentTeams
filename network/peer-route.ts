@@ -1,5 +1,5 @@
-import type { ServiceErrorCode } from '../control-protocol/agent-services.ts'
-import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
+import type { ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
+import type { AuthenticatedAgent } from '../packages/shared/src/agent-services.ts'
 import { resolveHostFromDirectory, type AccountDirectorySnapshot } from './account-directory.ts'
 import { activeDirectWssCandidate, buildDirectWssRoutePlan, type RoutePlan } from './route-plan.ts'
 import { connectDirectWssTarget, type DirectWssTarget, type DirectWssTargetOptions } from './direct-route.ts'

@@ -291,7 +291,7 @@ describe('agentteams install package', () => {
       'console-host/static/console.html',
       'ui/teams-console/index.js',
       'ui/teams-console/browser.js',
-      'ui/teams-console/client/render.js',
+      'ui/teams-console/components/render.js',
       'ui/teams-console/assets/agentbrowser-icon.jpg',
     ]
     for (const path of required) expect(await exists(join(packRoot, path)), path).toBe(true)
@@ -387,14 +387,14 @@ describe('agentteams install package', () => {
       'runtime/dagpipe/graphs/work-request.graph.json',
       'runtime/dagpipe/graphs/work-close.graph.json',
       'runtime/dagpipe/graphs/work-query.graph.json',
-      'generated/runtime-lib/control-protocol/endpoint-ref.js',
-      'generated/runtime-lib/control-protocol/json-value.js',
-      'generated/runtime-lib/control-protocol/relay-codec.js',
-      'generated/runtime-lib/control-protocol/work-wire.js',
+      'generated/runtime-lib/packages/shared/src/endpoint-ref.js',
+      'generated/runtime-lib/packages/shared/src/json-value.js',
+      'generated/runtime-lib/packages/shared/src/relay-codec.js',
+      'generated/runtime-lib/packages/shared/src/work-wire.js',
       'generated/runtime-lib/network/work-channel.js',
       'generated/runtime-lib/runtime/agent-work-client.js',
-      'generated/runtime-lib/runtime/dagpipe/host.js',
-      'generated/runtime-lib/runtime/dagpipe/protocol.js',
+      'generated/runtime-lib/packages/dagpipe/src/host.js',
+      'generated/runtime-lib/packages/dagpipe/src/protocol.js',
     ]
     for (const path of required) expect(await exists(join(packRoot, path)), path).toBe(true)
     const finalFiles = finalReceipt.files as string[]

@@ -5,7 +5,7 @@ import type {
   GroupMember,
   IssueSession,
   MemberInterval,
-} from '../control-protocol/group-wire.ts'
+} from '../packages/shared/src/group-wire.ts'
 
 /**
  * Group and membership truth for the group messaging increment.

@@ -1,15 +1,38 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023", "DOM"],
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["agent/**/*.ts", "agent-host/**/*.ts", "acp-adapter/**/*.ts", "cli-adapter/**/*.ts", "dsh-adapter/**/*.ts", "endpoint/**/*.ts", "config/**/*.ts", "control-protocol/**/*.ts", "network/**/*.ts", "runtime/**/*.ts", "server/**/*.ts", "memory-plugin/**/*.ts", "search-plugin/**/*.ts"],
-  "exclude": ["**/*.spec.ts", "**/vitest.config.ts"]
+  "include": [
+    "agent/**/*.ts",
+    "agent-host/**/*.ts",
+    "acp-adapter/**/*.ts",
+    "cli-adapter/**/*.ts",
+    "dsh-adapter/**/*.ts",
+    "endpoint/**/*.ts",
+    "config/**/*.ts",
+    "network/**/*.ts",
+    "runtime/**/*.ts",
+    "server/**/*.ts",
+    "memory-plugin/**/*.ts",
+    "search-plugin/**/*.ts",
+    "packages/shared/src/**/*.ts",
+    "packages/dagpipe/src/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.spec.ts",
+    "**/vitest.config.ts"
+  ]
 }

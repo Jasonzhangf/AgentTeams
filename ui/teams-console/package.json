@@ -30,7 +30,11 @@
   "files": [
     "lib/index.js",
     "lib/browser.js",
+    "lib/mount.js",
+    "lib/styles.js",
     "lib/client/**/*.js",
+    "lib/components/**/*.js",
+    "lib/state/**/*.js",
     "lib/canonical/**/*.js",
     "lib/**/*.d.ts",
     "assets",

@@ -1,6 +1,6 @@
-import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
-import type { AcpFault } from '../control-protocol/acp.ts'
-import { AcpError } from '../control-protocol/acp.ts'
+import type { AuthenticatedAgent } from '../packages/shared/src/agent-services.ts'
+import type { AcpFault } from '../packages/shared/src/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
 import type {
   RelationRole,
   TeamsAgreement,
@@ -11,8 +11,8 @@ import type {
   TeamsConnectionPropose,
   TeamsConnectionReady,
   TeamsConnectionReject,
-} from '../control-protocol/teams-connection.ts'
-import { parseTeamsConnectionFrame } from '../control-protocol/teams-connection.ts'
+} from '../packages/shared/src/teams-connection.ts'
+import { parseTeamsConnectionFrame } from '../packages/shared/src/teams-connection.ts'
 
 /**
  * Teams negotiation state machine (owner: network).

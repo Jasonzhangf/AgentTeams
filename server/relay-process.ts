@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, isAbsolute, resolve } from 'node:path'
-import { assertEnvelopeKeys, assertJsonValue } from '../control-protocol/json-value.ts'
-import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
+import { assertEnvelopeKeys, assertJsonValue } from '../packages/shared/src/json-value.ts'
+import type { AuthenticatedAgent } from '../packages/shared/src/agent-services.ts'
 import { createRelayServer, type RelayServer } from './relay.ts'
 
 const RELAY_CONFIG_VERSION = 1

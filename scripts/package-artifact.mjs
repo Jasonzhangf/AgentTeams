@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { currentCandidateIdentity } from './receipt-identity.mjs'
-import { buildRunner } from '../runtime/dagpipe/build.mjs'
+import { buildRunner } from '../packages/dagpipe/src/build.mjs'
 
 const root = resolve(import.meta.dirname, '..')
 const moduleRoot = resolve(root, 'generated', 'modules', 'teams-source')

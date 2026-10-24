@@ -18,7 +18,7 @@ import {
   type SnapshotRequest,
   type SnapshotResult,
 } from './contracts.ts'
-import type { JsonValue } from '../control-protocol/agent-services.ts'
+import type { JsonValue } from '../packages/shared/src/agent-services.ts'
 
 const profilePattern = /^[A-Za-z0-9._-]+$/
 

@@ -1,13 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { parseConsoleCommand, type ConsoleClientV1 } from '../../control-protocol/console-api.ts'
-import { assertJsonValue } from '../../control-protocol/json-value.ts'
+import { parseConsoleCommand, type ConsoleClientV1 } from '../../packages/shared/src/console-api.ts'
+import { assertJsonValue } from '../../packages/shared/src/json-value.ts'
 import {
   historyQueryFromSearchParams,
   type ConsoleProjectionSink,
   type ConsoleProjectionSubscriber,
   type HistoryPage,
   type HistoryReadPort,
-} from '../../control-protocol/teams-state.ts'
+} from '../../packages/shared/src/teams-state.ts'
 
 export interface ConsoleApiOptions {
   /** Runtime authenticates this request and returns only its authorized daemon binding. */
@@ -77,7 +77,7 @@ function streamEvents(response: ServerResponse, subscriber: ConsoleProjectionSub
     }
     const sink: ConsoleProjectionSink = {
       // The event name is the contract the UI live client subscribes to
-      // (ui/teams-console/src/client/{live-client,observation}.ts listen for `snapshot`).
+      // (ui/teams-console/src/client/live-client.ts and ui/teams-console/src/state/observation.ts listen for `snapshot`).
       // A named SSE event with no matching listener is dropped silently, so this name and the
       // client listeners must agree; console-host/tests/http-api.spec.ts pins it.
       onSnapshot(snapshot) { frame('snapshot', snapshot) },

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { assertJsonValue } from '../control-protocol/json-value.ts'
-import { parseWorkWireFrame, type WorkWireReply, type WorkWireRequest } from '../control-protocol/work-wire.ts'
-import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
+import { assertJsonValue } from '../packages/shared/src/json-value.ts'
+import { parseWorkWireFrame, type WorkWireReply, type WorkWireRequest } from '../packages/shared/src/work-wire.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
 import type { WssConnection } from './wss-connection.ts'
 
 type Command = WorkWireRequest extends infer T ? T extends WorkWireRequest ? Omit<T, 'correlationId'> : never : never

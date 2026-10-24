@@ -1,5 +1,5 @@
 import { createFixtureClient } from './fixture.ts'
-import { mountTeamsConsole } from './client/index.ts'
+import { mountTeamsConsole } from './mount.ts'
 
 const root = document.querySelector<HTMLElement>('#app')
 if (root === null) throw new Error('Teams fixture requires #app')

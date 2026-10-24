@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
-import type { ConsoleClientV1 } from '../../control-protocol/console-api.ts'
+import type { ConsoleClientV1 } from '../../packages/shared/src/console-api.ts'
 
 /** Credentials are supplied by runtime; daemon management policy remains independent. */
 export function createConsoleAuthorization(options: {

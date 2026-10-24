@@ -24,8 +24,8 @@ import type { LocalWorkControlRequest } from './local-work-control.ts'
 import { createFileWorkStore, createWorkLedger, proposeWork, requestWork } from '../agent/work-resource.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 import type { LocalServiceIntent } from './local-config.ts'
-import { buildRunner } from './dagpipe/build.mjs'
-import { runWorkExecution, type WorkCloseIntentControl, type WorkOpenIntentControl, type WorkRequestIntentControl } from './dagpipe/host.ts'
+import { buildRunner } from '../packages/dagpipe/src/build.mjs'
+import { runWorkExecution, type WorkCloseIntentControl, type WorkOpenIntentControl, type WorkRequestIntentControl } from '../packages/dagpipe/src/host.ts'
 
 const workOpenGraph = join(resolve(import.meta.dirname), '..', 'docs', 'design', 'dagpipe', 'graphs', 'work-open.graph.json')
 const workRequestGraph = join(resolve(import.meta.dirname), '..', 'docs', 'design', 'dagpipe', 'graphs', 'work-request.graph.json')
@@ -130,7 +130,7 @@ it('accepts service-only connect intent and rejects retired startup Work fields 
 
 it('loads control-protocol frames through a raw Node transform-types child', () => {
   const output = execFileSync(process.execPath, ['--experimental-transform-types', '--input-type=module', '-e', `
-    import { parseTargetControlFrame } from './control-protocol/frames.ts'
+    import { parseTargetControlFrame } from './packages/shared/src/frames.ts'
     const frame = parseTargetControlFrame({ kind: 'transport.ping', targetGeneration: 1, nonce: 'raw-child' })
     if (frame.kind !== 'transport.ping' || frame.nonce !== 'raw-child') throw new Error('raw frame import failed')
     process.stdout.write(frame.nonce)

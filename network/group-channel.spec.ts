@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ServiceError } from '../control-protocol/agent-services.ts'
-import type { GroupWireReply, GroupWireRequest } from '../control-protocol/group-wire.ts'
+import type { ServiceError } from '../packages/shared/src/agent-services.ts'
+import type { GroupWireReply, GroupWireRequest } from '../packages/shared/src/group-wire.ts'
 import {
   createGroupChannel,
   type GroupChannelPush,

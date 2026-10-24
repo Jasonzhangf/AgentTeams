@@ -11,9 +11,9 @@ import {
   writeSync,
 } from 'node:fs'
 import { dirname } from 'node:path'
-import { assertJsonValue } from '../control-protocol/json-value.ts'
-import { parseServiceError } from '../control-protocol/relay-codec.ts'
-import { admitWorkEndpointReference, parseWorkEndpointReference, type EndpointDiscoveryView, type WorkEndpointReference } from '../control-protocol/endpoint-ref.ts'
+import { assertJsonValue } from '../packages/shared/src/json-value.ts'
+import { parseServiceError } from '../packages/shared/src/relay-codec.ts'
+import { admitWorkEndpointReference, parseWorkEndpointReference, type EndpointDiscoveryView, type WorkEndpointReference } from '../packages/shared/src/endpoint-ref.ts'
 import type {
   AgentWork,
   AuthenticatedAgent,
@@ -27,7 +27,7 @@ import type {
   ServiceErrorCode,
   WorkProposal,
   WorkRequest,
-} from '../control-protocol/agent-services.ts'
+} from '../packages/shared/src/agent-services.ts'
 
 export interface WorkServiceError extends Error {
   readonly error: ServiceError

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Action, Group, Message } from '../control-protocol/group-wire.ts'
+import type { Action, Group, Message } from '../packages/shared/src/group-wire.ts'
 import { dedupeMessageBatch, routeGroupMessage } from './message-router.ts'
 
 const T0 = '2026-10-22T00:00:00.000Z'

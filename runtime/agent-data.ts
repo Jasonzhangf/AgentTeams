@@ -1,8 +1,8 @@
 import { createWorkChannel, type WorkChannelOptions } from '../network/work-channel.ts'
 import { serveConsole } from '../network/console-channel.ts'
 import type { WssConnection } from '../network/wss-connection.ts'
-import type { ConsoleWireReply, ConsoleWireRequest } from '../control-protocol/console-wire.ts'
-import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
+import type { ConsoleWireReply, ConsoleWireRequest } from '../packages/shared/src/console-wire.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
 
 /** The first typed frame selects a protocol; authorization stays in each Agent ingress. */
 export async function acceptAgentData(socket: WssConnection, options: {

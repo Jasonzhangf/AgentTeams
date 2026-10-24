@@ -1,13 +1,13 @@
 import { isAbsolute, join } from 'node:path'
-import type { JsonValue } from '../control-protocol/agent-services.ts'
-import type { AcpFrame } from '../control-protocol/acp.ts'
-import { AcpError } from '../control-protocol/acp.ts'
+import type { JsonValue } from '../packages/shared/src/agent-services.ts'
+import type { AcpFrame } from '../packages/shared/src/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
 import type {
   EngineAdapter,
   EngineHandle,
   EngineLaunchInput,
   EngineLaunchSpec,
-} from '../control-protocol/engine.ts'
+} from '../packages/shared/src/engine.ts'
 import type { AcpPolicyIntent } from '../config/acp-policy.ts'
 import type { AgentModelBinding, ModelRef } from '../config/runtime-config.ts'
 import { compileDshNativeConfig } from './native-config.ts'

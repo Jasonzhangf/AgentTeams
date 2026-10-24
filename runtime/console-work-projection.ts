@@ -1,5 +1,5 @@
-import type { AgentWork, WorkState } from '../control-protocol/agent-services.ts'
-import type { ConsoleRelationView, ConsoleWorkView } from '../control-protocol/console-api.ts'
+import type { AgentWork, WorkState } from '../packages/shared/src/agent-services.ts'
+import type { ConsoleRelationView, ConsoleWorkView } from '../packages/shared/src/console-api.ts'
 
 function relationPermission(state: WorkState): ConsoleRelationView['relationPermission'] {
   if (state === 'rejected') return 'revoked'

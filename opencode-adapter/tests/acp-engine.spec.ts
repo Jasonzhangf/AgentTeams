@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AcpFrame } from '../../control-protocol/acp.ts'
-import type { EngineHandle, EngineLaunchInput, EngineLaunchSpec } from '../../control-protocol/engine.ts'
+import type { AcpFrame } from '../../packages/shared/src/acp.ts'
+import type { EngineHandle, EngineLaunchInput, EngineLaunchSpec } from '../../packages/shared/src/engine.ts'
 import type { AcpPolicyIntent } from '../../config/acp-policy.ts'
 import { extractAcpCapabilities, resolveAcpPolicy } from '../../config/acp-policy.ts'
 import type { ProviderInstance, VersionedRuntimeConfig } from '../../config/runtime-config.ts'

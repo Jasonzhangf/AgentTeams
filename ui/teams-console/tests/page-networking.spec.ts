@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canSubmitMembership, projectMembershipDraft, selectNetworkMembers } from '../src/client/page-networking.ts'
+import { canSubmitMembership, projectMembershipDraft, selectNetworkMembers } from '../src/components/page-networking.ts'
 import type { ConsoleProjectionV1 } from '../src/client/protocol.ts'
 
 // Canonical owner observations: the networking page's projection consumes the raw

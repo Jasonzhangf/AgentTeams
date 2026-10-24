@@ -14,7 +14,7 @@ import { createCliWorkExecutor, type CliWorkExecutor } from '../agent-host/cli-e
 import { createFileWorkStore, createWorkLedger, type WorkLedger } from '../agent/work-resource.ts'
 import { compileDeclarationEndpoints } from '../server/endpoint-discovery.ts'
 import { createAgentWorkClient, type AgentWorkClient } from './agent-work-client.ts'
-import { buildRunner } from './dagpipe/build.mjs'
+import { buildRunner } from '../packages/dagpipe/src/build.mjs'
 import {
   runWorkExecution,
   type ProjectExecutionReceipt,
@@ -23,11 +23,11 @@ import {
   type WorkIntentControl,
   type WorkOpenIntentControl,
   type WorkRequestIntentControl,
-} from './dagpipe/host.ts'
-import type { HostCallFrame, RunnerFinalFrame } from './dagpipe/protocol.ts'
+} from '../packages/dagpipe/src/host.ts'
+import type { HostCallFrame, RunnerFinalFrame } from '../packages/dagpipe/src/protocol.ts'
 
 const repoRoot = resolve(import.meta.dirname, '..')
-const fixtureRoot = join(repoRoot, 'runtime', 'dagpipe', 'fixtures')
+const fixtureRoot = join(repoRoot, 'packages', 'dagpipe', 'src', 'fixtures')
 const evidenceRoot = join(repoRoot, 'generated', 'u4-receipts', process.env.U4_RECEIPT_RUN_ID ?? `run-${process.pid}`)
 const agentWorkGraph = join(repoRoot, 'docs', 'design', 'dagpipe', 'graphs', 'agent-work.graph.json')
 const workOpenGraph = join(repoRoot, 'docs', 'design', 'dagpipe', 'graphs', 'work-open.graph.json')

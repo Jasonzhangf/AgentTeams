@@ -1,7 +1,7 @@
-import type { ConsoleAgentObservationV1, ConsoleClientV1, ConsoleProjectionV1 } from '../control-protocol/console-api.ts'
-import type { RelayPeer } from '../control-protocol/agent-services.ts'
-import { parseConsoleWorkRelationProjection, projectCapabilityDetails } from '../control-protocol/console-api.ts'
-import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
+import type { ConsoleAgentObservationV1, ConsoleClientV1, ConsoleProjectionV1 } from '../packages/shared/src/console-api.ts'
+import type { RelayPeer } from '../packages/shared/src/agent-services.ts'
+import { parseConsoleWorkRelationProjection, projectCapabilityDetails } from '../packages/shared/src/console-api.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
 
 export interface ConsoleDirectoryBinding {
   readonly peers: readonly RelayPeer[]

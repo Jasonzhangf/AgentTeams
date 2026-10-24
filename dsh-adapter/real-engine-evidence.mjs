@@ -39,7 +39,7 @@ const { createDshEngineAdapter, DSH_PATCH_FILE_NAME } = await import(lib('dsh-ad
 const { startAcpAgentDaemon } = await import(lib('runtime/acp-daemon.js'))
 const { createAcpHistoryStore } = await import(lib('runtime/acp-history-store.js'))
 const { parseDaemonConfigText, resolveDaemonIntent, compileDaemonIntent } = await import(lib('config/daemon-intent.js'))
-const { AcpError } = await import(lib('control-protocol/acp.js'))
+const { AcpError } = await import(lib('packages/shared/src/acp.js'))
 
 const arg = (name, fallback) => {
   const index = process.argv.indexOf(`--${name}`)

@@ -2,9 +2,9 @@ import { randomBytes } from 'node:crypto'
 import type { PluginInput, Hooks } from '@opencode-ai/plugin'
 import type { Session } from '@opencode-ai/sdk'
 import { createOpencodeClient } from '@opencode-ai/sdk'
-import { assertEnvelopeKeys, assertJsonValue } from '../../control-protocol/json-value.ts'
-import type { JsonValue } from '../../control-protocol/agent-services.ts'
-import type { ConsoleSessionEventView, OpenCodeStructuredError, SessionCreateResult, SessionObservationState } from '../../control-protocol/console-api.ts'
+import { assertEnvelopeKeys, assertJsonValue } from '../../packages/shared/src/json-value.ts'
+import type { JsonValue } from '../../packages/shared/src/agent-services.ts'
+import type { ConsoleSessionEventView, OpenCodeStructuredError, SessionCreateResult, SessionObservationState } from '../../packages/shared/src/console-api.ts'
 import type {
   ConfigApplyResult,
   ModelEntry,

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Action, Group, GroupInvitation, IssueSession, ExternalOp, Message } from '../control-protocol/group-wire.ts'
+import type { Action, Group, GroupInvitation, IssueSession, ExternalOp, Message } from '../packages/shared/src/group-wire.ts'
 import type { IssueSessionOperation } from './issue-session.ts'
 import {
   appendJsonLine,

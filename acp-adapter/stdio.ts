@@ -1,8 +1,8 @@
 import { once } from 'node:events'
 import type { Readable, Writable } from 'node:stream'
-import type { AcpFault, AcpFrame } from '../control-protocol/acp.ts'
-import { AcpError, parseAcpFrame } from '../control-protocol/acp.ts'
-import type { AcpDuplex } from '../control-protocol/engine.ts'
+import type { AcpFault, AcpFrame } from '../packages/shared/src/acp.ts'
+import { AcpError, parseAcpFrame } from '../packages/shared/src/acp.ts'
+import type { AcpDuplex } from '../packages/shared/src/engine.ts'
 
 /**
  * Newline-delimited JSON ACP transport over one engine's stdio.

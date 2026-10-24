@@ -1,5 +1,5 @@
-import type { AcpPolicyIntent } from '../config/acp-policy.ts'
-import type { ConfigTargetIdentity, ModelRef, VersionedRuntimeConfig } from '../config/runtime-config.ts'
+import type { AcpPolicyIntent } from '../../../config/acp-policy.ts'
+import type { ConfigTargetIdentity, ModelRef, VersionedRuntimeConfig } from '../../../config/runtime-config.ts'
 import type { AcpFault, AcpFrame } from './acp.ts'
 
 /** Engine-facing stream port. The concrete stdio adapter owns its implementation. */

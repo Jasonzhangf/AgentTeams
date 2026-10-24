@@ -58,7 +58,7 @@ for (const relativePath of [
 ]) {
   assertSame(relativePath)
 }
-for (const relativePath of ['index.js', 'browser.js', 'client/render.js']) {
+for (const relativePath of ['index.js', 'browser.js', 'components/render.js']) {
   assertSame(`ui/teams-console/lib/${relativePath}`, `ui/teams-console/${relativePath}`)
 }
 assertSame('ui/teams-console/assets/agentbrowser-icon.jpg')

@@ -1,9 +1,9 @@
-import type { Action, ActionKind, ActionState } from '../control-protocol/group-wire.ts'
+import type { Action, ActionKind, ActionState } from '../packages/shared/src/group-wire.ts'
 import {
   actionNeedsExecutionFor,
   canTransitionAction,
   parseGroupAction,
-} from '../control-protocol/group-wire.ts'
+} from '../packages/shared/src/group-wire.ts'
 
 /**
  * Action truth for the group messaging increment.

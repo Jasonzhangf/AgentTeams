@@ -1,6 +1,6 @@
-import type { ServiceErrorCode } from '../control-protocol/agent-services.ts'
-import { parseTargetControlFrame, type TargetControlFrame } from '../control-protocol/frames.ts'
-import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
+import type { ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
+import { parseTargetControlFrame, type TargetControlFrame } from '../packages/shared/src/frames.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
 import {
   activeDirectWssCandidate,
   beginRouteCandidate,

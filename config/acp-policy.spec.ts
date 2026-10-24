@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AcpFrame } from '../control-protocol/acp.ts'
+import type { AcpFrame } from '../packages/shared/src/acp.ts'
 import { assertAcpAllowed, extractAcpCapabilities, resolveAcpPolicy } from './acp-policy.ts'
 
 const initialize: AcpFrame = {

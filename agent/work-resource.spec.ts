@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AuthenticatedAgent, CapabilityDeclaration, WorkRequest } from '../control-protocol/agent-services.ts'
+import type { AuthenticatedAgent, CapabilityDeclaration, WorkRequest } from '../packages/shared/src/agent-services.ts'
 import {
   createFileWorkStore,
   createTrustedWorkAuthority,

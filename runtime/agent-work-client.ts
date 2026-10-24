@@ -8,10 +8,10 @@ import type {
   ResourceDemand,
   WorkProposal,
   WorkReply,
-} from '../control-protocol/agent-services.ts'
-import type { WorkEndpointReference } from '../control-protocol/endpoint-ref.ts'
-import type { WorkWireReply } from '../control-protocol/work-wire.ts'
-import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
+} from '../packages/shared/src/agent-services.ts'
+import type { WorkEndpointReference } from '../packages/shared/src/endpoint-ref.ts'
+import type { WorkWireReply } from '../packages/shared/src/work-wire.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
 import type { RelayClient } from '../network/relay-client.ts'
 import { createWorkChannel, type WorkChannel } from '../network/work-channel.ts'
 

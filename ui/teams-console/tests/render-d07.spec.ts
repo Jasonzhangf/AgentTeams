@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 
-const clientRoot = join(import.meta.dirname, '../src/client')
+const srcRoot = join(import.meta.dirname, '../src')
 
 /**
  * Render the real D07 four-page console in a real DOM. The client modules are transpiled to a
@@ -15,7 +15,7 @@ const clientRoot = join(import.meta.dirname, '../src/client')
  * asserted, only the DOM the modules build: the frozen section 5 marker contract.
  */
 function classicModule(file: string): string {
-  const output = transpileModule(readFileSync(join(clientRoot, file), 'utf8'), {
+  const output = transpileModule(readFileSync(join(srcRoot, file), 'utf8'), {
     compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
   }).outputText
   return output
@@ -41,11 +41,11 @@ function chromeExecutable(): string {
 }
 
 const script = [
-  classicModule('locale.ts'),
-  classicModule('model.ts'),
-  classicModule('drafts.ts'),
-  classicModule('protocol.ts'),
-  classicModule('render.ts'),
+  classicModule('client/locale.ts'),
+  classicModule('state/model.ts'),
+  classicModule('state/drafts.ts'),
+  classicModule('client/protocol.ts'),
+  classicModule('components/render.ts'),
 ].join('\n')
 
 if (/(^|\n)\s*(import|export)\b/.test(script)) throw new Error('classic module bundling left module syntax behind')

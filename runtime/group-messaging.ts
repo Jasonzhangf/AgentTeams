@@ -1,5 +1,5 @@
-import type { AgentDeclaration, JsonValue } from '../control-protocol/agent-services.ts'
-import type { GroupWireRequest } from '../control-protocol/group-wire.ts'
+import type { AgentDeclaration, JsonValue } from '../packages/shared/src/agent-services.ts'
+import type { GroupWireRequest } from '../packages/shared/src/group-wire.ts'
 import { createGroupChannel, type GroupChannel } from '../network/group-channel.ts'
 import type { RegistrationClient, RegistrationStatus } from '../network/registration-client.ts'
 import {

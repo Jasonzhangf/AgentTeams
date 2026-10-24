@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { setMaxListeners } from 'node:events'
-import type { AgentDeclaration, JsonValue, RelayClientControl, RelayGrant, RelayPeer, RelayServerControl, ServiceError } from '../control-protocol/agent-services.ts'
-import { encodeRelayClientControl, parseAgentDeclaration, parseRelayServerControl } from '../control-protocol/relay-codec.ts'
-import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
+import type { AgentDeclaration, JsonValue, RelayClientControl, RelayGrant, RelayPeer, RelayServerControl, ServiceError } from '../packages/shared/src/agent-services.ts'
+import { encodeRelayClientControl, parseAgentDeclaration, parseRelayServerControl } from '../packages/shared/src/relay-codec.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-admission.ts'
 import { loginRelay, type RelayLoginOptions } from './relay-login.ts'
 import { connectWss, type WssConnection } from './wss-connection.ts'
 
