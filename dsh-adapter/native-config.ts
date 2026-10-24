@@ -1,4 +1,4 @@
-import { AcpError } from '../control-protocol/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
 import type {
   AgentModelBinding,
   ModelEntry,

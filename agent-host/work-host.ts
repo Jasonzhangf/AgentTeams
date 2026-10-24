@@ -1,4 +1,4 @@
-import type { AgentWork, AuthenticatedAgent, ResourceAllocation, ServiceErrorCode, WorkProposal, WorkRequest } from '../control-protocol/agent-services.ts'
+import type { AgentWork, AuthenticatedAgent, ResourceAllocation, ServiceErrorCode, WorkProposal, WorkRequest } from '../packages/shared/src/agent-services.ts'
 import {
   closeWork, completeRequest, confirmWorkDestroyed, createTrustedWorkAuthority,
   getRequest, proposeWork, requestWork,

@@ -239,7 +239,7 @@ export async function runInstalledSdkSmoke(options = {}) {
       ['compileDeclarationEndpoints', 'server/endpoint-discovery.js'],
       ['createWorkChannel', 'network/work-channel.js'],
       ['createAgentWorkClient', 'runtime/agent-work-client.js'],
-      ['runWorkExecution', 'runtime/dagpipe/host.js'],
+      ['runWorkExecution', 'packages/dagpipe/src/host.js'],
     ]) {
       const mod = await import(pathToFileURL(join(installedRoot, 'generated', 'runtime-lib', rel)).href)
       imported[name] = mod[name]

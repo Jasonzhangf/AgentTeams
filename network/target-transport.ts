@@ -1,4 +1,4 @@
-import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
+import type { AuthenticatedAgent } from '../packages/shared/src/agent-services.ts'
 
 export type TargetTransportStateName = 'connecting' | 'ready' | 'closed' | 'failed'
 

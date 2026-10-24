@@ -1,8 +1,8 @@
-import type { ConsoleEntry, UiStatus } from './model.ts'
-import { canOperateSession, modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerById, providerLabel, teamPages } from './model.ts'
-import type { ConsoleState, DrawerState, ProviderDraft, TeamsConsoleController } from './controller.ts'
-import { messages, type Locale, type MessageKey } from './locale.ts'
-import type { ConsoleProviderView, JsonValue } from './protocol.ts'
+import type { ConsoleEntry, UiStatus } from '../state/model.ts'
+import { canOperateSession, modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerById, providerLabel, teamPages } from '../state/model.ts'
+import type { ConsoleState, DrawerState, ProviderDraft, TeamsConsoleController } from '../state/controller.ts'
+import { messages, type Locale, type MessageKey } from '../client/locale.ts'
+import type { ConsoleProviderView, JsonValue } from '../client/protocol.ts'
 
 const entries: readonly ConsoleEntry[] = ['topology', 'conversations', 'notifications', 'search', 'memory']
 const pageEntries: readonly ('discovery' | 'networking' | 'interaction' | 'history')[] = ['discovery', 'networking', 'interaction', 'history']
@@ -73,7 +73,7 @@ function actionDisabled(state: ConsoleState): boolean {
   return state.busy !== null
 }
 
-function sessionEventTitle(event: import('./protocol.ts').ConsoleSessionEventView, t: Record<MessageKey, string>): string {
+function sessionEventTitle(event: import('../client/protocol.ts').ConsoleSessionEventView, t: Record<MessageKey, string>): string {
   switch (event.kind) {
     case 'message': return `${event.role} ${event.state}`
     case 'part': return `${event.partType} ${event.state}`
@@ -86,7 +86,7 @@ function sessionEventTitle(event: import('./protocol.ts').ConsoleSessionEventVie
   }
 }
 
-function sessionEventDetail(event: import('./protocol.ts').ConsoleSessionEventView): string | undefined {
+function sessionEventDetail(event: import('../client/protocol.ts').ConsoleSessionEventView): string | undefined {
   switch (event.kind) {
     case 'part': return event.state === 'observed' ? JSON.stringify(event.sourcePart, null, 2) : event.text
     case 'tool':
@@ -137,7 +137,7 @@ function renderAgentCard(
   controller: TeamsConsoleController,
   state: ConsoleState,
   t: Record<MessageKey, string>,
-  agent: import('./model.ts').AgentRow,
+  agent: import('../state/model.ts').AgentRow,
 ): HTMLElement {
   const projection = state.projection
   const card = element('article', `teams-agent-card teams-agent-card-${agent.kind}`)
@@ -238,7 +238,7 @@ function fieldHint(text: string): HTMLElement {
  * The published declaration summary. A missing detail is an explicit unavailable state:
  * the UI never guesses services, resources or capacity from capability IDs.
  */
-function renderDeclaredCapabilities(agent: import('./model.ts').AgentRow, t: Record<MessageKey, string>): HTMLElement {
+function renderDeclaredCapabilities(agent: import('../state/model.ts').AgentRow, t: Record<MessageKey, string>): HTMLElement {
   const section = element('section', 'teams-capability-detail')
   const heading = element('h4', 'teams-capability-detail-title')
   heading.textContent = t.declaredServices
@@ -285,7 +285,7 @@ function permissionOptionsFor(
   agentId: string,
   sessionId: string,
   permissionId: string,
-): readonly import('./protocol.ts').ConsolePermissionOption[] | undefined {
+): readonly import('../client/protocol.ts').ConsolePermissionOption[] | undefined {
   if (projection === null || projection.sessionEvents === undefined) return undefined
   const event = projection.sessionEvents.find(candidate =>
     candidate.agentId === agentId
@@ -906,7 +906,7 @@ function band(label: string, token: string): HTMLElement {
  * owner projection; none is derived from UI animation. `data-team-observation` is the
  * frozen marker the black box reads to decide whether any animation may remain.
  */
-function teamsStateBands(agent?: import('./model.ts').AgentRow, connection?: import('./protocol.ts').ConsoleConnectionView, observation: 'unknown' | 'stale' | 'live' = 'unknown'): HTMLElement {
+function teamsStateBands(agent?: import('../state/model.ts').AgentRow, connection?: import('../client/protocol.ts').ConsoleConnectionView, observation: 'unknown' | 'stale' | 'live' = 'unknown'): HTMLElement {
   const value = element('div', 'teams-state-bands')
   value.setAttribute('data-team-observation', observation)
   append(value,

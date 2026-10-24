@@ -1,5 +1,5 @@
-import type { ConsoleProjectionSnapshot, ConsoleProjectionUnsubscribe, SessionObservationState } from './protocol.ts'
-import { parseConsoleProjectionSnapshot } from './protocol.ts'
+import type { ConsoleProjectionSnapshot, ConsoleProjectionUnsubscribe, SessionObservationState } from '../client/protocol.ts'
+import { parseConsoleProjectionSnapshot } from '../client/protocol.ts'
 
 export type ObservationState = 'unknown' | 'stale' | 'live'
 

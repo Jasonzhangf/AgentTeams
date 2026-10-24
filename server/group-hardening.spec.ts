@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Action, ExternalOp } from '../control-protocol/group-wire.ts'
-import { actionNeedsExecutionFor } from '../control-protocol/group-wire.ts'
+import type { Action, ExternalOp } from '../packages/shared/src/group-wire.ts'
+import { actionNeedsExecutionFor } from '../packages/shared/src/group-wire.ts'
 import type { ExternalOpReceipt } from './group-external-ops.ts'
 import { createGroupHub, type GroupHubSnapshot, type GroupHubStore } from './group-hub.ts'
 

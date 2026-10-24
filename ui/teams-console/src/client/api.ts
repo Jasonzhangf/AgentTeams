@@ -1,6 +1,6 @@
 import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleCommandV1, ConsoleProjectionV1, JsonValue } from './protocol.ts'
-import { assertJsonValue } from '../../../../control-protocol/json-value.ts'
-import { parseTeamsConnectionStatus } from '../../../../control-protocol/teams-state.ts'
+import { assertJsonValue } from '../../../../packages/shared/src/json-value.ts'
+import { parseTeamsConnectionStatus } from '../../../../packages/shared/src/teams-state.ts'
 import { isServiceError, parseConsoleAgentObservation, parseConsoleSessionEvent, parsePermissionReplyResult, parseSessionCancelConfirmed, parseSessionCancelUnknownDetail, parseSessionCreateResult } from './protocol.ts'
 
 export interface ConsoleHttpClientOptions {

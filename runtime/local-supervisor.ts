@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { parseLocalConsoleProjectionConfig, projectLocalChildConfigs, readLocalInternalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, writeLocalInternalState, writeLocalInternalWorkControl, writeLocalLauncherOwnership, type ConsoleRuntimeState, type LocalConfig, type LocalInternalConfig, type LocalInternalDaemonState } from './local-config.ts'
 import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
 import { startLocalWorkControlListener, type LocalConsoleControlReply, type LocalConsolePublicStatus, type LocalWorkControlHandlerInput, type LocalWorkControlReply, type LocalWorkControlRequest, type LocalWorkControlServer } from './local-work-control.ts'
-import type { ProjectExecutionReceipt } from './dagpipe/host.ts'
+import type { ProjectExecutionReceipt } from '../packages/dagpipe/src/host.ts'
 
 /** Launcher -> receiver child typed Work frame; business payload stays in `frame`. */
 export interface LocalWorkChildRequest {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSessionStorageDrafts, readDraft, readFocus, readPage, writeDraft, writeFocus, writePage } from '../src/client/drafts.ts'
+import { createSessionStorageDrafts, readDraft, readFocus, readPage, writeDraft, writeFocus, writePage } from '../src/state/drafts.ts'
 
 function storageLike() {
   const values = new Map<string, string>()

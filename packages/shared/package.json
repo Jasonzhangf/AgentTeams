@@ -1,0 +1,20 @@
+{
+  "name": "@teams/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared Teams protocol, frames and codecs consumed by runtime, console host, adapter and UI",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    "./src/*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config src/vitest.config.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

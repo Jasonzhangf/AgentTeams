@@ -5,8 +5,8 @@
 // business values are separate fields at every boundary; nothing here schedules
 // graph nodes or holds provider resource state.
 
-import type { AgentWork, JsonValue, ResourceDemand } from '../../control-protocol/agent-services.ts'
-import type { AgentWorkServiceSelection, AgentWorkTarget } from '../agent-work-client.ts'
+import type { AgentWork, JsonValue, ResourceDemand } from '../../shared/src/agent-services.ts'
+import type { AgentWorkServiceSelection, AgentWorkTarget } from '../../../runtime/agent-work-client.ts'
 
 export class HostProtocolError extends Error {
   constructor(readonly code: string, message: string) {

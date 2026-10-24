@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import type { AgentWorkClient, AgentWorkTarget } from './agent-work-client.ts'
-import { buildRunner } from './dagpipe/build.mjs'
-import { runWorkExecution, type ProjectExecutionReceipt, type WorkExecutionRequest } from './dagpipe/host.ts'
+import { buildRunner } from '../packages/dagpipe/src/build.mjs'
+import { runWorkExecution, type ProjectExecutionReceipt, type WorkExecutionRequest } from '../packages/dagpipe/src/host.ts'
 
 const repoRoot = resolve(import.meta.dirname, '..')
 const agentWorkGraph = join(repoRoot, 'docs', 'design', 'dagpipe', 'graphs', 'agent-work.graph.json')

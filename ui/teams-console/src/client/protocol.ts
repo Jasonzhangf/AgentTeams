@@ -3,7 +3,7 @@ import type {
   ConsoleCommandResultV1,
   ConsoleServiceError,
   JsonValue,
-} from '../../../../control-protocol/console-api.ts'
+} from '../../../../packages/shared/src/console-api.ts'
 import type {
   ConsoleProjectionSnapshot,
   ConsoleProjectionSink,
@@ -12,7 +12,7 @@ import type {
   HistoryQuery,
   TeamsConnectionState,
   TeamsConnectionStatus,
-} from '../../../../control-protocol/teams-state.ts'
+} from '../../../../packages/shared/src/teams-state.ts'
 
 export type {
   ConsoleAgentObservationV1,
@@ -31,7 +31,7 @@ export type {
   SessionCancelUnknownDetail,
   SessionCreateResult,
   SessionObservationState,
-} from '../../../../control-protocol/console-api.ts'
+} from '../../../../packages/shared/src/console-api.ts'
 
 export type {
   ConsoleProjectionSnapshot,
@@ -41,7 +41,7 @@ export type {
   HistoryQuery,
   TeamsConnectionState,
   TeamsConnectionStatus,
-} from '../../../../control-protocol/teams-state.ts'
+} from '../../../../packages/shared/src/teams-state.ts'
 
 export {
   parseConsoleAgentObservation,
@@ -50,13 +50,13 @@ export {
   parseSessionCancelConfirmed,
   parseSessionCancelUnknownDetail,
   parseSessionCreateResult,
-} from '../../../../control-protocol/console-api.ts'
+} from '../../../../packages/shared/src/console-api.ts'
 
 export {
   parseConsoleProjectionSnapshot,
   parseTeamsConnectionState,
   parseTeamsConnectionStatus,
-} from '../../../../control-protocol/teams-state.ts'
+} from '../../../../packages/shared/src/teams-state.ts'
 
 export type ServiceError = ConsoleServiceError
 

@@ -5,7 +5,7 @@
   "functions": [
     {
       "function_id": "work_graph_execution",
-      "owner": "runtime",
+      "owner": "packages/dagpipe",
       "status": "partial",
       "paths": [
         "docs/design/teams-behavior-contracts.md",
@@ -15,7 +15,7 @@
         "docs/design/dagpipe/graphs/work-request.graph.json",
         "docs/design/dagpipe/graphs/work-close.graph.json",
         "docs/design/dagpipe/graphs/work-query.graph.json",
-        "runtime/dagpipe/**",
+        "packages/dagpipe/src/**",
         "runtime/dagpipe-work.spec.ts",
         "runtime/agent-work-client.ts",
         "runtime/agent-work-client.spec.ts"
@@ -30,7 +30,8 @@
       ],
       "required_gates": [
         "teams-behavior-dag-topology",
-        "teams-work-sdk-installed"
+        "teams-work-sdk-installed",
+        "teams-dagpipe-runner-build"
       ],
       "design_doc": "docs/design/teams-behavior-contracts.md",
       "note": "Source-level library consumer is implemented and author-verified: runtime/dagpipe/build.mjs builds the project runner against the installed pipeline_runtime 0.1.1, runner.rs registers the fixed ten-Operator registry used by all five graphs, and host.ts dispatches typed stdio calls to the public AgentWorkClient. runtime/dagpipe-work.spec.ts exercises real Relay/TLS local sockets and the provider ledger for one-shot submit/query and persistent open/request/query/close, including stale or incomplete bindings, compile rejection, malformed runner frames, and transport-unconfirmed retention. AgentWorkClient capability selection is implemented and tested. The CLI/launcher socket/receiver wiring and the installed runner/graph/manifest pack are delivered for the exact candidate: the installed package user smoke reaches the installed receiver daemon, runs the installed DAGpipe runner, and completes public submit/query plus persistent open/request/query/close with real provider results. teams-work-sdk-installed remains unsatisfied because the BB04-BB07/BB11 driver and its installed product-runner evidence are not implemented; Console-offline Work and final user acceptance also remain PENDING. BB06 round 12: buildCompletedReceipt (runtime/dagpipe/host.ts:685-756) projects the provider typed refusal from control.reply.error into the existing receipt.control.error when no closeError exists, keeps closeError precedence and the close-failure expression, and changes no status/request/work/binding/business/cleanup/identity semantics; no runner, admission, ledger, retry or CLI second projection changes. No second map or runtime registry is introduced."
@@ -102,11 +103,11 @@
     },
     {
       "function_id": "endpoint_discovery_admission",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/endpoint-ref.ts",
-        "control-protocol/endpoint-ref.spec.ts",
+        "packages/shared/src/endpoint-ref.ts",
+        "packages/shared/src/endpoint-ref.spec.ts",
         "server/endpoint-discovery.ts",
         "server/endpoint-discovery.spec.ts",
         "server/relay.ts"
@@ -128,8 +129,8 @@
       "owner": "agent",
       "status": "partial",
       "paths": [
-        "control-protocol/agent-services.ts",
-        "control-protocol/work-wire.ts",
+        "packages/shared/src/agent-services.ts",
+        "packages/shared/src/work-wire.ts",
         "agent/work-resource.ts",
         "agent-host/work-host.ts",
         "runtime/agent-work-client.ts",
@@ -358,11 +359,11 @@
     },
     {
       "function_id": "console_remote_request_codec",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/console-wire.ts",
-        "control-protocol/console-wire.spec.ts"
+        "packages/shared/src/console-wire.ts",
+        "packages/shared/src/console-wire.spec.ts"
       ],
       "entry_symbols": [
         "parseConsoleWireRequest",
@@ -476,11 +477,11 @@
     },
     {
       "function_id": "service_error_execution_details",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/agent-services.ts",
-        "control-protocol/relay-codec.ts"
+        "packages/shared/src/agent-services.ts",
+        "packages/shared/src/relay-codec.ts"
       ],
       "entry_symbols": [
         "parseServiceError"
@@ -508,10 +509,10 @@
     },
     {
       "function_id": "work_wire_codec",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/work-wire.ts"
+        "packages/shared/src/work-wire.ts"
       ],
       "entry_symbols": [
         "parseWorkWireFrame"
@@ -589,11 +590,11 @@
     },
     {
       "function_id": "console_api_v1_contract",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/console-api.ts",
-        "control-protocol/console-api.spec.ts"
+        "packages/shared/src/console-api.ts",
+        "packages/shared/src/console-api.spec.ts"
       ],
       "entry_symbols": [
         "parseConsoleCommand",
@@ -629,10 +630,10 @@
     },
     {
       "function_id": "relay_control_codec",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "implemented",
       "paths": [
-        "control-protocol/relay-codec.ts"
+        "packages/shared/src/relay-codec.ts"
       ],
       "entry_symbols": [
         "parseRelayServerControl",
@@ -707,10 +708,10 @@
     },
     {
       "function_id": "relay_admission_schema",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "implemented",
       "paths": [
-        "control-protocol/relay-admission.ts"
+        "packages/shared/src/relay-admission.ts"
       ],
       "entry_symbols": [
         "parseRelayAdmission"
@@ -736,10 +737,10 @@
     },
     {
       "function_id": "agent_service_contracts_r1",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "design",
       "paths": [
-        "control-protocol/agent-services.ts"
+        "packages/shared/src/agent-services.ts"
       ],
       "entry_symbols": [],
       "design_doc": "docs/design/teams-service-contracts-r1.md",
@@ -1056,13 +1057,13 @@
     },
     {
       "function_id": "control_protocol_schema",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "implemented",
       "paths": [
-        "control-protocol/frames.ts",
-        "control-protocol/agent-message.ts",
-        "control-protocol/json-value.ts",
-        "control-protocol/channel-state.ts"
+        "packages/shared/src/frames.ts",
+        "packages/shared/src/agent-message.ts",
+        "packages/shared/src/json-value.ts",
+        "packages/shared/src/channel-state.ts"
       ],
       "entry_symbols": [
         "parseTargetControlFrame",
@@ -1513,11 +1514,11 @@
     },
     {
       "function_id": "acp_frame_contract",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "paths": [
-        "control-protocol/acp.ts",
-        "control-protocol/acp.spec.ts",
+        "packages/shared/src/acp.ts",
+        "packages/shared/src/acp.spec.ts",
         "docs/design/teams-acp-daemon-config-v4.md"
       ],
       "entry_symbols": [
@@ -1532,10 +1533,10 @@
     },
     {
       "function_id": "engine_adapter_port",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "design",
       "paths": [
-        "control-protocol/engine.ts",
+        "packages/shared/src/engine.ts",
         "docs/design/teams-acp-daemon-config-v4.md"
       ],
       "entry_symbols": [
@@ -1552,13 +1553,13 @@
     },
     {
       "function_id": "teams_connection_negotiation",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "design",
       "paths": [
-        "control-protocol/teams-connection.ts",
-        "control-protocol/teams-connection.spec.ts",
-        "control-protocol/teams-state.ts",
-        "control-protocol/teams-state.spec.ts",
+        "packages/shared/src/teams-connection.ts",
+        "packages/shared/src/teams-connection.spec.ts",
+        "packages/shared/src/teams-state.ts",
+        "packages/shared/src/teams-state.spec.ts",
         "docs/design/teams-acp-daemon-config-v4.md"
       ],
       "entry_symbols": [

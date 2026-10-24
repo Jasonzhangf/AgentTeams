@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import type { RelationRole } from '../control-protocol/teams-connection.ts'
+import type { RelationRole } from '../packages/shared/src/teams-connection.ts'
 import { writeRecordAtomically } from './durable-record.ts'
 import type { ConfigApplyError, ConfigApplyResult } from './runtime-config.ts'
 import { RuntimeConfigError } from './runtime-config.ts'

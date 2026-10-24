@@ -116,7 +116,7 @@ it('streams real SSE projection snapshots and closes the stream on owner loss', 
   expect(frames[0]).toBe('event: health\ndata: {"state":"live"}')
   // The event NAME is part of the stream contract: the UI live client subscribes by name, and a
   // named SSE event that no listener matches is dropped silently. Pin the name here so the
-  // server can never drift from ui/teams-console/src/client/{live-client,observation}.ts.
+  // server can never drift from ui/teams-console/src/client/live-client.ts and ui/teams-console/src/state/observation.ts.
   expect(frames[1].startsWith('event: snapshot\n')).toBe(true)
   expect(frames[2].startsWith('event: snapshot\n')).toBe(true)
   expect(frames[3].startsWith('event: health\n')).toBe(true)

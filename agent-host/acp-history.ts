@@ -1,4 +1,4 @@
-import type { HistoryRecord } from '../control-protocol/acp.ts'
+import type { HistoryRecord } from '../packages/shared/src/acp.ts'
 
 /**
  * Execution-history write port owned by agent-host.

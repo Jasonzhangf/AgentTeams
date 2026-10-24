@@ -1,4 +1,4 @@
-import type { ConsoleCapabilityDetail, ConsoleProjectionV1, ConsoleProviderView, ConsoleSessionEventView } from './protocol.ts'
+import type { ConsoleCapabilityDetail, ConsoleProjectionV1, ConsoleProviderView, ConsoleSessionEventView } from '../client/protocol.ts'
 
 export type ConsoleEntry = 'topology' | 'conversations' | 'notifications' | 'search' | 'memory'
 export type TeamPage = 'discovery' | 'networking' | 'interaction' | 'history'
@@ -20,7 +20,7 @@ export interface AgentRow {
   readonly kind: 'runtime' | 'directory'
   readonly sessionCapable?: boolean
   readonly sessionAvailability?: 'changing' | 'stopped' | 'no-current' | 'uncertain' | 'current' | 'not-applicable'
-  readonly sessionObservation?: import('./protocol.ts').SessionObservationState
+  readonly sessionObservation?: import('../client/protocol.ts').SessionObservationState
   readonly sessionEffectiveRevision?: number
   readonly currentSessionId?: string
   readonly providerId?: string

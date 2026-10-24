@@ -5,13 +5,13 @@ import type {
   ConsoleCommandV1 as CanonicalCommand,
   ConsoleProjectionV1 as CanonicalProjection,
   ConsoleProviderView as CanonicalProvider,
-} from '../../../control-protocol/console-api.ts'
+} from '../../../packages/shared/src/console-api.ts'
 import type {
   ConsoleProjectionSink,
   ConsoleProjectionUnsubscribe,
   HistoryPage,
   HistoryQuery,
-} from '../../../control-protocol/teams-state.ts'
+} from '../../../packages/shared/src/teams-state.ts'
 import type {
   ConsoleCapabilityDetail as UiCapabilityDetail,
   ConsoleClientV1 as UiClient,
@@ -59,7 +59,7 @@ describe('contract compatibility', () => {
 
   it('re-exports the canonical projection instead of declaring a UI fork', () => {
     const source = readFileSync(join(import.meta.dirname, '../src/client/protocol.ts'), 'utf8')
-    expect(source).toContain("from '../../../../control-protocol/console-api.ts'")
+    expect(source).toContain("from '../../../../packages/shared/src/console-api.ts'")
     expect(source).not.toContain('interface ConsoleProjectionV1')
   })
 })

@@ -1,8 +1,8 @@
-import type { AcpFault, HistoryRecord } from '../control-protocol/acp.ts'
-import { AcpError, parseAcpFault } from '../control-protocol/acp.ts'
-import type { TeamsAgreement } from '../control-protocol/teams-connection.ts'
-import type { HistoryPage, HistoryQuery, HistoryReadPort } from '../control-protocol/teams-state.ts'
-import { parseHistoryQuery } from '../control-protocol/teams-state.ts'
+import type { AcpFault, HistoryRecord } from '../packages/shared/src/acp.ts'
+import { AcpError, parseAcpFault } from '../packages/shared/src/acp.ts'
+import type { TeamsAgreement } from '../packages/shared/src/teams-connection.ts'
+import type { HistoryPage, HistoryQuery, HistoryReadPort } from '../packages/shared/src/teams-state.ts'
+import { parseHistoryQuery } from '../packages/shared/src/teams-state.ts'
 import type { AcpHistoryPort } from '../agent-host/acp-history.ts'
 
 /**

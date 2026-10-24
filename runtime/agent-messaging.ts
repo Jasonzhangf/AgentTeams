@@ -1,5 +1,5 @@
-import type { AgentDeclaration, ServiceError, ServiceErrorCode } from '../control-protocol/agent-services.ts'
-import type { ExternalOpReply, GroupWireReply, GroupWireRequest } from '../control-protocol/group-wire.ts'
+import type { AgentDeclaration, ServiceError, ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
+import type { ExternalOpReply, GroupWireReply, GroupWireRequest } from '../packages/shared/src/group-wire.ts'
 import { startLocalMessageSocket, type LocalMessageSocketServer } from './local-message-socket.ts'
 import { createVikunjaSync, type VikunjaSync } from './vikunja-sync.ts'
 

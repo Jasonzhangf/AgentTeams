@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { createConsoleHub } from './console-hub.ts'
-import type { RelayPeer } from '../control-protocol/agent-services.ts'
+import type { RelayPeer } from '../packages/shared/src/agent-services.ts'
 
 function directoryPeer(agentId: string, presence: RelayPeer['presence'], generation: number, capabilities: readonly string[]): RelayPeer {
   return {

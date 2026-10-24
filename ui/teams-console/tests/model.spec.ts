@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canOperateSession, modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerLabel } from '../src/client/model.ts'
+import { canOperateSession, modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerLabel } from '../src/state/model.ts'
 import type { ConsoleProjectionV1 } from '../src/client/protocol.ts'
 
 const projection: ConsoleProjectionV1 = {

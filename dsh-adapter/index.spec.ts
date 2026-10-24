@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { AcpError } from '../control-protocol/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
 import { assertAcpAllowed, extractAcpCapabilities, resolveAcpPolicy } from '../config/acp-policy.ts'
-import type { EngineLaunchInput, EngineLaunchSpec } from '../control-protocol/engine.ts'
+import type { EngineLaunchInput, EngineLaunchSpec } from '../packages/shared/src/engine.ts'
 import type { VersionedRuntimeConfig } from '../config/runtime-config.ts'
 import { createDshEngineAdapter, dshHasPolicyEnforcementOwner, DSH_EXTENSION_METHODS, DSH_UNSUPPORTED_FEATURES } from './index.ts'
 

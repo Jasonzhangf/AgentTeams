@@ -1,4 +1,4 @@
-import type { RelayPeer } from '../control-protocol/agent-services.ts'
+import type { RelayPeer } from '../packages/shared/src/agent-services.ts'
 import type { HostDirectory, HostDirectoryEntry, HostDirectoryInput } from '../server/directory.ts'
 import { createHostDirectory, listDirectoryHosts, upsertDirectoryHost } from '../server/directory.ts'
 

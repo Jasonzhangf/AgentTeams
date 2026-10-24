@@ -33,9 +33,9 @@ describe('independent UI boundary', () => {
   })
 
   it('uses the injected client and keeps Session payload separate from control target', () => {
-    const index = readFileSync(join(sourceRoot, 'client/index.ts'), 'utf8')
+    const index = readFileSync(join(sourceRoot, 'mount.ts'), 'utf8')
     const api = readFileSync(join(sourceRoot, 'client/api.ts'), 'utf8')
-    const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
+    const render = readFileSync(join(sourceRoot, 'components/render.ts'), 'utf8')
     expect(index).toContain('client: ConsoleClientV1')
     expect(api).toContain('/api/v1/projection')
     expect(api).toContain('/api/v1/command')
@@ -54,7 +54,7 @@ describe('independent UI boundary', () => {
   })
 
   it('renders only explicitly projected Agent actions', () => {
-    const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
+    const render = readFileSync(join(sourceRoot, 'components/render.ts'), 'utf8')
     expect(render).toContain("projection?.configs.some(config => config.agentId === agent.agentId)")
     expect(render).toContain('if (current !== undefined && sessionExists)')
     expect(render).toContain('canOperateSession(agent)')
@@ -68,9 +68,9 @@ describe('independent UI boundary', () => {
 
   it('renders owner-projected Session activity without creating a UI transcript ledger', () => {
     const protocol = readFileSync(join(sourceRoot, 'client/protocol.ts'), 'utf8')
-    const canonicalProtocol = readFileSync(join(sourceRoot, '../../../control-protocol/console-api.ts'), 'utf8')
-    const controller = readFileSync(join(sourceRoot, 'client/controller.ts'), 'utf8')
-    const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
+    const canonicalProtocol = readFileSync(join(sourceRoot, '../../../packages/shared/src/console-api.ts'), 'utf8')
+    const controller = readFileSync(join(sourceRoot, 'state/controller.ts'), 'utf8')
+    const render = readFileSync(join(sourceRoot, 'components/render.ts'), 'utf8')
     expect(canonicalProtocol).toContain('readonly sessionEvents?')
     expect(protocol).not.toContain('interface ConsoleProjectionV1')
     expect(render).toContain('projectSessionFlow(state.projection, agentId, sessionId)')
@@ -79,10 +79,10 @@ describe('independent UI boundary', () => {
   })
 
   it('uses one semantic drawer tree with layout-only desktop and mobile variants', () => {
-    const controller = readFileSync(join(sourceRoot, 'client/controller.ts'), 'utf8')
-    const index = readFileSync(join(sourceRoot, 'client/index.ts'), 'utf8')
-    const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
-    const styles = readFileSync(join(sourceRoot, 'client/styles.ts'), 'utf8')
+    const controller = readFileSync(join(sourceRoot, 'state/controller.ts'), 'utf8')
+    const index = readFileSync(join(sourceRoot, 'mount.ts'), 'utf8')
+    const render = readFileSync(join(sourceRoot, 'components/render.ts'), 'utf8')
+    const styles = readFileSync(join(sourceRoot, 'styles.ts'), 'utf8')
     expect(controller).toContain('readonly drawerStack: readonly DrawerState[]')
     expect(index).toContain('restoreFocus(drawerFocusKey)')
     expect(index).toContain("event.key === 'Tab'")
@@ -95,7 +95,7 @@ describe('independent UI boundary', () => {
   })
 
   it('fails an interactive notification with no existing Session target visibly', () => {
-    const render = readFileSync(join(sourceRoot, 'client/render.ts'), 'utf8')
+    const render = readFileSync(join(sourceRoot, 'components/render.ts'), 'utf8')
     expect(render).toContain('sessionTargetExists')
     expect(render).toContain('t.invalidNotificationTarget')
   })

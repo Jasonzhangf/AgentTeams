@@ -4,10 +4,10 @@ import { createServer, type Server as HttpsServer } from 'node:https'
 import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
 import WebSocket, { WebSocketServer } from 'ws'
-import { assertEnvelopeKeys } from '../control-protocol/json-value.ts'
-import { parseAgentDeclaration } from '../control-protocol/relay-codec.ts'
+import { assertEnvelopeKeys } from '../packages/shared/src/json-value.ts'
+import { parseAgentDeclaration } from '../packages/shared/src/relay-codec.ts'
 import { attachDeclarationEndpoints, projectPeerEndpoints } from './endpoint-discovery.ts'
-import { assertEndpointIdentity } from '../control-protocol/endpoint-ref.ts'
+import { assertEndpointIdentity } from '../packages/shared/src/endpoint-ref.ts'
 import type {
   AgentDeclaration,
   AuthenticatedAgent,
@@ -17,7 +17,7 @@ import type {
   RelayServerControl,
   ServiceError,
   ServiceErrorCode,
-} from '../control-protocol/agent-services.ts'
+} from '../packages/shared/src/agent-services.ts'
 
 type MaybePromise<T> = T | Promise<T>
 type Credential = string | undefined

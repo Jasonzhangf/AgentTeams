@@ -1,0 +1,20 @@
+{
+  "name": "@teams/dagpipe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Teams DAGpipe orchestration: host, protocol, runner build and Work graphs",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    "./src/*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:runner": "node src/build.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { createFileWorkStore, createWorkLedger, type RequestCompletion } from '../agent/work-resource.ts'
 import { createWorkHost, type WorkExecutor } from './work-host.ts'
-import type { ResourceAllocation, WorkRequest } from '../control-protocol/agent-services.ts'
+import type { ResourceAllocation, WorkRequest } from '../packages/shared/src/agent-services.ts'
 
 const consumer = { accountId: 'account', scopeId: 'scope', agentId: 'consumer' }
 const provider = { ...consumer, agentId: 'provider' }

@@ -1,14 +1,14 @@
-import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
-import type { AcpChannelRef, AcpDelivery, AcpFault, AcpFrame, AcpIngress } from '../control-protocol/acp.ts'
-import { AcpError } from '../control-protocol/acp.ts'
+import type { AuthenticatedAgent } from '../packages/shared/src/agent-services.ts'
+import type { AcpChannelRef, AcpDelivery, AcpFault, AcpFrame, AcpIngress } from '../packages/shared/src/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
 import type {
   TeamsAcpClose,
   TeamsAcpError,
   TeamsAcpFrame,
   TeamsAcpOpen,
   TeamsConnectionFrame,
-} from '../control-protocol/teams-connection.ts'
-import { parseTeamsConnectionFrame } from '../control-protocol/teams-connection.ts'
+} from '../packages/shared/src/teams-connection.ts'
+import { parseTeamsConnectionFrame } from '../packages/shared/src/teams-connection.ts'
 import type { AcpPolicySnapshot } from '../config/acp-policy.ts'
 import type { AcpHost } from '../agent-host/acp-host.ts'
 import { rpcErrorFrame } from '../agent-host/acp-host.ts'

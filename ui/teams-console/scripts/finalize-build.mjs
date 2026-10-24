@@ -4,7 +4,7 @@ import { dirname, relative, resolve } from 'node:path'
 const packageRoot = resolve(import.meta.dirname, '..')
 const temporaryRoot = resolve(packageRoot, '.ts-build')
 const compiledUiRoot = resolve(temporaryRoot, 'ui/teams-console/src')
-const compiledCanonicalRoot = resolve(temporaryRoot, 'control-protocol')
+const compiledCanonicalRoot = resolve(temporaryRoot, 'packages', 'shared', 'src')
 const libraryRoot = resolve(packageRoot, 'lib')
 const canonicalRoot = resolve(libraryRoot, 'canonical')
 
@@ -14,7 +14,7 @@ cpSync(compiledUiRoot, libraryRoot, { recursive: true })
 // canonical modules ship next to the UI library instead of staying declaration-only.
 cpSync(compiledCanonicalRoot, canonicalRoot, { recursive: true })
 
-const canonicalSpecifier = /(['"])(?:\.\.\/)+control-protocol\/([\w./-]+)\.(?:ts|js)\1/g
+const canonicalSpecifier = /(['"])(?:\.\.\/)+packages\/shared\/src\/([\w./-]+)\.(?:ts|js)\1/g
 
 function rewriteCanonicalImports(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {

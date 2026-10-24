@@ -1,8 +1,8 @@
-import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleProviderView, HistoryPage, HistoryQuery, JsonValue, TeamsConsoleLiveClientV1 } from './protocol.ts'
-import { commandFailureMessage, formatServiceError } from './protocol.ts'
+import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleProviderView, HistoryPage, HistoryQuery, JsonValue, TeamsConsoleLiveClientV1 } from '../client/protocol.ts'
+import { commandFailureMessage, formatServiceError } from '../client/protocol.ts'
 import { readDraft, readFocus, readPage, writeDraft, writeFocus, writePage, type DraftPersistence } from './drafts.ts'
 import { ProjectionObservationController, type ObservationSession } from './observation.ts'
-import { canSubmitMembership, projectMembershipDraft, selectNetworkMembers, type NetworkMemberDraft } from './page-networking.ts'
+import { canSubmitMembership, projectMembershipDraft, selectNetworkMembers, type NetworkMemberDraft } from '../components/page-networking.ts'
 import { teamPages } from './model.ts'
 import type { ConsoleEntry, TeamPage } from './model.ts'
 
@@ -27,7 +27,7 @@ export interface ConsoleState {
   readonly drawer: DrawerState | null
   readonly drawerStack: readonly DrawerState[]
   readonly drawerExpanded: boolean
-  readonly projection: import('./protocol.ts').ConsoleProjectionV1 | null
+  readonly projection: import('../client/protocol.ts').ConsoleProjectionV1 | null
   readonly status: 'idle' | 'loading' | 'ready' | 'error'
   readonly error: string | null
   readonly notice: string | null

@@ -117,14 +117,30 @@
       "note": "Owns link configuration, transport, health and route execution. D04 adds `network/registration-client.ts` as the client transport/health owner for registry registration: it connects the config-selected discovery endpoint over wss, registers, renews the presence lease with a heartbeat, reconnects with bounded backoff on the same endpoint and keeps the original error instead of switching servers. It imports no `config/**`; the config-selected discovery plan and the AgentDeclaration stay in runtime. Gate: teams-acp-d04-registry. D05 adds the connection layer: `network/teams-negotiation.ts` (the frozen-frame negotiation state machine and the only source of an agreement), `network/teams-session.ts` (one authenticated connection bridged to the injected AcpHost, with locally allocated refs and generation/engine rewrite at the receive boundary), `network/teams-connection-history.ts` (typed kind=connection history over the injected store) and `network/teams-membership.ts` (the per-remote-agent connection/role view assembled from the directory, route and registration surfaces). D05 also adds the additive `RegistrationClient.publish` surface that carries the daemon's real listener route plus its ACP capability over the same D04 path. Gate: teams-acp-d05-network. The D05 closure adds two modules to this owner: `network/teams-ingress.ts` owns the one inbound Teams connection lifecycle on an already authenticated direct-WSS connection, runs the responder negotiation, allocates this side's own transport-scoped connectionId/channelId before any host call so the peer wire ref never reaches the AcpHost, creates the Teams session, and records the typed connection.negotiated / channel.opened / channel.closed / connection.failed facts; `network/teams-status.ts` owns the read-only `TeamsStatusPort` that projects the live connection ledger through projectTeamsMembership and reads the durable connection history, which is the D06 read handoff and stores no state of its own. Gate: teams-acp-d05-network, which now also runs network/teams-ingress.spec.ts, network/teams-status.spec.ts and control-protocol/teams-connection.spec.ts. L9 adds `network/teams-egress.ts` to this owner: it is the outbound initiator counterpart of `network/teams-ingress.ts` on an already authenticated direct-WSS connection. It runs the initiator negotiation, records connection.negotiated / connection.failed, observes channel lifecycle with local refs only, and opens the one ACP channel through createTeamsSession.open() so the handshake, the inbound mapping, the delivery pump and the release rules keep their single owner. It reuses createTeamsFrameTransport and TeamsConnectionLedger from the ingress owner, declares no second envelope and never sends acp.open_ack. Gate: teams-acp-d05-network, which now also runs network/teams-egress.spec.ts. L9 command-side adds this module's one production caller in the runtime owner (`runtime/serve-egress.ts`), so the network module itself is unchanged and declares no dial path of its own."
     },
     {
-      "module_id": "control-protocol",
-      "owner": "control-protocol",
+      "module_id": "shared",
+      "owner": "packages/shared",
       "status": "implemented",
-      "note": "Canonical owner of the Console observation wire contract. BB09 round 12 adds the optional capabilityDetails declaration summary to the shared runtime|directory Agent row fields, its closed parser validation (existing string and capacity/unit checks; illegal shapes rejected, never stripped) and the single declaration-to-summary helper reused by the runtime and Console-hub producers. D00 adds the public ACP envelope and single fault carrier (acp.ts), the type-only engine adapter port (engine.ts), the Teams negotiation frames and the connection-state/history DTOs (teams-connection.ts, teams-state.ts); declarations and parsers only; when this note was written transport, negotiation and history reads were pending D01/D05/D06. 2026-10-14 correction: D01, D05 and D06 now implement those in their own modules, so this module still owns declarations and parsers only.",
+      "note": "Canonical owner of the Console observation wire contract. BB09 round 12 adds the optional capabilityDetails declaration summary to the shared runtime|directory Agent row fields, its closed parser validation (existing string and capacity/unit checks; illegal shapes rejected, never stripped) and the single declaration-to-summary helper reused by the runtime and Console-hub producers. D00 adds the public ACP envelope and single fault carrier (acp.ts), the type-only engine adapter port (engine.ts), the Teams negotiation frames and the connection-state/history DTOs (teams-connection.ts, teams-state.ts); declarations and parsers only; when this note was written transport, negotiation and history reads were pending D01/D05/D06. 2026-10-14 correction: D01, D05 and D06 now implement those in their own modules, so this module still owns declarations and parsers only. Modular monorepo move (2026-10-23): the former control-protocol/** tree is now packages/shared/src/**; this module owns the shared protocol, wire, codec and DTO library for every consumer, and the runtime still resolves it through the flat tsconfig.runtime.json compile instead of a bare package specifier.",
       "owned_paths": [
-        "control-protocol/**"
+        "packages/shared/src/**"
       ],
       "forbidden_paths": [
+        "agent/**",
+        "server/**",
+        "ui/**"
+      ]
+    },
+    {
+      "module_id": "dagpipe",
+      "owner": "packages/dagpipe",
+      "owned_paths": [
+        "packages/dagpipe/**"
+      ],
+      "status": "partial",
+      "design_doc": "docs/design/modular-monorepo-v1.md",
+      "note": "Owner of the DAGpipe Work orchestration slice moved out of runtime/ in the modular monorepo batch: packages/dagpipe/src/{host,protocol}.ts, the checked-in Rust runner source, the build entry build.mjs and the fixture runners. The Node host owns only per-execution AgentWorkClient channels and typed host.call dispatch; it never re-runs, reorders or reconstructs a graph. runtime/dagpipe-work.spec.ts stays a runtime consumer. Gate: teams-dagpipe-runner-build.",
+      "forbidden_paths": [
+        "runtime/**",
         "agent/**",
         "server/**",
         "ui/**"
@@ -358,12 +374,12 @@
     },
     {
       "module_id": "group-wire",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "implemented",
       "note": "Batch 1 closed wire frames, codecs, action transition table and execution gating.",
       "owned_paths": [
-        "control-protocol/group-wire.spec.ts",
-        "control-protocol/group-wire.ts"
+        "packages/shared/src/group-wire.spec.ts",
+        "packages/shared/src/group-wire.ts"
       ],
       "forbidden_paths": [
         "server/**",

@@ -1,5 +1,5 @@
-import type { JsonValue } from '../control-protocol/agent-services.ts'
-import type { ExternalOpState, IssueSession, IssueState } from '../control-protocol/group-wire.ts'
+import type { JsonValue } from '../packages/shared/src/agent-services.ts'
+import type { ExternalOpState, IssueSession, IssueState } from '../packages/shared/src/group-wire.ts'
 
 /**
  * Issue session truth for the group messaging increment.

@@ -1,4 +1,4 @@
-import type { Action, Group, Message } from '../control-protocol/group-wire.ts'
+import type { Action, Group, Message } from '../packages/shared/src/group-wire.ts'
 import { memberActiveAt } from './group-registry.ts'
 
 /**

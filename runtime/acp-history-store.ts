@@ -1,10 +1,10 @@
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { join, resolve } from 'node:path'
-import type { HistoryRecord } from '../control-protocol/acp.ts'
-import { AcpError } from '../control-protocol/acp.ts'
-import type { HistoryPage, HistoryQuery, HistoryReadPort } from '../control-protocol/teams-state.ts'
-import { parseHistoryQuery } from '../control-protocol/teams-state.ts'
+import type { HistoryRecord } from '../packages/shared/src/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
+import type { HistoryPage, HistoryQuery, HistoryReadPort } from '../packages/shared/src/teams-state.ts'
+import { parseHistoryQuery } from '../packages/shared/src/teams-state.ts'
 import type { AcpHistoryPort } from '../agent-host/acp-history.ts'
 
 /**

@@ -1,6 +1,6 @@
-import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
-import { assertJsonValue } from '../control-protocol/json-value.ts'
-import { parseRelayAdmission, RelayProtocolError } from '../control-protocol/relay-admission.ts'
+import type { AgentDeclaration } from '../packages/shared/src/agent-services.ts'
+import { assertJsonValue } from '../packages/shared/src/json-value.ts'
+import { parseRelayAdmission, RelayProtocolError } from '../packages/shared/src/relay-admission.ts'
 import { connectWss, type WssConnection, type WssConnectionOptions } from './wss-connection.ts'
 
 export interface RelayLoginOptions {

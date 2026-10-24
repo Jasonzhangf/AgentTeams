@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { TeamsConsoleController } from '../src/client/controller.ts'
+import { TeamsConsoleController } from '../src/state/controller.ts'
 import { createLiveConsoleHttpClient } from '../src/client/live-client.ts'
-import { projectAgents } from '../src/client/model.ts'
+import { projectAgents } from '../src/state/model.ts'
 import { createFixtureClient } from '../src/fixture.ts'
 
 /** Minimal EventSource double: the live client only needs add/remove/close. */

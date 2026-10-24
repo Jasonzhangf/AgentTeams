@@ -1,5 +1,5 @@
-import type { JsonValue, ServiceError } from '../control-protocol/agent-services.ts'
-import type { Action, ActionState, ExternalOp, ExternalOpKind, ExternalOpState } from '../control-protocol/group-wire.ts'
+import type { JsonValue, ServiceError } from '../packages/shared/src/agent-services.ts'
+import type { Action, ActionState, ExternalOp, ExternalOpKind, ExternalOpState } from '../packages/shared/src/group-wire.ts'
 
 /**
  * External operation ledger and action convergence.

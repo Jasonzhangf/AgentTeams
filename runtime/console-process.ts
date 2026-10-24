@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseAgentDeclaration, RelayProtocolError } from '../control-protocol/relay-codec.ts'
+import { parseAgentDeclaration, RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
 import { object, text, number, credential, loadRelayConfig } from './process-config.ts'
 import { startConsoleRuntime, type ConsoleRuntimeOptions } from './console-runtime.ts'
 

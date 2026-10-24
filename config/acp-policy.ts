@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
-import type { JsonValue } from '../control-protocol/agent-services.ts'
-import type { AcpFaultCode, AcpFrame } from '../control-protocol/acp.ts'
-import { AcpError } from '../control-protocol/acp.ts'
+import type { JsonValue } from '../packages/shared/src/agent-services.ts'
+import type { AcpFaultCode, AcpFrame } from '../packages/shared/src/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
 
 export interface AcpPolicyIntent {
   readonly enabled: boolean
@@ -24,7 +24,7 @@ export interface AcpPolicySnapshot {
  * single owner of the fault type and code vocabulary; policy does not declare a
  * second error class with the same code space.
  */
-export { AcpError as AcpPolicyError } from '../control-protocol/acp.ts'
+export { AcpError as AcpPolicyError } from '../packages/shared/src/acp.ts'
 
 const BASE_CAPABILITY = 'acp'
 const REQUIRED_METHODS = [

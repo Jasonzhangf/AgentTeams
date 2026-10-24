@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import type { ConsoleClientV1, ConsoleServiceError } from '../control-protocol/console-api.ts'
-import { parseConsoleWireRequest, type ConsoleWireRequest } from '../control-protocol/console-wire.ts'
-import { assertJsonValue } from '../control-protocol/json-value.ts'
-import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
+import type { ConsoleClientV1, ConsoleServiceError } from '../packages/shared/src/console-api.ts'
+import { parseConsoleWireRequest, type ConsoleWireRequest } from '../packages/shared/src/console-wire.ts'
+import { assertJsonValue } from '../packages/shared/src/json-value.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
 import type { RelayClient } from '../network/relay-client.ts'
 import { requestConsole } from '../network/console-channel.ts'
 

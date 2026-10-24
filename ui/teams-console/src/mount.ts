@@ -1,8 +1,8 @@
-import type { ConsoleClientV1 } from './protocol.ts'
-import { TeamsConsoleController } from './controller.ts'
-import { containDrawerTab } from './focus.ts'
-import { renderConsole } from './render.ts'
-import type { DraftPersistence } from './drafts.ts'
+import type { ConsoleClientV1 } from './client/protocol.ts'
+import { TeamsConsoleController } from './state/controller.ts'
+import { containDrawerTab } from './state/focus.ts'
+import { renderConsole } from './components/render.ts'
+import type { DraftPersistence } from './state/drafts.ts'
 import { teamsStyles } from './styles.ts'
 
 export interface MountTeamsConsoleOptions {

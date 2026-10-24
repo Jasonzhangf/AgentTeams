@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { connect as tlsConnect, type TLSSocket } from 'node:tls'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
-import type { AuthenticatedAgent, AgentDeclaration, RelayClientControl, RelayPeer, RelayServerControl } from '../control-protocol/agent-services.ts'
+import type { AuthenticatedAgent, AgentDeclaration, RelayClientControl, RelayPeer, RelayServerControl } from '../packages/shared/src/agent-services.ts'
 import { createRelayServer, type RelayServer, type RelayServerOptions } from './relay.ts'
 
 interface TestCertificate {

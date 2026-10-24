@@ -10,9 +10,9 @@ import {
   type DaemonIntentV4,
   type DiscoveryServerConfig,
 } from '../config/daemon-intent.ts'
-import type { AgentDeclaration, CapabilityDeclaration } from '../control-protocol/agent-services.ts'
+import type { AgentDeclaration, CapabilityDeclaration } from '../packages/shared/src/agent-services.ts'
 import type { RouteCandidate } from '../server/directory.ts'
-import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-admission.ts'
 import {
   createRegistrationClient,
   type RegistrationClient,

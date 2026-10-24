@@ -1,7 +1,7 @@
 import { createRelayClient, type RelayClient, type RelayClientOptions } from '../network/relay-client.ts'
 import { connectDirectWssTarget, type DirectWssTarget, type DirectWssTargetOptions } from '../network/direct-route.ts'
 import { assembleDirectWssTargetOptions, type DirectPeerRouteInput } from '../network/peer-route.ts'
-import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-admission.ts'
 
 export type DirectPeerConnector = (options: DirectWssTargetOptions) => Promise<DirectWssTarget>
 

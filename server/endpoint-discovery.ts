@@ -1,10 +1,10 @@
-import type { AgentDeclaration, AuthenticatedAgent, RelayPeer } from '../control-protocol/agent-services.ts'
+import type { AgentDeclaration, AuthenticatedAgent, RelayPeer } from '../packages/shared/src/agent-services.ts'
 import {
   filterVisibleEndpoints,
   parseEndpointDiscoveryView,
   type EndpointDiscoveryView,
-} from '../control-protocol/endpoint-ref.ts'
-import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
+} from '../packages/shared/src/endpoint-ref.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
 import { compileLegacyAgentCapabilities } from '../endpoint/compile.ts'
 import { isEndpointError } from '../endpoint/errors.ts'
 

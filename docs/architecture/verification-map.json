@@ -26,7 +26,7 @@
       "command": "pnpm exec vitest run --no-file-parallelism runtime/dagpipe-work.spec.ts runtime/agent-work-client.spec.ts && dagpipe graph validate docs/design/dagpipe/graphs/agent-work.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/work-open.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/work-request.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/work-close.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/work-query.graph.json",
       "checks": [
         "agent-work@2, work-open@1, work-request@1, work-close@1, and work-query@1 are SESE and statically bind their declared operator names/versions",
-        "runtime/dagpipe/build.mjs builds a project-owned runner against the installed pipeline_runtime SDK and records source/SDK/graph/registry/artifact hashes; the runner registers all ten Operators needed by the five graphs",
+        "packages/dagpipe/src/build.mjs builds a project-owned runner against the installed pipeline_runtime SDK and records source/SDK/graph/registry/artifact hashes; the runner registers all ten Operators needed by the five graphs",
         "runtime/dagpipe-work.spec.ts exercises the real compiled runner, real TLS Relay/local socket, and provider ledger: distinct one-shot submits, get-only query without replay, persistent open/request/query/close on one Work, stale/incomplete binding rejection before effects, compile rejection for missing Operators or missing effects, bad correlation/EOF/malformed frames, and transport-unconfirmed retained responsibility",
         "dynamic runner/build and Work receipts are emitted only below ignored generated/u4-receipts/<run-id>/results; repeated focused runs leave every tracked product path byte-unchanged",
         "AgentWorkClient typed capability selection is implemented: capability mode binds the exact provider/generation and returns no Endpoint; endpoint mode remains separate and no fallback replaces one mode with the other; linkGeneration stays separate from the original Work targetGeneration",
@@ -36,6 +36,21 @@
         "BB06 round 12: buildCompletedReceipt projects a provider typed refusal from control.reply.error into receipt.control.error when no closeError exists (closeError precedence unchanged), without changing status/request/work/binding/business/cleanup semantics",
         "no duplicate map or runtime registry is introduced"
       ]
+    },
+    {
+      "gate_id": "teams-dagpipe-runner-build",
+      "status": "implemented",
+      "required": true,
+      "owner": "packages/dagpipe",
+      "command": "pnpm exec vitest run --no-file-parallelism packages/dagpipe/tests/dagpipe-build.spec.ts && dagpipe graph validate docs/design/dagpipe/graphs/agent-work.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/work-open.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/work-request.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/work-close.graph.json && dagpipe graph validate docs/design/dagpipe/graphs/work-query.graph.json",
+      "checks": [
+        "packages/dagpipe/src/build.mjs resolves the repository root through three parent levels and builds the project runner against the installed pipeline_runtime SDK",
+        "two concurrent build consumers produce distinct immutable build directories and receipts below packages/dagpipe/src/.build/<id>/ while .build/current never exists",
+        "the build receipt binds the exact runner source, Cargo template/lock, five graph artifacts, effect grant and toolchain hashes",
+        "all five Work graphs stay SESE and statically bind their declared Operator names/versions",
+        "moving the runner source out of runtime/ changes no runner, graph, effect or receipt semantics"
+      ],
+      "note": "Registered by the modular monorepo batch: the DAGpipe host, protocol, Rust runner source and build entry moved from runtime/dagpipe/** to packages/dagpipe/src/**, so the runner build and graph validation gate now names the new owner."
     },
     {
       "gate_id": "teams-local-control-socket",
@@ -136,7 +151,7 @@
       "gate_id": "teams-peer-work-execution",
       "status": "partial",
       "required": true,
-      "command": "pnpm exec vitest run control-protocol/work-wire.spec.ts agent-host/work-host.spec.ts agent-host/cli-executor.spec.ts network/relay-client.spec.ts runtime/agent-process.spec.ts runtime/local-relay-bridge.spec.ts",
+      "command": "pnpm exec vitest run packages/shared/src/work-wire.spec.ts agent-host/work-host.spec.ts agent-host/cli-executor.spec.ts network/relay-client.spec.ts runtime/agent-process.spec.ts runtime/local-relay-bridge.spec.ts",
       "checks": [
         "real daemon libraries and Node Agent process execute fixed-root CLI across the local socket bridge without Console",
         "provider policy and durable allocation before execution",
@@ -151,7 +166,7 @@
       "status": "design",
       "required": false,
       "phase": "post-mvp",
-      "command": "pnpm exec vitest run control-protocol/work-wire.spec.ts agent-host/work-host.spec.ts agent-host/cli-executor.spec.ts network/relay-client.spec.ts runtime/agent-process.spec.ts",
+      "command": "pnpm exec vitest run packages/shared/src/work-wire.spec.ts agent-host/work-host.spec.ts agent-host/cli-executor.spec.ts network/relay-client.spec.ts runtime/agent-process.spec.ts",
       "checks": [
         "the fixed-root CLI Work path is replayed through a deployed public Relay",
         "at least one daemon uses a real NAT egress",
@@ -186,7 +201,7 @@
       "gate_id": "teams-relay-control-codec",
       "status": "active",
       "required": true,
-      "command": "pnpm exec vitest run control-protocol/relay-codec.spec.ts",
+      "command": "pnpm exec vitest run packages/shared/src/relay-codec.spec.ts",
       "checks": [
         "all server control variants validated",
         "closed control envelopes and safe numeric values",
@@ -252,7 +267,7 @@
         "lifecycle admission rejects an installed receipt whose pack, tarball, or installed-content hash is missing or belongs to another candidate",
         "installed Console serves authenticated public assets and rejects unauthorized/cross-site requests",
         "default final mode calls the real U4 builder and consumes the exact runner build receipt with immutable unique build directories; final mode is release_eligible=false and never revives fixed .build/current or a duplicate scheduling/owner layer",
-        "the final pack stages the compiled runtime/dagpipe host and protocol plus their transitive control-protocol/network runtime modules, the runner, manifest, and five Work graphs; AppSDK artifact_paths bind those exact staged final outputs",
+        "the final pack stages the compiled runtime/dagpipe host and protocol plus their transitive packages/shared/src/network runtime modules, the runner, manifest, and five Work graphs; AppSDK artifact_paths bind those exact staged final outputs",
         "the installed SDK consumer packs and installs that same final tarball outside the source tree, imports the installed host/protocol, runs the packaged runner to a real provider rg marker, proves missing operator and missing effects compile negatives, and rejects missing runner/manifest/graph, dropped manifest graph entries, and runner/graph hash mismatches",
         "base lifecycle and final SDK consumer receipts remain separate evidence; the installed SDK consumer does not close public CLI Work, BB01, BB13, or BB14"
       ]
@@ -308,7 +323,7 @@
       "gate_id": "teams-endpoint-discovery-binding",
       "status": "partial",
       "required": true,
-      "command": "pnpm exec vitest run control-protocol/endpoint-ref.spec.ts server/endpoint-discovery.spec.ts control-protocol/relay-codec.spec.ts",
+      "command": "pnpm exec vitest run packages/shared/src/endpoint-ref.spec.ts server/endpoint-discovery.spec.ts packages/shared/src/relay-codec.spec.ts",
       "checks": [
         "typed Endpoint refs parse identity/kind/revision/capability/resource summaries",
         "scope-filtered discovery hides other-scope and disabled consumer views",
@@ -322,7 +337,7 @@
       "gate_id": "teams-endpoint-work-binding",
       "status": "partial",
       "required": true,
-      "command": "pnpm exec vitest run control-protocol/work-wire.spec.ts agent/work-resource.spec.ts runtime/agent-work-client.spec.ts runtime/agent-process.spec.ts",
+      "command": "pnpm exec vitest run packages/shared/src/work-wire.spec.ts agent/work-resource.spec.ts runtime/agent-work-client.spec.ts runtime/agent-process.spec.ts",
       "checks": [
         "consumer selects a visible Endpoint revision from directory discovery",
         "Work proposal carries only typed Endpoint control state",
@@ -360,7 +375,7 @@
       "gate_id": "teams-provider-config-catalog",
       "status": "partial",
       "required": true,
-      "command": "pnpm exec vitest run config/runtime-config.spec.ts config/config-boundary.spec.ts runtime/local-config.spec.ts control-protocol/console-wire.spec.ts",
+      "command": "pnpm exec vitest run config/runtime-config.spec.ts config/config-boundary.spec.ts runtime/local-config.spec.ts packages/shared/src/console-wire.spec.ts",
       "checks": [
         "config/runtime-config.spec.ts covers instance isolation, catalog refresh, manual overrides and credential references",
         "same-protocol instances stay isolated",
@@ -375,7 +390,7 @@
       "gate_id": "teams-provider-config-effective",
       "status": "partial",
       "required": true,
-      "command": "pnpm exec vitest run runtime/managed-config-owner.spec.ts runtime/managed-config-live.spec.ts runtime/managed-opencode-session.spec.ts runtime/agent-process.spec.ts runtime/console-config.spec.ts runtime/local-config.spec.ts control-protocol/console-api.spec.ts scripts/blackbox-user-mvp.spec.ts",
+      "command": "pnpm exec vitest run runtime/managed-config-owner.spec.ts runtime/managed-config-live.spec.ts runtime/managed-opencode-session.spec.ts runtime/agent-process.spec.ts runtime/console-config.spec.ts runtime/local-config.spec.ts packages/shared/src/console-api.spec.ts scripts/blackbox-user-mvp.spec.ts",
       "checks": [
         "daemon durable CAS rejects concurrent Console conflict",
         "machine source, per-daemon accepted snapshot and effective revision are separated",
@@ -413,7 +428,7 @@
       "gate_id": "teams-console-directory-discovery",
       "status": "partial",
       "required": true,
-      "command": "pnpm exec vitest run runtime/console-hub.spec.ts runtime/console-runtime.spec.ts control-protocol/console-wire.spec.ts scripts/blackbox-user-mvp.spec.ts ui/teams-console/tests/api.spec.ts ui/teams-console/tests/model.spec.ts ui/teams-console/tests/render.spec.ts && pnpm typecheck && pnpm build:runtime && pnpm smoke",
+      "command": "pnpm exec vitest run runtime/console-hub.spec.ts runtime/console-runtime.spec.ts packages/shared/src/console-wire.spec.ts scripts/blackbox-user-mvp.spec.ts ui/teams-console/tests/api.spec.ts ui/teams-console/tests/model.spec.ts ui/teams-console/tests/render.spec.ts && pnpm typecheck && pnpm build:runtime && pnpm smoke",
       "checks": [
         "empty agentIds enters explicit local bridge directory discovery",
         "Console identity is excluded",
@@ -571,7 +586,7 @@
         "business arrays and arbitrary JSON property names are preserved without deriving control state",
         "non-JSON values, cycles, sparse arrays and lossy properties fail explicitly",
         "channel state machine covers open/ack/close/close_ack/error",
-        "round 15: the Console projection reply closes the config row's acceptedBinding field set and forwards it unchanged (absent | null | {primary, backup?}, each reference exactly {providerInstanceId, modelId} as non-empty strings); undeclared nested keys, empty objects, missing fields and empty strings are refused before the UI sees them (control-protocol/console-wire.spec.ts, control-protocol/console-api.spec.ts)",
+        "round 15: the Console projection reply closes the config row's acceptedBinding field set and forwards it unchanged (absent | null | {primary, backup?}, each reference exactly {providerInstanceId, modelId} as non-empty strings); undeclared nested keys, empty objects, missing fields and empty strings are refused before the UI sees them (packages/shared/src/console-wire.spec.ts, packages/shared/src/console-api.spec.ts)",
         "round 15: the Console HTTP consumer parser admits the public accepted binding through the real consumer parser, and Console hub aggregation carries it through owner aggregation unchanged while rejecting a crossed config row (ui/teams-console/tests/api.spec.ts, runtime/console-hub.spec.ts)"
       ]
     },
@@ -899,7 +914,7 @@
       "gate_id": "teams-managed-session-contract",
       "status": "implemented",
       "required": true,
-      "command": "pnpm exec vitest run --no-file-parallelism control-protocol/console-api.spec.ts control-protocol/console-wire.spec.ts opencode-adapter/tests/index.spec.ts runtime/managed-config-owner.spec.ts runtime/agent-process.spec.ts runtime/console-hub.spec.ts network/console-channel.spec.ts agent-host/console-ingress.spec.ts ui/teams-console/tests/controller.spec.ts",
+      "command": "pnpm exec vitest run --no-file-parallelism packages/shared/src/console-api.spec.ts packages/shared/src/console-wire.spec.ts opencode-adapter/tests/index.spec.ts runtime/managed-config-owner.spec.ts runtime/agent-process.spec.ts runtime/console-hub.spec.ts network/console-channel.spec.ts agent-host/console-ingress.spec.ts ui/teams-console/tests/controller.spec.ts",
       "checks": [
         "one runtime|directory Agent row per daemon and the Session capability is gated on the U2-derived [agents.*.model] binding",
         "a daemon-level startAgentProcess Agent is sessionCapable true only when that same daemon constructed the ManagedConfigOwner and SessionHost; a binding without launch-owned objects is passive and its real session.create path returns typed UNSUPPORTED_OPERATION",
@@ -943,10 +958,10 @@
     },
     {
       "gate_id": "teams-acp-public-contract",
-      "owner": "control-protocol",
+      "owner": "packages/shared",
       "status": "partial",
       "required": true,
-      "command": "pnpm exec vitest run --config vitest.config.ts control-protocol/acp.spec.ts control-protocol/teams-connection.spec.ts control-protocol/teams-state.spec.ts",
+      "command": "pnpm exec vitest run --config vitest.config.ts packages/shared/src/acp.spec.ts packages/shared/src/teams-connection.spec.ts packages/shared/src/teams-state.spec.ts",
       "checks": [
         "the ACP envelope preserves unknown fields and rejects illegal shapes instead of stripping them",
         "the fault carrier is declared once and reused by config and connection state",
@@ -1049,7 +1064,7 @@
       "owner": "network",
       "status": "partial",
       "required": true,
-      "command": "pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts network/teams-egress.spec.ts runtime/serve-egress.spec.ts control-protocol/teams-connection.spec.ts",
+      "command": "pnpm exec vitest run --no-file-parallelism network/teams-negotiation.spec.ts network/teams-session.spec.ts network/teams-connection-history.spec.ts network/teams-membership.spec.ts network/registration-client.spec.ts runtime/registry-registration.spec.ts network/teams-ingress.spec.ts network/teams-status.spec.ts network/teams-egress.spec.ts runtime/serve-egress.spec.ts packages/shared/src/teams-connection.spec.ts",
       "checks": [
         "the Teams negotiation reaches one identical agreement over the frozen context/propose/accept/reject/confirm/ready frames only, and takes identity from the authenticated transport instead of a frame",
         "an unknown protocol version, an unknown frame kind, an illegal role pair (including the module's own outbound master/master guard at the initiator start boundary), a role outside the accepted relations, a stale target generation, a capability revision conflict, an unauthorized capability, a tampered accept and a one-sided peer are each refused with a typed fault and never downgraded to an agreement",
@@ -1075,7 +1090,7 @@
       "owner": "runtime",
       "status": "partial",
       "required": true,
-      "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts config/relations-intent-store.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts control-protocol/console-api.spec.ts",
+      "command": "pnpm exec vitest run --no-file-parallelism runtime/control-process.spec.ts config/relations-intent-store.spec.ts agent-host/acp-host.spec.ts runtime/acp-serve.spec.ts cli/agentteams.spec.ts console-host/tests/http-api.spec.ts packages/shared/src/console-api.spec.ts",
       "checks": [
         "the control daemon keeps one process, one WebUI listener, one owned runtime state record and an explicit-PID stop that closes its own listener connections instead of waiting for a WebUI client socket, and refuses a second start with a typed ALREADY_RUNNING instead of a second listener",
         "a stale generation, a stale owner, a taken WebUI port and a missing credential each fail typed (STALE_GENERATION, STALE_OWNER, PORT_OCCUPIED, CREDENTIAL_UNAVAILABLE) and no runtime state record is left behind (the durable data directory stays)",

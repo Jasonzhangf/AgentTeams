@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { AcpError, type AcpFrame } from '../control-protocol/acp.ts'
+import { AcpError, type AcpFrame } from '../packages/shared/src/acp.ts'
 import { createStdioAcpDuplex } from './stdio.ts'
 
 const peerPath = fileURLToPath(new URL('./test-peer.mjs', import.meta.url))

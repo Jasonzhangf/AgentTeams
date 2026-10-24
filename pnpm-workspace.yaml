@@ -2,3 +2,5 @@ packages:
   - console-host
   - opencode-adapter
   - ui/teams-console
+  - packages/shared
+  - packages/dagpipe

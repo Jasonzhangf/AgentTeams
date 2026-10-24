@@ -6,9 +6,9 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 
-const repoRoot = resolve(import.meta.dirname, '..')
-const buildParent = join(repoRoot, 'runtime', 'dagpipe', '.build')
-const buildEntry = join(repoRoot, 'runtime', 'dagpipe', 'build.mjs')
+const repoRoot = resolve(import.meta.dirname, '..', '..', '..')
+const buildParent = join(repoRoot, 'packages', 'dagpipe', 'src', '.build')
+const buildEntry = join(repoRoot, 'packages', 'dagpipe', 'src', 'build.mjs')
 const graphPaths = {
   agent_work: join(repoRoot, 'docs', 'design', 'dagpipe', 'graphs', 'agent-work.graph.json'),
   work_open: join(repoRoot, 'docs', 'design', 'dagpipe', 'graphs', 'work-open.graph.json'),
@@ -104,10 +104,10 @@ function verifyReceipt(result: BuildResult): void {
   expect(receipt.version).toBe(2)
   expect(receiptPath).toBe(join(dirname(runnerPath), '..', '..', '..', 'build-receipt.json'))
   expect(relativeToRepo(receiptPath)).toMatch(
-    /^runtime\/dagpipe\/\.build\/(?!current$)[^/]+\/build-receipt\.json$/,
+    /^packages\/dagpipe\/src\/\.build\/(?!current$)[^/]+\/build-receipt\.json$/,
   )
   expect(relativeToRepo(runnerPath)).toMatch(
-    /^runtime\/dagpipe\/\.build\/(?!current$)[^/]+\/target\/[^/]+\/debug\/teams-dagpipe-runner$/,
+    /^packages\/dagpipe\/src\/\.build\/(?!current$)[^/]+\/target\/[^/]+\/debug\/teams-dagpipe-runner$/,
   )
   const buildRoot = dirname(receiptPath)
   expect(runnerPath).toBe(join(buildRoot, 'target', cargoHostTarget(), 'debug', 'teams-dagpipe-runner'))
@@ -117,22 +117,22 @@ function verifyReceipt(result: BuildResult): void {
   expect(receipt.artifact.path).toBe(relativeToRepo(runnerPath))
 
   expect(receipt.inputs.build_entry).toEqual({
-    path: 'runtime/dagpipe/build.mjs',
+    path: 'packages/dagpipe/src/build.mjs',
     sha256: hashFile(buildEntry),
   })
-  const runnerSource = join(repoRoot, 'runtime', 'dagpipe', 'runner', 'src', 'bin', 'runner.rs')
+  const runnerSource = join(repoRoot, 'packages', 'dagpipe', 'src', 'runner', 'src', 'bin', 'runner.rs')
   expect(receipt.inputs.runner_source).toEqual({
-    path: 'runtime/dagpipe/runner/src/bin/runner.rs',
+    path: 'packages/dagpipe/src/runner/src/bin/runner.rs',
     sha256: hashFile(runnerSource),
   })
-  const templatePath = join(repoRoot, 'runtime', 'dagpipe', 'runner', 'Cargo.toml.template')
-  const lockPath = join(repoRoot, 'runtime', 'dagpipe', 'runner', 'Cargo.lock')
+  const templatePath = join(repoRoot, 'packages', 'dagpipe', 'src', 'runner', 'Cargo.toml.template')
+  const lockPath = join(repoRoot, 'packages', 'dagpipe', 'src', 'runner', 'Cargo.lock')
   expect(receipt.inputs.build_template).toEqual({
-    path: 'runtime/dagpipe/runner/Cargo.toml.template',
+    path: 'packages/dagpipe/src/runner/Cargo.toml.template',
     sha256: hashFile(templatePath),
   })
   expect(receipt.inputs.lock).toEqual({
-    path: 'runtime/dagpipe/runner/Cargo.lock',
+    path: 'packages/dagpipe/src/runner/Cargo.lock',
     sha256: hashFile(lockPath),
   })
 

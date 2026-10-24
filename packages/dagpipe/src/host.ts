@@ -8,14 +8,14 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
-import type { JsonValue, RequestState } from '../../control-protocol/agent-services.ts';
-import { RelayProtocolError } from '../../control-protocol/relay-codec.ts';
+import type { JsonValue, RequestState } from '../../shared/src/agent-services.ts';
+import { RelayProtocolError } from '../../shared/src/relay-codec.ts';
 import {
   AgentWorkTransportError,
   type AgentWorkChannel,
   type AgentWorkClient,
   type AgentWorkTarget,
-} from '../agent-work-client.ts';
+} from '../../../runtime/agent-work-client.ts';
 import {
   decodeAgentWorkServiceSelection,
   decodeResourceDemands,

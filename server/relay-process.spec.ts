@@ -8,7 +8,7 @@ import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import { connectWss, type WssConnection } from '../network/wss-connection.ts'
 import { loginRelay } from '../network/relay-login.ts'
 import { createRelayClient, type RelayClient, type RelayClientOptions } from '../network/relay-client.ts'
-import type { RelayGrant } from '../control-protocol/agent-services.ts'
+import type { RelayGrant } from '../packages/shared/src/agent-services.ts'
 import { RelayProcessConfigError, parseRelayProcessArgs, parseRelayProcessConfig, startRelayProcess } from './relay-process.ts'
 
 const entryPath = resolve(import.meta.dirname, 'relay-process.ts')

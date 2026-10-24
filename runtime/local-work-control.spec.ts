@@ -4,8 +4,8 @@ import { createConnection } from 'node:net'
 import type { Duplex } from 'node:net'
 import { join, resolve } from 'node:path'
 import { afterAll, expect, it } from 'vitest'
-import type { ResourceDemand } from '../control-protocol/agent-services.ts'
-import type { ProjectExecutionReceipt } from './dagpipe/host.ts'
+import type { ResourceDemand } from '../packages/shared/src/agent-services.ts'
+import type { ProjectExecutionReceipt } from '../packages/dagpipe/src/host.ts'
 import {
   decodeLocalWorkControlRequest,
   decodeLocalControlRequest,

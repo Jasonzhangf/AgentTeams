@@ -1,10 +1,10 @@
-import type { ServiceError, ServiceErrorCode } from '../control-protocol/agent-services.ts'
+import type { ServiceError, ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
 import {
   parseGroupWireReply,
   parseGroupWireRequest,
   type GroupWireReply,
   type GroupWireRequest,
-} from '../control-protocol/group-wire.ts'
+} from '../packages/shared/src/group-wire.ts'
 
 /**
  * Client-side group request/reply channel.

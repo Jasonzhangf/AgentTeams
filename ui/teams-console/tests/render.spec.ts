@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 
-const clientRoot = join(import.meta.dirname, '../src/client')
+const srcRoot = join(import.meta.dirname, '../src')
 
 /**
  * Render the real `render.ts`/`model.ts`/`locale.ts` modules in a browser. The modules are
@@ -14,7 +14,7 @@ const clientRoot = join(import.meta.dirname, '../src/client')
  * module loader; no source text is asserted, only the DOM the modules build.
  */
 function classicModule(file: string): string {
-  const output = transpileModule(readFileSync(join(clientRoot, file), 'utf8'), {
+  const output = transpileModule(readFileSync(join(srcRoot, file), 'utf8'), {
     compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
   }).outputText
   return output
@@ -101,7 +101,7 @@ ${script}
 
 describe('declared capability rendering in a real DOM', () => {
   it('renders declared services and resources and an explicit unavailable state', { timeout: 30_000 }, () => {
-    const script = [classicModule('locale.ts'), classicModule('model.ts'), classicModule('render.ts')].join('\n')
+    const script = [classicModule('client/locale.ts'), classicModule('state/model.ts'), classicModule('components/render.ts')].join('\n')
     if (/(^|\n)\s*(import|export)\b/.test(script)) throw new Error('classic module bundling left module syntax behind')
     const directory = mkdtempSync(join(tmpdir(), 'teams-console-render-'))
     onTestFinished(() => {
@@ -120,7 +120,7 @@ describe('declared capability rendering in a real DOM', () => {
 
 describe('BB09 refresh completion in a real DOM', () => {
   it('keeps the busy window distinct from completion and enables bind after reselection', { timeout: 30_000 }, () => {
-    const script = [classicModule('locale.ts'), classicModule('model.ts'), classicModule('render.ts')].join('\n')
+    const script = [classicModule('client/locale.ts'), classicModule('state/model.ts'), classicModule('components/render.ts')].join('\n')
     if (/(^|\n)\s*(import|export)\b/.test(script)) throw new Error('classic module bundling left module syntax behind')
     const directory = mkdtempSync(join(tmpdir(), 'teams-console-busy-window-'))
     onTestFinished(() => {

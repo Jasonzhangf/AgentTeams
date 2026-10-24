@@ -1,5 +1,5 @@
-import type { AgentDeclaration, JsonValue, RelayPeer, ServiceError } from '../control-protocol/agent-services.ts'
-import { RelayProtocolError } from '../control-protocol/relay-admission.ts'
+import type { AgentDeclaration, JsonValue, RelayPeer, ServiceError } from '../packages/shared/src/agent-services.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-admission.ts'
 import { createRelayClient, type RelayClient, type RelayClientOptions, type RelayDirectorySnapshot, type RelayGroupMessage } from './relay-client.ts'
 
 /**

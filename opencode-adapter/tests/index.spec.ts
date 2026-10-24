@@ -33,7 +33,7 @@ import {
 } from '../src/index.ts'
 // Test-only cross-layer equivalence check: the adapter must never emit a tool shape the closed
 // Console wire parser rejects, because one rejected event fails the whole projection reply.
-import { parseConsoleSessionEvent } from '../../control-protocol/console-api.ts'
+import { parseConsoleSessionEvent } from '../../packages/shared/src/console-api.ts'
 
 describe('OpenCode Teams adapter', () => {
   it('projects OpenCode session events from the SDK info shape', () => {

@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { AgentDeclaration, RelayPeer } from '../control-protocol/agent-services.ts'
+import type { AgentDeclaration, RelayPeer } from '../packages/shared/src/agent-services.ts'
 import type { RelayClient } from '../network/relay-client.ts'
 import { WssConnectionError, type WssConnection, type WssFrame } from '../network/wss-connection.ts'
 import { createAgentWorkClient } from './agent-work-client.ts'

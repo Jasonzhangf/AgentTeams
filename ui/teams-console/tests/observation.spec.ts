@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ProjectionObservationController } from '../src/client/observation.ts'
+import { ProjectionObservationController } from '../src/state/observation.ts'
 import type { ConsoleProjectionV1 } from '../src/client/protocol.ts'
 
 const projection: ConsoleProjectionV1 = { version: 1, agents: [], sessions: [], notifications: [], configs: [] }

@@ -30,8 +30,8 @@ import { readSessionObservationRecord, sessionObservationScopePath } from '../co
 import { RuntimeConfigError, type ConfigApplyResult } from '../config/runtime-config.ts'
 import { createConsoleAuthorization } from '../console-host/src/auth.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
-import type { RelayPeer } from '../control-protocol/agent-services.ts'
-import type { RelationRole } from '../control-protocol/teams-connection.ts'
+import type { RelayPeer } from '../packages/shared/src/agent-services.ts'
+import type { RelationRole } from '../packages/shared/src/teams-connection.ts'
 import {
   parseConsoleProjection,
   type ConsoleAgentObservationV1,
@@ -40,7 +40,7 @@ import {
   type ConsoleClientV1,
   type ConsoleProjectionV1,
   type JsonValue,
-} from '../control-protocol/console-api.ts'
+} from '../packages/shared/src/console-api.ts'
 import {
   historyQueryFromSearchParams,
   parseConsoleProjectionSnapshot,
@@ -52,7 +52,7 @@ import {
   type HistoryPage,
   type HistoryQuery,
   type HistoryReadPort,
-} from '../control-protocol/teams-state.ts'
+} from '../packages/shared/src/teams-state.ts'
 import { refreshRelayDirectory, type AccountDirectorySnapshot } from '../network/account-directory.ts'
 import type { RegistrationStatus } from '../network/registration-client.ts'
 import type { RelayDirectorySnapshot } from '../network/relay-client.ts'

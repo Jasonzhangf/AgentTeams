@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HostDirectoryEntry } from '../server/directory.ts'
-import { TEAMS_CONNECTION_STATUS_VERSION } from '../control-protocol/teams-state.ts'
+import { TEAMS_CONNECTION_STATUS_VERSION } from '../packages/shared/src/teams-state.ts'
 import type { AccountDirectorySnapshot } from './account-directory.ts'
 import type { RegistrationStatus } from './registration-client.ts'
 import { membershipHistoryEvents, projectTeamsMembership, type MembershipChannelObservation } from './teams-membership.ts'

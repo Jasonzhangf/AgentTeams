@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
-import { assertEnvelopeKeys } from '../control-protocol/json-value.ts'
-import { RelayProtocolError } from '../control-protocol/relay-codec.ts'
-import type { AgentDeclaration } from '../control-protocol/agent-services.ts'
+import { assertEnvelopeKeys } from '../packages/shared/src/json-value.ts'
+import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
+import type { AgentDeclaration } from '../packages/shared/src/agent-services.ts'
 import type { RelayClientOptions } from '../network/relay-client.ts'
 
 export function object(value: unknown, keys: readonly string[], label: string): Record<string, unknown> {

@@ -5,9 +5,9 @@ import { afterEach, expect, it } from 'vitest'
 import { createCliWorkExecutor } from './cli-executor.ts'
 import { createWorkHost } from './work-host.ts'
 import { createFileWorkStore, createWorkLedger } from '../agent/work-resource.ts'
-import type { AgentWork, ResourceAllocation } from '../control-protocol/agent-services.ts'
+import type { AgentWork, ResourceAllocation } from '../packages/shared/src/agent-services.ts'
 import { createWorkIngress } from './work-ingress.ts'
-import { parseWorkWireFrame } from '../control-protocol/work-wire.ts'
+import { parseWorkWireFrame } from '../packages/shared/src/work-wire.ts'
 
 const directories: string[] = []
 afterEach(() => { for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true }) })

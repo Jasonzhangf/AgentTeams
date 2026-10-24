@@ -1,4 +1,4 @@
-import type { HistoryPage, HistoryQuery, TeamsConnectionStatus } from '../control-protocol/teams-state.ts'
+import type { HistoryPage, HistoryQuery, TeamsConnectionStatus } from '../packages/shared/src/teams-state.ts'
 import type { AccountDirectorySnapshot } from './account-directory.ts'
 import type { RegistrationStatus } from './registration-client.ts'
 import type { TeamsConnectionHistory } from './teams-connection-history.ts'

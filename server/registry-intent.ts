@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import type { AuthenticatedAgent } from '../control-protocol/agent-services.ts'
+import type { AuthenticatedAgent } from '../packages/shared/src/agent-services.ts'
 import type { AdmissionIntent, RegistryDaemonIntent } from '../config/daemon-intent.ts'
 import { REGISTRY_IMPLEMENTATION, type RegistryImplementation } from '../config/daemon-intent.ts'
 import { DEFAULT_PEER_TTL_MS, type RelayServerOptions } from './relay.ts'

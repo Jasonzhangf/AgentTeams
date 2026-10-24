@@ -8,7 +8,7 @@ import {
   type FixedProcessResult,
 } from './fixed-process.ts'
 import { CliAdapterError, type SearchRequest, type SearchResult, type SearchMatch } from './contracts.ts'
-import type { JsonValue } from '../control-protocol/agent-services.ts'
+import type { JsonValue } from '../packages/shared/src/agent-services.ts'
 
 const defaultMaxResults = 100
 const maximumResults = 1_000

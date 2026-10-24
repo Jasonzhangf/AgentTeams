@@ -1,4 +1,4 @@
-import type { JsonValue } from '../control-protocol/agent-services.ts'
+import type { JsonValue } from '../packages/shared/src/agent-services.ts'
 
 export type CliOperation = 'context.create' | 'navigate' | 'snapshot' | 'context.destroy' | 'search'
 

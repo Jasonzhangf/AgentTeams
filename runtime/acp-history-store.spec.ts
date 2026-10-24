@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { HistoryRecord } from '../control-protocol/acp.ts'
-import type { HistoryQuery } from '../control-protocol/teams-state.ts'
+import type { HistoryRecord } from '../packages/shared/src/acp.ts'
+import type { HistoryQuery } from '../packages/shared/src/teams-state.ts'
 import { createAcpHistoryStore } from './acp-history-store.ts'
 
 const directories = new Set<string>()

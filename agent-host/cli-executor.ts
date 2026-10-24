@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { lstatSync, realpathSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import type { AgentWork, CapabilityDeclaration, JsonValue, ResourceAllocation, ServiceErrorCode, WorkRequest } from '../control-protocol/agent-services.ts'
+import type { AgentWork, CapabilityDeclaration, JsonValue, ResourceAllocation, ServiceErrorCode, WorkRequest } from '../packages/shared/src/agent-services.ts'
 import type { RequestCompletion } from '../agent/work-resource.ts'
 import { createBrowserCliAdapter, type BrowserCliAdapter } from '../cli-adapter/browser-cli.ts'
 import { createReadOnlySearchCliAdapter } from '../cli-adapter/search-cli.ts'

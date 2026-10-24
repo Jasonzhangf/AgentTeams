@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { Action, ExternalOp, Group, IssueSession, Message } from '../control-protocol/group-wire.ts'
+import type { Action, ExternalOp, Group, IssueSession, Message } from '../packages/shared/src/group-wire.ts'
 import type { IssueSessionOperation } from './issue-session.ts'
 import { createGroupFileStore } from './group-file-store.ts'
 import { createGroupHub, type GroupHubSnapshot } from './group-hub.ts'

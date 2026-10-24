@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import type { AgentDeclaration, ServiceError } from '../control-protocol/agent-services.ts'
-import type { ExternalOpReply, GroupWireReply, GroupWireRequest } from '../control-protocol/group-wire.ts'
+import type { AgentDeclaration, ServiceError } from '../packages/shared/src/agent-services.ts'
+import type { ExternalOpReply, GroupWireReply, GroupWireRequest } from '../packages/shared/src/group-wire.ts'
 import {
   createAgentMessaging,
   type AgentMessaging,

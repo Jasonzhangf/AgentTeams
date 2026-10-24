@@ -1,5 +1,5 @@
 import WebSocket, { type RawData } from 'ws'
-import type { ServiceErrorCode } from '../control-protocol/agent-services.ts'
+import type { ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
 
 /** Network owns bytes and socket lifecycle; callers own the wire protocol. */
 export interface WssFrame { readonly bytes: Buffer; readonly binary: boolean }
