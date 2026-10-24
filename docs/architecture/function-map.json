@@ -1140,7 +1140,7 @@
       "owner": "agent",
       "status": "partial",
       "paths": [
-        "ui/teams-console/src/client/model.ts"
+        "ui/teams-console/src/state/model.ts"
       ],
       "entry_symbols": [
         "projectAgentCurrentSessions"
@@ -1293,7 +1293,7 @@
       "status": "partial",
       "paths": [
         "ui/teams-console/src/client/Drawer.tsx",
-        "ui/teams-console/src/client/controller.ts"
+        "ui/teams-console/src/state/controller.ts"
       ],
       "entry_symbols": [
         "pushDrawer",

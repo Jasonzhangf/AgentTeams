@@ -180,7 +180,7 @@
 - Architecture maps: `docs/architecture/`
 - AppSDK maps and contracts: `.appsdk/`
 - Runtime source: `agent-host/`, `network/`, `server/`, `runtime/`,
-  `control-protocol/`, `opencode-adapter/`, `console-host/`, `ui/`
+  `packages/shared/`, `packages/dagpipe/`, `opencode-adapter/`, `console-host/`, `ui/`
 - Project facts and boundaries: this file. Reusable project procedure:
   `docs/development-governance.md`. Machine workflow: the declared `.appsdk/`
   guidance contracts. The project declares no project-local Skill.
