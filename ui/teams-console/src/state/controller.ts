@@ -716,10 +716,6 @@ export class TeamsConsoleController {
     if (this.state.group.composer !== text) this.updateGroup(state => ({ ...state, composer: text }))
   }
 
-  private restoreComposerIfContextChanged(previousKey: string): void {
-    if (this.composerKey() !== previousKey) this.restoreComposer()
-  }
-
   /**
    * Enter another actor/group view. Every switch uses the same order so an old answer can
    * neither land in the new view nor suppress the result already parked for the new view.
