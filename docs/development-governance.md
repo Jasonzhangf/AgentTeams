@@ -6,6 +6,8 @@
 ## 唯一归属
 
 - 产品约束：根 `AGENTS.md`；需求/下一步：`docs/goals/`；协议与配置：`docs/design/`。
+- 项目开发步骤：[agentteams-development](../.agents/skills/agentteams-development/SKILL.md)。
+  本文拥有命令、gate 适用性与证据复用，不再复制一套开发流程。
 - 产品 resource/function/mainline/module/verification：`docs/architecture/` 五个 map。
 - SDK 实现契约：官方初始化的 `.appsdk/contracts/`、`.appsdk/maps/`、SDK resources/lock。
 - 本项目交付单元：`.appsdk/project.json` 的 `teams-source`，绑定现有源码与真实库产物。
@@ -15,17 +17,9 @@
 
 ## 每个开发里程碑
 
-1. 获取最新 origin/main，在 `/Volumes/Intel/playground/agentteams/<unit>` 下创建独立
-   clean worktree；保持主线只读。
-2. 绑定受影响 feature/owner/路径/调用边/验收。先定位真源，比较删除、复用与直接实现。
-3. 关键行为先红测后最小修改；同步受影响 maps。探索与验证写本任务独占 run notes。
-4. 新 worktree 或依赖输入变化时，在根目录安装 `pnpm install --frozen-lockfile`；
-   依赖未变且已可用时复用。先执行当前阶段需要的定向验证，再按重入规则决定
-   是否需要全量 `pnpm verify`。
-5. 完整 milestone 完成作者自检和适用实际入口验收后，按本目标已选的独立 Codex
-   路由做一次整体 review。内部节点和常规提交不另派审；finding 修复后只补受影响
-   验证并复核该 finding。纯文档/Skill 修改做定向检查，不增加独立审批。
-6. commit、push、合并、安装、发布分别按授权执行；review PASS 不等于这些动作完成。
+按项目本地 Skill 的“开发与验收”推进。复杂任务的独立规划、worker 与 reviewer 路由
+沿当前宿主编排 Skill；这里不另定模型或复制角色规则。纯文档/Skill 修改只做定向检查，
+不为落盘文档启动服务、安装产品或增加独立审批。
 
 `pnpm verify` 顺序执行全量测试、类型检查、Guidance compile、AppSDK compile、编译
 产物 HTTP smoke、AppSDK verify；任何命令失败即停止该检查链。它用于适用首次/最终基线、依赖/契约漂移或

@@ -3,8 +3,8 @@
 ## Project truth
 
 - Teams is an independent multi-agent control plane. Agents may be passive
-  capability services, including browser CLI agents. OpenCode is the execution
-  substrate for LLM agents; Teams owns its UI and provider configuration.
+  capability services, including browser CLI agents. OpenCode and DSH are engine
+  adapters for LLM agents; Teams owns its UI and provider configuration.
 - Console Host is an optional, non-permanent observation/configuration client.
   Agent Hosts communicate and coordinate independently after configuration.
   Each Agent Host adapts one local capability service/runtime; peer and
@@ -43,19 +43,20 @@
   started separately. `agentteams --serve <opencode|dsh> --ip <ip> --port <port>`
   is the user quick-start entry. One config never starts a second daemon or an
   implicit control/registry.
-- D00 freezes the single-daemon config schema and the public ACP, engine-adapter
-  and Teams frames in `docs/design/teams-acp-daemon-config-v4.md`. The stdio ACP
-  adapter (D01), the OpenCode engine adapter plus the `--serve opencode` runtime
-  entry (D02), the DSH engine adapter plus the `--serve dsh` entry (D03)
-  and the registry daemon plus automatic registration (D04) are delivered at
-  source level. One `engineAdapterFor` dispatch in `runtime/acp-serve.ts` selects
-  the OpenCode or DSH adapter and the daemon/host/stdio/readiness/stop plumbing is
-  shared. The Teams network transport/negotiation and the UI
-  are later deliveries and stay pending. A declared port or
-  frame is not a running engine, and a parse test is not inference evidence.
+- The single-daemon config and public ACP/engine/Teams contracts are defined in
+  `docs/design/teams-acp-daemon-config-v4.md`. One `engineAdapterFor` dispatch in
+  `runtime/acp-serve.ts` selects OpenCode or DSH; daemon/host/stdio/readiness/stop
+  plumbing is shared. Delivery status belongs to the scoped plans and evidence,
+  not a second progress table here. A declared frame or parse test does not prove
+  engine inference or a usable UI.
 - The ACP increment does not replace the existing Work entry. Old Work
   obligations and their acceptance remain in force, and none of their evidence
   proves the ACP increment.
+- The authorized group WebUI first increment is a human-operated issue/action
+  loop. Model execution and ACP Session mapping are a separate second increment;
+  webhook acceleration is third. Work MVP, ACP/LAN and group delivery each need
+  their own evidence. See `docs/goals/teams-user-delivery-plan.md` and
+  `docs/design/teams-group-messaging-v1.md`.
 - Compatibility boundary: the Phase 1 local-network MVP and the current
   ACP/LAN/WebUI increment are the supported scope. Public Relay, real NAT/STUN,
   direct internet transport, mobile entrypoints, central registration
@@ -98,7 +99,64 @@
   affected map, tests, and declared gates in the same change when ownership,
   paths, call edges, or regression coverage change.
 
+## Group architecture and workflow
+
+These are product constraints, not a claim that all paths are implemented.
+Protocol fields, state transitions and DAGs have one owner:
+`docs/design/teams-group-messaging-v1.md`. Human interaction is owned by
+`docs/design/teams-group-webui-design.md`; the HTML beside it is a simulation.
+
+- The human path is discovery → select an authorized Agent context → create or
+  enter a group → select/create an issue → explicitly assign actions → read
+  results → follow up or close the issue. Switching groups/issues preserves
+  their own drafts and pending operations; late responses cannot replace the
+  current view. Choosing a daemon context does not switch authenticated users.
+- Console/UI submits typed requests to the existing Agent endpoint and hub.
+  `packages/shared` owns wire contracts; the server hub owns group membership,
+  issue-session links, actions and external-operation delegation records.
+  Runtime connects the transport and local execution owners. Console never
+  owns a second business ledger or the Agent-to-Agent relay path.
+- Vikunja owns issue open/closed state. The delegated daemon's `vikunja-sync`
+  owns the external call; hub projects its authenticated result. One group has
+  many issue sessions; one issue has one conversation. Local ACP Sessions are
+  execution bindings, not the navigation or issue-state authority.
+- Group messages are shared. `@` selects action responsibility, not private
+  visibility. Each request identifies its initiator/reply recipient, issue,
+  action, assignee, reason, expected result and reply requirement. A valid action
+  assigned to the Agent triggers work; `replyRequired` only controls the reply.
+  Comments and received messages do not implicitly start another action.
+- Group management, command authority and issue-close authority are separate.
+  A master's explicit `mastersOf` edge allows assignment to that peer and a
+  request from that peer to the master. The master may refuse with a reason;
+  the peer may report evidenced blockage/failure, but cannot refuse a valid
+  assignment. Roles never bypass system permissions or capability limits.
+- Each participant ends its action after its result is confirmed in the issue.
+  Follow-up creates a new action; blocked actions are not silently resumed.
+  The initiator closes/reopens the same issue, or explicitly delegates this to
+  a named member. Group admin rights alone do not grant that delegation.
+- Closing stops admission, cancels unstarted actions and requests cancellation
+  of in-flight work. Issue closed and execution stopped are separate facts.
+  External close uses the same settlement path. Reopening does not replay old
+  actions; late messages remain history. Leaving/hiding a group or switching
+  views does not close its issues.
+- A send receipt, durable inbox ACK, completed action and closed issue prove
+  different boundaries. Keep stable commit/result identifiers for uncertain
+  writes; recover by authoritative readback without blind replay. A successful
+  list never settles an uncertain write. `issue.list` reads persisted sessions
+  under group authorization; `issue.query` refreshes external state. Stale or
+  unknown state cannot authorize a new action.
+- Show only feedback that changes the user's decision, action or recovery.
+  Per-Agent cards and the overall summary expose distinct responsibilities and
+  unfinished actions. Motion follows real state; timestamps alone do not remount
+  inputs, clear drafts or announce progress. Keep refusal, unknown, history
+  gaps, unconfirmed stop and accessibility feedback; omit duplicate ACK/toasts.
+
 ## Development contract
+
+- For AgentTeams development, debugging or acceptance, read the project-local
+  `.agents/skills/agentteams-development/SKILL.md`. It owns the project procedure
+  and routes to the existing design/maps/gates; it does not replace global
+  orchestration, grant permissions or alter SDK-managed Skills.
 
 - The user-selected long-running delivery contract is
   `docs/goals/teams-long-running-delivery.md`. Each stage closes only after
@@ -124,8 +182,10 @@
   and verification evidence to the current run notes.
 - Treat the mainline checkout as read-only. Develop in one clean owner worktree
   created from the latest remote mainline, and preserve other workers' state.
-- The project's commit and push protection is procedural: the primary integrates
-  only after a passing candidate gate and one review. The project declares no
+- The project's commit and push protection is procedural: a complete product
+  milestone needs applicable validation and one independent overall review
+  before integration. Pure documentation/Skill edits use targeted checks;
+  internal steps do not each require a review. The project declares no
   commit-time or push-time hook, because a commit does not run the full gate. A
   merge, protection, or review result proves only its own boundary.
 - Remove the owned worktree and release its claim only after required delivery,
@@ -169,7 +229,7 @@
 ## Evidence boundary
 
 - Report source, test, build, installed artifact, restart, deployed-entrypoint
-  replay, review, merge, remote receipt, freeze, and cleanup separately. Never
+  replay, review, merge, remote receipt and cleanup separately. Never
   infer a later evidence level from an earlier one.
 - A blocked result names the first failing gate, the preserved state, the retry
   policy, the owner, and one executable next action.
@@ -181,8 +241,10 @@
 - AppSDK maps and contracts: `.appsdk/`
 - Runtime source: `agent-host/`, `network/`, `server/`, `runtime/`,
   `packages/shared/`, `packages/dagpipe/`, `opencode-adapter/`, `console-host/`, `ui/`
-- Project facts and boundaries: this file. Reusable project procedure:
-  `docs/development-governance.md`. Machine workflow: the declared `.appsdk/`
-  guidance contracts. The project declares no project-local Skill.
+- Project facts and boundaries: this file. Project development procedure:
+  `.agents/skills/agentteams-development/SKILL.md`. Commands, gate applicability
+  and evidence reuse: `docs/development-governance.md`. Machine workflow:
+  the declared `.appsdk/` guidance contracts. SDK-owned Skills stay under
+  `.appsdk/skills/`; do not put this project's procedure there.
 - Optional memory retrieval, level-3 writes, and evidence-backed promotion:
   `.appsdk/skills/project-memory/SKILL.md`
