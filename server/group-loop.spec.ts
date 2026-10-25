@@ -138,6 +138,15 @@ async function waitUntil(predicate: () => boolean, timeoutMs = 5_000): Promise<v
   throw new Error('timed out waiting for the group loop sweep')
 }
 
+async function waitUntilAsync(predicate: () => Promise<boolean>, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await predicate()) return
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 25))
+  }
+  throw new Error('timed out waiting for the asynchronous group loop condition')
+}
+
 /**
  * Runs the real CLI. It must not block this process: the relay, the hub and both
  * daemons live in it, so a synchronous child would wait on a frozen event loop.
@@ -429,4 +438,288 @@ credentialRef = "file:${credentialPaths.get('agent-c')}"
       await c.close()
     }
   }, 60_000)
+
+  it('converges an offline initiator through a trusted reader with no console', async () => {
+    vikunja = await startVikunjaStub()
+    const cert = readFileSync(join(directory, 'cert.pem'))
+    const registryData = join(directory, 'r5-offline-registry-data')
+    const port = await freePort()
+    const configPath = join(directory, `r5-offline-registry-${port}.toml`)
+    const credentialPaths = new Map<string, string>()
+    for (const agentId of ['agent-a', 'agent-b', 'agent-c']) {
+      const credentialPath = join(directory, `r5-offline-credential-${agentId}.txt`)
+      writeFileSync(credentialPath, `Bearer ${agentId}\n`)
+      credentialPaths.set(agentId, credentialPath)
+    }
+    writeFileSync(configPath, `version = 4
+
+[daemon]
+kind = "registry"
+id = "r5-offline-registry"
+hostId = "r5-offline-registry-host"
+accountId = "account-a"
+scopeId = "scope-a"
+dataDirectory = ${JSON.stringify(registryData)}
+
+[listen]
+ip = "127.0.0.1"
+port = ${port}
+tlsCertRef = "file:${join(directory, 'cert.pem')}"
+tlsKeyRef = "file:${join(directory, 'key.pem')}"
+
+[[admissions]]
+admissionRef = "agent-a"
+agentId = "agent-a"
+accountId = "account-a"
+scopeId = "scope-a"
+credentialRef = "file:${credentialPaths.get('agent-a')}"
+
+[[admissions]]
+admissionRef = "agent-b"
+agentId = "agent-b"
+accountId = "account-a"
+scopeId = "scope-a"
+credentialRef = "file:${credentialPaths.get('agent-b')}"
+
+[[admissions]]
+admissionRef = "agent-c"
+agentId = "agent-c"
+accountId = "account-a"
+scopeId = "scope-a"
+credentialRef = "file:${credentialPaths.get('agent-c')}"
+`)
+
+    const started = await startRegistryDaemon(configPath)
+    expect(started.state).toBe('running')
+    const a = await startMessaging({
+      agentId: 'agent-a', dataDirectory: join(directory, 'r5-offline-a'), ca: cert, endpoint: started.url,
+      vikunja: { baseUrl: vikunja.baseUrl, token: 'token-a' },
+    })
+    const b = await startMessaging({
+      agentId: 'agent-b', dataDirectory: join(directory, 'r5-offline-b'), ca: cert, endpoint: started.url,
+      vikunja: { baseUrl: vikunja.baseUrl, token: 'token-b' },
+    })
+    const c = await startMessaging({
+      agentId: 'agent-c', dataDirectory: join(directory, 'r5-offline-c'), ca: cert, endpoint: started.url,
+      vikunja: { baseUrl: vikunja.baseUrl, token: 'token-c' },
+    })
+    try {
+      const created = await cli(a.messaging.socketPath, ['group', 'create', 'release'])
+      const groupId = (created.group as { groupId: string }).groupId
+      await cli(a.messaging.socketPath, ['group', 'invite', groupId, 'agent-b', 'peer'])
+      await cli(b.messaging.socketPath, ['group', 'accept', groupId])
+      await cli(a.messaging.socketPath, ['group', 'invite', groupId, 'agent-c', 'master', '--masters', 'agent-b'])
+      await cli(c.messaging.socketPath, ['group', 'accept', groupId])
+
+      const session = await cli(c.messaging.socketPath, ['issue', 'create', groupId, 'p1', 'release', 'please', '--commit', 'r5-offline-issue'])
+      const sessionId = (session.session as { sessionId: string }).sessionId
+      const issueId = (session.session as { vikunjaIssueId: string }).vikunjaIssueId
+      const action = await cli(c.messaging.socketPath, ['action', 'create', sessionId, 'agent-b', 'review', 'check', 'verdict', '--commit', 'r5-offline-action'])
+      const actionId = (action.action as { actionId: string }).actionId
+      const paths = groupPaths(registryData, 'account-a', 'scope-a', groupId)
+      const taskReads = () => vikunja!.calls.filter((entry) => entry.method === 'GET' && entry.path === `/api/v1/tasks/${issueId}`)
+
+      // While the initiator daemon is online, it is the elected read owner. The
+      // command-before-refresh read on action create already proves this.
+      expect(taskReads().some((entry) => entry.auth === 'Bearer token-c')).toBe(true)
+
+      // The initiator daemon goes offline; its data directory is preserved.
+      await c.close()
+      await waitUntilAsync(async () => {
+        const peers = await a.registration.directory(false)
+        return peers.some((peer) => peer.declaration.identity.agentId === 'agent-c' && peer.presence === 'offline')
+      }, 10_000)
+
+      // The registry now reassigns the read-only query to the first active,
+      // online member that is neither the initiator nor the assignee.
+      await waitUntil(() => taskReads().some((entry) => entry.auth === 'Bearer token-a'), 15_000)
+      const readsWindowStart = taskReads().length
+      const writesBeforeClose = vikunja!.calls.filter((entry) => entry.method === 'POST').length
+
+      // External Vikunja closes the issue. No console, issue query, or action
+      // create runs here: only the registry-owned timer may converge.
+      const closedAt = Date.now()
+      vikunja!.issues.get(issueId)!.done = true
+      await waitUntil(() => {
+        const sessions = readJsonFile<{ sessions: readonly { sessionId: string; state: string }[] }>(paths.sessionsFile)
+        const actions = readJsonFile<{ actions: readonly { actionId: string; state: string }[] }>(paths.actionsFile)
+        const storedSession = sessions?.sessions.find((entry) => entry.sessionId === sessionId)
+        const storedAction = actions?.actions.find((entry) => entry.actionId === actionId)
+        return storedSession?.state === 'closed' && storedAction?.state === 'cancelled'
+      }, 20_000)
+      const convergenceMs = Date.now() - closedAt
+
+      const sweepReads = taskReads().slice(readsWindowStart)
+      expect(sweepReads.length).toBeGreaterThan(0)
+      expect(sweepReads.every((entry) => entry.auth === 'Bearer token-a')).toBe(true)
+      expect(sweepReads.some((entry) => entry.auth === 'Bearer token-c')).toBe(false)
+      expect(sweepReads.some((entry) => entry.auth === 'Bearer token-b')).toBe(false)
+      expect(vikunja!.calls.filter((entry) => entry.method === 'POST')).toHaveLength(writesBeforeClose)
+
+      // The registry process itself settled the state, independent of the
+      // initiator daemon; its persisted sweep receipt names the change.
+      const receipt = await readRegistryState(registryStatePath(await loadRegistryIntent(configPath)))
+      expect(receipt?.sweep?.changed).toBeGreaterThanOrEqual(1)
+      expect(processAlive(started.pid!)).toBe(true)
+
+      const stopped = await stopRegistryDaemon(configPath)
+      expect(stopped.state).toBe('stopped')
+      expect(processAlive(started.pid!)).toBe(false)
+      const readsAtStop = taskReads().length
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 700))
+      expect(taskReads()).toHaveLength(readsAtStop)
+      expect((await readRegistryState(registryStatePath(await loadRegistryIntent(configPath))))?.state).toBe('stopped')
+      console.log(`R5 offline reader: convergence=${convergenceMs}ms reads=${sweepReads.length} auth=token-a posts=${vikunja!.calls.filter((entry) => entry.method === 'POST').length}`)
+    } finally {
+      const state = await readRegistryState(registryStatePath(await loadRegistryIntent(configPath))).catch(() => undefined)
+      if (state !== undefined && state.pid > 0 && processAlive(state.pid)) {
+        await stopRegistryDaemon(configPath).catch(() => {
+          try { process.kill(state.pid, 'SIGTERM') } catch { /* preserve the original failure */ }
+        })
+      }
+      await a.close().catch(() => undefined)
+      await b.close().catch(() => undefined)
+      await c.close().catch(() => undefined)
+    }
+  }, 90_000)
+
+  it('shortens only the in-flight session poll inside the single registry timer', async () => {
+    vikunja = await startVikunjaStub()
+    const cert = readFileSync(join(directory, 'cert.pem'))
+    const registryData = join(directory, 'r5-inflight-registry-data')
+    const registryStartedAt = Date.now()
+    const port = await freePort()
+    const configPath = join(directory, `r5-inflight-registry-${port}.toml`)
+    const credentialPaths = new Map<string, string>()
+    for (const agentId of ['agent-a', 'agent-b', 'agent-c']) {
+      const credentialPath = join(directory, `r5-inflight-credential-${agentId}.txt`)
+      writeFileSync(credentialPath, `Bearer ${agentId}\n`)
+      credentialPaths.set(agentId, credentialPath)
+    }
+    writeFileSync(configPath, `version = 4
+
+[daemon]
+kind = "registry"
+id = "r5-inflight-registry"
+hostId = "r5-inflight-registry-host"
+accountId = "account-a"
+scopeId = "scope-a"
+dataDirectory = ${JSON.stringify(registryData)}
+
+[listen]
+ip = "127.0.0.1"
+port = ${port}
+tlsCertRef = "file:${join(directory, 'cert.pem')}"
+tlsKeyRef = "file:${join(directory, 'key.pem')}"
+
+[[admissions]]
+admissionRef = "agent-a"
+agentId = "agent-a"
+accountId = "account-a"
+scopeId = "scope-a"
+credentialRef = "file:${credentialPaths.get('agent-a')}"
+
+[[admissions]]
+admissionRef = "agent-b"
+agentId = "agent-b"
+accountId = "account-a"
+scopeId = "scope-a"
+credentialRef = "file:${credentialPaths.get('agent-b')}"
+
+[[admissions]]
+admissionRef = "agent-c"
+agentId = "agent-c"
+accountId = "account-a"
+scopeId = "scope-a"
+credentialRef = "file:${credentialPaths.get('agent-c')}"
+`)
+
+    const started = await startRegistryDaemon(configPath)
+    expect(started.state).toBe('running')
+    const a = await startMessaging({
+      agentId: 'agent-a', dataDirectory: join(directory, 'r5-inflight-a'), ca: cert, endpoint: started.url,
+      vikunja: { baseUrl: vikunja.baseUrl, token: 'token-a' },
+    })
+    const b = await startMessaging({
+      agentId: 'agent-b', dataDirectory: join(directory, 'r5-inflight-b'), ca: cert, endpoint: started.url,
+      vikunja: { baseUrl: vikunja.baseUrl, token: 'token-b' },
+    })
+    const c = await startMessaging({
+      agentId: 'agent-c', dataDirectory: join(directory, 'r5-inflight-c'), ca: cert, endpoint: started.url,
+      vikunja: { baseUrl: vikunja.baseUrl, token: 'token-c' },
+    })
+    try {
+      const created = await cli(a.messaging.socketPath, ['group', 'create', 'release'])
+      const groupId = (created.group as { groupId: string }).groupId
+      await cli(a.messaging.socketPath, ['group', 'invite', groupId, 'agent-b', 'peer'])
+      await cli(b.messaging.socketPath, ['group', 'accept', groupId])
+      await cli(a.messaging.socketPath, ['group', 'invite', groupId, 'agent-c', 'master', '--masters', 'agent-b'])
+      await cli(c.messaging.socketPath, ['group', 'accept', groupId])
+
+      const sessionA = await cli(c.messaging.socketPath, ['issue', 'create', groupId, 'p1', 'inflight', 'body', '--commit', 'r5-inflight-issue-a'])
+      const sessionAId = (sessionA.session as { sessionId: string }).sessionId
+      const issueAId = (sessionA.session as { vikunjaIssueId: string }).vikunjaIssueId
+      const sessionB = await cli(c.messaging.socketPath, ['issue', 'create', groupId, 'p1', 'ordinary', 'body', '--commit', 'r5-inflight-issue-b'])
+      const sessionBId = (sessionB.session as { sessionId: string }).sessionId
+      const issueBId = (sessionB.session as { vikunjaIssueId: string }).vikunjaIssueId
+      // Session A has a real in-flight action; session B has none.
+      await cli(c.messaging.socketPath, ['action', 'create', sessionAId, 'agent-b', 'review', 'check', 'verdict', '--commit', 'r5-inflight-action'])
+      const paths = groupPaths(registryData, 'account-a', 'scope-a', groupId)
+      const readsFor = (id: string) => vikunja!.calls.filter((entry) => entry.method === 'GET' && entry.path === `/api/v1/tasks/${id}`)
+      const sessionState = (sessionId: string) => {
+        const sessions = readJsonFile<{ sessions: readonly { sessionId: string; state: string }[] }>(paths.sessionsFile)
+        return sessions?.sessions.find((entry) => entry.sessionId === sessionId)?.state
+      }
+
+      // The registry timer targets the in-flight session before both issues are
+      // closed; the ordinary session must not be read during that same window.
+      await waitUntil(() => readsFor(issueAId).length > 0 && readsFor(issueBId).length === 0, 20_000)
+
+      const flipAt = Date.now()
+      const readsAtFlip = readsFor(issueAId).length
+      vikunja!.issues.get(issueAId)!.done = true
+      vikunja!.issues.get(issueBId)!.done = true
+      await waitUntil(() => sessionState(sessionAId) === 'closed', 20_000)
+      const convergenceMs = Date.now() - flipAt
+      expect(convergenceMs).toBeLessThan(15_000)
+      expect(readsFor(issueAId).slice(readsAtFlip).length).toBeGreaterThan(0)
+
+      // During the shortened window, B stays open and is never read early. The
+      // observation ends before the 30s full pass so it stays inside one window.
+      const observationEnd = Date.now() + 4_000
+      while (Date.now() < observationEnd) {
+        expect(sessionState(sessionBId)).toBe('open')
+        expect(readsFor(issueBId)).toHaveLength(0)
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 100))
+      }
+      expect(Date.now() - registryStartedAt).toBeLessThan(25_000)
+
+      // The single registry timer also owns the ordinary session's later full
+      // read: it converges only on the full window, never on the shortened one.
+      await waitUntil(() => sessionState(sessionBId) === 'closed', 45_000)
+      const fullWindowMs = Date.now() - flipAt
+      expect(fullWindowMs).toBeGreaterThan(15_000)
+      expect(readsFor(issueBId).length).toBeGreaterThan(0)
+
+      // One timer, one process: stopping the registry stops every read.
+      const stopped = await stopRegistryDaemon(configPath)
+      expect(stopped.state).toBe('stopped')
+      expect(processAlive(started.pid!)).toBe(false)
+      const readsAtStop = readsFor(issueAId).length + readsFor(issueBId).length
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 700))
+      expect(readsFor(issueAId).length + readsFor(issueBId).length).toBe(readsAtStop)
+      expect((await readRegistryState(registryStatePath(await loadRegistryIntent(configPath))))?.state).toBe('stopped')
+      console.log(`R5 in-flight: convergence=${convergenceMs}ms full=${fullWindowMs}ms aReads=${readsFor(issueAId).length} bReads=${readsFor(issueBId).length}`)
+    } finally {
+      const state = await readRegistryState(registryStatePath(await loadRegistryIntent(configPath))).catch(() => undefined)
+      if (state !== undefined && state.pid > 0 && processAlive(state.pid)) {
+        await stopRegistryDaemon(configPath).catch(() => {
+          try { process.kill(state.pid, 'SIGTERM') } catch { /* preserve the original failure */ }
+        })
+      }
+      await a.close().catch(() => undefined)
+      await b.close().catch(() => undefined)
+      await c.close().catch(() => undefined)
+    }
+  }, 90_000)
 })
