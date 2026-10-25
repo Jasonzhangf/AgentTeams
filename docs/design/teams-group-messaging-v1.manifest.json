@@ -2,7 +2,7 @@
   "schema_version": 1,
   "manifest_id": "teams-group-messaging-v1",
   "status": "design",
-  "revision": 10,
+  "revision": 9,
   "supersedes": "revision 8; restores the delegated read owner, command-before-refresh and in-flight shortening boundaries in section 13.1, and records the bounded sweep implementation plus the two explicit batch-1 gaps; revision 8 added Action.refusal and the registry-owned bounded external-close sweep; revision 7 added Action.report",
   "canonical_doc": "docs/design/teams-group-messaging-v1.md",
   "owner_modules": ["control-protocol", "server", "network", "runtime", "config"],

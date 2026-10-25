@@ -1,6 +1,6 @@
 # Teams 群组通信、issue 会话与 action 执行 v1(修订版)
 
-状态:design 修订版(revision 10)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
+状态:design 修订版(revision 9)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
 注入、关闭、投递语义。审计反馈和用户确认的决定已落实到对象模型、线协议、权限、投递、
 Session 映射、关闭和分批。本文件是唯一 owner;不并存两套契约。受影响架构映射已同步:模块归属登记在
 `docs/architecture/module-registry.json` 的 `group-messaging` 条目,实现后按
@@ -63,7 +63,7 @@ revision 8:新增持久 `Action.refusal`,master 拒绝 peer 请求时原因非�
 外部关闭收敛由 registry daemon 持有的唯一有界 scheduler 驱动,GroupHub 保留 issue 真源、
 读取委托与共用 close settlement。读失败保持 unknown 并拒绝新 action;Console 不承担同步。
 
-revision 10:恢复 13.1 的读取 owner 委派、命令前刷新与在飞缩短边界,并记录第一批有界
+revision 9:恢复 13.1 的读取 owner 委派、命令前刷新与在飞缩短边界,并记录第一批有界
 sweep 的实际实现(单轮有界并发、单读超时、30 秒窗口和 registry 状态可观测回执);离线改派
 与在飞缩短列为未实现项,附最小方案与验收,不静默降需求。
 
