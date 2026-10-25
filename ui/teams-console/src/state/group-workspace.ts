@@ -115,7 +115,10 @@ export function groupPhase(state: GroupWorkspaceState): GroupPhase {
   if (state.messageStatus === 'refused') return 'refused'
   if (state.messageStatus === 'failed') return 'failed'
   if (state.messageStatus === 'unknown') return 'unknown'
-  if (state.messageStatus === 'idle' || (state.messageStatus === 'loading' && state.messages.length === 0)) return 'loading'
+  // A chosen group whose messages are simply not read yet keeps the workspace on screen; the
+  // message panel shows that section's own state instead of replacing the whole page.
+  if (state.messageStatus === 'idle' && state.selectedGroupId !== undefined) return 'live'
+  if (state.messageStatus === 'loading' && state.messages.length === 0) return 'loading'
   return 'live'
 }
 
@@ -436,4 +439,43 @@ export function defaultActor(candidates: readonly string[], selectedAgentId: str
 export function effectiveAccess(state: GroupWorkspaceState): 'ready' | 'not-configured' | 'unreachable' {
   if (state.actors.length === 0) return 'not-configured'
   return state.access.kind
+}
+
+/**
+ * Members the acting agent may create an action for. GroupHub admits an action only when a
+ * command/request edge exists, and the edge lives in the actor's own `mastersOf`. Offering
+ * anything else would let the user fill in a target that is bound to be refused.
+ */
+export function assignableMembers(group: Group | undefined, actorId: string | undefined): readonly string[] {
+  if (group === undefined || actorId === undefined) return []
+  const actor = group.members.find(member => member.agentId === actorId)
+  if (actor === undefined) return []
+  return actor.mastersOf.filter(masterId => masterId !== actorId
+    && group.members.some(member => member.agentId === masterId && member.intervals.some(interval => interval.leftAt === undefined)))
+}
+
+/**
+ * Agents an invitation may name: declared actors that are not already active in the group.
+ * GroupHub refuses an invitation to an active member, so those are never offered.
+ */
+export function invitableAgents(actors: readonly string[], group: Group | undefined): readonly string[] {
+  if (group === undefined) return [...actors]
+  const active = new Set(group.members
+    .filter(member => member.intervals.some(interval => interval.leftAt === undefined))
+    .map(member => member.agentId))
+  return actors.filter(agentId => !active.has(agentId))
+}
+
+/**
+ * Members the acting owner may still grant an edge to. Already-granted edges and the owner
+ * itself are excluded; the UI offers the button only for these.
+ */
+export function grantTargets(group: Group, actorId: string): readonly string[] {
+  const actor = group.members.find(member => member.agentId === actorId)
+  if (actor === undefined || group.ownerAgentId !== actorId) return []
+  const granted = new Set(actor.mastersOf)
+  return group.members
+    .filter(member => member.agentId !== actorId && member.intervals.some(interval => interval.leftAt === undefined))
+    .map(member => member.agentId)
+    .filter(agentId => !granted.has(agentId))
 }

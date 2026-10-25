@@ -25,7 +25,7 @@ type MessageKey =
   | 'historyPrev' | 'historyRequest' | 'historyUnavailable' | 'permissionOptionsUnavailable'
   | 'cancelRequested' | 'cancelConfirmed' | 'cancelUnknown'
   | 'pageGroups' | 'groupList' | 'groupSelected' | 'groupMembers' | 'groupMessages' | 'groupComposer'
-  | 'groupSend' | 'groupCreate' | 'groupName' | 'groupInvite' | 'groupInviteAgent' | 'groupInviteRole'
+  | 'groupSend' | 'groupCreate' | 'groupName' | 'groupInvite' | 'groupInviteAgent' | 'groupInviteRole' | 'groupActionAssigneeEmpty' | 'groupActionAssigneeEmptyHint' | 'groupInviteAgentEmpty' | 'groupGrant' | 'groupGrantHint'
   | 'groupIssue' | 'groupIssueNone' | 'groupIssueCreate' | 'groupIssueTitle' | 'groupIssueBody'
   | 'groupIssueProject' | 'groupIssueClose' | 'groupIssueReopen' | 'groupIssueReason' | 'groupIssueConclusion'
   | 'groupActions' | 'groupActionsNone' | 'groupActionCreate' | 'groupActionAssignee' | 'groupActionReason'
@@ -60,6 +60,7 @@ const en: Record<MessageKey, string> = {
   cancelRequested: 'Cancel requested', cancelConfirmed: 'Cancel confirmed', cancelUnknown: 'Cancel outcome unknown',
   pageGroups: 'Groups', groupList: 'Groups', groupSelected: 'Selected group', groupMembers: 'Members', groupMessages: 'Messages', groupComposer: 'Message the group',
   groupSend: 'Send message', groupCreate: 'Create group', groupName: 'Group name', groupInvite: 'Invite member', groupInviteAgent: 'Agent ID', groupInviteRole: 'Role',
+  groupInviteAgentEmpty: 'No invitee available', groupActionAssigneeEmpty: 'No assignable member', groupActionAssigneeEmptyHint: 'You hold no command edge yet. Allow the group to assign work to a member first.', groupGrant: 'Allow assigning work', groupGrantHint: 'Only the group owner can widen these edges.',
   groupIssue: 'Issue', groupIssueNone: 'No issue is bound to this group.', groupIssueCreate: 'Create issue', groupIssueTitle: 'Issue title', groupIssueBody: 'Issue body',
   groupIssueProject: 'Vikunja project ID', groupIssueClose: 'Close issue', groupIssueReopen: 'Reopen issue', groupIssueReason: 'Reason', groupIssueConclusion: 'Conclusion',
   groupActions: 'Actions', groupActionsNone: 'No action is recorded for this group.', groupActionCreate: 'Create action', groupActionAssignee: 'Assignee agent ID', groupActionReason: 'Reason',
@@ -97,6 +98,7 @@ const zh: Record<MessageKey, string> = {
   cancelRequested: '已请求取消', cancelConfirmed: '取消已确认', cancelUnknown: '取消结果未知',
   pageGroups: '群组', groupList: '群组', groupSelected: '当前群组', groupMembers: '成员', groupMessages: '消息', groupComposer: '向群组发送消息',
   groupSend: '发送消息', groupCreate: '创建群组', groupName: '群组名称', groupInvite: '邀请成员', groupInviteAgent: '智能体 ID', groupInviteRole: '角色',
+  groupInviteAgentEmpty: '暂无可邀请的智能体', groupActionAssigneeEmpty: '暂无可指派成员', groupActionAssigneeEmptyHint: '你还没有向成员指派工作的权限，请先允许群组向该成员指派。', groupGrant: '允许向其指派', groupGrantHint: '只有群组 owner 可以扩展这项权限。',
   groupIssue: '议题', groupIssueNone: '当前群组还没有议题。', groupIssueCreate: '创建议题', groupIssueTitle: '议题标题', groupIssueBody: '议题内容',
   groupIssueProject: 'Vikunja 项目 ID', groupIssueClose: '关闭议题', groupIssueReopen: '重新打开议题', groupIssueReason: '原因', groupIssueConclusion: '结论',
   groupActions: '行动', groupActionsNone: '当前群组还没有行动记录。', groupActionCreate: '创建行动', groupActionAssignee: '负责智能体 ID', groupActionReason: '原因',

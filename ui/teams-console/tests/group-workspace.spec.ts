@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors,
-  groupPhase, initialGroupWorkspaceState, intentKeyOf, mergeMessages, recentGroupId, withCommitId,
-} from '../src/state/group-workspace.ts'
+import { applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors, groupPhase, initialGroupWorkspaceState, intentKeyOf, mergeMessages, recentGroupId, withCommitId, assignableMembers, grantTargets, invitableAgents } from '../src/state/group-workspace.ts'
 
 const reply = {
   kind: 'group.list', requestId: 'r1',
@@ -83,5 +80,42 @@ describe('group workspace model', () => {
     const first = intentKeyOf({ kind: 'action.refuse', requestId: 'r1', actionId: 'a1', reason: 'no' })
     const second = intentKeyOf({ kind: 'action.refuse', requestId: 'r2', actionId: 'a1', reason: 'no' })
     expect(first).toBe(second)
+  })
+})
+
+describe('command edge helpers', () => {
+  const member = (agentId: string, role: 'master' | 'peer', mastersOf: string[] = []) => ({
+    agentId,
+    role,
+    mastersOf,
+    intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }],
+  })
+  const build = (members: ReturnType<typeof member>[], ownerAgentId = 'agent-a') => ({
+    groupId: 'g1',
+    name: 'Alpha',
+    ownerAgentId,
+    createdAt: '2026-10-20T00:00:00.000Z',
+    members,
+  })
+
+  it('offers grant targets only to the owner and never for an existing edge', () => {
+    const group = build([member('agent-a', 'master', ['agent-b']), member('agent-b', 'peer'), member('agent-c', 'peer')])
+    expect(grantTargets(group, 'agent-a')).toEqual(['agent-c'])
+    // A peer holds no owner authority, so it gets no control at all.
+    expect(grantTargets(group, 'agent-b')).toEqual([])
+    expect(grantTargets(build([member('agent-a', 'master'), member('agent-b', 'peer')], 'agent-b'), 'agent-a')).toEqual([])
+  })
+
+  it('assigns work only to members the acting agent already commands', () => {
+    const group = build([member('agent-a', 'master', ['agent-b']), member('agent-b', 'peer'), member('agent-c', 'peer')])
+    expect(assignableMembers(group, 'agent-a')).toEqual(['agent-b'])
+    expect(assignableMembers(group, 'agent-b')).toEqual([])
+    expect(assignableMembers(group, undefined)).toEqual([])
+  })
+
+  it('invites declared agents that are not already active members', () => {
+    const group = build([member('agent-a', 'master'), member('agent-b', 'peer')])
+    expect(invitableAgents(['agent-a', 'agent-b', 'agent-c'], group)).toEqual(['agent-c'])
+    expect(invitableAgents(['agent-a'], undefined)).toEqual(['agent-a'])
   })
 })

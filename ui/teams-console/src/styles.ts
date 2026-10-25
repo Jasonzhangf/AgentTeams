@@ -980,6 +980,12 @@ export const teamsStyles = String.raw`
   align-items: end;
 }
 
+.teams-group-hint {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--teams-muted, #6b7280);
+}
+
 .teams-group-field {
   display: flex;
   flex-direction: column;

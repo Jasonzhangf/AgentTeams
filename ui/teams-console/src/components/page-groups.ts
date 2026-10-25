@@ -1,7 +1,7 @@
 import type { ConsoleState, TeamsConsoleController } from '../state/controller.ts'
 import type { MessageKey } from '../client/locale.ts'
 import type { GroupWorkspaceState } from '../state/group-workspace.ts'
-import { effectiveAccess, groupPhase } from '../state/group-workspace.ts'
+import { assignableMembers, effectiveAccess, grantTargets, groupPhase, invitableAgents } from '../state/group-workspace.ts'
 import { append, button, element } from './dom.ts'
 
 /**
@@ -38,7 +38,7 @@ function textField(labelText: string, marker: string): HTMLElement {
 }
 
 function valueOf(root: HTMLElement, marker: string): string {
-  const node = root.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-group-input="${marker}"]`)
+  const node = root.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-group-input="${marker}"]`)
   return node === null ? '' : node.value
 }
 
@@ -303,11 +303,41 @@ function renderActionPanel(state: GroupWorkspaceState, controller: TeamsConsoleC
     append(list, item)
   }
   append(section, list)
+  // An action is only admissible where the actor already holds a command/request edge, so the
+  // target is chosen from that set and never typed by hand.
+  const group = state.groups.find(entry => entry.groupId === state.selectedGroupId)
+  const assignable = assignableMembers(group, state.actorId)
   const form = element('div', 'teams-group-form')
-  append(form, inputField(t.groupActionAssignee, 'action-assignee'), inputField(t.groupActionReason, 'action-reason'), inputField(t.groupActionResult, 'action-expected'))
+  const assigneeField = element('label', 'teams-group-field')
+  const assigneeLabel = element('span', 'teams-group-label')
+  assigneeLabel.textContent = t.groupActionAssignee
+  const assignee = element('select', 'teams-select')
+  assignee.dataset.groupInput = 'action-assignee'
+  assignee.dataset.groupActionAssignable = String(assignable.length)
+  if (assignable.length === 0) {
+    assignee.disabled = true
+    const none = element('option')
+    none.value = ''
+    none.textContent = t.groupActionAssigneeEmpty
+    append(assignee, none)
+    const hint = element('p', 'teams-group-hint')
+    hint.dataset.groupActionAssigneeEmpty = 'true'
+    hint.textContent = t.groupActionAssigneeEmptyHint
+    append(assigneeField, assigneeLabel, assignee, hint)
+  } else {
+    assignee.disabled = disabled
+    for (const agentId of assignable) {
+      const option = element('option')
+      option.value = agentId
+      option.textContent = agentId
+      append(assignee, option)
+    }
+    append(assigneeField, assigneeLabel, assignee)
+  }
+  append(form, assigneeField, inputField(t.groupActionReason, 'action-reason'), inputField(t.groupActionResult, 'action-expected'))
   const create = button(t.groupActionCreate, 'teams-button-primary', async () => {
-    await controller.createAction(valueOf(form, 'action-assignee'), valueOf(form, 'action-reason'), valueOf(form, 'action-expected'))
-  }, disabled || state.issue === null)
+    await controller.createAction(assignee.value, valueOf(form, 'action-reason'), valueOf(form, 'action-expected'))
+  }, disabled || state.issue === null || assignable.length === 0)
   create.dataset.groupActionCreate = 'true'
   append(form, create)
   append(section, form)
@@ -321,23 +351,71 @@ function renderInvite(state: GroupWorkspaceState, controller: TeamsConsoleContro
   if (selected !== undefined) {
     const members = element('ul', 'teams-group-members')
     members.dataset.groupMemberList = selected.groupId
+    const targets = new Set(grantTargets(selected, state.actorId ?? ''))
     for (const member of selected.members) {
       const item = element('li')
       item.dataset.groupMember = member.agentId
       item.dataset.groupMemberRole = member.role
-      item.textContent = `${member.agentId} · ${member.role}`
+      const caption = element('span')
+      caption.textContent = `${member.agentId} · ${member.role}`
+      append(item, caption)
+      // Only the owner may widen an edge, and only to a member not already commandable.
+      if (targets.has(member.agentId)) {
+        const grant = button(t.groupGrant, 'teams-button-secondary', async () => { await controller.grantCommand(member.agentId) }, state.mutation !== null)
+        grant.dataset.groupGrant = member.agentId
+        grant.dataset.focusKey = `group:grant:${member.agentId}`
+        append(item, grant)
+      }
       append(members, item)
     }
     append(section, members)
   }
+  // Both fields are closed choices: the invitee comes from the declared agents that are not
+  // already members, and the role from the two roles the wire accepts. Nothing is typed blind.
+  const candidates = invitableAgents(state.actors, selected)
   const form = element('div', 'teams-group-form')
-  append(form, inputField(t.groupInviteAgent, 'invite-agent'), inputField(t.groupInviteRole, 'invite-role'))
+  const agentField = element('label', 'teams-group-field')
+  const agentLabel = element('span', 'teams-group-label')
+  agentLabel.textContent = t.groupInviteAgent
+  const agentSelect = element('select', 'teams-select')
+  agentSelect.dataset.groupInput = 'invite-agent'
+  agentSelect.dataset.groupInviteCandidates = String(candidates.length)
+  if (candidates.length === 0) {
+    agentSelect.disabled = true
+    const none = element('option')
+    none.value = ''
+    none.textContent = t.groupInviteAgentEmpty
+    append(agentSelect, none)
+  } else {
+    for (const agentId of candidates) {
+      const option = element('option')
+      option.value = agentId
+      option.textContent = agentId
+      append(agentSelect, option)
+    }
+  }
+  append(agentField, agentLabel, agentSelect)
+
+  const roleField = element('label', 'teams-group-field')
+  const roleLabel = element('span', 'teams-group-label')
+  roleLabel.textContent = t.groupInviteRole
+  const roleSelect = element('select', 'teams-select')
+  roleSelect.dataset.groupInput = 'invite-role'
+  for (const role of ['peer', 'master'] as const) {
+    const option = element('option')
+    option.value = role
+    option.textContent = role
+    append(roleSelect, option)
+  }
+  append(roleField, roleLabel, roleSelect)
+  append(form, agentField, roleField)
+
   const invite = button(t.groupInvite, 'teams-button-secondary', async () => {
     const groupId = state.selectedGroupId
     if (groupId === undefined) return
     const role = valueOf(form, 'invite-role').trim() === 'master' ? 'master' : 'peer'
     await controller.inviteMember(groupId, valueOf(form, 'invite-agent'), role)
-  }, state.mutation !== null || state.selectedGroupId === undefined)
+  }, state.mutation !== null || state.selectedGroupId === undefined || candidates.length === 0)
   invite.dataset.groupInviteAction = 'true'
   append(form, invite)
   append(section, form)

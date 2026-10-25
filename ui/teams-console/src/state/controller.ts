@@ -867,6 +867,32 @@ export class TeamsConsoleController {
     return this.send({ kind: 'group.invite', requestId: '', groupId, agentId, role })
   }
 
+  /**
+   * Let the acting owner assign work to one member. The edge lives on the owner's own
+   * membership, so the frame re-states the owner id, its role, and the widened edge list.
+   */
+  async grantCommand(memberAgentId: string): Promise<boolean> {
+    const state = this.state.group
+    const groupId = state.selectedGroupId
+    const actorId = state.actorId
+    if (groupId === undefined || actorId === undefined) {
+      this.updateGroup(current => ({ ...current, error: { code: 'INVALID_INPUT', message: 'Select a group and an acting agent first.' } }))
+      return false
+    }
+    const group = state.groups.find(entry => entry.groupId === groupId)
+    const actor = group?.members.find(member => member.agentId === actorId)
+    if (group === undefined || actor === undefined) {
+      this.updateGroup(current => ({ ...current, error: { code: 'INVALID_INPUT', message: 'The acting agent is not a member of this group.' } }))
+      return false
+    }
+    if (group.ownerAgentId !== actorId) {
+      this.updateGroup(current => ({ ...current, error: { code: 'FORBIDDEN', message: 'Only the group owner can widen these edges.' } }))
+      return false
+    }
+    const mastersOf = [...new Set([...actor.mastersOf, memberAgentId])]
+    return this.send({ kind: 'group.grant', requestId: '', groupId, agentId: actorId, role: actor.role, mastersOf })
+  }
+
   async createIssue(title: string, body: string, vikunjaProjectId: string): Promise<boolean> {
     const groupId = this.state.group.selectedGroupId
     if (groupId === undefined) {

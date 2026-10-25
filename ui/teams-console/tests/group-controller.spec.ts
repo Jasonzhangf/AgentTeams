@@ -185,4 +185,56 @@ describe('group workspace controller', () => {
     const sender = createGroupRequestClient({ fetchImpl: (async () => new Response('{}', { status: 200 })) as typeof fetch })
     expect(typeof sender.requestGroup).toBe('function')
   })
+
+  it('grants a command edge as the owner and refuses to do it as anyone else', async () => {
+    const group = {
+      groupId: 'g1', name: 'Alpha', ownerAgentId: 'agent-a', createdAt: '2026-10-20T00:00:00.000Z',
+      members: [
+        { agentId: 'agent-a', role: 'master' as const, mastersOf: [], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
+        { agentId: 'agent-b', role: 'peer' as const, mastersOf: [], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
+      ],
+    }
+    const twoActors = {
+      ...projection,
+      agents: [
+        ...projection.agents,
+        { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const },
+      ],
+    }
+    const sent: GroupWireRequest[] = []
+    const sender: GroupRequestSender = {
+      requestGroup: async (_agentId, frame) => {
+        sent.push(frame)
+        if (frame.kind === 'group.list') return { kind: 'reply', reply: { kind: 'group.list', requestId: frame.requestId, groups: [group] } }
+        if (frame.kind === 'group.grant') {
+          return { kind: 'reply', reply: { kind: 'group.member', requestId: frame.requestId, group: { ...group, members: group.members.map(member => member.agentId === frame.agentId ? { ...member, mastersOf: [...(frame.mastersOf ?? [])] } : member) } } }
+        }
+        if (frame.kind === 'message.page') return { kind: 'reply', reply: { kind: 'message.page', requestId: frame.requestId, messages: [], revision: 1, hasMore: false } }
+        return { kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: [] } }
+      },
+    }
+    const client = withGroupRequests({
+      readProjection: async () => twoActors,
+      command: async () => ({ ok: true as const, kind: 'connection.connect' as const }),
+      sendSession: async () => ({ ok: true as const }),
+    }, sender) as never
+
+    const owner = new TeamsConsoleController(client, { initialPage: 'groups' })
+    await owner.refresh()
+    owner.setGroupActor('agent-a')
+    await owner.loadGroups()
+    expect(await owner.grantCommand('agent-b')).toBe(true)
+    const grant = sent.filter(frame => frame.kind === 'group.grant').pop()
+    expect(grant).toEqual({ kind: 'group.grant', requestId: grant?.requestId, groupId: 'g1', agentId: 'agent-a', role: 'master', mastersOf: ['agent-b'] })
+    expect(owner.getSnapshot().group.groups[0]?.members.find(member => member.agentId === 'agent-a')?.mastersOf).toEqual(['agent-b'])
+
+    const peer = new TeamsConsoleController(client, { initialPage: 'groups' })
+    await peer.refresh()
+    peer.setGroupActor('agent-b')
+    await peer.loadGroups()
+    const before = sent.length
+    expect(await peer.grantCommand('agent-a')).toBe(false)
+    expect(sent.length).toBe(before)
+    expect(peer.getSnapshot().group.error?.code).toBe('FORBIDDEN')
+  })
 })
