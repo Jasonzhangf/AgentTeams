@@ -476,6 +476,47 @@ describe('group request context isolation', () => {
     expect(harness.sent.filter(frame => frame.kind === 'message.send')).toHaveLength(writesBefore)
   })
 
+  it('restores a parked result when an identity returns through its group list', async () => {
+    const agentB = { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const, currentSessionId: 's2' }
+    const harness = deferredClient([...projection.agents, agentB])
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { ...groupsReply, requestId: frame.requestId } }))
+    harness.scripts.set('message.send', () => ({ kind: 'transport', message: 'no answer' }))
+    const settle = async (): Promise<void> => { await new Promise(resolve => setTimeout(resolve, 0)) }
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    // Two runtime agents are projected, so the workspace waits for the acting identity.
+    controller.setGroupActor('agent-a')
+    await controller.loadGroups()
+    controller.setGroupComposer('hello group')
+    expect(await controller.sendGroupMessage()).toBe(false)
+    const write = harness.sent.filter(frame => frame.kind === 'message.send').at(-1)!
+    expect(controller.getSnapshot().group.retryable?.requestId).toBe(write.requestId)
+
+    // Another identity never inherits the parked result.
+    controller.setGroupActor('agent-b')
+    await settle()
+    expect(controller.getSnapshot().group.actorId).toBe('agent-b')
+    expect(controller.getSnapshot().group.outcome.kind).not.toBe('unknown')
+    expect(controller.getSnapshot().group.retryable).toBeNull()
+
+    // Returning to the owning identity through the group list restores its own result.
+    controller.setGroupActor('agent-a')
+    await settle()
+    const back = controller.getSnapshot().group
+    expect(back.actorId).toBe('agent-a')
+    expect(back.selectedGroupId).toBe('g1')
+    expect(back.outcome.kind).toBe('unknown')
+    expect(back.retryable?.requestId).toBe(write.requestId)
+    expect(back.retryable?.commitId).toBe(write.commitId)
+
+    // The restored retry reuses the original request and commit id.
+    harness.scripts.set('message.send', frame => ({ kind: 'reply', reply: { kind: 'message.sent', requestId: frame.requestId, messageId: 'm1', sequence: 1 } }))
+    expect(await controller.retryGroupMutation()).toBe(true)
+    const retried = harness.sent.filter(frame => frame.kind === 'message.send').at(-1)!
+    expect(retried.requestId).toBe(write.requestId)
+    expect(retried.commitId).toBe(write.commitId)
+  })
+
   it('lands a new group on an operable empty state instead of a loading screen', async () => {
     const created = { groupId: 'g9', name: 'Fresh', ownerAgentId: 'agent-a', createdAt: '2026-10-24T00:00:00.000Z', members: [{ agentId: 'agent-a', role: 'master' as const, mastersOf: [], intervals: [{ joinedAt: '2026-10-24T00:00:00.000Z' }] }] }
     const { client } = scriptedClient(frame => {

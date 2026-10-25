@@ -925,6 +925,13 @@ export class TeamsConsoleController {
     }
     // The owner's list may select a different group than the context we started in.
     this.restoreComposerIfContextChanged(contextBefore)
+    // A selected group that differs from the context the read started in is a context switch:
+    // an in-flight write stays with the context that sent it, and the context now shown gets
+    // back its own parked result instead of looking idle.
+    if (this.composerKey() !== contextBefore) {
+      this.parkInFlightGroupMutation()
+      this.applyContextResult()
+    }
     await this.loadSelectedGroup()
     return true
   }
