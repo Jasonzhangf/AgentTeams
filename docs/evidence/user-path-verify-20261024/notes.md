@@ -6,7 +6,7 @@ Environment: isolated `HOME=/tmp/uv-run/home`, npm prefix `/tmp/uv-run/prefix`; 
 
 ## Acceptance boundary and result
 
-Alice (Chief Designer and acceptance officer) reviewed this report and the same worktree source. Her decision is NEEDS-FIX: the CLI Work path is limitedly accepted, but Console/ACP whole-product usability is not approved. This does not expand or invalidate the prior modular-monorepo structural delivery.
+Alice (acceptance officer, under the user's authorization) reviewed this report and the same worktree source. Her decision is NEEDS-FIX: the CLI Work path is limitedly accepted, but Console/ACP whole-product usability is not approved. This does not expand or invalidate the prior modular-monorepo structural delivery.
 
 The installed CLI Work MVP is genuinely executable end to end. The whole product is not yet ready for a normal user to complete a Console/ACP workflow because the default Console path is opaque 502, Work results are absent from the UI, and local Console History is unavailable. No data loss, security incident, or whole-service outage was observed. The two core workflow blockers below are therefore P1, not P0.
 
@@ -80,7 +80,7 @@ Escape correction: `ui/teams-console/src/mount.ts:57-67` has a document Escape h
 - `work-2-submit-raw.json`, `work-3-submit.json`, `work-3-query.json`: redacted/no-secret JSON responses.
 - `sse-frames-control-7392.txt`: raw authenticated SSE frames used for the observedAt diff.
 - `shots/`: browser screenshots for discovery, tabs, drawer, connection, language, and Console states.
-- The original generated config and isolated data remain under `/tmp/uv-run` only until cleanup is complete.
+- `lifecycle-trace.txt`: installed init/start/status/stop/restart commands and their exit codes, including the shutdown entries used in the cleanup receipt below.
 
 ## Acceptance and next work
 
@@ -93,6 +93,21 @@ Alice's acceptance decision is NEEDS-FIX. The limited CLI Work path is accepted 
 
 No scope-expanding implementation was started during this verification. All findings are evidence for the corresponding owners.
 
-## Retained test resources
+## Resource cleanup receipt (closed)
 
-All daemons and `/tmp/uv-run` resources are test-only. They must be stopped and removed after this evidence is archived. The production/main tree and shared/other-peer resources were not modified.
+All daemons and `/tmp/uv-run` resources in this report were test-only and are already closed out through the formal CLI entries, not through ad-hoc kills:
+
+- `agentteams console stop` closed the local Console child, then `agentteams stop` stopped the isolated supervisor (generation 3, the provider/receiver/relay group).
+- `agentteams control stop` closed the isolated control daemons, and `agentteams registry stop` closed the isolated registry.
+- After shutdown, no listener remained on the isolated test ports 7391, 7392, 58222, 7444, or 7445.
+- The unrelated shared process on port 7331 and every other peer-owned resource were not touched.
+- `/tmp/uv-run` and its isolated HOME, npm prefix, certificates, and generated config were deleted after this archive was committed.
+
+The exact lifecycle commands and exit codes are in `lifecycle-trace.txt`. The production/main tree was not modified. Ending these processes is a recorded cleanup step, not something still pending.
+
+## Post-review record
+
+Alice re-checked archive commit e644b1c and confirmed that `work-3-submit.json` and `work-3-query.json` hold the same work and request IDs, report `succeeded`, return the `c.txt` gamma result, and query with `observed=true`; the first SSE frame pair differs only in `connections[0].status.observedAt` and the outer `seq`. She accepted the corrected P0 downgrade, the legitimate-refusal framing, and the Escape correction, and kept the same verdict: the CLI Work evidence is accepted, Console/ACP whole product is NEEDS-FIX.
+
+Her follow-up wording request is applied here: this section no longer claims processes are still waiting to be stopped, the cleanup receipt above references the lifecycle trace, the acceptance authority is written as the user-authorized acceptance officer, and the boundary that the original alpha/beta stdout was not saved byte-for-byte is unchanged.
+

@@ -26,4 +26,30 @@ agentteams start (restart)
 started state=running generation=2 ... pid=83894
 exit=0
 
+# Shutdown of the isolated test daemons (formal CLI entries, no ad-hoc kills)
+
+agentteams console stop
+console launcher=running console=enabled consoleState=stopped consoleGeneration=2 consoleCredential=configured
+exit=0
+
+agentteams stop
+stopped state=stopped generation=3 config=/tmp/uv-run/home/.agentteams/config.toml pid=48535
+exit=0
+
+agentteams control stop --config /tmp/uv-run/acp/control.toml
+stopped state=stopped generation=0 daemon=control-a listener=127.0.0.1:7392
+exit=0
+
+agentteams control stop --config /tmp/uv-run/ctl/control.toml
+stopped state=stopped generation=0 daemon=control-a listener=127.0.0.1:7391
+exit=0
+
+agentteams registry stop --config /tmp/uv-run/acp/registry.toml
+stopped state=stopped generation=1 daemon=lan-registry url=wss://127.0.0.1:7444
+exit=0
+
+# After shutdown: no listener on 7391, 7392, 58222, 7444 or 7445.
+# The unrelated shared process on 7331 and other peers' resources were not touched.
+# /tmp/uv-run was deleted after this archive was committed; no daemon needed it afterwards.
+
 The full JSON submit/query responses and IDs are in work-2-submit-raw.json, work-3-submit.json, and work-3-query.json. Paths and environment values above are isolated test paths; no production path was used.
