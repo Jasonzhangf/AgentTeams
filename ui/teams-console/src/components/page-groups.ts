@@ -1,7 +1,7 @@
 import type { ConsoleState, TeamsConsoleController } from '../state/controller.ts'
 import type { MessageKey } from '../client/locale.ts'
 import type { GroupWorkspaceState } from '../state/group-workspace.ts'
-import type { Action } from '../../../../packages/shared/src/group-wire.ts'
+import type { Action, CloseReportEntry } from '../../../../packages/shared/src/group-wire.ts'
 import { assignableMembers, effectiveAccess, grantTargets, groupPhase, invitableAgents, visibleRetryable } from '../state/group-workspace.ts'
 import { append, button, element } from './dom.ts'
 
@@ -362,6 +362,63 @@ function unfinishedAction(state: Action['state']): boolean {
     || state === 'unknown'
 }
 
+const unstoppedStateLabel: Record<CloseReportEntry['state'], MessageKey> = {
+  pending: 'groupStopPending',
+  accepted: 'groupStopAccepted',
+  in_progress: 'groupStopInProgress',
+  cancel_requested: 'groupStopCancelRequested',
+  blocked: 'groupStopBlocked',
+  failed: 'groupStopFailed',
+  completed: 'groupStopCompleted',
+  refused: 'groupStopRefused',
+  cancelled: 'groupStopCancelled',
+  unknown: 'groupStopUnknown',
+}
+
+/**
+ * Every unfinished action is affected by a close, including queued ones the contract will
+ * cancel. The reply's `unstopped` list is narrower: it names only stops the owner could not
+ * confirm, so the confirmation is derived from actions and the post-close report is not.
+ */
+function closeAffectedActions(state: GroupWorkspaceState): readonly Action[] {
+  return state.actions.filter(action => unfinishedAction(action.state))
+}
+
+function renderUnstoppedItem(entry: CloseReportEntry, t: Record<MessageKey, string>): HTMLElement {
+  const item = element('li', 'teams-group-unstopped')
+  item.dataset.groupUnstoppedItem = entry.actionId
+  item.dataset.groupUnstoppedState = entry.state
+  item.dataset.groupUnstoppedAssignee = entry.assigneeAgentId
+  const summary = element('p', 'teams-group-unstopped-head')
+  summary.textContent = `${entry.assigneeAgentId} · ${t[unstoppedStateLabel[entry.state]]}`
+  const actionId = element('p', 'teams-group-unstopped-id')
+  actionId.textContent = entry.actionId
+  append(item, summary, actionId)
+  return item
+}
+
+/**
+ * The same marker for both lists, so the report is one place in the DOM. The confirmation
+ * entry carries real action rows; the post-close entry carries the close reply's own stop
+ * facts, which are never replaced by the owner's action state after the refresh.
+ */
+function renderUnstoppedItems(entries: readonly CloseReportEntry[], t: Record<MessageKey, string>): HTMLElement {
+  const rows = element('ul', 'teams-group-unstopped-items')
+  for (const entry of entries) append(rows, renderUnstoppedItem(entry, t))
+  return rows
+}
+
+function renderUnstoppedList(entries: readonly CloseReportEntry[], label: string, context: 'confirm' | 'closed', t: Record<MessageKey, string>): HTMLElement {
+  const list = element('div', 'teams-group-unstopped-list')
+  list.dataset.groupUnstoppedList = 'true'
+  list.dataset.groupUnstoppedCount = String(entries.length)
+  list.dataset.groupUnstoppedContext = context
+  const title = element('strong', 'teams-group-unstopped-title')
+  title.textContent = label
+  append(list, title, renderUnstoppedItems(entries, t))
+  return list
+}
+
 function renderActionItem(
   action: Action,
   controller: TeamsConsoleController,
@@ -651,12 +708,29 @@ function renderConfirm(state: GroupWorkspaceState, controller: TeamsConsoleContr
   const target = element('p')
   target.dataset.groupConfirmTarget = confirm.intentKey
   target.textContent = `${t.groupTarget}: ${confirm.intentKey}`
+  append(panel, title, target)
+  if (confirm.frame.kind === 'issue.close') {
+    const affected = closeAffectedActions(state)
+    if (affected.length > 0) {
+      append(panel, renderUnstoppedList(affected.map(action => ({
+        actionId: action.actionId,
+        assigneeAgentId: action.assigneeAgentId,
+        state: action.state,
+      })), t.groupCloseImpact, 'confirm', t))
+    }
+  }
   const accept = button(t.groupConfirmAccept, 'teams-button-primary', async () => { await controller.confirmPendingGroupAction() })
   accept.dataset.groupConfirmAccept = 'true'
   const cancel = button(t.groupConfirmCancel, 'teams-button-secondary', () => { controller.cancelPendingGroupAction() })
   cancel.dataset.groupConfirmCancel = 'true'
-  append(panel, title, target, accept, cancel)
+  append(panel, accept, cancel)
   return panel
+}
+
+function renderPostCloseReport(state: GroupWorkspaceState, t: Record<MessageKey, string>): HTMLElement | null {
+  const report = state.stopReport
+  if (report === null) return null
+  return renderUnstoppedList(report.entries, t.groupStopReport, 'closed', t)
 }
 
 export function renderGroups(controller: TeamsConsoleController, state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
@@ -739,6 +813,12 @@ export function renderGroups(controller: TeamsConsoleController, state: ConsoleS
   const name = element('h2', 'teams-group-heading')
   name.textContent = selected?.name ?? group.selectedGroupId ?? ''
   append(header, name, renderOutcome(group, controller, t))
+  // The stop facts belong to the successful close, so they render beside its outcome and
+  // survive the owner's action refresh that follows it.
+  if (group.outcome.kind === 'succeeded' && group.outcome.frame === 'issue.close') {
+    const report = renderPostCloseReport(group, t)
+    if (report !== null) append(header, report)
+  }
   append(detail, header)
   append(detail, renderMessages(group, t))
   append(detail, renderComposer(group, controller, t))

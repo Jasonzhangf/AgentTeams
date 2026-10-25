@@ -38,6 +38,9 @@ type MessageKey =
   | 'groupRetry' | 'groupConfirm' | 'groupConfirmAccept' | 'groupConfirmCancel' | 'groupNoMessages'
   | 'groupTarget' | 'groupOutcomeSucceeded' | 'groupOutcomePending' | 'groupOutcomeIdle'
   | 'groupActor' | 'groupNoActor' | 'groupChooseActor' | 'groupChooseActorHint'
+  | 'groupCloseImpact' | 'groupStopReport' | 'groupStopPending' | 'groupStopAccepted'
+  | 'groupStopInProgress' | 'groupStopCancelRequested' | 'groupStopBlocked' | 'groupStopFailed'
+  | 'groupStopCompleted' | 'groupStopRefused' | 'groupStopCancelled' | 'groupStopUnknown'
 
 const en: Record<MessageKey, string> = {
   brand: 'Teams Console', topology: 'Agents', conversations: 'Sessions', notifications: 'Notifications', search: 'Search', memory: 'Memory', settings: 'Provider configuration',
@@ -78,6 +81,13 @@ const en: Record<MessageKey, string> = {
   groupTarget: 'Target', groupOutcomeSucceeded: 'Owner accepted the request', groupOutcomePending: 'Waiting for the group owner', groupOutcomeIdle: 'Ready',
   groupActor: 'Acting as', groupNoActor: 'No projected agent can act for groups; the Console control owner never acts.',
   groupChooseActor: 'Choose the agent', groupChooseActorHint: 'Several agents can act for a group. Choose the one this Console speaks as; the group list loads as soon as you do.',
+  groupCloseImpact: 'Close impact: these actions are not confirmed stopped.',
+  groupStopReport: 'Close report: actions not confirmed stopped.',
+  groupStopPending: 'queued, cancelled by the close', groupStopAccepted: 'accepted, not confirmed stopped',
+  groupStopInProgress: 'in progress, not confirmed stopped', groupStopCancelRequested: 'stop requested, not confirmed stopped',
+  groupStopBlocked: 'blocked, not confirmed stopped', groupStopFailed: 'failed',
+  groupStopCompleted: 'completed', groupStopRefused: 'refused',
+  groupStopCancelled: 'stop confirmed', groupStopUnknown: 'outcome unknown, not confirmed stopped',
 }
 
 const zh: Record<MessageKey, string> = {
@@ -119,6 +129,13 @@ const zh: Record<MessageKey, string> = {
   groupTarget: '对象', groupOutcomeSucceeded: '所有者已接受请求', groupOutcomePending: '等待群组所有者处理', groupOutcomeIdle: '就绪',
   groupActor: '当前以', groupNoActor: '没有可作为群组身份的项目智能体；控制台控制端不参与群组。',
   groupChooseActor: '请选择智能体', groupChooseActorHint: '有多个智能体可以作为群组身份。请选择控制台要使用的那个，选择后立即加载群组列表。',
+  groupCloseImpact: '关闭影响：这些行动尚未确认停止。',
+  groupStopReport: '关闭报告：尚未确认停止的行动。',
+  groupStopPending: '排队中，关闭时取消', groupStopAccepted: '已接管，尚未确认停止',
+  groupStopInProgress: '执行中，尚未确认停止', groupStopCancelRequested: '停止请求已发出，尚未确认停止',
+  groupStopBlocked: '阻塞，尚未确认停止', groupStopFailed: '失败',
+  groupStopCompleted: '已完成', groupStopRefused: '已拒绝',
+  groupStopCancelled: '已确认停止', groupStopUnknown: '结果未知，尚未确认停止',
 }
 
 export function messages(locale: Locale): Record<MessageKey, string> {

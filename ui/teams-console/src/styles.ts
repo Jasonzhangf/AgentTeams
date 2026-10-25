@@ -1073,6 +1073,52 @@ export const teamsStyles = String.raw`
   min-width: 0;
 }
 
+.teams-group-unstopped-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid var(--teams-border);
+  border-radius: 8px;
+  background: var(--teams-surface-soft);
+}
+
+.teams-group-unstopped-title {
+  overflow-wrap: anywhere;
+}
+
+.teams-group-unstopped-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teams-group-unstopped {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--teams-border);
+  border-radius: 6px;
+  background: var(--teams-surface-raised);
+}
+
+.teams-group-unstopped-head,
+.teams-group-unstopped-id {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.teams-group-unstopped-id {
+  margin-top: 2px;
+  color: var(--teams-faint);
+  font-size: 12px;
+}
+
 .teams-group-actor .teams-select {
   min-width: 0;
   max-width: 100%;

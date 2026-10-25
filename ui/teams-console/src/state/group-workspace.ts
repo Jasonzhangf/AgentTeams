@@ -1,4 +1,4 @@
-import type { Action, Group, GroupInvitation, GroupWireReply, GroupWireRequest, IssueSession, Message } from '../../../../packages/shared/src/group-wire.ts'
+import type { Action, CloseReportEntry, Group, GroupInvitation, GroupWireReply, GroupWireRequest, IssueSession, Message } from '../../../../packages/shared/src/group-wire.ts'
 import type { GroupAccessState } from '../client/group-client.ts'
 
 /**
@@ -40,6 +40,12 @@ export interface GroupOutcome {
   readonly commitId?: string
   readonly code?: string
   readonly message?: string
+}
+
+/** Stop facts a successful close reply carries for one issue session. */
+export interface IssueStopReport {
+  readonly sessionId: string
+  readonly entries: readonly CloseReportEntry[]
 }
 
 /**
@@ -158,6 +164,8 @@ export interface GroupWorkspaceState {
   readonly outcome: GroupOutcome
   /** A prepared critical action that needs an explicit confirmation before it is sent. */
   readonly confirm: GroupMutationMemory | null
+  /** Unconfirmed-stop facts from the successful close reply; kept across action reads. */
+  readonly stopReport: IssueStopReport | null
   readonly error?: { readonly code: string; readonly message: string }
   /** The last read failure belongs to one section and does not hide a write result. */
   readonly readError?: GroupSectionError | undefined
@@ -185,6 +193,7 @@ export const initialGroupWorkspaceState: GroupWorkspaceState = {
   commits: {},
   outcome: { kind: 'idle' },
   confirm: null,
+  stopReport: null,
 }
 
 /**
@@ -334,6 +343,7 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply, origi
         issueListStatus: selection === state.selectedGroupId ? state.issueListStatus : 'idle',
         actions: selection === state.selectedGroupId ? state.actions : [],
         actionStatus: selection === state.selectedGroupId ? state.actionStatus : 'idle',
+        stopReport: selection === state.selectedGroupId ? state.stopReport : null,
       }
     }
     case 'group.created':
@@ -354,6 +364,7 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply, origi
         issueListStatus: 'idle',
         actions: [],
         actionStatus: 'idle',
+        stopReport: null,
       }
       if (!settles(state, origin)) return patch
       const frame: GroupMutationKind = reply.kind === 'group.created' ? 'group.create' : 'group.grant'
@@ -405,13 +416,17 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply, origi
     }
     case 'issue.changed': {
       if (state.issue === null || state.issue.sessionId !== reply.sessionId) return state
-      return { ...state, issue: { ...state.issue, state: reply.state } }
+      return {
+        ...state,
+        issue: { ...state.issue, state: reply.state },
+        ...(reply.state === 'open' ? { stopReport: null } : {}),
+      }
     }
     case 'issue.closed': {
       if (!settles(state, origin)) return { ...state, issue: reply.session, issueStatus: 'ready' }
       const unknown = reply.outcome === 'unknown'
       const failed = reply.outcome === 'failed' || reply.outcome === 'conflict'
-      const patched: GroupWorkspaceState = { ...state, issue: reply.session, issueStatus: 'ready' }
+      const patched: GroupWorkspaceState = { ...state, issue: reply.session, issueStatus: 'ready', stopReport: null }
       if (unknown) {
         // An unknown external outcome is not a close. It stays retryable and never
         // renders as a completed close.
@@ -431,7 +446,12 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply, origi
           outcome: { kind: 'failed', frame: 'issue.close', code: reply.outcome.toUpperCase(), message: `Issue close reported ${reply.outcome}.` },
         }
       }
-      return succeeded(patched, {}, 'issue.close')
+      return succeeded({
+        ...patched,
+        stopReport: reply.unstopped === undefined || reply.unstopped.length === 0
+          ? null
+          : { sessionId: reply.session.sessionId, entries: reply.unstopped },
+      }, {}, 'issue.close')
     }
     case 'issue.reopened': {
       if (!settles(state, origin)) return { ...state, issue: reply.session, issueStatus: 'ready' }
@@ -455,7 +475,7 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply, origi
           outcome: { kind: 'failed', frame: 'issue.reopen', code: reply.outcome.toUpperCase(), message: `Issue reopen reported ${reply.outcome}.` },
         }
       }
-      return succeeded(patched, {}, 'issue.reopen')
+      return succeeded({ ...patched, stopReport: null }, {}, 'issue.reopen')
     }
     case 'action.created':
     case 'action.updated': {

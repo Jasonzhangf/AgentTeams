@@ -106,6 +106,7 @@ function groupState(overrides: Record<string, unknown> = {}) {
     commits: {},
     outcome: { kind: 'idle' },
     confirm: null,
+    stopReport: null,
   }
   return { ...base, ...overrides }
 }
@@ -156,6 +157,23 @@ const actionsState = state({
     { actionId: 'a-new', commitId: 'commit-new', sessionId: 's1', kind: 'reply', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-b', reason: 'new work', expectedResult: 'x', replyRequired: false, state: 'completed', createdAt: '2026-10-20T00:00:01.000Z' },
   ],
 })
+
+const closeActions = [
+  { actionId: 'a-accepted', commitId: 'ca', sessionId: 's1', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-b', kind: 'reply', reason: 'old work', expectedResult: 'x', replyRequired: false, state: 'accepted', createdAt: '2026-10-20T00:00:00.000Z' },
+  { actionId: 'a-running', commitId: 'cr', sessionId: 's1', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-b', kind: 'reply', reason: 'running work', expectedResult: 'x', replyRequired: false, state: 'in_progress', createdAt: '2026-10-20T00:00:01.000Z' },
+  { actionId: 'a-stopping', commitId: 'cs', sessionId: 's1', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-c', kind: 'reply', reason: 'stopping work', expectedResult: 'x', replyRequired: false, state: 'cancel_requested', createdAt: '2026-10-20T00:00:02.000Z' },
+  { actionId: 'a-unknown', commitId: 'cu', sessionId: 's1', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-d', kind: 'reply', reason: 'unknown work', expectedResult: 'x', replyRequired: false, state: 'unknown', executionStopped: false, createdAt: '2026-10-20T00:00:03.000Z' },
+  { actionId: 'a-pending', commitId: 'cp', sessionId: 's1', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-b', kind: 'reply', reason: 'queued work', expectedResult: 'x', replyRequired: false, state: 'pending', createdAt: '2026-10-20T00:00:04.000Z' },
+]
+
+const stopEntries = [
+  { actionId: 'a-accepted', assigneeAgentId: 'agent-b', state: 'accepted' },
+  { actionId: 'a-running', assigneeAgentId: 'agent-b', state: 'in_progress' },
+  { actionId: 'a-stopping', assigneeAgentId: 'agent-c', state: 'cancel_requested' },
+  { actionId: 'a-unknown', assigneeAgentId: 'agent-d', state: 'unknown' },
+]
+
+const closedIssueSession = { ...issueSession, state: 'closed', closedAt: '2026-10-20T00:00:05.000Z' }
 
 const controllerScript = `
   const calls = { actor: [], select: [], send: [], retry: [], confirm: [], openIssue: [] }
@@ -538,6 +556,130 @@ ${controllerScript}
   </script>
 </body></html>`
 
+/**
+ * Close and stop facts are different results. The confirmation list is derived from the
+ * owner-read action list; the post-close list is exactly the reply's `unstopped` entries.
+ */
+const stopReportPage = `<!doctype html>
+<html><body>
+  <div id="confirm"></div>
+  <div id="closed"></div>
+  <div id="unknown"></div>
+  <div id="failed"></div>
+  <script>
+${script}
+${controllerScript}
+    const render = (id, next) => {
+      STATE = next
+      renderConsole(document.getElementById(id), controller)
+      return document.getElementById(id)
+    }
+    const confirm = render('confirm', ${JSON.stringify(state({
+      issue: issueSession,
+      issueStatus: 'ready',
+      issues: [issueSession],
+      issueListStatus: 'ready',
+      actions: closeActions,
+      actionStatus: 'ready',
+      confirm: {
+        intentKey: 'issue.close:s1',
+        requestId: 'req-close',
+        commitId: 'commit-close',
+        frame: {
+          kind: 'issue.close', requestId: 'req-close', commitId: 'commit-close',
+          sessionId: 's1', reason: 'done', conclusion: 'shipped',
+        },
+      },
+    }))})
+    const closed = render('closed', ${JSON.stringify(state({
+      issue: closedIssueSession,
+      issueStatus: 'ready',
+      issues: [closedIssueSession],
+      issueListStatus: 'ready',
+      // The owner's refresh reports a-accepted as cancelled; the reply's stop facts remain.
+      actions: [
+        { ...closeActions[0], state: 'cancelled' },
+        { ...closeActions[3], state: 'unknown', executionStopped: false },
+      ],
+      actionStatus: 'ready',
+      stopReport: { sessionId: 's1', entries: stopEntries },
+      outcome: { kind: 'succeeded', frame: 'issue.close' },
+    }))})
+    const unknown = render('unknown', ${JSON.stringify(state({
+      issue: closedIssueSession,
+      issueStatus: 'ready',
+      issues: [closedIssueSession],
+      issueListStatus: 'ready',
+      actions: closeActions,
+      actionStatus: 'ready',
+      stopReport: null,
+      outcome: { kind: 'unknown', frame: 'issue.close', code: 'RESULT_UNKNOWN', message: 'no answer' },
+      retryable: {
+        intentKey: 'issue.close:s1',
+        requestId: 'req-close',
+        commitId: 'commit-close',
+        context: { actorId: 'agent-a', groupId: 'g1', sessionId: 's1' },
+        frame: {
+          kind: 'issue.close', requestId: 'req-close', commitId: 'commit-close',
+          sessionId: 's1', reason: 'done', conclusion: 'shipped',
+        },
+      },
+    }))})
+    const failed = render('failed', ${JSON.stringify(state({
+      issue: issueSession,
+      issueStatus: 'ready',
+      issues: [issueSession],
+      issueListStatus: 'ready',
+      actions: closeActions,
+      actionStatus: 'ready',
+      stopReport: null,
+      outcome: { kind: 'failed', frame: 'issue.close', code: 'FAILED', message: 'close failed' },
+    }))})
+
+    const attr = (root, name) => root.querySelector('[' + name + ']')?.getAttribute(name) ?? null
+    const confirmList = confirm.querySelector('[data-group-unstopped-list]')
+    const confirmAccept = confirm.querySelector('[data-group-confirm-accept]')
+    const confirmPanel = confirm.querySelector('[data-group-confirm]')
+    const confirmChildren = confirmPanel === null ? [] : [...confirmPanel.children]
+    document.body.dataset.stopConfirmList = String(confirmList !== null)
+    document.body.dataset.stopConfirmCount = confirmList?.getAttribute('data-group-unstopped-count') ?? ''
+    document.body.dataset.stopConfirmBeforeSubmit = String(
+      confirmList !== null && confirmAccept !== null
+      && confirmChildren.indexOf(confirmList) < confirmChildren.indexOf(confirmAccept))
+    document.body.dataset.stopConfirmAccepted = String(
+      confirm.querySelector('[data-group-unstopped-item="a-accepted"]')?.getAttribute('data-group-unstopped-state') === 'accepted')
+    document.body.dataset.stopConfirmRunning = String(
+      confirm.querySelector('[data-group-unstopped-item="a-running"]')?.getAttribute('data-group-unstopped-state') === 'in_progress')
+    document.body.dataset.stopConfirmPendingIncluded = String(
+      confirm.querySelector('[data-group-unstopped-item="a-pending"]')
+        ?.getAttribute('data-group-unstopped-state') === 'pending')
+    document.body.dataset.stopConfirmReadable = String(
+      (confirm.querySelector('[data-group-unstopped-item="a-accepted"]')?.textContent ?? '').includes('agent-b'))
+
+    const closedList = closed.querySelector('[data-group-unstopped-list]')
+    document.body.dataset.stopClosedList = String(closedList !== null)
+    document.body.dataset.stopClosedCount = closedList?.getAttribute('data-group-unstopped-count') ?? ''
+    document.body.dataset.stopClosedContext = attr(closed, 'data-group-unstopped-context')
+    document.body.dataset.stopClosedStates = String(
+      ['accepted', 'in_progress', 'cancel_requested', 'unknown'].every((state, index) => {
+        const actionId = ['a-accepted', 'a-running', 'a-stopping', 'a-unknown'][index]
+        return closed.querySelector('[data-group-unstopped-item="' + actionId + '"]')
+          ?.getAttribute('data-group-unstopped-state') === state
+      }))
+    document.body.dataset.stopClosedPendingExcluded = String(
+      closed.querySelector('[data-group-unstopped-item="a-pending"]') === null)
+    document.body.dataset.stopClosedKeepsAfterRefresh = String(
+      closed.querySelector('[data-group-action="a-accepted"]')?.getAttribute('data-group-action-state') === 'cancelled'
+      && closed.querySelector('[data-group-unstopped-item="a-accepted"]') !== null)
+
+    document.body.dataset.stopUnknownNoList = String(unknown.querySelector('[data-group-unstopped-list]') === null)
+    document.body.dataset.stopUnknownOutcome = String(attr(unknown, 'data-group-outcome') === 'unknown')
+    document.body.dataset.stopUnknownRetry = String(attr(unknown, 'data-group-retry') === 'true')
+    document.body.dataset.stopFailedNoList = String(failed.querySelector('[data-group-unstopped-list]') === null)
+    document.body.dataset.stopFailedOutcome = String(attr(failed, 'data-group-outcome') === 'failed')
+  </script>
+</body></html>`
+
 describe('group workspace DOM contract in a real DOM', () => {
   it('keeps a narrow 390px viewport free of horizontal overflow with a visible composer', { timeout: 30_000 }, () => {
     const narrow = measureLayout('390,844')
@@ -581,6 +723,36 @@ describe('group workspace DOM contract in a real DOM', () => {
       'data-invitation-joined-member',
       'data-invitation-joined-hidden',
       'data-invitation-declined',
+    ]) {
+      expect(output, marker).toContain(`${marker}="true"`)
+    }
+  })
+
+  it('lists close impact before submit and keeps the reply stop report after the action refresh', { timeout: 30_000 }, () => {
+    const directory = mkdtempSync(join(tmpdir(), 'teams-console-stop-report-'))
+    onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })
+    const file = join(directory, 'stop-report.html')
+    writeFileSync(file, stopReportPage)
+    const output = runChrome(file)
+    expect(output).toContain('data-stop-confirm-count="5"')
+    expect(output).toContain('data-stop-closed-count="4"')
+    expect(output).toContain('data-stop-closed-context="closed"')
+    for (const marker of [
+      'data-stop-confirm-list',
+      'data-stop-confirm-before-submit',
+      'data-stop-confirm-accepted',
+      'data-stop-confirm-running',
+      'data-stop-confirm-pending-included',
+      'data-stop-confirm-readable',
+      'data-stop-closed-list',
+      'data-stop-closed-states',
+      'data-stop-closed-pending-excluded',
+      'data-stop-closed-keeps-after-refresh',
+      'data-stop-unknown-no-list',
+      'data-stop-unknown-outcome',
+      'data-stop-unknown-retry',
+      'data-stop-failed-no-list',
+      'data-stop-failed-outcome',
     ]) {
       expect(output, marker).toContain(`${marker}="true"`)
     }

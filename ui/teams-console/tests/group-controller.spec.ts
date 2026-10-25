@@ -238,6 +238,56 @@ describe('group workspace controller', () => {
     expect(sent.length).toBe(before)
     expect(peer.getSnapshot().group.error?.code).toBe('FORBIDDEN')
   })
+
+  it('keeps the close stop report while re-reading the owner action state', async () => {
+    const issue = { sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'i1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const closed = { ...issue, state: 'closed' as const, closedAt: 'now' }
+    const before = [
+      { actionId: 'a-accepted', commitId: 'ac1', sessionId: 's1', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-b', kind: 'reply' as const, reason: 'old work', expectedResult: 'x', replyRequired: false, state: 'accepted' as const, createdAt: 'now' },
+      { actionId: 'a-running', commitId: 'ac2', sessionId: 's1', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-c', kind: 'reply' as const, reason: 'running work', expectedResult: 'y', replyRequired: false, state: 'in_progress' as const, createdAt: 'now' },
+    ]
+    const after = [
+      { ...before[0]!, state: 'cancelled' as const },
+      { ...before[1]!, state: 'unknown' as const, executionStopped: false },
+    ]
+    const unstopped = [{ actionId: 'a-running', assigneeAgentId: 'agent-c', state: 'unknown' as const }]
+    let actionReads = 0
+    const { client, sent } = scriptedClient(frame => {
+      if (frame.kind === 'group.list') return { kind: 'reply', reply: groupsReply }
+      if (frame.kind === 'message.page') return { kind: 'reply', reply: { kind: 'message.page', requestId: frame.requestId, messages: [], revision: 1, hasMore: false } }
+      if (frame.kind === 'issue.list') return { kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [issue] } }
+      if (frame.kind === 'issue.query') return { kind: 'reply', reply: { kind: 'issue.session', requestId: frame.requestId, session: issue } }
+      if (frame.kind === 'action.list') {
+        actionReads += 1
+        return { kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: actionReads === 1 ? before : after } }
+      }
+      if (frame.kind === 'issue.close') {
+        return { kind: 'reply', reply: { kind: 'issue.closed', requestId: frame.requestId, session: closed, outcome: 'closed', unstopped } }
+      }
+      return { kind: 'refused', code: 'FORBIDDEN', message: 'not permitted' }
+    })
+    const controller = new TeamsConsoleController(client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    controller.setGroupActor('agent-a')
+    await controller.openIssue('s1')
+    expect(controller.getSnapshot().group.actions.map(action => action.state)).toEqual(['accepted', 'in_progress'])
+
+    await controller.closeIssue('done', 'shipped')
+    expect(controller.getSnapshot().group.confirm?.frame.kind).toBe('issue.close')
+    expect(await controller.confirmPendingGroupAction()).toBe(true)
+
+    const state = controller.getSnapshot().group
+    expect(state.outcome).toMatchObject({ kind: 'succeeded', frame: 'issue.close' })
+    // The stop facts come from the close reply and survive the owner action refresh.
+    expect(state.stopReport).toEqual({ sessionId: 's1', entries: unstopped })
+    expect(state.actions.map(action => [action.actionId, action.state]))
+      .toEqual([['a-accepted', 'cancelled'], ['a-running', 'unknown']])
+    const closeIndex = sent.findIndex(frame => frame.kind === 'issue.close')
+    expect(sent.slice(closeIndex + 1).filter(frame => frame.kind === 'action.list')).toHaveLength(1)
+    expect(actionReads).toBe(2)
+    controller.destroy()
+  })
 })
 
 describe('group request context isolation', () => {

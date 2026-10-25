@@ -231,3 +231,81 @@ describe('command edge helpers', () => {
     expect(invitableAgents(['agent-a'], undefined)).toEqual(['agent-a'])
   })
 })
+
+describe('issue close stop report', () => {
+  const openSession = {
+    sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'i1',
+    initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1,
+  }
+  const closedSession = { ...openSession, state: 'closed' as const, closedAt: 'now' }
+  const closeFrame = {
+    kind: 'issue.close' as const, requestId: 'r1', commitId: 'c1', sessionId: 's1',
+    reason: 'done', conclusion: 'shipped',
+  }
+  const pendingClose = {
+    ...initialGroupWorkspaceState,
+    actorId: 'agent-a',
+    selectedGroupId: 'g1',
+    issue: openSession,
+    mutation: {
+      intentKey: intentKeyOf(closeFrame),
+      requestId: 'r1',
+      commitId: 'c1',
+      frame: closeFrame,
+      context: { actorId: 'agent-a', groupId: 'g1', sessionId: 's1' },
+    },
+  }
+  const unstopped = [
+    { actionId: 'a-accepted', assigneeAgentId: 'agent-b', state: 'accepted' as const },
+    { actionId: 'a-running', assigneeAgentId: 'agent-b', state: 'in_progress' as const },
+    { actionId: 'a-stopping', assigneeAgentId: 'agent-c', state: 'cancel_requested' as const },
+    { actionId: 'a-unknown', assigneeAgentId: 'agent-d', state: 'unknown' as const },
+  ]
+  const reply = {
+    kind: 'issue.closed' as const,
+    requestId: 'r1',
+    session: closedSession,
+    outcome: 'closed' as const,
+    unstopped,
+  }
+
+  it('keeps the close stop report when the action list is re-read', () => {
+    const closed = applyReply(pendingClose, reply, 'issue.close')
+    expect(closed.outcome).toMatchObject({ kind: 'succeeded', frame: 'issue.close' })
+    expect(closed.stopReport).toEqual({ sessionId: 's1', entries: unstopped })
+
+    const refreshed = applyReply(closed, {
+      kind: 'action.list',
+      requestId: 'r2',
+      actions: [{
+        actionId: 'a-accepted', commitId: 'c1', sessionId: 's1', initiatorAgentId: 'agent-a',
+        assigneeAgentId: 'agent-b', kind: 'reply', reason: 'old work', expectedResult: 'x',
+        replyRequired: false, state: 'cancelled' as const, createdAt: 'now',
+      }],
+    }, 'action.list')
+
+    // The owner now reports cancelled, but the reply's stop facts are still shown.
+    expect(refreshed.actions[0]?.state).toBe('cancelled')
+    expect(refreshed.stopReport).toEqual({ sessionId: 's1', entries: unstopped })
+  })
+
+  it('does not keep a completed stop report for an unknown, failed or conflict close', () => {
+    for (const outcome of ['unknown', 'failed', 'conflict'] as const) {
+      const state = applyReply(pendingClose, { ...reply, outcome }, 'issue.close')
+      expect(state.stopReport, outcome).toBeNull()
+      expect(state.outcome.kind, outcome).toBe(outcome === 'unknown' ? 'unknown' : 'failed')
+    }
+  })
+
+  it('keeps only the reply entries and never invents a pending stop entry', () => {
+    const pendingAction = {
+      actionId: 'a-pending', commitId: 'c2', sessionId: 's1', initiatorAgentId: 'agent-a',
+      assigneeAgentId: 'agent-b', kind: 'reply' as const, reason: 'queued', expectedResult: 'x',
+      replyRequired: false, state: 'pending' as const, createdAt: 'now',
+    }
+    const state = applyReply({ ...pendingClose, actions: [pendingAction] }, reply, 'issue.close')
+    expect(state.stopReport?.entries.map(entry => entry.actionId))
+      .toEqual(['a-accepted', 'a-running', 'a-stopping', 'a-unknown'])
+    expect(state.stopReport?.entries.some(entry => entry.actionId === 'a-pending')).toBe(false)
+  })
+})

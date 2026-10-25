@@ -92,6 +92,7 @@ const clearedGroupContent = {
   invitations: [],
   composer: '',
   confirm: null,
+  stopReport: null,
   readError: undefined,
   mutation: null,
   retryable: null,
