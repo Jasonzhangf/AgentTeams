@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -1,6 +1,8 @@
-import { createLiveConsoleHttpClient, createSessionStorageDrafts, mountTeamsConsole } from '/ui/browser.js'
+import { createGroupRequestClient, createLiveConsoleHttpClient, createSessionStorageDrafts, mountTeamsConsole, withGroupRequests } from '/ui/browser.js'
 
-mountTeamsConsole(document.getElementById('app'), createLiveConsoleHttpClient(), {
+const client = withGroupRequests(createLiveConsoleHttpClient(), createGroupRequestClient())
+
+mountTeamsConsole(document.getElementById('app'), client, {
   initialOpen: true,
   locale: 'zh',
   persistence: typeof sessionStorage === 'undefined' ? undefined : createSessionStorageDrafts(sessionStorage),
