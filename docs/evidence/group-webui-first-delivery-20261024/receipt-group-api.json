@@ -1,0 +1,125 @@
+{
+  "driver": "group-webui-first-delivery-20261024/black-box-group-api.mjs",
+  "startedAt": "2026-10-25T04:23:19.610Z",
+  "steps": [
+    {
+      "step": "owner agent start",
+      "name": "ownerAgent",
+      "value": {
+        "pid": 87617,
+        "listener": "192.168.0.3:63141",
+        "registration": "registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:63139"
+      }
+    },
+    {
+      "step": "owner publishes its endpoint record",
+      "name": "ownerEndpointRecord",
+      "value": {
+        "path": "/tmp/group-api-bb-vDNI0e/home/.agentteams/sessions/local/local/group-owner/local-group-endpoint.json",
+        "revision": 1,
+        "socketPath": "/tmp/group-api-bb-vDNI0e/owner/state/agent-messaging.sock"
+      }
+    },
+    {
+      "step": "second declared agent start",
+      "name": "retireAgent",
+      "value": {
+        "pid": 93294,
+        "listener": "192.168.0.3:63142",
+        "socketPath": "/tmp/group-api-bb-vDNI0e/retire/state/agent-messaging.sock"
+      }
+    },
+    {
+      "step": "control start",
+      "name": "control",
+      "value": {
+        "pid": 98203,
+        "listener": "127.0.0.1:63140"
+      }
+    },
+    {
+      "step": "real group create",
+      "name": "createdGroup",
+      "value": {
+        "groupId": "a55d8df9-5f2b-44c9-8519-f4e77802347b",
+        "name": "console-group-delivery",
+        "owner": "group-owner"
+      }
+    },
+    {
+      "step": "real message send and page",
+      "name": "sentMessage",
+      "value": {
+        "messageId": "message:a55d8df9-5f2b-44c9-8519-f4e77802347b:commit-a55d8df9-5f2b-44c9-8519-f4e77802347b",
+        "sequence": 1
+      }
+    },
+    {
+      "step": "real message send and page",
+      "name": "messagePage",
+      "value": {
+        "revision": 2,
+        "hasMore": false,
+        "count": 1
+      }
+    },
+    {
+      "step": "real action and issue reads",
+      "name": "unknownIssueSession",
+      "value": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "unknown session no-such-session"
+        }
+      }
+    },
+    {
+      "step": "owner-authored refusal keeps its own code",
+      "name": "ownerRefusal",
+      "value": {
+        "status": 200,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "FORBIDDEN",
+            "message": "group-owner is not an active member of group-does-not-exist"
+          }
+        }
+      }
+    },
+    {
+      "step": "one hop only",
+      "name": "undeclaredAgent",
+      "value": {
+        "code": "INVALID_INPUT",
+        "message": "agentId group-ghost is not declared by this control daemon's accepted peers"
+      }
+    },
+    {
+      "step": "declared peer with no published record",
+      "name": "absentPeer",
+      "value": {
+        "code": "GROUP_ENDPOINT_NOT_CONFIGURED",
+        "message": "agent group-absent has published no local group endpoint, so its group surface is not reachable from this control daemon"
+      }
+    },
+    {
+      "step": "published record with a dead socket",
+      "name": "unreachablePeer",
+      "value": {
+        "code": "GROUP_ENDPOINT_UNREACHABLE",
+        "message": "local group message socket is unavailable: connect ECONNREFUSED /tmp/group-api-bb-vDNI0e/owner/state/agent-messaging.sock"
+      }
+    },
+    {
+      "step": "graceful stop withdraws the record",
+      "name": "withdrawnEndpoint",
+      "value": {
+        "code": "GROUP_ENDPOINT_NOT_CONFIGURED",
+        "message": "agent group-retire has published no local group endpoint, so its group surface is not reachable from this control daemon"
+      }
+    }
+  ],
+  "checks": 53
+}

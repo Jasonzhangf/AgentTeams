@@ -26,9 +26,14 @@ import { closeSync, existsSync, openSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
-import { networkInterfaces, tmpdir } from 'node:os'
+import { networkInterfaces } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+// The agent group socket is a Unix domain socket. macOS limits its path to about 104
+// bytes, so the fixture root must stay short: /tmp is used instead of the default /var/
+// folders sandbox root, whose prefix alone would overflow the limit.
+const SANDBOX_ROOT = process.env.GROUP_API_SANDBOX_ROOT ?? '/tmp'
 
 const driverDirectory = dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = resolve(driverDirectory, '..', '..', '..')
@@ -414,7 +419,7 @@ function nextRequestId(label) {
 async function main() {
   const lanIp = lanIpv4()
   if (lanIp === undefined) throw new Error('this host has no non-internal IPv4 interface; the group API black box cannot run')
-  const directory = await mkdtemp(join(tmpdir(), 'group-api-blackbox-'))
+  const directory = await mkdtemp(join(SANDBOX_ROOT, 'group-api-bb-'))
   ownedRoot = directory
   console.log('# 8dde877 Console group API black box: the real Console route reaches the real group owner')
   console.log(`cli=${CLI}`)
@@ -497,6 +502,18 @@ async function main() {
   assert(existsSync(ownerSocketPath), 'the published socket really exists on this host')
   record('ownerEndpointRecord', { path: ownerRecordPath, revision: ownerRecord.revision, socketPath: ownerSocketPath })
 
+  step = 'second declared agent start'
+  // The second peer runs from the start, so the owner can invite it, it can accept over
+  // its own route, and its later graceful stop is the withdrawal evidence.
+  const retireEntry = spawnAgent({ label: 'retire', ip: lanIp, port: retirePort, configPath: retirePath, env: operatorEnv })
+  const retireFields = parseFields(await awaitReady(retireEntry))
+  assert(retireFields.listener === `${lanIp}:${retirePort}`, `the second agent serves its real listener (${retireFields.listener})`)
+  const retireRegistration = await awaitRegistrationOnline(retireEntry)
+  assert(retireRegistration.includes('state=online'), `the second agent registered with the real registry (${retireRegistration})`)
+  const retireRecord = await awaitEndpointRecord(home, STOPPED.agentId, found => found !== undefined)
+  assert(typeof retireRecord.groupEndpoint.socketPath === 'string', 'the second agent published its own endpoint record')
+  record('retireAgent', { pid: retireEntry.child.pid, listener: retireFields.listener, socketPath: retireRecord.groupEndpoint.socketPath })
+
   step = 'control start'
   const controlStart = parseFields(runCliSync(['control', 'start', '--config', controlPath], operatorEnv).trim())
   assert(controlStart.state === 'running', `the control daemon reports running (${controlStart.state})`)
@@ -510,7 +527,8 @@ async function main() {
   const listFrame = { kind: 'group.list', requestId: nextRequestId('auth') }
   const anonymous = await groupRequest(origin, OWNER.agentId, listFrame, { authorization: null })
   assert(anonymous.status === 401, `an anonymous group request is refused with 401 (${anonymous.status})`)
-  const wrongMethod = await fetch(`${origin}/api/v1/group-request?agentId=${OWNER.agentId}`)
+  // The route authenticates before it looks at the method, so this one carries credentials.
+  const wrongMethod = await fetch(`${origin}/api/v1/group-request?agentId=${OWNER.agentId}`, { headers: { authorization: BASIC } })
   assert(wrongMethod.status === 405, `a GET on the group route is refused as method not allowed (${wrongMethod.status})`)
 
   step = 'real group read through the owner'
@@ -563,6 +581,21 @@ async function main() {
   assert(unknownSession.status === 200, `an unknown issue session stays a 200 owner answer, not a transport failure (${unknownSession.status})`)
   assert(typeof unknownSession.body.ok === 'boolean', `the owner answer is a typed envelope (${JSON.stringify(unknownSession.body).slice(0, 160)})`)
   record('unknownIssueSession', unknownSession.body)
+
+  step = 'a second real agent joins over its own route'
+  const invited = await groupRequest(origin, OWNER.agentId, {
+    kind: 'group.invite', requestId: nextRequestId('invite'), groupId,
+    agentId: STOPPED.agentId, role: 'peer',
+  })
+  assert(invited.status === 200 && invited.body.ok === true && invited.body.reply.kind === 'group.invited',
+    `the owner invited the second agent as a peer (${JSON.stringify(invited.body).slice(0, 160)})`)
+  const accepted = await groupRequest(origin, STOPPED.agentId, {
+    kind: 'group.respond', requestId: nextRequestId('accept'), groupId, accept: true,
+  })
+  assert(accepted.status === 200 && accepted.body.ok === true && accepted.body.reply.kind === 'group.member',
+    `the invited agent accepted over its own real route (${JSON.stringify(accepted.body).slice(0, 160)})`)
+  assert(accepted.body.reply.group.members.some(member => member.agentId === STOPPED.agentId),
+    'the accepted member is part of the group the owner reads back')
 
   step = 'owner-authored refusal keeps its own code'
   const forbidden = await groupRequest(origin, OWNER.agentId, {
@@ -632,11 +665,6 @@ async function main() {
   record('unreachablePeer', unreachable.body)
 
   step = 'graceful stop withdraws the record'
-  const retireEntry = spawnAgent({ label: 'retire', ip: lanIp, port: retirePort, configPath: retirePath, env: operatorEnv })
-  await awaitReady(retireEntry)
-  await awaitRegistrationOnline(retireEntry)
-  const retireRecord = await awaitEndpointRecord(home, STOPPED.agentId, found => found !== undefined)
-  assert(typeof retireRecord.groupEndpoint.socketPath === 'string', 'the second agent published its own endpoint record')
   const retireBefore = await groupRequest(origin, STOPPED.agentId, { kind: 'group.list', requestId: nextRequestId('retire-live') })
   assert(retireBefore.status === 200 && retireBefore.body.ok === true,
     `the second declared peer answers group.list while it runs (${retireBefore.status})`)
