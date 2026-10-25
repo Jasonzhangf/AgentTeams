@@ -222,6 +222,16 @@ export async function createAgentMessaging(options: AgentMessagingOptions): Prom
           if (result.status === 'failed') return { kind: 'op.failed', opId, commitId, error: result.error }
           return { kind: 'op.unknown', opId, commitId, reason: 'action.result recovery outcome is not confirmable' }
         }
+        if (recoverKind === 'issue.close' || recoverKind === 'issue.reopen') {
+          // Vikunja owns open/closed, so recovery reads the current state and
+          // returns it; the hub decides whether this intent still applies.
+          const result = await vikunja.readState({ issueId: String(params.vikunjaIssueId ?? '') })
+          if (result.status === 'ok') {
+            return { kind: 'op.confirmed', opId, commitId, result: { found: true, actualState: result.value.state } }
+          }
+          if (result.status === 'failed') return { kind: 'op.failed', opId, commitId, error: result.error }
+          return { kind: 'op.unknown', opId, commitId, reason: `${recoverKind} recovery outcome is not confirmable` }
+        }
         return { kind: 'op.failed', opId, commitId, error: serviceError('INVALID_INPUT', `unsupported recover kind ${recoverKind}`) }
       }
       return { kind: 'op.failed', opId, commitId, error: serviceError('UNSUPPORTED_OPERATION', `unsupported external op ${opKind}`) }

@@ -151,6 +151,13 @@ export type GroupWireRequest =
 export type IssueCloseOutcome = 'closed' | 'conflict' | 'failed' | 'unknown'
 export type IssueReopenOutcome = 'reopened' | 'conflict' | 'failed' | 'unknown'
 
+/** One action whose stop the close could not confirm. */
+export interface CloseReportEntry {
+  readonly actionId: string
+  readonly assigneeAgentId: string
+  readonly state: ActionState
+}
+
 export type GroupWireReply =
   | { readonly kind: 'group.created'; readonly requestId: string; readonly group: Group }
   | { readonly kind: 'group.invited'; readonly requestId: string; readonly invitation: GroupInvitation }
@@ -164,7 +171,7 @@ export type GroupWireReply =
   | { readonly kind: 'issue.changed'; readonly sessionId: string; readonly state: IssueState }
   | { readonly kind: 'issue.session'; readonly requestId: string; readonly session: IssueSession }
   | { readonly kind: 'issue.list'; readonly requestId: string; readonly sessions: readonly IssueSession[] }
-  | { readonly kind: 'issue.closed'; readonly requestId: string; readonly session: IssueSession; readonly outcome: IssueCloseOutcome }
+  | { readonly kind: 'issue.closed'; readonly requestId: string; readonly session: IssueSession; readonly outcome: IssueCloseOutcome; readonly unstopped?: readonly CloseReportEntry[] }
   | { readonly kind: 'issue.reopened'; readonly requestId: string; readonly session: IssueSession; readonly outcome: IssueReopenOutcome }
   | { readonly kind: 'action.created'; readonly requestId: string; readonly action: Action }
   | { readonly kind: 'action.updated'; readonly requestId: string; readonly action: Action }
@@ -252,6 +259,20 @@ function parseActionReport(value: unknown): Action['report'] {
     ...(input.evidence === undefined ? {} : { evidence: optionalJson(input.evidence, 'Action report evidence') }),
     reportedAt: text(input.reportedAt, 'Action report reportedAt'),
   }
+}
+
+function parseCloseReport(value: unknown): readonly CloseReportEntry[] {
+  if (!Array.isArray(value)) fail('Issue closed unstopped must be an array')
+  return value.map((entry, index) => {
+    const path = `Issue closed unstopped ${index}`
+    const item = record(entry, path)
+    assertEnvelopeKeys(item, ['actionId', 'assigneeAgentId', 'state'], path)
+    return {
+      actionId: text(item.actionId, 'Close report actionId'),
+      assigneeAgentId: text(item.assigneeAgentId, 'Close report assigneeAgentId'),
+      state: pick(item.state, actionStates, 'Close report state'),
+    }
+  })
 }
 
 export function parseGroupAction(value: unknown): Action {
@@ -603,11 +624,12 @@ export function parseGroupWireReply(textValue: string): GroupWireReply {
       return { kind, requestId: text(frame.requestId, 'Issue list requestId'), sessions: frame.sessions.map(parseIssueSession) }
     }
     case 'issue.closed': {
-      assertEnvelopeKeys(frame, ['kind', 'requestId', 'session', 'outcome'], 'Issue closed reply')
+      assertEnvelopeKeys(frame, ['kind', 'requestId', 'session', 'outcome', 'unstopped'], 'Issue closed reply')
       return {
         kind, requestId: text(frame.requestId, 'Issue closed requestId'),
         session: parseIssueSession(frame.session),
         outcome: pick(frame.outcome, closeOutcomes, 'Issue close outcome'),
+        ...(frame.unstopped === undefined ? {} : { unstopped: parseCloseReport(frame.unstopped) }),
       }
     }
     case 'issue.reopened': {

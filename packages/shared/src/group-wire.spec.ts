@@ -147,6 +147,23 @@ describe('group wire replies', () => {
     expect(parsed).toMatchObject({ kind: 'issue.list', sessions: [{ sessionId: 's1', groupId: 'g1' }] })
   })
 
+  it('parses a closed reply that names the actions not confirmed stopped', () => {
+    const parsed = parseGroupWireReply(request({
+      kind: 'issue.closed', requestId: 'r1',
+      session: {
+        sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: '42',
+        initiatorAgentId: 'agent-a', state: 'closed', openedAt: '2026-10-22T00:00:00.000Z', lastOpSeq: 2,
+      },
+      outcome: 'closed',
+      unstopped: [{ actionId: 'a1', assigneeAgentId: 'agent-b', state: 'cancel_requested' }],
+    }))
+    expect(parsed).toMatchObject({
+      kind: 'issue.closed',
+      outcome: 'closed',
+      unstopped: [{ actionId: 'a1', assigneeAgentId: 'agent-b', state: 'cancel_requested' }],
+    })
+  })
+
   it('parses an op execute frame as hub to owner', () => {
     const parsed = parseGroupWireReply(request({
       kind: 'op.execute', opId: 'op1', opKind: 'issue.close', params: { sessionId: 's1' },

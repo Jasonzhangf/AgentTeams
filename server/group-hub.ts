@@ -52,6 +52,7 @@ import { routeGroupMessage } from './message-router.ts'
 import {
   authenticateExternalOpReceipt,
   beginExternalOp,
+  closeReportUnstopped,
   confirmExternalOpFromRead,
   createExternalOpLedger,
   externalOpForCommit,
@@ -485,6 +486,16 @@ export class GroupHubImpl implements GroupHub {
   }
 
   /**
+   * A read-back runs as the operation's recorded owner. A member that learns the
+   * commit id cannot recover someone else's uncertain write as its own.
+   */
+  private recoveryRefusal(op: ExternalOp, actor: Actor): GroupHubResult | undefined {
+    return op.ownerAgentId === actor.agentId
+      ? undefined
+      : err('FORBIDDEN', `${actor.agentId} is not the owner of ${op.kind} ${op.commitId}`)
+  }
+
+  /**
    * Read a create back by its stable reference before any retry. The read goes to
    * the same owner and never writes a second issue; a hit persists the confirmed
    * outcome, a miss leaves the op unknown.
@@ -498,7 +509,8 @@ export class GroupHubImpl implements GroupHub {
   ): Promise<GroupHubResult> {
     const recorded = externalOpForCommit(this.ledger, commitId, 'issue.create')
     if (!recorded) return err('NOT_FOUND', `no recorded create for ${commitId}`)
-    if (recorded.ownerAgentId !== actor.agentId) return err('FORBIDDEN', `${actor.agentId} is not the owner of create ${commitId}`)
+    const refusal = this.recoveryRefusal(recorded, actor)
+    if (refusal) return refusal
     const delegated = await this.delegate('issue.recover', commitId, actor.agentId, {
       recoverKind: 'issue.create', groupId, commitId,
       vikunjaProjectId: params.projectId, title: params.title,
@@ -706,11 +718,36 @@ export class GroupHubImpl implements GroupHub {
     if (!operation) return err('UPSTREAM_ERROR', `missing open/close operation for ${commitId}`)
     // The intent is durable before the write, so recovery can read it back.
     this.save()
+    const opKind = direction === 'close' ? 'issue.close' : 'issue.reopen'
+    const targetState: IssueState = direction === 'close' ? 'closed' : 'open'
+    // A lost receipt leaves an unknown write. A retry reads the actual state
+    // back and converges from it; it never re-issues the close or reopen.
+    const recorded = externalOpForCommit(this.ledger, commitId, opKind)
+    if (recorded && (recorded.state === 'unknown' || recorded.state === 'inflight')) {
+      const refusal = this.recoveryRefusal(recorded, actor)
+      if (refusal) return refusal
+      const recovered = await this.delegate('issue.recover', commitId, actor.agentId, {
+        recoverKind: opKind, sessionId, commitId, targetState,
+        vikunjaProjectId: session.vikunjaProjectId, vikunjaIssueId: session.vikunjaIssueId,
+      })
+      if (!recovered.ok) {
+        this.sessions = settleIssueOperation(this.sessions, commitId, 'unknown', now)
+        this.save()
+        return err('RESULT_UNKNOWN', `${direction} for ${commitId} is ${recorded.state}; recovery could not confirm it`)
+      }
+      const recoveredState = readObservedState(recovered.result)
+      if (recoveredState === undefined) {
+        this.sessions = settleIssueOperation(this.sessions, commitId, 'unknown', now)
+        this.save()
+        return err('RESULT_UNKNOWN', `${direction} for ${commitId} was not read back; the outcome stays unknown`)
+      }
+      this.ledger = confirmExternalOpFromRead(this.ledger, recorded.opId, recovered.result as JsonValue, this.now().toISOString())
+      return this.settleIssueRead(direction, input, sessionId, commitId, operation, recoveredState)
+    }
     // A close cancels queued work before the external write; an in-flight action
     // keeps its responsibility and its stop fact.
     if (direction === 'close') this.cancelSessionActions(sessionId, this.now().toISOString())
-    const targetState: IssueState = direction === 'close' ? 'closed' : 'open'
-    const delegated = await this.delegate(direction === 'close' ? 'issue.close' : 'issue.reopen', commitId, actor.agentId, {
+    const delegated = await this.delegate(opKind, commitId, actor.agentId, {
       sessionId, commitId, opSeq: operation.opSeq, targetState,
       vikunjaProjectId: session.vikunjaProjectId, vikunjaIssueId: session.vikunjaIssueId,
       reason, ...(direction === 'close' ? { conclusion: optionalText(input.conclusion) ?? '' } : {}),
@@ -728,6 +765,23 @@ export class GroupHubImpl implements GroupHub {
       this.save()
       return err('UPSTREAM_ERROR', `${direction} was not confirmed by a read-back; outcome is unknown`)
     }
+    return this.settleIssueRead(direction, input, sessionId, commitId, operation, actual)
+  }
+
+  /**
+   * Applies one confirmed read to the session projection. Only an applied
+   * decision changes the state; a conflict or unknown is reported as such and
+   * never rewrites the newer state. A close report is taken after cancellation,
+   * so it names the final facts of this settlement.
+   */
+  private settleIssueRead(
+    direction: 'close' | 'reopen',
+    input: Record<string, unknown>,
+    sessionId: string,
+    commitId: string,
+    operation: IssueSessionOperation,
+    actual: IssueState,
+  ): GroupHubResult {
     const confirmed = confirmIssueOperation(this.sessions, { commitId, externalState: actual, externalOpSeq: operation.opSeq }, this.now().toISOString())
     this.sessions = confirmed.state
     this.save()
@@ -738,7 +792,8 @@ export class GroupHubImpl implements GroupHub {
       this.cancelSessionActions(sessionId, this.now().toISOString())
       this.save()
       const outcome = confirmed.decision.outcome === 'applied' ? 'closed' : confirmed.decision.outcome
-      return ok({ kind: 'issue.closed', requestId: text(input.requestId, 'requestId'), session: current, outcome })
+      const unstopped = closeReportUnstopped(listActions(this.actions, sessionId))
+      return ok({ kind: 'issue.closed', requestId: text(input.requestId, 'requestId'), session: current, outcome, unstopped })
     }
     const outcome = confirmed.decision.outcome === 'applied' ? 'reopened' : confirmed.decision.outcome
     return ok({ kind: 'issue.reopened', requestId: text(input.requestId, 'requestId'), session: current, outcome })
@@ -809,6 +864,12 @@ export class GroupHubImpl implements GroupHub {
         `action ${actionId} is ${action.state}; a new result cannot be written`)
     }
     const session = this.sessions.sessions.get(action.sessionId)
+    // A lost receipt leaves an unknown write. The same result commit retries by
+    // reading its comment back, never by writing a second one.
+    const recorded = externalOpForCommit(this.ledger, resultCommitId, 'action.result')
+    if (recorded && (recorded.state === 'unknown' || recorded.state === 'inflight')) {
+      return await this.recoverActionResult(actor, text(input.requestId, 'requestId'), action, recorded, session)
+    }
     const delegated = await this.delegate('action.result', resultCommitId, actor.agentId, {
       actionId, resultCommitId, sessionId: action.sessionId,
       resultBody: optionalText(input.resultBody) ?? '',
@@ -837,6 +898,46 @@ export class GroupHubImpl implements GroupHub {
     this.save()
     const updated = actionOf(this.actions, actionId)
     return ok({ kind: 'action.updated', requestId: text(input.requestId, 'requestId'), action: updated }, [
+      { agentId: updated.initiatorAgentId, frame: { kind: 'action.changed', action: updated } },
+    ])
+  }
+
+  /**
+   * Reads one submitted result back by its stable commit reference. A hit is the
+   * owner's own comment, so it completes the action; a miss keeps the action
+   * unknown. This path never issues a second result write.
+   */
+  private async recoverActionResult(
+    actor: Actor,
+    requestId: string,
+    action: Action,
+    recorded: ExternalOp,
+    session: IssueSession | undefined,
+  ): Promise<GroupHubResult> {
+    const refusal = this.recoveryRefusal(recorded, actor)
+    if (refusal) return refusal
+    const delegated = await this.delegate('issue.recover', recorded.commitId, actor.agentId, {
+      recoverKind: 'action.result', actionId: action.actionId, resultCommitId: recorded.commitId,
+      sessionId: action.sessionId,
+      ...(session === undefined ? {} : { vikunjaIssueId: session.vikunjaIssueId }),
+    })
+    if (!delegated.ok) {
+      return err('RESULT_UNKNOWN', `action.result for ${recorded.commitId} is ${recorded.state}; recovery could not confirm it`)
+    }
+    const facts = delegated.result
+    const resultRef = facts !== null && typeof facts === 'object' && !Array.isArray(facts)
+      ? optionalText((facts as Record<string, unknown>).resultRef)
+      : undefined
+    if (resultRef === undefined) {
+      return err('RESULT_UNKNOWN', `action.result for ${recorded.commitId} was not found by its result reference; the outcome stays unknown`)
+    }
+    const now = this.now().toISOString()
+    this.ledger = confirmExternalOpFromRead(this.ledger, recorded.opId, { resultRef } as JsonValue, now)
+    if (this.actions.actions.get(action.actionId)?.state === 'pending') this.actions = startAction(this.actions, action.actionId, now)
+    this.actions = submitActionResult(this.actions, { actionId: action.actionId, resultCommitId: recorded.commitId, resultRef }, now).state
+    this.save()
+    const updated = actionOf(this.actions, action.actionId)
+    return ok({ kind: 'action.updated', requestId, action: updated }, [
       { agentId: updated.initiatorAgentId, frame: { kind: 'action.changed', action: updated } },
     ])
   }

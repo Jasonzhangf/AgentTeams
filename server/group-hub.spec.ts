@@ -458,6 +458,70 @@ describe('external op convergence and admission', () => {
     expect(creates).toBe(1)
   })
 
+  it('recovers an unknown result by reading its comment back', async () => {
+    let writes = 0
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'action.result') {
+        writes += 1
+        return writes === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { resultRef: 'comment:unexpected' })
+      }
+      if (op.kind === 'issue.recover') return confirmed(op, { found: true, resultRef: 'comment:1' })
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const action = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    const actionId = (action.reply as { action: { actionId: string } }).action.actionId
+    const first = await hub.handle(PEER, { kind: 'action.submit', requestId: 's1', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(first.ok).toBe(false)
+    const second = await hub.handle(PEER, { kind: 'action.submit', requestId: 's2', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(second.ok).toBe(true)
+    const recovered = (second.reply as { action: { state: string; resultRef?: string; resultCommitId?: string } }).action
+    expect(recovered.state).toBe('completed')
+    expect(recovered.resultCommitId).toBe('rc1')
+    expect(recovered.resultRef).toBe('comment:1')
+    // The recovery read is the only extra call; the comment was written once.
+    expect(calls.filter((op) => op.kind === 'action.result')).toHaveLength(1)
+    expect(calls.filter((op) => op.kind === 'issue.recover')).toHaveLength(1)
+  })
+
+  it('keeps an unknown result unknown when recovery finds nothing', async () => {
+    let writes = 0
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'action.result') {
+        writes += 1
+        return writes === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { resultRef: 'comment:unexpected' })
+      }
+      if (op.kind === 'issue.recover') return confirmed(op, { found: false })
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const action = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    const actionId = (action.reply as { action: { actionId: string } }).action.actionId
+    const first = await hub.handle(PEER, { kind: 'action.submit', requestId: 's1', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(first.ok).toBe(false)
+    const second = await hub.handle(PEER, { kind: 'action.submit', requestId: 's2', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(second.ok).toBe(false)
+    expect(second.ok ? '' : second.error.code).toBe('RESULT_UNKNOWN')
+    const listed = await hub.handle(OWNER, { kind: 'action.list', requestId: 'l1', sessionId })
+    const stored = (listed.reply as { actions: readonly { actionId: string; state: string; resultRef?: string }[] })
+      .actions.find((entry) => entry.actionId === actionId)
+    expect(stored?.state).toBe('unknown')
+    expect(stored?.resultRef).toBeUndefined()
+    expect(calls.filter((op) => op.kind === 'action.result')).toHaveLength(1)
+  })
+
   it('answers a state read that failed as unconfirmed, not as a fresh open session', async () => {
     let down = false
     const { hub } = scripted((op) => {
@@ -517,8 +581,12 @@ describe('external op convergence and admission', () => {
   })
 
   it('lets the assignee report a pending action and keeps the reason and evidence', async () => {
-    const { hub } = scripted((op) => confirmed(op, { issueId: '42' }))
+    const { hub, store } = scripted((op) => confirmed(op, { issueId: '42' }))
     const groupId = await groupWithEdge(hub)
+    // A member that is not the assignee may hold an unrelated role and still
+    // cannot report this action.
+    await hub.handle(OWNER, { kind: 'group.invite', requestId: 'r-nonassignee', groupId, agentId: 'agent-c', role: 'peer' })
+    await hub.handle(MASTER, { kind: 'group.respond', requestId: 'r-nonassignee-ok', groupId, accept: true })
     const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
     const action = await hub.handle(OWNER, {
       kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
@@ -529,19 +597,48 @@ describe('external op convergence and admission', () => {
       kind: 'action.report', requestId: 'p1', actionId, report: 'blocked', reason: 'upstream is closed today', evidence: { ticket: 'T-1' },
     })
     expect(reported.ok).toBe(true)
-    const listed = await hub.handle(OWNER, { kind: 'action.list', requestId: 'l1', sessionId })
-    const stored = (listed.reply as { actions: readonly { actionId: string; state: string; report?: { report: string; reason: string; evidence?: unknown } }[] })
-      .actions.find((entry) => entry.actionId === actionId)
-    expect(stored?.state).toBe('blocked')
-    expect(stored?.report).toMatchObject({ report: 'blocked', reason: 'upstream is closed today', evidence: { ticket: 'T-1' } })
-    // The report survives a restart, so the reason is not a UI-only fact.
-    const restarted = createGroupHub({
-      store: { load: () => undefined, save: () => undefined }, isOnline: () => true,
-      now: () => new Date('2026-10-22T00:00:00.000Z'),
-      idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
-      executeExternalOp: async (op) => confirmed(op, { issueId: '42' }),
+    const hijacked = await hub.handle(MASTER, {
+      kind: 'action.report', requestId: 'p2', actionId, report: 'failed', reason: 'not mine to report',
     })
-    expect(restarted).toBeDefined()
+    expect(hijacked.ok).toBe(false)
+    expect(hijacked.ok ? '' : hijacked.error.code).toBe('FORBIDDEN')
+
+    const deps = {
+      store,
+      isOnline: () => true,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `restart-${++n}` })(),
+      executeExternalOp: async (op: ExternalOp) => confirmed(op, { issueId: '42' }),
+    }
+    // A real restart: the second hub loads the same store and reads the record back.
+    const restarted = createGroupHub(deps)
+    const listed = await restarted.handle(OWNER, { kind: 'action.list', requestId: 'l1', sessionId })
+    const restored = (listed.reply as { actions: readonly { actionId: string; state: string; report?: { report: string; reason: string; evidence?: unknown } }[] })
+      .actions.find((entry) => entry.actionId === actionId)
+    expect(restored).toMatchObject({
+      actionId,
+      state: 'blocked',
+      report: { report: 'blocked', reason: 'upstream is closed today', evidence: { ticket: 'T-1' } },
+    })
+
+    // The same durable path keeps a failed report and its reason.
+    const failedAction = await restarted.handle(OWNER, {
+      kind: 'action.create', requestId: 'a2', commitId: 'ac2', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r2', expectedResult: 'e2', replyRequired: false,
+    })
+    const failedId = (failedAction.reply as { action: { actionId: string } }).action.actionId
+    const failedReport = await restarted.handle(PEER, {
+      kind: 'action.report', requestId: 'p3', actionId: failedId, report: 'failed', reason: 'builder rejected the change',
+    })
+    expect(failedReport.ok).toBe(true)
+    const second = createGroupHub(deps)
+    const relisted = await second.handle(OWNER, { kind: 'action.list', requestId: 'l2', sessionId })
+    const actions = (relisted.reply as { actions: readonly { actionId: string; state: string; report?: { report: string; reason: string } }[] }).actions
+    expect(actions.find((entry) => entry.actionId === failedId))
+      .toMatchObject({ state: 'failed', report: { report: 'failed', reason: 'builder rejected the change' } })
+    // The foreign report changed nothing: the blocked record still reads the same.
+    expect(actions.find((entry) => entry.actionId === actionId))
+      .toMatchObject({ actionId, state: 'blocked', report: { report: 'blocked', reason: 'upstream is closed today' } })
   })
 
   it('takes pending work out of the executable set when the issue closes', async () => {
@@ -603,6 +700,102 @@ describe('external op convergence and admission', () => {
     expect(stored?.state).toBe('cancelled')
     const resubmitted = await hub.handle(PEER, { kind: 'action.submit', requestId: 's1', resultCommitId: 'rc1', actionId, resultBody: 'late' })
     expect(resubmitted.ok).toBe(false)
+  })
+
+  it('recovers an unknown close by reading the actual state back', async () => {
+    let closes = 0
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'issue.close') {
+        closes += 1
+        return closes === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' })
+      }
+      if (op.kind === 'issue.recover') return confirmed(op, { found: true, actualState: 'closed' })
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const first = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(first.ok).toBe(false)
+    const second = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c2', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(second.ok).toBe(true)
+    expect((second.reply as { outcome: string }).outcome).toBe('closed')
+    expect(stateOf(second.reply)).toBe('closed')
+    // Recovery is a read: the close was written once.
+    expect(calls.filter((op) => op.kind === 'issue.close')).toHaveLength(1)
+    expect(calls.filter((op) => op.kind === 'issue.recover')).toHaveLength(1)
+  })
+
+  it('keeps a conflicting close reading as conflict instead of rewriting', async () => {
+    const { hub } = scripted((op) => {
+      if (op.kind === 'issue.close') {
+        return op.commitId === 'cc1'
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' })
+      }
+      if (op.kind === 'issue.reopen') return confirmed(op, { issueId: '42', expectedState: 'open', actualState: 'open' })
+      if (op.kind === 'issue.recover') return confirmed(op, { found: true, actualState: 'open' })
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const stale = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(stale.ok).toBe(false)
+    const closed = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c2', commitId: 'cc2', sessionId, reason: 'close again', conclusion: 'ok' })
+    expect(closed.ok).toBe(true)
+    expect(stateOf(closed.reply)).toBe('closed')
+    const reopened = await hub.handle(OWNER, { kind: 'issue.reopen', requestId: 'o1', commitId: 'oc1', sessionId, reason: 'more work' })
+    expect(reopened.ok).toBe(true)
+    expect(stateOf(reopened.reply)).toBe('open')
+    // The stale close is older than the newer close/reopen pair. Its recovery
+    // reading must not project the session back to closed.
+    const retried = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c3', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(retried.ok).toBe(true)
+    expect((retried.reply as { outcome: string }).outcome).toBe('conflict')
+    expect(stateOf(retried.reply)).toBe('open')
+  })
+
+  it('reports the actions not confirmed stopped when the issue closes', async () => {
+    const { hub, store } = scripted((op) => op.kind === 'issue.close'
+      ? confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' })
+      : confirmed(op, { issueId: '42' }))
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const running = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    const runningId = (running.reply as { action: { actionId: string } }).action.actionId
+    const queued = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a2', commitId: 'ac2', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r2', expectedResult: 'e2', replyRequired: true,
+    })
+    const queuedId = (queued.reply as { action: { actionId: string } }).action.actionId
+    // Execution start has no public frame in this increment; seed the durable
+    // action state and load it back through the real restore path.
+    const base = store.snapshots[store.snapshots.length - 1]
+    if (!base) throw new Error('missing snapshot')
+    const seeded = memoryStore()
+    seeded.save({
+      ...base,
+      actions: base.actions.map((entry) => entry.actionId === runningId ? { ...entry, state: 'in_progress' as const } : entry),
+    })
+    const restored = createGroupHub({
+      store: seeded,
+      isOnline: () => true,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `close-${++n}` })(),
+      executeExternalOp: async (op: ExternalOp) => op.kind === 'issue.close'
+        ? confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' })
+        : confirmed(op, { issueId: '42' }),
+    })
+    const closed = await restored.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(closed.ok).toBe(true)
+    const report = (closed.reply as { unstopped: readonly { actionId: string; assigneeAgentId: string; state: string }[] }).unstopped
+    expect(report).toContainEqual({ actionId: runningId, assigneeAgentId: 'agent-b', state: 'cancel_requested' })
+    // A queued action is cancelled outright, so it is not an unconfirmed stop.
+    expect(report.some((entry) => entry.actionId === queuedId)).toBe(false)
   })
 })
 

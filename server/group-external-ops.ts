@@ -1,5 +1,5 @@
 import type { JsonValue, ServiceError } from '../packages/shared/src/agent-services.ts'
-import type { Action, ActionState, ExternalOp, ExternalOpKind, ExternalOpState } from '../packages/shared/src/group-wire.ts'
+import type { Action, CloseReportEntry, ExternalOp, ExternalOpKind, ExternalOpState } from '../packages/shared/src/group-wire.ts'
 
 /**
  * External operation ledger and action convergence.
@@ -174,17 +174,11 @@ export function decideExternalConvergence(input: ConvergenceInput): Convergence 
   return input.observed === input.intended ? 'applied' : 'conflict'
 }
 
-export interface CloseReportEntry {
-  readonly actionId: string
-  readonly state: ActionState
-  readonly executionStopped: boolean
-}
-
 /** Actions that were never confirmed stopped stay visible in the close report. */
 export function closeReportUnstopped(actions: readonly Action[]): readonly CloseReportEntry[] {
   return actions
     .filter((action) => action.state === 'cancel_requested' || (action.state === 'unknown' && action.executionStopped !== true))
-    .map((action) => ({ actionId: action.actionId, state: action.state, executionStopped: action.executionStopped === true }))
+    .map((action) => ({ actionId: action.actionId, assigneeAgentId: action.assigneeAgentId, state: action.state }))
 }
 
 /**
