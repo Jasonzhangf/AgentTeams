@@ -1,0 +1,97 @@
+{
+  "driver": "group-webui-first-delivery-20261024/live-group-webui.mjs",
+  "startedAt": "2026-10-25T04:02:41.968Z",
+  "steps": [
+    {
+      "step": "startup",
+      "name": "root",
+      "value": "/tmp/group-webui-accept-z4QrDg"
+    },
+    {
+      "step": "registry",
+      "name": "registry",
+      "value": {
+        "pid": 94615,
+        "endpoint": "wss://127.0.0.1:53233"
+      }
+    },
+    {
+      "step": "agent A",
+      "name": "agentA",
+      "value": {
+        "pid": 94718,
+        "listener": "127.0.0.1:53235"
+      }
+    },
+    {
+      "step": "agent B",
+      "name": "agentB",
+      "value": {
+        "pid": 487,
+        "listener": "127.0.0.1:53236"
+      }
+    },
+    {
+      "step": "control",
+      "name": "control",
+      "value": {
+        "pid": 6728,
+        "origin": "http://127.0.0.1:53234"
+      }
+    },
+    {
+      "step": "group create via owner socket",
+      "name": "groupId",
+      "value": "02eac0a4-142d-406f-a095-2c03a91eb507"
+    }
+  ],
+  "finishedAt": "2026-10-25T04:03:15.586Z",
+  "checks": [
+    {
+      "name": "endpoint publication",
+      "detail": "both agent daemons published their own local group endpoint records"
+    },
+    {
+      "name": "console projection",
+      "detail": "the real Console discovers both agents (groups-a,groups-b)"
+    },
+    {
+      "name": "membership",
+      "detail": "groups-b accepted the invitation and lists the group as a member"
+    },
+    {
+      "name": "message page",
+      "detail": "a message sent by A is read back by B through the owner"
+    },
+    {
+      "name": "issue create (owner)",
+      "detail": "the group owner created Vikunja issue 5"
+    },
+    {
+      "name": "action lifecycle (owner)",
+      "detail": "the assignee submitted the action and Vikunja holds the result comment"
+    },
+    {
+      "name": "issue close (owner)",
+      "detail": "close set done=true and preserved the issue description"
+    },
+    {
+      "name": "refusal",
+      "detail": "a non-initiator close is refused with the original typed code"
+    },
+    {
+      "name": "http access states",
+      "detail": "anonymous, unknown target and not-configured are three distinct typed outcomes"
+    },
+    {
+      "name": "http group roundtrip",
+      "detail": "the Console route reaches the real group owner and keeps its reply"
+    }
+  ],
+  "gaps": [
+    {
+      "name": "browser replay",
+      "reason": "skipped by --skip-browser; this run does not claim desktop or mobile UI evidence"
+    }
+  ]
+}
