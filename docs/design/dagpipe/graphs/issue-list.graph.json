@@ -1,0 +1,42 @@
+{
+  "id": "agentteams.issue-list",
+  "version": "1",
+  "inputs": [{ "id": "issue.list.intent", "schema": "Object" }],
+  "nodes": [
+    {
+      "id": "authorize-reader",
+      "operator": "teams.authorize-group-issue-list",
+      "operator_version": "1",
+      "inputs": ["issue.list.intent"],
+      "output": { "id": "issue.list.authorized", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "read-sessions",
+      "operator": "teams.list-group-issue-sessions",
+      "operator_version": "1",
+      "inputs": ["issue.list.authorized"],
+      "output": { "id": "issue.list.sessions", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    },
+    {
+      "id": "decide-outcome",
+      "operator": "teams.decide-issue-list-outcome",
+      "operator_version": "1",
+      "inputs": ["issue.list.sessions"],
+      "output": { "id": "issue.list.receipt", "schema": "Object" },
+      "input_selector": { "include": [], "exclude": [] },
+      "output_selector": { "include": [], "exclude": [] },
+      "iterator": "Whole"
+    }
+  ],
+  "edges": [
+    { "from": "authorize-reader", "to": "read-sessions", "arc_id": "issue.list.authorized" },
+    { "from": "read-sessions", "to": "decide-outcome", "arc_id": "issue.list.sessions" }
+  ],
+  "outputs": ["issue.list.receipt"]
+}

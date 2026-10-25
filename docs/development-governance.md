@@ -6,28 +6,23 @@
 ## 唯一归属
 
 - 产品约束：根 `AGENTS.md`；需求/下一步：`docs/goals/`；协议与配置：`docs/design/`。
+- 项目开发步骤：[agentteams-development](../.agents/skills/agentteams-development/SKILL.md)。
+  本文拥有命令、gate 适用性与证据复用，不再复制一套开发流程。
 - 产品 resource/function/mainline/module/verification：`docs/architecture/` 五个 map。
 - SDK 实现契约：官方初始化的 `.appsdk/contracts/`、`.appsdk/maps/`、SDK resources/lock。
 - 本项目交付单元：`.appsdk/project.json` 的 `teams-source`，绑定现有源码与真实库产物。
   这是统一构建/准入边界，不替代 network、server、config 等语义 owner。
 - 根 `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml` 是依赖与命令入口。
-  源码哈希使用源码/配置路径，不把 node_modules 符号链接或 lib 构建输出当源码。
+  源码、构建输出和安装副本分别报告；日常交付不新增哈希清单或候选身份包装。
 
 ## 每个开发里程碑
 
-1. 获取最新 origin/main，在 `/Volumes/Intel/playground/agentteams/<unit>` 下创建独立
-   clean worktree；保持主线只读。
-2. 绑定受影响 feature/owner/路径/调用边/验收。先定位真源，比较删除、复用与直接实现。
-3. 关键行为先红测后最小修改；同步受影响 maps。探索与验证写本任务独占 run notes。
-4. 新 worktree 或依赖输入变化时，在根目录安装 `pnpm install --frozen-lockfile`；
-   依赖未变且已可用时复用。先执行当前阶段需要的定向验证，再按重入规则决定
-   是否需要全量 `pnpm verify`。
-5. 完成适用实际入口证据，再按本目标已获用户选择的独立 Codex exact review 路由
-   审查精确候选；AGY Review 不属于本目标的 review gate。变更后重跑受影响验证和 review。
-6. commit、push、合并、安装、发布分别按授权执行；review PASS 不等于这些动作完成。
+按项目本地 Skill 的“开发与验收”推进。复杂任务的独立规划、worker 与 reviewer 路由
+沿当前宿主编排 Skill；这里不另定模型或复制角色规则。纯文档/Skill 修改只做定向检查，
+不为落盘文档启动服务、安装产品或增加独立审批。
 
 `pnpm verify` 顺序执行全量测试、类型检查、Guidance compile、AppSDK compile、编译
-产物 HTTP smoke、AppSDK verify；任何命令失败即停止。它是新候选、依赖/契约漂移或
+产物 HTTP smoke、AppSDK verify；任何命令失败即停止该检查链。它用于适用首次/最终基线、依赖/契约漂移或
 无法证明证据仍有效时的全量门禁，不是每次恢复或每个阶段都必须重复执行的固定步骤。
 `pnpm test` 先构建被依赖的 OpenCode adapter，再运行现有全部测试文件。SDK
 project contract 声明的 `minimum_test_count` 继续强制（当前项目声明为 304），
@@ -38,9 +33,9 @@ project contract 声明的 `minimum_test_count` 继续强制（当前项目声�
 
 每个 delivery unit 在现有任务 run notes 中维护阶段状态：
 `pending → running → passed | blocked`；输入漂移时标记 `invalidated`，有效复用可记为
-`reused`。阶段记录只需保存该阶段实际消费的输入、命令/入口和原始 evidence
-receipt；只对相关 stage inputs 做 fingerprint，不要求每个阶段重复哈希全部 map、
-device、build 和 environment。
+`reused`。阶段记录只需保存实际消费的输入、命令/入口和原始回执。
+依据受影响文件、配置版本和实际运行条件判断证据是否仍适用；不为记笔记、恢复、
+派单或 review 主动计算指纹、冻结快照或重复验证候选身份。普通 Git 输出的提交标识可引用。
 
 恢复或进入下游前先读现有任务笔记和原始 receipt。相关输入未变时，笔记可以直接
 引用原始 receipt 并说明复用 gate；不需要另建第二套 reuse 记录。main、remote、
@@ -53,7 +48,20 @@ candidate 与 integrated main 的相关输入等价时，复用已有有效 test
 由 lifecycle adapter 生成的后续 evidence 仍按其契约标记
 `execution.mode=executed|reused` 并引用原始 receipt。
 
-增加功能时补测试并按真实基线更新门槛，不靠降低门槛消除回归。
+测试绑定具体失败模式，按风险补齐；不为增加测试数量制造重复断言，也不降低必要验收。
+
+## 最小交互与交接
+
+每个交互阶段只保留会改变用户决定、执行动作或恢复路径的反馈。产品的具体展示由
+对应交互设计拥有；协议回执不逐条转成用户通知。成功直接展示结果，失败说明影响和
+下一动作，未知保留原操作责任。ACK、心跳、查询成功不等于业务完成。
+
+协作交接在现有任务中记录问题、owner、结果/证据和下一责任人；有实际 action 才请求
+处理或答复。结果回复不附加“请确认收到”，不因 ACK、提醒或状态未变自动再发一轮。
+需要追问时明确新问题和原因。问题已解决后由发起者按原 issue 关闭，不另建完成议题。
+
+已有任务、run notes 和原始回执足以交接时，不另建平行进度表、身份清单或重复报告。
+权限、安全、真实入口验收、失败原错与资源责任仍须保留。交付不能用简短措辞掩盖缺项。
 
 ## 命令、证据与选择粒度
 
@@ -96,19 +104,16 @@ HTTP smoke 校验编译库与打包文件字节一致，使用已安装依赖执
 普通源码测试和库 smoke 不能替代这些安装副本证据。超出该基础包范围的 Agent daemon
 与 managed OpenCode 部署仍需各自适用的服务验收，不可用 Relay 单一进程回放替代；
 正式服务准入在对应证据齐备前保持未完成。
-AppSDK review admission、freeze/Active 发布保留正式证据门禁，本轮不生成假候选、
-假 review record、假部署 receipt。普通 compile/verify 与发布准入是不同证据。
+AppSDK 发布准入保留其适用的真实证据门禁，不生成假候选、假 review record 或假部署
+receipt。普通 compile/verify 与发布准入是不同证据；不把发布包装扩成日常前置。
 
 首次/最终完整源码基线、发布准入或受影响生命周期需要正式记录时，在候选提交后
 运行 `pnpm lifecycle:admission`。文档和测试整理按上述阶段适用性验证；提交动作本身
-不触发整套测试和安装重启。该 adapter 不接收 hash 参数：它从
-当前 clean worktree 和 Git 对象计算候选身份，按候选 fingerprint 读取自己的阶段状态；
-同一候选已经通过且原始日志、产物和环境指纹仍有效的阶段写 reuse receipt 并跳过，
-只有缺失或失效的阶段才执行 `pnpm verify`、隔离安装副本的 Relay/Agent 进程启动、
-Agent 重启与信号关闭。只有命令真实通过且源码未变化
-才生成 `.appsdk/records/` 的 fix-candidate、whitebox、install、restart、blackbox 和
-pre-review 记录；完整命令输出保存在 `.appsdk-control/lifecycle-adapter/`。这些本地
-记录不代表公网/NAT、managed OpenCode、跨设备或发布验收。
+不触发整套测试和安装重启。当前 `scripts/lifecycle-adapter.mjs` 仍包含候选/指纹包装，
+这是实现现状，不是本轮新增的流程要求；其消融由 bug `28f8373` 的生命周期 owner 处理。
+不得手改 SDK 记录或伪造通过来绕开契约。有效原始回执应直接复用；缺失或失效时只执行
+受影响的验证与实际入口。完整输出沿现有 `.appsdk-control/lifecycle-adapter/` 留存，
+记录按 SDK 契约生成。这些本地记录不代表公网/NAT、managed OpenCode、跨设备或发布验收。
 
 Phase 1 Local Network MVP 的必需 live gates 是：从 `~/.agentteams/config.toml` 启动多个
 独立 daemon，经真实本地 socket 完成注册、发现、能力匹配、原子容量、一对多 Work、

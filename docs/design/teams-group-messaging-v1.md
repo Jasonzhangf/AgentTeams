@@ -1,6 +1,6 @@
 # Teams 群组通信、issue 会话与 action 执行 v1(修订版)
 
-状态:design 修订版(revision 5)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
+状态:design 修订版(revision 6)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
 注入、关闭、投递语义。审计反馈和用户确认的决定已落实到对象模型、线协议、权限、投递、
 Session 映射、关闭和分批。本文件是唯一 owner;不并存两套契约。受影响架构映射已同步:模块归属登记在
 `docs/architecture/module-registry.json` 的 `group-messaging` 条目,实现后按
@@ -19,7 +19,7 @@ owner:`control-protocol/group-wire.ts`(帧)、`server/group-registry.ts` + `serv
 
 | 编号 | 决定 |
 | --- | --- |
-| D1 | 只做 CLI。不做 MCP,不做 skill。 |
+| D1 | 初始增量只做 CLI,不做 MCP 或 skill。后续用户已授权首版 WebUI;它复用同一 typed 服务入口,不另建业务真源。 |
 | D2 | 星型拓扑。所有 agent 连 relay,hub 路由。本阶段不做点对点。 |
 | D3 | 复用现有 agentteams WSS+TLS 通道,不新造传输。 |
 | D4 | 远端消息注入本地引擎 ACP Session。只有明确行动对象的消息才启动模型。 |
@@ -51,6 +51,10 @@ unknown 不再重写;在飞取消改为 cancel_requested 到 cancelled 的两步
 revision 5:revision 4 通过契约复核。用户确认 5 项待决定事项(peer->peer、多 master、
 Vikunja 身份、非发起者关闭与显式委托、容量与保留期),第 19 节改为已确认决定;仅 ACP
 Session 映射留到第二批。
+
+revision 6:补齐首版 WebUI 恢复旧议题所需的 `issue.list` 只读协议、SESE 图和验收。
+列表读取 hub 已持久会话,不绑定外部 issue,不查询 Vikunja,不证明外部状态新鲜。
+WebUI 授权沿 `teams-group-webui-design.md`;本轮只改设计,产品修复和运行证据分别验收。
 
 ## 2. 被替代的旧语义
 
@@ -387,6 +391,7 @@ message.page    { requestId, groupId, cursor? }
 issue.create    { requestId, commitId, groupId, vikunjaProjectId, title, body }
 issue.reference { requestId, commitId, groupId, vikunjaIssueId }
 issue.query     { requestId, sessionId }
+issue.list      { requestId, groupId }
 issue.close     { requestId, commitId, sessionId, reason, conclusion, evidence }
 issue.reopen    { requestId, commitId, sessionId, reason, remainingActions? }
 action.create   { requestId, commitId, sessionId, assigneeAgentId, actionKind, reason,
@@ -415,6 +420,7 @@ message.received { groupId, message }                        // 投递推送
 message.page     { requestId, messages, revision, hasMore, gapBeforeSequence? }
 issue.changed    { sessionId, state }                        // 开闭投影变化推送
 issue.session    { requestId, session }                      // create/reference/query 回执
+issue.list       { requestId, sessions }                     // 按群读取已持久会话
 issue.closed     { requestId, session, outcome }             // closed|conflict|failed|unknown
 issue.reopened   { requestId, session, outcome }             // reopened|conflict|failed|unknown
 action.created   { requestId, action }
@@ -427,6 +433,13 @@ relay.error      { requestId?, error }
 
 每个带 requestId 的请求都有同 requestId 的回执或 relay.error;无 requestId 的帧只作推送,
 不能被当成某次请求的答复。
+
+`issue.list` 的 owner 是 hub 的 `issue-session` 持久会话账本。hub 从认证连接取得 actor,
+先验证其 scope 与当前有效群成员资格,再按 groupId 读取会话。无消息、无 action、已关闭
+会话均保留在列表中;授权范围内没有会话才返回空列表,未授权返回 typed 拒绝。
+读取不调用 `issue.reference`、Vikunja 或外部操作委派,不修改账本,不清除未决写入的
+unknown。返回的开闭状态只是最后一次持久投影;用户选中后沿 `issue.query` 刷新状态,
+新 action 准入仍执行已有的新鲜状态校验。列表成功不表示某次创建或提交已经成功。
 
 执行 owner 到 hub:
 
@@ -644,7 +657,7 @@ agentteams status
 
 ## 17. DAG
 
-十三个 SESE 图,每个图一个外部对象流。全部通过 `dagpipe graph validate`。每个图的出口是
+十四个 SESE 图,每个图一个外部对象流。每个图须通过 `dagpipe graph validate`。每个图的出口是
 typed receipt,拒绝、等待、失败、取消、未知结果都在出口收敛,不靠成功直链掩盖。
 
 ### 17.0 typed outcome 传播规则
@@ -670,6 +683,7 @@ gate 约定:对每个图各注入一次失败(授权失败、外部写失败、�
 | 投递 | `agentteams.group-message-deliver` | `group-message-deliver.graph.json` | `group.delivery.tick` | delivered(水位已推进) \| offline \| timeout \| gap \| rejected |
 | 创建 issue | `agentteams.issue-create` | `issue-create.graph.json` | `issue.create.intent` | created \| referenced \| unavailable \| unknown |
 | 读 issue | `agentteams.issue-query` | `issue-query.graph.json` | `issue.query.intent` | open \| closed \| unavailable \| unknown |
+| 列出群议题 | `agentteams.issue-list` | `issue-list.graph.json` | `issue.list.intent` | listed(可为空) \| rejected \| unavailable |
 | 创建 action | `agentteams.action-create` | `action-create.graph.json` | `action.create.intent` | accepted \| refused \| invalid \| unknown |
 | 执行 action | `agentteams.action-execute` | `action-execute.graph.json` | `action.execute.tick` | completed \| blocked \| failed \| unknown |
 | 关闭 | `agentteams.issue-close` | `issue-close.graph.json` | `issue.close.intent` | closed \| unknown \| failed \| conflict |
@@ -861,6 +875,19 @@ vikunja.webhook.request
   => vikunja.webhook.receipt
 ```
 
+### 17.14 列出群议题
+
+业务路径:校验群读取权限 → 读取该群持久会话 → 返回列表或原始错误。
+
+| 节点 | operator | owner 与验收 |
+| --- | --- | --- |
+| `authorize-reader` | `teams.authorize-group-issue-list` | hub 群准入;非有效成员或跨 scope 不得读取会话 |
+| `read-sessions` | `teams.list-group-issue-sessions` | `issue-session`;包含空议题,不写账本或调用外部服务 |
+| `decide-outcome` | `teams.decide-issue-list-outcome` | hub 回执;保留 requestId 与 typed 错误,失败不伪报空列表 |
+
+入口 `issue.list.intent`,出口 `issue.list.receipt`。失败传播沿 17.0;鉴权失败时不得读取
+会话。只读列表与外部状态查询是两个对象流,不复用 `issue-query` 的外部读取节点。
+
 ## 18. 分批与验收
 
 ### 第一批:人工可操作的 issue/action 闭环
@@ -898,6 +925,9 @@ vikunja.webhook.request
     或 failed,不丢。
 18. 外部操作回执鉴权:非该 op 被委派的成员提交同一 opId 不改变 issue 或 action 投影;
     确定失败(权限拒绝、输入无效)按 typed error 持久化,不长期挂在 unknown。
+19. 刷新或重启后通过 `issue.list` 找回群内旧议题,包括无消息、无 action 和已关闭议题;
+    非成员或跨 scope 读取被拒。列表不触发外部调用/写入,不清除 unknown,不自动创建
+    会话;选中议题后查询失败时仍拒绝新 action,不得把列表中的旧 open 当成准入依据。
 
 ### 第二批:模型执行
 
