@@ -118,21 +118,61 @@ function revisions(paths) {
   return Object.fromEntries(paths.map(path => [path, gitRevision(path)]))
 }
 
-function changedSourcePaths(changedPaths) {
-  const owned = new Set([...configPaths, ...architectureMapPaths, ...registryPaths])
-  return changedPaths.filter(path => !owned.has(path))
+// The source roots that `pnpm verify` compiles or tests. Verify consumes the
+// tracked source tree at HEAD, not the candidate diff: a source change absorbed
+// from an advancing main must invalidate a previous PASS even when base...head
+// is empty.
+const sourceRoots = [
+  'AGENTS.md',
+  '.appsdk',
+  'acp-adapter',
+  'agent',
+  'agent-host',
+  'cli',
+  'cli-adapter',
+  'config',
+  'console-host',
+  'contracts',
+  'dsh-adapter',
+  'endpoint',
+  'memory-plugin',
+  'network',
+  'opencode-adapter',
+  'packages',
+  'runtime',
+  'scripts',
+  'search-plugin',
+  'server',
+  'ui/teams-console',
+]
+
+function sourceRevisions() {
+  const excluded = new Set([...configPaths, ...architectureMapPaths, ...registryPaths])
+  const result = spawnSync('git', ['ls-tree', '-r', '-z', 'HEAD', '--', ...sourceRoots],
+    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  if (result.status !== 0) throw new Error(`${result.stderr || result.stdout}`.trim())
+  const source = {}
+  for (const entry of result.stdout.split('\0')) {
+    if (entry === '') continue
+    const tab = entry.indexOf('\t')
+    if (tab < 0) continue
+    const [, type, revision] = entry.slice(0, tab).split(' ')
+    const path = entry.slice(tab + 1)
+    if (type !== 'blob' || excluded.has(path)) continue
+    source[path] = revision
+  }
+  return source
 }
 
 function runtimeEnvironment() {
   return { node: process.version, platform: process.platform, arch: process.arch }
 }
 
-// `pnpm verify` consumes the changed source, the architecture maps, the module
-// registry, the dependency config and the pinned SDK binary. Unaffected paths
-// never enter the decision.
-function verifyStageInputs(candidateInfo) {
+// `pnpm verify` consumes the tracked source tree at HEAD, the architecture maps,
+// the module registry, the dependency config and the pinned SDK binary.
+function verifyStageInputs() {
   return {
-    source: revisions(changedSourcePaths(candidateInfo.changedPaths)),
+    source: sourceRevisions(),
     architecture_maps: revisions(architectureMapPaths),
     registry: revisions(registryPaths),
     config: revisions(configPaths),
@@ -360,7 +400,7 @@ function changedInputGroups(previousInputs, actualInputs) {
 }
 
 function runStage({ state, statePath, receiptRoot, stageId, command, logPath, candidateInfo, requiredPaths = [], actualInputs = {},
-  dependsOn = [], env = {}, stageEvidence, validateEvidence }) {
+  dependsOn = [], env = {}, stageEvidence, validateEvidence, executedExtras = {} }) {
   const previous = state.stages[stageId]
   const previousReceiptPath = previous?.receiptPath
   const previousReceipt = previousReceiptPath && existsSync(previousReceiptPath) ? readJson(previousReceiptPath) : undefined
@@ -404,7 +444,7 @@ function runStage({ state, statePath, receiptRoot, stageId, command, logPath, ca
     const evidenceRecords = stageEvidence ? stageEvidence({ output, receiptId, receiptPath, expiresAt }) : []
     for (const record of evidenceRecords) writeJson(evidencePath(record.evidence_id), record)
     const sourceEvidenceIds = evidenceRecords.map(record => record.evidence_id)
-    const receiptExtras = {}
+    const receiptExtras = { ...executedExtras }
     if (evidenceRecords[0]?.artifact_hash !== undefined) receiptExtras.artifact_hash = evidenceRecords[0].artifact_hash
     if (evidenceRecords[0]?.environment_id !== undefined) receiptExtras.environment_id = evidenceRecords[0].environment_id
     if (sourceEvidenceIds.length > 0) bindStageEvidence({ stageId, receiptPath }, sourceEvidenceIds, receiptExtras)
@@ -490,14 +530,66 @@ function writeRecord(path, value) {
   }
 }
 
-function findExistingValidationRecord(recordsRoot, candidateInfo) {
+// A validation is reusable only while every evidence id it names is still a
+// present, passing, unexpired record and its stage_execution still names the
+// current stage-store receipts. Candidate identity alone is not enough: an
+// evidence repair can leave an older validation for the same candidate behind.
+function validationEvidenceIds(validation) {
+  const ids = new Set([
+    ...(validation.whitebox_evidence_ids ?? []),
+    ...(validation.blackbox_evidence_ids ?? []),
+  ])
+  if (validation.deployment?.install_receipt_id !== undefined) ids.add(validation.deployment.install_receipt_id)
+  if (validation.deployment?.restart_receipt_id !== undefined) ids.add(validation.deployment.restart_receipt_id)
+  for (const execution of Object.values(validation.stage_execution ?? {})) {
+    for (const evidenceId of execution?.evidence_ids ?? []) ids.add(evidenceId)
+  }
+  return [...ids]
+}
+
+function validationEvidenceValid(validation) {
+  const evidenceIds = validationEvidenceIds(validation)
+  if (evidenceIds.length === 0) return false
+  for (const evidenceId of evidenceIds) {
+    const path = evidencePath(evidenceId)
+    if (!existsSync(path)) return false
+    const record = readJson(path)
+    const expiresAt = Date.parse(record.expires_at)
+    if (record.evidence_id !== evidenceId ||
+        record.result !== 'pass' ||
+        !Number.isFinite(expiresAt) ||
+        expiresAt <= Date.now()) {
+      return false
+    }
+  }
+  return true
+}
+
+function validationBindsCurrentStages(validation, stageState) {
+  for (const stageId of ['pnpm-verify', 'pnpm-smoke-installed']) {
+    const stage = stageState.stages?.[stageId]
+    const execution = validation.stage_execution?.[stageId]
+    if (stage?.receiptId === undefined || execution === undefined) return false
+    const receiptId = execution.mode === 'reused' ? execution.source_receipt_id : execution.receipt_id
+    if (receiptId !== stage.receiptId) return false
+    const executionEvidenceIds = execution.evidence_ids ?? execution.source_evidence_ids ?? []
+    if (JSON.stringify(executionEvidenceIds) !== JSON.stringify(stage.evidenceIds ?? [])) return false
+  }
+  return true
+}
+
+function findExistingValidationRecord(recordsRoot, candidateInfo, stageState) {
   if (!existsSync(recordsRoot)) return undefined
   for (const name of readdirSync(recordsRoot)) {
     if (!name.startsWith(`pre-review-validation-record-${moduleId}`)) continue
     const path = join(recordsRoot, name)
     try {
       const record = readJson(path)
-      if (record.candidate_commit === candidateInfo.head && record.candidate_tree_hash === candidateInfo.tree && record.result === 'pass') {
+      if (record.candidate_commit === candidateInfo.head &&
+          record.candidate_tree_hash === candidateInfo.tree &&
+          record.result === 'pass' &&
+          validationBindsCurrentStages(record, stageState) &&
+          validationEvidenceValid(record)) {
         return path
       }
     } catch {
@@ -539,8 +631,9 @@ function main() {
   const stageStatePath = join(stageRoot, `${issueId}.json`)
   const stageState = loadStageState(stageStatePath, candidateInfo)
   const currentArtifactPath = join(root, 'generated', 'modules', moduleId, 'module.compiled.json')
-  const u1ReceiptPath = u1InstalledReceiptPath(candidateInfo.head)
-  const verifyInputs = verifyStageInputs(candidateInfo)
+  const previousSmokeStage = stageState.stages['pnpm-smoke-installed']
+  const u1ReceiptPath = previousSmokeStage?.installedReceiptPath ?? u1InstalledReceiptPath(candidateInfo.head)
+  const verifyInputs = verifyStageInputs()
   const attempt = `attempt-${Date.now()}-${randomUUID()}`
   const recordsRoot = join(root, '.appsdk', 'records')
   const validationPath = join(recordsRoot, `pre-review-validation-record-${moduleId}-${candidateInfo.head}-${attempt}.json`)
@@ -681,6 +774,7 @@ function main() {
         join(root, 'scripts', 'runtime-smoke.mjs'), join(root, 'package.json'), join(root, 'pnpm-workspace.yaml')],
       actualInputs: smokeInputs,
       env: { AGENTTEAMS_U1_INSTALLED_RECEIPT_PATH: u1ReceiptPath },
+      executedExtras: { installed_receipt_path: u1ReceiptPath },
       stageEvidence: ({ output, receiptId, receiptPath, expiresAt }) => {
         const receiptReference = parseInstalledReceiptReference(output)
         if (receiptReference.path !== u1ReceiptPath) {
@@ -753,8 +847,9 @@ installed lifecycle generations ${installedLifecycle.lifecycle.start.generation}
       },
       validateEvidence: receipt => {
         try {
+          const installedReceiptPath = receipt.installed_receipt_path ?? u1ReceiptPath
           const receiptReference = parseInstalledReceiptReference(readFileSync(receipt.log_path, 'utf8'))
-          if (receiptReference.path !== u1ReceiptPath) return false
+          if (receiptReference.path !== installedReceiptPath) return false
           installedLifecycleReceipt({
             receiptPath: receiptReference.path,
             expectedReceiptSha256: receiptReference.sha256,
@@ -767,11 +862,22 @@ installed lifecycle generations ${installedLifecycle.lifecycle.start.generation}
         return validateStageEvidence(receipt, smokeEvidenceSpec)
       } })
 
+    // Persist the installed receipt path on the stage record when the stage first
+    // executes. Later reuse and re-execution read this stored path instead of
+    // deriving a new one from the current HEAD commit.
+    if (stageState.stages['pnpm-smoke-installed']?.installedReceiptPath !== u1ReceiptPath) {
+      stageState.stages['pnpm-smoke-installed'] = {
+        ...stageState.stages['pnpm-smoke-installed'],
+        installedReceiptPath: u1ReceiptPath,
+      }
+      saveStageState(stageStatePath, stageState)
+    }
+
     // A repeated entry for a candidate that already has a committed pre-review
     // validation runs no command: both stages settled from their own stored
     // inputs and receipts, so the completed validation is returned instead of
     // writing a second record for the same candidate.
-    const committedValidationPath = findExistingValidationRecord(recordsRoot, candidateInfo)
+    const committedValidationPath = findExistingValidationRecord(recordsRoot, candidateInfo, stageState)
     if (committedValidationPath !== undefined && verifyStage.reused && smokeStage.reused) {
       const transactionPath = join(controlRoot, 'transaction.json')
       writeJson(transactionPath, { ...readJson(transactionPath), state: 'idempotent', completed_at: now() }, false)

@@ -6191,6 +6191,11 @@ async function runBB13(context) {
         'commit', '--allow-empty', '--quiet', '-m', 'bb13 empty commit'], { cwd: fixtureRoot,
         logPath: join(evidenceDir, 'empty-commit.json') })
       const before = capture('empty-commit-reuse', inputHashes([mapRelPath]))
+      const { delta } = runPhase('empty-commit-reuse', before)
+      expectDelta('empty-commit-reuse', delta, { verify: 0, smoke: 0 })
+      expectReused('empty-commit-reuse', delta, 'pnpm-verify', before.stages['pnpm-verify'])
+      const smokeReuse = expectReused('empty-commit-reuse', delta, 'pnpm-smoke-installed',
+        before.stages['pnpm-smoke-installed'])
       const storedReceiptPath = before.stages['pnpm-smoke-installed']?.installedReceiptPath
       assert(typeof storedReceiptPath === 'string' && storedReceiptPath.length > 0,
         'BB13 smoke stage did not persist its installed receipt path')
@@ -6199,18 +6204,30 @@ async function runBB13(context) {
         before.candidate.head_commit, 'installed-runtime-smoke.receipt.json')
       assert(storedReceiptPath !== headDerivedPath,
         'BB13 smoke reuse path is still derived from the current HEAD commit')
-      const { delta } = runPhase('empty-commit-reuse', before)
-      expectDelta('empty-commit-reuse', delta, { verify: 0, smoke: 0 })
-      expectReused('empty-commit-reuse', delta, 'pnpm-verify', before.stages['pnpm-verify'])
-      const smokeReuse = expectReused('empty-commit-reuse', delta, 'pnpm-smoke-installed',
-        before.stages['pnpm-smoke-installed'])
       assert(smokeReuse.installedReceiptPath === storedReceiptPath,
         `BB13 smoke reuse lost its stored installed receipt path ${storedReceiptPath}`)
       observations.at(-1).installed_receipt_path = storedReceiptPath
       observations.at(-1).head_derived_receipt_path = headDerivedPath
     }
 
-    // (6) Main-side source change with an empty candidate diff: origin/main
+    // (6) Main-side baseline with an empty candidate diff: origin/main points at
+    // the current HEAD, so the pre-fix adapter records an empty changed-path
+    // source set. This is the precondition for the counterexample below; without
+    // it the pre-fix adapter would invalidate only because its stored source set
+    // happened to be non-empty.
+    {
+      const head = runChecked('git', ['rev-parse', 'HEAD'], { cwd: fixtureRoot,
+        logPath: join(evidenceDir, 'main-baseline-head.json') }).stdout.trim()
+      runChecked('git', ['update-ref', 'refs/remotes/origin/main', head], { cwd: fixtureRoot,
+        logPath: join(evidenceDir, 'main-baseline-ref.json') })
+      const before = capture('main-baseline-empty-diff', inputHashes([mapRelPath]))
+      assert(before.candidate.head_commit === head && before.candidate.base_commit === head,
+        `BB13 main baseline did not make the candidate diff empty: ${JSON.stringify(before.candidate)}`)
+      runPhase('main-baseline-empty-diff', before)
+      observations.at(-1).candidate_diff_paths = []
+    }
+
+    // (7) Main-side source change with an empty candidate diff: origin/main
     // advances past a source change and the candidate absorbs that same commit,
     // so base...head is empty while the consumed source tree changed. Verify must
     // invalidate from the tracked source at HEAD, not from the empty candidate
@@ -6238,7 +6255,7 @@ async function runBB13(context) {
       observations.at(-1).candidate_diff_paths = candidateDiff.split('\n').filter(Boolean)
     }
 
-    // (7) Interrupted recovery re-entry: the validation record is gone while stage
+    // (8) Interrupted recovery re-entry: the validation record is gone while stage
     // state and receipts survive, so both unchanged stages reuse their original
     // valid receipts instead of re-executing.
     {
@@ -6256,7 +6273,7 @@ async function runBB13(context) {
       }
     }
 
-    // (8) Source change: the verify stage consumes the tracked source tree, so it
+    // (9) Source change: the verify stage consumes the tracked source tree, so it
     // invalidates; the produced artifact differs, so the dependent smoke stage
     // invalidates too and both execute. The reuse path is not taken.
     {
@@ -6272,7 +6289,7 @@ async function runBB13(context) {
       expectExecuted('source-change', delta, 'pnpm-smoke-installed', { beforeStage: before.stages['pnpm-smoke-installed'] })
     }
 
-    // (9) Architecture map input change: a legal key-order reorder of a real
+    // (10) Architecture map input change: a legal key-order reorder of a real
     // docs/architecture map changes the bytes without changing the parsed
     // content, so verify invalidates on the map input only. The map bytes are a
     // declared module contract, so the produced artifact changes and the
@@ -6294,7 +6311,7 @@ async function runBB13(context) {
       }
     }
 
-    // (10) Module registry change: the registry is verify's admission owner for
+    // (11) Module registry change: the registry is verify's admission owner for
     // module scope, so a byte change invalidates the registry input only; the
     // produced artifact and its dependent smoke stage re-verify in turn.
     {
@@ -6314,7 +6331,7 @@ async function runBB13(context) {
       }
     }
 
-    // (11) Config change: both stages consume the dependency config, so both
+    // (12) Config change: both stages consume the dependency config, so both
     // invalidate on that input. The artifact also changes, so smoke names both
     // affected inputs of its own decision.
     {
@@ -6330,7 +6347,7 @@ async function runBB13(context) {
       expectExecuted('config-change', delta, 'pnpm-smoke-installed', { beforeStage: before.stages['pnpm-smoke-installed'] })
     }
 
-    // (12) Artifact change: no consumed input changed, but the required compiled
+    // (13) Artifact change: no consumed input changed, but the required compiled
     // artifact bytes no longer match the stored receipt, so verify invalidates its
     // own stored evidence and re-verifies by recompiling; the dependent smoke
     // stage then re-verifies the artifact it consumes.
