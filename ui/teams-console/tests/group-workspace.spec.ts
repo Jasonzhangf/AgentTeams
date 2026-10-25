@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors, groupPhase, initialGroupWorkspaceState, intentKeyOf, isReadFrame, mergeMessages, recentGroupId, withCommitId, assignableMembers, grantTargets, invitableAgents } from '../src/state/group-workspace.ts'
+import { applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors, groupPhase, initialGroupWorkspaceState, intentKeyOf, isReadFrame, mergeMessages, recentGroupId, withCommitId, assignableMembers, canRefuseAction, canReportAction, commandTargets, grantTargets, invitableAgents, requestTargets } from '../src/state/group-workspace.ts'
 
 const reply = {
   kind: 'group.list', requestId: 'r1',
@@ -218,11 +218,54 @@ describe('command edge helpers', () => {
     expect(grantTargets(build([member('agent-a', 'master'), member('agent-b', 'peer')], 'agent-b'), 'agent-a')).toEqual([])
   })
 
-  it('assigns work only to members the acting agent already commands', () => {
+  it('offers only members that share an explicit edge with the acting agent', () => {
     const group = build([member('agent-a', 'master', ['agent-b']), member('agent-b', 'peer'), member('agent-c', 'peer')])
     expect(assignableMembers(group, 'agent-a')).toEqual(['agent-b'])
-    expect(assignableMembers(group, 'agent-b')).toEqual([])
+    // The peer requests the master through the same edge; an edgeless peer is absent.
+    expect(assignableMembers(group, 'agent-b')).toEqual(['agent-a'])
+    expect(assignableMembers(group, 'agent-c')).toEqual([])
     expect(assignableMembers(group, undefined)).toEqual([])
+  })
+
+  it('derives both assign and request targets from the same directional edge', () => {
+    const group = build([member('agent-a', 'master', ['agent-b']), member('agent-b', 'peer')])
+    // The master commands the peer, so the master can assign to the peer.
+    expect(assignableMembers(group, 'agent-a')).toEqual(['agent-b'])
+    // The same edge also lets the peer request the master even though the peer's own
+    // mastersOf list is empty.
+    expect(assignableMembers(group, 'agent-b')).toEqual(['agent-a'])
+    expect(commandTargets(group, 'agent-a')).toEqual(['agent-b'])
+    expect(requestTargets(group, 'agent-a')).toEqual([])
+    expect(commandTargets(group, 'agent-b')).toEqual([])
+    expect(requestTargets(group, 'agent-b')).toEqual(['agent-a'])
+  })
+
+  it('lets only the assignee report a pending or in-progress action', () => {
+    const group = build([member('agent-a', 'master', ['agent-b']), member('agent-b', 'peer')])
+    const action = (state: 'pending' | 'in_progress' | 'blocked') => ({
+      actionId: 'a1', commitId: 'c1', sessionId: 's1', initiatorAgentId: 'agent-a',
+      assigneeAgentId: 'agent-b', kind: 'reply' as const, reason: 'work',
+      expectedResult: 'result', replyRequired: false, state, createdAt: 'now',
+    })
+    expect(canReportAction(group, action('pending'), 'agent-b')).toBe(true)
+    expect(canReportAction(group, action('in_progress'), 'agent-b')).toBe(true)
+    // The initiator is not the owner of the report; a terminal action has no report entry.
+    expect(canReportAction(group, action('pending'), 'agent-a')).toBe(false)
+    expect(canReportAction(group, action('blocked'), 'agent-b')).toBe(false)
+    expect(canReportAction(group, action('pending'), undefined)).toBe(false)
+  })
+
+  it('lets a master refuse a peer request only through its own explicit edge', () => {
+    const group = build([member('agent-a', 'master', ['agent-b']), member('agent-b', 'peer')])
+    const request = {
+      actionId: 'a1', commitId: 'c1', sessionId: 's1', initiatorAgentId: 'agent-b',
+      assigneeAgentId: 'agent-a', kind: 'reply' as const, reason: 'please review',
+      expectedResult: 'result', replyRequired: true, state: 'pending' as const, createdAt: 'now',
+    }
+    expect(canRefuseAction(group, request, 'agent-a')).toBe(true)
+    // The peer receiving a master assignment holds no edge back to the master.
+    expect(canRefuseAction(group, { ...request, initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-b' }, 'agent-b')).toBe(false)
+    expect(canRefuseAction(group, { ...request, state: 'in_progress' }, 'agent-a')).toBe(false)
   })
 
   it('invites declared agents that are not already active members', () => {

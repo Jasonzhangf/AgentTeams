@@ -175,6 +175,45 @@ const stopEntries = [
 
 const closedIssueSession = { ...issueSession, state: 'closed', closedAt: '2026-10-20T00:00:05.000Z' }
 
+const peerGroup = {
+  ...group,
+  members: [
+    { agentId: 'agent-a', role: 'master', mastersOf: ['agent-b'], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
+    { agentId: 'agent-b', role: 'peer', mastersOf: [], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
+    { agentId: 'agent-c', role: 'peer', mastersOf: [], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
+  ],
+}
+
+const actionBase = {
+  actionId: 'a1', commitId: 'c1', sessionId: 's1', initiatorAgentId: 'agent-a',
+  assigneeAgentId: 'agent-b', kind: 'reply', reason: 'assignment reason', expectedResult: 'answer',
+  replyRequired: true, state: 'pending', createdAt: '2026-10-20T00:00:00.000Z',
+}
+
+const reportedAction = {
+  ...actionBase,
+  state: 'blocked',
+  report: {
+    report: 'blocked',
+    reason: 'waiting on credentials',
+    evidence: { log: 'auth-401' },
+    reportedAt: '2026-10-20T00:02:00.000Z',
+  },
+}
+
+const requestAction = {
+  ...actionBase,
+  initiatorAgentId: 'agent-b',
+  assigneeAgentId: 'agent-a',
+  reason: 'peer request reason',
+}
+
+const refusedAction = {
+  ...requestAction,
+  state: 'refused',
+  refusal: { reason: 'no capacity this week', refusedAt: '2026-10-20T00:03:00.000Z' },
+}
+
 const controllerScript = `
   const calls = { actor: [], select: [], send: [], retry: [], confirm: [], openIssue: [] }
   const controller = {
@@ -322,6 +361,12 @@ ${controllerScript}
     document.body.dataset.actionDiagnosticsCarryIds = String(
       actions.querySelector('[data-group-action-id="a-old"]') !== null
       && actions.querySelector('[data-group-action-commit="commit-old"]') !== null)
+    // A1: the issue panel keeps its stable session selector but never shows the internal id.
+    const issueSummary = actions.querySelector('[data-group-issue-session]')
+    document.body.dataset.issueSummaryNoSessionId = String(
+      issueSummary !== null
+      && !issueSummary.textContent.includes('s1')
+      && issueSummary.textContent.includes('p1/i1'))
 
     // 12. No issue: the panel states the missing step and shows no group-wide action list.
     const noissue = render('noissue', ${JSON.stringify(state({ issue: null, issueStatus: 'idle', actions: [], actionStatus: 'empty' }))})
@@ -680,6 +725,109 @@ ${controllerScript}
   </script>
 </body></html>`
 
+/**
+ * A human owner reads the report or refusal the owner actually stored, never the
+ * creation-time reason standing in for it. Permission markers show who may act.
+ */
+const actionReportPage = `<!doctype html>
+<html><body>
+  <div id="reported"></div>
+  <div id="refused"></div>
+  <div id="request"></div>
+  <div id="pending"></div>
+  <script>
+${script}
+${controllerScript}
+    const render = (id, next) => {
+      STATE = next
+      renderConsole(document.getElementById(id), controller)
+      return document.getElementById(id)
+    }
+    const reported = render('reported', ${JSON.stringify(state({
+      groups: [peerGroup],
+      actorId: 'agent-b',
+      issue: issueSession,
+      issueStatus: 'ready',
+      issues: [issueSession],
+      issueListStatus: 'ready',
+      actions: [reportedAction],
+      actionStatus: 'ready',
+    }))})
+    const refused = render('refused', ${JSON.stringify(state({
+      groups: [peerGroup],
+      actorId: 'agent-a',
+      issue: issueSession,
+      issueStatus: 'ready',
+      issues: [issueSession],
+      issueListStatus: 'ready',
+      actions: [refusedAction],
+      actionStatus: 'ready',
+    }))})
+    const request = render('request', ${JSON.stringify(state({
+      groups: [peerGroup],
+      actorId: 'agent-a',
+      issue: issueSession,
+      issueStatus: 'ready',
+      issues: [issueSession],
+      issueListStatus: 'ready',
+      actions: [requestAction],
+      actionStatus: 'ready',
+    }))})
+    const pending = render('pending', ${JSON.stringify(state({
+      groups: [peerGroup],
+      actorId: 'agent-b',
+      issue: issueSession,
+      issueStatus: 'ready',
+      issues: [issueSession],
+      issueListStatus: 'ready',
+      actions: [actionBase],
+      actionStatus: 'ready',
+    }))})
+    const text = (root, selector) => root.querySelector(selector)?.textContent ?? ''
+    const item = (root, id) => root.querySelector('[data-group-action="' + id + '"]')
+    const targets = root => {
+      const select = root.querySelector('[data-group-input="action-assignee"]')
+      return select === null ? '' : [...select.options].map(option => option.value).join(',')
+    }
+    const reportBlock = reported.querySelector('[data-group-action-report="a1"]')
+    document.body.dataset.reportVisible = String(reportBlock !== null)
+    document.body.dataset.reportKind = reportBlock?.getAttribute('data-group-action-report-kind') ?? ''
+    document.body.dataset.reportReason = reportBlock
+      ?.querySelector('[data-group-action-report-reason]')?.getAttribute('data-group-action-report-reason') ?? ''
+    document.body.dataset.reportEvidence = String(text(reportBlock, '.teams-group-action-report-evidence').includes('auth-401'))
+    document.body.dataset.reportKeepsCreationReason = String(
+      text(item(reported, 'a1'), '.teams-group-action-reason') === 'assignment reason')
+    // A blocked action already has its terminal report; reporting again would revive it.
+    document.body.dataset.reportedOwnerCannotReportAgain = String(
+      item(reported, 'a1')?.getAttribute('data-group-action-report-permitted') === 'false')
+    document.body.dataset.reportOwnerCannotRefuse = String(
+      item(reported, 'a1')?.getAttribute('data-group-action-refuse-permitted') === 'false')
+    // A fresh human assignment is pending, so the assignee can report blocked or failed.
+    document.body.dataset.pendingOwnerMayReport = String(
+      item(pending, 'a1')?.getAttribute('data-group-action-report-permitted') === 'true')
+    document.body.dataset.pendingOwnerCannotRefuse = String(
+      item(pending, 'a1')?.getAttribute('data-group-action-refuse-permitted') === 'false')
+
+    const refusalBlock = refused.querySelector('[data-group-action-refusal="a1"]')
+    document.body.dataset.refusalVisible = String(refusalBlock !== null)
+    document.body.dataset.refusalReason = refusalBlock
+      ?.querySelector('[data-group-action-refusal-reason]')?.getAttribute('data-group-action-refusal-reason') ?? ''
+    document.body.dataset.refusalRefusedAt = refusalBlock
+      ?.querySelector('[data-group-action-refused-at]')?.getAttribute('data-group-action-refused-at') ?? ''
+    document.body.dataset.refusalKeepsCreationReason = String(
+      text(item(refused, 'a1'), '.teams-group-action-reason') === 'peer request reason')
+
+    // Actor B is the peer: the master's edge is offered in the request direction only.
+    document.body.dataset.peerRequestTargets = targets(reported)
+    // Actor A is the master: the same edge is offered in the command direction only.
+    document.body.dataset.masterCommandTargets = targets(request)
+    document.body.dataset.requestMasterMayRefuse = String(
+      item(request, 'a1')?.getAttribute('data-group-action-refuse-permitted') === 'true')
+    document.body.dataset.requestMasterMayReportAsAssignee = String(
+      item(request, 'a1')?.getAttribute('data-group-action-report-permitted') === 'true')
+  </script>
+</body></html>`
+
 describe('group workspace DOM contract in a real DOM', () => {
   it('keeps a narrow 390px viewport free of horizontal overflow with a visible composer', { timeout: 30_000 }, () => {
     const narrow = measureLayout('390,844')
@@ -758,6 +906,31 @@ describe('group workspace DOM contract in a real DOM', () => {
     }
   })
 
+  it('renders the stored action report and refusal with the correct actors', { timeout: 30_000 }, () => {
+    const directory = mkdtempSync(join(tmpdir(), 'teams-console-action-report-'))
+    onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })
+    const file = join(directory, 'action-report.html')
+    writeFileSync(file, actionReportPage)
+    const output = runChrome(file)
+    expect(output).toContain('data-report-kind="blocked"')
+    expect(output).toContain('data-report-reason="waiting on credentials"')
+    expect(output).toContain('data-refusal-reason="no capacity this week"')
+    expect(output).toContain('data-refusal-refused-at="2026-10-20T00:03:00.000Z"')
+    expect(output).toContain('data-report-visible="true"')
+    expect(output).toContain('data-report-evidence="true"')
+    expect(output).toContain('data-report-keeps-creation-reason="true"')
+    expect(output).toContain('data-reported-owner-cannot-report-again="true"')
+    expect(output).toContain('data-report-owner-cannot-refuse="true"')
+    expect(output).toContain('data-pending-owner-may-report="true"')
+    expect(output).toContain('data-pending-owner-cannot-refuse="true"')
+    expect(output).toContain('data-refusal-visible="true"')
+    expect(output).toContain('data-refusal-keeps-creation-reason="true"')
+    expect(output).toContain('data-peer-request-targets="agent-a"')
+    expect(output).toContain('data-master-command-targets="agent-b"')
+    expect(output).toContain('data-request-master-may-refuse="true"')
+    expect(output).toContain('data-request-master-may-report-as-assignee="true"')
+  })
+
   it('renders every group phase and keeps the actor choice reachable', { timeout: 30_000 }, () => {
     const directory = mkdtempSync(join(tmpdir(), 'teams-console-groups-'))
     onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })
@@ -801,6 +974,7 @@ describe('group workspace DOM contract in a real DOM', () => {
       'data-action-finished-folded',
       'data-action-head-has-no-ids',
       'data-action-diagnostics-carry-ids',
+      'data-issue-summary-no-session-id',
       'data-action-no-issue-hint',
       'data-action-no-issue-no-list',
       'data-issue-list-marker',

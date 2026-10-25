@@ -51,6 +51,13 @@ describe('group request client', () => {
     expect(outcome).toEqual({ kind: 'refused', code: 'UPSTREAM_ERROR', message: 'bad owner code' })
   })
 
+  it('maps an HTTP-200 owner RESULT_UNKNOWN answer to the typed unknown outcome', async () => {
+    const fetchImpl = (async () => okJson({ ok: false, error: { code: 'RESULT_UNKNOWN', message: 'owner wrote, receipt lost' } })) as typeof fetch
+    const client = createGroupRequestClient({ fetchImpl })
+    const outcome = await client.requestGroup('agent-a', { ...groupListFrame })
+    expect(outcome).toEqual({ kind: 'unknown', code: 'RESULT_UNKNOWN', message: 'owner wrote, receipt lost' })
+  })
+
   it('rejects a malformed local frame before it leaves the UI', async () => {
     let called = false
     const fetchImpl = (async () => { called = true; return okJson({}) }) as typeof fetch

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { TeamsConsoleController } from '../src/state/controller.ts'
 import { createGroupRequestClient, withGroupRequests } from '../src/client/group-client.ts'
 import type { GroupRequestOutcome, GroupRequestSender } from '../src/client/group-client.ts'
-import type { GroupWireRequest } from '../../../packages/shared/src/group-wire.ts'
+import type { Action, GroupWireRequest } from '../../../packages/shared/src/group-wire.ts'
 
 /**
  * The controller drives the real group port. A fake transport is used only to script the
@@ -1157,5 +1157,252 @@ describe('group request context isolation', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('switches context when a poll removes the selected group and drops its delayed read', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = deferredClient()
+      const g1 = { ...twoGroups.groups[0]!, createdAt: '2026-10-21T00:00:00.000Z' }
+      const g2 = twoGroups.groups[1]!
+      const issue = { sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+      const g1Message = {
+        messageId: 'm-g1', commitId: 'c-g1', sequence: 1, groupId: 'g1', fromAgentId: 'agent-a',
+        targetAgentIds: ['agent-a'], replyRequired: false, body: 'g1 history', sentAt: 'now',
+      }
+      let groups = [g1, g2]
+      harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { kind: 'group.list', requestId: frame.requestId, groups } }))
+      harness.scripts.set('message.page', frame => ({
+        kind: 'reply',
+        reply: {
+          kind: 'message.page', requestId: frame.requestId, revision: 1, hasMore: false,
+          messages: frame.kind === 'message.page' && frame.groupId === 'g1' ? [g1Message] : [],
+        },
+      }))
+      harness.scripts.set('issue.list', frame => ({
+        kind: 'reply',
+        reply: {
+          kind: 'issue.list', requestId: frame.requestId,
+          sessions: frame.kind === 'issue.list' && frame.groupId === 'g1' ? [issue] : [],
+        },
+      }))
+      harness.scripts.set('issue.query', frame => ({ kind: 'reply', reply: { kind: 'issue.session', requestId: frame.requestId, session: issue } }))
+      harness.scripts.set('action.list', frame => ({ kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: [] } }))
+      harness.scripts.set('message.send', frame => ({ kind: 'reply', reply: { kind: 'message.sent', requestId: frame.requestId, messageId: 'm-sent', sequence: 2 } }))
+      const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+      controller.openConsole()
+      await controller.refresh()
+      controller.setGroupActor('agent-a')
+      await vi.advanceTimersByTimeAsync(0)
+      await controller.loadGroups()
+      expect(controller.getSnapshot().group.selectedGroupId).toBe('g1')
+      expect(controller.getSnapshot().group.messages.map(message => message.messageId)).toContain('m-g1')
+
+      controller.setGroupComposer('draft for g1')
+      // An identical poll is not a selection or membership change, so it must not rebuild
+      // the page or replace the state that owns the current draft.
+      const stable = controller.getSnapshot().group
+      await vi.advanceTimersByTimeAsync(4500)
+      expect(controller.getSnapshot().group).toBe(stable)
+
+      // One read of g1 is still in flight when the poll answers.
+      harness.defer.add('issue.query')
+      const slowIssue = controller.openIssue('s1')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(harness.pending.some(entry => entry.frame.kind === 'issue.query')).toBe(true)
+      // A g1 write is also in flight; it must be parked, not lost.
+      harness.defer.add('message.send')
+      const slowSend = controller.sendGroupMessage()
+      await vi.advanceTimersByTimeAsync(0)
+      const write = harness.sent.filter(frame => frame.kind === 'message.send').at(-1)!
+      expect(harness.pending.some(entry => entry.frame.kind === 'message.send')).toBe(true)
+
+      // The poll removes g1, so the owner-selected group becomes g2.
+      groups = [g2]
+      await vi.advanceTimersByTimeAsync(4500)
+      expect(controller.getSnapshot().group.selectedGroupId).toBe('g2')
+
+      harness.defer.delete('issue.query')
+      harness.defer.delete('message.send')
+      await harness.releaseOne(frame => frame.kind === 'issue.query')
+      await harness.releaseOne(frame => frame.kind === 'message.send')
+      await slowIssue
+      await slowSend
+
+      const after = controller.getSnapshot().group
+      expect(after.selectedGroupId).toBe('g2')
+      // The delayed g1 read and the late g1 write answer cannot repaint g2.
+      expect(after.issue).toBeNull()
+      expect(after.messages.map(message => message.messageId)).not.toContain('m-g1')
+      expect(after.composer).toBe('')
+
+      // Returning to g1 restores its draft and the original write identity.
+      groups = [g1, g2]
+      await vi.advanceTimersByTimeAsync(4500)
+      await controller.selectGroup('g1')
+      const restored = controller.getSnapshot().group
+      expect(restored.selectedGroupId).toBe('g1')
+      expect(restored.composer).toBe('draft for g1')
+      expect(restored.retryable?.intentKey).toBe('message.send:g1:draft for g1')
+      expect(restored.retryable?.requestId).toBe(write.requestId)
+      expect(restored.retryable?.commitId).toBe(write.commitId)
+      controller.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not rebuild the page when a poll repeats the same selection and members', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = deferredClient()
+      harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { kind: 'group.list', requestId: frame.requestId, groups: [twoGroups.groups[0]!] } }))
+      harness.scripts.set('issue.list', frame => ({ kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [] } }))
+      const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+      controller.openConsole()
+      await controller.refresh()
+      controller.setGroupActor('agent-a')
+      await vi.advanceTimersByTimeAsync(0)
+      await controller.loadGroups()
+      await vi.advanceTimersByTimeAsync(0)
+      const sentBeforePoll = harness.sent.filter(frame => frame.kind === 'group.list').length
+      let notifications = 0
+      const unsubscribe = controller.subscribe(() => { notifications += 1 })
+      await vi.advanceTimersByTimeAsync(4500)
+      expect(harness.sent.filter(frame => frame.kind === 'group.list').length).toBeGreaterThan(sentBeforePoll)
+      expect(notifications).toBe(0)
+      unsubscribe()
+      controller.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports a pending action blocked with reason and evidence, and keeps it after a refresh', async () => {
+    const agentB = { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const, currentSessionId: 's2' }
+    const harness = deferredClient([...projection.agents, agentB])
+    const group = {
+      groupId: 'g1', name: 'Alpha', ownerAgentId: 'agent-a', createdAt: '2026-10-20T00:00:00.000Z',
+      members: [
+        { agentId: 'agent-a', role: 'master' as const, mastersOf: ['agent-b'], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
+        { agentId: 'agent-b', role: 'peer' as const, mastersOf: [], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
+      ],
+    }
+    const issue = { sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const pending = {
+      actionId: 'a1', commitId: 'c1', sessionId: 's1', initiatorAgentId: 'agent-a',
+      assigneeAgentId: 'agent-b', kind: 'reply' as const, reason: 'assignment reason',
+      expectedResult: 'answer', replyRequired: true, state: 'pending' as const, createdAt: 'now',
+    }
+    const reported = {
+      ...pending, state: 'blocked' as const,
+      report: { report: 'blocked' as const, reason: 'waiting on credentials', evidence: { log: 'auth-401' }, reportedAt: '2026-10-20T00:02:00.000Z' },
+    }
+    let listed: readonly unknown[] = [pending]
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { kind: 'group.list', requestId: frame.requestId, groups: [group] } }))
+    harness.scripts.set('message.page', frame => ({ kind: 'reply', reply: { kind: 'message.page', requestId: frame.requestId, messages: [], revision: 1, hasMore: false } }))
+    harness.scripts.set('issue.list', frame => ({ kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [issue] } }))
+    harness.scripts.set('issue.query', frame => ({ kind: 'reply', reply: { kind: 'issue.session', requestId: frame.requestId, session: issue } }))
+    harness.scripts.set('action.list', frame => ({ kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: listed as Action[] } }))
+    harness.scripts.set('action.report', frame => ({
+      kind: 'reply',
+      reply: { kind: 'action.updated', requestId: frame.requestId, action: reported },
+    }))
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    controller.setGroupActor('agent-b')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await controller.loadGroups()
+    await controller.openIssue('s1')
+    expect(controller.getSnapshot().group.actions[0]?.state).toBe('pending')
+
+    expect(await controller.reportAction('a1', 'blocked', 'waiting on credentials', '{"log":"auth-401"}')).toBe(true)
+    const sent = harness.sent.filter(frame => frame.kind === 'action.report').at(-1)
+    expect(sent).toMatchObject({ actionId: 'a1', report: 'blocked', reason: 'waiting on credentials', evidence: '{"log":"auth-401"}' })
+    const afterReport = controller.getSnapshot().group.actions[0]!
+    expect(afterReport.state).toBe('blocked')
+    expect(afterReport.reason).toBe('assignment reason')
+    expect(afterReport.report).toMatchObject({ report: 'blocked', reason: 'waiting on credentials' })
+
+    // The owner's own read carries the report; the refresh shows it again, unchanged.
+    listed = [reported]
+    await controller.openIssue('s1')
+    const afterRefresh = controller.getSnapshot().group.actions[0]!
+    expect(afterRefresh.report).toEqual(reported.report)
+    expect(afterRefresh.reason).toBe('assignment reason')
+
+    // A non-assignee cannot report: no frame leaves the UI.
+    controller.setGroupActor('agent-a')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await controller.loadGroups()
+    await controller.openIssue('s1')
+    const before = harness.sent.filter(frame => frame.kind === 'action.report').length
+    expect(await controller.reportAction('a1', 'failed', 'not mine')).toBe(false)
+    expect(harness.sent.filter(frame => frame.kind === 'action.report')).toHaveLength(before)
+    expect(controller.getSnapshot().group.error).toMatchObject({ code: 'FORBIDDEN' })
+    controller.destroy()
+  })
+
+  it('lets only an edged master refuse a peer request and shows the persisted refusal', async () => {
+    const agentB = { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const, currentSessionId: 's2' }
+    const harness = deferredClient([...projection.agents, agentB])
+    const group = {
+      groupId: 'g1', name: 'Alpha', ownerAgentId: 'agent-a', createdAt: '2026-10-20T00:00:00.000Z',
+      members: [
+        { agentId: 'agent-a', role: 'master' as const, mastersOf: ['agent-b'], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
+        { agentId: 'agent-b', role: 'peer' as const, mastersOf: [], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
+      ],
+    }
+    const issue = { sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v1', initiatorAgentId: 'agent-b', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const request = {
+      actionId: 'a1', commitId: 'c1', sessionId: 's1', initiatorAgentId: 'agent-b',
+      assigneeAgentId: 'agent-a', kind: 'reply' as const, reason: 'peer request reason',
+      expectedResult: 'review', replyRequired: true, state: 'pending' as const, createdAt: 'now',
+    }
+    const refused = {
+      ...request, state: 'refused' as const,
+      refusal: { reason: 'no capacity this week', refusedAt: '2026-10-20T00:03:00.000Z' },
+    }
+    let listed: readonly unknown[] = [request]
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { kind: 'group.list', requestId: frame.requestId, groups: [group] } }))
+    harness.scripts.set('message.page', frame => ({ kind: 'reply', reply: { kind: 'message.page', requestId: frame.requestId, messages: [], revision: 1, hasMore: false } }))
+    harness.scripts.set('issue.list', frame => ({ kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [issue] } }))
+    harness.scripts.set('issue.query', frame => ({ kind: 'reply', reply: { kind: 'issue.session', requestId: frame.requestId, session: issue } }))
+    harness.scripts.set('action.list', frame => ({ kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: listed as Action[] } }))
+    harness.scripts.set('action.refuse', frame => ({ kind: 'reply', reply: { kind: 'action.updated', requestId: frame.requestId, action: refused } }))
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    controller.setGroupActor('agent-a')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await controller.loadGroups()
+    await controller.openIssue('s1')
+
+    // An empty reason never leaves the UI and never parks a confirmation.
+    expect(await controller.refuseAction('a1', '   ')).toBe(false)
+    expect(controller.getSnapshot().group.confirm).toBeNull()
+    expect(controller.getSnapshot().group.error).toMatchObject({ code: 'INVALID_INPUT' })
+    expect(harness.sent.some(frame => frame.kind === 'action.refuse')).toBe(false)
+
+    // A valid refusal is still the critical action it was: confirmed first, then sent.
+    expect(await controller.refuseAction('a1', 'no capacity this week')).toBe(false)
+    expect(controller.getSnapshot().group.confirm).not.toBeNull()
+    expect(harness.sent.some(frame => frame.kind === 'action.refuse')).toBe(false)
+    listed = [refused]
+    expect(await controller.confirmPendingGroupAction()).toBe(true)
+    expect(harness.sent.filter(frame => frame.kind === 'action.refuse').at(-1)).toMatchObject({ actionId: 'a1', reason: 'no capacity this week' })
+    const after = controller.getSnapshot().group.actions[0] as Action & { readonly refusal?: unknown }
+    expect(after.state).toBe('refused')
+    expect(after.reason).toBe('peer request reason')
+    expect(after.refusal).toEqual({ reason: 'no capacity this week', refusedAt: '2026-10-20T00:03:00.000Z' })
+
+    // The peer that received an assignment holds no edge back and cannot refuse it.
+    controller.setGroupActor('agent-b')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await controller.loadGroups()
+    await controller.openIssue('s1')
+    expect(await controller.refuseAction('a1', 'not my call')).toBe(false)
+    expect(controller.getSnapshot().group.confirm).toBeNull()
+    expect(controller.getSnapshot().group.error).toMatchObject({ code: 'FORBIDDEN' })
+    controller.destroy()
   })
 })
