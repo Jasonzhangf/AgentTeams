@@ -2,8 +2,8 @@
   "schema_version": 1,
   "manifest_id": "teams-group-messaging-v1",
   "status": "design",
-  "revision": 5,
-  "supersedes": "revision 4; see docs/design/teams-group-messaging-v1-audit-feedback.md and the revision 3, revision 4 and revision 5 review findings",
+  "revision": 6,
+  "supersedes": "revision 5; adds the authorized WebUI read-only issue list without changing issue lifecycle authority",
   "canonical_doc": "docs/design/teams-group-messaging-v1.md",
   "owner_modules": ["control-protocol", "server", "network", "runtime", "config"],
   "resources": [
@@ -42,10 +42,11 @@
       "graph_files": [
         "docs/design/dagpipe/graphs/issue-create.graph.json",
         "docs/design/dagpipe/graphs/issue-query.graph.json",
+        "docs/design/dagpipe/graphs/issue-list.graph.json",
         "docs/design/dagpipe/graphs/issue-close.graph.json",
         "docs/design/dagpipe/graphs/issue-reopen.graph.json"
       ],
-      "steps": ["create-or-reference", "readback", "open-session", "query", "close", "reopen"]
+      "steps": ["create-or-reference", "readback", "open-session", "list-persisted-sessions", "query", "close", "reopen"]
     },
     {
       "chain_id": "action-lifecycle-v1",
@@ -81,6 +82,9 @@
     "auto_reply_between_agents": false,
     "one_issue_one_session": true,
     "group_has_many_issue_sessions": true,
+    "issue_list_source": "hub persisted issue-session registry scoped to authenticated active membership",
+    "issue_list_has_external_calls_or_writes": false,
+    "issue_list_proves_fresh_state_or_settles_mutation": false,
     "vikunja_owns_issue_open_closed_state": true,
     "teams_keeps_second_editable_issue_state": false,
     "action_completion_closes_issue": false,
@@ -154,7 +158,8 @@
     "teams-group-dag-outcome"
   ],
   "design_defaults": {
-    "cli_only": true,
+    "cli_only": false,
+    "webui_uses_same_typed_owner": true,
     "mcp_tools": false,
     "skills": false,
     "transport": "existing agentteams WSS+TLS channel over RegistrationClient",
@@ -210,9 +215,10 @@
   ],
   "evidence_boundary": {
     "design_only": true,
-    "implementation_started": false,
+    "implementation_started": true,
+    "this_revision_changes_product_code": false,
     "services_run": false,
     "runtime_acceptance_claimed": false,
-    "graph_validation": "dagpipe graph validate over the thirteen design graphs"
+    "graph_validation": "thirteen unchanged graphs retain prior validation; issue-list graph validated and inspected for revision 6; no runtime acceptance implied"
   }
 }

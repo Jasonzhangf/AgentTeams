@@ -39,3 +39,24 @@ Ego 浏览器真实操作原型：模拟阻塞 → 补充信息 → 原 blocked 
 
 当前活动树的真实 owner/Vikunja 回执比首次审计增加了证据，但明确 `--skip-browser`；
 不升级成 WebUI 完整验收。文档集成与实现集成分别等待各自真实回执，不因消息入队宣布完成。
+
+## 文档交付与只读列表补正
+
+Jenny 已将 `b9d9e27`、`ec6d91d` 独立推送 main;Alice fetch 后确认远端包含两项提交。
+干净的 `mvp-design-ablation` 工作树已用 `git worktree remove` 移除并确认路径不存在。
+主树未提交原型、其他 peer 工作树均保留。Astra 报告以主线本目录为正式位置。
+
+后续审计发现 `issue-query` 图含 Vikunja 读取,不能承载恢复旧议题的纯列表流程。
+Alice 在新独占 `group-issue-list-design` 文档树补 revision 6,只修改设计、manifest、
+WebUI 协议引用与 `issue-list.graph.json`;未改产品代码。旧树已关闭后才开新树。
+新增路径为成员/scope 鉴权、读取持久会话、返回列表。无外部调用或写入;列表不证明
+状态新鲜,不收敛未决写入,不作为新 action 准入凭据。产品 map/gate 与真实接口反例
+仍由 Carol 的实现任务完成,图中的 operator 声明不冒充运行绑定。
+
+新增图 `validate` 与 `inspect` 通过:3 节点、2 边、单入口/单出口;manifest 的 14 个图
+路径存在,新增节点/operator/出口与正文一致,`git diff --check` 通过。其余 13 个图复用
+此前未变证据。未运行产品测试或服务,revision 6 不增加产品验收通过项。
+
+Jenny 已明确生命周期执行者 `agentteams-28f8373-lifecycle-gcm-r1`,由她编排,
+原任务 `task-28f8373-lifecycle-ablation-r2` 负责。允许修改 lifecycle adapter 与 BB13,
+不得弱化真实安装和输入变化失效义务。此为派发回执,尚非修复交付。

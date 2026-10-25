@@ -4,7 +4,7 @@
 
 这是供人操作的交互设计原型。使用本页内存模拟数据，没有连接 Relay、daemon、引擎或 Vikunja；刷新页面会重置演示。不代表真实功能交付。所有外部写入和执行状态均标注模拟。
 
-本次修订沿用原浅色工具界面，修正群/issue/Session 混淆、自动 @ 必答、缺少关闭与切换、静态卡片和输入区被历史挤出窗口的问题。协议与已确认权限决定沿 group-messaging revision 5；本文件只拥有 WebUI 交互，不另定义服务端真源。原型中的会话映射示例不代替第二批前的 ACP Session 映射定案。
+本次修订沿用原浅色工具界面，修正群/issue/Session 混淆、自动 @ 必答、缺少关闭与切换、静态卡片和输入区被历史挤出窗口的问题。协议与已确认权限决定沿 group-messaging revision 6；本文件只拥有 WebUI 交互，不另定义服务端真源。原型中的会话映射示例不代替第二批前的 ACP Session 映射定案。
 
 ## 首个可用版本与当前实现
 
@@ -79,7 +79,7 @@ peer 可以向自己的 master 请求，master 可带原因拒绝；向下有效
 
 “代表 Agent 操作”切换的是 Console 已被授权代理的 daemon 上下文，不是切换独立登录用户。可代理目标来自服务端声明和准入；选中目标本身不授予权限。主路径不允许输入自报 actor 代替已认证身份。Vikunja 共用账户时，结果署名由可信 Agent 身份生成。原型中的“我”是示例发起者；多独立用户的登录隔离不属于该模拟能力。
 
-恢复原议题使用 hub 已持久 IssueSession 的按群鉴权只读列表；空消息、无 action 的议题也必须可列出。选中原 session 后再查询外部状态，只有新鲜且确认打开才准入新 action。`issue.reference` 用于用户明确引用外部 issue，不用于自动刷新或代替列表；不要求用户手填内部 sessionId。
+恢复原议题使用 `issue.list { requestId, groupId }` 读取 hub 已持久 IssueSession 的按群鉴权只读列表；空消息、无 action 的议题也必须可列出。列表中的开闭状态是最后一次投影，不表示刚从 Vikunja 读取。选中原 session 后再查询外部状态，只有新鲜且确认打开才准入新 action。`issue.reference` 用于用户明确引用外部 issue，不用于自动刷新或代替列表；不要求用户手填内部 sessionId。
 
 ## 群与议题的生命周期
 
