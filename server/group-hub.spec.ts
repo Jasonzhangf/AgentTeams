@@ -905,6 +905,121 @@ describe('external op convergence and admission', () => {
   })
 })
 
+describe('transient read ledger isolation', () => {
+  /**
+   * A recovery or state read exists only to authenticate one owner receipt. It
+   * must never reach the durable ledger, even when another public frame saves a
+   * snapshot while the read is suspended on the executor.
+   */
+  function transientOps(snapshot: GroupHubSnapshot | undefined): readonly string[] {
+    return (snapshot?.ops ?? [])
+      .filter((op) => op.kind === 'issue.recover' || op.kind === 'issue.query')
+      .map((op) => `${op.kind}:${op.commitId}`)
+  }
+
+  function unknown(op: ExternalOp): ExternalOpReceipt {
+    return { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+  }
+
+  function sessionIdOf(reply: unknown): string {
+    return (reply as { session: { sessionId: string } }).session.sessionId
+  }
+
+  it('keeps a suspended recovery read out of a snapshot saved by another frame', async () => {
+    let enteredRead: () => void = () => {}
+    const readEntered = new Promise<void>((resolve) => { enteredRead = resolve })
+    let releaseRead: () => void = () => {}
+    const released = new Promise<void>((resolve) => { releaseRead = resolve })
+    let creates = 0
+    const store = memoryStore()
+    const hub = createGroupHub({
+      store,
+      isOnline: () => true,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
+      executeExternalOp: async (op) => {
+        if (op.kind === 'issue.create') {
+          creates += 1
+          return creates === 1 ? unknown(op) : confirmed(op, { issueId: '42' })
+        }
+        if (op.kind === 'issue.recover') {
+          enteredRead()
+          await released
+          return confirmed(op, { found: true, issueId: '42' })
+        }
+        return confirmed(op, { issueId: '42' })
+      },
+    })
+    const groupId = await withPeer(hub)
+    const first = await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })
+    expect(first.ok).toBe(false)
+    // The retry of an unknown create reads its stable reference back and suspends.
+    const retry = hub.handle(OWNER, { kind: 'issue.create', requestId: 'r2', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })
+    await readEntered
+    // A different, legitimate public frame on the same hub persists right now.
+    const other = await hub.handle(OWNER, { kind: 'group.create', requestId: 'r3', name: 'other' })
+    expect(other.ok).toBe(true)
+    expect(transientOps(store.snapshots[store.snapshots.length - 1])).toEqual([])
+    // A restart inside that window must not read the transient read back either.
+    const restarted = createGroupHub({
+      store,
+      isOnline: () => true,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `restart-${++n}` })(),
+      executeExternalOp: async (op) => confirmed(op, { issueId: '42' }),
+    })
+    expect(transientOps(restarted.snapshot())).toEqual([])
+    releaseRead()
+    const recovered = await retry
+    // The read still authenticates its receipt and confirms the original write.
+    expect(recovered.ok).toBe(true)
+    expect(transientOps(store.snapshots[store.snapshots.length - 1])).toEqual([])
+  })
+
+  it('keeps a suspended state read out of a snapshot saved by another frame', async () => {
+    let enteredRead: () => void = () => {}
+    const readEntered = new Promise<void>((resolve) => { enteredRead = resolve })
+    let releaseRead: () => void = () => {}
+    const released = new Promise<void>((resolve) => { releaseRead = resolve })
+    const store = memoryStore()
+    const hub = createGroupHub({
+      store,
+      isOnline: () => true,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
+      executeExternalOp: async (op) => {
+        if (op.kind === 'issue.query') {
+          enteredRead()
+          await released
+          return confirmed(op, { issueId: '42', actualState: 'open' })
+        }
+        return confirmed(op, { issueId: '42' })
+      },
+    })
+    const groupId = await withPeer(hub)
+    const created = await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })
+    expect(created.ok).toBe(true)
+    const sessionId = sessionIdOf(created.reply)
+    const query = hub.handle(OWNER, { kind: 'issue.query', requestId: 'q1', sessionId })
+    await readEntered
+    const other = await hub.handle(OWNER, { kind: 'group.create', requestId: 'r3', name: 'other' })
+    expect(other.ok).toBe(true)
+    expect(transientOps(store.snapshots[store.snapshots.length - 1])).toEqual([])
+    const restarted = createGroupHub({
+      store,
+      isOnline: () => true,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `restart-${++n}` })(),
+      executeExternalOp: async (op) => confirmed(op, { issueId: '42' }),
+    })
+    expect(transientOps(restarted.snapshot())).toEqual([])
+    releaseRead()
+    const read = await query
+    expect(read.ok).toBe(true)
+    expect(transientOps(store.snapshots[store.snapshots.length - 1])).toEqual([])
+  })
+})
+
 describe('persistence and restart', () => {
   it('reloads the last snapshot so a restart keeps groups and messages', async () => {
     const store = memoryStore()

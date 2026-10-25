@@ -204,7 +204,10 @@ export class GroupHubImpl implements GroupHub {
         retentionStartSequence: log.retentionStartSequence,
         watermarks: [...log.watermarks.values()],
       })),
-      ops: [...this.ledger.operations.values()],
+      // Recovery and state reads live in the ledger only while one receipt is
+      // authenticated. They are never durable: a snapshot taken while another
+      // frame saves must not persist the transient read.
+      ops: [...this.ledger.operations.values()].filter((op) => op.kind !== 'issue.recover' && op.kind !== 'issue.query'),
     }
   }
 
