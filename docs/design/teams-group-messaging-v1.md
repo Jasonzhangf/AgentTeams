@@ -1,6 +1,6 @@
 # Teams 群组通信、issue 会话与 action 执行 v1(修订版)
 
-状态:design 修订版(revision 7)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
+状态:design 修订版(revision 8)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
 注入、关闭、投递语义。审计反馈和用户确认的决定已落实到对象模型、线协议、权限、投递、
 Session 映射、关闭和分批。本文件是唯一 owner;不并存两套契约。受影响架构映射已同步:模块归属登记在
 `docs/architecture/module-registry.json` 的 `group-messaging` 条目,实现后按
@@ -55,6 +55,13 @@ Session 映射留到第二批。
 revision 6:补齐首版 WebUI 恢复旧议题所需的 `issue.list` 只读协议、SESE 图和验收。
 列表读取 hub 已持久会话,不绑定外部 issue,不查询 Vikunja,不证明外部状态新鲜。
 WebUI 授权沿 `teams-group-webui-design.md`;本轮只改设计,产品修复和运行证据分别验收。
+
+revision 7:允许 pending action 直接报告 blocked/failed,新增持久 `Action.report`,并对齐
+`action.report` 帧字段命名。
+
+revision 8:新增持久 `Action.refusal`,master 拒绝 peer 请求时原因非空、不覆盖原 `reason`;
+外部关闭收敛由 registry daemon 持有的唯一有界 scheduler 驱动,GroupHub 保留 issue 真源、
+读取委托与共用 close settlement。读失败保持 unknown 并拒绝新 action;Console 不承担同步。
 
 ## 2. 被替代的旧语义
 
@@ -158,6 +165,9 @@ Action {
   report?: {                   // 被指派人的持久报告,不代表结果 comment 已完成
     report: 'blocked'|'failed', reason, evidence?, reportedAt
   },
+  refusal?: {                  // master 拒绝 peer 请求的持久原因;不覆盖原 reason
+    reason, refusedAt
+  },
   resultCommitId?,             // 结果提交操作的稳定幂等键
   resultRef?,                  // 写回 Vikunja 的 comment id
   createdAt, completedAt?
@@ -253,6 +263,8 @@ action:未开始的取消;在飞的进入取消或收口,已有副作用保留�
 - blocked 与 failed 不自动推进。由 master 决定重新指派(新 action)或调整;原 action 保持记录。
 - pending 直接报告 blocked/failed 不表示执行已开始,也不改变 peer 不能拒绝 master 有效指派的规则;
   原 action 记录保留,重新指派创建新 action。
+- pending 到 refused 必须有非空原因。refusal.reason 持久保存,发起者刷新 action.list 可见;
+  refusal 不覆盖 action.reason。
 - unknown 不是终态。由执行 owner 按 commitId 回读目标 API 收敛为 completed 或 failed。
   回读无法确定时保持 unknown 并上报,不盲目重试。
 - cancelled 只证明执行已停止。issue 可以先关闭,但关闭报告中必须列出尚未确认停止的 action。
@@ -600,10 +612,16 @@ JSONL 纪律:每条消息一行,含 messageId、sequence、commitId。单写者�
 
 第一批不等 webhook,用明确的状态读取机制收敛。
 
-- 读取 owner 是发起者所在 daemon;离线时由 hub 委派的受信读取 daemon 执行。
-- 刷新触发:定时轮询(默认 30 秒)、每条命令进入前刷新本会话、会话有在飞 action 时缩短间隔。
+- 读取 owner 是发起者所在 daemon,即本批 elected read owner;离线或超时时读取失败,不把旧投影
+  当新鲜状态。
+- 刷新触发:registry daemon 启动时创建唯一的有界 scheduler(默认 30 秒)。scheduler 只持有
+  timer 生命周期并逐轮调用 GroupHub 的 sweep;GroupHub 保留 issue 真源、读取委托和共用
+  close settlement。每轮同一时刻最多一个 sweep,读取串行委托。Console 关闭不停止 scheduler,
+  UI 不拥有轮询,也不创建第二个 scheduler。
+- 正式 stop 先清理 registry 自有的 scheduler timer,再关闭 relay。
 - 最大延迟:默认 30 秒。超过该窗口未读到状态,视为会话状态未知。
-- 读取失败时的准入:会话状态未知时拒绝新 action,返回明确错误,不放行也不缓存待执行。
+- 读取失败时的准入:会话状态未知时拒绝新 action,返回明确错误,不放行也不缓存待执行;投影与
+  action 责任保持原样。
 - 外部关闭进入与本地关闭共用的收口逻辑:停止新准入、取消队列、通知在飞执行。不重复调用
   Vikunja close,但取消与收口不能跳过。只把 `state` 改成 closed 不算完成。
 - webhook 是第三批的加速通道,只缩短延迟,不改变上述机制和准入规则。
