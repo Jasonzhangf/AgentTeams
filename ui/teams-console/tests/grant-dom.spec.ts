@@ -126,6 +126,7 @@ ${script}
       controller.selectPage('groups')
       // Several agents are declared, so the operator chooses the acting identity first.
       controller.setGroupActor('${actor}')
+      await new Promise(resolve => setTimeout(resolve, 0))
       await controller.loadGroups()
       // Work belongs to an opened issue now, so the action form is reached through the
       // group's own issue list rather than a group-wide form with no target.

@@ -4,7 +4,7 @@ import type { GroupRequestOutcome, GroupRequestSender } from '../client/group-cl
 import type { GroupWireRequest } from '../../../../packages/shared/src/group-wire.ts'
 import {
   applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors,
-  contextKeyOf, contextVisibleIn, initialGroupWorkspaceState, intentKeyOf, isReadFrame,
+  contextKeyOf, initialGroupWorkspaceState, intentKeyOf, isReadFrame,
   needsConfirmation, requestContextOf, withCommitId,
   type GroupMutationMemory, type GroupOutcome, type GroupRequestContext, type GroupWorkspaceState,
 } from './group-workspace.ts'
@@ -720,6 +720,24 @@ export class TeamsConsoleController {
     if (this.composerKey() !== previousKey) this.restoreComposer()
   }
 
+  /**
+   * Enter another actor/group view. Every switch uses the same order so an old answer can
+   * neither land in the new view nor suppress the result already parked for the new view.
+   */
+  private switchGroupContext(
+    update: (state: GroupWorkspaceState) => GroupWorkspaceState,
+    options: { readonly composerAlreadySaved?: boolean } = {},
+  ): void {
+    // `setGroupComposer` writes the typed text into the drafts map under the key in force,
+    // so the owner-driven path already saved the old context's text and only restores.
+    if (options.composerAlreadySaved !== true) this.parkComposer()
+    this.groupGeneration += 1
+    this.parkInFlightGroupMutation()
+    this.updateGroup(update)
+    this.restoreComposer()
+    this.applyContextResult()
+  }
+
   private nextRequestId(): string {
     const cryptoImpl = globalThis.crypto as { readonly randomUUID?: () => string } | undefined
     if (cryptoImpl?.randomUUID !== undefined) return cryptoImpl.randomUUID()
@@ -859,6 +877,16 @@ export class TeamsConsoleController {
     this.applyContextResult()
   }
 
+  /** A late create success never repaints another view; it is kept for the created group. */
+  private parkLateCreatedWrite(memory: GroupMutationMemory, createdContext: GroupRequestContext): void {
+    this.parkedResults.delete(contextKeyOf(memory.context))
+    this.parkWriteResult(createdContext, { kind: 'succeeded', frame: 'group.create' }, null, {})
+    this.updateGroup(state => state.mutation !== null && state.mutation.requestId === memory.requestId
+      ? { ...state, mutation: null }
+      : state)
+    this.applyContextResult()
+  }
+
   /** Group actors come from the projection; `control` is never an actor. */
   private syncGroupActors(): void {
     const projection = this.state.projection
@@ -876,10 +904,7 @@ export class TeamsConsoleController {
     if (this.state.group.actorId === agentId) return
     // A different identity shares no draft, retry credential or visible history with the
     // previous one. The generation bump makes any answer to the old identity inert.
-    this.parkComposer()
-    this.parkInFlightGroupMutation()
-    this.groupGeneration += 1
-    this.updateGroup(state => ({
+    this.switchGroupContext(state => ({
       ...state,
       ...clearedGroupContent,
       actorId: agentId,
@@ -887,7 +912,6 @@ export class TeamsConsoleController {
       groups: [],
       listStatus: 'idle',
     }))
-    this.restoreComposer()
     // Choosing the actor is the only action available in that phase, so it must lead
     // straight to the real group list rather than to another empty screen. The previous
     // actor's in-flight list is already inert, so it must not block this read.
@@ -923,14 +947,10 @@ export class TeamsConsoleController {
       this.updateGroup(state => ({ ...state, listStatus: state.groups.length === 0 ? 'idle' : state.listStatus }))
       return false
     }
-    // The owner's list may select a different group than the context we started in.
-    this.restoreComposerIfContextChanged(contextBefore)
-    // A selected group that differs from the context the read started in is a context switch:
-    // an in-flight write stays with the context that sent it, and the context now shown gets
-    // back its own parked result instead of looking idle.
+    // An owner-selected group is the same switch as a user selection: bump the generation,
+    // park the old context's pending write, then restore the entered context's own result.
     if (this.composerKey() !== contextBefore) {
-      this.parkInFlightGroupMutation()
-      this.applyContextResult()
+      this.switchGroupContext(state => ({ ...state, ...clearedGroupContent }), { composerAlreadySaved: true })
     }
     await this.loadSelectedGroup()
     return true
@@ -939,10 +959,13 @@ export class TeamsConsoleController {
   private async loadSelectedGroup(): Promise<void> {
     const groupId = this.state.group.selectedGroupId
     if (groupId === undefined) return
+    const generation = this.groupGeneration
     await this.dispatch({ kind: 'message.page', requestId: '', groupId })
+    if (generation !== this.groupGeneration) return
     // The group already owns its issues. Read them back so a reopened workspace can open
     // one the user already has instead of asking for an id.
     await this.dispatch({ kind: 'issue.list', requestId: '', groupId })
+    if (generation !== this.groupGeneration) return
     // Actions belong to one issue session. With no session loaded the actions area shows its
     // own "create an issue first" state; an actor-wide list is never presented as this group's.
     const sessionId = this.state.group.issue?.sessionId
@@ -952,16 +975,11 @@ export class TeamsConsoleController {
 
   async selectGroup(groupId: string): Promise<boolean> {
     if (this.state.group.selectedGroupId === groupId) return true
-    this.parkComposer()
-    this.parkInFlightGroupMutation()
-    this.groupGeneration += 1
-    this.updateGroup(state => ({
+    this.switchGroupContext(state => ({
       ...state,
       ...clearedGroupContent,
       selectedGroupId: groupId,
     }))
-    this.restoreComposer()
-    this.applyContextResult()
     await this.loadSelectedGroup()
     return true
   }
@@ -1026,18 +1044,46 @@ export class TeamsConsoleController {
       return this.applyReadOutcome(outcome, built)
     }
     if (memory === null) return false
-    // The owner may select a different group in its list answer, so a group.create result
-    // always lands wherever the owner placed the group. Every other write's answer belongs
-    // to the context that asked, and a session-bound write stays with its issue.
-    const visible = contextVisibleIn(this.state.group, memory.context)
-    const createdGroup = built.kind === 'group.create' && this.state.group.selectedGroupId !== memory.context.groupId
-    const dropped = !visible && !createdGroup
+    const createdReply = outcome.kind === 'reply' && outcome.reply.kind === 'group.created'
+      ? outcome.reply
+      : undefined
+    // The actor comparison is never relaxed. A group.create may widen the group part when the
+    // owner selects the group it just created, but only in the same generation: a user choice
+    // made after the send always bumps the generation and makes the old answer inert.
+    const createdGroupSelection = built.kind === 'group.create'
+      && memory.context.actorId === (this.state.group.actorId ?? '')
+      && generation === this.groupGeneration
+      && this.state.group.selectedGroupId !== memory.context.groupId
+    const dropped = memory.context.actorId !== (this.state.group.actorId ?? '')
       || (generation !== this.groupGeneration && memory.context.sessionId !== undefined)
+      || (generation !== this.groupGeneration && built.kind === 'group.create')
+      || (memory.context.groupId !== undefined
+        && memory.context.groupId !== this.state.group.selectedGroupId
+        && !createdGroupSelection)
+      || (memory.context.sessionId !== undefined && memory.context.sessionId !== this.state.group.issue?.sessionId)
     if (dropped) {
-      this.parkDroppedWrite(memory)
+      if (createdReply !== undefined) {
+        this.parkLateCreatedWrite(memory, { ...memory.context, groupId: createdReply.group.groupId })
+      } else {
+        this.parkDroppedWrite(memory)
+      }
       return false
     }
-    return this.applyWriteOutcome(memory, built, outcome)
+    // A create answer selects the new group, so it is itself a context switch: older
+    // in-flight reads must not land in the new group and the composer must follow it.
+    const switchesToCreated = createdReply !== undefined
+      && this.state.group.selectedGroupId !== createdReply.group.groupId
+    if (switchesToCreated) {
+      this.parkComposer()
+      this.groupGeneration += 1
+      this.updateGroup(state => ({ ...state, confirm: null }))
+    }
+    const applied = this.applyWriteOutcome(memory, built, outcome)
+    if (switchesToCreated) {
+      this.restoreComposer()
+      this.applyContextResult({ actorId: this.state.group.actorId ?? '', groupId: createdReply!.group.groupId })
+    }
+    return applied
   }
 
   /** A read answer only refreshes its own section and never settles a parked write. */

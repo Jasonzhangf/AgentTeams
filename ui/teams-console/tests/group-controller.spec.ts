@@ -750,4 +750,235 @@ describe('group request context isolation', () => {
     expect(controller.getSnapshot().group.mutation).toBeNull()
     expect(controller.getSnapshot().group.outcome.kind).toBe('succeeded')
   })
+
+  it('parks a late group.create success for its own actor instead of applying it to another actor', async () => {
+    const agentB = { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const, currentSessionId: 's2' }
+    const groupA = twoGroups.groups[0]!
+    const created = { groupId: 'g9', name: 'From A', ownerAgentId: 'agent-a', createdAt: '2026-10-24T00:00:00.000Z', members: [{ agentId: 'agent-a', role: 'master' as const, mastersOf: [], intervals: [{ joinedAt: '2026-10-24T00:00:00.000Z' }] }] }
+    const groupB1 = { groupId: 'b1', name: 'B One', ownerAgentId: 'agent-b', createdAt: '2026-10-21T00:00:00.000Z', members: [{ agentId: 'agent-b', role: 'master' as const, mastersOf: [], intervals: [{ joinedAt: '2026-10-21T00:00:00.000Z' }] }] }
+    const groupB2 = { groupId: 'b2', name: 'B Two', ownerAgentId: 'agent-b', createdAt: '2026-10-23T00:00:00.000Z', members: [{ agentId: 'agent-b', role: 'master' as const, mastersOf: [], intervals: [{ joinedAt: '2026-10-23T00:00:00.000Z' }] }] }
+    const harness = deferredClient([...projection.agents, agentB])
+    const settle = async (): Promise<void> => { await new Promise(resolve => setTimeout(resolve, 0)) }
+    let includeCreated = false
+    harness.scripts.set('group.list', (frame, agentId) => ({
+      kind: 'reply',
+      reply: {
+        kind: 'group.list',
+        requestId: frame.requestId,
+        groups: agentId === 'agent-a'
+          ? includeCreated ? [groupA, created] : [groupA]
+          : [groupB2, groupB1],
+      },
+    }))
+    harness.scripts.set('group.create', frame => ({
+      kind: 'reply',
+      reply: { kind: 'group.created', requestId: frame.requestId, group: created },
+    }))
+    harness.defer.add('group.create')
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    controller.setGroupActor('agent-a')
+    await settle()
+    expect(controller.getSnapshot().group.selectedGroupId).toBe('g1')
+
+    const creating = controller.createGroup('From A')
+    await Promise.resolve()
+    expect(harness.pending.some(entry => entry.frame.kind === 'group.create')).toBe(true)
+
+    // The user leaves A and selects one of B's groups while A's create answer is still open.
+    controller.setGroupActor('agent-b')
+    await settle()
+    expect(controller.getSnapshot().group.selectedGroupId).toBe('b2')
+    await controller.selectGroup('b1')
+    includeCreated = true
+    await harness.releaseOne(frame => frame.kind === 'group.create')
+    expect(await creating).toBe(false)
+
+    const inB = controller.getSnapshot().group
+    expect(inB.actorId).toBe('agent-b')
+    expect(inB.groups.map(group => group.groupId)).toEqual(['b2', 'b1'])
+    expect(inB.selectedGroupId).toBe('b1')
+    expect(inB.outcome).not.toMatchObject({ kind: 'succeeded', frame: 'group.create' })
+
+    // A's created group and its success result belong to A, not to B's view.
+    controller.setGroupActor('agent-a')
+    await settle()
+    const backToA = controller.getSnapshot().group
+    expect(backToA.actorId).toBe('agent-a')
+    expect(backToA.groups.map(group => group.groupId)).toContain('g9')
+    expect(backToA.selectedGroupId).toBe('g9')
+    expect(backToA.outcome).toMatchObject({ kind: 'succeeded', frame: 'group.create' })
+  })
+
+  it('invalidates a held page for the old group when the owner changes the selected group', async () => {
+    const g2 = twoGroups.groups[1]!
+    const messageFor = (groupId: string, sequence: number) => ({
+      messageId: `m-${groupId}`,
+      commitId: `c-${groupId}`,
+      sequence,
+      groupId,
+      fromAgentId: 'agent-a',
+      targetAgentIds: [],
+      replyRequired: false,
+      body: `body ${groupId}`,
+      sentAt: 'now',
+    })
+    const issueFor = (sessionId: string, groupId: string) => ({
+      sessionId,
+      groupId,
+      vikunjaProjectId: 'p1',
+      vikunjaIssueId: `v-${sessionId}`,
+      initiatorAgentId: 'agent-a',
+      state: 'open' as const,
+      openedAt: 'now',
+      lastOpSeq: 1,
+    })
+    const harness = deferredClient()
+    let listed = twoGroups.groups
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { kind: 'group.list', requestId: frame.requestId, groups: listed } }))
+    harness.scripts.set('message.page', frame => ({
+      kind: 'reply',
+      reply: {
+        kind: 'message.page',
+        requestId: frame.requestId,
+        messages: frame.kind === 'message.page' ? [messageFor(frame.groupId, frame.groupId === 'g1' ? 1 : 2)] : [],
+        revision: 1,
+        hasMore: false,
+      },
+    }))
+    harness.scripts.set('issue.list', frame => ({
+      kind: 'reply',
+      reply: {
+        kind: 'issue.list',
+        requestId: frame.requestId,
+        sessions: frame.kind === 'issue.list' ? [issueFor(frame.groupId === 'g1' ? 'i1' : 'i2', frame.groupId)] : [],
+      },
+    }))
+    harness.scripts.set('action.list', frame => ({ kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: [] } }))
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    expect(controller.getSnapshot().group.selectedGroupId).toBe('g2')
+
+    // g1's page is slow. Before it answers, the owner's list drops g1 and keeps g2 selected.
+    harness.defer.add('message.page')
+    const openingG1 = controller.selectGroup('g1')
+    await Promise.resolve()
+    listed = [g2]
+    const refreshing = controller.loadGroups()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(harness.pending.some(entry => entry.frame.kind === 'message.page' && entry.frame.groupId === 'g2')).toBe(true)
+    await harness.releaseOne(frame => frame.kind === 'message.page' && frame.groupId === 'g2')
+    await refreshing
+    const loadedG2 = controller.getSnapshot().group
+    expect(loadedG2.messages.map(message => message.messageId)).toEqual(['m-g2'])
+    expect(loadedG2.issues.map(issue => issue.sessionId)).toEqual(['i2'])
+    expect(loadedG2.actions).toEqual([])
+
+    await harness.releaseOne(frame => frame.kind === 'message.page' && frame.groupId === 'g1')
+    await openingG1
+    const afterLatePage = controller.getSnapshot().group
+    expect(afterLatePage.selectedGroupId).toBe('g2')
+    expect(afterLatePage.messages.map(message => message.messageId)).toEqual(['m-g2'])
+    expect(afterLatePage.issues.map(issue => issue.sessionId)).toEqual(['i2'])
+    expect(afterLatePage.actions).toEqual([])
+  })
+
+  it('invalidates a held issue list for the old group when the owner changes the selected group', async () => {
+    const g2 = twoGroups.groups[1]!
+    const issueFor = (sessionId: string, groupId: string) => ({
+      sessionId,
+      groupId,
+      vikunjaProjectId: 'p1',
+      vikunjaIssueId: `v-${sessionId}`,
+      initiatorAgentId: 'agent-a',
+      state: 'open' as const,
+      openedAt: 'now',
+      lastOpSeq: 1,
+    })
+    const harness = deferredClient()
+    let listed = twoGroups.groups
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { kind: 'group.list', requestId: frame.requestId, groups: listed } }))
+    harness.scripts.set('issue.list', frame => ({
+      kind: 'reply',
+      reply: {
+        kind: 'issue.list',
+        requestId: frame.requestId,
+        sessions: frame.kind === 'issue.list' ? [issueFor(frame.groupId === 'g1' ? 'i1' : 'i2', frame.groupId)] : [],
+      },
+    }))
+    harness.scripts.set('action.list', frame => ({ kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: [] } }))
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    expect(controller.getSnapshot().group.selectedGroupId).toBe('g2')
+
+    // g1's issue list is slow. The owner later drops g1 and selects g2 again.
+    harness.defer.add('issue.list')
+    const openingG1 = controller.selectGroup('g1')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(harness.pending.some(entry => entry.frame.kind === 'issue.list' && entry.frame.groupId === 'g1')).toBe(true)
+    listed = [g2]
+    const refreshing = controller.loadGroups()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await harness.releaseOne(frame => frame.kind === 'issue.list' && frame.groupId === 'g2')
+    await refreshing
+    const loadedG2 = controller.getSnapshot().group
+    expect(loadedG2.issues.map(issue => issue.sessionId)).toEqual(['i2'])
+    expect(loadedG2.actions).toEqual([])
+
+    await harness.releaseOne(frame => frame.kind === 'issue.list' && frame.groupId === 'g1')
+    await openingG1
+    const afterLateList = controller.getSnapshot().group
+    expect(afterLateList.selectedGroupId).toBe('g2')
+    expect(afterLateList.issues.map(issue => issue.sessionId)).toEqual(['i2'])
+    expect(afterLateList.actions).toEqual([])
+  })
+
+  it('lets a create answer switch to its group and invalidates the previous group held page', async () => {
+    const created = { groupId: 'g9', name: 'Fresh', ownerAgentId: 'agent-a', createdAt: '2026-10-24T00:00:00.000Z', members: [{ agentId: 'agent-a', role: 'master' as const, mastersOf: [], intervals: [{ joinedAt: '2026-10-24T00:00:00.000Z' }] }] }
+    const harness = deferredClient()
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { kind: 'group.list', requestId: frame.requestId, groups: [twoGroups.groups[0]!] } }))
+    harness.scripts.set('message.page', frame => ({
+      kind: 'reply',
+      reply: {
+        kind: 'message.page',
+        requestId: frame.requestId,
+        messages: frame.kind === 'message.page'
+          ? [{ messageId: `m-${frame.groupId}`, commitId: `c-${frame.groupId}`, sequence: 1, groupId: frame.groupId, fromAgentId: 'agent-a', targetAgentIds: [], replyRequired: false, body: `body ${frame.groupId}`, sentAt: 'now' }]
+          : [],
+        revision: 1,
+        hasMore: false,
+      },
+    }))
+    harness.scripts.set('issue.list', frame => ({ kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [] } }))
+    harness.scripts.set('action.list', frame => ({ kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: [] } }))
+    harness.scripts.set('group.create', frame => ({
+      kind: 'reply',
+      reply: { kind: 'group.created', requestId: frame.requestId, group: created },
+    }))
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    expect(controller.getSnapshot().group.selectedGroupId).toBe('g1')
+
+    harness.defer.add('message.page')
+    const refreshingG1 = controller.loadGroups()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(harness.pending.some(entry => entry.frame.kind === 'message.page' && entry.frame.groupId === 'g1')).toBe(true)
+
+    const creating = controller.createGroup('Fresh')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await harness.releaseOne(frame => frame.kind === 'message.page' && frame.groupId === 'g9')
+    expect(await creating).toBe(true)
+    expect(controller.getSnapshot().group.selectedGroupId).toBe('g9')
+    expect(controller.getSnapshot().group.messages.map(message => message.messageId)).toEqual(['m-g9'])
+
+    await harness.releaseOne(frame => frame.kind === 'message.page' && frame.groupId === 'g1')
+    await refreshingG1
+    const afterLatePage = controller.getSnapshot().group
+    expect(afterLatePage.selectedGroupId).toBe('g9')
+    expect(afterLatePage.messages.map(message => message.messageId)).toEqual(['m-g9'])
+    expect(afterLatePage.issues).toEqual([])
+  })
 })
