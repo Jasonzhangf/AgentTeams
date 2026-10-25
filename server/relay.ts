@@ -100,7 +100,9 @@ export interface GroupHub {
    * scheduler. The hub keeps issue truth and close settlement; the scheduler
    * only decides when a pass runs.
    */
-  sweepIssueStates?(): Promise<GroupIssueSweepResult>
+  sweepIssueStates?(sessionIds?: readonly string[]): Promise<GroupIssueSweepResult>
+  /** Live action responsibility derived from the hub's existing action state. */
+  inflightIssueSessionIds?(): readonly string[]
 }
 
 /**

@@ -263,7 +263,16 @@ function recordOperation(state: IssueSessionRegistry, input: RecordOperationInpu
     fail(`commitId ${commitId} conflicts with an existing open/close operation`)
   }
   if (input.kind === 'issue.close' && session.state !== 'open') fail(`session ${session.sessionId} is not open`)
-  if (input.kind === 'issue.reopen' && session.state !== 'closed') fail(`session ${session.sessionId} is not closed`)
+  if (input.kind === 'issue.reopen' && session.state !== 'closed') {
+    // An unresolved close can leave the projection open. A newer reopen
+    // supersedes that intent instead of waiting forever for the older close.
+    const unresolvedClose = state.operations.some(operation =>
+      operation.sessionId === session.sessionId
+      && operation.kind === 'issue.close'
+      && operation.opSeq === session.lastOpSeq
+      && (operation.state === 'pending' || operation.state === 'inflight' || operation.state === 'unknown'))
+    if (!unresolvedClose) fail(`session ${session.sessionId} is not closed`)
+  }
   const opSeq = Math.max(
     session.lastOpSeq,
     ...state.operations.filter(operation => operation.sessionId === session.sessionId).map(operation => operation.opSeq),

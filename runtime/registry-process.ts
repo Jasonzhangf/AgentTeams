@@ -101,15 +101,19 @@ export class RegistryProcessError extends Error {
  * close settlement. There is no second scheduler and no UI timer.
  */
 export const DEFAULT_GROUP_ISSUE_SWEEP_INTERVAL_MS = 30_000
+export const DEFAULT_GROUP_ISSUE_INFLIGHT_SWEEP_INTERVAL_MS = 5_000
 
 export interface GroupIssueSweepSchedulerOptions {
   readonly intervalMs?: number
+  /** Shorter cadence used only when the hub reports in-flight action sessions. */
+  readonly inflightIntervalMs?: number
   readonly onResult?: (result: GroupIssueSweepResult) => void | Promise<void>
   readonly onError?: (error: unknown) => void
 }
 
 export interface GroupIssueSweepScheduler {
   readonly intervalMs: number
+  readonly inflightIntervalMs: number
   /** Runs one serialized pass now; concurrent callers share the same pass. */
   runOnce(): Promise<GroupIssueSweepResult | undefined>
   /** Clears this scheduler's timer and waits for its own pass to finish. */
@@ -124,18 +128,28 @@ export function startGroupIssueSweepScheduler(
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
     throw new RegistryProcessError('INVALID_CONFIG', 'group issue sweep interval must be a positive number')
   }
+  const requestedInflightIntervalMs = options.inflightIntervalMs ?? DEFAULT_GROUP_ISSUE_INFLIGHT_SWEEP_INTERVAL_MS
+  if (!Number.isFinite(requestedInflightIntervalMs) || requestedInflightIntervalMs <= 0) {
+    throw new RegistryProcessError('INVALID_CONFIG', 'group issue in-flight sweep interval must be a positive number')
+  }
+  // The registry owns one timer. A hub that reports live work gets the shorter
+  // cadence; other hubs keep the full interval.
+  const hasInflightSource = hub.inflightIssueSessionIds !== undefined
+  const inflightIntervalMs = hasInflightSource
+    ? Math.min(intervalMs, requestedInflightIntervalMs)
+    : intervalMs
   const onError = options.onError ?? ((error: unknown) => {
     console.error(`group issue sweep failed: ${error instanceof Error ? error.message : String(error)}`)
   })
   let inFlight: Promise<GroupIssueSweepResult | undefined> | undefined
   let stopped = false
-  const runOnce = (): Promise<GroupIssueSweepResult | undefined> => {
+  const runPass = (sessionIds?: readonly string[]): Promise<GroupIssueSweepResult | undefined> => {
     if (inFlight !== undefined) return inFlight
     if (stopped) return Promise.resolve(undefined)
     let pass: Promise<GroupIssueSweepResult | undefined>
     pass = (async () => {
       if (hub.sweepIssueStates === undefined) throw new Error('group hub has no issue state sweep')
-      const result = await hub.sweepIssueStates()
+      const result = await hub.sweepIssueStates(sessionIds)
       await options.onResult?.(result)
       return result
     })().catch((error: unknown) => {
@@ -147,13 +161,30 @@ export function startGroupIssueSweepScheduler(
     inFlight = pass
     return pass
   }
-  const timer = setInterval(() => { void runOnce() }, intervalMs)
+  const runOnce = (): Promise<GroupIssueSweepResult | undefined> => runPass()
+  let lastFullPassAt = Date.now()
+  let lastInflightPassAt = lastFullPassAt
+  const timer = setInterval(() => {
+    if (stopped) return
+    const now = Date.now()
+    if (now - lastFullPassAt >= intervalMs) {
+      lastFullPassAt = now
+      lastInflightPassAt = now
+      void runPass()
+      return
+    }
+    if (!hasInflightSource || now - lastInflightPassAt < inflightIntervalMs) return
+    lastInflightPassAt = now
+    const sessionIds = hub.inflightIssueSessionIds?.() ?? []
+    if (sessionIds.length > 0) void runPass(sessionIds)
+  }, Math.min(intervalMs, inflightIntervalMs))
   timer.unref()
   // Converge at boot as well as on the interval: a restarted registry should not
   // serve a stale projection until the first full window has elapsed.
-  void runOnce()
+  void runPass()
   return {
     intervalMs,
+    inflightIntervalMs,
     runOnce,
     async stop() {
       stopped = true

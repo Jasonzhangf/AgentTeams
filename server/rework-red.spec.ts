@@ -33,6 +33,20 @@ function scripted(script: Executor) {
   return { hub, calls, store }
 }
 
+/** Same seam as `scripted`, but with explicit presence so a read owner can be elected. */
+function scriptedOnline(isOnline: (agentId: string) => boolean, script: Executor) {
+  const calls: ExternalOp[] = []
+  const store = memoryStore()
+  const hub = createGroupHub({
+    store,
+    isOnline,
+    now: () => new Date('2026-10-22T00:00:00.000Z'),
+    idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
+    executeExternalOp: async (op) => { calls.push(op); return script(op) },
+  })
+  return { hub, calls, store }
+}
+
 async function groupWithEdge(hub: ReturnType<typeof createGroupHub>): Promise<string> {
   const created = await hub.handle(OWNER, { kind: 'group.create', requestId: 'r0', name: 'release' })
   if (!created.ok) throw new Error('group create failed')
@@ -332,6 +346,218 @@ describe('rework red findings', () => {
     expect(calls.filter((op) => op.kind === 'issue.query')).toHaveLength(0)
     releaseClose()
     await closing
+  })
+
+  it('R4 red: an unknown close keeps admission sealed until the same close is recovered', async () => {
+    let closeAttempts = 0
+    const { hub, calls, store } = scripted((op) => {
+      if (op.kind === 'issue.close') {
+        closeAttempts += 1
+        return closeAttempts === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' })
+      }
+      if (op.kind === 'issue.recover') return confirmed(op, { found: true, actualState: 'closed' })
+      if (op.kind === 'issue.query') return confirmed(op, { issueId: '42', actualState: 'open' })
+      return confirmed(op, { issueId: '42' })
+    })
+    const { sessionId } = await sessionWithEdge(hub)
+    const closed = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(closed.ok).toBe(false)
+    const queriesBefore = calls.filter((op) => op.kind === 'issue.query').length
+    const snapshotsBefore = store.snapshots.length
+    const created = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'acN', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    expect(created.ok).toBe(false)
+    expect(created.ok ? '' : created.error.code).toBe('CONFLICT')
+    expect(calls.filter((op) => op.kind === 'issue.query')).toHaveLength(queriesBefore)
+    expect(store.snapshots.length).toBe(snapshotsBefore)
+    const recovered = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c2', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(recovered.ok).toBe(true)
+    expect((recovered.reply as { outcome: string }).outcome).toBe('closed')
+    expect(calls.filter((op) => op.kind === 'issue.close')).toHaveLength(1)
+    const after = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a2', commitId: 'acN2', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    expect(after.ok).toBe(false)
+    expect(after.ok ? '' : after.error.code).toBe('CONFLICT')
+  })
+
+  it('R4 red: an unknown close is unsealed only by a newer reopen generation', async () => {
+    let closeAttempts = 0
+    const { hub, calls, store } = scripted((op) => {
+      if (op.kind === 'issue.close') {
+        closeAttempts += 1
+        return closeAttempts === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' })
+      }
+      if (op.kind === 'issue.reopen') return confirmed(op, { issueId: '42', expectedState: 'open', actualState: 'open' })
+      if (op.kind === 'issue.query') return confirmed(op, { issueId: '42', actualState: 'open' })
+      return confirmed(op, { issueId: '42' })
+    })
+    const { sessionId } = await sessionWithEdge(hub)
+    const closed = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(closed.ok).toBe(false)
+    const snapshotsBefore = store.snapshots.length
+    const created = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'acN', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    expect(created.ok).toBe(false)
+    expect(created.ok ? '' : created.error.code).toBe('CONFLICT')
+    expect(store.snapshots.length).toBe(snapshotsBefore)
+    const reopened = await hub.handle(OWNER, { kind: 'issue.reopen', requestId: 'o1', commitId: 'oc1', sessionId, reason: 'more work' })
+    expect(reopened.ok).toBe(true)
+    const admitted = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a2', commitId: 'acN2', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    expect(admitted.ok).toBe(true)
+    expect(calls.filter((op) => op.kind === 'issue.close')).toHaveLength(1)
+  })
+
+  it('R4 red: an unknown close unseals after the same close recovery confirms it was not applied', async () => {
+    let closeAttempts = 0
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'issue.close') {
+        closeAttempts += 1
+        return closeAttempts === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' })
+      }
+      if (op.kind === 'issue.recover') return confirmed(op, { found: false, actualState: 'open' })
+      if (op.kind === 'issue.query') return confirmed(op, { issueId: '42', actualState: 'open' })
+      return confirmed(op, { issueId: '42' })
+    })
+    const { sessionId } = await sessionWithEdge(hub)
+    const closed = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(closed.ok).toBe(false)
+    const sealed = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a0', commitId: 'ac0', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    expect(sealed.ok).toBe(false)
+    expect(sealed.ok ? '' : sealed.error.code).toBe('CONFLICT')
+    const recovered = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c2', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(recovered.ok).toBe(true)
+    expect((recovered.reply as { outcome: string }).outcome).toBe('conflict')
+    expect(calls.filter((op) => op.kind === 'issue.close')).toHaveLength(1)
+    const admitted = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    expect(admitted.ok).toBe(true)
+  })
+
+  it('R4 red: an unknown close refuses a pending action result with no external write', async () => {
+    let closeAttempts = 0
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'issue.close') {
+        closeAttempts += 1
+        return closeAttempts === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' })
+      }
+      return confirmed(op, { issueId: '42' })
+    })
+    const { sessionId } = await sessionWithEdge(hub)
+    const actionId = await actionFor(hub, sessionId)
+    const closed = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(closed.ok).toBe(false)
+    // Restore the durable state as a restart would: an unknown close intent and
+    // a pending action that has not been disposed yet.
+    const base = hub.snapshot()
+    const session = base.sessions.find((entry) => entry.sessionId === sessionId)
+    const action = base.actions.find((entry) => entry.actionId === actionId)
+    if (!session || !action) throw new Error('missing seeded records')
+    const opSeq = session.lastOpSeq + 1
+    const crafted: GroupHubSnapshot = {
+      ...base,
+      sessions: base.sessions.map((entry) => entry.sessionId === sessionId ? { ...entry, lastOpSeq: opSeq } : entry),
+      operations: [...base.operations, {
+        opId: `issue-op:${sessionId}:cc1`, commitId: 'cc1', sessionId, kind: 'issue.close',
+        state: 'unknown', targetState: 'closed', opSeq, reason: 'done',
+        createdAt: session.openedAt, updatedAt: session.openedAt,
+      }],
+      actions: base.actions.map((entry) => entry.actionId === actionId ? { ...entry, state: 'pending' } : entry),
+    }
+    const writes: ExternalOp[] = []
+    const restored = createGroupHub({
+      store: { load: () => crafted, save: () => undefined },
+      isOnline: () => true,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `r-${++n}` })(),
+      executeExternalOp: async (op) => { writes.push(op); return confirmed(op, { resultRef: 'comment:late' }) },
+    })
+    const submit = await restored.handle(PEER, { kind: 'action.submit', requestId: 's1', resultCommitId: 'rc1', actionId, resultBody: 'late result' })
+    expect(submit.ok).toBe(false)
+    expect(writes.filter((op) => op.kind === 'action.result')).toHaveLength(0)
+    expect(calls.filter((op) => op.kind === 'action.result')).toHaveLength(0)
+  })
+
+  it('R5 red: an offline initiator delegates a state read to an active online member', async () => {
+    const online = new Set(['agent-a', 'agent-b', 'agent-z'])
+    const { hub, calls } = scriptedOnline((agentId) => online.has(agentId), (op) => {
+      if (op.kind === 'issue.query') {
+        return op.ownerAgentId === 'agent-b'
+          ? confirmed(op, { issueId: '42', actualState: 'closed' })
+          : { code: 'UNAVAILABLE', message: 'initiator is offline' }
+      }
+      return confirmed(op, { issueId: '42' })
+    })
+    const { sessionId } = await sessionWithEdge(hub)
+    online.delete('agent-a')
+    const sweep = await hub.sweepIssueStates()
+    expect(sweep.unconfirmed).not.toContain(sessionId)
+    const session = hub.snapshot().sessions.find((entry) => entry.sessionId === sessionId)
+    expect(session?.state).toBe('closed')
+    const read = calls.filter((op) => op.kind === 'issue.query').at(-1)
+    expect(read?.ownerAgentId).toBe('agent-b')
+  })
+
+  it('R5 red: a reader receipt from another owner cannot settle the state read', async () => {
+    const online = new Set(['agent-a', 'agent-b'])
+    const { hub } = scriptedOnline((agentId) => online.has(agentId), (op) => {
+      if (op.kind === 'issue.query') return confirmed(op, { issueId: '42', actualState: 'closed' }, 'agent-z')
+      return confirmed(op, { issueId: '42' })
+    })
+    const { sessionId } = await sessionWithEdge(hub)
+    online.delete('agent-a')
+    const sweep = await hub.sweepIssueStates()
+    expect(sweep.unconfirmed).toContain(sessionId)
+    const session = hub.snapshot().sessions.find((entry) => entry.sessionId === sessionId)
+    expect(session?.state).toBe('open')
+  })
+
+  it('R5 red: no online reader keeps the read unknown and refuses new admission', async () => {
+    const online = new Set(['agent-a'])
+    const { hub, calls, store } = scriptedOnline((agentId) => online.has(agentId), (op) => {
+      if (op.kind === 'issue.query') {
+        return online.has(op.ownerAgentId)
+          ? confirmed(op, { issueId: '42', actualState: 'closed' })
+          : { code: 'UNAVAILABLE', message: 'read owner is offline' }
+      }
+      return confirmed(op, { issueId: '42' })
+    })
+    const { sessionId } = await sessionWithEdge(hub)
+    online.clear()
+    const sweep = await hub.sweepIssueStates()
+    expect(sweep.unconfirmed).toContain(sessionId)
+    expect(hub.snapshot().sessions.find((entry) => entry.sessionId === sessionId)?.state).toBe('open')
+    const queriesBefore = calls.filter((op) => op.kind === 'issue.query').length
+    const snapshotsBefore = store.snapshots.length
+    const created = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac-no-reader', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    expect(created.ok).toBe(false)
+    expect(created.ok ? '' : created.error.code).toBe('UNAVAILABLE')
+    expect(calls.filter((op) => op.kind === 'issue.query')).toHaveLength(queriesBefore)
+    expect(store.snapshots.length).toBe(snapshotsBefore)
   })
 
   it('R7 red: a refusal with no reason is accepted and the reason is not persisted', async () => {

@@ -232,9 +232,9 @@ export class GroupHubImpl implements GroupHub {
    * session's elected read owner; a failed read stays unconfirmed instead of
    * turning the old projection into a fresh state.
    */
-  async sweepIssueStates(): Promise<GroupIssueSweepResult> {
+  async sweepIssueStates(sessionIds?: readonly string[]): Promise<GroupIssueSweepResult> {
     if (this.sweepInFlight !== undefined) return await this.sweepInFlight
-    const pass = this.sweepIssueStatesOnce()
+    const pass = this.sweepIssueStatesOnce(sessionIds)
     this.sweepInFlight = pass
     try {
       return await pass
@@ -243,7 +243,7 @@ export class GroupHubImpl implements GroupHub {
     }
   }
 
-  private async sweepIssueStatesOnce(): Promise<GroupIssueSweepResult> {
+  private async sweepIssueStatesOnce(sessionIds?: readonly string[]): Promise<GroupIssueSweepResult> {
     let checked = 0
     let changed = 0
     const unconfirmed: string[] = []
@@ -251,7 +251,9 @@ export class GroupHubImpl implements GroupHub {
     // worker owns one read at a time, every read is bounded by its own timeout,
     // and the whole pass has one deadline, so neither pass duration nor stop
     // scales with an unbounded issue set.
+    const selected = sessionIds === undefined ? undefined : new Set(sessionIds)
     const queue = [...this.sessions.sessions.values()]
+      .filter((session) => selected === undefined || selected.has(session.sessionId))
     const deadline = Date.now() + this.sweepDeadlineMs
     const markRemainingUnconfirmed = () => {
       for (;;) {
@@ -299,6 +301,23 @@ export class GroupHubImpl implements GroupHub {
     await Promise.all(workers)
     markRemainingUnconfirmed()
     return { checked, changed, unconfirmed }
+  }
+
+  /**
+   * Sessions with live work responsibility. The registry scheduler reads this
+   * derived fact before choosing a short targeted pass; it is not a second
+   * ledger and does not change action state.
+   */
+  inflightIssueSessionIds(): readonly string[] {
+    const sessionIds = new Set<string>()
+    for (const action of this.actions.actions.values()) {
+      const live = action.state === 'pending'
+        || action.state === 'accepted'
+        || action.state === 'in_progress'
+        || action.state === 'cancel_requested'
+      if (live && this.sessions.sessions.has(action.sessionId)) sessionIds.add(action.sessionId)
+    }
+    return [...sessionIds]
   }
 
   /**
@@ -832,6 +851,16 @@ export class GroupHubImpl implements GroupHub {
     try {
       const receipt = this.executeExternalOp ? await this.executeExternalOp(op) : await this.delegatedReceipt(op)
       if ('code' in receipt) return { status: 'unconfirmed', error: receipt }
+      try {
+        // A read can move the projection only when its receipt comes from the
+        // reader this transient query was delegated to and names its commit.
+        authenticateExternalOpReceipt(this.ledger, receipt, now)
+      } catch (error) {
+        return {
+          status: 'unconfirmed',
+          error: { code: 'FORBIDDEN', message: error instanceof Error ? error.message : 'external read receipt rejected' },
+        }
+      }
       if (receipt.state !== 'confirmed') {
         return { status: 'unconfirmed', error: { code: 'UPSTREAM_ERROR', message: `${receipt.reason ?? 'state read'}; session state is unconfirmed` } }
       }
@@ -847,13 +876,38 @@ export class GroupHubImpl implements GroupHub {
   }
 
   private async readExternal(session: IssueSession): Promise<StateRead> {
-    const read = await this.confirmRead(`issue.query:${session.sessionId}`, session.initiatorAgentId, {
+    const ownerAgentId = this.readOwnerFor(session)
+    if (ownerAgentId === undefined) {
+      return {
+        status: 'unconfirmed',
+        error: { code: 'UNAVAILABLE', message: `no online group member can read session ${session.sessionId}` },
+      }
+    }
+    const read = await this.confirmRead(`issue.query:${session.sessionId}`, ownerAgentId, {
       sessionId: session.sessionId,
       vikunjaProjectId: session.vikunjaProjectId,
       vikunjaIssueId: session.vikunjaIssueId,
     })
     if (read.status === 'unconfirmed') return read
     return { status: 'confirmed', facts: read.facts, observed: readObservedState(read.facts as JsonValue) }
+  }
+
+  /**
+   * Prefer the initiator's daemon. When it is offline, any active member of the
+   * same group can perform the read-only query: the group membership is the
+   * scope boundary, and every active member has issue read access. Writes never
+   * use this election and stay with their recorded owner.
+   */
+  private readOwnerFor(session: IssueSession): string | undefined {
+    const group = groupOf(this.registry, session.groupId)
+    const now = this.now().toISOString()
+    if (memberActiveAt(group, session.initiatorAgentId, now) && this.isOnline(session.initiatorAgentId)) {
+      return session.initiatorAgentId
+    }
+    return activeMemberIds(group).find(agentId =>
+      agentId !== session.initiatorAgentId
+      && memberActiveAt(group, agentId, now)
+      && this.isOnline(agentId))
   }
 
   /** Queued work is cancelled by the close, per the close graph: cancel-queued first. */
@@ -956,8 +1010,24 @@ export class GroupHubImpl implements GroupHub {
     operation: IssueSessionOperation,
     actual: IssueState,
   ): GroupHubResult {
-    const confirmed = confirmIssueOperation(this.sessions, { commitId, externalState: actual, externalOpSeq: operation.opSeq }, this.now().toISOString())
+    const now = this.now().toISOString()
+    const confirmed = confirmIssueOperation(this.sessions, { commitId, externalState: actual, externalOpSeq: operation.opSeq }, now)
     this.sessions = confirmed.state
+    // A readback of this close itself that reports open is authoritative that
+    // the intent never applied. Record that fact so admission can resume; a
+    // plain issue.query during admission never reaches this path, and a newer
+    // operation keeps ownership of the projection.
+    const newerOperation = this.sessions.operations.some((entry) =>
+      entry.sessionId === sessionId
+      && entry.opSeq > operation.opSeq
+      && entry.state !== 'failed')
+    if (direction === 'close'
+      && operation.targetState === 'closed'
+      && actual === 'open'
+      && confirmed.decision.outcome === 'conflict'
+      && !newerOperation) {
+      this.sessions = settleIssueOperation(this.sessions, commitId, 'failed', now)
+    }
     this.save()
     const current = sessionOfIssue(this.sessions, sessionId)
     if (direction === 'close' && confirmed.decision.outcome === 'applied') {
@@ -1038,7 +1108,7 @@ export class GroupHubImpl implements GroupHub {
     const latest = this.sessions.operations.find((entry) => entry.sessionId === session.sessionId && entry.opSeq === session.lastOpSeq)
     return latest !== undefined
       && latest.kind === 'issue.close'
-      && (latest.state === 'pending' || latest.state === 'inflight')
+      && (latest.state === 'pending' || latest.state === 'inflight' || latest.state === 'unknown')
   }
 
   private async submitAction(actor: Actor, input: Record<string, unknown>): Promise<GroupHubResult> {
@@ -1066,12 +1136,17 @@ export class GroupHubImpl implements GroupHub {
     if (action.state === 'blocked' || action.state === 'failed') {
       return err('INVALID_INPUT', `action ${actionId} is ${action.state}; a new result cannot be written`)
     }
+    const session = this.sessions.sessions.get(action.sessionId)
+    // An unresolved close stops every result write. Vikunja may still apply the
+    // close, so a pending action must not append a comment while it is unknown.
+    if (session !== undefined && this.isSessionClosing(session)) {
+      return err('CONFLICT', `session ${action.sessionId} is closing; wait for the close to settle before submitting a result`)
+    }
     // A different result commit is refused before the action's first write is
     // claimed, so it can never become a second comment after a lost receipt.
     if (action.resultCommitId !== undefined && action.resultCommitId !== resultCommitId) {
       return err('CONFLICT', `action ${actionId} is bound to result commit ${action.resultCommitId}`)
     }
-    const session = this.sessions.sessions.get(action.sessionId)
     // A lost receipt leaves an unknown write. The same result commit retries by
     // reading its comment back, never by writing a second one.
     const recorded = externalOpForCommit(this.ledger, resultCommitId, 'action.result')

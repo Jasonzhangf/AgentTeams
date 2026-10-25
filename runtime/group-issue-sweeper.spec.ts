@@ -85,7 +85,7 @@ interface MultiIssueState {
 
 async function multiIssueHub(count: number): Promise<{
   readonly hub: ReturnType<typeof createGroupHub>
-  readonly calls: readonly ExternalOp[]
+  readonly calls: ExternalOp[]
   readonly external: Map<string, MultiIssueState>
   readonly groupId: string
   readonly sessions: readonly string[]
@@ -291,6 +291,35 @@ describe('registry-owned issue sweep', () => {
       console.log(`R5 bounded pass: ${elapsedMs}ms, unconfirmed=${result.unconfirmed.length}, healthy=closed`)
     } finally {
       release()
+    }
+  })
+
+  it('R5 red: an in-flight action shortens only its own session poll interval', async () => {
+    const { hub, calls, external, sessions } = await multiIssueHub(2)
+    const [inflightSession, ordinarySession] = sessions
+    const created = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a-inflight', commitId: 'ac-inflight', sessionId: inflightSession,
+      assigneeAgentId: PEER.agentId, actionKind: 'comment', reason: 'wait', expectedResult: 'result', replyRequired: true,
+    })
+    expect(created.ok).toBe(true)
+    const scheduler = startGroupIssueSweepScheduler(hub, { intervalMs: 400, inflightIntervalMs: 25 })
+    try {
+      await scheduler.runOnce()
+      calls.length = 0
+      external.get('ic-1')!.state = 'closed'
+      external.get('ic-2')!.state = 'closed'
+      const startedAt = Date.now()
+      await waitFor(() => hub.snapshot().sessions.find((entry) => entry.sessionId === inflightSession)?.state === 'closed', 250)
+      const elapsedMs = Date.now() - startedAt
+      const reads = calls.filter((op) => op.kind === 'issue.query')
+      const issueIds = reads.map((op) => (op.params as Record<string, unknown>).vikunjaIssueId)
+      expect(elapsedMs).toBeLessThan(250)
+      expect(issueIds).toContain('ic-1')
+      expect(issueIds).not.toContain('ic-2')
+      expect(hub.snapshot().sessions.find((entry) => entry.sessionId === ordinarySession)?.state).toBe('open')
+      console.log(`R5 in-flight interval: ${elapsedMs}ms, reads=${issueIds.join(',')}`)
+    } finally {
+      await scheduler.stop()
     }
   })
 

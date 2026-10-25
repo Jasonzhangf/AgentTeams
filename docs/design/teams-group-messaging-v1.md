@@ -1,6 +1,6 @@
 # Teams 群组通信、issue 会话与 action 执行 v1(修订版)
 
-状态:design 修订版(revision 9)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
+状态:design 修订版(revision 10)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
 注入、关闭、投递语义。审计反馈和用户确认的决定已落实到对象模型、线协议、权限、投递、
 Session 映射、关闭和分批。本文件是唯一 owner;不并存两套契约。受影响架构映射已同步:模块归属登记在
 `docs/architecture/module-registry.json` 的 `group-messaging` 条目,实现后按
@@ -66,6 +66,13 @@ revision 8:新增持久 `Action.refusal`,master 拒绝 peer 请求时原因非�
 revision 9:恢复 13.1 的读取 owner 委派、命令前刷新与在飞缩短边界,并记录第一批有界
 sweep 的实际实现(单轮有界并发、单读超时、30 秒窗口和 registry 状态可观测回执);离线改派
 与在飞缩短列为未实现项,附最小方案与验收,不静默降需求。
+
+revision 10:离线受信 reader 改派与在飞缩短按 13.1 的最小方案实现并验收。只读 `issue.query`
+在发起者离线时换到同群当前有效的在线成员,沿用同一 op/commit 与回执鉴权;无可用受信
+reader 时保持 unknown 并拒绝新 action,不静默降级。registry scheduler 仍只持有一个 timer,
+按 GroupHub 暴露的真实在飞 action 会话集合缩短读取间隔,普通会话不提前读。变更类外部写
+不换 owner 重写。未权威收敛的 close 意图(pending/inflight/unknown)同时封住新准入,
+只有原 close 的只读恢复或更高代次的新 reopen 意图可以解封。
 
 ## 2. 被替代的旧语义
 
@@ -616,13 +623,18 @@ JSONL 纪律:每条消息一行,含 messageId、sequence、commitId。单写者�
 
 第一批不等 webhook,用明确的状态读取机制收敛。
 
-- 读取 owner 是发起者所在 daemon;离线或读取超时时由 hub 委派的受信读取 daemon 执行。
-  只读查询允许换 owner,变更操作不换 daemon 重写。读取失败时保持原投影与 action 责任,
-  不把旧投影当新鲜状态。
+- 读取 owner 首选发起者所在 daemon。发起者离线时,GroupHub 从同一群当前有效且 scope 一致
+  的在线成员中选一个受信 reader;只读 `issue.query` 允许换 owner,沿用同一 op/commit 与
+  回执鉴权。回执 owner 必须匹配被委派 reader,不匹配即拒绝并保持 unknown。无可用受信
+  reader 时保持 unconfirmed/unknown 并拒绝新 action,不静默降级。变更类外部写
+  (`issue.close`、`issue.reopen`、`issue.create`、`action.result` 等)永远沿用记录 owner,
+  不换 daemon 重写。读取失败时保持原投影与 action 责任,不把旧投影当新鲜状态。
 - 刷新触发:定时轮询(默认 30 秒)、每条命令进入前刷新本会话、会话有在飞 action 时缩短间隔。
   第一批的定时轮询由 registry daemon 启动时创建的唯一有界 scheduler 承担;scheduler 只持有
   timer 生命周期并逐轮调用 GroupHub 的 sweep,GroupHub 保留 issue 真源、读取委派和共用
-  close settlement。每轮同一时刻最多一个 sweep;单轮读取用有界并发(默认 4)和单读超时
+  close settlement。在飞缩短只由这一个 timer 执行:scheduler 读取 GroupHub 从现有 action
+  状态派生的在飞会话集合,只对这批会话按较短间隔(默认 5 秒)触发单次 sweep;普通会话仍只按
+  完整间隔(默认 30 秒)读取,不提前触发。每轮同一时刻最多一个 sweep;单轮读取用有界并发(默认 4)和单读超时
   (默认 10 秒)推进,整轮在 30 秒窗口内结束。未完成读取的会话记为 unconfirmed 并保持
   unknown,不按旧投影放行。Console 关闭不停止 scheduler,UI 不拥有轮询,也不创建第二个
   scheduler。
@@ -631,19 +643,26 @@ JSONL 纪律:每条消息一行,含 messageId、sequence、commitId。单写者�
 - 最大延迟:默认 30 秒。超过该窗口未读到状态,视为会话状态未知。
 - 读取失败时的准入:会话状态未知时拒绝新 action,返回明确错误,不放行也不缓存待执行;投影与
   action 责任保持原样。每条 `action.create` 进入前刷新本会话,刷新失败即拒绝。
+- 未权威收敛的关闭:最后一条有效 close 意图处于 `pending`、`inflight` 或 `unknown` 时,
+  新 action 在外部读之前拒绝,已有 pending action 的结果提交同样拒绝。一次普通
+  `issue.query` 读到 open 不解除该意图;只有原 close 的只读恢复给出权威读回(生效则保持
+  closed,确认未生效则记录失败并允许按 open 重新准入),或更高 `opSeq` 的新 reopen 意图
+  记录后取代旧意图,才解除封口。
 - 外部关闭进入与本地关闭共用的收口逻辑:停止新准入、取消队列、通知在飞执行。不重复调用
   Vikunja close,但取消与收口不能跳过。只把 `state` 改成 closed 不算完成。
 - webhook 是第三批的加速通道,只缩短延迟,不改变上述机制和准入规则。
 
-本批未实现项与最小方案:
+已实现契约:
 
-- 受信读取 daemon 的离线改派尚未实现。当前 initiator owner 离线时,单轮读取记为
-  unconfirmed,新 action 因刷新失败被拒绝,不会静默改由 Console 或 hub 代替读取。
-  最小方案:GroupHub 只对 `issue.query` 选择一个在线的受信群成员作为 owner,沿用同一
-  op/commit 与回执鉴权;验收覆盖 initiator 离线、受信读取成功和回执 owner 不匹配三类。
-- 在飞 action 的轮询间隔缩短尚未实现。本批按固定 30 秒窗口验收,不宣称已有缩短。
-  最小方案:GroupHub 暴露在飞 action 的会话集合,scheduler 只对这批会话按较短间隔触发单次
-  sweep,不新增 timer owner;验收覆盖在飞会话外部关闭在缩短窗口内收敛,普通会话不被提前读。
+- `GroupHub.readExternal` 首选 session initiator;initiator 离线时从 `group-registry` 的当前
+  有效成员中选第一个在线成员作为受信 reader,只换 `issue.query` 的 owner。读取沿用
+  `issue.query:<sessionId>` 的 commit,并走 `confirmRead` 的回执鉴权;回执 `fromAgentId`
+  必须等于被委派 reader,否则拒绝并保持 unknown。无 reader 时返回 `UNAVAILABLE`,不发起
+  外部读,也不持久化新状态。
+- 在飞缩短的真实触发来源是 `GroupHub.inflightIssueSessionIds()`:它只从现有 action 状态
+  (`pending`、`accepted`、`in_progress`、`cancel_requested`)派生有在飞责任且仍存在的会话,
+  不新增第二套账本。registry scheduler 仍只有一个 timer;在短间隔 tick 上只对这组会话调用
+  `sweepIssueStates(sessionIds)`(默认 5 秒),普通会话只按完整间隔读取,不提前触发。
 
 ### 13.2 关闭与成员变更规则
 
