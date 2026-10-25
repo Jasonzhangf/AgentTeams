@@ -31,6 +31,26 @@ const TOKEN_FLAG = '--launcher-start-token'
 
 export type RegistryDaemonLifecycleState = 'starting' | 'running' | 'failed' | 'stopped'
 
+export interface RegistryIssueSweep {
+  readonly checked: number
+  readonly changed: number
+  readonly unconfirmed: readonly string[]
+  readonly updatedAt: string
+}
+
+/** The one durable receipt shape the CLI reads back from registry state. */
+export function groupIssueSweepReceipt(
+  result: GroupIssueSweepResult,
+  updatedAt: string = new Date().toISOString(),
+): RegistryIssueSweep {
+  return {
+    checked: result.checked,
+    changed: result.changed,
+    unconfirmed: [...result.unconfirmed],
+    updatedAt,
+  }
+}
+
 export interface RegistryDaemonState {
   readonly version: typeof STATE_VERSION
   readonly configPath: string
@@ -41,6 +61,7 @@ export interface RegistryDaemonState {
   readonly pid: number
   readonly state: RegistryDaemonLifecycleState
   readonly url?: string
+  readonly sweep?: RegistryIssueSweep
   readonly error?: string
   readonly updatedAt: string
 }
@@ -53,6 +74,7 @@ export interface RegistryDaemonStatus {
   readonly generation: number
   readonly pid?: number
   readonly url?: string
+  readonly sweep?: RegistryIssueSweep
   readonly error?: string
 }
 
@@ -82,7 +104,7 @@ export const DEFAULT_GROUP_ISSUE_SWEEP_INTERVAL_MS = 30_000
 
 export interface GroupIssueSweepSchedulerOptions {
   readonly intervalMs?: number
-  readonly onResult?: (result: GroupIssueSweepResult) => void
+  readonly onResult?: (result: GroupIssueSweepResult) => void | Promise<void>
   readonly onError?: (error: unknown) => void
 }
 
@@ -114,7 +136,7 @@ export function startGroupIssueSweepScheduler(
     pass = (async () => {
       if (hub.sweepIssueStates === undefined) throw new Error('group hub has no issue state sweep')
       const result = await hub.sweepIssueStates()
-      options.onResult?.(result)
+      await options.onResult?.(result)
       return result
     })().catch((error: unknown) => {
       onError(error)
@@ -127,6 +149,9 @@ export function startGroupIssueSweepScheduler(
   }
   const timer = setInterval(() => { void runOnce() }, intervalMs)
   timer.unref()
+  // Converge at boot as well as on the interval: a restarted registry should not
+  // serve a stale projection until the first full window has elapsed.
+  void runOnce()
   return {
     intervalMs,
     runOnce,
@@ -224,6 +249,15 @@ export async function readRegistryState(statePath: string): Promise<RegistryDaem
     || !Number.isSafeInteger(state.pid) || !['starting', 'running', 'failed', 'stopped'].includes(state.state)) {
     throw new RegistryProcessError('INVALID_STATUS', `registry state is malformed: ${statePath}`)
   }
+  if (state.sweep !== undefined) {
+    if (typeof state.sweep !== 'object' || state.sweep === null
+      || !Number.isSafeInteger(state.sweep.checked) || !Number.isSafeInteger(state.sweep.changed)
+      || !Array.isArray(state.sweep.unconfirmed)
+      || !state.sweep.unconfirmed.every((entry) => typeof entry === 'string')
+      || typeof state.sweep.updatedAt !== 'string' || state.sweep.updatedAt.length === 0) {
+      throw new RegistryProcessError('INVALID_STATUS', `registry sweep state is malformed: ${statePath}`)
+    }
+  }
   return state
 }
 
@@ -250,6 +284,7 @@ function statusFrom(statePath: string, configPath: string, daemonId: string, sta
     generation: state.generation,
     pid: state.pid,
     ...(state.url === undefined ? {} : { url: state.url }),
+    ...(state.sweep === undefined ? {} : { sweep: state.sweep }),
     ...(state.error === undefined ? {} : { error: state.error }),
   }
 }
@@ -457,14 +492,26 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
   console.log(`registry listening ${server.url} config=${base.configPath} pid=${process.pid}`)
   // The registry owns the one convergence timer. GroupHub keeps the issue truth
   // and the shared close settlement; this scheduler only holds the timer.
-  const issueSweeper = hub === undefined ? undefined : startGroupIssueSweepScheduler(hub)
+  let sweep: RegistryIssueSweep | undefined
+  const issueSweeper = hub === undefined ? undefined : startGroupIssueSweepScheduler(hub, {
+    // A detached child has no readable console stream, so the sweep result is
+    // persisted in the one state file the CLI and `registry status` read back.
+    onResult: (result) => {
+      sweep = groupIssueSweepReceipt(result)
+      return writeRegistryState(statePath, { ...base, pid: process.pid, state: 'running', url: server.url, sweep, updatedAt: sweep.updatedAt })
+    },
+  })
   let stopping: Promise<void> | undefined
   const stop = (signal: NodeJS.Signals) => {
     if (stopping) return
     stopping = (async () => {
       await issueSweeper?.stop()
       await server.close()
-      await writeRegistryState(statePath, { ...base, pid: process.pid, state: 'stopped', updatedAt: new Date().toISOString() })
+      await writeRegistryState(statePath, {
+        ...base, pid: process.pid, state: 'stopped',
+        ...(sweep === undefined ? {} : { sweep }),
+        updatedAt: new Date().toISOString(),
+      })
     })()
       .catch(error => {
         process.exitCode = 1

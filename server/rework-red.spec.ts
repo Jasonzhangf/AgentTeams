@@ -289,6 +289,51 @@ describe('rework red findings', () => {
     expect(calls.filter((op) => op.kind === 'issue.close')).toHaveLength(closeWrites)
   })
 
+  it('R4 red: a valid close refuses a pending action result while the external write is held', async () => {
+    let releaseClose: () => void = () => undefined
+    const closeWrite = new Promise<void>((resolve) => { releaseClose = resolve })
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'issue.close') {
+        return closeWrite.then(() => confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' }))
+      }
+      if (op.kind === 'action.result') return confirmed(op, { resultRef: 'comment:late' })
+      return confirmed(op, { issueId: '42', actualState: 'open' })
+    })
+    const { sessionId } = await sessionWithEdge(hub)
+    const actionId = await actionFor(hub, sessionId)
+    const closing = hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    // The close intent is durable and the queue is already disposed; the external
+    // write has not settled yet.
+    const submit = await hub.handle(PEER, { kind: 'action.submit', requestId: 's1', resultCommitId: 'rc1', actionId, resultBody: 'late result' })
+    expect(submit.ok).toBe(false)
+    expect(submit.ok ? '' : submit.error.code).toBe('INVALID_INPUT')
+    expect(calls.filter((op) => op.kind === 'action.result')).toHaveLength(0)
+    releaseClose()
+    await closing
+  })
+
+  it('R4 red: a valid close refuses new action admission while the external write is held', async () => {
+    let releaseClose: () => void = () => undefined
+    const closeWrite = new Promise<void>((resolve) => { releaseClose = resolve })
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'issue.close') {
+        return closeWrite.then(() => confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' }))
+      }
+      return confirmed(op, { issueId: '42', actualState: 'open' })
+    })
+    const { sessionId } = await sessionWithEdge(hub)
+    const closing = hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    const created = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac2', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    expect(created.ok).toBe(false)
+    expect(created.ok ? '' : created.error.code).toBe('CONFLICT')
+    expect(calls.filter((op) => op.kind === 'issue.query')).toHaveLength(0)
+    releaseClose()
+    await closing
+  })
+
   it('R7 red: a refusal with no reason is accepted and the reason is not persisted', async () => {
     const { hub, store } = scripted((op) => confirmed(op, { issueId: '42' }))
     const { sessionId, groupId } = await sessionWithEdge(hub)

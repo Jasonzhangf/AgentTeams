@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import { processAlive } from './local-ownership.ts'
 import {
   RegistryProcessError,
+  groupIssueSweepReceipt,
   loadRegistryIntent,
   readRegistryState,
   registryStatePath,
@@ -19,6 +20,10 @@ import {
 let directory: string
 let credentialFile: string
 const startedConfigs: string[] = []
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
+}
 
 beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'teams-registry-process-'))
@@ -156,4 +161,29 @@ it('reports a persisted but dead pid as failed instead of running', async () => 
     url: 'wss://127.0.0.1:1', updatedAt: new Date().toISOString(),
   })}\n`)
   expect(await statusRegistryDaemon(configPath)).toMatchObject({ state: 'failed', generation: 3, error: 'registry process pid is not alive' })
+})
+
+it('R5 dwell: the production registry entry persists its sweep receipt for status readback', async () => {
+  const configPath = track(await registryConfig())
+  const started = await startRegistryDaemon(configPath)
+  expect(started.state).toBe('running')
+  // A detached child has no console, so a sweep result that is only passed to
+  // onResult is invisible to the operator. The running daemon must write the
+  // receipt into its one state file and `status` must return it.
+  const deadline = Date.now() + 5_000
+  let sweep: RegistryDaemonStatus['sweep'] | undefined
+  while (Date.now() < deadline) {
+    sweep = (await statusRegistryDaemon(configPath)).sweep
+    if (sweep !== undefined) break
+    await wait(25)
+  }
+  expect(sweep).toBeDefined()
+  expect(sweep!.checked).toBe(0)
+  expect(sweep!.changed).toBe(0)
+  expect(sweep!.unconfirmed).toEqual([])
+  expect(Date.parse(sweep!.updatedAt)).toBeGreaterThan(0)
+  // The same receipt shape keeps a non-empty unconfirmed set, so a failed read
+  // is not collapsed to an empty success when it reaches the state file.
+  expect(groupIssueSweepReceipt({ checked: 2, changed: 1, unconfirmed: ['session:slow'] }).unconfirmed).toEqual(['session:slow'])
+  await stopRegistryDaemon(configPath, started.generation)
 })
