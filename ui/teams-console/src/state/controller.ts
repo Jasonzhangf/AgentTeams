@@ -4,8 +4,9 @@ import type { GroupRequestOutcome, GroupRequestSender } from '../client/group-cl
 import type { GroupWireRequest } from '../../../../packages/shared/src/group-wire.ts'
 import {
   applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors,
-  initialGroupWorkspaceState, intentKeyOf, isReadFrame, needsConfirmation, withCommitId,
-  type GroupMutationMemory, type GroupRequestContext, type GroupWorkspaceState,
+  contextKeyOf, contextVisibleIn, initialGroupWorkspaceState, intentKeyOf, isReadFrame,
+  needsConfirmation, requestContextOf, withCommitId,
+  type GroupMutationMemory, type GroupOutcome, type GroupRequestContext, type GroupWorkspaceState,
 } from './group-workspace.ts'
 import { readDraft, readFocus, readPage, writeDraft, writeFocus, writePage, type DraftPersistence } from './drafts.ts'
 import { ProjectionObservationController, type ObservationSession } from './observation.ts'
@@ -91,7 +92,22 @@ const clearedGroupContent = {
   composer: '',
   confirm: null,
   readError: undefined,
+  mutation: null,
+  retryable: null,
+  commits: {},
+  outcome: { kind: 'idle' as const },
 } satisfies Partial<GroupWorkspaceState>
+
+/**
+ * One write result kept under the context that produced it. `retryable` keeps the original
+ * request and commit ids, so only the owning context can retry it.
+ */
+interface ParkedGroupResult {
+  readonly context: GroupRequestContext
+  readonly outcome: GroupOutcome
+  readonly retryable: GroupMutationMemory | null
+  readonly commits: Readonly<Record<string, string>>
+}
 
 export const initialConsoleState: ConsoleState = {
   open: false,
@@ -159,6 +175,14 @@ function typedError(error: unknown): { readonly code: string; readonly message: 
   return { code: "HISTORY_REFUSED", message: "Unknown history refusal" }
 }
 
+/** Whether a write sent in `owner` belongs to the `view` context. */
+function contextMatches(view: GroupRequestContext, owner: GroupRequestContext): boolean {
+  if (owner.actorId !== view.actorId) return false
+  if (owner.groupId !== undefined && owner.groupId !== view.groupId) return false
+  if (owner.sessionId !== undefined && owner.sessionId !== view.sessionId) return false
+  return true
+}
+
 function actionResult(label: string, result: Extract<ConsoleCommandResultV1, { readonly ok: true }>): string {
   return result.result === undefined ? `${label}: accepted by Agent` : `${label}: ${JSON.stringify(result.result)}`
 }
@@ -180,6 +204,8 @@ export class TeamsConsoleController {
    * to the new context.
    */
   private groupGeneration = 0
+  /** Write results parked under the context that produced them; visible only there. */
+  private readonly parkedResults = new Map<string, ParkedGroupResult>()
   /** Typed composer text parked under `actorId::groupId` while the user is elsewhere. */
   private readonly composerDrafts = new Map<string, string>()
 
@@ -704,14 +730,14 @@ export class TeamsConsoleController {
     return { ...frame, requestId: this.nextRequestId() }
   }
 
-  /** Retained commit ids live per identity, so a switched actor can never inherit one. */
-  private commitKey(frame: GroupWireRequest): string {
-    return `${this.state.group.actorId ?? ''}::${intentKeyOf(frame)}`
+  /** Retained commit ids live per context, so a switched context never inherits one. */
+  private commitKeyOf(context: GroupRequestContext, frame: GroupWireRequest): string {
+    return `${contextKeyOf(context)}::${intentKeyOf(frame)}`
   }
 
   /** Attach the retained commit id for this intent, or retain a new one. */
   private withCommit(frame: GroupWireRequest): GroupWireRequest {
-    const key = this.commitKey(frame)
+    const key = this.commitKeyOf(requestContextOf(this.state.group, frame), frame)
     const retained = this.state.group.commits[key] ?? this.nextRequestId()
     if (this.state.group.commits[key] === undefined) {
       this.updateGroup(state => ({ ...state, commits: { ...state.commits, [key]: retained } }))
@@ -729,30 +755,108 @@ export class TeamsConsoleController {
     return { ...committed, requestId: retained.requestId }
   }
 
-  private mutationMemory(frame: GroupWireRequest): GroupMutationMemory {
+  private mutationMemory(frame: GroupWireRequest, retained?: GroupMutationMemory): GroupMutationMemory {
+    if (retained !== undefined) return { ...retained, frame, requestId: frame.requestId }
     const key = intentKeyOf(frame)
-    const commitId = this.state.group.commits[this.commitKey(frame)]
-    const context: GroupRequestContext = { actorId: this.state.group.actorId ?? '', groupId: this.state.group.selectedGroupId }
+    const context = requestContextOf(this.state.group, frame)
+    const commitId = this.state.group.commits[this.commitKeyOf(context, frame)]
     return { intentKey: key, requestId: frame.requestId, frame, context, ...(commitId === undefined ? {} : { commitId }) }
   }
 
-  /** A write that was in flight when the user switched context stays retryable where it was sent. */
-  private parkInFlightGroupMutation(): void {
-    this.updateGroup(state => {
-      const pending = state.mutation
-      if (pending === null) return state
-      return {
-        ...state,
-        mutation: null,
-        retryable: pending,
-        outcome: {
-          kind: 'unknown',
-          frame: pending.frame.kind,
-          code: 'RESULT_UNKNOWN',
-          message: 'Context changed before the owner answered; switch back to retry with the same commit.',
-        },
+  /** A write in flight when its context changes stays parked under the context that sent it. */
+  private parkInFlightGroupMutation(options: { readonly issueScopedOnly?: boolean } = {}): void {
+    const pending = this.state.group.mutation
+    if (pending === null) return
+    // A group-level write survives an issue switch, so only session-bound writes park there.
+    if (options.issueScopedOnly === true && pending.context.sessionId === undefined) return
+    this.parkWriteResult(pending.context, {
+      kind: 'unknown',
+      frame: pending.frame.kind,
+      requestId: pending.requestId,
+      code: 'RESULT_UNKNOWN',
+      message: 'Context changed before the owner answered; switch back to retry with the same commit.',
+    }, pending, pending.commitId === undefined
+      ? {}
+      : { [this.commitKeyOf(pending.context, pending.frame)]: pending.commitId })
+    this.updateGroup(state => ({ ...state, mutation: null }))
+  }
+
+  /** The actor/group/issue the view shows; a session component only when one is open. */
+  private currentViewContext(): GroupRequestContext {
+    const group = this.state.group
+    return {
+      actorId: group.actorId ?? '',
+      groupId: group.selectedGroupId,
+      ...(group.issue === null ? {} : { sessionId: group.issue.sessionId }),
+    }
+  }
+
+  /** The parked result that belongs to `view`, if any. */
+  private parkedFor(view: GroupRequestContext): ParkedGroupResult | undefined {
+    let best: ParkedGroupResult | undefined
+    let bestRank = -1
+    for (const parked of this.parkedResults.values()) {
+      if (!contextMatches(view, parked.context)) continue
+      const rank = parked.context.sessionId !== undefined ? 2 : parked.context.groupId !== undefined ? 1 : 0
+      if (rank > bestRank) {
+        best = parked
+        bestRank = rank
       }
-    })
+    }
+    return best
+  }
+
+  /**
+   * Show only what the current context owns. An in-flight write that still belongs here keeps
+   * its pending result; every other context's parked result stays out of the view.
+   */
+  private applyContextResult(view: GroupRequestContext = this.currentViewContext()): void {
+    const group = this.state.group
+    const pending = group.mutation !== null && contextMatches(view, group.mutation.context)
+      ? group.mutation
+      : null
+    const parked = this.parkedFor(view)
+    this.updateGroup(state => ({
+      ...state,
+      mutation: pending,
+      retryable: parked?.retryable ?? null,
+      commits: parked?.commits ?? {},
+      outcome: pending === null
+        ? parked?.outcome ?? { kind: 'idle' as const }
+        : { kind: 'pending', frame: pending.frame.kind, requestId: pending.requestId },
+    }))
+  }
+
+  /** Keep one write result under its own context, so a switch never shows or erases it. */
+  private recordResult(context: GroupRequestContext, state: GroupWorkspaceState): void {
+    this.parkWriteResult(context, state.outcome, state.retryable, state.commits)
+  }
+
+  /** Keep one write result under its own context, so a switch never shows or erases it. */
+  private parkWriteResult(
+    context: GroupRequestContext,
+    outcome: GroupOutcome,
+    retryable: GroupMutationMemory | null,
+    commits: Readonly<Record<string, string>>,
+  ): void {
+    this.parkedResults.set(contextKeyOf(context), { context, outcome, retryable, commits })
+  }
+
+  /** A write whose answer arrived after its context changed is parked, never stranded. */
+  private parkDroppedWrite(memory: GroupMutationMemory): void {
+    this.parkWriteResult(memory.context, {
+      kind: 'unknown',
+      frame: memory.frame.kind,
+      requestId: memory.requestId,
+      code: 'RESULT_UNKNOWN',
+      message: 'Context changed before the owner answered; switch back to retry with the same commit.',
+    }, memory, memory.commitId === undefined
+      ? {}
+      : { [this.commitKeyOf(memory.context, memory.frame)]: memory.commitId })
+    this.updateGroup(state => state.mutation !== null && state.mutation.requestId === memory.requestId
+      ? { ...state, mutation: null }
+      : state)
+    this.applyContextResult()
   }
 
   /** Group actors come from the projection; `control` is never an actor. */
@@ -850,6 +954,7 @@ export class TeamsConsoleController {
       selectedGroupId: groupId,
     }))
     this.restoreComposer()
+    this.applyContextResult()
     await this.loadSelectedGroup()
     return true
   }
@@ -897,22 +1002,39 @@ export class TeamsConsoleController {
     // A read only refreshes its own section. It never becomes a pending write, so its answer
     // can neither be shown as the current operation nor clear another write's unknown state.
     const read = isReadFrame(built.kind)
+    const memory = read ? null : this.mutationMemory(built, options.retained)
     const generation = this.groupGeneration
     this.updateGroup(state => ({
       ...state,
       // Only executing the parked action clears it. An unrelated read or refresh must not
       // silently drop a confirmation the user is still looking at.
       confirm: options.retained === undefined ? state.confirm : null,
-      mutation: read ? state.mutation : this.mutationMemory(built),
+      mutation: memory === null ? state.mutation : memory,
       outcome: read ? state.outcome : { kind: 'pending', frame: built.kind, requestId: built.requestId },
       error: undefined,
     }))
     const outcome: GroupRequestOutcome = await this.groupClient.requestGroup(actorId, built)
-    if (generation !== this.groupGeneration) {
-      // The user switched identity or group while this request was open. Its answer belongs
-      // to the context that asked, so it is dropped instead of landing in the new one.
+    if (read) {
+      if (generation !== this.groupGeneration) return false
+      return this.applyReadOutcome(outcome, built)
+    }
+    if (memory === null) return false
+    // The owner may select a different group in its list answer, so a group.create result
+    // always lands wherever the owner placed the group. Every other write's answer belongs
+    // to the context that asked, and a session-bound write stays with its issue.
+    const visible = contextVisibleIn(this.state.group, memory.context)
+    const createdGroup = built.kind === 'group.create' && this.state.group.selectedGroupId !== memory.context.groupId
+    const dropped = !visible && !createdGroup
+      || (generation !== this.groupGeneration && memory.context.sessionId !== undefined)
+    if (dropped) {
+      this.parkDroppedWrite(memory)
       return false
     }
+    return this.applyWriteOutcome(memory, built, outcome)
+  }
+
+  /** A read answer only refreshes its own section and never settles a parked write. */
+  private applyReadOutcome(outcome: GroupRequestOutcome, built: GroupWireRequest): boolean {
     switch (outcome.kind) {
       case 'reply':
         this.updateGroup(state => applyReply(state, outcome.reply, built.kind))
@@ -924,8 +1046,38 @@ export class TeamsConsoleController {
         this.updateGroup(state => applyAccess(state, outcome.access))
         return false
       default:
-        this.updateGroup(state => applyUnknown(state, built, outcome.message))
+        this.updateGroup(state => applyUnknown(state, built, outcome.message, requestContextOf(this.state.group, built)))
         return false
+    }
+  }
+
+  /** A write answer settles only where it was sent and is kept under that same context. */
+  private applyWriteOutcome(memory: GroupMutationMemory, built: GroupWireRequest, outcome: GroupRequestOutcome): boolean {
+    switch (outcome.kind) {
+      case 'reply': {
+        const next = applyReply(this.state.group, outcome.reply, built.kind)
+        this.update({ group: next })
+        const context = outcome.reply.kind === 'group.created'
+          ? { ...memory.context, groupId: outcome.reply.group.groupId }
+          : memory.context
+        this.recordResult(context, next)
+        return true
+      }
+      case 'refused': {
+        const next = applyRefusal(this.state.group, outcome.code, outcome.message, built.kind)
+        this.update({ group: next })
+        this.recordResult(memory.context, next)
+        return false
+      }
+      case 'access':
+        this.updateGroup(state => applyAccess(state, outcome.access))
+        return false
+      default: {
+        const next = applyUnknown(this.state.group, built, outcome.message, memory.context)
+        this.update({ group: next })
+        this.recordResult(memory.context, next)
+        return false
+      }
     }
   }
 
@@ -1026,11 +1178,19 @@ export class TeamsConsoleController {
     const known = group.issue?.sessionId === sessionId
       || group.issues.some(session => session.sessionId === sessionId)
     if (!known) return false
+    // A session-bound write that is still open belongs to the issue being left, so it is
+    // parked under that issue instead of staying pending or following the new view.
+    this.parkInFlightGroupMutation({ issueScopedOnly: true })
     // Opening an issue is a selection change: a later open supersedes this one, so the
     // older query and its follow-up action list are both inert when they answer.
     this.groupGeneration += 1
+    // Hide the previous issue's write result before the owner answers for this one. A
+    // group-level message result stays visible because it belongs to the whole group.
+    this.applyContextResult({ actorId: group.actorId ?? '', groupId: group.selectedGroupId })
     const opened = await this.dispatch({ kind: 'issue.query', requestId: '', sessionId })
     if (!opened) return false
+    // The opened issue may own a parked write result; restore it with its original ids.
+    this.applyContextResult()
     // Actions belong to the opened session; load them now that it is visible.
     await this.dispatch({ kind: 'action.list', requestId: '', sessionId })
     return true
@@ -1092,11 +1252,9 @@ export class TeamsConsoleController {
     return this.send({ kind: 'action.report', requestId: '', actionId, report, reason })
   }
 
-  /** A stored request is only replayable in the identity and group that produced it. */
+  /** A stored request is only replayable in the identity, group and issue that produced it. */
   private inCurrentContext(memory: GroupMutationMemory): boolean {
-    if (memory.context.actorId !== (this.state.group.actorId ?? '')) return false
-    if (memory.context.groupId !== undefined && memory.context.groupId !== this.state.group.selectedGroupId) return false
-    return true
+    return contextMatches(this.currentViewContext(), memory.context)
   }
 
   /** Execute the parked critical action after the user confirms its target. */

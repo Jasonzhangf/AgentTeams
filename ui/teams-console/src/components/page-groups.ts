@@ -2,7 +2,7 @@ import type { ConsoleState, TeamsConsoleController } from '../state/controller.t
 import type { MessageKey } from '../client/locale.ts'
 import type { GroupWorkspaceState } from '../state/group-workspace.ts'
 import type { Action } from '../../../../packages/shared/src/group-wire.ts'
-import { assignableMembers, effectiveAccess, grantTargets, groupPhase, invitableAgents } from '../state/group-workspace.ts'
+import { assignableMembers, effectiveAccess, grantTargets, groupPhase, invitableAgents, visibleRetryable } from '../state/group-workspace.ts'
 import { append, button, element } from './dom.ts'
 
 /**
@@ -546,7 +546,8 @@ function renderOutcome(state: GroupWorkspaceState, controller: TeamsConsoleContr
             ? t.groupFailed
             : t.groupOutcomeIdle
   panel.textContent = outcome.message === undefined ? label : `${label} — ${outcome.message}`
-  if (outcome.kind === 'unknown' || (outcome.kind === 'failed' && state.retryable !== null)) {
+  // A result parked under another context offers no retry here.
+  if ((outcome.kind === 'unknown' || outcome.kind === 'failed') && visibleRetryable(state) !== null) {
     const retry = button(t.groupRetry, 'teams-button-secondary', async () => { await controller.retryGroupMutation() })
     retry.dataset.groupRetry = 'true'
     append(panel, retry)

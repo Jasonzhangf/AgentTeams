@@ -55,14 +55,67 @@ export interface GroupMutationMemory {
   readonly context: GroupRequestContext
 }
 
-/** A retry or pending answer belongs to one identity/group context; it never follows a switch. */
+/**
+ * A retry or pending answer belongs to one identity/group context; it never follows a
+ * switch. A session-bound action write also belongs to the issue it was sent from, so the
+ * same group can hold one parked result per issue.
+ */
 export interface GroupRequestContext {
   readonly actorId: string
   readonly groupId?: string
+  readonly sessionId?: string
 }
 
 export function contextKeyOf(context: GroupRequestContext): string {
-  return `${context.actorId}::${context.groupId ?? ''}`
+  return `${context.actorId}::${context.groupId ?? ''}::${context.sessionId ?? ''}`
+}
+
+/**
+ * The issue session a write belongs to. Group-level traffic has no issue owner, so a
+ * message send never gains one from whatever issue happens to be open.
+ */
+export function writeSessionOf(frame: GroupWireRequest, state?: GroupWorkspaceState): string | undefined {
+  switch (frame.kind) {
+    case 'issue.close':
+    case 'issue.reopen':
+    case 'action.create':
+      return frame.sessionId
+    case 'action.submit':
+    case 'action.report':
+    case 'action.refuse': {
+      const action = state?.actions.find(candidate => candidate.actionId === frame.actionId)
+      return action?.sessionId ?? state?.issue?.sessionId
+    }
+    default:
+      return undefined
+  }
+}
+
+/** The context a write is sent in, captured when the frame leaves the UI. */
+export function requestContextOf(state: GroupWorkspaceState, frame: GroupWireRequest): GroupRequestContext {
+  const sessionId = writeSessionOf(frame, state)
+  return {
+    actorId: state.actorId ?? '',
+    groupId: state.selectedGroupId,
+    ...(sessionId === undefined ? {} : { sessionId }),
+  }
+}
+
+/** A write result is visible only for the actor/group that produced it, and its issue. */
+export function contextVisibleIn(state: GroupWorkspaceState, context: GroupRequestContext): boolean {
+  if (context.actorId !== (state.actorId ?? '')) return false
+  if (context.groupId !== undefined && context.groupId !== state.selectedGroupId) return false
+  if (context.sessionId !== undefined && context.sessionId !== state.issue?.sessionId) return false
+  return true
+}
+
+/** The visible retry belongs to this view only; another context's parked write has none. */
+export function visibleRetryable(state: GroupWorkspaceState): GroupMutationMemory | null {
+  const retryable = state.retryable
+  if (retryable === null) return null
+  // A snapshot without a context is rendered by the workspace that owns it.
+  if (retryable.context === undefined) return retryable
+  return contextVisibleIn(state, retryable.context) ? retryable : null
 }
 
 /** Read failure scoped to its own section; it never replaces a write's outcome. */
@@ -470,7 +523,12 @@ function sectionOf(kind: string): GroupSectionName {
  * A missing or unreadable owner answer. A mutation stays retryable with the same commit
  * so a repeated submit cannot create a second business object.
  */
-export function applyUnknown(state: GroupWorkspaceState, frame: GroupWireRequest, message: string): GroupWorkspaceState {
+export function applyUnknown(
+  state: GroupWorkspaceState,
+  frame: GroupWireRequest,
+  message: string,
+  context: GroupRequestContext = requestContextOf(state, frame),
+): GroupWorkspaceState {
   if (isReadFrame(frame.kind)) {
     // An unreadable read is a section problem. It never rewrites a write's unknown result.
     const next: GroupWorkspaceState = { ...state, readError: { section: sectionOf(frame.kind), code: 'RESULT_UNKNOWN', message } }
@@ -483,7 +541,6 @@ export function applyUnknown(state: GroupWorkspaceState, frame: GroupWireRequest
       default: return next
     }
   }
-  const context: GroupRequestContext = { actorId: state.actorId ?? '', groupId: state.selectedGroupId }
   const retryable: GroupMutationMemory = {
     intentKey: intentKeyOf(frame),
     requestId: frame.requestId,

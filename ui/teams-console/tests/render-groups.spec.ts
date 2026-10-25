@@ -196,6 +196,7 @@ const page = `<!doctype html>
   <div id="issuelist"></div>
   <div id="issueempty"></div>
   <div id="issuerefused"></div>
+  <div id="foreign"></div>
   <script>
 ${script}
 ${controllerScript}
@@ -332,6 +333,21 @@ ${controllerScript}
     document.body.dataset.issueListRefusedError = String(issuerefused.querySelector('[data-group-issue-list-error]') !== null)
     document.body.dataset.issueListRefusedState = String(attr(issuerefused, 'data-group-issue-list-state') === 'refused')
     document.body.dataset.issueListRefusedCreateForm = String(issuerefused.querySelector('[data-group-issue-action="create"]') !== null)
+
+    // 16. A parked result owned by another context offers no retry control here.
+    const foreign = render('foreign', ${JSON.stringify(state({
+      issue: issueSession,
+      issueStatus: 'ready',
+      outcome: { kind: 'unknown', frame: 'action.submit', code: 'RESULT_UNKNOWN', message: 'kept by another context' },
+      retryable: {
+        intentKey: 'action.submit:a1',
+        requestId: 'req-foreign',
+        commitId: 'commit-foreign',
+        context: { actorId: 'agent-b', groupId: 'g1' },
+        frame: { kind: 'action.submit', requestId: 'req-foreign', resultCommitId: 'commit-foreign', actionId: 'a1', resultBody: 'done' },
+      },
+    }))})
+    document.body.dataset.foreignContextNoRetry = String(foreign.querySelector('[data-group-retry]') === null)
   </script>
 </body></html>`
 
@@ -495,6 +511,7 @@ describe('group workspace DOM contract in a real DOM', () => {
       'data-issue-list-refused-error',
       'data-issue-list-refused-state',
       'data-issue-list-refused-create-form',
+      'data-foreign-context-no-retry',
     ]) {
       expect(output, marker).toContain(`${marker}="true"`)
     }

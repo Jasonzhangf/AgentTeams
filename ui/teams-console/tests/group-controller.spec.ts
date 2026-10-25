@@ -557,4 +557,156 @@ describe('group request context isolation', () => {
     expect(lists[0]).toMatchObject({ sessionId: 's1' })
     expect(controller.getSnapshot().group.issue?.sessionId).toBe('s1')
   })
+
+  it('parks a session-bound write when another issue opens and restores it on return', async () => {
+    const issueOne = { sessionId: 'i1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const issueTwo = { sessionId: 'i2', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v2', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const actionFor = (sessionId: string) => ({
+      actionId: `action-${sessionId}`,
+      commitId: `commit-${sessionId}`,
+      sessionId,
+      initiatorAgentId: 'agent-a',
+      assigneeAgentId: 'agent-a',
+      kind: 'reply' as const,
+      reason: 'review',
+      expectedResult: 'answer',
+      replyRequired: false,
+      state: 'pending' as const,
+      createdAt: 'now',
+    })
+    const harness = deferredClient()
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { ...groupsReply, requestId: frame.requestId } }))
+    harness.scripts.set('issue.list', frame => ({ kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [issueOne, issueTwo] } }))
+    harness.scripts.set('issue.query', frame => {
+      const sessionId = frame.kind === 'issue.query' ? frame.sessionId : ''
+      return { kind: 'reply', reply: { kind: 'issue.session', requestId: frame.requestId, session: sessionId === 'i1' ? issueOne : issueTwo } }
+    })
+    harness.scripts.set('action.list', frame => {
+      const sessionId = frame.kind === 'action.list' ? frame.sessionId : undefined
+      return { kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: sessionId === undefined ? [] : [actionFor(sessionId)] } }
+    })
+    harness.defer.add('action.submit')
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    await controller.openIssue('i1')
+
+    const submitting = controller.submitAction('action-i1', 'done')
+    await Promise.resolve()
+    const submitFrame = harness.sent.find(frame => frame.kind === 'action.submit')
+    expect(submitFrame).toBeDefined()
+    expect(controller.getSnapshot().group.mutation?.requestId).toBe(submitFrame!.requestId)
+
+    // Opening I2 parks the in-flight I1 write instead of stranding it as pending.
+    await controller.openIssue('i2')
+    const duringI2 = controller.getSnapshot().group
+    expect(duringI2.mutation).toBeNull()
+    expect(duringI2.retryable).toBeNull()
+    expect(duringI2.outcome.kind).toBe('idle')
+
+    // The late answer is inert; it never repaints I2 and never sends again.
+    await harness.releaseOne(frame => frame.kind === 'action.submit')
+    await submitting
+    const afterAnswer = controller.getSnapshot().group
+    expect(afterAnswer.issue?.sessionId).toBe('i2')
+    expect(afterAnswer.mutation).toBeNull()
+    expect(afterAnswer.retryable).toBeNull()
+    expect(afterAnswer.outcome.kind).toBe('idle')
+    expect(harness.sent.filter(frame => frame.kind === 'action.submit')).toHaveLength(1)
+
+    // The parked result belongs to I1 and comes back there with its original ids.
+    await controller.openIssue('i1')
+    const backToI1 = controller.getSnapshot().group
+    expect(backToI1.mutation).toBeNull()
+    expect(backToI1.outcome.kind).toBe('unknown')
+    expect(backToI1.retryable?.requestId).toBe(submitFrame!.requestId)
+    expect(backToI1.retryable?.commitId).toBe(submitFrame!.resultCommitId)
+  })
+
+  it('keeps each context write result parked and visible only in its owning context', async () => {
+    const harness = deferredClient()
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { ...twoGroups, requestId: frame.requestId } }))
+    harness.scripts.set('message.send', () => ({ kind: 'transport', message: 'no answer' }))
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    await controller.selectGroup('g1')
+    controller.setGroupComposer('hello g1')
+    expect(await controller.sendGroupMessage()).toBe(false)
+    const g1Send = harness.sent.filter(frame => frame.kind === 'message.send').at(-1)!
+
+    // Reads never settle, clear or re-park the current context's write result.
+    await controller.loadGroups()
+    const afterReads = controller.getSnapshot().group
+    expect(afterReads.outcome.kind).toBe('unknown')
+    expect(afterReads.retryable?.requestId).toBe(g1Send.requestId)
+
+    // A different group never shows the previous group's unknown or retry control.
+    await controller.selectGroup('g2')
+    const inG2 = controller.getSnapshot().group
+    expect(inG2.outcome.kind).not.toBe('unknown')
+    expect(inG2.retryable).toBeNull()
+
+    controller.setGroupComposer('hello g2')
+    expect(await controller.sendGroupMessage()).toBe(false)
+    const g2Send = harness.sent.filter(frame => frame.kind === 'message.send').at(-1)!
+    expect(controller.getSnapshot().group.retryable?.requestId).toBe(g2Send.requestId)
+
+    // Returning to g1 restores g1's own unknown; a retry reuses its original ids.
+    await controller.selectGroup('g1')
+    const backToG1 = controller.getSnapshot().group
+    expect(backToG1.outcome.kind).toBe('unknown')
+    expect(backToG1.retryable?.requestId).toBe(g1Send.requestId)
+    expect(backToG1.retryable?.commitId).toBe(g1Send.commitId)
+    harness.scripts.set('message.send', frame => ({ kind: 'reply', reply: { kind: 'message.sent', requestId: frame.requestId, messageId: 'm-retry', sequence: 9 } }))
+    expect(await controller.retryGroupMutation()).toBe(true)
+    const retrySend = harness.sent.filter(frame => frame.kind === 'message.send').at(-1)!
+    expect(retrySend.requestId).toBe(g1Send.requestId)
+    expect(retrySend.commitId).toBe(g1Send.commitId)
+
+    // g2's unknown was parked independently and is still there.
+    await controller.selectGroup('g2')
+    const g2Again = controller.getSnapshot().group
+    expect(g2Again.outcome.kind).toBe('unknown')
+    expect(g2Again.retryable?.requestId).toBe(g2Send.requestId)
+  })
+
+  it('keeps a group-level message send visible across an issue switch', async () => {
+    const issueOne = { sessionId: 'i1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const issueTwo = { sessionId: 'i2', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v2', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const harness = deferredClient()
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { ...groupsReply, requestId: frame.requestId } }))
+    harness.scripts.set('issue.list', frame => ({ kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [issueOne, issueTwo] } }))
+    harness.scripts.set('issue.query', frame => {
+      const sessionId = frame.kind === 'issue.query' ? frame.sessionId : ''
+      return { kind: 'reply', reply: { kind: 'issue.session', requestId: frame.requestId, session: sessionId === 'i1' ? issueOne : issueTwo } }
+    })
+    harness.scripts.set('message.send', frame => ({ kind: 'reply', reply: { kind: 'message.sent', requestId: frame.requestId, messageId: 'm1', sequence: 1 } }))
+    harness.defer.add('message.send')
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    await controller.openIssue('i1')
+
+    controller.setGroupComposer('hello group')
+    const sending = controller.sendGroupMessage()
+    await Promise.resolve()
+    expect(controller.getSnapshot().group.mutation?.frame.kind).toBe('message.send')
+
+    // A group-level send is not issue-scoped: opening I2 neither parks it as unknown nor
+    // hides the pending operation, and its late answer still lands in the same group.
+    await controller.openIssue('i2')
+    const duringI2 = controller.getSnapshot().group
+    expect(duringI2.issue?.sessionId).toBe('i2')
+    expect(duringI2.mutation?.frame.kind).toBe('message.send')
+    expect(duringI2.outcome.kind).toBe('pending')
+    await harness.releaseOne(frame => frame.kind === 'message.send')
+    expect(await sending).toBe(true)
+    expect(controller.getSnapshot().group.outcome.kind).toBe('succeeded')
+
+    // Returning to I1 still sees the same group-level result; it was never parked away.
+    await controller.openIssue('i1')
+    expect(controller.getSnapshot().group.mutation).toBeNull()
+    expect(controller.getSnapshot().group.outcome.kind).toBe('succeeded')
+  })
 })
