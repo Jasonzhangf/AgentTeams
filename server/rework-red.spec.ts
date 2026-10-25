@@ -420,9 +420,9 @@ describe('rework red findings', () => {
     expect(calls.filter((op) => op.kind === 'issue.close')).toHaveLength(1)
   })
 
-  it('R4 red: an unknown close unseals after the same close recovery confirms it was not applied', async () => {
+  it('R4 red: an open read of an unknown close keeps the seal and its responsibility', async () => {
     let closeAttempts = 0
-    const { hub, calls } = scripted((op) => {
+    const { hub, calls, store } = scripted((op) => {
       if (op.kind === 'issue.close') {
         closeAttempts += 1
         return closeAttempts === 1
@@ -446,11 +446,27 @@ describe('rework red findings', () => {
     expect(recovered.ok).toBe(true)
     expect((recovered.reply as { outcome: string }).outcome).toBe('conflict')
     expect(calls.filter((op) => op.kind === 'issue.close')).toHaveLength(1)
-    const admitted = await hub.handle(OWNER, {
+    // The close recovery is a plain read: an open result cannot tell "C never
+    // applied" from "C applied and the issue was reopened externally later".
+    // The unknown write keeps its responsibility, so admission stays sealed
+    // and the failed attempt neither writes externally nor changes any snapshot.
+    const readsAfterRecovery = calls.filter((op) => op.kind === 'issue.query').length
+    const writesAfterRecovery = calls.filter((op) => op.kind === 'issue.close' || op.kind === 'issue.reopen').length
+    const snapshotsBefore = store.snapshots.length
+    const refused = await hub.handle(OWNER, {
       kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
       assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
     })
-    expect(admitted.ok).toBe(true)
+    expect(refused.ok).toBe(false)
+    expect(refused.ok ? '' : refused.error.code).toBe('CONFLICT')
+    expect(calls.filter((op) => op.kind === 'issue.query')).toHaveLength(readsAfterRecovery)
+    expect(calls.filter((op) => op.kind === 'issue.close' || op.kind === 'issue.reopen')).toHaveLength(writesAfterRecovery)
+    expect(writesAfterRecovery).toBe(1)
+    expect(store.snapshots.length).toBe(snapshotsBefore)
+    const session = hub.snapshot().sessions.find((entry) => entry.sessionId === sessionId)
+    expect(session?.state).toBe('open')
+    const operation = hub.snapshot().operations.find((entry) => entry.commitId === 'cc1')
+    expect(operation?.state).toBe('unknown')
   })
 
   it('R4 red: an unknown close refuses a pending action result with no external write', async () => {

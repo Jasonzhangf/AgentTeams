@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ExternalOp } from '../packages/shared/src/group-wire.ts'
 import type { ExternalOpReceipt } from '../server/group-external-ops.ts'
 import { createGroupHub, type GroupHubSnapshot, type GroupHubStore } from '../server/group-hub.ts'
@@ -228,6 +228,98 @@ describe('registry-owned issue sweep', () => {
     await Promise.all([first, second])
     expect(calls.filter((op) => op.kind === 'issue.query')).toHaveLength(readsBefore + 1)
     await scheduler.stop()
+  })
+
+  it('R5 red: a full window that falls due during a short pass waits and then runs as a full pass', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-10-22T00:00:00.000Z'))
+      const allSessions = ['session:live', 'session:ordinary']
+      const passes: Array<readonly string[] | undefined> = []
+      const reads: string[][] = []
+      let inflight: readonly string[] = []
+      let releaseShort: () => void = () => undefined
+      let shortHeld = false
+      let active = 0
+      let maxActive = 0
+      const hub: GroupHub = {
+        handle: async () => ({ ok: true }),
+        inflightIssueSessionIds: () => inflight,
+        sweepIssueStates: async (sessionIds?: readonly string[]) => {
+          active += 1
+          maxActive = Math.max(maxActive, active)
+          passes.push(sessionIds)
+          reads.push(sessionIds === undefined ? [...allSessions] : [...sessionIds])
+          try {
+            if (sessionIds !== undefined && shortHeld) {
+              await new Promise<void>((resolveHold) => { releaseShort = resolveHold })
+            }
+            return { checked: 0, changed: 0, unconfirmed: [] }
+          } finally {
+            active -= 1
+          }
+        },
+      }
+      const scheduler = startGroupIssueSweepScheduler(hub, { intervalMs: 30_000, inflightIntervalMs: 5_000 })
+      await vi.advanceTimersByTimeAsync(0)
+      // The boot pass is a real full pass over every session.
+      expect(passes).toEqual([undefined])
+      expect(reads[0]).toEqual(allSessions)
+      expect(vi.getTimerCount()).toBe(1)
+      await vi.advanceTimersByTimeAsync(20_000)
+      inflight = ['session:live']
+      shortHeld = true
+      // 25s: the short targeted pass starts and stays in flight.
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(passes).toEqual([undefined, ['session:live']])
+      // 30s: the full window is due, but only the short pass is in flight.
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(passes).toEqual([undefined, ['session:live']])
+      // 35s: release the short pass; the full window is still due.
+      await vi.advanceTimersByTimeAsync(5_000)
+      releaseShort()
+      await vi.advanceTimersByTimeAsync(5_000)
+      // 40s: the real full pass runs over the ordinary session as well.
+      expect(passes).toEqual([undefined, ['session:live'], undefined])
+      expect(reads[2]).toEqual(allSessions)
+      expect(maxActive).toBe(1)
+      expect(vi.getTimerCount()).toBe(1)
+      console.log(`R5 full after short pass: boot=0ms short=25s due=30s release=35s full=${Date.now() - Date.parse('2026-10-22T00:00:00.000Z')}ms`)
+      await scheduler.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('R5 red: a due full pass with nothing in flight runs at once and moves the full window', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-10-22T00:00:00.000Z'))
+      const starts: number[] = []
+      const hub: GroupHub = {
+        handle: async () => ({ ok: true }),
+        inflightIssueSessionIds: () => [],
+        sweepIssueStates: async () => {
+          starts.push(Date.now())
+          return { checked: 0, changed: 0, unconfirmed: [] }
+        },
+      }
+      const scheduler = startGroupIssueSweepScheduler(hub, { intervalMs: 30_000, inflightIntervalMs: 5_000 })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(starts).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(starts).toHaveLength(2)
+      expect(starts[1]! - starts[0]!).toBe(30_000)
+      // The window moved: no extra full pass before another 30 seconds elapse.
+      await vi.advanceTimersByTimeAsync(25_000)
+      expect(starts).toHaveLength(2)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(starts).toHaveLength(3)
+      expect(starts[2]! - starts[1]!).toBe(30_000)
+      await scheduler.stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('R5 red: a stale closed read cannot overwrite a newer close+reopen generation', async () => {

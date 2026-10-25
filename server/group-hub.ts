@@ -1013,21 +1013,12 @@ export class GroupHubImpl implements GroupHub {
     const now = this.now().toISOString()
     const confirmed = confirmIssueOperation(this.sessions, { commitId, externalState: actual, externalOpSeq: operation.opSeq }, now)
     this.sessions = confirmed.state
-    // A readback of this close itself that reports open is authoritative that
-    // the intent never applied. Record that fact so admission can resume; a
-    // plain issue.query during admission never reaches this path, and a newer
-    // operation keeps ownership of the projection.
-    const newerOperation = this.sessions.operations.some((entry) =>
-      entry.sessionId === sessionId
-      && entry.opSeq > operation.opSeq
-      && entry.state !== 'failed')
-    if (direction === 'close'
-      && operation.targetState === 'closed'
-      && actual === 'open'
-      && confirmed.decision.outcome === 'conflict'
-      && !newerOperation) {
-      this.sessions = settleIssueOperation(this.sessions, commitId, 'failed', now)
-    }
+    // A conflict or unknown settlement leaves the intent unknown and never
+    // rewrites the newer state. An open read of a close cannot prove that the
+    // close never applied: it cannot tell "C did not apply yet" from "C applied
+    // and the issue was reopened externally afterwards". The intent therefore
+    // keeps its unknown responsibility and its admission seal until a higher
+    // generation reopen intent is confirmed or the close reads back closed.
     this.save()
     const current = sessionOfIssue(this.sessions, sessionId)
     if (direction === 'close' && confirmed.decision.outcome === 'applied') {

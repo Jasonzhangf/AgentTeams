@@ -2,8 +2,8 @@
   "schema_version": 1,
   "manifest_id": "teams-group-messaging-v1",
   "status": "design",
-  "revision": 10,
-  "supersedes": "revision 9; implements the offline trusted reader fallback, the in-flight interval shortening and the unknown-close admission seal described there; revision 9 restored the delegated read owner, command-before-refresh and in-flight shortening boundaries in section 13.1, and recorded the bounded sweep implementation plus the two explicit batch-1 gaps; revision 8 added Action.refusal and the registry-owned bounded external-close sweep; revision 7 added Action.report",
+  "revision": 11,
+  "supersedes": "revision 10; an open read of an unknown close no longer releases its admission seal because a current-state read cannot prove the close never applied, and the full sweep clock advances only when a full pass really starts rather than when a short targeted pass is in flight; revision 10 implemented the offline trusted reader fallback, the in-flight interval shortening and the unknown-close admission seal; revision 9 restored the delegated read owner, command-before-refresh and in-flight shortening boundaries in section 13.1, and recorded the bounded sweep implementation plus the two explicit batch-1 gaps; revision 8 added Action.refusal and the registry-owned bounded external-close sweep; revision 7 added Action.report",
   "canonical_doc": "docs/design/teams-group-messaging-v1.md",
   "owner_modules": ["control-protocol", "server", "network", "runtime", "config"],
   "resources": [

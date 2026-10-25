@@ -143,9 +143,18 @@ export function startGroupIssueSweepScheduler(
   })
   let inFlight: Promise<GroupIssueSweepResult | undefined> | undefined
   let stopped = false
+  let lastFullPassAt = Date.now()
+  let lastInflightPassAt = lastFullPassAt
   const runPass = (sessionIds?: readonly string[]): Promise<GroupIssueSweepResult | undefined> => {
     if (inFlight !== undefined) return inFlight
     if (stopped) return Promise.resolve(undefined)
+    // A full pass counts for the full window only when it really starts. A due
+    // full pass that would merge into an in-flight short pass keeps its clock
+    // behind, so the next tick after that pass settles runs the full one.
+    if (sessionIds === undefined) {
+      lastFullPassAt = Date.now()
+      lastInflightPassAt = lastFullPassAt
+    }
     let pass: Promise<GroupIssueSweepResult | undefined>
     pass = (async () => {
       if (hub.sweepIssueStates === undefined) throw new Error('group hub has no issue state sweep')
@@ -162,14 +171,14 @@ export function startGroupIssueSweepScheduler(
     return pass
   }
   const runOnce = (): Promise<GroupIssueSweepResult | undefined> => runPass()
-  let lastFullPassAt = Date.now()
-  let lastInflightPassAt = lastFullPassAt
   const timer = setInterval(() => {
     if (stopped) return
     const now = Date.now()
     if (now - lastFullPassAt >= intervalMs) {
-      lastFullPassAt = now
-      lastInflightPassAt = now
+      // A full pass that is due is not satisfied by whatever pass is already in
+      // flight. Its clock stays behind, so a later tick starts the real full
+      // pass over ordinary sessions too.
+      if (inFlight !== undefined) return
       void runPass()
       return
     }

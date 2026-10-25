@@ -1,6 +1,6 @@
 # Teams 群组通信、issue 会话与 action 执行 v1(修订版)
 
-状态:design 修订版(revision 10)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
+状态:design 修订版(revision 11)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
 注入、关闭、投递语义。审计反馈和用户确认的决定已落实到对象模型、线协议、权限、投递、
 Session 映射、关闭和分批。本文件是唯一 owner;不并存两套契约。受影响架构映射已同步:模块归属登记在
 `docs/architecture/module-registry.json` 的 `group-messaging` 条目,实现后按
@@ -71,8 +71,18 @@ revision 10:离线受信 reader 改派与在飞缩短按 13.1 的最小方案实
 在发起者离线时换到同群当前有效的在线成员,沿用同一 op/commit 与回执鉴权;无可用受信
 reader 时保持 unknown 并拒绝新 action,不静默降级。registry scheduler 仍只持有一个 timer,
 按 GroupHub 暴露的真实在飞 action 会话集合缩短读取间隔,普通会话不提前读。变更类外部写
-不换 owner 重写。未权威收敛的 close 意图(pending/inflight/unknown)同时封住新准入,
-只有原 close 的只读恢复或更高代次的新 reopen 意图可以解封。
+不换 owner 重写。未权威收敛的 close 意图(pending/inflight/unknown)同时封住新准入;
+解封只由读回 closed 的确认或更高代次的新 reopen 意图产生,读回 open 不解封。
+
+revision 11:修正 close 的未权威收敛责任与 scheduler 的 full 时钟。`issue.recover` 只有当前
+状态读,没有原请求的终态和外部序号,因此读回 open 与普通 `issue.query` 证据相同:它既不能
+证明旧 C 从未生效,也不能区分"C 生效后被外部重开",不再据此把原 close op 记为 failed。
+读回 open 或先后不明时保持 unknown/conflict 并继续封准入;读回 closed 按已应用确认完成并
+保持关闭。只有原 owner 的写回执明确失败且能证明未写,或更高代次的新 reopen 意图经真实
+写/读确认后取代旧责任,才解除封口。revision 10 的"原 close 的只读恢复可以解封"按此限定为
+读回 closed。registry scheduler 只在 full pass 真正开始时推进 full 时钟;full 到期时若有
+短定向 pass 在飞,保留 full 待执行、不推进时钟、不把子集 pass 当 full,在飞 pass 结束后由
+下一 tick 执行 full。
 
 ## 2. 被替代的旧语义
 
@@ -645,9 +655,11 @@ JSONL 纪律:每条消息一行,含 messageId、sequence、commitId。单写者�
   action 责任保持原样。每条 `action.create` 进入前刷新本会话,刷新失败即拒绝。
 - 未权威收敛的关闭:最后一条有效 close 意图处于 `pending`、`inflight` 或 `unknown` 时,
   新 action 在外部读之前拒绝,已有 pending action 的结果提交同样拒绝。一次普通
-  `issue.query` 读到 open 不解除该意图;只有原 close 的只读恢复给出权威读回(生效则保持
-  closed,确认未生效则记录失败并允许按 open 重新准入),或更高 `opSeq` 的新 reopen 意图
-  记录后取代旧意图,才解除封口。
+  `issue.query` 读到 open 不解除该意图,原 close 的 `issue.recover` 读到 open 同样不解除:
+  两者都只给当前状态,没有原请求的终态或外部序号,无法区分"从未生效"与"生效后被外部重开"。
+  读到 open 或先后不明时保持 unknown/conflict 责任并继续封口;读到 closed 按已应用确认完成
+  并保持 closed。只有原 owner 的写回执明确失败且能证明未写,或更高 `opSeq` 的新 reopen
+  意图经真实写/读确认后取代旧意图,才解除封口。
 - 外部关闭进入与本地关闭共用的收口逻辑:停止新准入、取消队列、通知在飞执行。不重复调用
   Vikunja close,但取消与收口不能跳过。只把 `state` 改成 closed 不算完成。
 - webhook 是第三批的加速通道,只缩短延迟,不改变上述机制和准入规则。
@@ -663,6 +675,9 @@ JSONL 纪律:每条消息一行,含 messageId、sequence、commitId。单写者�
   (`pending`、`accepted`、`in_progress`、`cancel_requested`)派生有在飞责任且仍存在的会话,
   不新增第二套账本。registry scheduler 仍只有一个 timer;在短间隔 tick 上只对这组会话调用
   `sweepIssueStates(sessionIds)`(默认 5 秒),普通会话只按完整间隔读取,不提前触发。
+- full 与短定向 pass 的时钟:只有 full pass(不带 `sessionIds`)真正开始执行时才推进 full
+  时钟与在飞时钟。full 到期时若有 pass 在飞,不合并、不推进时钟、不把子集 pass 当 full;
+  在飞 pass 结束后由下一 tick 执行真正的 full。boot pass 按真实 full 计数。
 
 ### 13.2 关闭与成员变更规则
 
