@@ -36,7 +36,10 @@ description: AgentTeams 项目开发、调试与验收入口；按现有架构�
    提交，不在前端补账本、准入或恢复逻辑来绕过 owner。
 3. 代码改动在最新远端主线派生的独占 `/Volumes/Intel/playground/agentteams/<unit>`
    工作树进行；同任务续作先关旧树再开新树。保留主树及他人修改。复杂开发先观察，
-   沿宿主编排入口做独立计划；常规实现交已授权 peer 编排。设计/文档可直接修。
+   沿宿主编排入口做独立计划。具体代码、文档、测试和集成执行统一交
+   `codex exec --profile gcm` worker；peer 只保留目标编排与验收责任，不直接写
+   代码；Alice 只做指导、审计和 review，不执行代码、文档、测试或集成；不使用
+   Astra worker，GCM 不可用时显式报告不可用，不用 Astra 替代。
    派单明确原问题、允许文件、owner、验收、失败停止点，不因接单回执宣布完成。
 4. 按正确图补受影响 gate 和能抓住具体失败的红测，再修改唯一实现。图变更沿
    `dagpipe-runtime` validate/inspect；图校验不证明 operator 已绑定或业务已运行。
