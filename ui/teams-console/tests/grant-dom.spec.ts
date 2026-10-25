@@ -80,6 +80,10 @@ ${script}
         { agentId: 'agent-c', role: 'peer', mastersOf: [], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] },
       ],
     }
+    const issue = {
+      sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'i1',
+      initiatorAgentId: 'agent-a', state: 'open', openedAt: '2026-10-20T00:00:00.000Z', lastOpSeq: 1,
+    }
     const sent = []
     const groupPort = {
       requestGroup: async (agentId, frame) => {
@@ -93,6 +97,8 @@ ${script}
           return { kind: 'reply', reply: { kind: 'group.member', requestId: frame.requestId, group: { ...group, members: widened } } }
         }
         if (frame.kind === 'message.page') return { kind: 'reply', reply: { kind: 'message.page', requestId: frame.requestId, messages: [], revision: 1, hasMore: false } }
+        if (frame.kind === 'issue.list') return { kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [issue] } }
+        if (frame.kind === 'issue.query') return { kind: 'reply', reply: { kind: 'issue.session', requestId: frame.requestId, session: issue } }
         if (frame.kind === 'action.list') return { kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: [] } }
         return { kind: 'refused', code: 'UNSUPPORTED_OPERATION', message: 'unexpected frame ' + frame.kind }
       },
@@ -121,6 +127,9 @@ ${script}
       // Several agents are declared, so the operator chooses the acting identity first.
       controller.setGroupActor('${actor}')
       await controller.loadGroups()
+      // Work belongs to an opened issue now, so the action form is reached through the
+      // group's own issue list rather than a group-wide form with no target.
+      await controller.openIssue('s1')
       rerender()
 
       const buttons = [...root.querySelectorAll('[data-group-grant]')].map(node => node.dataset.groupGrant)
@@ -128,7 +137,15 @@ ${script}
       mark('grantButtonsVisible', buttons.length)
 
       const grantToB = root.querySelector('[data-group-grant="agent-b"]')
-      if (grantToB !== null) { grantToB.click(); await Promise.resolve(); await Promise.resolve(); rerender() }
+      if (grantToB !== null) {
+        grantToB.click()
+        await Promise.resolve(); await Promise.resolve()
+        // The group.member reply resets the per-group content, so the workspace reloads the
+        // selected group and reopens its issue before measuring the widened assignee form.
+        await controller.loadGroups()
+        await controller.openIssue('s1')
+        rerender()
+      }
 
       const grant = sent.filter(entry => entry.frame.kind === 'group.grant').pop()
       mark('grantSent', grant === undefined ? 'none' : JSON.stringify(grant.frame))

@@ -16,6 +16,7 @@ export type GroupPhase = 'idle' | 'loading' | 'live' | 'empty' | 'failed' | 'unk
 
 export type GroupMutationKind =
   | 'group.create'
+  | 'group.grant'
   | 'group.invite'
   | 'group.respond'
   | 'group.leave'
@@ -50,6 +51,27 @@ export interface GroupMutationMemory {
   readonly requestId: string
   readonly commitId?: string
   readonly frame: GroupWireRequest
+  /** The identity and group this write was sent under; a retry is only valid there. */
+  readonly context: GroupRequestContext
+}
+
+/** A retry or pending answer belongs to one identity/group context; it never follows a switch. */
+export interface GroupRequestContext {
+  readonly actorId: string
+  readonly groupId?: string
+}
+
+export function contextKeyOf(context: GroupRequestContext): string {
+  return `${context.actorId}::${context.groupId ?? ''}`
+}
+
+/** Read failure scoped to its own section; it never replaces a write's outcome. */
+export type GroupSectionName = 'list' | 'messages' | 'actions' | 'issue'
+
+export interface GroupSectionError {
+  readonly section: GroupSectionName
+  readonly code: string
+  readonly message: string
 }
 
 export interface GroupWorkspaceState {
@@ -63,6 +85,9 @@ export interface GroupWorkspaceState {
   readonly messageCursor?: number
   readonly issue: IssueSession | null
   readonly issueStatus: GroupSectionStatus
+  /** Issues this group already owns, read back from the owner so a page can reopen one. */
+  readonly issues: readonly IssueSession[]
+  readonly issueListStatus: GroupSectionStatus
   readonly actions: readonly Action[]
   readonly actionStatus: GroupSectionStatus
   readonly composer: string
@@ -77,6 +102,8 @@ export interface GroupWorkspaceState {
   /** A prepared critical action that needs an explicit confirmation before it is sent. */
   readonly confirm: GroupMutationMemory | null
   readonly error?: { readonly code: string; readonly message: string }
+  /** The last read failure belongs to one section and does not hide a write result. */
+  readonly readError?: GroupSectionError | undefined
 }
 
 export const initialGroupWorkspaceState: GroupWorkspaceState = {
@@ -88,6 +115,8 @@ export const initialGroupWorkspaceState: GroupWorkspaceState = {
   messageHasMore: false,
   issue: null,
   issueStatus: 'idle',
+  issues: [],
+  issueListStatus: 'idle',
   actions: [],
   actionStatus: 'idle',
   composer: '',
@@ -173,14 +202,48 @@ function succeeded(state: GroupWorkspaceState, patch: Partial<GroupWorkspaceStat
   }
 }
 
-/** Apply one validated owner reply. Unknown reply kinds cannot reach here. */
-export function applyReply(input: GroupWorkspaceState, reply: GroupWireReply): GroupWorkspaceState {
-  // A validated reply proves the endpoint is reachable again, so a stale access failure
-  // cannot outlive the answer that disproves it.
-  return applyReplyKind(input.access.kind === 'ready' ? input : { ...input, access: { kind: 'ready' } }, reply)
+/**
+ * Reads never settle a write. Only the answer to a write may clear that write's unknown
+ * state, its retry memory or its commit id; a successful list or page read leaves them alone.
+ */
+const READ_FRAMES = new Set<string>([
+  'group.list',
+  'message.page',
+  'action.list',
+  'issue.query',
+  // The issue-enumeration frame belongs to the backend owner; it is a read too, so it must
+  // never settle a write once its reply case lands here.
+  'issue.list',
+])
+
+export function isReadFrame(kind: string): boolean {
+  return READ_FRAMES.has(kind)
 }
 
-function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply): GroupWorkspaceState {
+/**
+ * Apply one validated owner reply. `origin` names the frame that asked, so a reply to a read
+ * cannot be mistaken for the settlement of a write.
+ */
+export function applyReply(input: GroupWorkspaceState, reply: GroupWireReply, origin?: GroupWireRequest['kind']): GroupWorkspaceState {
+  // A validated reply proves the endpoint is reachable again, so a stale access failure
+  // cannot outlive the answer that disproves it.
+  return applyReplyKind(input.access.kind === 'ready' ? input : { ...input, access: { kind: 'ready' } }, reply, origin)
+}
+
+/**
+ * A reply settles a write only when it answers that very write: same frame kind, and a
+ * pending mutation exists. A reply for another write, a read, or a late answer to a closed
+ * context leaves the pending unknown and its retry memory untouched.
+ */
+function settles(state: GroupWorkspaceState, origin: GroupWireRequest['kind'] | undefined): boolean {
+  if (origin === undefined) return false
+  if (isReadFrame(origin)) return false
+  const mutation = state.mutation
+  if (mutation === null) return false
+  return mutation.frame.kind === origin
+}
+
+function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply, origin?: GroupWireRequest['kind']): GroupWorkspaceState {
   switch (reply.kind) {
     case 'group.list': {
       const groups = reply.groups
@@ -199,6 +262,8 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply): Grou
         messageCursor: selection === state.selectedGroupId ? state.messageCursor : undefined,
         issue: selection === state.selectedGroupId ? state.issue : null,
         issueStatus: selection === state.selectedGroupId ? state.issueStatus : 'idle',
+        issues: selection === state.selectedGroupId ? state.issues : [],
+        issueListStatus: selection === state.selectedGroupId ? state.issueListStatus : 'idle',
         actions: selection === state.selectedGroupId ? state.actions : [],
         actionStatus: selection === state.selectedGroupId ? state.actionStatus : 'idle',
       }
@@ -206,17 +271,31 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply): Grou
     case 'group.created':
     case 'group.member': {
       const groups = upsertGroup(state.groups, reply.group)
-      return succeeded(
-        { ...state, groups, listStatus: 'ready', selectedGroupId: reply.group.groupId },
-        { messageStatus: 'idle', messages: [], messageHasMore: false, messageCursor: undefined, issue: null, issueStatus: 'idle', actions: [], actionStatus: 'idle' },
-        reply.kind === 'group.created' ? 'group.create' : undefined,
-      )
+      const patch: GroupWorkspaceState = {
+        ...state,
+        groups,
+        listStatus: 'ready',
+        selectedGroupId: reply.group.groupId,
+        messageStatus: 'idle',
+        messages: [],
+        messageHasMore: false,
+        messageCursor: undefined,
+        issue: null,
+        issueStatus: 'idle',
+        issues: [],
+        issueListStatus: 'idle',
+        actions: [],
+        actionStatus: 'idle',
+      }
+      if (!settles(state, origin)) return patch
+      const frame: GroupMutationKind = reply.kind === 'group.created' ? 'group.create' : 'group.grant'
+      return succeeded(patch, {}, frame)
     }
     case 'group.changed': {
       return { ...state, groups: upsertGroup(state.groups, reply.group), listStatus: 'ready' }
     }
     case 'group.invited': {
-      return succeeded(state, {}, 'group.invite')
+      return settles(state, origin) ? succeeded(state, {}, 'group.invite') : state
     }
     case 'message.page': {
       return {
@@ -230,20 +309,32 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply): Grou
     case 'message.received': {
       return { ...state, messages: mergeMessages(state.messages, [reply.message]), messageStatus: 'ready' }
     }
+    case 'issue.list': {
+      // A read of the group's own issues. It never settles a write and never clears its
+      // outcome, retry memory or commits.
+      return {
+        ...state,
+        issues: reply.sessions,
+        issueListStatus: reply.sessions.length === 0 ? 'empty' : 'ready',
+      }
+    }
     case 'message.sent': {
-      return succeeded(state, {}, 'message.send')
+      return settles(state, origin) ? succeeded(state, {}, 'message.send') : state
     }
     case 'message.acked': {
-      return succeeded(state, {}, 'message.ack')
+      return settles(state, origin) ? succeeded(state, {}, 'message.ack') : state
     }
     case 'issue.session': {
-      return succeeded({ ...state, issue: reply.session, issueStatus: 'ready' })
+      const patched: GroupWorkspaceState = { ...state, issue: reply.session, issueStatus: 'ready' }
+      // issue.query reads the issue; issue.create settles the write that opened it.
+      return settles(state, origin) ? succeeded(patched, {}, 'issue.create') : patched
     }
     case 'issue.changed': {
       if (state.issue === null || state.issue.sessionId !== reply.sessionId) return state
       return { ...state, issue: { ...state.issue, state: reply.state } }
     }
     case 'issue.closed': {
+      if (!settles(state, origin)) return { ...state, issue: reply.session, issueStatus: 'ready' }
       const unknown = reply.outcome === 'unknown'
       const failed = reply.outcome === 'failed' || reply.outcome === 'conflict'
       const patched: GroupWorkspaceState = { ...state, issue: reply.session, issueStatus: 'ready' }
@@ -253,7 +344,7 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply): Grou
         return {
           ...patched,
           mutation: null,
-          retryable: state.retryable,
+          retryable: state.mutation,
           outcome: { kind: 'unknown', frame: 'issue.close', code: 'RESULT_UNKNOWN', message: 'Issue owner reported an unknown close outcome.' },
         }
       }
@@ -269,6 +360,7 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply): Grou
       return succeeded(patched, {}, 'issue.close')
     }
     case 'issue.reopened': {
+      if (!settles(state, origin)) return { ...state, issue: reply.session, issueStatus: 'ready' }
       const unknown = reply.outcome === 'unknown'
       const failed = reply.outcome === 'failed' || reply.outcome === 'conflict'
       const patched: GroupWorkspaceState = { ...state, issue: reply.session, issueStatus: 'ready' }
@@ -276,6 +368,7 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply): Grou
         return {
           ...patched,
           mutation: null,
+          retryable: state.mutation,
           outcome: { kind: 'unknown', frame: 'issue.reopen', code: 'RESULT_UNKNOWN', message: 'Issue owner reported an unknown reopen outcome.' },
         }
       }
@@ -292,13 +385,22 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply): Grou
     }
     case 'action.created':
     case 'action.updated': {
-      return succeeded({ ...state, actions: upsertAction(state.actions, reply.action), actionStatus: 'ready' }, {}, reply.kind === 'action.created' ? 'action.create' : undefined)
+      const patched: GroupWorkspaceState = { ...state, actions: upsertAction(state.actions, reply.action), actionStatus: 'ready' }
+      if (!settles(state, origin)) return patched
+      const frame: GroupMutationKind | undefined = origin === 'action.create'
+        || origin === 'action.submit'
+        || origin === 'action.report'
+        || origin === 'action.refuse'
+        ? origin
+        : undefined
+      return succeeded(patched, {}, frame)
     }
     case 'action.changed': {
       return { ...state, actions: upsertAction(state.actions, reply.action), actionStatus: 'ready' }
     }
     case 'action.list': {
-      return succeeded({ ...state, actions: reply.actions, actionStatus: reply.actions.length === 0 ? 'empty' : 'ready' })
+      // A list read is never a settlement: an unknown submit keeps its retry memory.
+      return { ...state, actions: reply.actions, actionStatus: reply.actions.length === 0 ? 'empty' : 'ready' }
     }
     case 'relay.error': {
       return {
@@ -334,13 +436,33 @@ export function applyAccess(state: GroupWorkspaceState, access: GroupAccessState
 
 /** A refused request is a business answer, not a reachability problem. */
 export function applyRefusal(state: GroupWorkspaceState, code: string, message: string, frameKind?: GroupWireRequest['kind']): GroupWorkspaceState {
-  const next: GroupWorkspaceState = { ...state, outcome: { kind: 'refused', code, message, ...(frameKind === undefined ? {} : { frame: frameKind }) }, error: { code, message } }
-  switch (frameKind) {
-    case 'group.list': return { ...next, listStatus: state.groups.length === 0 ? 'refused' : state.listStatus, mutation: null, retryable: null, commits: {} }
-    case 'message.page': return { ...next, messageStatus: state.messages.length === 0 ? 'refused' : state.messageStatus, mutation: null, retryable: null, commits: {} }
-    case 'action.list': return { ...next, actionStatus: state.actions.length === 0 ? 'refused' : state.actionStatus, mutation: null, retryable: null, commits: {} }
-    case 'issue.query': return { ...next, issueStatus: state.issue === null ? 'refused' : state.issueStatus, mutation: null, retryable: null, commits: {} }
-    default: return { ...next, mutation: null, retryable: null, commits: {} }
+  const outcome: GroupOutcome = { kind: 'refused', code, message, ...(frameKind === undefined ? {} : { frame: frameKind }) }
+  const error = { code, message }
+  // A refused read reports its own section and never overwrites a write that is pending,
+  // unknown or already settled: the write result stays the visible outcome.
+  if (frameKind !== undefined && isReadFrame(frameKind)) {
+    const section = sectionOf(frameKind)
+    const sectionError: GroupSectionError = { section, code, message }
+    const withError: GroupWorkspaceState = { ...state, readError: sectionError }
+    switch (frameKind) {
+      case 'group.list': return { ...withError, listStatus: state.groups.length === 0 ? 'refused' : state.listStatus }
+      case 'message.page': return { ...withError, messageStatus: state.messages.length === 0 ? 'refused' : state.messageStatus }
+      case 'action.list': return { ...withError, actionStatus: state.actions.length === 0 ? 'refused' : state.actionStatus }
+      case 'issue.query': return { ...withError, issueStatus: state.issue === null ? 'refused' : state.issueStatus }
+      case 'issue.list': return { ...withError, issueListStatus: state.issues.length === 0 ? 'refused' : state.issueListStatus }
+      default: return withError
+    }
+  }
+  return { ...state, outcome, error, mutation: null, retryable: null, commits: {} }
+}
+
+/** Which workspace section one read frame belongs to. */
+function sectionOf(kind: string): GroupSectionName {
+  switch (kind) {
+    case 'group.list': return 'list'
+    case 'message.page': return 'messages'
+    case 'action.list': return 'actions'
+    default: return 'issue'
   }
 }
 
@@ -349,10 +471,24 @@ export function applyRefusal(state: GroupWorkspaceState, code: string, message: 
  * so a repeated submit cannot create a second business object.
  */
 export function applyUnknown(state: GroupWorkspaceState, frame: GroupWireRequest, message: string): GroupWorkspaceState {
+  if (isReadFrame(frame.kind)) {
+    // An unreadable read is a section problem. It never rewrites a write's unknown result.
+    const next: GroupWorkspaceState = { ...state, readError: { section: sectionOf(frame.kind), code: 'RESULT_UNKNOWN', message } }
+    switch (frame.kind) {
+      case 'group.list': return { ...next, listStatus: state.groups.length === 0 ? 'failed' : state.listStatus }
+      case 'message.page': return { ...next, messageStatus: state.messages.length === 0 ? 'unknown' : state.messageStatus }
+      case 'action.list': return { ...next, actionStatus: state.actions.length === 0 ? 'unknown' : state.actionStatus }
+      case 'issue.query': return { ...next, issueStatus: state.issue === null ? 'unknown' : state.issueStatus }
+      case 'issue.list': return { ...next, issueListStatus: state.issues.length === 0 ? 'unknown' : state.issueListStatus }
+      default: return next
+    }
+  }
+  const context: GroupRequestContext = { actorId: state.actorId ?? '', groupId: state.selectedGroupId }
   const retryable: GroupMutationMemory = {
     intentKey: intentKeyOf(frame),
     requestId: frame.requestId,
     frame,
+    context,
     ...(('commitId' in frame && typeof frame.commitId === 'string') ? { commitId: frame.commitId } : {}),
     ...(('resultCommitId' in frame && typeof frame.resultCommitId === 'string') ? { commitId: frame.resultCommitId } : {}),
   }
@@ -362,13 +498,7 @@ export function applyUnknown(state: GroupWorkspaceState, frame: GroupWireRequest
     outcome: { kind: 'unknown', frame: frame.kind, code: 'RESULT_UNKNOWN', message },
     error: { code: 'RESULT_UNKNOWN', message },
   }
-  switch (frame.kind) {
-    case 'group.list': return { ...base, listStatus: state.groups.length === 0 ? 'failed' : state.listStatus, retryable }
-    case 'message.page': return { ...base, messageStatus: state.messages.length === 0 ? 'unknown' : state.messageStatus, retryable }
-    case 'action.list': return { ...base, actionStatus: state.actions.length === 0 ? 'unknown' : state.actionStatus, retryable }
-    case 'issue.query': return { ...base, issueStatus: state.issue === null ? 'unknown' : state.issueStatus, retryable }
-    default: return { ...base, retryable }
-  }
+  return { ...base, retryable }
 }
 
 /** Attach the retained commit id to the frame field its owner contract defines. */

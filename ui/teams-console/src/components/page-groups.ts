@@ -1,6 +1,7 @@
 import type { ConsoleState, TeamsConsoleController } from '../state/controller.ts'
 import type { MessageKey } from '../client/locale.ts'
 import type { GroupWorkspaceState } from '../state/group-workspace.ts'
+import type { Action } from '../../../../packages/shared/src/group-wire.ts'
 import { assignableMembers, effectiveAccess, grantTargets, groupPhase, invitableAgents } from '../state/group-workspace.ts'
 import { append, button, element } from './dom.ts'
 
@@ -206,6 +207,42 @@ function renderComposer(state: GroupWorkspaceState, controller: TeamsConsoleCont
   return section
 }
 
+function renderIssueList(state: GroupWorkspaceState, controller: TeamsConsoleController, t: Record<MessageKey, string>): HTMLElement {
+  const list = element('div', 'teams-group-issue-list')
+  list.dataset.groupIssueList = 'true'
+  list.dataset.groupIssueListState = state.issueListStatus
+  const heading = element('h3', 'teams-group-heading')
+  heading.textContent = t.groupIssueList
+  append(list, heading)
+  if (state.issueListStatus === 'refused' || state.issueListStatus === 'unknown' || state.issueListStatus === 'failed') {
+    const error = element('p', 'teams-group-empty')
+    error.dataset.groupIssueListError = 'true'
+    error.textContent = t.groupIssueListHint
+    append(list, error)
+    return list
+  }
+  if (state.issueListStatus === 'empty') {
+    const empty = element('p', 'teams-group-empty')
+    empty.dataset.groupIssueEmpty = 'true'
+    empty.textContent = t.groupIssueListEmpty
+    append(list, empty)
+    return list
+  }
+  for (const session of state.issues) {
+    const row = element('div', 'teams-group-issue-row')
+    row.dataset.groupIssueItem = session.sessionId
+    const label = element('span', 'teams-group-issue-label')
+    label.textContent = `${session.state} · ${session.vikunjaProjectId}/${session.vikunjaIssueId}`
+    const open = button(t.groupIssueOpen, 'teams-button-secondary', async () => {
+      await controller.openIssue(session.sessionId)
+    }, state.mutation !== null)
+    open.dataset.groupIssueOpen = session.sessionId
+    append(row, label, open)
+    append(list, row)
+  }
+  return list
+}
+
 function renderIssuePanel(state: GroupWorkspaceState, controller: TeamsConsoleController, t: Record<MessageKey, string>): HTMLElement {
   const section = element('section', 'teams-group-issue')
   section.dataset.groupIssuePanel = 'true'
@@ -216,10 +253,9 @@ function renderIssuePanel(state: GroupWorkspaceState, controller: TeamsConsoleCo
   append(section, title)
   const disabled = state.mutation !== null
   if (issue === null) {
-    const empty = element('p', 'teams-group-empty')
-    empty.dataset.groupIssueEmpty = 'true'
-    empty.textContent = t.groupIssueNone
-    append(section, empty)
+    // The group's own issues come first. The create form stays available whether the list
+    // is empty, refused or unreadable; the panel never asks for a Vikunja or session id.
+    append(section, renderIssueList(state, controller, t))
     const form = element('div', 'teams-group-form')
     append(form,
       inputField(t.groupIssueTitle, 'issue-title'),
@@ -254,6 +290,72 @@ function renderIssuePanel(state: GroupWorkspaceState, controller: TeamsConsoleCo
   return section
 }
 
+/** An action that has not reached a terminal state yet must never be hidden by a newer one. */
+function unfinishedAction(state: Action['state']): boolean {
+  return state === 'pending'
+    || state === 'accepted'
+    || state === 'in_progress'
+    || state === 'blocked'
+    || state === 'cancel_requested'
+    || state === 'unknown'
+}
+
+function renderActionItem(
+  action: Action,
+  controller: TeamsConsoleController,
+  disabled: boolean,
+  t: Record<MessageKey, string>,
+): HTMLElement {
+  const item = element('li', 'teams-group-action')
+  item.dataset.groupAction = action.actionId
+  item.dataset.groupActionState = action.state
+  item.dataset.groupActionAssignee = action.assigneeAgentId
+  item.dataset.groupActionKind = action.kind
+  item.dataset.groupActionUnfinished = String(unfinishedAction(action.state))
+  const head = element('p', 'teams-group-action-head')
+  head.textContent = `${action.kind} · ${action.assigneeAgentId} · ${action.state}`
+  const reason = element('p', 'teams-group-action-reason')
+  reason.textContent = action.reason
+  append(item, head, reason)
+  const row = element('div', 'teams-group-action-row')
+  const result = element('input', 'teams-input')
+  result.type = 'text'
+  result.dataset.groupInput = `action-result-${action.actionId}`
+  const submit = button(t.groupActionSubmit, 'teams-button-secondary', async () => {
+    await controller.submitAction(action.actionId, result.value)
+  }, disabled || !(action.state === 'pending' || action.state === 'accepted' || action.state === 'in_progress'))
+  submit.dataset.groupActionVerb = 'submit'
+  const reasonInput = element('input', 'teams-input')
+  reasonInput.type = 'text'
+  reasonInput.dataset.groupInput = `action-reason-${action.actionId}`
+  const refuse = button(t.groupActionRefuse, 'teams-button-secondary', async () => {
+    await controller.refuseAction(action.actionId, reasonInput.value)
+  }, disabled || !(action.state === 'pending' || action.state === 'accepted'))
+  refuse.dataset.groupActionVerb = 'refuse'
+  const blocked = button(t.groupActionReport, 'teams-button-secondary', async () => {
+    await controller.reportAction(action.actionId, 'blocked', reasonInput.value)
+  }, disabled || !(action.state === 'accepted' || action.state === 'in_progress'))
+  blocked.dataset.groupActionVerb = 'report'
+  append(row, result, submit, reasonInput, refuse, blocked)
+  append(item, row)
+  // Action and commit ids are diagnostics, not part of the task the user performs.
+  const diagnostics = element('details', 'teams-group-action-diagnostics')
+  diagnostics.dataset.groupActionDiagnostics = action.actionId
+  const diagnosticsTitle = element('summary')
+  diagnosticsTitle.textContent = t.groupActionDiagnostics
+  const actionIdLine = element('p')
+  actionIdLine.dataset.groupActionId = action.actionId
+  actionIdLine.textContent = `actionId ${action.actionId}`
+  const commitLine = element('p')
+  commitLine.dataset.groupActionCommit = action.commitId
+  commitLine.textContent = `commitId ${action.commitId}`
+  const sessionLine = element('p')
+  sessionLine.textContent = `session ${action.sessionId}`
+  append(diagnostics, diagnosticsTitle, actionIdLine, commitLine, sessionLine)
+  append(item, diagnostics)
+  return item
+}
+
 function renderActionPanel(state: GroupWorkspaceState, controller: TeamsConsoleController, t: Record<MessageKey, string>): HTMLElement {
   const section = element('section', 'teams-group-actions')
   section.dataset.groupActionList = 'true'
@@ -261,6 +363,31 @@ function renderActionPanel(state: GroupWorkspaceState, controller: TeamsConsoleC
   title.textContent = t.groupActions
   append(section, title)
   const disabled = state.mutation !== null
+  const readError = state.readError?.section === 'actions' ? state.readError : undefined
+  if (readError !== undefined) {
+    // A failed action read reports itself here and leaves any write result untouched.
+    const hint = element('p', 'teams-group-hint')
+    hint.dataset.groupReadError = 'actions'
+    hint.dataset.groupReadErrorCode = readError.code
+    hint.textContent = `${t.groupReadFailed} — ${readError.message}`
+    append(section, hint)
+  }
+  if (state.issue === null) {
+    // Work belongs to an issue. Without one the panel states the missing step instead of
+    // presenting a group-wide action list as this issue's work.
+    const hint = element('p', 'teams-group-hint')
+    hint.dataset.groupActionNoIssue = 'true'
+    hint.textContent = `${t.groupActionNoIssue} — ${t.groupActionNoIssueHint}`
+    append(section, hint)
+    return section
+  }
+  const unfinished = state.actions.filter(action => unfinishedAction(action.state))
+  const finished = state.actions.filter(action => !unfinishedAction(action.state))
+  const summary = element('p', 'teams-group-hint')
+  summary.dataset.groupActionUnfinished = String(unfinished.length)
+  summary.dataset.groupActionTotal = String(state.actions.length)
+  summary.textContent = `${t.groupActionUnfinished} ${unfinished.length} / ${state.actions.length}`
+  append(section, summary)
   if (state.actions.length === 0) {
     const empty = element('p', 'teams-group-empty')
     empty.dataset.groupActionsEmpty = 'true'
@@ -268,41 +395,19 @@ function renderActionPanel(state: GroupWorkspaceState, controller: TeamsConsoleC
     append(section, empty)
   }
   const list = element('ul', 'teams-group-action-items')
-  for (const action of state.actions) {
-    const item = element('li', 'teams-group-action')
-    item.dataset.groupAction = action.actionId
-    item.dataset.groupActionState = action.state
-    item.dataset.groupActionAssignee = action.assigneeAgentId
-    item.dataset.groupActionKind = action.kind
-    const head = element('p', 'teams-group-action-head')
-    head.textContent = `${action.kind} · ${action.assigneeAgentId} · ${action.state}`
-    const reason = element('p', 'teams-group-action-reason')
-    reason.textContent = action.reason
-    append(item, head, reason)
-    const row = element('div', 'teams-group-action-row')
-    const result = element('input', 'teams-input')
-    result.type = 'text'
-    result.dataset.groupInput = `action-result-${action.actionId}`
-    const submit = button(t.groupActionSubmit, 'teams-button-secondary', async () => {
-      await controller.submitAction(action.actionId, result.value)
-    }, disabled || !(action.state === 'pending' || action.state === 'accepted' || action.state === 'in_progress'))
-    submit.dataset.groupActionVerb = 'submit'
-    const reasonInput = element('input', 'teams-input')
-    reasonInput.type = 'text'
-    reasonInput.dataset.groupInput = `action-reason-${action.actionId}`
-    const refuse = button(t.groupActionRefuse, 'teams-button-secondary', async () => {
-      await controller.refuseAction(action.actionId, reasonInput.value)
-    }, disabled || !(action.state === 'pending' || action.state === 'accepted'))
-    refuse.dataset.groupActionVerb = 'refuse'
-    const blocked = button(t.groupActionReport, 'teams-button-secondary', async () => {
-      await controller.reportAction(action.actionId, 'blocked', reasonInput.value)
-    }, disabled || !(action.state === 'accepted' || action.state === 'in_progress'))
-    blocked.dataset.groupActionVerb = 'report'
-    append(row, result, submit, reasonInput, refuse, blocked)
-    append(item, row)
-    append(list, item)
-  }
+  for (const action of unfinished) append(list, renderActionItem(action, controller, disabled, t))
   append(section, list)
+  if (finished.length > 0) {
+    // Completed work folds away, but it can never take an unfinished action down with it.
+    const details = element('details', 'teams-group-action-finished')
+    details.dataset.groupActionFinished = String(finished.length)
+    const summaryNode = element('summary')
+    summaryNode.textContent = `${t.groupActionFinished} ${finished.length}`
+    const finishedList = element('ul', 'teams-group-action-items')
+    for (const action of finished) append(finishedList, renderActionItem(action, controller, disabled, t))
+    append(details, summaryNode, finishedList)
+    append(section, details)
+  }
   // An action is only admissible where the actor already holds a command/request edge, so the
   // target is chosen from that set and never typed by hand.
   const group = state.groups.find(entry => entry.groupId === state.selectedGroupId)

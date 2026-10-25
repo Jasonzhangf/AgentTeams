@@ -4,8 +4,8 @@ import type { GroupRequestOutcome, GroupRequestSender } from '../client/group-cl
 import type { GroupWireRequest } from '../../../../packages/shared/src/group-wire.ts'
 import {
   applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors,
-  initialGroupWorkspaceState, intentKeyOf, needsConfirmation, withCommitId,
-  type GroupMutationMemory, type GroupWorkspaceState,
+  initialGroupWorkspaceState, intentKeyOf, isReadFrame, needsConfirmation, withCommitId,
+  type GroupMutationMemory, type GroupRequestContext, type GroupWorkspaceState,
 } from './group-workspace.ts'
 import { readDraft, readFocus, readPage, writeDraft, writeFocus, writePage, type DraftPersistence } from './drafts.ts'
 import { ProjectionObservationController, type ObservationSession } from './observation.ts'
@@ -154,6 +154,12 @@ export class TeamsConsoleController {
 
   private observationController?: ProjectionObservationController
   private readonly timers = new Set<ReturnType<typeof setTimeout>>()
+  /**
+   * Bumped on every identity or group switch. A reply carries the generation it was asked
+   * in, so an answer that lands after the user moved on is dropped instead of being applied
+   * to the new context.
+   */
+  private groupGeneration = 0
 
   constructor(client: ConsoleClientV1, options: { readonly persistence?: DraftPersistence; readonly initialPage?: TeamPage } = {}) {
     this.client = client
@@ -654,9 +660,14 @@ export class TeamsConsoleController {
     return { ...frame, requestId: this.nextRequestId() }
   }
 
+  /** Retained commit ids live per identity, so a switched actor can never inherit one. */
+  private commitKey(frame: GroupWireRequest): string {
+    return `${this.state.group.actorId ?? ''}::${intentKeyOf(frame)}`
+  }
+
   /** Attach the retained commit id for this intent, or retain a new one. */
   private withCommit(frame: GroupWireRequest): GroupWireRequest {
-    const key = intentKeyOf(frame)
+    const key = this.commitKey(frame)
     const retained = this.state.group.commits[key] ?? this.nextRequestId()
     if (this.state.group.commits[key] === undefined) {
       this.updateGroup(state => ({ ...state, commits: { ...state.commits, [key]: retained } }))
@@ -676,8 +687,28 @@ export class TeamsConsoleController {
 
   private mutationMemory(frame: GroupWireRequest): GroupMutationMemory {
     const key = intentKeyOf(frame)
-    const commitId = this.state.group.commits[key]
-    return { intentKey: key, requestId: frame.requestId, frame, ...(commitId === undefined ? {} : { commitId }) }
+    const commitId = this.state.group.commits[this.commitKey(frame)]
+    const context: GroupRequestContext = { actorId: this.state.group.actorId ?? '', groupId: this.state.group.selectedGroupId }
+    return { intentKey: key, requestId: frame.requestId, frame, context, ...(commitId === undefined ? {} : { commitId }) }
+  }
+
+  /** A write that was in flight when the user switched context stays retryable where it was sent. */
+  private parkInFlightGroupMutation(): void {
+    this.updateGroup(state => {
+      const pending = state.mutation
+      if (pending === null) return state
+      return {
+        ...state,
+        mutation: null,
+        retryable: pending,
+        outcome: {
+          kind: 'unknown',
+          frame: pending.frame.kind,
+          code: 'RESULT_UNKNOWN',
+          message: 'Context changed before the owner answered; switch back to retry with the same commit.',
+        },
+      }
+    })
   }
 
   /** Group actors come from the projection; `control` is never an actor. */
@@ -694,7 +725,12 @@ export class TeamsConsoleController {
 
   setGroupActor(agentId: string): void {
     if (!this.state.group.actors.includes(agentId)) return
-    this.updateGroup(state => ({ ...state, actorId: agentId }))
+    if (this.state.group.actorId === agentId) return
+    // A different identity shares no draft, retry credential or visible history with the
+    // previous one. The generation bump makes any answer to the old identity inert.
+    this.parkInFlightGroupMutation()
+    this.groupGeneration += 1
+    this.updateGroup(state => ({ ...state, actorId: agentId, composer: '', confirm: null }))
     // Choosing the actor is the only action available in that phase, so it must lead
     // straight to the real group list rather than to another empty screen.
     if (this.state.group.listStatus !== 'loading') void this.loadGroups()
@@ -734,11 +770,20 @@ export class TeamsConsoleController {
     const groupId = this.state.group.selectedGroupId
     if (groupId === undefined) return
     await this.dispatch({ kind: 'message.page', requestId: '', groupId })
-    await this.dispatch({ kind: 'action.list', requestId: '' })
+    // The group already owns its issues. Read them back so a reopened workspace can open
+    // one the user already has instead of asking for an id.
+    await this.dispatch({ kind: 'issue.list', requestId: '', groupId })
+    // Actions belong to one issue session. With no session loaded the actions area shows its
+    // own "create an issue first" state; an actor-wide list is never presented as this group's.
+    const sessionId = this.state.group.issue?.sessionId
+    if (sessionId === undefined) return
+    await this.dispatch({ kind: 'action.list', requestId: '', sessionId })
   }
 
   async selectGroup(groupId: string): Promise<boolean> {
     if (this.state.group.selectedGroupId === groupId) return true
+    this.parkInFlightGroupMutation()
+    this.groupGeneration += 1
     this.updateGroup(state => ({
       ...state,
       selectedGroupId: groupId,
@@ -750,7 +795,9 @@ export class TeamsConsoleController {
       issueStatus: 'idle',
       actions: [],
       actionStatus: 'idle',
-      outcome: { kind: 'idle' },
+      composer: '',
+      confirm: null,
+      readError: undefined,
     }))
     await this.loadSelectedGroup()
     return true
@@ -793,19 +840,28 @@ export class TeamsConsoleController {
       return false
     }
     const built = options.retained === undefined ? this.frameFor(frame) : this.frameFor(frame, options.retained)
+    // A read only refreshes its own section. It never becomes a pending write, so its answer
+    // can neither be shown as the current operation nor clear another write's unknown state.
+    const read = isReadFrame(built.kind)
+    const generation = this.groupGeneration
     this.updateGroup(state => ({
       ...state,
       // Only executing the parked action clears it. An unrelated read or refresh must not
       // silently drop a confirmation the user is still looking at.
       confirm: options.retained === undefined ? state.confirm : null,
-      mutation: this.mutationMemory(built),
-      outcome: { kind: 'pending', frame: built.kind, requestId: built.requestId },
+      mutation: read ? state.mutation : this.mutationMemory(built),
+      outcome: read ? state.outcome : { kind: 'pending', frame: built.kind, requestId: built.requestId },
       error: undefined,
     }))
     const outcome: GroupRequestOutcome = await this.groupClient.requestGroup(actorId, built)
+    if (generation !== this.groupGeneration) {
+      // The user switched identity or group while this request was open. Its answer belongs
+      // to the context that asked, so it is dropped instead of landing in the new one.
+      return false
+    }
     switch (outcome.kind) {
       case 'reply':
-        this.updateGroup(state => applyReply(state, outcome.reply))
+        this.updateGroup(state => applyReply(state, outcome.reply, built.kind))
         return true
       case 'refused':
         this.updateGroup(state => applyRefusal(state, outcome.code, outcome.message, built.kind))
@@ -860,7 +916,11 @@ export class TeamsConsoleController {
       this.updateGroup(state => ({ ...state, error: { code: 'INVALID_INPUT', message: 'Group name is required.' } }))
       return false
     }
-    return this.send({ kind: 'group.create', requestId: '', name: trimmed })
+    const sent = await this.send({ kind: 'group.create', requestId: '', name: trimmed })
+    // A new group is empty, not unreadable: load its real (empty) first page so the
+    // workspace lands on an operable state instead of a loading screen.
+    if (sent) await this.loadSelectedGroup()
+    return sent
   }
 
   async inviteMember(groupId: string, agentId: string, role: 'master' | 'peer'): Promise<boolean> {
@@ -900,6 +960,22 @@ export class TeamsConsoleController {
       return false
     }
     return this.send({ kind: 'issue.create', requestId: '', commitId: '', groupId, vikunjaProjectId, title, body })
+  }
+
+  /**
+   * Open one issue this group already owns. An id that is neither in the group's own issue
+   * list nor already open is never sent to the owner.
+   */
+  async openIssue(sessionId: string): Promise<boolean> {
+    const group = this.state.group
+    const known = group.issue?.sessionId === sessionId
+      || group.issues.some(session => session.sessionId === sessionId)
+    if (!known) return false
+    const opened = await this.dispatch({ kind: 'issue.query', requestId: '', sessionId })
+    if (!opened) return false
+    // Actions belong to the opened session; load them now that it is visible.
+    await this.dispatch({ kind: 'action.list', requestId: '', sessionId })
+    return true
   }
 
   async closeIssue(reason: string, conclusion: string): Promise<boolean> {
@@ -958,10 +1034,21 @@ export class TeamsConsoleController {
     return this.send({ kind: 'action.report', requestId: '', actionId, report, reason })
   }
 
+  /** A stored request is only replayable in the identity and group that produced it. */
+  private inCurrentContext(memory: GroupMutationMemory): boolean {
+    if (memory.context.actorId !== (this.state.group.actorId ?? '')) return false
+    if (memory.context.groupId !== undefined && memory.context.groupId !== this.state.group.selectedGroupId) return false
+    return true
+  }
+
   /** Execute the parked critical action after the user confirms its target. */
   async confirmPendingGroupAction(): Promise<boolean> {
     const confirm = this.state.group.confirm
     if (confirm === null) return false
+    if (!this.inCurrentContext(confirm)) {
+      this.updateGroup(state => ({ ...state, confirm: null }))
+      return false
+    }
     const sent = await this.send(confirm.frame, { skipConfirmation: true, retained: confirm })
     if (sent) await this.loadSelectedGroup()
     return sent
@@ -975,6 +1062,9 @@ export class TeamsConsoleController {
   async retryGroupMutation(): Promise<boolean> {
     const retryable = this.state.group.retryable
     if (retryable === null) return false
+    // Returning to the original context re-enables the retry; a different identity or group
+    // never replays another context's write.
+    if (!this.inCurrentContext(retryable)) return false
     const sent = await this.send(retryable.frame, { skipConfirmation: true, retained: retryable })
     if (sent) await this.loadSelectedGroup()
     return sent

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors, groupPhase, initialGroupWorkspaceState, intentKeyOf, mergeMessages, recentGroupId, withCommitId, assignableMembers, grantTargets, invitableAgents } from '../src/state/group-workspace.ts'
+import { applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors, groupPhase, initialGroupWorkspaceState, intentKeyOf, isReadFrame, mergeMessages, recentGroupId, withCommitId, assignableMembers, grantTargets, invitableAgents } from '../src/state/group-workspace.ts'
 
 const reply = {
   kind: 'group.list', requestId: 'r1',
@@ -46,19 +46,32 @@ describe('group workspace model', () => {
     expect(groupPhase(state)).toBe('unknown')
   })
 
-  it('renders a refused request as refusal, never as a delivery', () => {
-    const state = applyRefusal(initialGroupWorkspaceState, 'FORBIDDEN', 'not declared', 'group.list')
-    expect(state.listStatus).toBe('refused')
+  it('renders a refused write as refusal, never as a delivery', () => {
+    const state = applyRefusal(initialGroupWorkspaceState, 'FORBIDDEN', 'not declared', 'message.send')
     expect(state.outcome).toMatchObject({ kind: 'refused', code: 'FORBIDDEN' })
-    expect(groupPhase(state)).toBe('refused')
+    expect(state.retryable).toBeNull()
+  })
+
+  it('scopes a refused read to its own section and never overwrites a write result', () => {
+    const listed = applyReply(initialGroupWorkspaceState, reply)
+    const failed = applyRefusal(listed, 'FORBIDDEN', 'not declared', 'group.list')
+    expect(failed.listStatus).toBe('ready')
+    expect(failed.readError).toMatchObject({ section: 'list', code: 'FORBIDDEN' })
+    expect(failed.outcome.kind).toBe(listed.outcome.kind)
   })
 
   it('keeps an unknown external close outcome out of the closed state', () => {
-    const base = { ...initialGroupWorkspaceState, issue: { sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'i1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 } }
-    const state = applyReply(base, { kind: 'issue.closed', requestId: 'r1', session: { ...base.issue!, state: 'closed' as const }, outcome: 'unknown' as const })
+    const session = { sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'i1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const closeFrame = { kind: 'issue.close', requestId: 'r1', commitId: 'c1', sessionId: 's1', reason: 'done', conclusion: 'shipped' } as const
+    const base = {
+      ...initialGroupWorkspaceState,
+      issue: session,
+      mutation: { intentKey: intentKeyOf(closeFrame), requestId: 'r1', commitId: 'c1', frame: closeFrame, context: { actorId: 'agent-a', groupId: 'g1' } },
+    }
+    const state = applyReply(base, { kind: 'issue.closed', requestId: 'r1', session: { ...session, state: 'closed' as const }, outcome: 'unknown' as const }, 'issue.close')
     expect(state.outcome.kind).toBe('unknown')
     expect(state.issue?.state).toBe('closed')
-    expect(state.outcome).not.toMatchObject({ kind: 'succeeded' })
+    expect(state.retryable?.requestId).toBe('r1')
   })
 
   it('merges messages by id and keeps the owner sequence order', () => {
@@ -80,6 +93,105 @@ describe('group workspace model', () => {
     const first = intentKeyOf({ kind: 'action.refuse', requestId: 'r1', actionId: 'a1', reason: 'no' })
     const second = intentKeyOf({ kind: 'action.refuse', requestId: 'r2', actionId: 'a1', reason: 'no' })
     expect(first).toBe(second)
+  })
+})
+
+describe('write results survive unrelated reads', () => {
+  const sendFrame = { kind: 'message.send', requestId: 'req-1', commitId: 'commit-1', groupId: 'g1', targetAgentIds: ['agent-a'], replyRequired: false, body: 'hello' } as const
+  const submitFrame = { kind: 'action.submit', requestId: 'req-2', resultCommitId: 'result-1', actionId: 'a1', resultBody: 'done' } as const
+  const unknownSend = applyUnknown(
+    { ...initialGroupWorkspaceState, actorId: 'agent-a', selectedGroupId: 'g1' },
+    sendFrame,
+    'no answer',
+  )
+
+  it('keeps an unknown submit through successful list and page reads', () => {
+    const listed = applyReply(unknownSend, { kind: 'action.list', requestId: 'r1', actions: [] }, 'action.list')
+    const paged = applyReply(listed, { kind: 'message.page', requestId: 'r2', messages: [], revision: 1, hasMore: false }, 'message.page')
+    const grouped = applyReply(paged, { kind: 'group.list', requestId: 'r3', groups: [] }, 'group.list')
+    expect(grouped.outcome).toMatchObject({ kind: 'unknown', frame: 'message.send' })
+    expect(grouped.retryable?.requestId).toBe('req-1')
+    expect(grouped.retryable?.commitId).toBe('commit-1')
+    expect(grouped.mutation).toBeNull()
+  })
+
+  it('keeps an unknown submit when the list read itself is refused', () => {
+    // The controller retains the commit id; a refused read must not clear it.
+    const withCommit = { ...unknownSend, commits: { 'agent-a::message.send:g1:hello': 'commit-1' } }
+    const refused = applyRefusal(withCommit, 'ENDPOINT_UNREACHABLE_READ', 'list denied', 'action.list')
+    // The list failure is reported on its own section; the write result stays visible.
+    expect(refused.actionStatus).toBe('refused')
+    expect(refused.readError).toMatchObject({ section: 'actions' })
+    expect(refused.outcome).toMatchObject({ kind: 'unknown', frame: 'message.send' })
+    expect(refused.retryable?.requestId).toBe('req-1')
+    expect(refused.commits).toMatchObject({ 'agent-a::message.send:g1:hello': 'commit-1' })
+  })
+
+  it('settles only the write that the reply answers', () => {
+    // A submit is pending; an answer attributed to another write must not clear it.
+    const pending = {
+      ...initialGroupWorkspaceState,
+      actorId: 'agent-a',
+      selectedGroupId: 'g1',
+      mutation: { intentKey: intentKeyOf(submitFrame), requestId: 'req-2', commitId: 'result-1', frame: submitFrame, context: { actorId: 'agent-a', groupId: 'g1' } },
+      outcome: { kind: 'pending' as const, frame: 'action.submit' as const, requestId: 'req-2' },
+    }
+    const other = applyReply(pending, { kind: 'group.created', requestId: 'req-9', group: { groupId: 'g2', name: 'Beta', ownerAgentId: 'agent-a', createdAt: 'now', members: [] } }, 'group.create')
+    expect(other.outcome.kind).toBe('pending')
+    expect(other.mutation?.requestId).toBe('req-2')
+    // The answer to the pending submit does settle it, with its own frame.
+    const action = { actionId: 'a1', commitId: 'ac1', sessionId: 's1', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-b', kind: 'reply' as const, reason: 'r', expectedResult: 'e', replyRequired: false, state: 'completed' as const, createdAt: 'now' }
+    const settled = applyReply(pending, { kind: 'action.updated', requestId: 'req-2', action }, 'action.submit')
+    expect(settled.outcome).toMatchObject({ kind: 'succeeded', frame: 'action.submit' })
+    expect(settled.mutation).toBeNull()
+  })
+
+  it('does not settle a write with a read reply of the same family', () => {
+    const pendingCreate = {
+      ...initialGroupWorkspaceState,
+      actorId: 'agent-a',
+      selectedGroupId: 'g1',
+      mutation: { intentKey: 'issue.create:x', requestId: 'req-3', commitId: 'c3', frame: { kind: 'issue.create', requestId: 'req-3', commitId: 'c3', groupId: 'g1', vikunjaProjectId: 'p', title: 't', body: 'b' } as const, context: { actorId: 'agent-a', groupId: 'g1' } },
+      outcome: { kind: 'pending' as const, frame: 'issue.create' as const },
+    }
+    const session = { sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p', vikunjaIssueId: 'i', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const queried = applyReply(pendingCreate, { kind: 'issue.session', requestId: 'req-4', session }, 'issue.query')
+    expect(queried.outcome.kind).toBe('pending')
+    expect(queried.mutation?.requestId).toBe('req-3')
+    const created = applyReply(pendingCreate, { kind: 'issue.session', requestId: 'req-3', session }, 'issue.create')
+    expect(created.outcome).toMatchObject({ kind: 'succeeded', frame: 'issue.create' })
+  })
+
+  it('treats the issue list frame as a read', () => {
+    expect(isReadFrame('issue.list')).toBe(true)
+    expect(isReadFrame('action.list')).toBe(true)
+    expect(isReadFrame('action.submit')).toBe(false)
+  })
+
+  it('populates the issue list from its own read without touching a pending write', () => {
+    const pending = {
+      ...initialGroupWorkspaceState,
+      actorId: 'agent-a',
+      selectedGroupId: 'g1',
+      mutation: { intentKey: intentKeyOf(sendFrame), requestId: 'req-1', commitId: 'commit-1', frame: sendFrame, context: { actorId: 'agent-a', groupId: 'g1' } },
+      outcome: { kind: 'pending' as const, frame: 'message.send' as const, requestId: 'req-1' },
+      retryable: { intentKey: intentKeyOf(submitFrame), requestId: 'req-2', commitId: 'result-1', frame: submitFrame, context: { actorId: 'agent-a', groupId: 'g1' } },
+      commits: { 'agent-a::message.send:g1:hello': 'commit-1' },
+    }
+    const session = { sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'i1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const listed = applyReply(pending, { kind: 'issue.list', requestId: 'req-4', sessions: [session] }, 'issue.list')
+    expect(listed.issues).toEqual([session])
+    expect(listed.issueListStatus).toBe('ready')
+    // A read never writes over the pending mutation, its answer or its commit memory.
+    expect(listed.outcome).toEqual(pending.outcome)
+    expect(listed.mutation).toBe(pending.mutation)
+    expect(listed.retryable).toBe(pending.retryable)
+    expect(listed.commits).toEqual(pending.commits)
+    // An empty answer is a readable empty section, not a failure.
+    const empty = applyReply(pending, { kind: 'issue.list', requestId: 'req-5', sessions: [] }, 'issue.list')
+    expect(empty.issues).toEqual([])
+    expect(empty.issueListStatus).toBe('empty')
+    expect(empty.outcome).toEqual(pending.outcome)
   })
 })
 

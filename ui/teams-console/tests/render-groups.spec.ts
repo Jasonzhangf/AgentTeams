@@ -65,6 +65,11 @@ const message = {
   targetAgentIds: ['agent-a'], replyRequired: false, body: 'hello group', sentAt: '2026-10-20T00:00:01.000Z',
 }
 
+const issueSession = {
+  sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'i1',
+  initiatorAgentId: 'agent-a', state: 'open', openedAt: '2026-10-20T00:00:00.000Z', lastOpSeq: 1,
+}
+
 const projection = {
   version: 1,
   agents: [
@@ -87,6 +92,8 @@ function groupState(overrides: Record<string, unknown> = {}) {
     messageHasMore: false,
     issue: null,
     issueStatus: 'idle',
+    issues: [],
+    issueListStatus: 'idle',
     actions: [],
     actionStatus: 'empty',
     composer: '',
@@ -137,8 +144,19 @@ function state(groupOverrides: Record<string, unknown> = {}, stateOverrides: Rec
   }
 }
 
+const actionsState = state({
+  issue: issueSession,
+  issueStatus: 'ready',
+  issues: [issueSession],
+  issueListStatus: 'ready',
+  actions: [
+    { actionId: 'a-old', commitId: 'commit-old', sessionId: 's1', kind: 'reply', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-b', reason: 'old work', expectedResult: 'x', replyRequired: false, state: 'accepted', createdAt: '2026-10-20T00:00:00.000Z' },
+    { actionId: 'a-new', commitId: 'commit-new', sessionId: 's1', kind: 'reply', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-b', reason: 'new work', expectedResult: 'x', replyRequired: false, state: 'completed', createdAt: '2026-10-20T00:00:01.000Z' },
+  ],
+})
+
 const controllerScript = `
-  const calls = { actor: [], select: [], send: [], retry: [], confirm: [] }
+  const calls = { actor: [], select: [], send: [], retry: [], confirm: [], openIssue: [] }
   const controller = {
     getSnapshot: () => STATE,
     setGroupActor(id) { calls.actor.push(id) },
@@ -148,6 +166,7 @@ const controllerScript = `
     retryGroupMutation() { calls.retry.push('retry') },
     confirmPendingGroupAction() { calls.confirm.push('confirm') },
     cancelPendingGroupAction() { calls.confirm.push('cancel') },
+    openIssue(id) { calls.openIssue.push(id) },
     setGroupComposer() {}, createGroup() {}, inviteMember() {}, createIssue() {}, closeIssue() {},
     reopenIssue() {}, createAction() {}, submitAction() {}, refuseAction() {}, reportAction() {},
     setLocale() {}, openConsole() {}, closeConsole() {}, selectPage() {}, openAgent() {}, openSession() {},
@@ -172,6 +191,11 @@ const page = `<!doctype html>
   <div id="refused"></div>
   <div id="unknown"></div>
   <div id="confirm"></div>
+  <div id="actions"></div>
+  <div id="noissue"></div>
+  <div id="issuelist"></div>
+  <div id="issueempty"></div>
+  <div id="issuerefused"></div>
   <script>
 ${script}
 ${controllerScript}
@@ -258,6 +282,56 @@ ${controllerScript}
     document.body.dataset.confirmNamesTarget = String(confirmTarget.includes('issue.close:s1'))
     document.body.dataset.confirmHasAccept = String(attr(confirm, 'data-group-confirm-accept') === 'true')
     document.body.dataset.confirmHasCancel = String(attr(confirm, 'data-group-confirm-cancel') === 'true')
+
+    // 11. Two actions for one agent: the finished one may never hide the unfinished one.
+    const actions = render('actions', ${JSON.stringify(actionsState)})
+    const topLevelItems = [...actions.querySelectorAll('[data-group-action]')]
+      .filter(item => !item.closest('[data-group-action-finished]'))
+    document.body.dataset.actionUnfinishedCount = String(attr(actions, 'data-group-action-unfinished') === '1')
+    document.body.dataset.actionTotalCount = String(attr(actions, 'data-group-action-total') === '2')
+    // The older unfinished action stays in the visible list, not inside the folded section.
+    document.body.dataset.actionUnfinishedVisible = String(
+      topLevelItems.some(item => item.getAttribute('data-group-action') === 'a-old'))
+    document.body.dataset.actionFinishedFolded = String(
+      attr(actions, 'data-group-action-finished') === '1'
+      && actions.querySelector('[data-group-action="a-new"]')?.closest('details[data-group-action-finished]') !== null)
+    // Identifiers are diagnostics only: the task surface must not carry them.
+    const actionHead = actions.querySelector('[data-group-action="a-old"] .teams-group-action-head')?.textContent ?? ''
+    document.body.dataset.actionHeadHasNoIds = String(!actionHead.includes('a-old') && !actionHead.includes('commit-old'))
+    document.body.dataset.actionDiagnosticsCarryIds = String(
+      actions.querySelector('[data-group-action-id="a-old"]') !== null
+      && actions.querySelector('[data-group-action-commit="commit-old"]') !== null)
+
+    // 12. No issue: the panel states the missing step and shows no group-wide action list.
+    const noissue = render('noissue', ${JSON.stringify(state({ issue: null, issueStatus: 'idle', actions: [], actionStatus: 'empty' }))})
+    document.body.dataset.actionNoIssueHint = String(attr(noissue, 'data-group-action-no-issue') === 'true')
+    document.body.dataset.actionNoIssueNoList = String(noissue.querySelector('[data-group-action]') === null)
+
+    // 13. The group's own issue list opens an issue already owned by the group.
+    const issuelist = render('issuelist', ${JSON.stringify(state({ issue: null, issueStatus: 'idle', issues: [issueSession], issueListStatus: 'ready', actions: [], actionStatus: 'empty' }))})
+    document.body.dataset.issueListMarker = String(attr(issuelist, 'data-group-issue-list') === 'true')
+    document.body.dataset.issueListState = String(attr(issuelist, 'data-group-issue-list-state') === 'ready')
+    document.body.dataset.issueListItem = String(issuelist.querySelector('[data-group-issue-item="s1"]') !== null)
+    document.body.dataset.issueListOpen = String(issuelist.querySelector('[data-group-issue-open="s1"]') !== null)
+    const issueOpenButton = issuelist.querySelector('[data-group-issue-open="s1"]')
+    if (issueOpenButton !== null) issueOpenButton.click()
+    document.body.dataset.issueOpenCalled = String(calls.openIssue.join(',') === 's1')
+    document.body.dataset.issueListLabelCarriesId = String(
+      (issuelist.querySelector('[data-group-issue-item="s1"] .teams-group-issue-label')?.textContent ?? '').includes('p1/i1'))
+    document.body.dataset.issueCreateFormStillPresent = String(issuelist.querySelector('[data-group-issue-action="create"]') !== null)
+
+    // 14. An empty issue list keeps the create form and states the empty section.
+    const issueempty = render('issueempty', ${JSON.stringify(state({ issue: null, issueStatus: 'idle', issues: [], issueListStatus: 'empty', actions: [], actionStatus: 'empty' }))})
+    document.body.dataset.issueListEmptyMarker = String(attr(issueempty, 'data-group-issue-empty') === 'true')
+    document.body.dataset.issueListEmptyState = String(attr(issueempty, 'data-group-issue-list-state') === 'empty')
+    document.body.dataset.issueListEmptyNoItems = String(issueempty.querySelector('[data-group-issue-item]') === null)
+    document.body.dataset.issueListEmptyCreateForm = String(issueempty.querySelector('[data-group-issue-action="create"]') !== null)
+
+    // 15. A refused issue list shows its own hint and does not hide the create form.
+    const issuerefused = render('issuerefused', ${JSON.stringify(state({ issue: null, issueStatus: 'idle', issues: [], issueListStatus: 'refused', actions: [], actionStatus: 'empty' }))})
+    document.body.dataset.issueListRefusedError = String(issuerefused.querySelector('[data-group-issue-list-error]') !== null)
+    document.body.dataset.issueListRefusedState = String(attr(issuerefused, 'data-group-issue-list-state') === 'refused')
+    document.body.dataset.issueListRefusedCreateForm = String(issuerefused.querySelector('[data-group-issue-action="create"]') !== null)
   </script>
 </body></html>`
 
@@ -399,6 +473,28 @@ describe('group workspace DOM contract in a real DOM', () => {
       'data-confirm-names-target',
       'data-confirm-has-accept',
       'data-confirm-has-cancel',
+      'data-action-unfinished-count',
+      'data-action-total-count',
+      'data-action-unfinished-visible',
+      'data-action-finished-folded',
+      'data-action-head-has-no-ids',
+      'data-action-diagnostics-carry-ids',
+      'data-action-no-issue-hint',
+      'data-action-no-issue-no-list',
+      'data-issue-list-marker',
+      'data-issue-list-state',
+      'data-issue-list-item',
+      'data-issue-list-open',
+      'data-issue-open-called',
+      'data-issue-list-label-carries-id',
+      'data-issue-create-form-still-present',
+      'data-issue-list-empty-marker',
+      'data-issue-list-empty-state',
+      'data-issue-list-empty-no-items',
+      'data-issue-list-empty-create-form',
+      'data-issue-list-refused-error',
+      'data-issue-list-refused-state',
+      'data-issue-list-refused-create-form',
     ]) {
       expect(output, marker).toContain(`${marker}="true"`)
     }

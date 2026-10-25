@@ -80,10 +80,11 @@ describe('review finding 2: one commit id names one external write', () => {
     })
     expect(second.ok).toBe(false)
     expect(second.ok ? '' : second.error.message).toContain('unknown')
-    // The retry must ask for a read-back, not write a second issue: the only
-    // write is the first create, and the retry adds a read-only recover.
+    // The retry asks for a read-back instead of writing a second issue: the
+    // recover is a read-only confirmation, not a second external write.
+    expect(calls).toHaveLength(2)
     expect(calls.filter((op) => op.kind === 'issue.create')).toHaveLength(1)
-    expect(calls.some((op) => op.kind === 'issue.recover')).toBe(true)
+    expect(calls.filter((op) => op.kind === 'issue.recover')).toHaveLength(1)
   })
 
   it('keeps the recorded operation across a restart', async () => {
@@ -221,19 +222,18 @@ describe('acceptance 8: a read converges the projection to the external state', 
   })
 
   it('answers a failed read as unconfirmed and keeps the stored projection', async () => {
-    const hub = hubWith(jsonStore(), async (op) => (op.kind === 'issue.query'
+    const store = jsonStore()
+    const hub = hubWith(store, async (op) => (op.kind === 'issue.query'
       ? { code: 'UNAVAILABLE', message: 'no read owner' }
       : issueOk(op)))
-    const { groupId, sessionId } = await groupAndSession(hub)
+    const { sessionId } = await groupAndSession(hub)
     const queried = await hub.handle(MASTER, { kind: 'issue.query', requestId: 'q1', sessionId })
-    // A read that failed proves nothing: it must not report the old projection
-    // as a fresh success.
+    // A failed read is not new evidence. It returns unconfirmed rather than
+    // reporting the old projection as a fresh success.
     expect(queried.ok).toBe(false)
     expect(queried.ok ? '' : queried.error.code).toBe('UNAVAILABLE')
-    // The stored projection is untouched by the failed read.
-    const listed = await hub.handle(MASTER, { kind: 'issue.list', requestId: 'l1', groupId })
-    const stored = (listed.reply as { sessions: readonly { sessionId: string; state: string }[] })
-      .sessions.find((entry) => entry.sessionId === sessionId)
+    // The projection stays unchanged after the failed read.
+    const stored = store.state.current?.sessions.find((entry) => entry.sessionId === sessionId)
     expect(stored?.state).toBe('open')
   })
 })
