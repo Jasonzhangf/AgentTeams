@@ -23,6 +23,7 @@ export type GroupAccessState =
 export type GroupRequestOutcome =
   | { readonly kind: 'reply'; readonly reply: GroupWireReply }
   | { readonly kind: 'refused'; readonly code: string; readonly message: string }
+  | { readonly kind: 'unknown'; readonly code: string; readonly message: string }
   | { readonly kind: 'access'; readonly access: GroupAccessState }
   | { readonly kind: 'transport'; readonly message: string }
 
@@ -38,6 +39,7 @@ export interface GroupClientOptions {
 
 export const GROUP_ENDPOINT_NOT_CONFIGURED = 'GROUP_ENDPOINT_NOT_CONFIGURED'
 export const GROUP_ENDPOINT_UNREACHABLE = 'GROUP_ENDPOINT_UNREACHABLE'
+export const RESULT_UNKNOWN = 'RESULT_UNKNOWN'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -136,6 +138,7 @@ export function createGroupRequestClient(options: GroupClientOptions = {}): Grou
         if (failure === undefined) return { kind: 'transport', message: 'Group owner refused the request without a typed error' }
         if (failure.code === GROUP_ENDPOINT_NOT_CONFIGURED) return { kind: 'access', access: { kind: 'not-configured', message: failure.message } }
         if (failure.code === GROUP_ENDPOINT_UNREACHABLE) return { kind: 'access', access: { kind: 'unreachable', message: failure.message } }
+        if (failure.code === RESULT_UNKNOWN) return { kind: 'unknown', code: failure.code, message: failure.message }
         return { kind: 'refused', code: failure.code, message: failure.message }
       }
       return { kind: 'transport', message: 'Group owner returned an envelope without an ok flag' }

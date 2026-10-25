@@ -670,16 +670,63 @@ export function effectiveAccess(state: GroupWorkspaceState): 'ready' | 'not-conf
 }
 
 /**
- * Members the acting agent may create an action for. GroupHub admits an action only when a
- * command/request edge exists, and the edge lives in the actor's own `mastersOf`. Offering
- * anything else would let the user fill in a target that is bound to be refused.
+ * One explicit `mastersOf` edge covers both directions: the master may assign work to the
+ * peer, and the same peer may request work from that master. The edge is stored on the
+ * master only, so reading the actor's own list alone would hide the second direction.
+ */
+function activeMember(group: Group, agentId: string): Group['members'][number] | undefined {
+  return group.members.find(member => member.agentId === agentId
+    && member.intervals.some(interval => interval.leftAt === undefined))
+}
+
+export function commandTargets(group: Group | undefined, actorId: string | undefined): readonly string[] {
+  if (group === undefined || actorId === undefined) return []
+  const actor = activeMember(group, actorId)
+  if (actor === undefined) return []
+  return actor.mastersOf.filter(targetId => targetId !== actorId && activeMember(group, targetId) !== undefined)
+}
+
+export function requestTargets(group: Group | undefined, actorId: string | undefined): readonly string[] {
+  if (group === undefined || actorId === undefined) return []
+  if (activeMember(group, actorId) === undefined) return []
+  return group.members
+    .filter(member => member.agentId !== actorId
+      && member.mastersOf.includes(actorId)
+      && member.intervals.some(interval => interval.leftAt === undefined))
+    .map(member => member.agentId)
+}
+
+/**
+ * Members the acting agent may create an action for. Both directions of the same explicit
+ * edge are admissible: a master commands a peer, and that peer requests the same master.
+ * Offering anything else would let the user choose a target bound to be refused.
  */
 export function assignableMembers(group: Group | undefined, actorId: string | undefined): readonly string[] {
-  if (group === undefined || actorId === undefined) return []
-  const actor = group.members.find(member => member.agentId === actorId)
-  if (actor === undefined) return []
-  return actor.mastersOf.filter(masterId => masterId !== actorId
-    && group.members.some(member => member.agentId === masterId && member.intervals.some(interval => interval.leftAt === undefined)))
+  return [...new Set([...commandTargets(group, actorId), ...requestTargets(group, actorId)])]
+}
+
+/**
+ * Only the assignee may report a blocked or failed action. A newly assigned human action
+ * is pending and has no accept/start entry, so pending is an admissible report source.
+ */
+export function canReportAction(group: Group | undefined, action: Action, actorId: string | undefined): boolean {
+  if (group === undefined || actorId === undefined) return false
+  if (action.assigneeAgentId !== actorId) return false
+  if (activeMember(group, actorId) === undefined) return false
+  return action.state === 'pending' || action.state === 'in_progress'
+}
+
+/**
+ * A master may refuse a peer's request only when the master's own explicit edge names the
+ * initiator. A peer receiving a master assignment has no such edge and cannot refuse it.
+ */
+export function canRefuseAction(group: Group | undefined, action: Action, actorId: string | undefined): boolean {
+  if (group === undefined || actorId === undefined) return false
+  if (action.assigneeAgentId !== actorId) return false
+  if (action.state !== 'pending') return false
+  const actor = activeMember(group, actorId)
+  if (actor === undefined) return false
+  return actor.mastersOf.includes(action.initiatorAgentId)
 }
 
 /**

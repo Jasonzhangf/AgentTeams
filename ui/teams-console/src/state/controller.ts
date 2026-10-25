@@ -4,6 +4,7 @@ import type { GroupRequestOutcome, GroupRequestSender } from '../client/group-cl
 import type { GroupWireReply, GroupWireRequest } from '../../../../packages/shared/src/group-wire.ts'
 import {
   applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors,
+  canRefuseAction, canReportAction,
   contextKeyOf, initialGroupWorkspaceState, intentKeyOf, isReadFrame,
   needsConfirmation, requestContextOf, withCommitId,
   type GroupMutationMemory, type GroupOutcome, type GroupRequestContext, type GroupWorkspaceState,
@@ -1004,12 +1005,22 @@ export class TeamsConsoleController {
   private mergePolledGroups(reply: Extract<GroupWireReply, { readonly kind: 'group.list' }>): void {
     const current = this.state.group
     const next = applyReply(current, reply, 'group.list')
+    const selectionChanged = current.selectedGroupId !== next.selectedGroupId
     const changed = current.access.kind !== 'ready'
       || current.listStatus !== next.listStatus
-      || current.selectedGroupId !== next.selectedGroupId
+      || selectionChanged
       || current.groups.length !== reply.groups.length
       || JSON.stringify(current.groups) !== JSON.stringify(reply.groups)
     if (!changed) return
+    // A poll can change which group is selected. That is a real context switch, so it must
+    // use the same invariant as an explicit choice: bump the generation, park the old
+    // write and restore the new context's draft. A plain update would let a delayed read
+    // from the group that disappeared land in the new view.
+    if (selectionChanged) {
+      this.switchGroupContext(() => next)
+      void this.loadSelectedGroup()
+      return
+    }
     this.updateGroup(() => next)
   }
 
@@ -1392,11 +1403,47 @@ export class TeamsConsoleController {
   }
 
   async refuseAction(actionId: string, reason: string): Promise<boolean> {
-    return this.send({ kind: 'action.refuse', requestId: '', actionId, reason })
+    const trimmed = reason.trim()
+    if (trimmed.length === 0) {
+      this.updateGroup(state => ({ ...state, error: { code: 'INVALID_INPUT', message: 'A refusal reason is required.' } }))
+      return false
+    }
+    const action = this.selectedAction(actionId)
+    if (action === undefined || !canRefuseAction(this.selectedGroup(), action, this.state.group.actorId)) {
+      this.updateGroup(state => ({ ...state, error: { code: 'FORBIDDEN', message: 'Only a master that owns the explicit edge may refuse this action.' } }))
+      return false
+    }
+    return this.send({ kind: 'action.refuse', requestId: '', actionId, reason: trimmed })
   }
 
-  async reportAction(actionId: string, report: 'blocked' | 'failed', reason: string): Promise<boolean> {
-    return this.send({ kind: 'action.report', requestId: '', actionId, report, reason })
+  async reportAction(actionId: string, report: 'blocked' | 'failed', reason: string, evidence?: string): Promise<boolean> {
+    const trimmed = reason.trim()
+    if (trimmed.length === 0) {
+      this.updateGroup(state => ({ ...state, error: { code: 'INVALID_INPUT', message: 'A report reason is required.' } }))
+      return false
+    }
+    const action = this.selectedAction(actionId)
+    if (action === undefined || !canReportAction(this.selectedGroup(), action, this.state.group.actorId)) {
+      this.updateGroup(state => ({ ...state, error: { code: 'FORBIDDEN', message: 'Only the current assignee may report this action.' } }))
+      return false
+    }
+    const trimmedEvidence = evidence?.trim()
+    return this.send({
+      kind: 'action.report',
+      requestId: '',
+      actionId,
+      report,
+      reason: trimmed,
+      ...(trimmedEvidence === undefined || trimmedEvidence.length === 0 ? {} : { evidence: trimmedEvidence }),
+    })
+  }
+
+  private selectedGroup(): GroupWorkspaceState['groups'][number] | undefined {
+    return this.state.group.groups.find(entry => entry.groupId === this.state.group.selectedGroupId)
+  }
+
+  private selectedAction(actionId: string): GroupWorkspaceState['actions'][number] | undefined {
+    return this.state.group.actions.find(entry => entry.actionId === actionId)
   }
 
   /** A stored request is only replayable in the identity, group and issue that produced it. */

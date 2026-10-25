@@ -33,6 +33,9 @@ type MessageKey =
   | 'groupActionUnfinished' | 'groupActionFinished' | 'groupActionDiagnostics' | 'groupActionNoIssue' | 'groupActionNoIssueHint' | 'groupReadFailed'
   | 'groupActions' | 'groupActionsNone' | 'groupActionCreate' | 'groupActionAssignee' | 'groupActionReason'
   | 'groupActionResult' | 'groupActionSubmit' | 'groupActionRefuse' | 'groupActionReport'
+  | 'groupActionReportKind' | 'groupActionReportReason' | 'groupActionReportEvidence'
+  | 'groupActionRefusalReason' | 'groupActionRefusedAt'
+  | 'groupActionReportBlocked' | 'groupActionReportFailed'
   | 'groupPhaseLoading' | 'groupPhaseEmpty' | 'groupPhaseLive'
   | 'groupNotConfigured' | 'groupUnreachable' | 'groupRefused' | 'groupUnknown' | 'groupFailed'
   | 'groupRetry' | 'groupConfirm' | 'groupConfirmAccept' | 'groupConfirmCancel' | 'groupNoMessages'
@@ -74,6 +77,9 @@ const en: Record<MessageKey, string> = {
   groupActionUnfinished: 'Unfinished', groupActionFinished: 'Finished', groupActionDiagnostics: 'Diagnostics', groupActionNoIssue: 'No issue is open in this group', groupActionNoIssueHint: 'Actions belong to an issue. Create or open an issue first; a group-wide action list is never shown as this issue’s work.', groupReadFailed: 'This section could not be read',
   groupActions: 'Actions', groupActionsNone: 'No action is recorded for this group.', groupActionCreate: 'Create action', groupActionAssignee: 'Assignee agent ID', groupActionReason: 'Reason',
   groupActionResult: 'Result body', groupActionSubmit: 'Submit result', groupActionRefuse: 'Refuse action', groupActionReport: 'Report blocked or failed',
+  groupActionReportKind: 'Report', groupActionReportReason: 'Reported reason', groupActionReportEvidence: 'Evidence',
+  groupActionRefusalReason: 'Refusal reason', groupActionRefusedAt: 'Refused at',
+  groupActionReportBlocked: 'Report blocked', groupActionReportFailed: 'Report failed',
   groupPhaseLoading: 'Loading groups…', groupPhaseEmpty: 'No group exists yet. Create one to start a conversation.', groupPhaseLive: 'Group workspace',
   groupNotConfigured: 'The group endpoint is not configured on this Console host.', groupUnreachable: 'The group endpoint exists but the agent is unreachable.',
   groupRefused: 'The group owner refused this request.', groupUnknown: 'The owner outcome is unknown. Retry with the same commit.', groupFailed: 'The group workspace could not be loaded.',
@@ -122,6 +128,9 @@ const zh: Record<MessageKey, string> = {
   groupActionUnfinished: '未结束', groupActionFinished: '已完成', groupActionDiagnostics: '诊断', groupActionNoIssue: '当前群组还没有打开的议题', groupActionNoIssueHint: '行动属于议题。请先创建或打开议题；不会把全局行动列表当作本议题的工作。', groupReadFailed: '本区域读取失败',
   groupActions: '行动', groupActionsNone: '当前群组还没有行动记录。', groupActionCreate: '创建行动', groupActionAssignee: '负责智能体 ID', groupActionReason: '原因',
   groupActionResult: '结果内容', groupActionSubmit: '提交结果', groupActionRefuse: '拒绝行动', groupActionReport: '上报阻塞或失败',
+  groupActionReportKind: '上报', groupActionReportReason: '上报原因', groupActionReportEvidence: '证据',
+  groupActionRefusalReason: '拒绝原因', groupActionRefusedAt: '拒绝时间',
+  groupActionReportBlocked: '上报阻塞', groupActionReportFailed: '上报失败',
   groupPhaseLoading: '正在加载群组…', groupPhaseEmpty: '还没有群组。创建一个群组即可开始对话。', groupPhaseLive: '群组工作区',
   groupNotConfigured: '当前控制台没有配置群组入口。', groupUnreachable: '群组入口存在，但无法连接到对应智能体。',
   groupRefused: '群组所有者拒绝了这次请求。', groupUnknown: '所有者结果未知。请用同一个提交重试。', groupFailed: '无法加载群组工作区。',

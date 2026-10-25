@@ -2,7 +2,7 @@ import type { ConsoleState, TeamsConsoleController } from '../state/controller.t
 import type { MessageKey } from '../client/locale.ts'
 import type { GroupWorkspaceState } from '../state/group-workspace.ts'
 import type { Action, CloseReportEntry } from '../../../../packages/shared/src/group-wire.ts'
-import { assignableMembers, effectiveAccess, grantTargets, groupPhase, invitableAgents, visibleRetryable } from '../state/group-workspace.ts'
+import { assignableMembers, canRefuseAction, canReportAction, effectiveAccess, grantTargets, groupPhase, invitableAgents, visibleRetryable } from '../state/group-workspace.ts'
 import { append, button, element } from './dom.ts'
 
 /**
@@ -335,7 +335,9 @@ function renderIssuePanel(state: GroupWorkspaceState, controller: TeamsConsoleCo
   const summary = element('p', 'teams-group-issue-summary')
   summary.dataset.groupIssueSession = issue.sessionId
   summary.dataset.groupIssueStateToken = issue.state
-  summary.textContent = `${issue.sessionId} · ${issue.state} · ${issue.vikunjaProjectId}/${issue.vikunjaIssueId}`
+  // The session id stays a stable selector and query target, never visible chrome. The
+  // human-readable state and Vikunja reference are what the operator needs here.
+  summary.textContent = `${issue.state} · ${issue.vikunjaProjectId}/${issue.vikunjaIssueId}`
   append(section, summary)
   const form = element('div', 'teams-group-form')
   append(form, inputField(t.groupIssueReason, 'issue-reason'), inputField(t.groupIssueConclusion, 'issue-conclusion'))
@@ -419,8 +421,68 @@ function renderUnstoppedList(entries: readonly CloseReportEntry[], label: string
   return list
 }
 
+/**
+ * `Action.refusal` is owned by the shared wire contract. The parallel backend branch adds
+ * it to `Action`; this UI branch reads the same typed field without rebuilding it from
+ * error text or keeping a second refusal ledger.
+ */
+interface ActionRefusalView {
+  readonly reason: string
+  readonly refusedAt: string
+}
+
+function refusalOf(action: Action): ActionRefusalView | undefined {
+  const refusal = (action as Action & { readonly refusal?: ActionRefusalView }).refusal
+  if (refusal === undefined) return undefined
+  if (typeof refusal.reason !== 'string' || typeof refusal.refusedAt !== 'string') return undefined
+  return refusal
+}
+
+function evidenceText(evidence: unknown): string {
+  return typeof evidence === 'string' ? evidence : JSON.stringify(evidence)
+}
+
+function renderActionReport(action: Action, t: Record<MessageKey, string>): HTMLElement | null {
+  const report = action.report
+  if (report === undefined) return null
+  const box = element('div', 'teams-group-action-report')
+  box.dataset.groupActionReport = action.actionId
+  box.dataset.groupActionReportKind = report.report
+  box.dataset.groupActionReportedAt = report.reportedAt
+  const kind = element('strong', 'teams-group-action-report-kind')
+  kind.textContent = `${t.groupActionReportKind} · ${report.report === 'blocked' ? t.groupStopBlocked : t.groupStopFailed}`
+  const reason = element('p', 'teams-group-action-report-reason')
+  reason.dataset.groupActionReportReason = report.reason
+  reason.textContent = `${t.groupActionReportReason} · ${report.reason}`
+  append(box, kind, reason)
+  if (report.evidence !== undefined) {
+    const evidence = element('p', 'teams-group-action-report-evidence')
+    evidence.dataset.groupActionReportEvidence = evidenceText(report.evidence)
+    evidence.textContent = `${t.groupActionReportEvidence} · ${evidenceText(report.evidence)}`
+    append(box, evidence)
+  }
+  return box
+}
+
+function renderActionRefusal(action: Action, t: Record<MessageKey, string>): HTMLElement | null {
+  const refusal = refusalOf(action)
+  if (refusal === undefined) return null
+  const box = element('div', 'teams-group-action-refusal')
+  box.dataset.groupActionRefusal = action.actionId
+  const reason = element('p', 'teams-group-action-refusal-reason')
+  reason.dataset.groupActionRefusalReason = refusal.reason
+  reason.textContent = `${t.groupActionRefusalReason} · ${refusal.reason}`
+  const at = element('p', 'teams-group-action-refusal-at')
+  at.dataset.groupActionRefusedAt = refusal.refusedAt
+  at.textContent = `${t.groupActionRefusedAt} · ${refusal.refusedAt}`
+  append(box, reason, at)
+  return box
+}
+
 function renderActionItem(
   action: Action,
+  group: GroupWorkspaceState['groups'][number] | undefined,
+  actorId: string | undefined,
   controller: TeamsConsoleController,
   disabled: boolean,
   t: Record<MessageKey, string>,
@@ -429,6 +491,7 @@ function renderActionItem(
   item.dataset.groupAction = action.actionId
   item.dataset.groupActionState = action.state
   item.dataset.groupActionAssignee = action.assigneeAgentId
+  item.dataset.groupActionInitiator = action.initiatorAgentId
   item.dataset.groupActionKind = action.kind
   item.dataset.groupActionUnfinished = String(unfinishedAction(action.state))
   const head = element('p', 'teams-group-action-head')
@@ -436,6 +499,10 @@ function renderActionItem(
   const reason = element('p', 'teams-group-action-reason')
   reason.textContent = action.reason
   append(item, head, reason)
+  const report = renderActionReport(action, t)
+  if (report !== null) append(item, report)
+  const refusal = renderActionRefusal(action, t)
+  if (refusal !== null) append(item, refusal)
   const row = element('div', 'teams-group-action-row')
   const result = element('input', 'teams-input')
   result.type = 'text'
@@ -447,15 +514,26 @@ function renderActionItem(
   const reasonInput = element('input', 'teams-input')
   reasonInput.type = 'text'
   reasonInput.dataset.groupInput = `action-reason-${action.actionId}`
+  const evidenceInput = element('input', 'teams-input')
+  evidenceInput.type = 'text'
+  evidenceInput.dataset.groupInput = `action-evidence-${action.actionId}`
+  const mayRefuse = canRefuseAction(group, action, actorId)
+  item.dataset.groupActionRefusePermitted = String(mayRefuse)
   const refuse = button(t.groupActionRefuse, 'teams-button-secondary', async () => {
     await controller.refuseAction(action.actionId, reasonInput.value)
-  }, disabled || !(action.state === 'pending' || action.state === 'accepted'))
+  }, disabled || !mayRefuse)
   refuse.dataset.groupActionVerb = 'refuse'
-  const blocked = button(t.groupActionReport, 'teams-button-secondary', async () => {
-    await controller.reportAction(action.actionId, 'blocked', reasonInput.value)
-  }, disabled || !(action.state === 'accepted' || action.state === 'in_progress'))
-  blocked.dataset.groupActionVerb = 'report'
-  append(row, result, submit, reasonInput, refuse, blocked)
+  const mayReport = canReportAction(group, action, actorId)
+  item.dataset.groupActionReportPermitted = String(mayReport)
+  const blocked = button(t.groupActionReportBlocked, 'teams-button-secondary', async () => {
+    await controller.reportAction(action.actionId, 'blocked', reasonInput.value, evidenceInput.value)
+  }, disabled || !mayReport)
+  blocked.dataset.groupActionVerb = 'report-blocked'
+  const failed = button(t.groupActionReportFailed, 'teams-button-secondary', async () => {
+    await controller.reportAction(action.actionId, 'failed', reasonInput.value, evidenceInput.value)
+  }, disabled || !mayReport)
+  failed.dataset.groupActionVerb = 'report-failed'
+  append(row, result, submit, reasonInput, evidenceInput, refuse, blocked, failed)
   append(item, row)
   // Action and commit ids are diagnostics, not part of the task the user performs.
   const diagnostics = element('details', 'teams-group-action-diagnostics')
@@ -468,9 +546,9 @@ function renderActionItem(
   const commitLine = element('p')
   commitLine.dataset.groupActionCommit = action.commitId
   commitLine.textContent = `commitId ${action.commitId}`
-  const sessionLine = element('p')
-  sessionLine.textContent = `session ${action.sessionId}`
-  append(diagnostics, diagnosticsTitle, actionIdLine, commitLine, sessionLine)
+  // Internal ids are diagnostics only; the issue the action belongs to is shown through the
+  // issue panel's Vikunja reference, never as a second visible session id here.
+  append(diagnostics, diagnosticsTitle, actionIdLine, commitLine)
   append(item, diagnostics)
   return item
 }
@@ -478,6 +556,7 @@ function renderActionItem(
 function renderActionPanel(state: GroupWorkspaceState, controller: TeamsConsoleController, t: Record<MessageKey, string>): HTMLElement {
   const section = element('section', 'teams-group-actions')
   section.dataset.groupActionList = 'true'
+  const group = state.groups.find(entry => entry.groupId === state.selectedGroupId)
   const title = element('h2', 'teams-group-heading')
   title.textContent = t.groupActions
   append(section, title)
@@ -514,7 +593,7 @@ function renderActionPanel(state: GroupWorkspaceState, controller: TeamsConsoleC
     append(section, empty)
   }
   const list = element('ul', 'teams-group-action-items')
-  for (const action of unfinished) append(list, renderActionItem(action, controller, disabled, t))
+  for (const action of unfinished) append(list, renderActionItem(action, group, state.actorId, controller, disabled, t))
   append(section, list)
   if (finished.length > 0) {
     // Completed work folds away, but it can never take an unfinished action down with it.
@@ -523,13 +602,12 @@ function renderActionPanel(state: GroupWorkspaceState, controller: TeamsConsoleC
     const summaryNode = element('summary')
     summaryNode.textContent = `${t.groupActionFinished} ${finished.length}`
     const finishedList = element('ul', 'teams-group-action-items')
-    for (const action of finished) append(finishedList, renderActionItem(action, controller, disabled, t))
+    for (const action of finished) append(finishedList, renderActionItem(action, group, state.actorId, controller, disabled, t))
     append(details, summaryNode, finishedList)
     append(section, details)
   }
   // An action is only admissible where the actor already holds a command/request edge, so the
   // target is chosen from that set and never typed by hand.
-  const group = state.groups.find(entry => entry.groupId === state.selectedGroupId)
   const assignable = assignableMembers(group, state.actorId)
   const form = element('div', 'teams-group-form')
   const assigneeField = element('label', 'teams-group-field')

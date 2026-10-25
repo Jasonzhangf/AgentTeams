@@ -2,8 +2,9 @@
 
 Issue: `8dde877`
 
-Status: backend/runtime candidate implemented (Carol), frontend in progress (Bob); not a
-merge or browser-playback receipt.
+Status: source candidate in rework (R1, R6, R7, R8 and A1 from the 2026-10-25
+review). This is not an installed-artifact, lifecycle, real Chrome replay,
+review PASS, merge or remote-delivery receipt.
 
 Purpose: deliver the first user-usable group workspace in the installed Console
 WebUI, backed by the real group owner, with independent desktop and mobile
@@ -133,17 +134,30 @@ flowchart TD
   UI --> GATE{Candidate gates pass?}:::decision
   GATE -->|no| FIX[Author fixes first divergence]:::action
   FIX --> GATE
-  GATE -->|yes| REVIEW{Alice independent review}:::decision
-  REVIEW -->|findings| FIX
-  REVIEW -->|PASS| CHROME{Jenny Chrome replay\n1440x900 and 390x844}:::decision
+  GATE -->|yes| CHROME{Jenny Chrome replay\n1440x900 and 390x844}:::decision
   CHROME -->|fail| FIX
-  CHROME -->|pass| DELIVER([Merge, push, remote receipt, cleanup]):::success
+  CHROME -->|pass| REVIEW{Alice independent review\nof the replayed candidate}:::decision
+  REVIEW -->|findings| FIX
+  REVIEW -->|PASS| DELIVER([Merge, push, remote receipt, cleanup]):::success
 
   classDef boundary fill:#E9EEF5,stroke:#64748B,color:#0F172A,stroke-width:1.5px
   classDef action fill:#E8F1FF,stroke:#2563EB,color:#0F172A,stroke-width:1.5px
   classDef decision fill:#FFF4CC,stroke:#D97706,color:#0F172A,stroke-width:1.5px
   classDef success fill:#E8F7EE,stroke:#16A34A,color:#0F172A,stroke-width:1.5px
 ```
+
+Candidate validation, the Chrome replay and the independent review are separate
+evidence boundaries. Only the source/candidate tests and build prove the tree
+under test; an installed artifact and its lifecycle prove a different level; the
+Chrome replay proves the user-observable desktop and mobile entrypoints; and an
+independent review starts only after those applicable validations pass on the
+candidate it reviews. A review PASS replaces none of them and proves neither a
+merge nor a remote-delivery receipt.
+
+The five `docs/architecture/` owner maps keep their existing owners and gates.
+This UI rework reuses the already declared `ui/teams-console` → group client →
+controller edges from the group design; it adds no sixth authority map and no
+unrelated gate binding.
 
 ## 4. Peer duties and current state
 
