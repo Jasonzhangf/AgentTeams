@@ -191,6 +191,18 @@ Protocol fields, state transitions and DAGs have one owner:
 - Remove the owned worktree and release its claim only after required delivery,
   the remote receipt, and retention evidence exist.
 
+## Execution split (user-authorized)
+
+- All AgentTeams workers execute concrete code, document, test, and integration
+  work through `codex exec --profile gcm`. Peers keep goal orchestration and
+  delegate concrete execution to GCM workers; peers are not code writers
+  themselves.
+- Alice guides, audits, and reviews only. She does not execute code, docs,
+  tests, or integration.
+- Astra workers are not used. If GCM is unavailable, report the unavailability
+  explicitly; do not fall back to Astra.
+- This rule does not terminate peer hosts or tmux/daemon lifecycles.
+
 ## Process control
 
 - AppSDK quality, safety, and evidence gates are mandatory when applicable.
