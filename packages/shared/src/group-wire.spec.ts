@@ -83,6 +83,19 @@ describe('group wire requests', () => {
   })
 })
 
+describe('issue list requests', () => {
+  it('parses the group-scoped issue list so a page can restore the sessions it owns', () => {
+    const parsed = parseGroupWireRequest(request({ kind: 'issue.list', requestId: 'r1', groupId: 'g1' }))
+    expect(parsed).toEqual({ kind: 'issue.list', requestId: 'r1', groupId: 'g1' })
+  })
+
+  it('rejects an issue list with an unknown field, so no second filter can leak in', () => {
+    expect(() => parseGroupWireRequest(request({
+      kind: 'issue.list', requestId: 'r2', groupId: 'g1', sessionId: 's1',
+    }))).toThrow(/unsupported field/)
+  })
+})
+
 describe('group grant requests', () => {
   it('parses the one frame that retargets a member role and its command edges', () => {
     const parsed = parseGroupWireRequest(request({
@@ -121,6 +134,17 @@ describe('group wire replies', () => {
       }],
     }))
     expect(parsed).toMatchObject({ kind: 'message.page', gapBeforeSequence: 3 })
+  })
+
+  it('parses an issue list reply that carries the sessions of one group', () => {
+    const parsed = parseGroupWireReply(request({
+      kind: 'issue.list', requestId: 'r1',
+      sessions: [{
+        sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: '42',
+        initiatorAgentId: 'agent-a', state: 'open', openedAt: '2026-10-22T00:00:00.000Z', lastOpSeq: 1,
+      }],
+    }))
+    expect(parsed).toMatchObject({ kind: 'issue.list', sessions: [{ sessionId: 's1', groupId: 'g1' }] })
   })
 
   it('parses an op execute frame as hub to owner', () => {

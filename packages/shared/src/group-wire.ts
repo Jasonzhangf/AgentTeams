@@ -16,7 +16,7 @@ export type ActionKind = 'reply' | 'review' | 'comment' | 'audit' | 'followup'
 export type ActionState =
   | 'pending' | 'accepted' | 'in_progress' | 'cancel_requested'
   | 'blocked' | 'failed' | 'completed' | 'refused' | 'cancelled' | 'unknown'
-export type ExternalOpKind = 'issue.create' | 'issue.reference' | 'issue.close' | 'issue.reopen' | 'issue.query' | 'action.result'
+export type ExternalOpKind = 'issue.create' | 'issue.reference' | 'issue.close' | 'issue.reopen' | 'issue.query' | 'issue.recover' | 'action.result'
 export type ExternalOpState = 'pending' | 'inflight' | 'confirmed' | 'failed' | 'unknown'
 export type InvitationState = 'pending' | 'accepted' | 'declined' | 'revoked'
 
@@ -83,6 +83,8 @@ export interface Action {
   readonly resultCommitId?: string
   readonly resultRef?: string
   readonly executionStopped?: boolean
+  /** A blocked or failed report from the assignee, with its reason and evidence. */
+  readonly report?: { readonly report: 'blocked' | 'failed'; readonly reason: string; readonly evidence?: JsonValue; readonly reportedAt: string }
   readonly createdAt: string
   readonly completedAt?: string
 }
@@ -137,6 +139,7 @@ export type GroupWireRequest =
   | { readonly kind: 'issue.create'; readonly requestId: string; readonly commitId: string; readonly groupId: string; readonly vikunjaProjectId: string; readonly title: string; readonly body: string }
   | { readonly kind: 'issue.reference'; readonly requestId: string; readonly commitId: string; readonly groupId: string; readonly vikunjaIssueId: string }
   | { readonly kind: 'issue.query'; readonly requestId: string; readonly sessionId: string }
+  | { readonly kind: 'issue.list'; readonly requestId: string; readonly groupId: string }
   | { readonly kind: 'issue.close'; readonly requestId: string; readonly commitId: string; readonly sessionId: string; readonly reason: string; readonly conclusion: string; readonly evidence?: JsonValue }
   | { readonly kind: 'issue.reopen'; readonly requestId: string; readonly commitId: string; readonly sessionId: string; readonly reason: string; readonly remainingActions?: readonly string[] }
   | { readonly kind: 'action.create'; readonly requestId: string; readonly commitId: string; readonly sessionId: string; readonly assigneeAgentId: string; readonly actionKind: ActionKind; readonly reason: string; readonly expectedResult: string; readonly replyRequired: boolean; readonly replyRequiredReason?: string; readonly inReplyToActionId?: string }
@@ -160,6 +163,7 @@ export type GroupWireReply =
   | { readonly kind: 'message.page'; readonly requestId: string; readonly messages: readonly Message[]; readonly revision: number; readonly hasMore: boolean; readonly gapBeforeSequence?: number }
   | { readonly kind: 'issue.changed'; readonly sessionId: string; readonly state: IssueState }
   | { readonly kind: 'issue.session'; readonly requestId: string; readonly session: IssueSession }
+  | { readonly kind: 'issue.list'; readonly requestId: string; readonly sessions: readonly IssueSession[] }
   | { readonly kind: 'issue.closed'; readonly requestId: string; readonly session: IssueSession; readonly outcome: IssueCloseOutcome }
   | { readonly kind: 'issue.reopened'; readonly requestId: string; readonly session: IssueSession; readonly outcome: IssueReopenOutcome }
   | { readonly kind: 'action.created'; readonly requestId: string; readonly action: Action }
@@ -181,7 +185,7 @@ const actionStates: readonly ActionState[] = [
   'pending', 'accepted', 'in_progress', 'cancel_requested',
   'blocked', 'failed', 'completed', 'refused', 'cancelled', 'unknown',
 ]
-const externalOpKinds: readonly ExternalOpKind[] = ['issue.create', 'issue.reference', 'issue.close', 'issue.reopen', 'issue.query', 'action.result']
+const externalOpKinds: readonly ExternalOpKind[] = ['issue.create', 'issue.reference', 'issue.close', 'issue.reopen', 'issue.query', 'issue.recover', 'action.result']
 const externalOpStates: readonly ExternalOpState[] = ['pending', 'inflight', 'confirmed', 'failed', 'unknown']
 const invitationStates: readonly InvitationState[] = ['pending', 'accepted', 'declined', 'revoked']
 const closeOutcomes: readonly IssueCloseOutcome[] = ['closed', 'conflict', 'failed', 'unknown']
@@ -239,6 +243,17 @@ function optionalJson(value: unknown, path: string): JsonValue | undefined {
   return value
 }
 
+function parseActionReport(value: unknown): Action['report'] {
+  const input = record(value, 'Action report')
+  const report = pick(input.report, ['blocked', 'failed'], 'Action report kind')
+  return {
+    report,
+    reason: text(input.reason, 'Action report reason'),
+    ...(input.evidence === undefined ? {} : { evidence: optionalJson(input.evidence, 'Action report evidence') }),
+    reportedAt: text(input.reportedAt, 'Action report reportedAt'),
+  }
+}
+
 export function parseGroupAction(value: unknown): Action {
   const input = record(value, 'Action')
   const state = pick(input.state, actionStates, 'Action state')
@@ -258,6 +273,7 @@ export function parseGroupAction(value: unknown): Action {
     ...(optionalText(input.resultCommitId, 'Action resultCommitId') === undefined ? {} : { resultCommitId: text(input.resultCommitId, 'Action resultCommitId') }),
     ...(optionalText(input.resultRef, 'Action resultRef') === undefined ? {} : { resultRef: text(input.resultRef, 'Action resultRef') }),
     ...(input.executionStopped === undefined ? {} : { executionStopped: flag(input.executionStopped, 'Action executionStopped') }),
+    ...(input.report === undefined ? {} : { report: parseActionReport(input.report) }),
     createdAt: text(input.createdAt, 'Action createdAt'),
     ...(optionalText(input.completedAt, 'Action completedAt') === undefined ? {} : { completedAt: text(input.completedAt, 'Action completedAt') }),
   }
@@ -432,6 +448,10 @@ export function parseGroupWireRequest(textValue: string): GroupWireRequest {
       assertEnvelopeKeys(frame, keys('sessionId'), 'Issue query request')
       return { kind, requestId, sessionId: text(frame.sessionId, 'Session id') }
     }
+    case 'issue.list': {
+      assertEnvelopeKeys(frame, keys('groupId'), 'Issue list request')
+      return { kind, requestId, groupId: text(frame.groupId, 'Group id') }
+    }
     case 'issue.close': {
       assertEnvelopeKeys(frame, keys('commitId', 'sessionId', 'reason', 'conclusion', 'evidence'), 'Issue close request')
       return {
@@ -577,6 +597,11 @@ export function parseGroupWireReply(textValue: string): GroupWireReply {
       assertEnvelopeKeys(frame, ['kind', 'requestId', 'session'], 'Issue session reply')
       return { kind, requestId: text(frame.requestId, 'Issue session requestId'), session: parseIssueSession(frame.session) }
     }
+    case 'issue.list': {
+      assertEnvelopeKeys(frame, ['kind', 'requestId', 'sessions'], 'Issue list reply')
+      if (!Array.isArray(frame.sessions)) fail('Issue list reply sessions must be an array')
+      return { kind, requestId: text(frame.requestId, 'Issue list requestId'), sessions: frame.sessions.map(parseIssueSession) }
+    }
     case 'issue.closed': {
       assertEnvelopeKeys(frame, ['kind', 'requestId', 'session', 'outcome'], 'Issue closed reply')
       return {
@@ -678,6 +703,10 @@ const transitions: readonly ActionTransition[] = [
   { from: 'in_progress', to: 'completed' },
   { from: 'in_progress', to: 'blocked' },
   { from: 'in_progress', to: 'failed' },
+  // A human assignee reports a fresh assignment immediately; the action never
+  // entered execution, so the report is the terminal record of that attempt.
+  { from: 'pending', to: 'blocked' },
+  { from: 'pending', to: 'failed' },
   { from: 'in_progress', to: 'cancel_requested' },
   { from: 'in_progress', to: 'unknown' },
   { from: 'cancel_requested', to: 'cancelled' },

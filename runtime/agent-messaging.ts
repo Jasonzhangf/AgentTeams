@@ -194,6 +194,36 @@ export async function createAgentMessaging(options: AgentMessagingOptions): Prom
         if (result.status === 'failed') return { kind: 'op.failed', opId, commitId, error: result.error }
         return { kind: 'op.unknown', opId, commitId, reason: 'issue.query outcome is not confirmable' }
       }
+      if (opKind === 'issue.recover') {
+        const recoverKind = String(params.recoverKind ?? '')
+        if (recoverKind === 'issue.create') {
+          const result = await vikunja.findIssueByStableRef({
+            projectId: String(params.vikunjaProjectId ?? ''),
+            ref: commitId,
+          })
+          if (result.status === 'ok') {
+            return result.value === undefined
+              ? { kind: 'op.confirmed', opId, commitId, result: { found: false } }
+              : { kind: 'op.confirmed', opId, commitId, result: { found: true, issueId: result.value.issueId } }
+          }
+          if (result.status === 'failed') return { kind: 'op.failed', opId, commitId, error: result.error }
+          return { kind: 'op.unknown', opId, commitId, reason: 'issue.recover outcome is not confirmable' }
+        }
+        if (recoverKind === 'action.result') {
+          const result = await vikunja.findCommentByStableRef({
+            issueId: String(params.vikunjaIssueId ?? ''),
+            ref: commitId,
+          })
+          if (result.status === 'ok') {
+            return result.value === undefined
+              ? { kind: 'op.confirmed', opId, commitId, result: { found: false } }
+              : { kind: 'op.confirmed', opId, commitId, result: { found: true, resultRef: result.value.commentId } }
+          }
+          if (result.status === 'failed') return { kind: 'op.failed', opId, commitId, error: result.error }
+          return { kind: 'op.unknown', opId, commitId, reason: 'action.result recovery outcome is not confirmable' }
+        }
+        return { kind: 'op.failed', opId, commitId, error: serviceError('INVALID_INPUT', `unsupported recover kind ${recoverKind}`) }
+      }
       return { kind: 'op.failed', opId, commitId, error: serviceError('UNSUPPORTED_OPERATION', `unsupported external op ${opKind}`) }
     } catch (cause) {
       return { kind: 'op.unknown', opId, commitId, reason: cause instanceof Error ? cause.message : 'external op failed unexpectedly' }

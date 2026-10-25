@@ -1,3 +1,4 @@
+import type { JsonValue } from '../packages/shared/src/agent-services.ts'
 import type { Action, ActionKind, ActionState } from '../packages/shared/src/group-wire.ts'
 import {
   actionNeedsExecutionFor,
@@ -217,8 +218,23 @@ export function reportAction(
   actionId: string,
   report: 'blocked' | 'failed',
   now: string,
+  detail: { readonly reason: string; readonly evidence?: JsonValue } = { reason: '' },
 ): ActionRegistryState {
-  return transitionAction(state, actionId, report, now)
+  const transitioned = transition(state, actionId, report, now).state
+  // The report is the record of why the assignee stopped: keep its reason and
+  // evidence on the action itself, so a refresh shows the same facts.
+  const actions = new Map(transitioned.actions)
+  const action = getAction(transitioned, actionId)
+  actions.set(actionId, {
+    ...action,
+    report: {
+      report,
+      reason: detail.reason,
+      ...(detail.evidence === undefined ? {} : { evidence: detail.evidence }),
+      reportedAt: now,
+    },
+  })
+  return { actions }
 }
 
 /**

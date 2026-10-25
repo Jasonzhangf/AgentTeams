@@ -80,8 +80,10 @@ describe('review finding 2: one commit id names one external write', () => {
     })
     expect(second.ok).toBe(false)
     expect(second.ok ? '' : second.error.message).toContain('unknown')
-    // The retry must ask for a read-back, not write a second issue.
-    expect(calls).toHaveLength(1)
+    // The retry must ask for a read-back, not write a second issue: the only
+    // write is the first create, and the retry adds a read-only recover.
+    expect(calls.filter((op) => op.kind === 'issue.create')).toHaveLength(1)
+    expect(calls.some((op) => op.kind === 'issue.recover')).toBe(true)
   })
 
   it('keeps the recorded operation across a restart', async () => {
@@ -218,14 +220,21 @@ describe('acceptance 8: a read converges the projection to the external state', 
     expect((reopened.reply as { session: { state: string } }).session.state).toBe('open')
   })
 
-  it('keeps the projection when the read fails', async () => {
+  it('answers a failed read as unconfirmed and keeps the stored projection', async () => {
     const hub = hubWith(jsonStore(), async (op) => (op.kind === 'issue.query'
       ? { code: 'UNAVAILABLE', message: 'no read owner' }
       : issueOk(op)))
-    const { sessionId } = await groupAndSession(hub)
+    const { groupId, sessionId } = await groupAndSession(hub)
     const queried = await hub.handle(MASTER, { kind: 'issue.query', requestId: 'q1', sessionId })
-    expect(queried.ok).toBe(true)
-    expect((queried.reply as { session: { state: string } }).session.state).toBe('open')
+    // A read that failed proves nothing: it must not report the old projection
+    // as a fresh success.
+    expect(queried.ok).toBe(false)
+    expect(queried.ok ? '' : queried.error.code).toBe('UNAVAILABLE')
+    // The stored projection is untouched by the failed read.
+    const listed = await hub.handle(MASTER, { kind: 'issue.list', requestId: 'l1', groupId })
+    const stored = (listed.reply as { sessions: readonly { sessionId: string; state: string }[] })
+      .sessions.find((entry) => entry.sessionId === sessionId)
+    expect(stored?.state).toBe('open')
   })
 })
 

@@ -117,6 +117,22 @@ export function reconcileAfterRestart(ledger: ExternalOpLedger, now = new Date()
   return result
 }
 
+/**
+ * Persist a confirmed outcome for an unknown write after a successful recovery
+ * read. The read is the owner's own, so this records fact, not a guessed replay.
+ */
+export function confirmExternalOpFromRead(
+  ledger: ExternalOpLedger,
+  opId: string,
+  result: JsonValue,
+  now = new Date().toISOString(),
+): ExternalOpLedger {
+  const op = ledger.operations.get(opId)
+  if (!op) throw new Error('external-op: recovery names an unknown operation')
+  if (op.state === 'failed') throw new Error(`external-op: recovery tried to confirm failed op ${opId}`)
+  return replaceOp(ledger, { ...op, state: 'confirmed', result, updatedAt: now }, now)
+}
+
 export function externalOpFor(ledger: ExternalOpLedger, opId: string): ExternalOp | undefined {
   return ledger.operations.get(opId)
 }
