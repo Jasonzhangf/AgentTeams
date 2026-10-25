@@ -1,0 +1,23 @@
+# CLI replay: 2026-10-24T17:29:19-07:00 (America/Los_Angeles)
+prefix: /tmp/uv-run/prefix/node_modules/.bin/agentteams
+HOME: /tmp/uv-run/home
+
+## status
+status state=running generation=3 config=/tmp/uv-run/home/.agentteams/config.toml internal=/tmp/uv-run/home/.agentteams/internal.toml pid=48535 endpoint=provider identity=local/local/provider/local/custom/Local provider role=provider presence=online generation=1 capabilities=file-search@1:search[search-slot:2:slot] endpoint=receiver identity=local/local/receiver/local/custom/Local receiver role=receiver presence=online generation=1 capabilities=- console=enabled consoleState=online consoleGeneration=2 consoleCredential=missing consoleUrl=http://127.0.0.1:58222 consolePid=48798
+exit=0
+
+## work submit query=gamma
+exit=0
+workId 698cb693-2b5c-4be0-81bb-b00e1bf44a85
+requestId 98651de4-b39c-4e3c-99b8-ece4dda37fff
+state succeeded closed
+status matched matches 1
+path ./c.txt text 'gamma content three\n'
+## work query (workId 698cb693-2b5c-4be0-81bb-b00e1bf44a85)
+exit=0
+observed True state succeeded
+status matched path ./c.txt text 'gamma content three\n'
+
+## 早前两次提交（原始回执未逐字节保存，ID 与业务结果如下）
+work-1 workId 5e2a85a4-a2aa-49ea-8b9f-4d4cfb0830e8 requestId 59e9a81f-3416-441b-bbf9-52d3fe92eb20 query=alpha path=./a.txt text='alpha content one' state=succeeded closed
+work-2 workId 796bb3c1-cc1a-40a3-ace0-ae3a1e744c6f requestId 047ce385-2aca-4343-ad58-78770a4ebcd3 query=beta  path=./b.txt text='beta content two'  state=succeeded closed

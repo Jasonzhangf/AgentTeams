@@ -1,0 +1,108 @@
+# Console enablement diagnosis (recorded during the run)
+
+Date: 2026-10-24 (America/Los_Angeles). Isolated environment only.
+
+## Step 1: enable Console with the generated default config
+
+Command sequence:
+
+```
+agentteams init                      # exit 0, writes ~/.agentteams/config.toml with [console] enabled=false
+# user edits config.toml: [console] enabled = true
+agentteams start                     # first attempt failed with the config error below
+```
+
+First failure, before `username`/`passwordEnv` were present:
+
+```
+console.username must be a non-empty string
+exit=0
+```
+
+The command printed a config error but still exited 0. Configuration errors are reported only through text.
+
+After adding `username = "admin"`, `passwordEnv = "AGENTTEAMS_CONSOLE_PASSWORD"`, and `agentIds = ["provider","receiver"]`, `agentteams start` succeeded and `agentteams status` reported `console=enabled`.
+
+## Step 2: contradictory state after editing config while the supervisor runs
+
+With the supervisor from an earlier generation still running:
+
+```
+agentteams console start
+Console is disabled; set [console].enabled=true in config.toml
+exit=0
+```
+
+At the same moment `agentteams status` reported `console=enabled consoleState=stopped`. The two commands disagree because the running supervisor still holds the earlier projection. The message does not say that a restart is required.
+
+After `agentteams stop` and `agentteams start`, `agentteams console start` succeeded:
+
+```
+console launcher=running console=enabled consoleState=online consoleGeneration=1 consoleCredential=configured consoleUrl=http://127.0.0.1:58222 consolePid=84079
+```
+
+## Step 3: Console serves HTML but projection fails with the default agent policy
+
+Generated policy is `allowedManagers = []` for both agents.
+
+```
+GET http://127.0.0.1:58222/            unauthenticated -> 401
+GET http://127.0.0.1:58222/            admin:... -> 200 (HTML shell)
+GET http://127.0.0.1:58222/api/v1/projection -> 502
+```
+
+Response body:
+
+```
+{"message":"Console owner request failed; outcome not inferred"}
+```
+
+Browser console recorded during the same page load:
+
+```
+Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+Failed to load resource: the server responded with a status of 503 (Service Unavailable)
+```
+
+Page text shown to the user:
+
+```
+无法加载控制台数据。
+HTTP 502: Console owner request failed; outcome not inferred
+重试
+```
+
+The rendered page offered a `重试` button and no explanation of the missing manager admission.
+
+## Step 4: after granting the manager admission in the isolated test config
+
+Test-only edit, isolated environment only, not a product recommendation:
+
+```
+policy = { revision = 1, allowedConsumers = ["receiver"], allowedManagers = ["__console"] }
+policy = { revision = 1, allowedConsumers = [],            allowedManagers = ["__console"] }
+```
+
+Then `agentteams stop`, `agentteams start` (generation 3), `agentteams console start` (Console url unchanged at http://127.0.0.1:58222).
+
+```
+GET /api/v1/projection -> 200
+agents: provider (runtime, online, file-search), receiver (runtime, online, no capability)
+works:  5e2a85a4-a2aa-49ea-8b9f-4d4cfb0830e8 provider->receiver file-search@1 state=closed
+        796bb3c1-cc1a-40a3-ace0-ae3a1e744c6f (second submit, closed)
+```
+
+The projection contained the real Work rows from the CLI submissions. The UI did not render them.
+
+## Step 5: local Console History tab
+
+```
+GET /api/v1/history -> 503
+{"message":"history owner is not bound to this control daemon"}
+```
+
+The History tab rendered the raw refusal and a bare `上一页` control. `console-host/src/http-api.ts` has the explicit `HISTORY_UNAVAILABLE` branch for the unbound owner.
+
+## Interpretation
+
+The Console shell, authentication, static assets, and online lifecycle work. The default admission path is not user-completable, the failure is opaque, and the Work results the user just produced are not visible in the product UI. Admission must not be weakened to make this appear healthy; the fix belongs to configuration diagnostics plus task-result presentation with a single owner for each.

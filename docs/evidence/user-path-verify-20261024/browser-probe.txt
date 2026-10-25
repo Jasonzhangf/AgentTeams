@@ -1,0 +1,119 @@
+# Browser probe record (Chromium via Playwright)
+
+Date: 2026-10-24 (America/Los_Angeles). Targets: control daemon http://127.0.0.1:7392 (teams/…), installed local Console http://127.0.0.1:58222 (admin/…). Credentials passed as HTTP Basic Auth by the browser context; no credential value is recorded here.
+
+## Page loads
+
+| Target | GET / | /console-entry.js | Browser console errors |
+| --- | --- | --- | --- |
+| control 7392 | 200 | 200 | none on discovery page |
+| local Console 58222 (default policy) | 200 | n/a | 502 and 503 resource errors |
+| local Console 58222 (after isolated policy grant) | 200 | n/a | none on discovery page |
+
+Discovery page text (control 7392, real discovered agent):
+
+```
+Teams 控制台 / EN / 刷新 / 服务配置 / 关闭 / 发现 组网 交互 历史
+发现
+unknown
+disconnected
+not-applicable
+idle
+reasoner-a (reasoner-a)directory · acp
+连接详情
+disconnected
+```
+
+Local Console text (after policy grant, real runtime agents):
+
+```
+发现
+unknown
+disconnected
+not-applicable
+idle
+Local provider (provider)runtime · file-search
+连接详情
+Local receiver (receiver)runtime · 能力
+连接详情
+```
+
+## Tabs
+
+| Tab | Observing page | Local Console |
+| --- | --- | --- |
+| 发现 | agent list only | agent list only |
+| 组网 | `reasoner-a · masterreasoner-a · peer`, `提交组网草稿` | `Local provider · masterLocal provider · peerLocal receiver · masterLocal receiver · peer`, two granted edges |
+| 交互 | empty | empty |
+| 历史 | `上一页0`, no rows | 503 `history owner is not bound to this control daemon` |
+
+No tab renders `projection.works`. `grep` over `ui/teams-console/src` for `works` returns no matches, and the projection does contain Work rows.
+
+## Connect action
+
+Control 7392, before any peer declaration:
+
+```
+click 连接 -> page replaced by: FORBIDDEN: agentId reasoner-a is not declared by this control daemon's accepted peers
+```
+
+Control 7392, after declaring `[peers.reasoner-a]`:
+
+```
+click 连接 -> Connect: {"acceptedRevision":1}
+GET /api/v1/projection -> connections [["reasoner-a","disconnected"]]
+```
+
+Accepted is not connected. The refusal is legal; the missing pieces are preflight operability, state semantics, reason, and recovery entry.
+
+Local Console 58222: connect is offered for already-connected local runtime agents; no state change was observed.
+
+## Language toggle
+
+Control 7392: `EN` -> labels became `Teams Console / 中文 / Refresh / Provider configuration / Close / Discover / Network / Interact / History`. Toggling works; the toggle label itself does not stay consistent on the local Console (only one direction was exercised).
+
+## Modal and backdrop measurement
+
+Open drawer via `详情`, then for every button on the page compute the element at its center:
+
+```
+initial:  none covered
+drawer open: EN, 刷新, 服务配置, 关闭, 发现, 组网, 交互, 历史, 连接, 详情 -> all resolved to div.teams-backdrop
+             drawer body buttons 展开 and 关闭 -> still clickable
+```
+
+`.teams-backdrop` is `position: absolute`, full viewport (0,0,1440,900), `z-index: auto`, `pointer-events: auto`, and no dimming was rendered. The header `关闭` is visually available but inert while a drawer is open.
+
+## Escape behavior (corrected)
+
+`ui/teams-console/src/mount.ts:57-67` installs a document keydown handler. Measured with a capture listener and drawer counting:
+
+```
+[58222] initial:            drawer=0 overlay=1 active=body
+[58222] drawer open:        drawer=1 overlay=1 active=header.teams-drawer-header
+[58222] after Escape:       drawer=0 overlay=1 active=button…secondary focusKey=agent:provider:details
+[58222] after 2nd Escape:   drawer=0 overlay=0 active=body
+[7392]  initial:            drawer=0 overlay=1 active=body
+[7392]  drawer open:        drawer=1 overlay=1 active=body
+[7392]  after Escape:       drawer=0 overlay=1 active=body
+[7392]  after 2nd Escape:   drawer=0 overlay=0 active=body
+```
+
+Keyboard Escape closes the drawer and a second Escape closes the console. The earlier claim that Escape did nothing was a measurement error: the probe counted `.teams-overlay`, which remains after only the drawer closes. No Escape defect.
+
+## Projection update cadence and DOM rebuild
+
+Authenticated SSE capture (`sse-frames-control-7392.txt`) produced 6 frames in about 6 seconds while the observed state did not change. Field-by-field diff of the first two frames:
+
+```
+CHANGED /projection/connections[0]/status/observedAt | '2026-10-25T00:28:07.815Z' -> '2026-10-25T00:28:08.816Z'
+CHANGED /seq | 1 -> 2
+```
+
+No other projection field differs. Source: `runtime/control-process.ts:963-968` dedupes by `JSON.stringify(projection)`, and `runtime/control-process.ts:907` builds the membership view with a fresh `new Date().toISOString()` on each observation. The dedupe therefore sees a different string every poll.
+
+During the same update pattern, Playwright locators repeatedly reported "element was detached from the DOM, retrying" for the connect button. UI rebuild and click detachment are separate impact evidence and are not derived from the frame log. No battery or energy claim is made.
+
+## Screenshots
+
+`shots/` holds: `01-initial.png`, `detail.png`, `config-panel.png`, `connect-offline.png`, `connect-declared.png`, `english.png`, `tab-组网.png`, `tab-交互.png`, `tab-历史.png`, `tab-发现.png`, `v3-discovery.png`, `v3-组网.png`, `v3-交互.png`, `v3-历史.png`.

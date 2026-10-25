@@ -1,0 +1,29 @@
+# Installed lifecycle trace (recorded during replay)
+# Shell: HOME=/tmp/uv-run/home; CLI=/tmp/uv-run/prefix/node_modules/.bin/agentteams
+
+agentteams (no args)
+usage: agentteams init|start|status|work|stop|console status|start|stop|registry start|status|stop|control start|status|stop [--config <path>] [--generation <n>]
+exit=0
+
+agentteams init
+initialized /tmp/uv-run/home/.agentteams/config.toml
+Edit config.toml, then run agentteams start, agentteams status, or agentteams stop.
+exit=0
+
+agentteams start
+started state=running generation=1 config=/tmp/uv-run/home/.agentteams/config.toml internal=/tmp/uv-run/home/.agentteams/internal.toml pid=8212
+exit=0
+
+agentteams status
+status state=running generation=1 ... endpoint=provider ... presence=online ... endpoint=receiver ... presence=online ... console=disabled consoleState=disabled
+exit=0
+
+agentteams stop
+stopped state=stopped generation=1 ... pid=8212
+exit=0
+
+agentteams start (restart)
+started state=running generation=2 ... pid=83894
+exit=0
+
+The full JSON submit/query responses and IDs are in work-2-submit-raw.json, work-3-submit.json, and work-3-query.json. Paths and environment values above are isolated test paths; no production path was used.
