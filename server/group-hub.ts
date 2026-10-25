@@ -496,6 +496,51 @@ export class GroupHubImpl implements GroupHub {
   }
 
   /**
+   * One read-only recovery query issued as the recorded write's owner. Unlike a
+   * write it is not cached: the temporary record exists only long enough to
+   * authenticate the owner receipt and is removed in `finally`, so a miss or a
+   * timed-out read can really be read again. It never calls `save()`.
+   */
+  private async recoverRead(
+    recorded: ExternalOp,
+    params: Record<string, unknown>,
+  ): Promise<{ readonly ok: true; readonly facts: JsonValue | undefined } | { readonly ok: false; readonly result: GroupHubResult }> {
+    const now = this.now().toISOString()
+    const op: ExternalOp = {
+      opId: this.idFactory(),
+      commitId: recorded.commitId,
+      kind: 'issue.recover',
+      state: 'inflight',
+      ownerAgentId: recorded.ownerAgentId,
+      params: params as JsonValue,
+      updatedAt: now,
+    }
+    // Present for receipt authentication only; never part of a saved snapshot.
+    this.ledger = { operations: new Map(this.ledger.operations).set(op.opId, op) }
+    try {
+      const receipt = this.executeExternalOp ? await this.executeExternalOp(op) : await this.delegatedReceipt(op)
+      if ('code' in receipt) return { ok: false, result: err(receipt.code, receipt.message) }
+      try {
+        // The receipt must come from the write's own owner and name its commit.
+        authenticateExternalOpReceipt(this.ledger, receipt, now)
+      } catch (error) {
+        return { ok: false, result: err('FORBIDDEN', error instanceof Error ? error.message : 'external receipt rejected') }
+      }
+      if (receipt.state === 'failed') {
+        return { ok: false, result: err(receipt.error?.code ?? 'UPSTREAM_ERROR', receipt.error?.message ?? 'issue.recover failed') }
+      }
+      if (receipt.state !== 'confirmed') {
+        return { ok: false, result: err('UPSTREAM_ERROR', `${receipt.reason ?? 'issue.recover'} for ${recorded.commitId}`) }
+      }
+      return { ok: true, facts: receipt.result }
+    } finally {
+      const operations = new Map(this.ledger.operations)
+      operations.delete(op.opId)
+      this.ledger = { operations }
+    }
+  }
+
+  /**
    * Read a create back by its stable reference before any retry. The read goes to
    * the same owner and never writes a second issue; a hit persists the confirmed
    * outcome, a miss leaves the op unknown.
@@ -511,12 +556,12 @@ export class GroupHubImpl implements GroupHub {
     if (!recorded) return err('NOT_FOUND', `no recorded create for ${commitId}`)
     const refusal = this.recoveryRefusal(recorded, actor)
     if (refusal) return refusal
-    const delegated = await this.delegate('issue.recover', commitId, actor.agentId, {
+    const read = await this.recoverRead(recorded, {
       recoverKind: 'issue.create', groupId, commitId,
       vikunjaProjectId: params.projectId, title: params.title,
     })
-    if (!delegated.ok) return delegated.result
-    const facts = delegated.result
+    if (!read.ok) return read.result
+    const facts = read.facts
     const issueId = facts !== null && typeof facts === 'object' && !Array.isArray(facts)
       ? optionalText((facts as Record<string, unknown>).issueId)
       : undefined
@@ -726,22 +771,22 @@ export class GroupHubImpl implements GroupHub {
     if (recorded && (recorded.state === 'unknown' || recorded.state === 'inflight')) {
       const refusal = this.recoveryRefusal(recorded, actor)
       if (refusal) return refusal
-      const recovered = await this.delegate('issue.recover', commitId, actor.agentId, {
+      const read = await this.recoverRead(recorded, {
         recoverKind: opKind, sessionId, commitId, targetState,
         vikunjaProjectId: session.vikunjaProjectId, vikunjaIssueId: session.vikunjaIssueId,
       })
-      if (!recovered.ok) {
+      if (!read.ok) {
         this.sessions = settleIssueOperation(this.sessions, commitId, 'unknown', now)
         this.save()
         return err('RESULT_UNKNOWN', `${direction} for ${commitId} is ${recorded.state}; recovery could not confirm it`)
       }
-      const recoveredState = readObservedState(recovered.result)
+      const recoveredState = readObservedState(read.facts)
       if (recoveredState === undefined) {
         this.sessions = settleIssueOperation(this.sessions, commitId, 'unknown', now)
         this.save()
         return err('RESULT_UNKNOWN', `${direction} for ${commitId} was not read back; the outcome stays unknown`)
       }
-      this.ledger = confirmExternalOpFromRead(this.ledger, recorded.opId, recovered.result as JsonValue, this.now().toISOString())
+      this.ledger = confirmExternalOpFromRead(this.ledger, recorded.opId, read.facts as JsonValue, this.now().toISOString())
       return this.settleIssueRead(direction, input, sessionId, commitId, operation, recoveredState)
     }
     // A close cancels queued work before the external write; an in-flight action
@@ -916,15 +961,15 @@ export class GroupHubImpl implements GroupHub {
   ): Promise<GroupHubResult> {
     const refusal = this.recoveryRefusal(recorded, actor)
     if (refusal) return refusal
-    const delegated = await this.delegate('issue.recover', recorded.commitId, actor.agentId, {
+    const read = await this.recoverRead(recorded, {
       recoverKind: 'action.result', actionId: action.actionId, resultCommitId: recorded.commitId,
-      sessionId: action.sessionId,
+      sessionId: action.sessionId, commitId: recorded.commitId,
       ...(session === undefined ? {} : { vikunjaIssueId: session.vikunjaIssueId }),
     })
-    if (!delegated.ok) {
+    if (!read.ok) {
       return err('RESULT_UNKNOWN', `action.result for ${recorded.commitId} is ${recorded.state}; recovery could not confirm it`)
     }
-    const facts = delegated.result
+    const facts = read.facts
     const resultRef = facts !== null && typeof facts === 'object' && !Array.isArray(facts)
       ? optionalText((facts as Record<string, unknown>).resultRef)
       : undefined

@@ -188,6 +188,105 @@ function startStubProvider() {
   })
 }
 
+function stableReferenceOf(text) {
+  const match = /\[agentteams:([^\]]+)\]/u.exec(typeof text === 'string' ? text : '')
+  return match?.[1]
+}
+
+/**
+ * Local Vikunja HTTP boundary, so the daemon's own vikunja-sync is still the
+ * only writer. The create write is applied before its reply is dropped, and the
+ * first recovery list read is held past the hub deadline; the stub itself never
+ * decides group or issue state.
+ */
+function startStubVikunja() {
+  const tasks = new Map()
+  const calls = { create: [], list: [] }
+  const sockets = new Set()
+  let nextTaskId = 101
+  let dropNextCreateResponse = false
+  let holdNextListResponse = false
+  let held = undefined
+
+  const server = createHttpServer((request, response) => {
+    const url = new URL(request.url ?? '/', 'http://stub-vikunja.invalid')
+    let body = ''
+    request.on('data', chunk => { body += chunk })
+    request.on('end', () => {
+      const send = (status, value) => {
+        response.writeHead(status, { 'content-type': 'application/json' })
+        response.end(JSON.stringify(value))
+      }
+      const projectTasks = url.pathname.match(/^\/api\/v1\/projects\/([^/]+)\/tasks$/u)
+      if (request.method === 'PUT' && projectTasks) {
+        const parsed = JSON.parse(body)
+        const task = {
+          id: nextTaskId,
+          project_id: projectTasks[1],
+          title: String(parsed.title ?? ''),
+          description: String(parsed.description ?? ''),
+          done: false,
+        }
+        nextTaskId += 1
+        tasks.set(String(task.id), task)
+        calls.create.push({ commitId: stableReferenceOf(task.description), issueId: String(task.id) })
+        if (dropNextCreateResponse) {
+          dropNextCreateResponse = false
+          // The write is applied by this process, but the caller gets no
+          // complete response: the external outcome is genuinely unknown.
+          response.destroy()
+          return
+        }
+        send(200, task)
+        return
+      }
+      if (request.method === 'GET' && projectTasks) {
+        calls.list.push({ projectId: projectTasks[1], taskCount: tasks.size })
+        if (holdNextListResponse) {
+          holdNextListResponse = false
+          held = response
+          return
+        }
+        send(200, [...tasks.values()])
+        return
+      }
+      send(404, { message: 'unsupported stub Vikunja route' })
+    })
+  })
+  server.on('connection', socket => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+  return new Promise(resolveStart => {
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      resolveStart({
+        baseUrl: `http://127.0.0.1:${address.port}`,
+        calls,
+        dropNextCreateResponse: () => { dropNextCreateResponse = true },
+        holdNextListResponse: () => { holdNextListResponse = true },
+        releaseHeldListResponse: () => {
+          if (held === undefined) return false
+          const response = held
+          held = undefined
+          response.writeHead(200, { 'content-type': 'application/json' })
+          response.end('[]')
+          return true
+        },
+        counts: () => ({ create: calls.create.length, list: calls.list.length }),
+        close: () => new Promise(resolveClose => {
+          if (held !== undefined) {
+            held.destroy()
+            held = undefined
+          }
+          for (const socket of sockets) socket.destroy()
+          server.close(() => resolveClose())
+        }),
+      })
+    })
+  })
+}
+
 function registryConfig({ directory, port, keyPath, certPath }) {
   return `version = 4
 
@@ -265,7 +364,7 @@ allowed = ["master", "peer"]
 ${peer(OWNER.agentId)}${peer(STOPPED.agentId)}${peer(ABSENT.agentId)}`
 }
 
-function agentConfig({ id, hostId, ip, port, keyPath, certPath, trustPath, registryPort, directory, baseUrl, credentialRef }) {
+function agentConfig({ id, hostId, ip, port, keyPath, certPath, trustPath, registryPort, directory, baseUrl, credentialRef, vikunjaBaseUrl }) {
   return `version = 4
 
 [daemon]
@@ -324,6 +423,11 @@ id = "probe-model"
 [model.primary]
 provider = "probe"
 model = "probe-model"
+${vikunjaBaseUrl === undefined ? '' : `
+[vikunja]
+baseUrl = ${JSON.stringify(vikunjaBaseUrl)}
+tokenRef = "env:GROUP_API_VIKUNJA_TOKEN"
+`}
 `
 }
 
@@ -422,6 +526,8 @@ async function main() {
   const directory = await mkdtemp(join(SANDBOX_ROOT, 'group-api-bb-'))
   ownedRoot = directory
   console.log('# 8dde877 Console group API black box: the real Console route reaches the real group owner')
+  receipts.command = [process.execPath, ...process.argv.slice(1)].join(' ')
+  receipts.cwd = process.cwd()
   console.log(`cli=${CLI}`)
   console.log(`root=${directory}`)
   console.log(`lanIp=${lanIp}`)
@@ -446,6 +552,7 @@ async function main() {
   const ownerPort = await availablePort(lanIp)
   const retirePort = await availablePort(lanIp)
   const provider = await startStubProvider()
+  const vikunja = await startStubVikunja()
 
   const operatorEnv = {
     HOME: home,
@@ -454,6 +561,7 @@ async function main() {
     GROUP_API_CRED_ABSENT: CREDENTIALS.absent,
     GROUP_API_CRED_PEER: CREDENTIALS.peer,
     GROUP_API_PROBE_KEY: CREDENTIALS.probe,
+    GROUP_API_VIKUNJA_TOKEN: 'group-api-vikunja-token',
     [PASSWORD_ENV]: PASSWORD,
   }
 
@@ -469,7 +577,7 @@ async function main() {
     id: OWNER.agentId, hostId: OWNER.hostId, ip: lanIp, port: ownerPort,
     keyPath: ownerTls.keyPath, certPath: ownerTls.certPath, trustPath: registryTls.certPath,
     registryPort, directory: join(directory, 'owner'), baseUrl: provider.baseUrl,
-    credentialRef: 'env:GROUP_API_CRED_OWNER',
+    credentialRef: 'env:GROUP_API_CRED_OWNER', vikunjaBaseUrl: vikunja.baseUrl,
   }))
   await writeFile(retirePath, agentConfig({
     id: STOPPED.agentId, hostId: STOPPED.hostId, ip: lanIp, port: retirePort,
@@ -582,6 +690,52 @@ async function main() {
   assert(typeof unknownSession.body.ok === 'boolean', `the owner answer is a typed envelope (${JSON.stringify(unknownSession.body).slice(0, 160)})`)
   record('unknownIssueSession', unknownSession.body)
 
+  step = 'fault injection: unknown create and one held recovery read'
+  const faultProjectId = 'project-fault'
+  const faultCommitId = 'fault-create-1'
+  const faultFrame = () => ({
+    kind: 'issue.create', requestId: nextRequestId('fault-create'),
+    commitId: faultCommitId, groupId, vikunjaProjectId: faultProjectId,
+    title: 'fault recovery issue', body: 'created through the real Console route',
+  })
+  // The external create is applied, then its reply is lost: the hub can only
+  // record an unknown outcome.
+  vikunja.dropNextCreateResponse()
+  const unknownCreate = await groupRequest(origin, OWNER.agentId, faultFrame())
+  assert(unknownCreate.status === 200 && unknownCreate.body.ok === false,
+    `the lost create reply leaves the write unconfirmed (${JSON.stringify(unknownCreate.body).slice(0, 220)})`)
+  assert(vikunja.calls.create.length === 1, 'the stub received exactly one external create write')
+  assert(vikunja.calls.create[0].commitId === faultCommitId,
+    `the create carried the typed commit id as its stable reference (${vikunja.calls.create[0].commitId})`)
+  record('faultUnknownCreate', unknownCreate.body)
+
+  // The first recovery read never answers before the hub's own deadline. A read
+  // is not a write: the next retry must issue a fresh read, not replay this.
+  vikunja.holdNextListResponse()
+  const timedOutRecovery = await groupRequest(origin, OWNER.agentId, faultFrame())
+  assert(timedOutRecovery.status === 200 && timedOutRecovery.body.ok === false,
+    `a recovery read held past the deadline stays unconfirmed (${JSON.stringify(timedOutRecovery.body).slice(0, 220)})`)
+  assert(vikunja.calls.list.length === 1, 'the first recovery read really reached the stub and was held')
+  assert(vikunja.releaseHeldListResponse(), 'the held recovery read was released after the hub deadline')
+  record('faultTimedOutRecovery', timedOutRecovery.body)
+
+  const recoveredSession = await groupRequest(origin, OWNER.agentId, faultFrame())
+  assert(recoveredSession.status === 200 && recoveredSession.body.ok === true && recoveredSession.body.reply.kind === 'issue.session',
+    `the next retry reads again and converges (${JSON.stringify(recoveredSession.body).slice(0, 240)})`)
+  const faultSessionId = recoveredSession.body.reply.session.sessionId
+  assert(faultSessionId.includes(`:${faultProjectId}:`), `the session binds the recovered issue (${faultSessionId})`)
+  assert(vikunja.calls.create.length === 1, 'the recovery issued no second create write')
+  assert(vikunja.calls.list.length >= 2, `the recovery issued a fresh read (${vikunja.calls.list.length})`)
+  record('faultRecoveredSession', { sessionId: faultSessionId, counts: vikunja.counts() })
+
+  // Once confirmed, the same commit replays from the ledger with no external call.
+  const replayedSession = await groupRequest(origin, OWNER.agentId, faultFrame())
+  assert(replayedSession.status === 200 && replayedSession.body.ok === true,
+    `a confirmed create replays its recorded session (${JSON.stringify(replayedSession.body).slice(0, 200)})`)
+  assert(vikunja.counts().create === 1 && vikunja.counts().list === 2,
+    `the confirmed replay made no external call (${JSON.stringify(vikunja.counts())})`)
+  record('faultVikunjaCounts', { counts: vikunja.counts(), creates: vikunja.calls.create, reads: vikunja.calls.list })
+
   step = 'a second real agent joins over its own route'
   const invited = await groupRequest(origin, OWNER.agentId, {
     kind: 'group.invite', requestId: nextRequestId('invite'), groupId,
@@ -678,6 +832,7 @@ async function main() {
     `the same request becomes not-configured once the agent stopped (${retireAfter.status} ${JSON.stringify(retireAfter.body)})`)
   record('withdrawnEndpoint', retireAfter.body)
 
+  await vikunja.close()
   await provider.close()
 }
 
@@ -723,12 +878,22 @@ const deadline = setTimeout(() => {
 
 try {
   await main()
+  receipts.finishedAt = new Date().toISOString()
+  receipts.exitCode = process.exitCode ?? 0
   await writeFile(RECEIPT_PATH, `${JSON.stringify(receipts, null, 2)}\n`)
   console.log(`receipt: wrote ${RECEIPT_PATH} with ${receipts.checks} checks`)
 } catch (error) {
   console.error(error instanceof Error ? error.stack ?? error.message : String(error))
   for (const entry of live.entries) {
     console.error(`--- ${entry.label} stdout ---\n${entry.stdout}\n--- ${entry.label} stderr ---\n${entry.stderr}`)
+  }
+  receipts.finishedAt = new Date().toISOString()
+  receipts.exitCode = 1
+  receipts.error = error instanceof Error ? error.message : String(error)
+  try {
+    await writeFile(RECEIPT_PATH, `${JSON.stringify(receipts, null, 2)}\n`)
+  } catch {
+    // The original failure is the reported one.
   }
   process.exitCode = 1
 } finally {

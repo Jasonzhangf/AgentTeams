@@ -522,6 +522,112 @@ describe('external op convergence and admission', () => {
     expect(calls.filter((op) => op.kind === 'action.result')).toHaveLength(1)
   })
 
+  it('recovers a result that became visible after an earlier miss', async () => {
+    let visible = false
+    let writes = 0
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'action.result') {
+        writes += 1
+        return writes === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { resultRef: 'comment:unexpected' })
+      }
+      if (op.kind === 'issue.recover') {
+        return visible ? confirmed(op, { found: true, resultRef: 'comment:1' }) : confirmed(op, { found: false })
+      }
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const action = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    const actionId = (action.reply as { action: { actionId: string } }).action.actionId
+    const first = await hub.handle(PEER, { kind: 'action.submit', requestId: 's1', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(first.ok).toBe(false)
+    // The first read really runs and misses; the result is not forced to unknown
+    // forever by that miss.
+    const missed = await hub.handle(PEER, { kind: 'action.submit', requestId: 's2', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(missed.ok).toBe(false)
+    expect(missed.ok ? '' : missed.error.code).toBe('RESULT_UNKNOWN')
+    const afterMiss = await hub.handle(OWNER, { kind: 'action.list', requestId: 'l1', sessionId })
+    expect((afterMiss.reply as { actions: readonly { actionId: string; state: string }[] }).actions.find((entry) => entry.actionId === actionId)?.state).toBe('unknown')
+    // The comment becomes visible afterwards; the second recovery must read again.
+    visible = true
+    const recovered = await hub.handle(PEER, { kind: 'action.submit', requestId: 's3', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(recovered.ok).toBe(true)
+    expect((recovered.reply as { action: { state: string; resultRef?: string } }).action).toMatchObject({ state: 'completed', resultRef: 'comment:1' })
+    expect(calls.filter((op) => op.kind === 'action.result')).toHaveLength(1)
+    expect(calls.filter((op) => op.kind === 'issue.recover').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('recovers again after a recovery read timed out', async () => {
+    let reads = 0
+    let writes = 0
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'action.result') {
+        writes += 1
+        return writes === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { resultRef: 'comment:unexpected' })
+      }
+      if (op.kind === 'issue.recover') {
+        reads += 1
+        return reads === 1
+          ? { code: 'UNAVAILABLE', message: 'vikunja read timed out' }
+          : confirmed(op, { found: true, resultRef: 'comment:1' })
+      }
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const action = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    const actionId = (action.reply as { action: { actionId: string } }).action.actionId
+    const first = await hub.handle(PEER, { kind: 'action.submit', requestId: 's1', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(first.ok).toBe(false)
+    const timedOut = await hub.handle(PEER, { kind: 'action.submit', requestId: 's2', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(timedOut.ok).toBe(false)
+    // A timed-out read must leave no record that blocks the next real read.
+    const recovered = await hub.handle(PEER, { kind: 'action.submit', requestId: 's3', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(recovered.ok).toBe(true)
+    expect((recovered.reply as { action: { state: string } }).action.state).toBe('completed')
+    expect(calls.filter((op) => op.kind === 'action.result')).toHaveLength(1)
+  })
+
+  it('keeps an unknown create recoverable after an earlier miss', async () => {
+    let visible = false
+    let creates = 0
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'issue.create') {
+        creates += 1
+        return creates === 1
+          ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+          : confirmed(op, { issueId: 'unexpected' })
+      }
+      if (op.kind === 'issue.recover') {
+        return visible ? confirmed(op, { found: true, issueId: '42' }) : confirmed(op, { found: false })
+      }
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await withPeer(hub)
+    const create = { kind: 'issue.create', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' }
+    const first = await hub.handle(OWNER, { ...create, requestId: 'r1', commitId: 'ic1' })
+    expect(first.ok).toBe(false)
+    const missed = await hub.handle(OWNER, { ...create, requestId: 'r2', commitId: 'ic1' })
+    expect(missed.ok).toBe(false)
+    expect(missed.ok ? '' : missed.error.code).toBe('RESULT_UNKNOWN')
+    visible = true
+    const recovered = await hub.handle(OWNER, { ...create, requestId: 'r3', commitId: 'ic1' })
+    expect(recovered.ok).toBe(true)
+    expect(sessionIdOf(recovered.reply)).toContain('42')
+    expect(calls.filter((op) => op.kind === 'issue.create')).toHaveLength(1)
+    expect(calls.filter((op) => op.kind === 'issue.recover').length).toBeGreaterThanOrEqual(2)
+  })
+
   it('answers a state read that failed as unconfirmed, not as a fresh open session', async () => {
     let down = false
     const { hub } = scripted((op) => {

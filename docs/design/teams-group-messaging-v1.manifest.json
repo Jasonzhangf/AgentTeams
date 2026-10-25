@@ -3,7 +3,7 @@
   "manifest_id": "teams-group-messaging-v1",
   "status": "design",
   "revision": 7,
-  "supersedes": "revision 6; allows pending actions to report blocked/failed directly, adds a persistent Action.report field, and aligns action.report frame field naming with the typed protocol; revision 5 added the authorized WebUI read-only issue list without changing issue lifecycle authority",
+  "supersedes": "revision 6; allows pending actions to report blocked/failed directly, adds a persistent Action.report field, and aligns action.report frame field naming with the typed protocol; revision 6 added the authorized WebUI read-only issue list without changing issue lifecycle authority",
   "canonical_doc": "docs/design/teams-group-messaging-v1.md",
   "owner_modules": ["control-protocol", "server", "network", "runtime", "config"],
   "resources": [

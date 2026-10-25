@@ -1,6 +1,6 @@
 # Teams 群组通信、issue 会话与 action 执行 v1(修订版)
 
-状态:design 修订版(revision 6)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
+状态:design 修订版(revision 7)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
 注入、关闭、投递语义。审计反馈和用户确认的决定已落实到对象模型、线协议、权限、投递、
 Session 映射、关闭和分批。本文件是唯一 owner;不并存两套契约。受影响架构映射已同步:模块归属登记在
 `docs/architecture/module-registry.json` 的 `group-messaging` 条目,实现后按
@@ -441,8 +441,9 @@ relay.error      { requestId?, error }
 ```
 
 每个带 requestId 的请求都有同 requestId 的回执或 relay.error;无 requestId 的帧只作推送,
-不能被当成某次请求的答复。`action.report` 只更新该 action 的持久 `report` 字段,并随
-`action.updated` 回执返回;该字段不代表结果 comment 已完成。
+不能被当成某次请求的答复。`action.report` 会把该 action 从 pending 或 in_progress
+推到 blocked 或 failed,并写入持久 `report` 字段,随 `action.updated` 回执返回;该字段不代表
+结果 comment 已完成。
 
 `issue.list` 的 owner 是 hub 的 `issue-session` 持久会话账本。hub 从认证连接取得 actor,
 先验证其 scope 与当前有效群成员资格,再按 groupId 读取会话。无消息、无 action、已关闭

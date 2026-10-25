@@ -1,0 +1,188 @@
+{
+  "driver": "group-webui-first-delivery-20261024/black-box-group-api.mjs",
+  "startedAt": "2026-10-25T08:26:09.078Z",
+  "steps": [
+    {
+      "step": "owner agent start",
+      "name": "ownerAgent",
+      "value": {
+        "pid": 34851,
+        "listener": "192.168.0.3:62581",
+        "registration": "registration state=online attempts=0 reconnects=0 endpoint=wss://127.0.0.1:62579"
+      }
+    },
+    {
+      "step": "owner publishes its endpoint record",
+      "name": "ownerEndpointRecord",
+      "value": {
+        "path": "/tmp/group-api-bb-7bPwuQ/home/.agentteams/sessions/local/local/group-owner/local-group-endpoint.json",
+        "revision": 1,
+        "socketPath": "/tmp/group-api-bb-7bPwuQ/owner/state/agent-messaging.sock"
+      }
+    },
+    {
+      "step": "second declared agent start",
+      "name": "retireAgent",
+      "value": {
+        "pid": 39891,
+        "listener": "192.168.0.3:62582",
+        "socketPath": "/tmp/group-api-bb-7bPwuQ/retire/state/agent-messaging.sock"
+      }
+    },
+    {
+      "step": "control start",
+      "name": "control",
+      "value": {
+        "pid": 44223,
+        "listener": "127.0.0.1:62580"
+      }
+    },
+    {
+      "step": "real group create",
+      "name": "createdGroup",
+      "value": {
+        "groupId": "2521e3b6-575d-4e38-96e7-d15c35c48372",
+        "name": "console-group-delivery",
+        "owner": "group-owner"
+      }
+    },
+    {
+      "step": "real message send and page",
+      "name": "sentMessage",
+      "value": {
+        "messageId": "message:2521e3b6-575d-4e38-96e7-d15c35c48372:commit-2521e3b6-575d-4e38-96e7-d15c35c48372",
+        "sequence": 1
+      }
+    },
+    {
+      "step": "real message send and page",
+      "name": "messagePage",
+      "value": {
+        "revision": 2,
+        "hasMore": false,
+        "count": 1
+      }
+    },
+    {
+      "step": "real action and issue reads",
+      "name": "unknownIssueSession",
+      "value": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "unknown session no-such-session"
+        }
+      }
+    },
+    {
+      "step": "fault injection: unknown create and one held recovery read",
+      "name": "faultUnknownCreate",
+      "value": {
+        "ok": false,
+        "error": {
+          "code": "UPSTREAM_ERROR",
+          "message": "issue.create outcome is unknown; read back before retrying"
+        }
+      }
+    },
+    {
+      "step": "fault injection: unknown create and one held recovery read",
+      "name": "faultTimedOutRecovery",
+      "value": {
+        "ok": false,
+        "error": {
+          "code": "RESULT_UNKNOWN",
+          "message": "issue.create for fault-create-1 is unknown; recovery could not confirm it"
+        }
+      }
+    },
+    {
+      "step": "fault injection: unknown create and one held recovery read",
+      "name": "faultRecoveredSession",
+      "value": {
+        "sessionId": "2521e3b6-575d-4e38-96e7-d15c35c48372:project-fault:101",
+        "counts": {
+          "create": 1,
+          "list": 2
+        }
+      }
+    },
+    {
+      "step": "fault injection: unknown create and one held recovery read",
+      "name": "faultVikunjaCounts",
+      "value": {
+        "counts": {
+          "create": 1,
+          "list": 2
+        },
+        "creates": [
+          {
+            "commitId": "fault-create-1",
+            "issueId": "101"
+          }
+        ],
+        "reads": [
+          {
+            "projectId": "project-fault",
+            "taskCount": 1
+          },
+          {
+            "projectId": "project-fault",
+            "taskCount": 1
+          }
+        ]
+      }
+    },
+    {
+      "step": "owner-authored refusal keeps its own code",
+      "name": "ownerRefusal",
+      "value": {
+        "status": 200,
+        "body": {
+          "ok": false,
+          "error": {
+            "code": "FORBIDDEN",
+            "message": "group-owner is not an active member of group-does-not-exist"
+          }
+        }
+      }
+    },
+    {
+      "step": "one hop only",
+      "name": "undeclaredAgent",
+      "value": {
+        "code": "INVALID_INPUT",
+        "message": "agentId group-ghost is not declared by this control daemon's accepted peers"
+      }
+    },
+    {
+      "step": "declared peer with no published record",
+      "name": "absentPeer",
+      "value": {
+        "code": "GROUP_ENDPOINT_NOT_CONFIGURED",
+        "message": "agent group-absent has published no local group endpoint, so its group surface is not reachable from this control daemon"
+      }
+    },
+    {
+      "step": "published record with a dead socket",
+      "name": "unreachablePeer",
+      "value": {
+        "code": "GROUP_ENDPOINT_UNREACHABLE",
+        "message": "local group message socket is unavailable: connect ECONNREFUSED /tmp/group-api-bb-7bPwuQ/owner/state/agent-messaging.sock"
+      }
+    },
+    {
+      "step": "graceful stop withdraws the record",
+      "name": "withdrawnEndpoint",
+      "value": {
+        "code": "GROUP_ENDPOINT_NOT_CONFIGURED",
+        "message": "agent group-retire has published no local group endpoint, so its group surface is not reachable from this control daemon"
+      }
+    }
+  ],
+  "checks": 65,
+  "command": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /Volumes/Intel/playground/agentteams/group-webui-first-delivery/docs/evidence/group-webui-first-delivery-20261024/black-box-group-api.mjs",
+  "cwd": "/Volumes/Intel/playground/agentteams/group-webui-first-delivery",
+  "finishedAt": "2026-10-25T08:26:52.542Z",
+  "exitCode": 0
+}
