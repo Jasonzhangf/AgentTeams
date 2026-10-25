@@ -38,6 +38,11 @@ export interface SubmitActionResultInput {
   readonly resultRef: string
 }
 
+export interface BindActionResultInput {
+  readonly actionId: string
+  readonly resultCommitId: string
+}
+
 export interface TransitionOptions {
   readonly resultCommitId?: string
   readonly resultRef?: string
@@ -209,8 +214,14 @@ export function startAction(state: ActionRegistryState, actionId: string, now: s
   return transitionAction(state, actionId, 'in_progress', now)
 }
 
-export function refuseAction(state: ActionRegistryState, actionId: string, now: string): ActionRegistryState {
-  return transitionAction(state, actionId, 'refused', now)
+export function refuseAction(state: ActionRegistryState, actionId: string, now: string, reason: string): ActionRegistryState {
+  requireText(reason, 'refusal reason')
+  const transitioned = transitionAction(state, actionId, 'refused', now)
+  const action = getAction(transitioned, actionId)
+  return replaceAction(transitioned, {
+    ...action,
+    refusal: { reason, refusedAt: now },
+  })
 }
 
 export function reportAction(
@@ -288,6 +299,9 @@ export function submitActionResult(
   const action = getAction(state, actionId)
   if (action.resultCommitId === resultCommitId) {
     if (action.resultRef === resultRef) return { state, action }
+    if (action.resultRef === undefined) {
+      return transition(state, action.actionId, 'completed', now, { resultCommitId, resultRef })
+    }
     fail(`resultCommitId ${resultCommitId} conflicts with the recorded result reference`)
   }
   for (const other of state.actions.values()) {
@@ -296,6 +310,39 @@ export function submitActionResult(
     }
   }
   return transition(state, action.actionId, 'completed', now, { resultCommitId, resultRef })
+}
+
+/**
+ * Persist the result commit that this action owns before any external write.
+ *
+ * The binding is the same idempotency key the eventual `submitActionResult`
+ * uses, so a retry or a concurrent different result commit can never claim the
+ * action after its first write is already in flight.
+ */
+export function bindActionResult(
+  state: ActionRegistryState,
+  input: BindActionResultInput,
+  now: string,
+): { readonly state: ActionRegistryState; readonly action: Action } {
+  timestampOf(now, 'now')
+  const action = getAction(state, input.actionId)
+  const resultCommitId = requireText(input.resultCommitId, 'resultCommitId')
+  if (action.resultCommitId !== undefined) {
+    if (action.resultCommitId === resultCommitId) return { state, action }
+    fail(`resultCommitId ${resultCommitId} conflicts with the result already bound to action ${action.actionId}`)
+  }
+  for (const other of state.actions.values()) {
+    if (other.actionId !== action.actionId && other.resultCommitId === resultCommitId) {
+      fail(`resultCommitId ${resultCommitId} already belongs to action ${other.actionId}`)
+    }
+  }
+  const next: Action = { ...action, resultCommitId }
+  return { state: replaceAction(state, next), action: next }
+}
+
+/** Whether a fresh result write may start for this action state. */
+export function maySubmitActionResult(state: ActionState): boolean {
+  return state === 'pending' || state === 'accepted' || state === 'in_progress' || state === 'cancel_requested' || state === 'unknown'
 }
 
 /**

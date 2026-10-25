@@ -206,6 +206,19 @@ describe('group entities', () => {
     expect(parsed.state).toBe('cancel_requested')
   })
 
+  it('parses a persisted master refusal without dropping the initiator reason', () => {
+    const parsed = parseGroupAction({
+      ...action,
+      state: 'refused',
+      refusal: { reason: 'out of scope', refusedAt: '2026-10-22T00:01:00.000Z' },
+    })
+    expect(parsed).toMatchObject({
+      state: 'refused',
+      reason: 'check the plan',
+      refusal: { reason: 'out of scope', refusedAt: '2026-10-22T00:01:00.000Z' },
+    })
+  })
+
   it('rejects a message with sequence zero', () => {
     expect(() => parseGroupMessage({
       messageId: 'm1', commitId: 'c1', sequence: 0, groupId: 'g1', fromAgentId: 'agent-a',

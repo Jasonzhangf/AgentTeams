@@ -37,9 +37,11 @@ import {
 } from './issue-session.ts'
 import {
   actionOf,
+  bindActionResult,
   createAction,
   createActionRegistry,
   listActions,
+  maySubmitActionResult,
   refuseAction,
   reportAction,
   requestActionCancel,
@@ -834,14 +836,17 @@ export class GroupHubImpl implements GroupHub {
     this.sessions = confirmed.state
     this.save()
     const current = sessionOfIssue(this.sessions, sessionId)
-    if (direction === 'close') {
+    if (direction === 'close' && confirmed.decision.outcome === 'applied') {
       // A confirmed close is the single convergence: the projection is closed and
-      // any work not yet cancelled is taken out of the executable set.
+      // any work not yet cancelled is taken out of the executable set. A stale
+      // close that loses to a newer reopen must not cancel the newer work.
       this.cancelSessionActions(sessionId, this.now().toISOString())
       this.save()
+    }
+    if (direction === 'close') {
       const outcome = confirmed.decision.outcome === 'applied' ? 'closed' : confirmed.decision.outcome
-      const unstopped = closeReportUnstopped(listActions(this.actions, sessionId))
-      return ok({ kind: 'issue.closed', requestId: text(input.requestId, 'requestId'), session: current, outcome, unstopped })
+      const unstopped = confirmed.decision.outcome === 'applied' ? closeReportUnstopped(listActions(this.actions, sessionId)) : undefined
+      return ok({ kind: 'issue.closed', requestId: text(input.requestId, 'requestId'), session: current, outcome, ...(unstopped === undefined ? {} : { unstopped }) })
     }
     const outcome = confirmed.decision.outcome === 'applied' ? 'reopened' : confirmed.decision.outcome
     return ok({ kind: 'issue.reopened', requestId: text(input.requestId, 'requestId'), session: current, outcome })
@@ -856,6 +861,13 @@ export class GroupHubImpl implements GroupHub {
     const session = this.sessions.sessions.get(sessionId)
     if (!session) return err('NOT_FOUND', `unknown session ${sessionId}`)
     if (session.state === 'closed') return err('CONFLICT', `session ${sessionId} is closed; reopen it before creating an action`)
+    const group = groupOf(this.registry, session.groupId)
+    if (!memberActiveAt(group, assigneeAgentId, this.now().toISOString())) return err('INVALID_INPUT', `${assigneeAgentId} is not an active member`)
+    // One `mastersOf` edge serves both directions: a master commands its peer, a
+    // peer requests its master. No edge means no authority in either direction.
+    if (!canCommand(group, actor.agentId, assigneeAgentId) && !canRequest(group, actor.agentId, assigneeAgentId)) {
+      return err('FORBIDDEN', `${actor.agentId} has no command or request edge to ${assigneeAgentId}`)
+    }
     // Command-before-refresh (§13.1): admission is decided on the current external
     // state, never on a stale local projection. A read that fails is a refusal,
     // not permission to admit on the old open.
@@ -869,13 +881,6 @@ export class GroupHubImpl implements GroupHub {
       this.convergeSessionClosed(session.groupId, sessionId, read.observed === 'closed', this.now().toISOString())
       this.save()
       if (read.observed === 'closed') return err('CONFLICT', `session ${sessionId} is closed; reopen it before creating an action`)
-    }
-    const group = groupOf(this.registry, session.groupId)
-    if (!memberActiveAt(group, assigneeAgentId, this.now().toISOString())) return err('INVALID_INPUT', `${assigneeAgentId} is not an active member`)
-    // One `mastersOf` edge serves both directions: a master commands its peer, a
-    // peer requests its master. No edge means no authority in either direction.
-    if (!canCommand(group, actor.agentId, assigneeAgentId) && !canRequest(group, actor.agentId, assigneeAgentId)) {
-      return err('FORBIDDEN', `${actor.agentId} has no command or request edge to ${assigneeAgentId}`)
     }
     if (typeof input.replyRequired !== 'boolean') return err('INVALID_INPUT', 'replyRequired must be a boolean')
     const reason = text(input.reason, 'reason')
@@ -897,30 +902,63 @@ export class GroupHubImpl implements GroupHub {
   private async submitAction(actor: Actor, input: Record<string, unknown>): Promise<GroupHubResult> {
     const actionId = text(input.actionId, 'actionId')
     const resultCommitId = text(input.resultCommitId, 'resultCommitId')
+    const resultBody = optionalText(input.resultBody) ?? ''
     const action = this.actions.actions.get(actionId)
     if (!action) return err('NOT_FOUND', `unknown action ${actionId}`)
     if (action.assigneeAgentId !== actor.agentId) return err('FORBIDDEN', `${actor.agentId} is not the assignee of ${actionId}`)
-    // The state and the result identity are checked before any external write:
-    // a finished action never appends a second comment, and a repeated result
-    // commit returns the recorded result instead of writing again.
+    // State and result identity are checked before any external write: blocked,
+    // failed and terminal states never append another comment, and a different
+    // result commit cannot claim an action whose first write is still unknown.
     if (isTerminalActionState(action.state)) {
       if (action.state === 'completed' && action.resultCommitId === resultCommitId) {
+        const recorded = externalOpForCommit(this.ledger, resultCommitId, 'action.result')
+        if (recorded !== undefined && !sameActionResult(recorded.params, resultBody, input.evidence)) {
+          return err('CONFLICT', `resultCommitId ${resultCommitId} conflicts with the recorded result content`)
+        }
         return ok({ kind: 'action.updated', requestId: text(input.requestId, 'requestId'), action: actionOf(this.actions, actionId) },
           [{ agentId: action.initiatorAgentId, frame: { kind: 'action.changed', action: actionOf(this.actions, actionId) } }])
       }
       return err(action.state === 'completed' ? 'CONFLICT' : 'INVALID_INPUT',
         `action ${actionId} is ${action.state}; a new result cannot be written`)
     }
+    if (action.state === 'blocked' || action.state === 'failed') {
+      return err('INVALID_INPUT', `action ${actionId} is ${action.state}; a new result cannot be written`)
+    }
+    // A different result commit is refused before the action's first write is
+    // claimed, so it can never become a second comment after a lost receipt.
+    if (action.resultCommitId !== undefined && action.resultCommitId !== resultCommitId) {
+      return err('CONFLICT', `action ${actionId} is bound to result commit ${action.resultCommitId}`)
+    }
     const session = this.sessions.sessions.get(action.sessionId)
     // A lost receipt leaves an unknown write. The same result commit retries by
     // reading its comment back, never by writing a second one.
     const recorded = externalOpForCommit(this.ledger, resultCommitId, 'action.result')
+    // A retry that claims the same result commit must carry the same content:
+    // recovering the first write under different content would settle the action
+    // with a result nobody ever submitted.
+    if (recorded !== undefined && !sameActionResult(recorded.params, resultBody, input.evidence)) {
+      return err('CONFLICT', `resultCommitId ${resultCommitId} conflicts with the recorded result content`)
+    }
     if (recorded && (recorded.state === 'unknown' || recorded.state === 'inflight')) {
       return await this.recoverActionResult(actor, text(input.requestId, 'requestId'), action, recorded, session)
     }
+    if (action.state === 'unknown' && recorded?.state !== 'failed') {
+      return err('CONFLICT', `action ${actionId} has no recoverable result for ${resultCommitId}; a new result cannot be written`)
+    }
+    if (!maySubmitActionResult(action.state)) {
+      return err('INVALID_INPUT', `action ${actionId} is ${action.state}; a new result cannot be written`)
+    }
+    // Bind and persist the result commit before the awaited write. A concurrent
+    // different commit now sees the binding and returns without writing.
+    if (action.resultCommitId === undefined) {
+      const bound = bindActionResult(this.actions, { actionId, resultCommitId }, this.now().toISOString())
+      this.actions = bound.state
+      this.save()
+    }
     const delegated = await this.delegate('action.result', resultCommitId, actor.agentId, {
       actionId, resultCommitId, sessionId: action.sessionId,
-      resultBody: optionalText(input.resultBody) ?? '',
+      resultBody,
+      ...(input.evidence === undefined ? {} : { evidence: input.evidence as JsonValue }),
       ...(session === undefined ? {} : { vikunjaIssueId: session.vikunjaIssueId }),
     })
     const now = this.now().toISOString()
@@ -1008,7 +1046,8 @@ export class GroupHubImpl implements GroupHub {
       if (!canRequest(group, action.initiatorAgentId, actor.agentId)) {
         return err('FORBIDDEN', `${actor.agentId} cannot refuse ${actionId}; only a master may refuse a peer request`)
       }
-      this.actions = refuseAction(this.actions, actionId, this.now().toISOString())
+      const refusalReason = text(input.reason, 'reason')
+      this.actions = refuseAction(this.actions, actionId, this.now().toISOString(), refusalReason)
     }
     this.save()
     const updated = actionOf(this.actions, actionId)
@@ -1109,6 +1148,29 @@ function readObservedState(result: JsonValue | undefined): IssueState | undefine
   if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined
   const value = (result as Record<string, unknown>).actualState
   return value === 'open' || value === 'closed' ? value : undefined
+}
+
+function sameJson(left: JsonValue | undefined, right: unknown): boolean {
+  if (left === right) return true
+  if (left === undefined || right === undefined) return false
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    return left.every((value, index) => sameJson(value, right[index]))
+  }
+  const leftRecord = left as { readonly [key: string]: JsonValue }
+  const rightRecord = right as { readonly [key: string]: unknown }
+  const leftKeys = Object.keys(leftRecord).sort()
+  const rightKeys = Object.keys(rightRecord).sort()
+  if (leftKeys.length !== rightKeys.length || leftKeys.some((key, index) => key !== rightKeys[index])) return false
+  return leftKeys.every(key => sameJson(leftRecord[key], rightRecord[key]))
+}
+
+function sameActionResult(params: JsonValue, resultBody: string, evidence: unknown): boolean {
+  if (typeof params !== 'object' || params === null || Array.isArray(params)) return false
+  const record = params as Record<string, unknown>
+  const recordedBody = typeof record.resultBody === 'string' ? record.resultBody : ''
+  return recordedBody === resultBody && sameJson(record.evidence as JsonValue | undefined, evidence)
 }
 
 export function createGroupHub(deps: GroupHubDeps = {}): GroupHubImpl {

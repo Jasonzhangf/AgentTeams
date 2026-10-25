@@ -85,6 +85,8 @@ export interface Action {
   readonly executionStopped?: boolean
   /** A blocked or failed report from the assignee, with its reason and evidence. */
   readonly report?: { readonly report: 'blocked' | 'failed'; readonly reason: string; readonly evidence?: JsonValue; readonly reportedAt: string }
+  /** A master's refusal of a peer request: the initiator's reason stays in `reason`. */
+  readonly refusal?: { readonly reason: string; readonly refusedAt: string }
   readonly createdAt: string
   readonly completedAt?: string
 }
@@ -295,8 +297,17 @@ export function parseGroupAction(value: unknown): Action {
     ...(optionalText(input.resultRef, 'Action resultRef') === undefined ? {} : { resultRef: text(input.resultRef, 'Action resultRef') }),
     ...(input.executionStopped === undefined ? {} : { executionStopped: flag(input.executionStopped, 'Action executionStopped') }),
     ...(input.report === undefined ? {} : { report: parseActionReport(input.report) }),
+    ...(input.refusal === undefined ? {} : { refusal: parseActionRefusal(input.refusal) }),
     createdAt: text(input.createdAt, 'Action createdAt'),
     ...(optionalText(input.completedAt, 'Action completedAt') === undefined ? {} : { completedAt: text(input.completedAt, 'Action completedAt') }),
+  }
+}
+
+function parseActionRefusal(value: unknown): Action['refusal'] {
+  const input = record(value, 'Action refusal')
+  return {
+    reason: text(input.reason, 'Action refusal reason'),
+    refusedAt: text(input.refusedAt, 'Action refusal refusedAt'),
   }
 }
 
