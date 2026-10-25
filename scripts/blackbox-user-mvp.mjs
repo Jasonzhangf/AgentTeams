@@ -5829,6 +5829,26 @@ function latestSmokeReceipt(state) {
   return { path: receiptPath, receipt: readJson(receiptPath) }
 }
 
+function validationRecordPath(fixtureRoot, validationId) {
+  const recordsRoot = join(fixtureRoot, '.appsdk', 'records')
+  for (const name of readdirSync(recordsRoot)) {
+    if (!name.startsWith('pre-review-validation-record-')) continue
+    const record = readJson(join(recordsRoot, name))
+    if (record.validation_id === validationId) return { path: join(recordsRoot, name), record }
+  }
+  throw new Error(`validation record ${validationId} is missing`)
+}
+
+function latestValidationRecord(fixtureRoot) {
+  const recordsRoot = join(fixtureRoot, '.appsdk', 'records')
+  const records = readdirSync(recordsRoot)
+    .filter(name => name.startsWith('pre-review-validation-record-'))
+    .map(name => ({ path: join(recordsRoot, name), record: readJson(join(recordsRoot, name)) }))
+    .sort((left, right) => Date.parse(left.record.created_at) - Date.parse(right.record.created_at))
+  assert(records.length > 0, 'BB13 fixture has no pre-review validation record')
+  return records.at(-1)
+}
+
 /** The two governed stages this matrix observes, reduced to their execution identity. */
 function stageExecutionSummary(state) {
   return Object.fromEntries(['pnpm-verify', 'pnpm-smoke-installed'].map(stageId => {
@@ -5839,6 +5859,7 @@ function stageExecutionSummary(state) {
       receiptPath: stage.receiptPath ?? null,
       evidenceIds: Array.isArray(stage.evidenceIds) ? stage.evidenceIds : [],
       logPath: stage.logPath ?? null,
+      installedReceiptPath: stage.installedReceiptPath ?? null,
     }]
   }))
 }
@@ -5898,6 +5919,8 @@ async function runBB13(context) {
     AGENTTEAMS_GATE_PROOF_ROOT: proofDir,
   }
   const observations = []
+  let deletedEvidenceId
+  let staleValidationId
   let result
   try {
     runChecked('git', ['clone', '--quiet', '--no-local', root, fixtureRoot], { cwd: root, logPath: join(evidenceDir, 'git-clone.json') })
@@ -6061,7 +6084,161 @@ async function runBB13(context) {
       })
     }
 
-    // (3) Interrupted recovery re-entry: the validation record is gone while stage
+    // (3) Deleted smoke-required evidence: the independent verify stage reuses,
+    // and only the dependent smoke stage re-executes with a fresh receipt and
+    // freshly present evidence. This and the failure-recovery phase prove "first
+    // invalidated node and dependent successors" without a second lifecycle stage.
+    // The stale validation that still references the deleted evidence is kept so
+    // the evidence-repair re-entry can prove it is not returned.
+    {
+      const smoke = latestSmokeReceipt(store.state)
+      const evidenceId = smoke.receipt.evidence_ids[0]
+      const evidenceRelPath = `.appsdk/records/evidence/teams-source/${evidenceId}.json`
+      const evidencePath = join(fixtureRoot, evidenceRelPath)
+      assert(existsSync(evidencePath), `BB13 evidence file is missing: ${evidencePath}`)
+      const staleValidation = latestValidationRecord(fixtureRoot)
+      assert(staleValidation.record.deployment?.install_receipt_id === evidenceId,
+        'BB13 evidence deletion setup does not reference the deleted install evidence')
+      const before = capture('evidence-delete', inputHashes([mapRelPath]))
+      rmSync(evidencePath)
+      const { delta } = runPhase('evidence-delete', before)
+      expectDelta('evidence-delete', delta, { verify: 0, smoke: 1 })
+      expectReused('evidence-delete', delta, 'pnpm-verify', before.stages['pnpm-verify'])
+      const smokeStage = expectExecuted('evidence-delete', delta, 'pnpm-smoke-installed',
+        { beforeStage: before.stages['pnpm-smoke-installed'] })
+      const regenerated = latestSmokeReceipt(store.state)
+      assert(regenerated.receipt.receipt_id !== smoke.receipt.receipt_id,
+        'BB13 evidence deletion reused the stale smoke receipt instead of re-executing')
+      assert(smokeStage.receiptId === regenerated.receipt.receipt_id,
+        'BB13 evidence deletion did not publish the regenerated smoke receipt as the stage receipt')
+      const evidenceRoot = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source')
+      assert(regenerated.receipt.evidence_ids.length > 0 &&
+        regenerated.receipt.evidence_ids.every(id => existsSync(join(evidenceRoot, `${id}.json`))),
+        'BB13 deleted required evidence was not regenerated as fresh present records')
+      deletedEvidenceId = evidenceId
+      staleValidationId = staleValidation.record.validation_id
+      observations.at(-1).deleted_evidence = evidenceId
+      observations.at(-1).stale_validation_id = staleValidationId
+      observations.at(-1).regenerated_install_evidence = regenerated.receipt.evidence_ids[0]
+    }
+
+    // (4) Idempotent re-entry after evidence repair: the stale validation still
+    // references the deleted evidence and must not be returned. The selected
+    // validation must bind the current stage receipt ids and reference the
+    // regenerated, present, unexpired evidence.
+    {
+      const before = capture('evidence-repair-idempotent', inputHashes([mapRelPath]))
+      const run = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'evidence-repair-idempotent.json'))
+      assert(run.status === 0, 'BB13 evidence-repair idempotent re-entry did not pass')
+      assert(/"idempotent":true/u.test(run.stdout),
+        `BB13 evidence-repair idempotent re-entry did not return a completed validation: ${run.stdout.trim()}`)
+      const validationId = JSON.parse(run.stdout.trim()).validation_id
+      const storeNow = readLifecycleState(fixtureRoot)
+      const delta = bb13PhaseDelta(before, { state: storeNow.state, counts: pnpmInvocationCounts(proofDir) })
+      expectDelta('evidence-repair-idempotent', delta, { verify: 0, smoke: 0 })
+      expectReused('evidence-repair-idempotent', delta, 'pnpm-verify', before.stages['pnpm-verify'])
+      expectReused('evidence-repair-idempotent', delta, 'pnpm-smoke-installed', before.stages['pnpm-smoke-installed'])
+      assert(delta.invalidations.length === 0,
+        'BB13 evidence-repair idempotent re-entry mutated the completed stages')
+      const returned = validationRecordPath(fixtureRoot, validationId)
+      assert(returned.record.validation_id !== staleValidationId,
+        `BB13 evidence-repair idempotent re-entry returned the stale validation ${staleValidationId}`)
+      assert(returned.record.deployment.install_receipt_id !== deletedEvidenceId,
+        `BB13 evidence-repair idempotent re-entry returned validation evidence ${deletedEvidenceId}, which was deleted`)
+      const evidenceRoot = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source')
+      assert(!existsSync(join(evidenceRoot, `${deletedEvidenceId}.json`)),
+        'BB13 deleted evidence unexpectedly reappeared without an execution')
+      const validationEvidenceIds = [
+        ...returned.record.whitebox_evidence_ids,
+        ...returned.record.blackbox_evidence_ids,
+        returned.record.deployment.install_receipt_id,
+        returned.record.deployment.restart_receipt_id,
+      ]
+      assert(validationEvidenceIds.length > 0 && validationEvidenceIds.every(Boolean),
+        'BB13 returned validation does not name its required evidence')
+      for (const evidenceId of validationEvidenceIds) {
+        const evidencePath = join(evidenceRoot, `${evidenceId}.json`)
+        assert(existsSync(evidencePath), `BB13 returned validation references missing evidence ${evidenceId}`)
+        const evidenceRecord = readJson(evidencePath)
+        assert(evidenceRecord.result === 'pass', `BB13 returned validation evidence ${evidenceId} is not pass`)
+        assert(Date.parse(evidenceRecord.expires_at) > Date.now(),
+          `BB13 returned validation evidence ${evidenceId} is expired`)
+      }
+      for (const stageId of ['pnpm-verify', 'pnpm-smoke-installed']) {
+        const execution = returned.record.stage_execution?.[stageId]
+        const stage = storeNow.state.stages[stageId]
+        const receiptId = execution?.mode === 'reused' ? execution.source_receipt_id : execution.receipt_id
+        assert(receiptId === stage?.receiptId,
+          `BB13 returned validation ${stageId} receipt ${receiptId} does not bind the current stage receipt ${stage?.receiptId}`)
+      }
+      observations.push({
+        phase: 'evidence-repair-idempotent',
+        before: { candidate: before.candidate, input_hashes: before.input_hashes,
+          history_length: before.historyLength, counts: before.counts, stages: before.stages },
+        invocation: { exit: run.status, stdout: run.stdout.trim(), stderr: run.stderr.trim() },
+        delta, after: { stages: delta.stages, counts: pnpmInvocationCounts(proofDir) },
+        returned_validation_id: validationId,
+        returned_install_evidence: returned.record.deployment.install_receipt_id,
+      })
+    }
+
+    // (5) Empty commit with unchanged consumed inputs: HEAD moves but the source
+    // tree, architecture maps, registry, config, producer receipt and artifact do
+    // not. Both stages reuse the original receipts; smoke reuses the installed
+    // receipt path persisted on its stage record instead of a HEAD-derived path.
+    {
+      runChecked('git', ['-c', 'user.name=u7-bb13-fixture', '-c', 'user.email=u7-bb13-fixture@example.invalid',
+        'commit', '--allow-empty', '--quiet', '-m', 'bb13 empty commit'], { cwd: fixtureRoot,
+        logPath: join(evidenceDir, 'empty-commit.json') })
+      const before = capture('empty-commit-reuse', inputHashes([mapRelPath]))
+      const storedReceiptPath = before.stages['pnpm-smoke-installed']?.installedReceiptPath
+      assert(typeof storedReceiptPath === 'string' && storedReceiptPath.length > 0,
+        'BB13 smoke stage did not persist its installed receipt path')
+      assert(existsSync(storedReceiptPath), `BB13 persisted installed receipt path is missing: ${storedReceiptPath}`)
+      const headDerivedPath = join(fixtureRoot, '.appsdk-control', 'lifecycle-adapter', 'u1-installed-receipts',
+        before.candidate.head_commit, 'installed-runtime-smoke.receipt.json')
+      assert(storedReceiptPath !== headDerivedPath,
+        'BB13 smoke reuse path is still derived from the current HEAD commit')
+      const { delta } = runPhase('empty-commit-reuse', before)
+      expectDelta('empty-commit-reuse', delta, { verify: 0, smoke: 0 })
+      expectReused('empty-commit-reuse', delta, 'pnpm-verify', before.stages['pnpm-verify'])
+      const smokeReuse = expectReused('empty-commit-reuse', delta, 'pnpm-smoke-installed',
+        before.stages['pnpm-smoke-installed'])
+      assert(smokeReuse.installedReceiptPath === storedReceiptPath,
+        `BB13 smoke reuse lost its stored installed receipt path ${storedReceiptPath}`)
+      observations.at(-1).installed_receipt_path = storedReceiptPath
+      observations.at(-1).head_derived_receipt_path = headDerivedPath
+    }
+
+    // (6) Main-side source change with an empty candidate diff: origin/main
+    // advances past a source change and the candidate absorbs that same commit,
+    // so base...head is empty while the consumed source tree changed. Verify must
+    // invalidate from the tracked source at HEAD, not from the empty candidate
+    // diff, and the dependent smoke stage must re-verify the new artifact.
+    {
+      const sourcePath = 'network/relay-client.ts'
+      writeFileSync(join(fixtureRoot, sourcePath), `${readFileSync(join(fixtureRoot, sourcePath), 'utf8')}\n// BB13 main-side source advance fixture\n`)
+      commitFixtureChange(fixtureRoot, 'bb13 main-side source advance')
+      const mainAdvance = runChecked('git', ['rev-parse', 'HEAD'], { cwd: fixtureRoot,
+        logPath: join(evidenceDir, 'main-advance-head.json') }).stdout.trim()
+      runChecked('git', ['update-ref', 'refs/remotes/origin/main', mainAdvance], { cwd: fixtureRoot,
+        logPath: join(evidenceDir, 'main-advance-ref.json') })
+      const candidateDiff = runChecked('git', ['diff', '--name-only', `${mainAdvance}...HEAD`], { cwd: fixtureRoot }).stdout.trim()
+      assert(candidateDiff === '',
+        `BB13 main-side source advance left a non-empty candidate diff: ${candidateDiff}`)
+      const before = capture('main-advance-source-change', inputHashes([sourcePath, mapRelPath]))
+      const { delta } = runPhase('main-advance-source-change', before)
+      expectDelta('main-advance-source-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('main-advance-source-change', delta, 'pnpm-verify', ['source'])
+      expectInvalidated('main-advance-source-change', delta, 'pnpm-smoke-installed', ['artifact'])
+      expectExecuted('main-advance-source-change', delta, 'pnpm-verify', { beforeStage: before.stages['pnpm-verify'] })
+      expectExecuted('main-advance-source-change', delta, 'pnpm-smoke-installed',
+        { beforeStage: before.stages['pnpm-smoke-installed'] })
+      observations.at(-1).main_advance_commit = mainAdvance
+      observations.at(-1).candidate_diff_paths = candidateDiff.split('\n').filter(Boolean)
+    }
+
+    // (7) Interrupted recovery re-entry: the validation record is gone while stage
     // state and receipts survive, so both unchanged stages reuse their original
     // valid receipts instead of re-executing.
     {
@@ -6079,9 +6256,9 @@ async function runBB13(context) {
       }
     }
 
-    // (4) Source change: the verify stage consumes only the changed source paths,
-    // so it invalidates; the produced artifact differs, so the dependent smoke
-    // stage invalidates too and both execute. The reuse path is not taken.
+    // (8) Source change: the verify stage consumes the tracked source tree, so it
+    // invalidates; the produced artifact differs, so the dependent smoke stage
+    // invalidates too and both execute. The reuse path is not taken.
     {
       const sourcePath = 'network/relay-client.ts'
       writeFileSync(join(fixtureRoot, sourcePath), `${readFileSync(join(fixtureRoot, sourcePath), 'utf8')}\n// BB13 source invalidation fixture\n`)
@@ -6095,7 +6272,7 @@ async function runBB13(context) {
       expectExecuted('source-change', delta, 'pnpm-smoke-installed', { beforeStage: before.stages['pnpm-smoke-installed'] })
     }
 
-    // (5) Architecture map input change: a legal key-order reorder of a real
+    // (9) Architecture map input change: a legal key-order reorder of a real
     // docs/architecture map changes the bytes without changing the parsed
     // content, so verify invalidates on the map input only. The map bytes are a
     // declared module contract, so the produced artifact changes and the
@@ -6117,7 +6294,7 @@ async function runBB13(context) {
       }
     }
 
-    // (6) Module registry change: the registry is verify's admission owner for
+    // (10) Module registry change: the registry is verify's admission owner for
     // module scope, so a byte change invalidates the registry input only; the
     // produced artifact and its dependent smoke stage re-verify in turn.
     {
@@ -6137,7 +6314,7 @@ async function runBB13(context) {
       }
     }
 
-    // (7) Config change: both stages consume the dependency config, so both
+    // (11) Config change: both stages consume the dependency config, so both
     // invalidate on that input. The artifact also changes, so smoke names both
     // affected inputs of its own decision.
     {
@@ -6153,7 +6330,7 @@ async function runBB13(context) {
       expectExecuted('config-change', delta, 'pnpm-smoke-installed', { beforeStage: before.stages['pnpm-smoke-installed'] })
     }
 
-    // (8) Artifact change: no consumed input changed, but the required compiled
+    // (12) Artifact change: no consumed input changed, but the required compiled
     // artifact bytes no longer match the stored receipt, so verify invalidates its
     // own stored evidence and re-verifies by recompiling; the dependent smoke
     // stage then re-verifies the artifact it consumes.
@@ -6169,43 +6346,14 @@ async function runBB13(context) {
       expectExecuted('artifact-change', delta, 'pnpm-smoke-installed', { beforeStage: before.stages['pnpm-smoke-installed'] })
     }
 
-    // (9) Deleted smoke-required evidence: the independent verify stage reuses,
-    // and only the dependent smoke stage re-executes with a fresh receipt and
-    // freshly present evidence. This and the failure-recovery phase prove "first
-    // invalidated node and dependent successors" without a second lifecycle stage.
-    {
-      const smoke = latestSmokeReceipt(store.state)
-      const evidenceId = smoke.receipt.evidence_ids[0]
-      const evidenceRelPath = `.appsdk/records/evidence/teams-source/${evidenceId}.json`
-      const evidencePath = join(fixtureRoot, evidenceRelPath)
-      assert(existsSync(evidencePath), `BB13 evidence file is missing: ${evidencePath}`)
-      const before = capture('evidence-delete', inputHashes([mapRelPath]))
-      rmSync(evidencePath)
-      const { delta } = runPhase('evidence-delete', before)
-      expectDelta('evidence-delete', delta, { verify: 0, smoke: 1 })
-      expectReused('evidence-delete', delta, 'pnpm-verify', before.stages['pnpm-verify'])
-      const smokeStage = expectExecuted('evidence-delete', delta, 'pnpm-smoke-installed',
-        { beforeStage: before.stages['pnpm-smoke-installed'] })
-      const regenerated = latestSmokeReceipt(store.state)
-      assert(regenerated.receipt.receipt_id !== smoke.receipt.receipt_id,
-        'BB13 evidence deletion reused the stale smoke receipt instead of re-executing')
-      assert(smokeStage.receiptId === regenerated.receipt.receipt_id,
-        'BB13 evidence deletion did not publish the regenerated smoke receipt as the stage receipt')
-      const evidenceRoot = join(fixtureRoot, '.appsdk', 'records', 'evidence', 'teams-source')
-      assert(regenerated.receipt.evidence_ids.length > 0 &&
-        regenerated.receipt.evidence_ids.every(id => existsSync(join(evidenceRoot, `${id}.json`))),
-        'BB13 deleted required evidence was not regenerated as fresh present records')
-      observations.at(-1).deleted_evidence = evidenceId
-    }
-
     result = {
       status: 'passed',
       public_input: {
         lifecycle_adapter: 'node scripts/lifecycle-adapter.mjs',
         store: '.appsdk-control/lifecycle-adapter/stages/teams-lifecycle-admission.json',
         fault: 'one-shot smoke:installed exit 86',
-        mutations: ['source', 'architecture map key reorder', 'module registry key reorder', 'config',
-          'artifact', 'required evidence file deletion'],
+        mutations: ['required evidence file deletion', 'empty commit', 'main-side source advance with empty candidate diff',
+          'source', 'architecture map key reorder', 'module registry key reorder', 'config', 'artifact'],
         map_input: mapRelPath,
         registry_input: registryRelPath,
       },
@@ -6228,6 +6376,14 @@ async function runBB13(context) {
           map_reorder: observation.map_reorder,
           registry_reorder: observation.registry_reorder,
           deleted_evidence: observation.deleted_evidence,
+          stale_validation_id: observation.stale_validation_id,
+          regenerated_install_evidence: observation.regenerated_install_evidence,
+          returned_validation_id: observation.returned_validation_id,
+          returned_install_evidence: observation.returned_install_evidence,
+          installed_receipt_path: observation.installed_receipt_path,
+          head_derived_receipt_path: observation.head_derived_receipt_path,
+          main_advance_commit: observation.main_advance_commit,
+          candidate_diff_paths: observation.candidate_diff_paths,
         })),
         final_counts: pnpmInvocationCounts(proofDir),
       },
