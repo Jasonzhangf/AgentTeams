@@ -73,6 +73,26 @@ export const emptyProviderDraft: ProviderDraft = {
   credentialRef: '',
 }
 
+/**
+ * Visible group content owned by one actor/group context. Switching context drops all of
+ * it before the next owner answer arrives, so a late reply can never repaint the old view.
+ */
+const clearedGroupContent = {
+  messages: [],
+  messageStatus: 'idle',
+  messageHasMore: false,
+  messageCursor: undefined,
+  issue: null,
+  issueStatus: 'idle',
+  issues: [],
+  issueListStatus: 'idle',
+  actions: [],
+  actionStatus: 'idle',
+  composer: '',
+  confirm: null,
+  readError: undefined,
+} satisfies Partial<GroupWorkspaceState>
+
 export const initialConsoleState: ConsoleState = {
   open: false,
   entry: 'topology',
@@ -160,6 +180,8 @@ export class TeamsConsoleController {
    * to the new context.
    */
   private groupGeneration = 0
+  /** Typed composer text parked under `actorId::groupId` while the user is elsewhere. */
+  private readonly composerDrafts = new Map<string, string>()
 
   constructor(client: ConsoleClientV1, options: { readonly persistence?: DraftPersistence; readonly initialPage?: TeamPage } = {}) {
     this.client = client
@@ -650,6 +672,28 @@ export class TeamsConsoleController {
     this.update({ group: patch(this.state.group) })
   }
 
+  private composerKey(): string {
+    return `${this.state.group.actorId ?? ''}::${this.state.group.selectedGroupId ?? ''}`
+  }
+
+  /** Keep the text typed in the context the user is leaving. */
+  private parkComposer(): void {
+    const key = this.composerKey()
+    const text = this.state.group.composer
+    if (text.length === 0) this.composerDrafts.delete(key)
+    else this.composerDrafts.set(key, text)
+  }
+
+  /** Restore the text that belongs to the context the user is entering. */
+  private restoreComposer(): void {
+    const text = this.composerDrafts.get(this.composerKey()) ?? ''
+    if (this.state.group.composer !== text) this.updateGroup(state => ({ ...state, composer: text }))
+  }
+
+  private restoreComposerIfContextChanged(previousKey: string): void {
+    if (this.composerKey() !== previousKey) this.restoreComposer()
+  }
+
   private nextRequestId(): string {
     const cryptoImpl = globalThis.crypto as { readonly randomUUID?: () => string } | undefined
     if (cryptoImpl?.randomUUID !== undefined) return cryptoImpl.randomUUID()
@@ -728,12 +772,22 @@ export class TeamsConsoleController {
     if (this.state.group.actorId === agentId) return
     // A different identity shares no draft, retry credential or visible history with the
     // previous one. The generation bump makes any answer to the old identity inert.
+    this.parkComposer()
     this.parkInFlightGroupMutation()
     this.groupGeneration += 1
-    this.updateGroup(state => ({ ...state, actorId: agentId, composer: '', confirm: null }))
+    this.updateGroup(state => ({
+      ...state,
+      ...clearedGroupContent,
+      actorId: agentId,
+      selectedGroupId: undefined,
+      groups: [],
+      listStatus: 'idle',
+    }))
+    this.restoreComposer()
     // Choosing the actor is the only action available in that phase, so it must lead
-    // straight to the real group list rather than to another empty screen.
-    if (this.state.group.listStatus !== 'loading') void this.loadGroups()
+    // straight to the real group list rather than to another empty screen. The previous
+    // actor's in-flight list is already inert, so it must not block this read.
+    void this.loadGroups()
   }
 
   private ensureGroupsLoaded(page: TeamPage): void {
@@ -757,11 +811,16 @@ export class TeamsConsoleController {
       return false
     }
     this.updateGroup(state => ({ ...state, listStatus: 'loading' }))
+    const generation = this.groupGeneration
+    const contextBefore = this.composerKey()
     const sent = await this.dispatch({ kind: 'group.list', requestId: '' })
+    if (generation !== this.groupGeneration) return false
     if (!sent) {
       this.updateGroup(state => ({ ...state, listStatus: state.groups.length === 0 ? 'idle' : state.listStatus }))
       return false
     }
+    // The owner's list may select a different group than the context we started in.
+    this.restoreComposerIfContextChanged(contextBefore)
     await this.loadSelectedGroup()
     return true
   }
@@ -782,23 +841,15 @@ export class TeamsConsoleController {
 
   async selectGroup(groupId: string): Promise<boolean> {
     if (this.state.group.selectedGroupId === groupId) return true
+    this.parkComposer()
     this.parkInFlightGroupMutation()
     this.groupGeneration += 1
     this.updateGroup(state => ({
       ...state,
+      ...clearedGroupContent,
       selectedGroupId: groupId,
-      messages: [],
-      messageStatus: 'idle',
-      messageHasMore: false,
-      messageCursor: undefined,
-      issue: null,
-      issueStatus: 'idle',
-      actions: [],
-      actionStatus: 'idle',
-      composer: '',
-      confirm: null,
-      readError: undefined,
     }))
+    this.restoreComposer()
     await this.loadSelectedGroup()
     return true
   }
@@ -809,6 +860,9 @@ export class TeamsConsoleController {
 
   setGroupComposer(text: string): void {
     this.updateGroup(state => ({ ...state, composer: text }))
+    const key = this.composerKey()
+    if (text.length === 0) this.composerDrafts.delete(key)
+    else this.composerDrafts.set(key, text)
   }
 
   /**
@@ -906,6 +960,7 @@ export class TeamsConsoleController {
     })
     if (!sent) return false
     this.updateGroup(current => ({ ...current, composer: '' }))
+    this.composerDrafts.delete(this.composerKey())
     await this.dispatch({ kind: 'message.page', requestId: '', groupId })
     return true
   }
@@ -971,6 +1026,9 @@ export class TeamsConsoleController {
     const known = group.issue?.sessionId === sessionId
       || group.issues.some(session => session.sessionId === sessionId)
     if (!known) return false
+    // Opening an issue is a selection change: a later open supersedes this one, so the
+    // older query and its follow-up action list are both inert when they answer.
+    this.groupGeneration += 1
     const opened = await this.dispatch({ kind: 'issue.query', requestId: '', sessionId })
     if (!opened) return false
     // Actions belong to the opened session; load them now that it is visible.

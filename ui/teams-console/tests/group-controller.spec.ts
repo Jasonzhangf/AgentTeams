@@ -252,10 +252,10 @@ describe('group request context isolation', () => {
 
   /** A transport whose answers the test releases by hand, so a reply can be made late. */
   function deferredClient(actors: typeof projection.agents = projection.agents) {
-    const pending: Array<() => void> = []
+    const pending: Array<{ readonly frame: GroupWireRequest; readonly resolve: () => void }> = []
     const sent: GroupWireRequest[] = []
     const agents: string[] = []
-    const scripts = new Map<string, (frame: GroupWireRequest) => GroupRequestOutcome>()
+    const scripts = new Map<string, (frame: GroupWireRequest, agentId: string) => GroupRequestOutcome>()
     /** Frame kinds the test holds back, so their answers can be made late. */
     const defer = new Set<string>()
     const sender: GroupRequestSender = {
@@ -265,10 +265,10 @@ describe('group request context isolation', () => {
         const script = scripts.get(frame.kind)
         const outcome: GroupRequestOutcome = script === undefined
           ? { kind: 'reply', reply: { kind: 'message.page', requestId: frame.requestId, messages: [], revision: 1, hasMore: false } }
-          : script(frame)
+          : script(frame, agentId)
         // Only the kinds the test marks as slow wait for a hand release.
         if (!defer.has(frame.kind)) return outcome
-        return await new Promise<GroupRequestOutcome>(resolve => { pending.push(() => resolve(outcome)) })
+        return await new Promise<GroupRequestOutcome>(resolve => { pending.push({ frame, resolve: () => resolve(outcome) }) })
       },
     }
     const base = {
@@ -277,18 +277,169 @@ describe('group request context isolation', () => {
       sendSession: async () => ({ ok: true as const }),
     }
     const release = async (): Promise<void> => {
-      while (pending.length > 0) pending.shift()!()
+      while (pending.length > 0) pending.shift()!.resolve()
       await Promise.resolve()
       await Promise.resolve()
       await Promise.resolve()
     }
-    return { client: withGroupRequests(base, sender) as never, sent, agents, scripts, defer, release, pending }
+    /** Release exactly one held answer, matching the frame it belongs to. */
+    const releaseOne = async (match: (frame: GroupWireRequest) => boolean): Promise<void> => {
+      const index = pending.findIndex(entry => match(entry.frame))
+      if (index < 0) throw new Error('No deferred answer matches the requested frame')
+      pending.splice(index, 1)[0]!.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+    return { client: withGroupRequests(base, sender) as never, sent, agents, scripts, defer, release, releaseOne, pending }
   }
+
+  it('starts the new identity list while the old list is loading and drops its late groups', async () => {
+    const agentB = { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const, currentSessionId: 's2' }
+    const harness = deferredClient([...projection.agents, agentB])
+    harness.scripts.set('group.list', (frame, agentId) => ({
+      kind: 'reply',
+      reply: {
+        kind: 'group.list',
+        requestId: frame.requestId,
+        groups: agentId === 'agent-a' ? [twoGroups.groups[0]!] : [twoGroups.groups[1]!],
+      },
+    }))
+    harness.defer.add('group.list')
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    controller.setGroupActor('agent-a')
+    const slow = controller.loadGroups()
+    await Promise.resolve()
+    expect(controller.getSnapshot().group.listStatus).toBe('loading')
+
+    // The user picks another identity before the first actor's list answers.
+    harness.defer.delete('group.list')
+    controller.setGroupActor('agent-b')
+    await harness.release()
+    await slow
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const state = controller.getSnapshot().group
+    expect(state.actorId).toBe('agent-b')
+    expect(harness.sent.some((frame, index) => frame.kind === 'group.list' && harness.agents[index] === 'agent-b')).toBe(true)
+    expect(state.listStatus).toBe('ready')
+    expect(state.groups.map(group => group.groupId)).toEqual(['g2'])
+  })
+
+  it('lets the newest issue open win and drops the superseded query and its actions', async () => {
+    const issueOne = { sessionId: 'i1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const issueTwo = { sessionId: 'i2', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v2', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const actionFor = (sessionId: string) => ({
+      actionId: `action-${sessionId}`,
+      commitId: `commit-${sessionId}`,
+      sessionId,
+      initiatorAgentId: 'agent-a',
+      assigneeAgentId: 'agent-a',
+      kind: 'reply' as const,
+      reason: 'review',
+      expectedResult: 'answer',
+      replyRequired: false,
+      state: 'pending' as const,
+      createdAt: 'now',
+    })
+    const harness = deferredClient()
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { kind: 'group.list', requestId: frame.requestId, groups: [twoGroups.groups[0]!] } }))
+    harness.scripts.set('issue.list', frame => ({ kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [issueOne, issueTwo] } }))
+    harness.scripts.set('issue.query', frame => {
+      const sessionId = frame.kind === 'issue.query' ? frame.sessionId : ''
+      return { kind: 'reply', reply: { kind: 'issue.session', requestId: frame.requestId, session: sessionId === 'i1' ? issueOne : issueTwo } }
+    })
+    harness.scripts.set('action.list', frame => {
+      const sessionId = frame.kind === 'action.list' ? frame.sessionId : undefined
+      return { kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: sessionId === undefined ? [] : [actionFor(sessionId)] } }
+    })
+    harness.defer.add('issue.query')
+    harness.defer.add('action.list')
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    expect(controller.getSnapshot().group.issues.map(issue => issue.sessionId)).toEqual(['i1', 'i2'])
+
+    const first = controller.openIssue('i1')
+    const second = controller.openIssue('i2')
+    await harness.releaseOne(frame => frame.kind === 'issue.query' && 'sessionId' in frame && frame.sessionId === 'i2')
+    await harness.releaseOne(frame => frame.kind === 'action.list' && 'sessionId' in frame && frame.sessionId === 'i2')
+    await harness.releaseOne(frame => frame.kind === 'issue.query' && 'sessionId' in frame && frame.sessionId === 'i1')
+    await harness.release()
+    expect(await second).toBe(true)
+    expect(await first).toBe(false)
+
+    const state = controller.getSnapshot().group
+    expect(state.issue?.sessionId).toBe('i2')
+    expect(state.actions.map(action => action.actionId)).toEqual(['action-i2'])
+    expect(harness.sent.some(frame => frame.kind === 'action.list' && frame.sessionId === 'i1')).toBe(false)
+  })
+
+  it('drops the previous group issue list when another group is selected', async () => {
+    const issueOne = { sessionId: 'i1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+    const { client, sent } = scriptedClient(frame => {
+      if (frame.kind === 'group.list') return { kind: 'reply', reply: twoGroups }
+      if (frame.kind === 'issue.list') {
+        return { kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: frame.groupId === 'g1' ? [issueOne] : [] } }
+      }
+      return { kind: 'reply', reply: { kind: 'message.page', requestId: frame.requestId, messages: [], revision: 1, hasMore: false } }
+    })
+    const controller = new TeamsConsoleController(client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    await controller.selectGroup('g1')
+    expect(controller.getSnapshot().group.issues.map(issue => issue.sessionId)).toEqual(['i1'])
+
+    const switching = controller.selectGroup('g2')
+    const switched = controller.getSnapshot().group
+    expect(switched.selectedGroupId).toBe('g2')
+    expect(switched.issues).toEqual([])
+    expect(switched.issueListStatus).toBe('idle')
+    const queriesBefore = sent.filter(frame => frame.kind === 'issue.query').length
+    expect(await controller.openIssue('i1')).toBe(false)
+    expect(sent.filter(frame => frame.kind === 'issue.query')).toHaveLength(queriesBefore)
+    await switching
+  })
+
+  it('parks a composer draft per identity and restores it on return', async () => {
+    const agentB = { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const, currentSessionId: 's2' }
+    const harness = deferredClient([...projection.agents, agentB])
+    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { ...groupsReply, requestId: frame.requestId } }))
+    const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+    await controller.refresh()
+    await controller.loadGroups()
+    controller.setGroupActor('agent-a')
+    await controller.loadGroups()
+    expect(controller.getSnapshot().group.actorId).toBe('agent-a')
+    expect(controller.getSnapshot().group.selectedGroupId).toBe('g1')
+    controller.setGroupComposer('draft for a')
+
+    controller.setGroupActor('agent-b')
+    await controller.loadGroups()
+    // A different identity never sees the previous identity's text.
+    expect(controller.getSnapshot().group.composer).toBe('')
+    controller.setGroupComposer('draft for b')
+
+    controller.setGroupActor('agent-a')
+    await controller.loadGroups()
+    expect(controller.getSnapshot().group.composer).toBe('draft for a')
+    controller.setGroupActor('agent-b')
+    await controller.loadGroups()
+    expect(controller.getSnapshot().group.composer).toBe('draft for b')
+  })
 
   it('drops a late group.list answer that arrives after the identity switched', async () => {
     const agentB = { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const, currentSessionId: 's2' }
     const harness = deferredClient([...projection.agents, agentB])
-    harness.scripts.set('group.list', frame => ({ kind: 'reply', reply: { ...twoGroups, requestId: frame.requestId } }))
+    harness.scripts.set('group.list', (frame, agentId) => ({
+      kind: 'reply',
+      reply: {
+        ...twoGroups,
+        requestId: frame.requestId,
+        groups: agentId === 'agent-a' ? twoGroups.groups : [twoGroups.groups[1]!],
+      },
+    }))
     harness.defer.add('group.list')
     const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
     await controller.refresh()
