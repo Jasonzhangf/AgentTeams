@@ -3,7 +3,7 @@ import { createServer, createConnection, type Socket } from 'node:net'
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { networkInterfaces, tmpdir } from 'node:os'
+import { homedir, networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AcpFrame } from '../packages/shared/src/acp.ts'
@@ -30,6 +30,7 @@ import {
   type AcpServeHandle,
   type ServeEngineAdapter,
 } from './acp-serve.ts'
+import { localGroupEndpointScopePath, readLocalGroupEndpointRecord } from '../config/local-group-endpoint-store.ts'
 import type { AgentRegistration } from './registry-registration.ts'
 import { sendLocalMessageRequest } from './local-message-socket.ts'
 
@@ -1261,6 +1262,19 @@ tlsTrustRef = ${JSON.stringify(tls.certRef)}
     expect(handle.registration.state).not.toBe('disabled')
     expect(handle.groupSocketPath).not.toBeNull()
     expect(handle.groupSocketPath?.startsWith(join(directory, 'state'))).toBe(true)
+    // The socket this daemon just bound is published into the durable endpoint record the
+    // control daemon reads, under the shared account-and-scope directory the Session records
+    // use. This is the one binding the control daemon cannot derive on its own.
+    expect(handle.groupEndpoint.published).toBe(true)
+    // The path is derived from the accepted identity and the shared `~/.agentteams` root, so
+    // the control daemon resolves the same file from its own accepted facts.
+    expect(handle.groupEndpoint.path).toBe(localGroupEndpointScopePath({
+      home: homedir(), accountId: 'local', scopeId: 'local', agentId: handle.agentId,
+    }))
+    expect(handle.groupEndpoint.failures()).toEqual([])
+    const endpointRecord = await readLocalGroupEndpointRecord(handle.groupEndpoint.path)
+    expect(endpointRecord?.agentId).toBe(handle.agentId)
+    expect(endpointRecord?.groupEndpoint).toEqual({ kind: 'local-socket', socketPath: handle.groupSocketPath })
     // No registry is reachable, so a group request fails with a typed error
     // instead of being answered by a local stand-in.
     await expect(sendLocalMessageRequest({
@@ -1268,7 +1282,12 @@ tlsTrustRef = ${JSON.stringify(tls.certRef)}
       request: { kind: 'group.list', requestId: 'cli-offline' },
       timeoutMs: 2_000,
     })).rejects.toBeDefined()
+    const endpointPath = handle.groupEndpoint.path
     await handle.stop()
+    // The published endpoint does not outlive the socket it named: the control daemon now
+    // reads an honest "not configured" instead of dialing a released path.
+    expect(handle.groupEndpoint.published).toBe(false)
+    expect(await readLocalGroupEndpointRecord(endpointPath)).toBeUndefined()
   })
 
   it('attempts every declared peer at start and records a typed failure instead of skipping', async () => {

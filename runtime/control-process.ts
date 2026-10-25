@@ -27,9 +27,12 @@ import {
   type SessionIntentChange,
 } from '../config/session-intent-store.ts'
 import { readSessionObservationRecord, sessionObservationScopePath } from '../config/session-observation-store.ts'
+import { localGroupEndpointScopePath, readLocalGroupEndpointRecord } from '../config/local-group-endpoint-store.ts'
+import { LocalMessageSocketError, sendLocalMessageRequest } from './local-message-socket.ts'
 import { RuntimeConfigError, type ConfigApplyResult } from '../config/runtime-config.ts'
 import { createConsoleAuthorization } from '../console-host/src/auth.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
+import type { ConsoleGroupForwardOutcome, ConsoleGroupForwardPort } from '../console-host/src/http-api.ts'
 import type { RelayPeer } from '../packages/shared/src/agent-services.ts'
 import type { RelationRole } from '../packages/shared/src/teams-connection.ts'
 import {
@@ -746,6 +749,107 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
   }
 }
 
+/**
+ * The accepted control intent facts the Console group forwarder needs: this daemon's
+ * declared peers (the only legal targets) and the home root the shared endpoint record path
+ * resolves from.
+ *
+ * The frozen v4 `PeerIntent` carries no peer `dataDirectory`, so this daemon cannot derive a
+ * peer's local group socket from its own facts. It instead reads the one durable endpoint
+ * record the peer's agent daemon publishes (`config/local-group-endpoint-store.ts`), at the
+ * same shared account-and-scope path both sides derive. No environment read and no second
+ * config source.
+ */
+export interface ControlGroupForwardFacts {
+  readonly peers: Readonly<Record<string, PeerIntent>>
+  readonly home: string
+  /** One local socket round trip; the socket client's own default applies when absent. */
+  readonly timeoutMs?: number
+}
+
+/**
+ * Message prefix the local group socket client owns for failures it raises *before* any group
+ * owner answered (`runtime/local-message-socket.ts`). A `relay.error` reply carries the group
+ * owner's own code and message and never this prefix, which is what lets the forwarder keep
+ * the two facts apart instead of flattening an owner refusal into a transport failure.
+ */
+const LOCAL_MESSAGE_TRANSPORT_PREFIX = 'local group message '
+
+/**
+ * Classify one local socket failure.
+ *
+ * A transport failure means no group owner answered: a refused connection, a timeout and a
+ * close before the reply are all the same fact for the Console, so each becomes the typed
+ * `GROUP_ENDPOINT_UNREACHABLE`. A `relay.error` reply is the owner's answer, so its code
+ * travels verbatim and the frame is never retried here.
+ */
+function groupForwardFailure(error: unknown): ConsoleGroupForwardOutcome {
+  if (error instanceof LocalMessageSocketError) {
+    if (!error.serviceError.message.startsWith(LOCAL_MESSAGE_TRANSPORT_PREFIX)) {
+      return { outcome: 'owner-error', error: error.serviceError }
+    }
+    if (error.serviceError.code === 'UNAVAILABLE' || error.serviceError.code === 'RESULT_UNKNOWN') {
+      // A timeout keeps its own `do not replay` message: the frame may have been applied.
+      return { outcome: 'unreachable', error: { code: 'GROUP_ENDPOINT_UNREACHABLE', message: error.serviceError.message } }
+    }
+    // A malformed reply or a mismatched request id is an upstream protocol failure, not an
+    // absent endpoint.
+    return { outcome: 'unreachable', error: { code: 'UPSTREAM_ERROR', message: error.serviceError.message } }
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  return { outcome: 'unreachable', error: { code: 'UPSTREAM_ERROR', message } }
+}
+
+/**
+ * The Console group forwarder: the control daemon's one hop to a declared peer's local group
+ * socket.
+ *
+ * The Console is an operator entry, not a group member. Group truth, membership and authority
+ * stay in the hub behind the agent daemon: this daemon only resolves the peer's published
+ * endpoint, forwards the closed frame over the real local socket and reports what came back.
+ * It never parses a business field, never keeps a group state, never joins a group and never
+ * retries, so an unknown outcome stays unknown. A peer this daemon does not declare has no
+ * resolvable record, and it is a bad Console input rather than a missing endpoint.
+ */
+export function createControlGroupForwarder(facts: ControlGroupForwardFacts): ConsoleGroupForwardPort {
+  return {
+    async forward({ agentId, request }): Promise<ConsoleGroupForwardOutcome> {
+      const peer = Object.values(facts.peers).find(candidate => candidate.agentId === agentId)
+      if (peer === undefined) {
+        return { outcome: 'invalid-target', message: `agentId ${agentId} is not declared by this control daemon's accepted peers` }
+      }
+      const path = localGroupEndpointScopePath({ home: facts.home, accountId: peer.accountId, scopeId: peer.scopeId, agentId: peer.agentId })
+      let record
+      try {
+        record = await readLocalGroupEndpointRecord(path)
+      } catch (error) {
+        // A broken stored endpoint is the store's own typed throw: the endpoint is unusable
+        // and the durable bytes stay exactly as they were.
+        if (error instanceof RuntimeConfigError) {
+          return { outcome: 'unreachable', error: { code: 'GROUP_ENDPOINT_UNREACHABLE', message: `local group endpoint record is not usable: ${error.message}` } }
+        }
+        throw error
+      }
+      if (record === undefined) {
+        return {
+          outcome: 'not-configured',
+          message: `agent ${agentId} has published no local group endpoint, so its group surface is not reachable from this control daemon`,
+        }
+      }
+      try {
+        const reply = await sendLocalMessageRequest({
+          socketPath: record.groupEndpoint.socketPath,
+          request,
+          ...(facts.timeoutMs === undefined ? {} : { timeoutMs: facts.timeoutMs }),
+        })
+        return { outcome: 'reply', reply }
+      } catch (error) {
+        return groupForwardFailure(error)
+      }
+    },
+  }
+}
+
 /** One bound real network read chain: the D05 status port, its projection owner and its stop path. */
 export interface ControlNetworkStatusBinding {
   readonly port: TeamsStatusPort
@@ -1119,6 +1223,11 @@ export async function runControlProcess(argv: readonly string[] = process.argv.s
     })
     const authorize = createConsoleAuthorization({ username, password, origin, client })
     const history = createControlHistoryReader(network.port)
+    // The Console group surface rides the real local group socket each declared peer
+    // publishes. This daemon reads the peer's endpoint record per request — never a cached
+    // or guessed path — and forwards the closed frame verbatim, so group truth never leaves
+    // its hub and the Console never becomes an Agent-to-Agent relay.
+    const group = createControlGroupForwarder({ peers: intent.peers, home: homedir() })
     const projectionRead = async () => await client.readProjection()
     const fixturePath = env.AGENTTEAMS_CONTROL_PROJECTION_FIXTURE
     // The real owner feed: the directory projection source streams a frame whenever the
@@ -1132,6 +1241,7 @@ export async function runControlProcess(argv: readonly string[] = process.argv.s
       authorize,
       history,
       events,
+      group,
       authenticationChallenge: AUTHENTICATION_CHALLENGE,
       ...(intent.webui.tlsCertRef === undefined || intent.webui.tlsKeyRef === undefined ? {} : {
         tls: { cert: await readFile(intent.webui.tlsCertRef), key: await readFile(intent.webui.tlsKeyRef) },

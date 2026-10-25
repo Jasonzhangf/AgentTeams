@@ -23,8 +23,8 @@ import {
   type DaemonIntentV4,
 } from '../config/daemon-intent.ts'
 import type { AcpPolicySnapshot } from '../config/acp-policy.ts'
-import type { AgentModelBinding, ConfigTargetIdentity, ModelRef, VersionedRuntimeConfig } from '../config/runtime-config.ts'
-import { providerIntentFingerprint } from '../config/runtime-config.ts'
+import type { AgentModelBinding, ConfigErrorCode, ConfigTargetIdentity, ModelRef, VersionedRuntimeConfig } from '../config/runtime-config.ts'
+import { providerIntentFingerprint, RuntimeConfigError } from '../config/runtime-config.ts'
 import {
   readRelationsIntentRecord,
   relationsIntentScopePath,
@@ -40,6 +40,12 @@ import {
   type SessionIntent,
 } from '../config/session-intent-store.ts'
 import { sessionObservationScopePath } from '../config/session-observation-store.ts'
+import {
+  localGroupEndpointScopePath,
+  readLocalGroupEndpointRecord,
+  removeLocalGroupEndpointRecord,
+  writeLocalGroupEndpointRecord,
+} from '../config/local-group-endpoint-store.ts'
 import { createSessionObservationPublisher, type SessionObservationFailure } from './session-observation-publisher.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
 import { rpcErrorFrame, type AcpHost } from '../agent-host/acp-host.ts'
@@ -221,6 +227,19 @@ export interface AcpServeHandle {
   readonly registration: RegistrationStatus
   /** The CLI socket the group surface listens on, or null when it is not composed. */
   readonly groupSocketPath: string | null
+  /**
+   * The durable local group endpoint record this daemon publishes so the control daemon can
+   * reach the socket above. The control daemon cannot derive the path from its own accepted
+   * facts, so this record is the one binding between the two daemons. `failures()` is every
+   * typed refusal this publisher recorded, so a publish or withdrawal this daemon could not
+   * store stays visible instead of disappearing.
+   */
+  readonly groupEndpoint: {
+    readonly path: string
+    /** True while this daemon's live group socket is the published endpoint. */
+    readonly published: boolean
+    failures(): readonly LocalGroupEndpointFailure[]
+  }
   /** Read-only D06 handoff over the live ledger and the durable history. */
   readonly teamsStatus: TeamsStatusPort
   /**
@@ -1314,6 +1333,66 @@ export function agentSessionObservationPath(home: string, daemon: AgentDaemonInt
 }
 
 /**
+ * The one local group endpoint record path this daemon publishes.
+ *
+ * It resolves from the same accepted identity, account and scope the Session records use, so
+ * the control daemon resolves the same file without a new config key. The record carries the
+ * socket path this daemon really bound, which is the one fact the control daemon cannot
+ * derive on its own.
+ */
+export function agentLocalGroupEndpointPath(home: string, daemon: AgentDaemonIntent['daemon']): string {
+  return localGroupEndpointScopePath({ home, accountId: daemon.accountId, scopeId: daemon.scopeId, agentId: daemon.id })
+}
+
+/** One typed refusal to publish or withdraw this daemon's local group endpoint. */
+export interface LocalGroupEndpointFailure {
+  readonly code: ConfigErrorCode
+  readonly message: string
+}
+
+/**
+ * Publish the socket this daemon just bound. The daemon is the record's single writer, so the
+ * write accepts exactly the revision it read, and a refused write is returned as a typed
+ * failure instead of being swallowed or retried into a false success.
+ */
+async function publishLocalGroupEndpoint(
+  path: string,
+  agentId: string,
+  socketPath: string,
+): Promise<LocalGroupEndpointFailure | undefined> {
+  try {
+    const current = await readLocalGroupEndpointRecord(path)
+    const result = await writeLocalGroupEndpointRecord(path, current?.revision ?? 0, {
+      agentId,
+      groupEndpoint: { kind: 'local-socket', socketPath },
+    })
+    if (result.status === 'applied') return undefined
+    if (result.status === 'uncertain') return { code: result.error.code, message: `${result.error.message} (write outcome unknown)` }
+    return { code: result.error.code, message: result.error.message }
+  } catch (cause) {
+    if (cause instanceof RuntimeConfigError) return { code: cause.code, message: cause.message }
+    return { code: 'UNAVAILABLE', message: messageOf(cause, 'local group endpoint could not be published') }
+  }
+}
+
+/**
+ * Withdraw the record when the socket it names is gone.
+ *
+ * It runs on the stop path and on the failed-start path for the same reason: a record that
+ * outlives its socket would make the control daemon report `unreachable` for a daemon that
+ * stopped on purpose, when the honest answer is `not configured`.
+ */
+async function withdrawLocalGroupEndpoint(path: string): Promise<LocalGroupEndpointFailure | undefined> {
+  try {
+    await removeLocalGroupEndpointRecord(path)
+    return undefined
+  } catch (cause) {
+    if (cause instanceof RuntimeConfigError) return { code: cause.code, message: cause.message }
+    return { code: 'UNAVAILABLE', message: messageOf(cause, 'local group endpoint could not be withdrawn') }
+  }
+}
+
+/**
  * Start exactly one agent daemon and serve local ACP channels on its configured
  * listener. Every failure before the listener is bound stops the spawned engine
  * and rethrows the typed fault, so a failed start never leaves a child behind.
@@ -1451,6 +1530,12 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     let egress: ServeEgressOwner | undefined
     let groupChannel: GroupChannel | undefined
     let groupMessaging: AgentMessaging | undefined
+    // The endpoint record this daemon publishes for the control daemon. The path is derived
+    // once from the accepted identity, the failures stay readable on the handle, and the
+    // published flag follows the real socket: it is true only while that socket is bound.
+    const groupEndpointPath = agentLocalGroupEndpointPath(homedir(), agent.daemon)
+    const groupEndpointFailures: LocalGroupEndpointFailure[] = []
+    let groupEndpointPublished = false
     try {
       if (listenerClass === 'lan') {
         lan = await buildLanChannel({
@@ -1501,6 +1586,15 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           dataDirectory: agent.daemon.dataDirectory,
           ...(vikunja === undefined ? {} : { vikunja }),
         })
+        // The Console's only way to reach this daemon's group surface is the socket it just
+        // bound. The control daemon cannot derive that path from its own accepted facts (the
+        // frozen v4 `PeerIntent` carries no peer `dataDirectory`), so this daemon publishes
+        // it into the one durable endpoint record both sides resolve. A refused publish is
+        // recorded and the daemon keeps serving its CLI: the Console then reads an honest
+        // `not-configured` instead of a guessed path.
+        const published = await publishLocalGroupEndpoint(groupEndpointPath, agent.daemon.id, groupMessaging.socketPath)
+        if (published === undefined) groupEndpointPublished = true
+        else groupEndpointFailures.push(published)
       }
       if (registration.state === 'enabled' && registration.status.state === 'online') {
         // Publish only after the listener is bound and the client is online. The
@@ -1658,6 +1752,11 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           // The CLI socket closes before the connection it answers on.
           await groupMessaging?.close().catch(() => undefined)
           groupMessaging = undefined
+          // The published endpoint is withdrawn with the socket it names, so the control daemon
+          // reads an honest "not configured" instead of dialing a path this daemon released.
+          const withdrawal = await withdrawLocalGroupEndpoint(groupEndpointPath)
+          if (withdrawal === undefined) groupEndpointPublished = false
+          else groupEndpointFailures.push(withdrawal)
           groupChannel?.close()
           groupChannel = undefined
           if (registration !== undefined && registration.state === 'enabled') {
@@ -1675,6 +1774,11 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       return {
         agentId: agent.daemon.id,
         groupSocketPath: groupMessaging?.socketPath ?? null,
+        groupEndpoint: {
+          path: groupEndpointPath,
+          get published() { return groupEndpointPublished },
+          failures: () => groupEndpointFailures,
+        },
         engineKind: engine.kind,
         engineInstanceId,
         enginePid: daemon.handle.pid,
@@ -1722,6 +1826,12 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       if (egress !== undefined) await egress.close().catch(() => undefined)
       // A partially started serve releases the CLI socket it opened.
       if (groupMessaging !== undefined) await groupMessaging.close().catch(() => undefined)
+      // A published endpoint never outlives the socket of a serve that failed to start.
+      if (groupEndpointPublished) {
+        const withdrawal = await withdrawLocalGroupEndpoint(groupEndpointPath)
+        if (withdrawal === undefined) groupEndpointPublished = false
+        else groupEndpointFailures.push(withdrawal)
+      }
       if (groupChannel !== undefined) groupChannel.close()
       if (registration !== undefined && registration.state === 'enabled') {
         await registration.client.stop().catch(() => undefined)

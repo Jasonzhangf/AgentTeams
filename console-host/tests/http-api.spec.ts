@@ -125,3 +125,145 @@ it('streams real SSE projection snapshots and closes the stream on owner loss', 
   expect(JSON.parse(frames[3].split('data: ')[1]!)).toEqual({ state: 'lost', reason: 'stream-ended', detail: 'owner projection ended' })
   expect(unsubscribe).toBe(1)
 })
+
+it('forwards one closed group frame to the authenticated agent group owner and preserves its reply', async () => {
+  const forwarded: unknown[] = []
+  const { url } = await start(true, {
+    group: {
+      forward: async input => {
+        forwarded.push(input)
+        return { outcome: 'reply', reply: { kind: 'group.list', requestId: 'r1', groups: [] } }
+      },
+    },
+  })
+  const response = await fetch(`${url}/api/v1/group-request?agentId=agent-a`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }),
+  })
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual({ ok: true, reply: { kind: 'group.list', requestId: 'r1', groups: [] } })
+  // The frame reaches the group owner verbatim: the transport adds no field and drops none.
+  expect(forwarded).toEqual([{ agentId: 'agent-a', request: { kind: 'group.list', requestId: 'r1' } }])
+})
+
+it('keeps the group owner own code and message verbatim for every typed refusal', async () => {
+  for (const error of [
+    { code: 'FORBIDDEN' as const, message: 'agent is not a group member' },
+    { code: 'UNAVAILABLE' as const, message: 'group hub is not connected' },
+    { code: 'UPSTREAM_ERROR' as const, message: 'upstream refused the write' },
+    { code: 'RESULT_UNKNOWN' as const, message: 'the write may have been applied; do not replay' },
+  ]) {
+    const { url } = await start(true, { group: { forward: async () => ({ outcome: 'owner-error', error }) } })
+    const response = await fetch(`${url}/api/v1/group-request?agentId=agent-a`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }),
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: false, error })
+  }
+})
+
+it('reports a missing group endpoint as typed not-configured and an unanswered one as unreachable', async () => {
+  const missing = await start(true, {
+    group: { forward: async () => ({ outcome: 'not-configured', message: 'agent agent-a has published no local group endpoint' }) },
+  })
+  const configured = await fetch(`${missing.url}/api/v1/group-request?agentId=agent-a`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }),
+  })
+  expect(configured.status).toBe(503)
+  expect(await configured.json()).toEqual({ code: 'GROUP_ENDPOINT_NOT_CONFIGURED', message: 'agent agent-a has published no local group endpoint' })
+
+  const unreachable = await start(true, {
+    group: { forward: async () => ({ outcome: 'unreachable', error: { code: 'GROUP_ENDPOINT_UNREACHABLE', message: 'connect ECONNREFUSED' } }) },
+  })
+  const refused = await fetch(`${unreachable.url}/api/v1/group-request?agentId=agent-a`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }),
+  })
+  expect(refused.status).toBe(502)
+  expect(await refused.json()).toEqual({ code: 'GROUP_ENDPOINT_UNREACHABLE', message: 'connect ECONNREFUSED' })
+
+  // A timeout keeps its own do-not-replay code instead of being flattened into unreachable.
+  const timedOut = await start(true, {
+    group: { forward: async () => ({ outcome: 'unreachable', error: { code: 'RESULT_UNKNOWN', message: 'request timed out' } }) },
+  })
+  const unknown = await fetch(`${timedOut.url}/api/v1/group-request?agentId=agent-a`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }),
+  })
+  expect(unknown.status).toBe(502)
+  expect(await unknown.json()).toEqual({ code: 'RESULT_UNKNOWN', message: 'request timed out' })
+})
+
+it('refuses an undeclared agent, an unwritable envelope and an unknown code as bad input', async () => {
+  const forwarded: unknown[] = []
+  const { url } = await start(true, {
+    group: {
+      forward: async input => {
+        forwarded.push(input)
+        return { outcome: 'invalid-target', message: 'agentId agent-z is not declared by this control daemon\'s accepted peers' }
+      },
+    },
+  })
+  const undeclared = await fetch(`${url}/api/v1/group-request?agentId=agent-z`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }),
+  })
+  expect(undeclared.status).toBe(400)
+  expect(await undeclared.json()).toEqual({ code: 'INVALID_INPUT', message: 'agentId agent-z is not declared by this control daemon\'s accepted peers' })
+  expect(forwarded).toHaveLength(1)
+
+  const post = (path: string, body: string): Promise<Response> => fetch(`${url}${path}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body,
+  })
+  const envelope = (value: unknown): string => JSON.stringify(value)
+  // Exactly one agentId query, exactly the two body keys, and one frame request id.
+  for (const path of ['/api/v1/group-request', '/api/v1/group-request?agentId=a&agentId=b', '/api/v1/group-request?agentId=a&other=1']) {
+    const refused = await post(path, envelope({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }))
+    expect(refused.status, path).toBe(400)
+    expect(await refused.json()).toMatchObject({ code: 'INVALID_INPUT' })
+  }
+  for (const body of [
+    { requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' }, extra: true },
+    { requestId: 'r1', frame: { kind: 'group.list', requestId: 'r2' } },
+    { requestId: '', frame: { kind: 'group.list', requestId: '' } },
+    { requestId: 'r1', frame: { kind: 'group.unknown', requestId: 'r1' } },
+    { requestId: 'r1' },
+  ]) {
+    const refused = await post('/api/v1/group-request?agentId=a', envelope(body))
+    expect(refused.status).toBe(400)
+    expect(await refused.json()).toMatchObject({ code: 'INVALID_INPUT' })
+  }
+  expect((await fetch(`${url}/api/v1/group-request?agentId=a`)).status).toBe(405)
+})
+
+it('refuses a group error code outside the closed envelope vocabulary', async () => {
+  const { url } = await start(true, {
+    // A forwarder from another module is not type-checked by this transport, so the closed
+    // vocabulary is enforced here too instead of reaching the UI as a new code.
+    group: { forward: async () => ({ outcome: 'unreachable', error: { code: 'GROUP_ENDPOINT_MELTED' as never, message: 'unknown' } }) },
+  })
+  const response = await fetch(`${url}/api/v1/group-request?agentId=agent-a`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }),
+  })
+  expect(response.status).toBe(502)
+  expect(await response.json()).toMatchObject({ code: 'UPSTREAM_ERROR' })
+})
+
+it('reports an unbound group owner as typed not-configured and never authenticates late', async () => {
+  const unbound = await start()
+  const response = await fetch(`${unbound.url}/api/v1/group-request?agentId=agent-a`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }),
+  })
+  expect(response.status).toBe(503)
+  expect(await response.json()).toMatchObject({ code: 'GROUP_ENDPOINT_NOT_CONFIGURED' })
+
+  const denied = await start(false, { group: { forward: async () => { throw new Error('must not run') } } })
+  expect((await fetch(`${denied.url}/api/v1/group-request?agentId=agent-a`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ requestId: 'r1', frame: { kind: 'group.list', requestId: 'r1' } }),
+  })).status).toBe(401)
+})

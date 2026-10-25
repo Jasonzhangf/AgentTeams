@@ -141,6 +141,12 @@ interface ParsedIssue {
   readonly state: IssueState
   readonly description: string
   readonly projectId?: string
+  /**
+   * Exactly the fields the server really returned as strings, so a full-update write can
+   * re-submit what it means to keep without inventing an empty value for a field the server
+   * never reported.
+   */
+  readonly preserve: Readonly<Record<string, unknown>>
 }
 
 interface ParsedComment {
@@ -166,6 +172,16 @@ function identifier(value: unknown): string | undefined {
   return undefined
 }
 
+/**
+ * The same identity as a JSON number, for a full-update body that must speak the server's own
+ * type. `undefined` leaves the field out instead of sending a string where an integer belongs.
+ */
+function numericIdentifier(value: string): number | undefined {
+  if (!/^[0-9]+$/u.test(value)) return undefined
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : undefined
+}
+
 function parseIssueRecord(value: unknown): ParsedIssue | undefined {
   if (!isRecord(value)) return undefined
   const issueId = identifier(value.id)
@@ -177,6 +193,31 @@ function parseIssueRecord(value: unknown): ParsedIssue | undefined {
     state: value.done ? 'closed' : 'open',
     description: typeof value.description === 'string' ? value.description : '',
     ...(projectId === undefined ? {} : { projectId }),
+    preserve: {
+      ...(typeof value.title === 'string' ? { title: value.title } : {}),
+      ...(typeof value.description === 'string' ? { description: value.description } : {}),
+    },
+  }
+}
+
+/**
+ * The body one full-update task write carries: the fields the server really reported, with
+ * `done` replaced.
+ *
+ * Vikunja's `POST /api/v1/tasks/{id}` is a full update — an omitted field is reset — so a body
+ * carrying only `done` erases the title and the description. `PATCH` is not an alternative:
+ * v2.7.1 answers it with `405 Method Not Allowed`. The description is where `createIssue`
+ * writes the stable reference, so losing it also loses `findIssueByStableRef`, and a later
+ * sync would create a duplicate issue instead of finding the existing one.
+ */
+function preserveOnFullUpdate(issue: ParsedIssue, done: boolean): Record<string, unknown> {
+  const id = numericIdentifier(issue.issueId)
+  const projectId = issue.projectId === undefined ? undefined : numericIdentifier(issue.projectId) ?? issue.projectId
+  return {
+    ...(id === undefined ? {} : { id }),
+    ...issue.preserve,
+    done,
+    ...(projectId === undefined ? {} : { project_id: projectId }),
   }
 }
 
@@ -366,18 +407,34 @@ export function createVikunjaSync(options: VikunjaSyncOptions): VikunjaSync {
     })
   }
 
+  /**
+   * Close or reopen one issue.
+   *
+   * The update is a full update, so the current record is read first and merged into the body:
+   * a body carrying only `done` resets every field it omits, and in v2.7.1 that resets the
+   * description, which is where `createIssue` wrote the stable reference. The state that ends
+   * up stored is still reported from a real read after the write, never from the write's own
+   * echo, and an unanswered write keeps the `RESULT_UNKNOWN` outcome instead of being retried.
+   */
   const setDone = async (
     label: string,
     issueId: string,
     done: boolean,
   ): Promise<VikunjaResult<VikunjaStateProjection>> => {
-    const exchange = await request('POST', `/api/v1/tasks/${encodeURIComponent(issueId)}`, { done })
+    // Read before write: nothing has been written yet, so a refused read is the close's own
+    // failure and never a `RESULT_UNKNOWN`.
+    const current = await read('vikunja issue read before state write', `/api/v1/tasks/${encodeURIComponent(issueId)}`, parseIssueRecord)
+    if (current.status !== 'ok') {
+      return failure(current.error.code, `${label}: the issue could not be read before the write (${current.error.message})`)
+    }
+    const exchange = await request('POST', `/api/v1/tasks/${encodeURIComponent(issueId)}`, preserveOnFullUpdate(current.value, done))
     if (exchange.kind === 'transport') {
       return unknown(`${label}: no complete response was received; the write may or may not have been applied`)
     }
     if (!isSuccess(exchange.status)) {
       return failure(errorCodeForStatus(exchange.status), `${label}: request returned HTTP ${exchange.status}`)
     }
+    // The stored state is what the readback says, not what the write echoed.
     const state = await readState({ issueId })
     if (state.status !== 'ok') {
       return unknown(`${label}: the write was accepted but the issue state could not be read back (${state.error.message})`)

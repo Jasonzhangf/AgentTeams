@@ -170,22 +170,25 @@ describe('vikunja sync', () => {
 
   it('closes an issue and reports the readback actual state', async () => {
     const server = await startServer((request, response) => {
-      if (request.method === 'POST') return json(response, 200, { id: 5, done: true })
-      return json(response, 200, { id: 5, title: 'Track', done: true })
+      if (request.method === 'POST') return json(response, 200, { id: 5, title: 'Track', description: 'Body', done: true })
+      return json(response, 200, { id: 5, title: 'Track', description: 'Body', done: true })
     })
 
     const result = await sync(server).closeIssue({ issueId: '5' })
 
     expect(result).toEqual({ status: 'ok', value: { issueId: '5', expectedState: 'closed', actualState: 'closed' } })
-    expect(server.requests).toHaveLength(2)
-    expect(server.requests[0]).toMatchObject({ method: 'POST', url: '/api/v1/tasks/5' })
-    expect(JSON.parse(server.requests[0].body)).toEqual({ done: true })
-    expect(server.requests[1]).toMatchObject({ method: 'GET', url: '/api/v1/tasks/5' })
+    // One read before the write, the write itself, one read after it.
+    expect(server.requests).toHaveLength(3)
+    expect(server.requests[0]).toMatchObject({ method: 'GET', url: '/api/v1/tasks/5' })
+    expect(server.requests[1]).toMatchObject({ method: 'POST', url: '/api/v1/tasks/5' })
+    // The update is a full update, so it carries the fields it must keep, not only `done`.
+    expect(JSON.parse(server.requests[1].body)).toEqual({ id: 5, title: 'Track', description: 'Body', done: true })
+    expect(server.requests[2]).toMatchObject({ method: 'GET', url: '/api/v1/tasks/5' })
   })
 
   it('expresses a close conflict as the actual state without rewriting', async () => {
     const server = await startServer((request, response) => {
-      if (request.method === 'POST') return json(response, 200, { id: 5, done: true })
+      if (request.method === 'POST') return json(response, 200, { id: 5, title: 'Track', done: true })
       return json(response, 200, { id: 5, title: 'Track', done: false })
     })
 
@@ -198,14 +201,56 @@ describe('vikunja sync', () => {
 
   it('reopens an issue with done=false and reports the actual state', async () => {
     const server = await startServer((request, response) => {
-      if (request.method === 'POST') return json(response, 200, { id: 5, done: false })
+      if (request.method === 'POST') return json(response, 200, { id: 5, title: 'Track', done: false })
       return json(response, 200, { id: 5, title: 'Track', done: false })
     })
 
     const result = await sync(server).reopenIssue({ issueId: '5' })
 
     expect(result).toEqual({ status: 'ok', value: { issueId: '5', expectedState: 'open', actualState: 'open' } })
-    expect(JSON.parse(server.requests[0].body)).toEqual({ done: false })
+    expect(JSON.parse(server.requests[1].body)).toEqual({ id: 5, title: 'Track', done: false })
+  })
+
+  it('keeps the description and its stable reference through a full-update close', async () => {
+    // Vikunja v2.7.1 answers POST /api/v1/tasks/{id} with full-update semantics: a field the
+    // body omits is reset. This stub replaces the stored task the same way, so a body carrying
+    // only `done` erases the description — and with it the stable reference `createIssue` wrote
+    // there, which is what `findIssueByStableRef` later searches for.
+    const stored: Record<string, unknown> = {
+      id: 5,
+      title: 'accept-issue',
+      description: `hello\n\n${stableReference('test-ref-1')}`,
+      done: false,
+      project_id: 2,
+    }
+    const server = await startServer((request, response) => {
+      if (request.method === 'POST') {
+        const body = JSON.parse(request.body) as Record<string, unknown>
+        for (const key of Object.keys(stored)) if (!(key in body)) delete stored[key]
+        Object.assign(stored, body)
+        return json(response, 200, stored)
+      }
+      if (request.url === '/api/v1/projects/2/tasks') return json(response, 200, [stored])
+      return json(response, 200, stored)
+    })
+
+    const result = await sync(server).closeIssue({ issueId: '5' })
+
+    expect(result).toEqual({ status: 'ok', value: { issueId: '5', expectedState: 'closed', actualState: 'closed' } })
+    // The write carried the whole task, so the server kept the body and its reference.
+    expect(stored.description).toBe(`hello\n\n${stableReference('test-ref-1')}`)
+    expect(stored.title).toBe('accept-issue')
+    expect(stored.project_id).toBe(2)
+    expect(JSON.parse(server.requests[1].body)).toEqual({
+      id: 5,
+      title: 'accept-issue',
+      description: `hello\n\n${stableReference('test-ref-1')}`,
+      done: true,
+      project_id: 2,
+    })
+    // The reference the sync looks up is still findable after the close.
+    const found = await sync(server).findIssueByStableRef({ projectId: '2', ref: 'test-ref-1' })
+    expect(found).toEqual({ status: 'ok', value: { issueId: '5', title: 'accept-issue', state: 'closed' } })
   })
 
   it.each([
