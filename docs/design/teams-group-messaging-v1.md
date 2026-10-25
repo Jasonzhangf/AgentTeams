@@ -155,6 +155,9 @@ Action {
   inReplyToActionId?,          // 追问关联先前 action 或评论
   state: 'pending'|'accepted'|'refused'|'blocked'|'in_progress'
         |'cancel_requested'|'completed'|'failed'|'unknown'|'cancelled',
+  report?: {                   // 被指派人的持久报告,不代表结果 comment 已完成
+    report: 'blocked'|'failed', reason, evidence?, reportedAt
+  },
   resultCommitId?,             // 结果提交操作的稳定幂等键
   resultRef?,                  // 写回 Vikunja 的 comment id
   createdAt, completedAt?
@@ -181,6 +184,8 @@ DeliveryRecord {
 ```
 
 身份来源:成员身份取传输认证后的 agentId,不取消息体里的值。行动对象必须来自显式参数。
+`Action.report` 的 `reason` 必填非空,`reportedAt` 由服务端写入,报告人取自认证身份与 assignee 校验。
+它由 action.report 帧写入,只表达该 action 的执行报告,不产生也不代表 Vikunja 结果 comment。
 
 ## 6. 生命周期语义
 
@@ -231,6 +236,8 @@ action:未开始的取消;在飞的进入取消或收口,已有副作用保留�
 | in_progress | completed | 结果提交 Vikunja 并读回确认;或明确无须答复且已记录完成 | 结果提交 owner |
 | in_progress | blocked | 执行报告缺信息或阻塞,带证据 | assignee daemon |
 | in_progress | failed | 执行失败,带证据 | assignee daemon |
+| pending | blocked | 尚未开始即报告缺信息或阻塞,带证据 | assignee daemon |
+| pending | failed | 尚未开始即确定失败,带证据 | assignee daemon |
 | in_progress | cancel_requested | 取消请求已发出,执行状态未结束 | hub 或 assignee daemon |
 | cancel_requested | cancelled | 收到执行停止确认 | 执行 owner |
 | cancel_requested | unknown | 无法确认执行已停止,保留停止事实 | hub 标记,执行 owner 回读 |
@@ -244,6 +251,8 @@ action:未开始的取消;在飞的进入取消或收口,已有副作用保留�
   不能仅凭发出请求就把 in_progress 改成终态 cancelled。无法确认停止时保留 unknown 和停止
   事实。尚未停止执行期间到达的结果,按实际结果归入 completed 或 failed,迟到结果不丢。
 - blocked 与 failed 不自动推进。由 master 决定重新指派(新 action)或调整;原 action 保持记录。
+- pending 直接报告 blocked/failed 不表示执行已开始,也不改变 peer 不能拒绝 master 有效指派的规则;
+  原 action 记录保留,重新指派创建新 action。
 - unknown 不是终态。由执行 owner 按 commitId 回读目标 API 收敛为 completed 或 failed。
   回读无法确定时保持 unknown 并上报,不盲目重试。
 - cancelled 只证明执行已停止。issue 可以先关闭,但关闭报告中必须列出尚未确认停止的 action。
@@ -398,7 +407,7 @@ action.create   { requestId, commitId, sessionId, assigneeAgentId, actionKind, r
                   expectedResult, replyRequired, replyRequiredReason,
                   inReplyToActionId? }
 action.submit   { requestId, resultCommitId, actionId, resultBody, evidence }
-action.report   { requestId, actionId, kind:'blocked'|'failed', reason, evidence }
+action.report   { requestId, actionId, report:'blocked'|'failed', reason, evidence }
 action.refuse   { requestId, actionId, reason }
 ```
 
@@ -432,7 +441,8 @@ relay.error      { requestId?, error }
 ```
 
 每个带 requestId 的请求都有同 requestId 的回执或 relay.error;无 requestId 的帧只作推送,
-不能被当成某次请求的答复。
+不能被当成某次请求的答复。`action.report` 只更新该 action 的持久 `report` 字段,并随
+`action.updated` 回执返回;该字段不代表结果 comment 已完成。
 
 `issue.list` 的 owner 是 hub 的 `issue-session` 持久会话账本。hub 从认证连接取得 actor,
 先验证其 scope 与当前有效群成员资格,再按 groupId 读取会话。无消息、无 action、已关闭

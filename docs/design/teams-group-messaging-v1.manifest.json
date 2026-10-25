@@ -2,8 +2,8 @@
   "schema_version": 1,
   "manifest_id": "teams-group-messaging-v1",
   "status": "design",
-  "revision": 6,
-  "supersedes": "revision 5; adds the authorized WebUI read-only issue list without changing issue lifecycle authority",
+  "revision": 7,
+  "supersedes": "revision 6; allows pending actions to report blocked/failed directly, adds a persistent Action.report field, and aligns action.report frame field naming with the typed protocol; revision 5 added the authorized WebUI read-only issue list without changing issue lifecycle authority",
   "canonical_doc": "docs/design/teams-group-messaging-v1.md",
   "owner_modules": ["control-protocol", "server", "network", "runtime", "config"],
   "resources": [
@@ -219,6 +219,6 @@
     "this_revision_changes_product_code": false,
     "services_run": false,
     "runtime_acceptance_claimed": false,
-    "graph_validation": "thirteen unchanged graphs retain prior validation; issue-list graph validated and inspected for revision 6; no runtime acceptance implied"
+    "graph_validation": "thirteen unchanged graphs retain prior validation; issue-list graph retains the revision 6 validation evidence from 96f1e12; no merge-driven re-validation and no runtime acceptance implied"
   }
 }
