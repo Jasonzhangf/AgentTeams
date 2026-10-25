@@ -24,6 +24,17 @@ type MessageKey =
   | 'connect' | 'draft' | 'accepted' | 'master' | 'peer' | 'applyMembership'
   | 'historyPrev' | 'historyRequest' | 'historyUnavailable' | 'permissionOptionsUnavailable'
   | 'cancelRequested' | 'cancelConfirmed' | 'cancelUnknown'
+  | 'pageGroups' | 'groupList' | 'groupSelected' | 'groupMembers' | 'groupMessages' | 'groupComposer'
+  | 'groupSend' | 'groupCreate' | 'groupName' | 'groupInvite' | 'groupInviteAgent' | 'groupInviteRole'
+  | 'groupIssue' | 'groupIssueNone' | 'groupIssueCreate' | 'groupIssueTitle' | 'groupIssueBody'
+  | 'groupIssueProject' | 'groupIssueClose' | 'groupIssueReopen' | 'groupIssueReason' | 'groupIssueConclusion'
+  | 'groupActions' | 'groupActionsNone' | 'groupActionCreate' | 'groupActionAssignee' | 'groupActionReason'
+  | 'groupActionResult' | 'groupActionSubmit' | 'groupActionRefuse' | 'groupActionReport'
+  | 'groupPhaseLoading' | 'groupPhaseEmpty' | 'groupPhaseLive'
+  | 'groupNotConfigured' | 'groupUnreachable' | 'groupRefused' | 'groupUnknown' | 'groupFailed'
+  | 'groupRetry' | 'groupConfirm' | 'groupConfirmAccept' | 'groupConfirmCancel' | 'groupNoMessages'
+  | 'groupTarget' | 'groupOutcomeSucceeded' | 'groupOutcomePending' | 'groupOutcomeIdle'
+  | 'groupActor' | 'groupNoActor' | 'groupChooseActor' | 'groupChooseActorHint'
 
 const en: Record<MessageKey, string> = {
   brand: 'Teams Console', topology: 'Agents', conversations: 'Sessions', notifications: 'Notifications', search: 'Search', memory: 'Memory', settings: 'Provider configuration',
@@ -47,6 +58,19 @@ const en: Record<MessageKey, string> = {
   connect: 'Connect', draft: 'Draft', accepted: 'Accepted', master: 'Master', peer: 'Peer', applyMembership: 'Apply membership',
   historyPrev: 'Previous page', historyRequest: 'Request history is refused by the owner.', historyUnavailable: 'History is unavailable.', permissionOptionsUnavailable: 'Permission choices are unavailable from the engine callback.',
   cancelRequested: 'Cancel requested', cancelConfirmed: 'Cancel confirmed', cancelUnknown: 'Cancel outcome unknown',
+  pageGroups: 'Groups', groupList: 'Groups', groupSelected: 'Selected group', groupMembers: 'Members', groupMessages: 'Messages', groupComposer: 'Message the group',
+  groupSend: 'Send message', groupCreate: 'Create group', groupName: 'Group name', groupInvite: 'Invite member', groupInviteAgent: 'Agent ID', groupInviteRole: 'Role',
+  groupIssue: 'Issue', groupIssueNone: 'No issue is bound to this group.', groupIssueCreate: 'Create issue', groupIssueTitle: 'Issue title', groupIssueBody: 'Issue body',
+  groupIssueProject: 'Vikunja project ID', groupIssueClose: 'Close issue', groupIssueReopen: 'Reopen issue', groupIssueReason: 'Reason', groupIssueConclusion: 'Conclusion',
+  groupActions: 'Actions', groupActionsNone: 'No action is recorded for this group.', groupActionCreate: 'Create action', groupActionAssignee: 'Assignee agent ID', groupActionReason: 'Reason',
+  groupActionResult: 'Result body', groupActionSubmit: 'Submit result', groupActionRefuse: 'Refuse action', groupActionReport: 'Report blocked or failed',
+  groupPhaseLoading: 'Loading groups…', groupPhaseEmpty: 'No group exists yet. Create one to start a conversation.', groupPhaseLive: 'Group workspace',
+  groupNotConfigured: 'The group endpoint is not configured on this Console host.', groupUnreachable: 'The group endpoint exists but the agent is unreachable.',
+  groupRefused: 'The group owner refused this request.', groupUnknown: 'The owner outcome is unknown. Retry with the same commit.', groupFailed: 'The group workspace could not be loaded.',
+  groupRetry: 'Retry', groupConfirm: 'Confirm this action', groupConfirmAccept: 'Confirm', groupConfirmCancel: 'Cancel', groupNoMessages: 'No message has been exchanged in this group yet.',
+  groupTarget: 'Target', groupOutcomeSucceeded: 'Owner accepted the request', groupOutcomePending: 'Waiting for the group owner', groupOutcomeIdle: 'Ready',
+  groupActor: 'Acting as', groupNoActor: 'No projected agent can act for groups; the Console control owner never acts.',
+  groupChooseActor: 'Choose the agent', groupChooseActorHint: 'Several agents can act for a group. Choose the one this Console speaks as; the group list loads as soon as you do.',
 }
 
 const zh: Record<MessageKey, string> = {
@@ -71,6 +95,19 @@ const zh: Record<MessageKey, string> = {
   connect: '连接', draft: '草稿', accepted: '已接受', master: '主节点', peer: '对等节点', applyMembership: '提交组网草稿',
   historyPrev: '上一页', historyRequest: '请求历史被所有者拒绝。', historyUnavailable: '历史不可用。', permissionOptionsUnavailable: '引擎回调未提供权限选择。',
   cancelRequested: '已请求取消', cancelConfirmed: '取消已确认', cancelUnknown: '取消结果未知',
+  pageGroups: '群组', groupList: '群组', groupSelected: '当前群组', groupMembers: '成员', groupMessages: '消息', groupComposer: '向群组发送消息',
+  groupSend: '发送消息', groupCreate: '创建群组', groupName: '群组名称', groupInvite: '邀请成员', groupInviteAgent: '智能体 ID', groupInviteRole: '角色',
+  groupIssue: '议题', groupIssueNone: '当前群组还没有议题。', groupIssueCreate: '创建议题', groupIssueTitle: '议题标题', groupIssueBody: '议题内容',
+  groupIssueProject: 'Vikunja 项目 ID', groupIssueClose: '关闭议题', groupIssueReopen: '重新打开议题', groupIssueReason: '原因', groupIssueConclusion: '结论',
+  groupActions: '行动', groupActionsNone: '当前群组还没有行动记录。', groupActionCreate: '创建行动', groupActionAssignee: '负责智能体 ID', groupActionReason: '原因',
+  groupActionResult: '结果内容', groupActionSubmit: '提交结果', groupActionRefuse: '拒绝行动', groupActionReport: '上报阻塞或失败',
+  groupPhaseLoading: '正在加载群组…', groupPhaseEmpty: '还没有群组。创建一个群组即可开始对话。', groupPhaseLive: '群组工作区',
+  groupNotConfigured: '当前控制台没有配置群组入口。', groupUnreachable: '群组入口存在，但无法连接到对应智能体。',
+  groupRefused: '群组所有者拒绝了这次请求。', groupUnknown: '所有者结果未知。请用同一个提交重试。', groupFailed: '无法加载群组工作区。',
+  groupRetry: '重试', groupConfirm: '确认这次操作', groupConfirmAccept: '确认', groupConfirmCancel: '取消', groupNoMessages: '该群组还没有消息。',
+  groupTarget: '对象', groupOutcomeSucceeded: '所有者已接受请求', groupOutcomePending: '等待群组所有者处理', groupOutcomeIdle: '就绪',
+  groupActor: '当前以', groupNoActor: '没有可作为群组身份的项目智能体；控制台控制端不参与群组。',
+  groupChooseActor: '请选择智能体', groupChooseActorHint: '有多个智能体可以作为群组身份。请选择控制台要使用的那个，选择后立即加载群组列表。',
 }
 
 export function messages(locale: Locale): Record<MessageKey, string> {

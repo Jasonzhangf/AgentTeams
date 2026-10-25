@@ -101,7 +101,7 @@ ${script}
 
 describe('declared capability rendering in a real DOM', () => {
   it('renders declared services and resources and an explicit unavailable state', { timeout: 30_000 }, () => {
-    const script = [classicModule('client/locale.ts'), classicModule('state/model.ts'), classicModule('components/render.ts')].join('\n')
+    const script = [classicModule('client/locale.ts'), classicModule('state/model.ts'), classicModule('state/group-workspace.ts'), classicModule('components/dom.ts'), classicModule('components/page-groups.ts'), classicModule('components/render.ts')].join('\n')
     if (/(^|\n)\s*(import|export)\b/.test(script)) throw new Error('classic module bundling left module syntax behind')
     const directory = mkdtempSync(join(tmpdir(), 'teams-console-render-'))
     onTestFinished(() => {
@@ -120,7 +120,7 @@ describe('declared capability rendering in a real DOM', () => {
 
 describe('BB09 refresh completion in a real DOM', () => {
   it('keeps the busy window distinct from completion and enables bind after reselection', { timeout: 30_000 }, () => {
-    const script = [classicModule('client/locale.ts'), classicModule('state/model.ts'), classicModule('components/render.ts')].join('\n')
+    const script = [classicModule('client/locale.ts'), classicModule('state/model.ts'), classicModule('state/group-workspace.ts'), classicModule('components/dom.ts'), classicModule('components/page-groups.ts'), classicModule('components/render.ts')].join('\n')
     if (/(^|\n)\s*(import|export)\b/.test(script)) throw new Error('classic module bundling left module syntax behind')
     const directory = mkdtempSync(join(tmpdir(), 'teams-console-busy-window-'))
     onTestFinished(() => {

@@ -1,8 +1,8 @@
 import type { ConsoleCapabilityDetail, ConsoleProjectionV1, ConsoleProviderView, ConsoleSessionEventView } from '../client/protocol.ts'
 
 export type ConsoleEntry = 'topology' | 'conversations' | 'notifications' | 'search' | 'memory'
-export type TeamPage = 'discovery' | 'networking' | 'interaction' | 'history'
-export const teamPages: readonly TeamPage[] = ['discovery', 'networking', 'interaction', 'history']
+export type TeamPage = 'discovery' | 'networking' | 'interaction' | 'history' | 'groups'
+export const teamPages: readonly TeamPage[] = ['discovery', 'networking', 'interaction', 'history', 'groups']
 export type UiStatus = 'online' | 'offline' | 'unknown'
 
 export interface AgentRow {

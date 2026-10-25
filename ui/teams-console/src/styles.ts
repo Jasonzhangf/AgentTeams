@@ -833,6 +833,205 @@ export const teamsStyles = String.raw`
   }
 }
 
+
+/* Group workspace: a two-column list/detail layout on desktop that collapses to one
+   column on narrow screens. Every grid track uses minmax(0, …) and every control is
+   border-box, so a long agent id or message body never widens the page. */
+.teams-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.teams-group-phase {
+  align-self: flex-start;
+}
+
+.teams-group-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  gap: 18px;
+  min-width: 0;
+}
+
+.teams-group-actor-pending {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--teams-warning);
+  border-radius: 10px;
+  background: var(--teams-surface-soft);
+}
+
+.teams-group-actor-pending p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.teams-group-actor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--teams-border);
+  border-radius: 10px;
+  background: var(--teams-surface-raised);
+}
+
+.teams-group-actor-name {
+  overflow-wrap: anywhere;
+}
+
+.teams-group-column,
+.teams-group-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.teams-group-heading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--teams-muted);
+}
+
+.teams-group-list,
+.teams-group-message-items,
+.teams-group-action-items,
+.teams-group-members {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teams-group-row {
+  width: 100%;
+  justify-content: flex-start;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.teams-group-row.is-active {
+  border-color: var(--teams-accent);
+}
+
+.teams-group-meta {
+  display: block;
+  color: var(--teams-faint);
+  font-size: 12px;
+}
+
+.teams-group-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.teams-group-message,
+.teams-group-action,
+.teams-group-invite,
+.teams-group-issue,
+.teams-group-actions,
+.teams-group-messages,
+.teams-group-composer,
+.teams-group-create,
+.teams-group-form,
+.teams-group-confirm,
+.teams-group-outcome {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--teams-border);
+  border-radius: 10px;
+  background: var(--teams-surface-raised);
+}
+
+.teams-group-message-body,
+.teams-group-action-reason,
+.teams-group-action-head,
+.teams-group-issue-summary {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.teams-group-message-author,
+.teams-group-label {
+  color: var(--teams-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.teams-group-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.teams-group-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.teams-group-form .teams-input,
+.teams-group-form .teams-textarea,
+.teams-group-create .teams-input,
+.teams-group-composer-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.teams-group-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: sticky;
+  bottom: 0;
+  background: var(--teams-surface-soft);
+}
+
+.teams-group-action-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.teams-group-actor .teams-select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 780px) {
+  .teams-group-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teams-group-form,
+  .teams-group-action-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teams-group-composer {
+    position: static;
+  }
+}
+
 @media (forced-colors: active) {
   .teams-root :where(button, input, select, textarea):focus-visible {
     outline: 2px solid CanvasText;

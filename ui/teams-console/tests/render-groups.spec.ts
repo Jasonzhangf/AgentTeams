@@ -1,0 +1,406 @@
+import { describe, expect, it, onTestFinished } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { teamsStyles } from '../src/styles.ts'
+
+const srcRoot = join(import.meta.dirname, '../src')
+
+/**
+ * Render the shipped group workspace in a real DOM. The modules are transpiled to a classic
+ * script and executed by Chrome, so the assertions read the DOM the modules actually build
+ * rather than source text. The stable markers here are the ones a browser replay drives.
+ */
+function classicModule(file: string): string {
+  const output = transpileModule(readFileSync(join(srcRoot, file), 'utf8'), {
+    compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
+  }).outputText
+  return output
+    .split('\n')
+    .filter(line => !/^\s*import\b/.test(line))
+    .filter(line => !/^\s*export\s*\{/.test(line))
+    .map(line => line.replace(/^export\s+(?=(?:function|const|let|var|class)\b)/, ''))
+    .join('\n')
+    .replaceAll('import.meta.url', 'location.href')
+}
+
+function chromeExecutable(): string {
+  const candidates = [
+    process.env.CHROME_BIN,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ]
+  const executable = candidates.find(candidate => candidate !== undefined && existsSync(candidate))
+  if (executable === undefined) throw new Error('A Chrome/Chromium executable is required for the group DOM render test')
+  return executable
+}
+
+const script = [
+  classicModule('client/locale.ts'),
+  classicModule('state/model.ts'),
+  classicModule('client/protocol.ts'),
+  classicModule('state/group-workspace.ts'),
+  classicModule('components/dom.ts'),
+  classicModule('components/page-groups.ts'),
+  classicModule('components/render.ts'),
+].join('\n')
+
+if (/(^|\n)\s*(import|export)\b/.test(script)) throw new Error('classic module bundling left module syntax behind')
+
+const group = {
+  groupId: 'g1',
+  name: 'Alpha',
+  ownerAgentId: 'agent-a',
+  createdAt: '2026-10-20T00:00:00.000Z',
+  members: [{ agentId: 'agent-a', role: 'master', mastersOf: [], intervals: [{ joinedAt: '2026-10-20T00:00:00.000Z' }] }],
+}
+
+const message = {
+  messageId: 'm1', commitId: 'c1', sequence: 1, groupId: 'g1', fromAgentId: 'agent-a',
+  targetAgentIds: ['agent-a'], replyRequired: false, body: 'hello group', sentAt: '2026-10-20T00:00:01.000Z',
+}
+
+const projection = {
+  version: 1,
+  agents: [
+    { kind: 'runtime', agentId: 'agent-a', label: 'Agent A', machineId: 'M1', presence: 'online', capabilities: ['session'], sessionCapable: true, sessionAvailability: 'current' },
+    { kind: 'runtime', agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online', capabilities: ['session'], sessionCapable: true, sessionAvailability: 'current' },
+  ],
+  sessions: [],
+  notifications: [],
+  configs: [],
+}
+
+function groupState(overrides: Record<string, unknown> = {}) {
+  const base = {
+    access: { kind: 'ready' },
+    listStatus: 'ready',
+    groups: [group],
+    selectedGroupId: 'g1',
+    messageStatus: 'ready',
+    messages: [message],
+    messageHasMore: false,
+    issue: null,
+    issueStatus: 'idle',
+    actions: [],
+    actionStatus: 'empty',
+    composer: '',
+    actors: ['agent-a'],
+    actorId: 'agent-a',
+    mutation: null,
+    retryable: null,
+    commits: {},
+    outcome: { kind: 'idle' },
+    confirm: null,
+  }
+  return { ...base, ...overrides }
+}
+
+function state(groupOverrides: Record<string, unknown> = {}, stateOverrides: Record<string, unknown> = {}) {
+  return {
+    open: true,
+    page: 'groups',
+    live: true,
+    entry: 'topology',
+    drawer: null,
+    drawerStack: [],
+    drawerExpanded: false,
+    projection,
+    status: 'ready',
+    error: null,
+    notice: null,
+    busy: null,
+    query: '',
+    locale: 'en',
+    selectedAgentId: undefined,
+    selectedSessionId: undefined,
+    providerFormOpen: false,
+    editingProviderId: undefined,
+    providerDraft: { id: '', label: '', protocol: 'openai-chat', apiBaseUrl: '', enabled: true, authKind: 'none', credentialRef: '' },
+    refusedError: null,
+    cancelState: 'idle',
+    observation: { projection, observation: 'live', health: { state: 'live' } },
+    messageDraft: '',
+    membershipDraft: [],
+    history: null,
+    historyStatus: 'idle',
+    historyError: null,
+    lastFocusKey: undefined,
+    groupCapable: true,
+    group: groupState(groupOverrides),
+    ...stateOverrides,
+  }
+}
+
+const controllerScript = `
+  const calls = { actor: [], select: [], send: [], retry: [], confirm: [] }
+  const controller = {
+    getSnapshot: () => STATE,
+    setGroupActor(id) { calls.actor.push(id) },
+    selectGroup(id) { calls.select.push(id) },
+    sendGroupMessage() { calls.send.push('send') },
+    refreshGroup() { calls.retry.push('refresh') },
+    retryGroupMutation() { calls.retry.push('retry') },
+    confirmPendingGroupAction() { calls.confirm.push('confirm') },
+    cancelPendingGroupAction() { calls.confirm.push('cancel') },
+    setGroupComposer() {}, createGroup() {}, inviteMember() {}, createIssue() {}, closeIssue() {},
+    reopenIssue() {}, createAction() {}, submitAction() {}, refuseAction() {}, reportAction() {},
+    setLocale() {}, openConsole() {}, closeConsole() {}, selectPage() {}, openAgent() {}, openSession() {},
+    closeDrawer() {}, toggleDrawerExpanded() {}, selectNetworkMember() {}, removeNetworkMember() {},
+    applyMembership() {}, connectAgent() {}, loadHistory() {}, retryHistory() {}, sendSession() {},
+    cancelSession() {}, replyPermission() {}, acknowledge() {}, createSessionCommand() {}, openSessionCommand() {},
+    refresh() {}, selectSession() {}, applyConfig() {}, bindModel() {}, saveProvider() {}, openProviderForm() {},
+    closeProviderForm() {}, editProvider() {}, refreshModels() {}, setQuery() {},
+  }
+`
+
+const page = `<!doctype html>
+<html><body>
+  <div id="live"></div>
+  <div id="multi"></div>
+  <div id="single"></div>
+  <div id="none"></div>
+  <div id="not-configured"></div>
+  <div id="unreachable"></div>
+  <div id="empty"></div>
+  <div id="loading"></div>
+  <div id="refused"></div>
+  <div id="unknown"></div>
+  <div id="confirm"></div>
+  <script>
+${script}
+${controllerScript}
+    const render = (id, next) => {
+      STATE = next
+      renderConsole(document.getElementById(id), controller)
+      return document.getElementById(id)
+    }
+    // 1. Live workspace.
+    const live = render('live', ${JSON.stringify(state())})
+    // 2. Two actors and no choice yet: the actor control must be reachable on this screen.
+    const multi = render('multi', ${JSON.stringify(state({ actors: ['agent-a', 'agent-b'], actorId: undefined, groups: [], listStatus: 'idle', messages: [], messageStatus: 'idle' }))})
+    // 3. A single actor is chosen automatically and shows no forced choice.
+    const single = render('single', ${JSON.stringify(state({ actors: ['agent-a'], actorId: 'agent-a' }))})
+    // 4. No eligible actor: a typed not-configured state with every action disabled.
+    const none = render('none', ${JSON.stringify(state({ actors: [], actorId: undefined, groups: [], listStatus: 'idle', messages: [], messageStatus: 'idle' }))})
+    const notConfigured = render('not-configured', ${JSON.stringify(state({ access: { kind: 'not-configured', message: 'the group owner is not bound to this control daemon' } }))})
+    const unreachable = render('unreachable', ${JSON.stringify(state({ access: { kind: 'unreachable', message: 'the group endpoint did not answer' } }))})
+    // 7. An empty owner answer is not a failure.
+    const empty = render('empty', ${JSON.stringify(state({ groups: [], selectedGroupId: undefined, listStatus: 'empty', messages: [], messageStatus: 'idle' }))})
+    const loading = render('loading', ${JSON.stringify(state({ groups: [], selectedGroupId: undefined, listStatus: 'loading', messages: [], messageStatus: 'idle' }))})
+    // 9. A refused owner answer and an unknown mutation both stay visibly not-successful.
+    const refused = render('refused', ${JSON.stringify(state({ listStatus: 'refused', groups: [], selectedGroupId: undefined, messages: [], messageStatus: 'idle', outcome: { kind: 'refused', code: 'FORBIDDEN', message: 'not declared' } }))})
+    const unknown = render('unknown', ${JSON.stringify(state({ messageStatus: 'unknown', outcome: { kind: 'unknown', frame: 'message.send', code: 'RESULT_UNKNOWN', message: 'no answer' }, retryable: { intentKey: 'message.send:g1:hi', requestId: 'req-1', commitId: 'commit-1', frame: { kind: 'message.send', requestId: 'req-1', commitId: 'commit-1', groupId: 'g1', targetAgentIds: ['agent-a'], replyRequired: false, body: 'hi' } } }))})
+    // 10. A parked critical action names its target before anything is sent.
+    const confirm = render('confirm', ${JSON.stringify(state({ confirm: { intentKey: 'issue.close:s1', requestId: 'req-2', commitId: 'commit-2', frame: { kind: 'issue.close', requestId: 'req-2', commitId: 'commit-2', sessionId: 's1', reason: 'done', conclusion: 'closed' } } }))})
+
+    const html = id => document.getElementById(id).outerHTML
+    const attr = (root, name) => root.querySelector('[' + name + ']')?.getAttribute(name) ?? null
+
+    document.body.dataset.workspaceMarker = String(attr(live, 'data-group-workspace') === 'true')
+    document.body.dataset.listStateMarker = String(attr(live, 'data-group-list-state') === 'ready')
+    document.body.dataset.itemMarkers = String(live.querySelectorAll('[data-group-item="g1"]').length > 0)
+    document.body.dataset.messagesMarker = String(attr(live, 'data-group-messages') === 'true')
+    document.body.dataset.composerMarker = String(attr(live, 'data-group-composer') === 'true')
+    document.body.dataset.outcomeMarker = String(attr(live, 'data-group-outcome') === 'idle')
+    document.body.dataset.accessReady = String(attr(live, 'data-group-access') === 'ready')
+    document.body.dataset.messageRendered = String(live.querySelectorAll('[data-group-message="m1"]').length === 1)
+
+    // The reported dead end: two actors, none chosen, and no way to choose inside the page.
+    const multiSelect = multi.querySelector('[data-group-actor-select]')
+    document.body.dataset.multiActorSelectReachable = String(multiSelect !== null)
+    document.body.dataset.multiActorOptions = String(
+      multiSelect !== null && [...multiSelect.options].map(option => option.value).join(',') === 'agent-a,agent-b')
+    document.body.dataset.multiActorPending = String(attr(multi, 'data-group-actor-pending') === 'true')
+    document.body.dataset.multiActorNotCalledNotConfigured = String(attr(multi, 'data-group-access') !== 'not-configured')
+    // Choosing an actor must drive the controller, which loads the real group list.
+    if (multiSelect !== null) {
+      multiSelect.value = 'agent-b'
+      multiSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    document.body.dataset.multiActorChangeReported = String(calls.actor.join(',') === 'agent-b')
+
+    document.body.dataset.singleActorAutoSelected = String(
+      attr(single, 'data-group-actor') === 'agent-a' && single.querySelector('[data-group-actor-select]') === null)
+
+    const noneSelect = none.querySelector('[data-group-actor-select]')
+    // The no-actor screen renders no operable control at all: nothing can be sent.
+    const noneDisabled = [...none.querySelectorAll('button')]
+      .filter(button => button.hasAttribute('data-group-send') || button.hasAttribute('data-group-invite-action') || button.hasAttribute('data-group-issue-action'))
+      .every(button => button.disabled === true)
+    document.body.dataset.noActorNotConfigured = String(attr(none, 'data-group-access') === 'not-configured')
+    document.body.dataset.noActorNoSelect = String(noneSelect === null)
+    // Nothing is rendered to send with, so "no action" is the whole surface.
+    document.body.dataset.noActorNoComposer = String(none.querySelector('[data-group-composer]') === null)
+    document.body.dataset.noActorActionsDisabled = String(noneDisabled)
+
+    document.body.dataset.notConfiguredSeparate = String(
+      attr(notConfigured, 'data-group-access') === 'not-configured'
+      && notConfigured.querySelector('[data-group-error-code]')?.getAttribute('data-group-error-code') === 'GROUP_ENDPOINT_NOT_CONFIGURED')
+    document.body.dataset.unreachableSeparate = String(
+      attr(unreachable, 'data-group-access') === 'unreachable'
+      && unreachable.querySelector('[data-group-error-code]')?.getAttribute('data-group-error-code') === 'GROUP_ENDPOINT_UNREACHABLE')
+
+    document.body.dataset.emptyMarker = String(attr(empty, 'data-group-phase') === 'empty')
+    document.body.dataset.loadingMarker = String(attr(loading, 'data-group-phase') === 'loading')
+    document.body.dataset.refusedMarker = String(attr(refused, 'data-group-phase') === 'refused')
+    document.body.dataset.unknownMarker = String(attr(unknown, 'data-group-outcome') === 'unknown')
+    document.body.dataset.unknownNotSucceeded = String(!html('unknown').includes('data-group-outcome="succeeded"'))
+    document.body.dataset.unknownRetryable = String(attr(unknown, 'data-group-retry') === 'true')
+
+    const confirmTarget = confirm.querySelector('[data-group-confirm-target]')?.getAttribute('data-group-confirm-target') ?? ''
+    document.body.dataset.confirmMarker = String(attr(confirm, 'data-group-confirm') === 'issue.close')
+    document.body.dataset.confirmNamesTarget = String(confirmTarget.includes('issue.close:s1'))
+    document.body.dataset.confirmHasAccept = String(attr(confirm, 'data-group-confirm-accept') === 'true')
+    document.body.dataset.confirmHasCancel = String(attr(confirm, 'data-group-confirm-cancel') === 'true')
+  </script>
+</body></html>`
+
+function runChrome(file: string, windowSize?: string, extraFlags: readonly string[] = []): string {
+  const profileDirectory = mkdtempSync(join(tmpdir(), 'teams-console-groups-profile-'))
+  try {
+    return execFileSync(chromeExecutable(), [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-sandbox',
+      ...(windowSize === undefined ? [] : [`--window-size=${windowSize}`]),
+      ...extraFlags,
+      `--user-data-dir=${profileDirectory}`,
+      '--dump-dom',
+      pathToFileURL(file).toString(),
+    ], { encoding: 'utf8', timeout: 25_000, stdio: ['ignore', 'pipe', 'ignore'] })
+  } finally {
+    rmSync(profileDirectory, { recursive: true, force: true })
+  }
+}
+
+/**
+ * A live workspace measured in the browser. The shipped stylesheet is injected into the same
+ * document, so the numbers come from real layout, not from the stylesheet text.
+ */
+const layoutPage = `<!doctype html>
+<html><head><style></style></head><body>
+  <div id="frame" style="width:390px;overflow:hidden;position:relative"><div id="root" class="teams-root"></div></div>
+  <script>
+${script}
+${controllerScript}
+    // The shipped panel is a fixed full-viewport overlay. Confining it to the 390px frame
+    // makes the mobile layout measurable at its real width; no other rule is overridden.
+    document.querySelector('style').textContent =
+      ${JSON.stringify(teamsStyles)} + '#frame .teams-overlay { position: absolute; inset: 0; }'
+    STATE = ${JSON.stringify(state({ actions: [{ actionId: 'a1', sessionId: 's1', kind: 'reply', assigneeAgentId: 'agent-a-very-long-identifier', reason: 'A reason long enough to wrap inside the narrow column without widening the page body.', state: 'accepted', expectedResult: 'x', replyRequired: false, createdAt: '2026-10-20T00:00:00.000Z' }], messageStatus: 'ready' }))}
+    renderConsole(document.getElementById('root'), controller)
+    const root = document.getElementById('root')
+    const frame = document.getElementById('frame')
+    const frameWidth = frame.getBoundingClientRect().width
+    const composer = root.querySelector('[data-group-composer]')
+    const composerRect = composer === null ? null : composer.getBoundingClientRect()
+    // Overflow is measured against the narrow frame the workspace was given, so a wide
+    // desktop window cannot hide a mobile layout that spills sideways.
+    document.body.dataset.frameWidth = String(Math.round(frameWidth))
+    document.body.dataset.documentScrollWidth = String(document.documentElement.scrollWidth)
+    document.body.dataset.documentViewportWidth = String(document.documentElement.clientWidth)
+    document.body.dataset.noHorizontalOverflow = String(
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      && frame.scrollWidth <= Math.ceil(frameWidth) + 1)
+    document.body.dataset.composerPresent = String(composer !== null)
+    document.body.dataset.composerInputVisible = String(
+      composer !== null
+      && composerRect !== null
+      && composerRect.width > 0
+      && composerRect.height > 0
+      && composerRect.right <= Math.ceil(frameWidth) + 1
+      && composerRect.left >= -1)
+    const longBody = root.querySelector('[data-group-message="m1"] .teams-group-message-body')
+    document.body.dataset.messageWraps = String(longBody !== null && longBody.getBoundingClientRect().width <= Math.ceil(frameWidth) + 1)
+  </script>
+</body></html>`
+
+function measureLayout(windowSize: string, extraFlags: readonly string[] = []): Record<string, string> {
+  const directory = mkdtempSync(join(tmpdir(), 'teams-console-groups-layout-'))
+  try {
+    const file = join(directory, 'layout.html')
+    writeFileSync(file, layoutPage)
+    const output = runChrome(file, windowSize, extraFlags)
+    const match = /<body([^>]*)>/.exec(output)
+    const attributes = match?.[1] ?? ''
+    const read = (name: string): string => new RegExp(`${name}="([^"]*)"`).exec(attributes)?.[1] ?? ''
+    return {
+      frameWidth: read('data-frame-width'),
+      documentViewportWidth: read('data-document-viewport-width'),
+      documentScrollWidth: read('data-document-scroll-width'),
+      noHorizontalOverflow: read('data-no-horizontal-overflow'),
+      composerPresent: read('data-composer-present'),
+      composerInputVisible: read('data-composer-input-visible'),
+      messageWraps: read('data-message-wraps'),
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+describe('group workspace DOM contract in a real DOM', () => {
+  it('keeps a narrow 390px viewport free of horizontal overflow with a visible composer', { timeout: 30_000 }, () => {
+    const narrow = measureLayout('390,844')
+    // The media query breakpoint engages at this width, so this is the real mobile layout.
+    expect(Number(narrow.frameWidth)).toBe(390)
+    expect(narrow.composerPresent).toBe('true')
+    expect(narrow.composerInputVisible).toBe('true')
+    expect(narrow.messageWraps).toBe('true')
+    expect(narrow.noHorizontalOverflow).toBe('true')
+  })
+
+  it('keeps a desktop viewport free of horizontal overflow', { timeout: 30_000 }, () => {
+    const desktop = measureLayout('1280,900')
+    expect(desktop.composerInputVisible).toBe('true')
+    expect(desktop.noHorizontalOverflow).toBe('true')
+    expect(Number(desktop.documentViewportWidth)).toBeGreaterThan(390)
+  })
+
+  it('renders every group phase and keeps the actor choice reachable', { timeout: 30_000 }, () => {
+    const directory = mkdtempSync(join(tmpdir(), 'teams-console-groups-'))
+    onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })
+    const file = join(directory, 'groups.html')
+    writeFileSync(file, page)
+    const output = runChrome(file)
+    for (const marker of [
+      'data-workspace-marker',
+      'data-list-state-marker',
+      'data-item-markers',
+      'data-messages-marker',
+      'data-composer-marker',
+      'data-outcome-marker',
+      'data-access-ready',
+      'data-message-rendered',
+      'data-multi-actor-select-reachable',
+      'data-multi-actor-options',
+      'data-multi-actor-pending',
+      'data-multi-actor-not-called-not-configured',
+      'data-multi-actor-change-reported',
+      'data-single-actor-auto-selected',
+      'data-no-actor-not-configured',
+      'data-no-actor-no-select',
+      'data-no-actor-no-composer',
+      'data-no-actor-actions-disabled',
+      'data-not-configured-separate',
+      'data-unreachable-separate',
+      'data-empty-marker',
+      'data-loading-marker',
+      'data-refused-marker',
+      'data-unknown-marker',
+      'data-unknown-not-succeeded',
+      'data-unknown-retryable',
+      'data-confirm-marker',
+      'data-confirm-names-target',
+      'data-confirm-has-accept',
+      'data-confirm-has-cancel',
+    ]) {
+      expect(output, marker).toContain(`${marker}="true"`)
+    }
+  })
+})

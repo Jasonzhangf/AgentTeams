@@ -1,43 +1,16 @@
-import type { ConsoleEntry, UiStatus } from '../state/model.ts'
+import type { ConsoleEntry, TeamPage, UiStatus } from '../state/model.ts'
 import { canOperateSession, modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerById, providerLabel, teamPages } from '../state/model.ts'
 import type { ConsoleState, DrawerState, ProviderDraft, TeamsConsoleController } from '../state/controller.ts'
 import { messages, type Locale, type MessageKey } from '../client/locale.ts'
 import type { ConsoleProviderView, JsonValue } from '../client/protocol.ts'
+import { append, button, element } from './dom.ts'
+import { renderGroups } from './page-groups.ts'
 
 const entries: readonly ConsoleEntry[] = ['topology', 'conversations', 'notifications', 'search', 'memory']
-const pageEntries: readonly ('discovery' | 'networking' | 'interaction' | 'history')[] = ['discovery', 'networking', 'interaction', 'history']
+const pageEntries: readonly TeamPage[] = teamPages
 const agentBrowserIcon = new URL('../../assets/agentbrowser-icon.jpg', import.meta.url).toString()
 
 type RenderOptions = { readonly fixtureLabel?: string }
-
-function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): HTMLElementTagNameMap[K] {
-  const value = document.createElement(tag)
-  if (className !== undefined) value.className = className
-  return value
-}
-
-function append(parent: Node, ...children: readonly (Node | string | null | undefined)[]): void {
-  for (const child of children) {
-    if (child === null || child === undefined) continue
-    parent.appendChild(typeof child === 'string' ? document.createTextNode(child) : child)
-  }
-}
-
-function button(
-  label: string,
-  className: string,
-  action: () => void | Promise<void>,
-  disabled = false,
-  focusKey?: string,
-): HTMLButtonElement {
-  const value = element('button', `teams-button ${className}`)
-  value.type = 'button'
-  value.textContent = label
-  value.disabled = disabled
-  if (focusKey !== undefined) value.dataset.focusKey = focusKey
-  value.addEventListener('click', async () => { await action() })
-  return value
-}
 
 function heading(title: string): HTMLElement {
   const value = element('div')
@@ -882,12 +855,13 @@ function renderDrawer(controller: TeamsConsoleController, state: ConsoleState, t
   return layer
 }
 
-function pageLabel(page: 'discovery' | 'networking' | 'interaction' | 'history', t: Record<MessageKey, string>): string {
+function pageLabel(page: TeamPage, t: Record<MessageKey, string>): string {
   switch (page) {
     case 'discovery': return t.pageDiscovery
     case 'networking': return t.pageNetworking
     case 'interaction': return t.pageInteraction
     case 'history': return t.pageHistory
+    case 'groups': return t.pageGroups
   }
 }
 
@@ -1137,6 +1111,10 @@ export function renderConsole(root: HTMLElement, controller: TeamsConsoleControl
       if (state.page === 'networking') append(content, renderNetworking(controller, state, t))
       if (state.page === 'interaction') append(content, renderInteraction(controller, state, t))
       if (state.page === 'history') append(content, renderHistory(controller, state, t))
+      if (state.page === 'groups') {
+        if (state.groupCapable) append(content, renderGroups(controller, state, t))
+        else append(content, element('div', 'teams-empty'))
+      }
     } else {
       if (state.entry === 'topology') append(content, renderTopology(controller, state, t))
       if (state.entry === 'conversations') append(content, renderConversations(controller, state, t))
