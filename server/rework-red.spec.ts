@@ -252,6 +252,43 @@ describe('rework red findings', () => {
     expect(calls.filter((op) => op.kind === 'issue.recover').length).toBeGreaterThanOrEqual(1)
   })
 
+  it('R4 red: replaying a confirmed stale close cancels a new action created after reopen', async () => {
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'issue.close') return confirmed(op, { issueId: '42', expectedState: 'closed', actualState: 'closed' })
+      if (op.kind === 'issue.reopen') return confirmed(op, { issueId: '42', expectedState: 'open', actualState: 'open' })
+      if (op.kind === 'issue.query') return confirmed(op, { issueId: '42', actualState: 'open' })
+      return confirmed(op, { issueId: '42' })
+    })
+    const { sessionId, groupId } = await sessionWithEdge(hub)
+    // The close succeeds and is persisted in the ledger, but the client never
+    // receives that receipt. The replay below is therefore a confirmed op.
+    const closed = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(closed.ok).toBe(true)
+    const reopened = await hub.handle(OWNER, { kind: 'issue.reopen', requestId: 'o1', commitId: 'oc1', sessionId, reason: 'more work' })
+    expect(reopened.ok).toBe(true)
+    const newAction = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'acN', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'new', expectedResult: 'new', replyRequired: true,
+    })
+    expect(newAction.ok).toBe(true)
+    const newActionId = (newAction.reply as { action: { actionId: string } }).action.actionId
+    const closeWrites = calls.filter((op) => op.kind === 'issue.close').length
+
+    const retried = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c2', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'ok' })
+    expect(retried.ok).toBe(true)
+    expect((retried.reply as { outcome: string }).outcome).toBe('conflict')
+
+    // The stale confirmed replay must not cancel work created after the reopen
+    // and must not call the external close owner again.
+    const listed = await hub.handle(OWNER, { kind: 'action.list', requestId: 'l1', sessionId })
+    const stored = (listed.reply as { actions: readonly { actionId: string; state: string }[] }).actions.find((entry) => entry.actionId === newActionId)
+    expect(stored?.state).toBe('pending')
+    const sessionList = await hub.handle(OWNER, { kind: 'issue.list', requestId: 'l2', groupId })
+    const session = (sessionList.reply as { sessions: readonly { sessionId: string; state: string }[] }).sessions.find((entry) => entry.sessionId === sessionId)
+    expect(session?.state).toBe('open')
+    expect(calls.filter((op) => op.kind === 'issue.close')).toHaveLength(closeWrites)
+  })
+
   it('R7 red: a refusal with no reason is accepted and the reason is not persisted', async () => {
     const { hub, store } = scripted((op) => confirmed(op, { issueId: '42' }))
     const { sessionId, groupId } = await sessionWithEdge(hub)

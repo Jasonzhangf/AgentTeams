@@ -843,9 +843,9 @@ export class GroupHubImpl implements GroupHub {
       this.ledger = confirmExternalOpFromRead(this.ledger, recorded.opId, read.facts as JsonValue, this.now().toISOString())
       return this.settleIssueRead(direction, input, sessionId, commitId, operation, recoveredState)
     }
-    // A close cancels queued work before the external write; an in-flight action
-    // keeps its responsibility and its stop fact.
-    if (direction === 'close') this.cancelSessionActions(sessionId, this.now().toISOString())
+    // A close may dispose queued work only after its readback applies. The
+    // settlement below owns that cancellation, so a stale replay cannot cancel
+    // an action created after a newer reopen.
     const delegated = await this.delegate(opKind, commitId, actor.agentId, {
       sessionId, commitId, opSeq: operation.opSeq, targetState,
       vikunjaProjectId: session.vikunjaProjectId, vikunjaIssueId: session.vikunjaIssueId,
