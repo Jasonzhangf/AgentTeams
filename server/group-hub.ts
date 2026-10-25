@@ -2,7 +2,7 @@ import type { JsonValue, ServiceError } from '../packages/shared/src/agent-servi
 import type { Action, ExternalOp, Group, GroupInvitation, IssueSession, IssueState, Message, MessageWatermark } from '../packages/shared/src/group-wire.ts'
 import { isTerminalActionState } from '../packages/shared/src/group-wire.ts'
 import type { ExternalOpReceipt } from './group-external-ops.ts'
-import type { GroupHub, GroupHubResult, GroupHubPush } from './relay.ts'
+import type { GroupHub, GroupHubResult, GroupHubPush, GroupIssueSweepResult } from './relay.ts'
 import { advanceWatermark, appendMessage, createMessageLog, pageMessages, restoreMessageLog, type MessageLogState } from './message-log.ts'
 import {
   activeMemberIds,
@@ -155,6 +155,7 @@ export class GroupHubImpl implements GroupHub {
   private readonly externalOpTimeoutMs: number
   private readonly executeExternalOp?: (op: ExternalOp) => Promise<ExternalOpReceipt | ServiceError>
   private readonly waiting = new Map<string, (receipt: ExternalOpReceipt) => void>()
+  private sweepInFlight?: Promise<GroupIssueSweepResult>
 
   constructor(deps: GroupHubDeps = {}) {
     this.now = deps.now ?? (() => new Date())
@@ -211,6 +212,54 @@ export class GroupHubImpl implements GroupHub {
       // frame saves must not persist the transient read.
       ops: [...this.ledger.operations.values()].filter((op) => op.kind !== 'issue.recover' && op.kind !== 'issue.query'),
     }
+  }
+
+  /**
+   * One registry-driven external-state pass. A pass is serialized with every
+   * other pass, so a slow owner cannot stack reads. Each read delegates to the
+   * session's elected read owner; a failed read stays unconfirmed instead of
+   * turning the old projection into a fresh state.
+   */
+  async sweepIssueStates(): Promise<GroupIssueSweepResult> {
+    if (this.sweepInFlight !== undefined) return await this.sweepInFlight
+    const pass = this.sweepIssueStatesOnce()
+    this.sweepInFlight = pass
+    try {
+      return await pass
+    } finally {
+      if (this.sweepInFlight === pass) this.sweepInFlight = undefined
+    }
+  }
+
+  private async sweepIssueStatesOnce(): Promise<GroupIssueSweepResult> {
+    let checked = 0
+    let changed = 0
+    const unconfirmed: string[] = []
+    for (const session of [...this.sessions.sessions.values()]) {
+      const before = this.sessions.sessions.get(session.sessionId)
+      if (before === undefined) continue
+      checked += 1
+      let read: StateRead
+      try {
+        read = await this.readExternal(before)
+      } catch {
+        unconfirmed.push(before.sessionId)
+        continue
+      }
+      if (read.status === 'unconfirmed' || read.observed === undefined) {
+        unconfirmed.push(before.sessionId)
+        continue
+      }
+      const current = this.sessions.sessions.get(before.sessionId)
+      // A command may have changed the projection while the read was in flight;
+      // only a state that is still current may move the projection.
+      if (current === undefined || current.state !== before.state) continue
+      if (read.observed === current.state) continue
+      this.convergeSessionClosed(current.groupId, current.sessionId, read.observed === 'closed', this.now().toISOString())
+      this.save()
+      changed += 1
+    }
+    return { checked, changed, unconfirmed }
   }
 
   async handle(actor: Actor, frame: unknown): Promise<GroupHubResult> {

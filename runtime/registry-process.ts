@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseDaemonConfigText, resolveDaemonIntent, type DaemonIntentV4, type RegistryDaemonIntent } from '../config/daemon-intent.ts'
-import { createRelayServer, type RelayServer } from '../server/relay.ts'
+import { createRelayServer, type GroupHub, type GroupIssueSweepResult, type RelayServer } from '../server/relay.ts'
 import { createGroupHub } from '../server/group-hub.ts'
 import { createGroupFileStore } from '../server/group-file-store.ts'
 import {
@@ -69,6 +69,72 @@ export class RegistryProcessError extends Error {
   constructor(readonly code: RegistryProcessErrorCode, message: string, cause?: unknown) {
     super(message, { cause })
     this.name = 'RegistryProcessError'
+  }
+}
+
+/**
+ * The registry daemon owns the one timer that converges issue state when no
+ * Console is open. The timer only decides when a pass runs: GroupHub keeps the
+ * issue truth, delegates each read to the elected owner and applies the shared
+ * close settlement. There is no second scheduler and no UI timer.
+ */
+export const DEFAULT_GROUP_ISSUE_SWEEP_INTERVAL_MS = 30_000
+
+export interface GroupIssueSweepSchedulerOptions {
+  readonly intervalMs?: number
+  readonly onResult?: (result: GroupIssueSweepResult) => void
+  readonly onError?: (error: unknown) => void
+}
+
+export interface GroupIssueSweepScheduler {
+  readonly intervalMs: number
+  /** Runs one serialized pass now; concurrent callers share the same pass. */
+  runOnce(): Promise<GroupIssueSweepResult | undefined>
+  /** Clears this scheduler's timer and waits for its own pass to finish. */
+  stop(): Promise<void>
+}
+
+export function startGroupIssueSweepScheduler(
+  hub: GroupHub,
+  options: GroupIssueSweepSchedulerOptions = {},
+): GroupIssueSweepScheduler {
+  const intervalMs = options.intervalMs ?? DEFAULT_GROUP_ISSUE_SWEEP_INTERVAL_MS
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    throw new RegistryProcessError('INVALID_CONFIG', 'group issue sweep interval must be a positive number')
+  }
+  const onError = options.onError ?? ((error: unknown) => {
+    console.error(`group issue sweep failed: ${error instanceof Error ? error.message : String(error)}`)
+  })
+  let inFlight: Promise<GroupIssueSweepResult | undefined> | undefined
+  let stopped = false
+  const runOnce = (): Promise<GroupIssueSweepResult | undefined> => {
+    if (inFlight !== undefined) return inFlight
+    if (stopped) return Promise.resolve(undefined)
+    let pass: Promise<GroupIssueSweepResult | undefined>
+    pass = (async () => {
+      if (hub.sweepIssueStates === undefined) throw new Error('group hub has no issue state sweep')
+      const result = await hub.sweepIssueStates()
+      options.onResult?.(result)
+      return result
+    })().catch((error: unknown) => {
+      onError(error)
+      return undefined
+    }).finally(() => {
+      if (inFlight === pass) inFlight = undefined
+    })
+    inFlight = pass
+    return pass
+  }
+  const timer = setInterval(() => { void runOnce() }, intervalMs)
+  timer.unref()
+  return {
+    intervalMs,
+    runOnce,
+    async stop() {
+      stopped = true
+      clearInterval(timer)
+      await inFlight
+    },
   }
 }
 
@@ -356,6 +422,7 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
     generation: previous?.generation ?? 1,
   } as const
   let server: RelayServer
+  let hub: GroupHub | undefined
   try {
     const credentials = await loadRegistryCredentials(plan, { env })
     const [key, cert] = await Promise.all([readFile(plan.tls.keyFile), readFile(plan.tls.certFile)])
@@ -371,12 +438,15 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
       ...options,
       // Pushes and group frames are addressed inside this one account and scope.
       groupScope: { accountId: intent.daemon.accountId, scopeId: intent.daemon.scopeId },
-      groupHub: (bridge) => createGroupHub({
-        store,
-        sendToAgent: bridge.send,
-        isOnline: bridge.isOnline,
-        externalOpTimeoutMs: 10_000,
-      }),
+      groupHub: (bridge) => {
+        hub = createGroupHub({
+          store,
+          sendToAgent: bridge.send,
+          isOnline: bridge.isOnline,
+          externalOpTimeoutMs: 10_000,
+        })
+        return hub
+      },
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -385,13 +455,17 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
   }
   await writeRegistryState(statePath, { ...base, pid: process.pid, state: 'running', url: server.url, updatedAt: new Date().toISOString() })
   console.log(`registry listening ${server.url} config=${base.configPath} pid=${process.pid}`)
+  // The registry owns the one convergence timer. GroupHub keeps the issue truth
+  // and the shared close settlement; this scheduler only holds the timer.
+  const issueSweeper = hub === undefined ? undefined : startGroupIssueSweepScheduler(hub)
   let stopping: Promise<void> | undefined
   const stop = (signal: NodeJS.Signals) => {
     if (stopping) return
-    stopping = server.close()
-      .then(async () => {
-        await writeRegistryState(statePath, { ...base, pid: process.pid, state: 'stopped', updatedAt: new Date().toISOString() })
-      })
+    stopping = (async () => {
+      await issueSweeper?.stop()
+      await server.close()
+      await writeRegistryState(statePath, { ...base, pid: process.pid, state: 'stopped', updatedAt: new Date().toISOString() })
+    })()
       .catch(error => {
         process.exitCode = 1
         console.error(`registry shutdown failed after ${signal}: ${error instanceof Error ? error.message : String(error)}`)
