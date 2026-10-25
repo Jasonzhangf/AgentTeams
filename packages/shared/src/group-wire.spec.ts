@@ -83,6 +83,34 @@ describe('group wire requests', () => {
   })
 })
 
+describe('group grant requests', () => {
+  it('parses the one frame that retargets a member role and its command edges', () => {
+    const parsed = parseGroupWireRequest(request({
+      kind: 'group.grant', requestId: 'r1', groupId: 'g1', agentId: 'agent-a', role: 'master', mastersOf: ['agent-b'],
+    }))
+    expect(parsed).toEqual({ kind: 'group.grant', requestId: 'r1', groupId: 'g1', agentId: 'agent-a', role: 'master', mastersOf: ['agent-b'] })
+  })
+
+  it('parses a grant without an edge list, so the member keeps or clears its edges', () => {
+    const parsed = parseGroupWireRequest(request({
+      kind: 'group.grant', requestId: 'r2', groupId: 'g1', agentId: 'agent-b', role: 'peer',
+    }))
+    expect(parsed).toEqual({ kind: 'group.grant', requestId: 'r2', groupId: 'g1', agentId: 'agent-b', role: 'peer' })
+  })
+
+  it('rejects a grant with an unsupported role, a repeated edge or an unknown field', () => {
+    expect(() => parseGroupWireRequest(request({
+      kind: 'group.grant', requestId: 'r3', groupId: 'g1', agentId: 'agent-a', role: 'owner',
+    }))).toThrow(/Grant role is not a supported value/)
+    expect(() => parseGroupWireRequest(request({
+      kind: 'group.grant', requestId: 'r4', groupId: 'g1', agentId: 'agent-a', role: 'master', mastersOf: ['agent-b', 'agent-b'],
+    }))).toThrow(/must not repeat/)
+    expect(() => parseGroupWireRequest(request({
+      kind: 'group.grant', requestId: 'r5', groupId: 'g1', agentId: 'agent-a', role: 'master', mastersOf: ['agent-b'], force: true,
+    }))).toThrow(/unsupported field/)
+  })
+})
+
 describe('group wire replies', () => {
   it('parses a page reply and carries an explicit gap', () => {
     const parsed = parseGroupWireReply(request({

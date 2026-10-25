@@ -230,6 +230,104 @@ describe('issue and action through the delegated owner', () => {
   })
 })
 
+describe('group grant', () => {
+  function memberEdges(reply: unknown, agentId: string): readonly string[] | undefined {
+    const group = (reply as { group: { members: { agentId: string; mastersOf: readonly string[] }[] } }).group
+    return group.members.find((member) => member.agentId === agentId)?.mastersOf
+  }
+
+  it('lets the owner open the command edge a real action then uses', async () => {
+    const withExecutor = createGroupHub({
+      isOnline: (id) => ['agent-a', 'agent-b', 'agent-c'].includes(id),
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
+      executeExternalOp: async (op) => confirmed(op, op.kind === 'action.result' ? { resultRef: 'comment-1' } : { issueId: '42' }),
+    })
+    const groupId = await withPeer(withExecutor)
+    const issue = await withExecutor.handle(OWNER, {
+      kind: 'issue.create', requestId: 'r-issue', commitId: 'ic1', groupId,
+      vikunjaProjectId: 'p1', title: 'ship', body: 'body',
+    })
+    const sessionId = (issue.reply as { session: { sessionId: string } }).session.sessionId
+    // The owner runs the group but owns no edge, so assignment to its peer is refused.
+    const before = await withExecutor.handle(OWNER, {
+      kind: 'action.create', requestId: 'r-before', commitId: 'ac0', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'review', reason: 'check the plan', expectedResult: 'a verdict', replyRequired: true,
+    })
+    expect(before.ok).toBe(false)
+    expect(before.ok ? '' : before.error.code).toBe('FORBIDDEN')
+
+    const granted = await withExecutor.handle(OWNER, {
+      kind: 'group.grant', requestId: 'r-grant', groupId, agentId: 'agent-a', role: 'master', mastersOf: ['agent-b'],
+    })
+    expect(granted.ok).toBe(true)
+    expect(memberEdges(granted.reply, 'agent-a')).toEqual(['agent-b'])
+    expect(granted.ok && granted.pushes?.map((push) => push.agentId)).toEqual(['agent-a'])
+
+    const action = await withExecutor.handle(OWNER, {
+      kind: 'action.create', requestId: 'r-after', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'review', reason: 'check the plan', expectedResult: 'a verdict', replyRequired: true,
+    })
+    expect(action.ok).toBe(true)
+    const actionId = (action.reply as { action: { actionId: string } }).action.actionId
+    const submitted = await withExecutor.handle(PEER, {
+      kind: 'action.submit', requestId: 'r-submit', resultCommitId: 'rc1', actionId, resultBody: 'reviewed',
+    })
+    expect(submitted.ok).toBe(true)
+    expect((submitted.reply as { action: { state: string } }).action.state).toBe('completed')
+
+    const intruder = await withExecutor.handle(PEER, {
+      kind: 'group.grant', requestId: 'r-intruder', groupId, agentId: 'agent-b', role: 'master', mastersOf: ['agent-a'],
+    })
+    expect(intruder.ok).toBe(false)
+    expect(intruder.ok ? '' : intruder.error.code).toBe('FORBIDDEN')
+  })
+
+  it('replaces the command edges of a member instead of appending to them', async () => {
+    const { hub, store, groupId } = await groupWithPeer()
+    await addMaster(hub, groupId)
+    // The invite already gave agent-c the edge to agent-b; the grant replaces it.
+    const first = await hub.handle(OWNER, {
+      kind: 'group.grant', requestId: 'r1', groupId, agentId: 'agent-c', role: 'master', mastersOf: ['agent-b', 'agent-a'],
+    })
+    expect(first.ok).toBe(true)
+    expect(memberEdges(first.reply, 'agent-c')).toEqual(['agent-b', 'agent-a'])
+    const narrower = await hub.handle(OWNER, {
+      kind: 'group.grant', requestId: 'r2', groupId, agentId: 'agent-c', role: 'master', mastersOf: ['agent-b'],
+    })
+    expect(memberEdges(narrower.reply, 'agent-c')).toEqual(['agent-b'])
+    // The accepted snapshot carries the replaced edges, not a union of every grant.
+    expect(store.snapshots[store.snapshots.length - 1]?.groups?.[0]?.members.find((member) => member.agentId === 'agent-c')?.mastersOf)
+      .toEqual(['agent-b'])
+    // An omitted list keeps a master's edges; an explicit empty list clears them.
+    const kept = await hub.handle(OWNER, { kind: 'group.grant', requestId: 'r3', groupId, agentId: 'agent-c', role: 'master' })
+    expect(memberEdges(kept.reply, 'agent-c')).toEqual(['agent-b'])
+    const cleared = await hub.handle(OWNER, {
+      kind: 'group.grant', requestId: 'r4', groupId, agentId: 'agent-c', role: 'master', mastersOf: [],
+    })
+    expect(memberEdges(cleared.reply, 'agent-c')).toEqual([])
+  })
+
+  it('keeps the registry refusals typed: peer edges and absent members are bad input', async () => {
+    const { hub, groupId } = await groupWithPeer()
+    const peerWithEdges = await hub.handle(OWNER, {
+      kind: 'group.grant', requestId: 'r1', groupId, agentId: 'agent-b', role: 'peer', mastersOf: ['agent-a'],
+    })
+    expect(peerWithEdges.ok).toBe(false)
+    expect(peerWithEdges.ok ? '' : peerWithEdges.error.code).toBe('INVALID_INPUT')
+    const absent = await hub.handle(OWNER, {
+      kind: 'group.grant', requestId: 'r2', groupId, agentId: 'agent-z', role: 'master', mastersOf: [],
+    })
+    expect(absent.ok).toBe(false)
+    expect(absent.ok ? '' : absent.error.code).toBe('INVALID_INPUT')
+    const unknownGroup = await hub.handle(OWNER, {
+      kind: 'group.grant', requestId: 'r3', groupId: 'nope', agentId: 'agent-b', role: 'peer',
+    })
+    expect(unknownGroup.ok).toBe(false)
+    expect(unknownGroup.ok ? '' : unknownGroup.error.code).toBe('INVALID_INPUT')
+  })
+})
+
 describe('persistence and restart', () => {
   it('reloads the last snapshot so a restart keeps groups and messages', async () => {
     const store = memoryStore()

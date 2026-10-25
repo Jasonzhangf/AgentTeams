@@ -127,6 +127,7 @@ export interface ExternalOp {
 export type GroupWireRequest =
   | { readonly kind: 'group.create'; readonly requestId: string; readonly name: string }
   | { readonly kind: 'group.invite'; readonly requestId: string; readonly groupId: string; readonly agentId: string; readonly role: AgentRole; readonly mastersOf?: readonly string[] }
+  | { readonly kind: 'group.grant'; readonly requestId: string; readonly groupId: string; readonly agentId: string; readonly role: AgentRole; readonly mastersOf?: readonly string[] }
   | { readonly kind: 'group.respond'; readonly requestId: string; readonly groupId: string; readonly accept: boolean }
   | { readonly kind: 'group.leave'; readonly requestId: string; readonly groupId: string }
   | { readonly kind: 'group.list'; readonly requestId: string }
@@ -357,6 +358,16 @@ export function parseGroupWireRequest(textValue: string): GroupWireRequest {
         agentId: text(frame.agentId, 'Invitee id'),
         role: pick(frame.role, roles, 'Invite role'),
         ...(frame.mastersOf === undefined ? {} : { mastersOf: texts(frame.mastersOf, 'Invite mastersOf') }),
+      }
+    }
+    case 'group.grant': {
+      assertEnvelopeKeys(frame, keys('groupId', 'agentId', 'role', 'mastersOf'), 'Group grant request')
+      return {
+        kind, requestId,
+        groupId: text(frame.groupId, 'Group id'),
+        agentId: text(frame.agentId, 'Grant target id'),
+        role: pick(frame.role, roles, 'Grant role'),
+        ...(frame.mastersOf === undefined ? {} : { mastersOf: texts(frame.mastersOf, 'Grant mastersOf') }),
       }
     }
     case 'group.respond': {

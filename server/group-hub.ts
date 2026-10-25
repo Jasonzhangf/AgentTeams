@@ -10,6 +10,7 @@ import {
   canManageGroup,
   canRequest,
   createGroupRegistry,
+  grantRole,
   groupOf,
   inviteMember,
   leaveGroup,
@@ -202,6 +203,7 @@ export class GroupHubImpl implements GroupHub {
         case 'group.list': return ok({ kind: 'group.list', requestId: text(input.requestId, 'requestId'), groups: listGroups(this.registry, actor.agentId) })
         case 'group.create': return this.createGroup(actor, input)
         case 'group.invite': return this.invite(actor, input)
+        case 'group.grant': return this.grant(actor, input)
         case 'group.respond': return this.respond(actor, input)
         case 'group.leave': return this.leave(actor, input)
         case 'message.send': return this.sendMessage(actor, input)
@@ -321,6 +323,32 @@ export class GroupHubImpl implements GroupHub {
     return ok({ kind: 'group.invited', requestId: text(input.requestId, 'requestId'), invitation }, [
       { agentId, frame: { kind: 'group.invited', requestId: text(input.requestId, 'requestId'), invitation } },
     ])
+  }
+
+  /**
+   * The owner retargets one member's role and command edges. This is the only
+   * frame that changes `mastersOf`, and those edges are the sole authority for a
+   * master's assignment and a peer's request, so a group a user creates is
+   * actually usable. Ownership itself never creates an edge.
+   */
+  private grant(actor: Actor, input: Record<string, unknown>): GroupHubResult {
+    const groupId = text(input.groupId, 'groupId')
+    const agentId = text(input.agentId, 'agentId')
+    const role = input.role === 'master' || input.role === 'peer' ? input.role : undefined
+    if (!role) return err('INVALID_INPUT', 'role must be master or peer')
+    const group = groupOf(this.registry, groupId)
+    if (!canManageGroup(group, actor.agentId)) return err('FORBIDDEN', `${actor.agentId} cannot manage group ${groupId}`)
+    this.registry = grantRole(this.registry, {
+      groupId, agentId, role,
+      ...(Array.isArray(input.mastersOf) ? { mastersOf: input.mastersOf.filter((id): id is string => typeof id === 'string') } : {}),
+      grantedByAgentId: actor.agentId,
+    }, this.now().toISOString())
+    this.save()
+    const updated = groupOf(this.registry, groupId)
+    // The changed member holds the new edges and the owner holds the group view.
+    const recipients = [...new Set([updated.ownerAgentId, agentId])]
+    return ok({ kind: 'group.member', requestId: text(input.requestId, 'requestId'), group: updated },
+      recipients.map((recipient) => ({ agentId: recipient, frame: { kind: 'group.changed', group: updated } })))
   }
 
   private respond(actor: Actor, input: Record<string, unknown>): GroupHubResult {
