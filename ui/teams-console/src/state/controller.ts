@@ -1,7 +1,7 @@
 import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleProviderView, HistoryPage, HistoryQuery, JsonValue, TeamsConsoleLiveClientV1 } from '../client/protocol.ts'
 import { commandFailureMessage, formatServiceError } from '../client/protocol.ts'
 import type { GroupRequestOutcome, GroupRequestSender } from '../client/group-client.ts'
-import type { GroupWireRequest } from '../../../../packages/shared/src/group-wire.ts'
+import type { GroupWireReply, GroupWireRequest } from '../../../../packages/shared/src/group-wire.ts'
 import {
   applyAccess, applyRefusal, applyReply, applyUnknown, defaultActor, groupActors,
   contextKeyOf, initialGroupWorkspaceState, intentKeyOf, isReadFrame,
@@ -89,6 +89,7 @@ const clearedGroupContent = {
   issueListStatus: 'idle',
   actions: [],
   actionStatus: 'idle',
+  invitations: [],
   composer: '',
   confirm: null,
   readError: undefined,
@@ -97,6 +98,9 @@ const clearedGroupContent = {
   commits: {},
   outcome: { kind: 'idle' as const },
 } satisfies Partial<GroupWorkspaceState>
+
+/** Period between quiet background `group.list` re-reads on the visible groups page. */
+const GROUP_LIST_POLL_INTERVAL_MS = 4000
 
 /**
  * One write result kept under the context that produced it. `retryable` keeps the original
@@ -198,6 +202,8 @@ export class TeamsConsoleController {
 
   private observationController?: ProjectionObservationController
   private readonly timers = new Set<ReturnType<typeof setTimeout>>()
+  private groupPollTimer: ReturnType<typeof setTimeout> | undefined
+  private groupPollInFlight = false
   /**
    * Bumped on every identity or group switch. A reply carries the generation it was asked
    * in, so an answer that lands after the user moved on is dropped instead of being applied
@@ -248,6 +254,7 @@ export class TeamsConsoleController {
     this.observationController?.stop()
     for (const timer of this.timers) clearTimeout(timer)
     this.timers.clear()
+    this.stopGroupPoll()
     this.observationController = undefined
   }
 
@@ -308,10 +315,12 @@ export class TeamsConsoleController {
   openConsole(): void {
     this.update({ open: true, notice: null })
     if (this.state.projection === null && this.state.status !== 'loading') void this.refresh()
+    this.syncGroupPoll()
   }
 
   closeConsole(): void {
     this.update({ open: false, drawer: null, drawerStack: [], drawerExpanded: false, notice: null, error: null })
+    this.stopGroupPoll()
   }
 
   selectEntry(entry: ConsoleEntry): void {
@@ -323,6 +332,7 @@ export class TeamsConsoleController {
     writePage(this.persistence, page)
     this.ensureHistoryLoaded(page)
     this.ensureGroupsLoaded(page)
+    this.syncGroupPoll()
   }
 
   /**
@@ -908,6 +918,7 @@ export class TeamsConsoleController {
       groups: [],
       listStatus: 'idle',
     }))
+    this.syncGroupPoll()
     // Choosing the actor is the only action available in that phase, so it must lead
     // straight to the real group list rather than to another empty screen. The previous
     // actor's in-flight list is already inert, so it must not block this read.
@@ -920,6 +931,85 @@ export class TeamsConsoleController {
     this.syncGroupActors()
     if (this.state.group.listStatus !== 'idle') return
     void this.loadGroups()
+  }
+
+  /**
+   * A quiet background re-read of the group list while the groups page is visible.
+   * It never starts a follow-up page/issue/action read, never shows a loading phase and
+   * never settles a parked write: only the merged owner list is applied, and only when
+   * the membership/list actually changed.
+   */
+  private syncGroupPoll(): void {
+    const canPoll = this.groupClient !== undefined
+      && this.state.open
+      && this.state.page === 'groups'
+      && this.state.group.actorId !== undefined
+    if (!canPoll) {
+      this.stopGroupPoll()
+      return
+    }
+    if (this.groupPollTimer !== undefined || this.groupPollInFlight) return
+    const timer = setTimeout(() => {
+      this.timers.delete(timer)
+      if (this.groupPollTimer === timer) this.groupPollTimer = undefined
+      void this.pollGroups()
+    }, GROUP_LIST_POLL_INTERVAL_MS)
+    this.groupPollTimer = timer
+    this.scheduleTimer(timer)
+  }
+
+  private stopGroupPoll(): void {
+    if (this.groupPollTimer === undefined) return
+    clearTimeout(this.groupPollTimer)
+    this.timers.delete(this.groupPollTimer)
+    this.groupPollTimer = undefined
+  }
+
+  private async pollGroups(): Promise<void> {
+    const client = this.groupClient
+    const actorId = this.state.group.actorId
+    if (client === undefined || actorId === undefined || !this.state.open || this.state.page !== 'groups') {
+      this.stopGroupPoll()
+      return
+    }
+    if (this.groupPollInFlight || this.state.group.listStatus === 'loading') {
+      this.syncGroupPoll()
+      return
+    }
+    this.groupPollInFlight = true
+    const generation = this.groupGeneration
+    let outcome: GroupRequestOutcome
+    try {
+      outcome = await client.requestGroup(actorId, { kind: 'group.list', requestId: this.nextRequestId() })
+    } catch {
+      outcome = { kind: 'transport', message: 'Background group list read failed' }
+    } finally {
+      this.groupPollInFlight = false
+    }
+    // A late answer from before an identity/group switch is inert here, exactly like every
+    // other owner reply; the current view keeps its own content and parked results.
+    if (generation === this.groupGeneration
+      && this.state.open
+      && this.state.page === 'groups'
+      && this.state.group.actorId === actorId
+      && outcome.kind === 'reply'
+      && outcome.reply.kind === 'group.list') {
+      this.mergePolledGroups(outcome.reply)
+    }
+    this.syncGroupPoll()
+  }
+
+  /** Apply a polled list only when it changes something; identical answers do not re-render. */
+  private mergePolledGroups(reply: Extract<GroupWireReply, { readonly kind: 'group.list' }>): void {
+    const current = this.state.group
+    const next = applyReply(current, reply, 'group.list')
+    const changed = current.access.kind !== 'ready'
+      || current.listStatus !== next.listStatus
+      || current.selectedGroupId !== next.selectedGroupId
+      || current.groups.length !== reply.groups.length
+      || JSON.stringify(current.groups) !== JSON.stringify(reply.groups)
+    if (!changed) return
+    this.updateGroup(() => next)
   }
 
   async loadGroups(): Promise<boolean> {
@@ -949,6 +1039,7 @@ export class TeamsConsoleController {
       this.switchGroupContext(state => ({ ...state, ...clearedGroupContent }), { composerAlreadySaved: true })
     }
     await this.loadSelectedGroup()
+    this.syncGroupPoll()
     return true
   }
 
@@ -977,11 +1068,17 @@ export class TeamsConsoleController {
       selectedGroupId: groupId,
     }))
     await this.loadSelectedGroup()
+    this.syncGroupPoll()
     return true
   }
 
   async refreshGroup(): Promise<boolean> {
     return this.loadGroups()
+  }
+
+  /** The narrow manage panel is a UI preference, not a group fact; nothing else changes. */
+  toggleGroupManageOpen(open: boolean): void {
+    this.updateGroup(state => ({ ...state, manageOpen: open }))
   }
 
   setGroupComposer(text: string): void {

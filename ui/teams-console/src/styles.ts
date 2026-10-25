@@ -855,6 +855,61 @@ export const teamsStyles = String.raw`
   min-width: 0;
 }
 
+.teams-group-mobile {
+  display: none;
+}
+
+.teams-group-mobile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.teams-group-mobile-field .teams-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.teams-group-manage {
+  display: none;
+}
+
+.teams-group-manage[open] {
+  display: flex;
+}
+
+.teams-group-manage > .teams-group-column,
+.teams-group-manage > .teams-group-invite {
+  border: 1px solid var(--teams-border);
+  border-radius: 10px;
+  background: var(--teams-surface-raised);
+}
+
+.teams-group-invitations {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.teams-group-invitations li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--teams-border);
+  border-radius: 9px;
+  background: var(--teams-surface);
+}
+
+.teams-group-invitations span {
+  overflow-wrap: anywhere;
+}
+
 .teams-group-actor-pending {
   min-width: 0;
   padding: 12px;
@@ -1024,17 +1079,85 @@ export const teamsStyles = String.raw`
 }
 
 @media (max-width: 780px) {
+  .teams-groups {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    max-height: calc(100dvh - 210px);
+  }
+
   .teams-group-layout {
     grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .teams-group-layout > .teams-group-column {
+    display: none;
+  }
+
+  .teams-group-mobile {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--teams-border);
+    border-radius: 10px;
+    background: var(--teams-surface-raised);
+  }
+
+  .teams-group-manage {
+    display: block;
+    grid-column: 1 / -1;
+    min-width: 0;
+    gap: 12px;
+  }
+
+  .teams-group-manage > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--teams-border);
+    border-radius: 10px;
+    background: var(--teams-surface-raised);
+    color: var(--teams-ink);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .teams-group-manage > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .teams-group-manage > summary::after {
+    content: "+";
+    color: var(--teams-muted);
+  }
+
+  .teams-group-manage[open] > summary::after {
+    content: "-";
+  }
+
+  .teams-group-manage[open] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .teams-group-detail {
+    gap: 10px;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .teams-group-composer {
+    position: sticky;
+    bottom: 0;
   }
 
   .teams-group-form,
   .teams-group-action-row {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .teams-group-composer {
-    position: static;
   }
 }
 

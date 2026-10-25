@@ -1,4 +1,4 @@
-import type { Action, Group, GroupWireReply, GroupWireRequest, IssueSession, Message } from '../../../../packages/shared/src/group-wire.ts'
+import type { Action, Group, GroupInvitation, GroupWireReply, GroupWireRequest, IssueSession, Message } from '../../../../packages/shared/src/group-wire.ts'
 import type { GroupAccessState } from '../client/group-client.ts'
 
 /**
@@ -132,6 +132,8 @@ export interface GroupWorkspaceState {
   readonly listStatus: GroupSectionStatus
   readonly groups: readonly Group[]
   readonly selectedGroupId?: string
+  /** Owner-declared invitations, kept with their wire state; never a local "joined" guess. */
+  readonly invitations: readonly GroupInvitation[]
   readonly messageStatus: GroupSectionStatus
   readonly messages: readonly Message[]
   readonly messageHasMore: boolean
@@ -144,6 +146,8 @@ export interface GroupWorkspaceState {
   readonly actions: readonly Action[]
   readonly actionStatus: GroupSectionStatus
   readonly composer: string
+  /** Whether the narrow-screen manage/create/invite panel is expanded. */
+  readonly manageOpen: boolean
   /** Agents this Console may act as for group traffic; `control` is never an actor. */
   readonly actors: readonly string[]
   readonly actorId?: string
@@ -163,6 +167,7 @@ export const initialGroupWorkspaceState: GroupWorkspaceState = {
   access: { kind: 'ready' },
   listStatus: 'idle',
   groups: [],
+  invitations: [],
   messageStatus: 'idle',
   messages: [],
   messageHasMore: false,
@@ -173,6 +178,7 @@ export const initialGroupWorkspaceState: GroupWorkspaceState = {
   actions: [],
   actionStatus: 'idle',
   composer: '',
+  manageOpen: false,
   actors: [],
   mutation: null,
   retryable: null,
@@ -225,6 +231,15 @@ function upsertGroup(groups: readonly Group[], group: Group): readonly Group[] {
   if (index < 0) return [...groups, group]
   const next = [...groups]
   next[index] = group
+  return next
+}
+
+/** One invitation per group/agent; the newest owner answer replaces the older state. */
+function upsertInvitation(invitations: readonly GroupInvitation[], invitation: GroupInvitation): readonly GroupInvitation[] {
+  const index = invitations.findIndex(candidate => candidate.groupId === invitation.groupId && candidate.agentId === invitation.agentId)
+  if (index < 0) return [...invitations, invitation]
+  const next = [...invitations]
+  next[index] = invitation
   return next
 }
 
@@ -348,7 +363,13 @@ function applyReplyKind(state: GroupWorkspaceState, reply: GroupWireReply, origi
       return { ...state, groups: upsertGroup(state.groups, reply.group), listStatus: 'ready' }
     }
     case 'group.invited': {
-      return settles(state, origin) ? succeeded(state, {}, 'group.invite') : state
+      // The reply carries the owner's invitation state. Showing it is not a local success:
+      // the agent is only a member after a later group.list names it as one.
+      const patched: GroupWorkspaceState = {
+        ...state,
+        invitations: upsertInvitation(state.invitations, reply.invitation),
+      }
+      return settles(state, origin) ? succeeded(patched, {}, 'group.invite') : patched
     }
     case 'message.page': {
       return {

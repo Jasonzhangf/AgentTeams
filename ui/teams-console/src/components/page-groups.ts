@@ -160,6 +160,67 @@ function renderGroupList(state: GroupWorkspaceState, controller: TeamsConsoleCon
   return column
 }
 
+/**
+ * Narrow-screen switchers. Both selects drive the same controller paths as the desktop
+ * list; they never keep a second navigation ledger.
+ */
+function renderMobileSwitchers(state: GroupWorkspaceState, controller: TeamsConsoleController, t: Record<MessageKey, string>): HTMLElement {
+  const bar = element('div', 'teams-group-mobile')
+  bar.dataset.groupMobile = 'true'
+  const groupField = element('label', 'teams-group-mobile-field')
+  const groupLabel = element('span', 'teams-group-label')
+  groupLabel.textContent = t.groupList
+  const groupSelect = element('select', 'teams-select')
+  groupSelect.dataset.groupMobileGroup = 'true'
+  groupSelect.setAttribute('aria-label', t.groupList)
+  for (const group of state.groups) {
+    const option = element('option')
+    option.value = group.groupId
+    option.textContent = group.name
+    if (group.groupId === state.selectedGroupId) option.selected = true
+    append(groupSelect, option)
+  }
+  groupSelect.addEventListener('change', () => { void controller.selectGroup(groupSelect.value) })
+  append(groupField, groupLabel, groupSelect)
+  append(bar, groupField)
+
+  const issueField = element('label', 'teams-group-mobile-field')
+  const issueLabel = element('span', 'teams-group-label')
+  issueLabel.textContent = t.groupIssue
+  const issueSelect = element('select', 'teams-select')
+  issueSelect.dataset.groupMobileIssue = 'true'
+  issueSelect.setAttribute('aria-label', t.groupIssue)
+  // Every option value is a real `sessionId`; the open issue stays in the list even while
+  // the issue list itself is still being read, so the control never shows a fake entry.
+  const sessions = state.issue !== null && !state.issues.some(session => session.sessionId === state.issue!.sessionId)
+    ? [...state.issues, state.issue]
+    : state.issues
+  for (const session of sessions) {
+    const option = element('option')
+    option.value = session.sessionId
+    option.textContent = `${session.state} · ${session.vikunjaProjectId}/${session.vikunjaIssueId}`
+    if (state.issue?.sessionId === session.sessionId) option.selected = true
+    append(issueSelect, option)
+  }
+  issueSelect.disabled = sessions.length === 0 || state.mutation !== null
+  issueSelect.addEventListener('change', () => { void controller.openIssue(issueSelect.value) })
+  append(issueField, issueLabel, issueSelect)
+  append(bar, issueField)
+  return bar
+}
+
+function renderMobileManage(state: GroupWorkspaceState, controller: TeamsConsoleController, t: Record<MessageKey, string>): HTMLElement {
+  const details = element('details', 'teams-group-manage')
+  details.dataset.groupManagePanel = 'true'
+  if (state.manageOpen) details.open = true
+  const summary = element('summary')
+  summary.textContent = t.groupManage
+  summary.dataset.groupManageToggle = 'true'
+  summary.addEventListener('toggle', () => { controller.toggleGroupManageOpen(details.open) })
+  append(details, summary, renderGroupList(state, controller, t), renderIssuePanel(state, controller, t), renderActionPanel(state, controller, t), renderInvite(state, controller, t))
+  return details
+}
+
 function renderMessages(state: GroupWorkspaceState, t: Record<MessageKey, string>): HTMLElement {
   const section = element('section', 'teams-group-messages')
   section.dataset.groupMessages = 'true'
@@ -197,6 +258,7 @@ function renderComposer(state: GroupWorkspaceState, controller: TeamsConsoleCont
   const area = element('textarea', 'teams-textarea teams-group-composer-input')
   area.rows = 3
   area.dataset.groupComposerInput = 'true'
+  area.dataset.focusKey = 'group:composer'
   area.placeholder = t.groupComposer
   area.value = state.composer
   area.addEventListener('input', () => { controller.setGroupComposer(area.value) })
@@ -453,6 +515,28 @@ function renderInvite(state: GroupWorkspaceState, controller: TeamsConsoleContro
   const section = element('section', 'teams-group-invite')
   section.dataset.groupInvite = 'true'
   const selected = state.groups.find(group => group.groupId === state.selectedGroupId)
+  const invitationLabel: Record<string, MessageKey> = {
+    pending: 'groupInvitationPending',
+    accepted: 'groupInvitationAccepted',
+    declined: 'groupInvitationDeclined',
+    revoked: 'groupInvitationRevoked',
+  }
+  const invitationRows = state.invitations.filter(invitation =>
+    !(selected?.members.some(member => member.agentId === invitation.agentId) ?? false))
+  if (invitationRows.length > 0) {
+    const invitationList = element('ul', 'teams-group-invitations')
+    invitationList.dataset.groupInvitationList = 'true'
+    for (const invitation of invitationRows) {
+      const item = element('li')
+      item.dataset.groupInvitation = invitation.agentId
+      item.dataset.groupInvitationState = invitation.state
+      const caption = element('span')
+      caption.textContent = `${invitation.agentId} · ${invitation.role} · ${t[invitationLabel[invitation.state] ?? 'groupInvitationPending']}`
+      append(item, caption)
+      append(invitationList, item)
+    }
+    append(section, invitationList)
+  }
   if (selected !== undefined) {
     const members = element('ul', 'teams-group-members')
     members.dataset.groupMemberList = selected.groupId
@@ -577,6 +661,9 @@ function renderConfirm(state: GroupWorkspaceState, controller: TeamsConsoleContr
 
 export function renderGroups(controller: TeamsConsoleController, state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
   const group = state.group
+  const narrow = typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 780px)').matches
   const root = element('section', 'teams-groups')
   root.dataset.groupWorkspace = 'true'
   root.dataset.groupPhase = groupPhase(group)
@@ -627,15 +714,22 @@ export function renderGroups(controller: TeamsConsoleController, state: ConsoleS
   }
 
   if (groupPhase(group) === 'empty') {
+    if (narrow) {
+      append(root, renderMobileSwitchers(group, controller, t))
+      append(root, renderMobileManage(group, controller, t))
+    }
     const empty = element('div', 'teams-empty')
     empty.dataset.groupEmpty = 'true'
     empty.textContent = t.groupPhaseEmpty
-    append(root, empty, renderGroupList(group, controller, t))
+    append(root, empty)
+    if (!narrow) append(root, renderGroupList(group, controller, t))
     return root
   }
 
   const layout = element('div', 'teams-group-layout')
-  append(layout, renderGroupList(group, controller, t))
+  if (!narrow) append(layout, renderGroupList(group, controller, t))
+  if (narrow) append(layout, renderMobileSwitchers(group, controller, t))
+  if (narrow) append(layout, renderMobileManage(group, controller, t))
 
   const detail = element('div', 'teams-group-detail')
   detail.dataset.groupDetail = 'true'
@@ -648,9 +742,11 @@ export function renderGroups(controller: TeamsConsoleController, state: ConsoleS
   append(detail, header)
   append(detail, renderMessages(group, t))
   append(detail, renderComposer(group, controller, t))
-  append(detail, renderIssuePanel(group, controller, t))
-  append(detail, renderActionPanel(group, controller, t))
-  append(detail, renderInvite(group, controller, t))
+  if (!narrow) {
+    append(detail, renderIssuePanel(group, controller, t))
+    append(detail, renderActionPanel(group, controller, t))
+    append(detail, renderInvite(group, controller, t))
+  }
   append(layout, detail)
   append(root, layout)
 

@@ -87,6 +87,7 @@ function groupState(overrides: Record<string, unknown> = {}) {
     listStatus: 'ready',
     groups: [group],
     selectedGroupId: 'g1',
+    invitations: [],
     messageStatus: 'ready',
     messages: [message],
     messageHasMore: false,
@@ -97,6 +98,7 @@ function groupState(overrides: Record<string, unknown> = {}) {
     actions: [],
     actionStatus: 'empty',
     composer: '',
+    manageOpen: false,
     actors: ['agent-a'],
     actorId: 'agent-a',
     mutation: null,
@@ -408,6 +410,11 @@ ${controllerScript}
       && composerRect.left >= -1)
     const longBody = root.querySelector('[data-group-message="m1"] .teams-group-message-body')
     document.body.dataset.messageWraps = String(longBody !== null && longBody.getBoundingClientRect().width <= Math.ceil(frameWidth) + 1)
+    const list = root.querySelector('[data-group-list]')
+    const detail = root.querySelector('[data-group-detail]')
+    document.body.dataset.desktopTwoColumn = String(
+      list !== null && detail !== null
+      && list.getBoundingClientRect().right <= detail.getBoundingClientRect().left + 1)
   </script>
 </body></html>`
 
@@ -428,11 +435,108 @@ function measureLayout(windowSize: string, extraFlags: readonly string[] = []): 
       composerPresent: read('data-composer-present'),
       composerInputVisible: read('data-composer-input-visible'),
       messageWraps: read('data-message-wraps'),
+      desktopTwoColumn: read('data-desktop-two-column'),
     }
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
 }
+
+/**
+ * A real full-page mobile load. The shipped overlay is fixed to the viewport and nothing is
+ * confined to a frame, so the composer rect is measured against the actual window the owner
+ * checks: visible before any scroll and never below `window.innerHeight`.
+ */
+const fullMobilePage = `<!doctype html>
+<html><head><style></style></head><body>
+  <div id="root" class="teams-root"></div>
+  <script>
+${script}
+${controllerScript}
+    document.querySelector('style').textContent = ${JSON.stringify(teamsStyles)}
+    STATE = ${JSON.stringify(state({ messages: Array.from({ length: 8 }, (_, index) => ({
+      messageId: `m${index}`,
+      commitId: `c${index}`,
+      sequence: index + 1,
+      groupId: 'g1',
+      fromAgentId: 'agent-a',
+      targetAgentIds: [],
+      replyRequired: false,
+      body: 'A long message body that keeps the detail tall enough for the composer to need a fixed bottom position at a narrow viewport width. '.repeat(3),
+      sentAt: `2026-10-20T00:00:0${index}.000Z`,
+    })), messageStatus: 'ready', issue: issueSession, issues: [issueSession], issueListStatus: 'ready', actions: [{ actionId: 'a1', commitId: 'c1', sessionId: 's1', initiatorAgentId: 'agent-a', assigneeAgentId: 'agent-a', kind: 'reply', reason: 'review', expectedResult: 'answer', replyRequired: false, state: 'pending', createdAt: '2026-10-20T00:00:00.000Z' }], actionStatus: 'ready' }))}
+    renderConsole(document.getElementById('root'), controller)
+    const input = document.querySelector('[data-group-composer-input]')
+    const rect = input === null ? null : input.getBoundingClientRect()
+    const groupSelect = document.querySelector('[data-group-mobile-group]')
+    const issueSelect = document.querySelector('[data-group-mobile-issue]')
+    const messagesNode = document.querySelector('[data-group-messages]')
+    const messagesRect = messagesNode === null ? null : messagesNode.getBoundingClientRect()
+    document.body.dataset.viewportWidth = String(window.innerWidth)
+    document.body.dataset.scrollOverflow = String(document.documentElement.scrollWidth - window.innerWidth)
+    document.body.dataset.composerVisible = String(
+      rect !== null && rect.width > 0 && rect.height > 0 && rect.bottom <= window.innerHeight + 1)
+    document.body.dataset.groupOptions = groupSelect === null ? '' : [...groupSelect.options].map(option => option.value).join(',')
+    document.body.dataset.issueOptions = issueSelect === null ? '' : [...issueSelect.options].map(option => option.value).join(',')
+    document.body.dataset.messagesVisible = String(
+      messagesRect !== null && messagesRect.top < window.innerHeight && messagesRect.bottom > 0)
+  </script>
+</body></html>`
+
+function measureFullMobile(windowSize: string): Record<string, string> {
+  const directory = mkdtempSync(join(tmpdir(), 'teams-console-groups-mobile-'))
+  try {
+    const file = join(directory, 'mobile.html')
+    writeFileSync(file, fullMobilePage)
+    const output = runChrome(file, windowSize)
+    const match = /<body([^>]*)>/.exec(output)
+    const attributes = match?.[1] ?? ''
+    const read = (name: string): string => new RegExp(`${name}="([^"]*)"`).exec(attributes)?.[1] ?? ''
+    return {
+      viewportWidth: read('data-viewport-width'),
+      scrollOverflow: read('data-scroll-overflow'),
+      composerVisible: read('data-composer-visible'),
+      groupOptions: read('data-group-options'),
+      issueOptions: read('data-issue-options'),
+      messagesVisible: read('data-messages-visible'),
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+/**
+ * The member area renders invitation rows from the validated owner reply and drops the
+ * invitation row once the owner's list proves the invited agent is an active member.
+ */
+const invitationPage = `<!doctype html>
+<html><body>
+  <div id="invited"></div>
+  <div id="joined"></div>
+  <div id="declined"></div>
+  <script>
+${script}
+${controllerScript}
+    const render = (id, next) => {
+      STATE = next
+      renderConsole(document.getElementById(id), controller)
+      return document.getElementById(id)
+    }
+    const invited = render('invited', ${JSON.stringify(state({ invitations: [{ groupId: 'g1', agentId: 'agent-b', role: 'peer', mastersOf: [], invitedByAgentId: 'agent-a', state: 'pending', createdAt: '2026-10-20T00:00:00.000Z' }] }))})
+    const joined = render('joined', ${JSON.stringify(state({ invitations: [{ groupId: 'g1', agentId: 'agent-b', role: 'peer', mastersOf: [], invitedByAgentId: 'agent-a', state: 'pending', createdAt: '2026-10-20T00:00:00.000Z' }], groups: [{ ...group, members: [...group.members, { agentId: 'agent-b', role: 'peer', mastersOf: [], intervals: [{ joinedAt: '2026-10-20T00:01:00.000Z' }] }] }] }))})
+    const declined = render('declined', ${JSON.stringify(state({ invitations: [{ groupId: 'g1', agentId: 'agent-b', role: 'peer', mastersOf: [], invitedByAgentId: 'agent-a', state: 'declined', createdAt: '2026-10-20T00:00:00.000Z' }] }))})
+    document.body.dataset.invitationPending = String(
+      invited.querySelector('[data-group-invitation="agent-b"]')?.getAttribute('data-group-invitation-state') === 'pending')
+    document.body.dataset.invitationPendingNoMember = String(
+      invited.querySelector('[data-group-member="agent-b"]') === null)
+    document.body.dataset.invitationJoinedMember = String(
+      joined.querySelector('[data-group-member="agent-b"]') !== null)
+    document.body.dataset.invitationJoinedHidden = String(
+      joined.querySelector('[data-group-invitation="agent-b"]') === null)
+    document.body.dataset.invitationDeclined = String(
+      declined.querySelector('[data-group-invitation="agent-b"]')?.getAttribute('data-group-invitation-state') === 'declined')
+  </script>
+</body></html>`
 
 describe('group workspace DOM contract in a real DOM', () => {
   it('keeps a narrow 390px viewport free of horizontal overflow with a visible composer', { timeout: 30_000 }, () => {
@@ -449,7 +553,37 @@ describe('group workspace DOM contract in a real DOM', () => {
     const desktop = measureLayout('1280,900')
     expect(desktop.composerInputVisible).toBe('true')
     expect(desktop.noHorizontalOverflow).toBe('true')
+    expect(desktop.desktopTwoColumn).toBe('true')
     expect(Number(desktop.documentViewportWidth)).toBeGreaterThan(390)
+  })
+
+  it('shows the composer above the fold on a real 390x844 full-page load without scrolling', { timeout: 30_000 }, () => {
+    const mobile = measureFullMobile('390,844')
+    // Headless Chrome clamps the requested 390px window to a 500px minimum, so accept the
+    // actual narrow viewport while the load still uses `--window-size=390,844`.
+    expect(Number(mobile.viewportWidth)).toBeLessThanOrEqual(780)
+    expect(mobile.composerVisible).toBe('true')
+    expect(Number(mobile.scrollOverflow)).toBeLessThanOrEqual(0)
+    expect(mobile.groupOptions).toBe('g1')
+    expect(mobile.issueOptions).toBe('s1')
+    expect(mobile.messagesVisible).toBe('true')
+  })
+
+  it('renders a pending invitation without a member and hides it once the member joined', { timeout: 30_000 }, () => {
+    const directory = mkdtempSync(join(tmpdir(), 'teams-console-invitation-'))
+    onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })
+    const file = join(directory, 'invitation.html')
+    writeFileSync(file, invitationPage)
+    const output = runChrome(file)
+    for (const marker of [
+      'data-invitation-pending',
+      'data-invitation-pending-no-member',
+      'data-invitation-joined-member',
+      'data-invitation-joined-hidden',
+      'data-invitation-declined',
+    ]) {
+      expect(output, marker).toContain(`${marker}="true"`)
+    }
   })
 
   it('renders every group phase and keeps the actor choice reachable', { timeout: 30_000 }, () => {

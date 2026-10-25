@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { TeamsConsoleController } from '../src/state/controller.ts'
 import { createGroupRequestClient, withGroupRequests } from '../src/client/group-client.ts'
 import type { GroupRequestOutcome, GroupRequestSender } from '../src/client/group-client.ts'
@@ -980,5 +980,132 @@ describe('group request context isolation', () => {
     expect(afterLatePage.selectedGroupId).toBe('g9')
     expect(afterLatePage.messages.map(message => message.messageId)).toEqual(['m-g9'])
     expect(afterLatePage.issues).toEqual([])
+  })
+
+  it('shows a pending invitation and turns it into a joined member through the background group.list poll', async () => {
+    vi.useFakeTimers()
+    try {
+      const agentB = { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const, currentSessionId: 's1' as const }
+      const harness = deferredClient([...projection.agents, agentB])
+      const issue = {
+        sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v1',
+        initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1,
+      }
+      const message = {
+        messageId: 'm1', commitId: 'c1', sequence: 1, groupId: 'g1', fromAgentId: 'agent-a',
+        targetAgentIds: ['agent-a'], replyRequired: false, body: 'hello group', sentAt: 'now',
+      }
+      const action = {
+        actionId: 'a1', commitId: 'c-a1', sessionId: 's1', initiatorAgentId: 'agent-a',
+        assigneeAgentId: 'agent-a', kind: 'reply' as const, reason: 'review', expectedResult: 'answer',
+        replyRequired: false, state: 'pending' as const, createdAt: 'now',
+      }
+      const memberOf = (groupId: string) => twoGroups.groups.find(group => group.groupId === groupId)!.members[0]!
+      let bJoined = false
+      harness.scripts.set('group.list', frame => ({
+        kind: 'reply',
+        reply: {
+          kind: 'group.list',
+          requestId: frame.requestId,
+          groups: [bJoined
+            ? { ...twoGroups.groups[0]!, members: [memberOf('g1'), { agentId: 'agent-b', role: 'peer' as const, mastersOf: [], intervals: [{ joinedAt: 'now' }] }] }
+            : twoGroups.groups[0]!],
+        },
+      }))
+      harness.scripts.set('message.page', frame => ({ kind: 'reply', reply: { kind: 'message.page', requestId: frame.requestId, messages: [message], revision: 1, hasMore: false } }))
+      harness.scripts.set('issue.list', frame => ({ kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [issue] } }))
+      harness.scripts.set('issue.query', frame => ({ kind: 'reply', reply: { kind: 'issue.session', requestId: frame.requestId, session: issue } }))
+      harness.scripts.set('action.list', frame => ({ kind: 'reply', reply: { kind: 'action.list', requestId: frame.requestId, actions: [action] } }))
+      harness.scripts.set('group.invite', frame => ({
+        kind: 'reply',
+        reply: {
+          kind: 'group.invited',
+          requestId: frame.requestId,
+          invitation: {
+            groupId: 'g1', agentId: 'agent-b', role: 'peer' as const, mastersOf: [],
+            invitedByAgentId: 'agent-a', state: 'pending' as const, createdAt: 'now',
+          },
+        },
+      }))
+      const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+      controller.openConsole()
+      await controller.refresh()
+      controller.setGroupActor('agent-a')
+      await vi.advanceTimersByTimeAsync(0)
+      await controller.loadGroups()
+      await controller.openIssue('s1')
+      controller.setGroupComposer('draft text')
+      controller.setFocusKey('group:composer')
+      const before = controller.getSnapshot().group
+      expect(before.invitations).toEqual([])
+
+      await controller.inviteMember('g1', 'agent-b', 'peer')
+      const invited = controller.getSnapshot().group
+      expect(invited.invitations).toEqual([
+        expect.objectContaining({ agentId: 'agent-b', groupId: 'g1', state: 'pending' }),
+      ])
+      expect(invited.groups[0]?.members.map(member => member.agentId)).not.toContain('agent-b')
+
+      const sentBeforePoll = harness.sent.length
+      bJoined = true
+      await vi.advanceTimersByTimeAsync(4500)
+      const after = controller.getSnapshot().group
+      expect(after.actorId).toBe('agent-a')
+      expect(after.selectedGroupId).toBe('g1')
+      expect(after.groups[0]?.members.map(member => member.agentId)).toContain('agent-b')
+      expect(after.composer).toBe('draft text')
+      expect(controller.getSnapshot().lastFocusKey).toBe('group:composer')
+      expect(after.issue?.sessionId).toBe('s1')
+      expect(after.messages).toEqual(before.messages)
+      expect(after.issues).toEqual(before.issues)
+      expect(after.actions).toEqual(before.actions)
+      const pollFrames = harness.sent.slice(sentBeforePoll)
+      expect(pollFrames.length).toBeGreaterThan(0)
+      expect(pollFrames.every(frame => frame.kind === 'group.list')).toBe(true)
+      controller.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops a background group.list answer when the acting identity moved', async () => {
+    vi.useFakeTimers()
+    try {
+      const agentB = { kind: 'runtime' as const, agentId: 'agent-b', label: 'Agent B', machineId: 'M1', presence: 'online' as const, capabilities: ['session'], sessionCapable: true as const, sessionAvailability: 'current' as const, currentSessionId: 's1' as const }
+      const harness = deferredClient([...projection.agents, agentB])
+      const issue = { sessionId: 's1', groupId: 'g1', vikunjaProjectId: 'p1', vikunjaIssueId: 'v1', initiatorAgentId: 'agent-a', state: 'open' as const, openedAt: 'now', lastOpSeq: 1 }
+      harness.scripts.set('group.list', (frame, agentId) => ({
+        kind: 'reply',
+        reply: {
+          kind: 'group.list',
+          requestId: frame.requestId,
+          groups: agentId === 'agent-a'
+            ? [{ ...twoGroups.groups[0]!, members: [...twoGroups.groups[0]!.members, { agentId: 'agent-b', role: 'peer' as const, mastersOf: [], intervals: [{ joinedAt: 'now' }] }] }]
+            : [twoGroups.groups[1]!],
+        },
+      }))
+      harness.scripts.set('issue.list', frame => ({ kind: 'reply', reply: { kind: 'issue.list', requestId: frame.requestId, sessions: [issue] } }))
+      const controller = new TeamsConsoleController(harness.client, { initialPage: 'groups' })
+      controller.openConsole()
+      await controller.refresh()
+      controller.setGroupActor('agent-a')
+      await vi.advanceTimersByTimeAsync(0)
+      await controller.loadGroups()
+      harness.defer.add('group.list')
+      await vi.advanceTimersByTimeAsync(4500)
+      expect(harness.pending.some(entry => entry.frame.kind === 'group.list')).toBe(true)
+      harness.defer.delete('group.list')
+      controller.setGroupActor('agent-b')
+      await vi.advanceTimersByTimeAsync(0)
+      await harness.releaseOne(frame => frame.kind === 'group.list')
+      await vi.advanceTimersByTimeAsync(0)
+      const state = controller.getSnapshot().group
+      expect(state.actorId).toBe('agent-b')
+      expect(state.groups.map(group => group.groupId)).toEqual(['g2'])
+      expect(state.groups.every(group => group.members.every(member => member.agentId !== 'agent-b'))).toBe(true)
+      controller.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

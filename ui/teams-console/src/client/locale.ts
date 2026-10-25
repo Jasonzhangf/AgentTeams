@@ -29,6 +29,7 @@ type MessageKey =
   | 'groupIssue' | 'groupIssueNone' | 'groupIssueCreate' | 'groupIssueTitle' | 'groupIssueBody'
   | 'groupIssueProject' | 'groupIssueClose' | 'groupIssueReopen' | 'groupIssueReason' | 'groupIssueConclusion'
   | 'groupIssueList' | 'groupIssueListEmpty' | 'groupIssueListHint' | 'groupIssueOpen'
+  | 'groupManage' | 'groupInvitationPending' | 'groupInvitationAccepted' | 'groupInvitationDeclined' | 'groupInvitationRevoked'
   | 'groupActionUnfinished' | 'groupActionFinished' | 'groupActionDiagnostics' | 'groupActionNoIssue' | 'groupActionNoIssueHint' | 'groupReadFailed'
   | 'groupActions' | 'groupActionsNone' | 'groupActionCreate' | 'groupActionAssignee' | 'groupActionReason'
   | 'groupActionResult' | 'groupActionSubmit' | 'groupActionRefuse' | 'groupActionReport'
@@ -66,6 +67,7 @@ const en: Record<MessageKey, string> = {
   groupIssue: 'Issue', groupIssueNone: 'No issue is bound to this group.', groupIssueCreate: 'Create issue', groupIssueTitle: 'Issue title', groupIssueBody: 'Issue body',
   groupIssueProject: 'Vikunja project ID', groupIssueClose: 'Close issue', groupIssueReopen: 'Reopen issue', groupIssueReason: 'Reason', groupIssueConclusion: 'Conclusion',
   groupIssueList: 'Issues in this group', groupIssueListEmpty: 'No issue belongs to this group yet.', groupIssueListHint: 'The issue list could not be read. You can still create an issue below.', groupIssueOpen: 'Open issue',
+  groupManage: 'Manage group', groupInvitationPending: 'Pending', groupInvitationAccepted: 'Accepted', groupInvitationDeclined: 'Declined', groupInvitationRevoked: 'Revoked',
   groupActionUnfinished: 'Unfinished', groupActionFinished: 'Finished', groupActionDiagnostics: 'Diagnostics', groupActionNoIssue: 'No issue is open in this group', groupActionNoIssueHint: 'Actions belong to an issue. Create or open an issue first; a group-wide action list is never shown as this issue’s work.', groupReadFailed: 'This section could not be read',
   groupActions: 'Actions', groupActionsNone: 'No action is recorded for this group.', groupActionCreate: 'Create action', groupActionAssignee: 'Assignee agent ID', groupActionReason: 'Reason',
   groupActionResult: 'Result body', groupActionSubmit: 'Submit result', groupActionRefuse: 'Refuse action', groupActionReport: 'Report blocked or failed',
@@ -106,6 +108,7 @@ const zh: Record<MessageKey, string> = {
   groupIssue: '议题', groupIssueNone: '当前群组还没有议题。', groupIssueCreate: '创建议题', groupIssueTitle: '议题标题', groupIssueBody: '议题内容',
   groupIssueProject: 'Vikunja 项目 ID', groupIssueClose: '关闭议题', groupIssueReopen: '重新打开议题', groupIssueReason: '原因', groupIssueConclusion: '结论',
   groupIssueList: '群组议题', groupIssueListEmpty: '当前群组还没有议题。', groupIssueListHint: '无法读取议题列表。你仍可在下方创建议题。', groupIssueOpen: '打开议题',
+  groupManage: '管理群组', groupInvitationPending: '待接受', groupInvitationAccepted: '已接受', groupInvitationDeclined: '已拒绝', groupInvitationRevoked: '已撤销',
   groupActionUnfinished: '未结束', groupActionFinished: '已完成', groupActionDiagnostics: '诊断', groupActionNoIssue: '当前群组还没有打开的议题', groupActionNoIssueHint: '行动属于议题。请先创建或打开议题；不会把全局行动列表当作本议题的工作。', groupReadFailed: '本区域读取失败',
   groupActions: '行动', groupActionsNone: '当前群组还没有行动记录。', groupActionCreate: '创建行动', groupActionAssignee: '负责智能体 ID', groupActionReason: '原因',
   groupActionResult: '结果内容', groupActionSubmit: '提交结果', groupActionRefuse: '拒绝行动', groupActionReport: '上报阻塞或失败',
