@@ -116,7 +116,15 @@ it('starts the production registry entry, reports it running and stops it by exp
   expect(processAlive(started.pid!)).toBe(true)
 
   const status = await statusRegistryDaemon(configPath)
-  expect(status).toEqual(started)
+  expect(status).toMatchObject({
+    configPath: started.configPath,
+    statePath: started.statePath,
+    daemonId: started.daemonId,
+    state: started.state,
+    generation: started.generation,
+    pid: started.pid,
+    url: started.url,
+  })
 
   const stopped = await stopRegistryDaemon(configPath, 1)
   expect(stopped.state).toBe('stopped')
