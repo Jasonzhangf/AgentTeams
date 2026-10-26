@@ -903,6 +903,85 @@ describe('external op convergence and admission', () => {
     // A queued action is cancelled outright, so it is not an unconfirmed stop.
     expect(report.some((entry) => entry.actionId === queuedId)).toBe(false)
   })
+
+  /**
+   * R1: a write whose outcome is unknown must answer `RESULT_UNKNOWN`. The client maps
+   * that code to an unknown outcome and keeps the original commit; any other code reads
+   * as a definite refusal and drops the only recovery handle, so a retry would write a
+   * second issue or comment.
+   */
+  it('answers RESULT_UNKNOWN when a create receipt is lost and recovers by the same commit', async () => {
+    let writes = 0
+    const { hub, calls } = scripted((op) => {
+      if (op.kind === 'issue.create') {
+        writes += 1
+        return { code: 'UNAVAILABLE', message: 'no receipt within 500ms' }
+      }
+      if (op.kind === 'issue.recover') return confirmed(op, { found: true, issueId: '42' })
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await withPeer(hub)
+    const create = { kind: 'issue.create', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' }
+    const first = await hub.handle(OWNER, { ...create, requestId: 'r1', commitId: 'ic1' })
+    expect(first.ok).toBe(false)
+    expect(first.ok ? '' : first.error.code).toBe('RESULT_UNKNOWN')
+    const retried = await hub.handle(OWNER, { ...create, requestId: 'r2', commitId: 'ic1' })
+    expect(retried.ok).toBe(true)
+    expect(sessionIdOf(retried.reply)).toContain('42')
+    // The same commit reads the outcome back; it never writes a second issue.
+    expect(writes).toBe(1)
+    expect(calls.filter((op) => op.kind === 'issue.create')).toHaveLength(1)
+  })
+
+  it('answers RESULT_UNKNOWN when the owner reports an unknown create outcome', async () => {
+    const { hub } = scripted((op) => op.kind === 'issue.create'
+      ? { opId: op.opId, commitId: op.commitId, fromAgentId: op.ownerAgentId, state: 'unknown' }
+      : confirmed(op, { issueId: '42' }))
+    const groupId = await withPeer(hub)
+    const created = await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })
+    expect(created.ok).toBe(false)
+    expect(created.ok ? '' : created.error.code).toBe('RESULT_UNKNOWN')
+  })
+
+  it('answers RESULT_UNKNOWN when a close is not confirmed by its read-back', async () => {
+    const { hub } = scripted((op) => confirmed(op, { issueId: '42' }))
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const closed = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'shipped' })
+    expect(closed.ok).toBe(false)
+    expect(closed.ok ? '' : closed.error.code).toBe('RESULT_UNKNOWN')
+  })
+
+  it('answers RESULT_UNKNOWN when an action result names no comment', async () => {
+    const { hub } = scripted((op) => op.kind === 'action.result'
+      ? confirmed(op, {})
+      : confirmed(op, { issueId: '42' }))
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const action = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    const actionId = (action.reply as { action: { actionId: string } }).action.actionId
+    const submitted = await hub.handle(PEER, { kind: 'action.submit', requestId: 's1', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(submitted.ok).toBe(false)
+    expect(submitted.ok ? '' : submitted.error.code).toBe('RESULT_UNKNOWN')
+  })
+
+  it('keeps UNAVAILABLE when no executor could be reached', async () => {
+    const store = memoryStore()
+    const offline = createGroupHub({
+      store,
+      isOnline: () => false,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `off-${++n}` })(),
+      sendToAgent: () => undefined,
+    })
+    const groupId = await withPeer(offline)
+    const created = await offline.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })
+    expect(created.ok).toBe(false)
+    expect(created.ok ? '' : created.error.code).toBe('UNAVAILABLE')
+  })
 })
 
 describe('transient read ledger isolation', () => {
