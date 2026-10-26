@@ -6363,6 +6363,99 @@ async function runBB13(context) {
       expectExecuted('artifact-change', delta, 'pnpm-smoke-installed', { beforeStage: before.stages['pnpm-smoke-installed'] })
     }
 
+    // (14) Work graph source change: the five docs/design/dagpipe/graphs Work
+    // graphs are read by the DAGpipe runner build, the graph regression and the
+    // packaged Work replay, all of which run inside pnpm verify or its dependent
+    // installed smoke. A graph-only change must therefore invalidate verify from
+    // its source input and the dependent smoke stage from its artifact input, and
+    // an invalid graph must fail the real gate instead of returning the old PASS.
+    {
+      const graphRelPath = 'docs/design/dagpipe/graphs/work-query.graph.json'
+      const graphPath = join(fixtureRoot, graphRelPath)
+      const graphOriginal = readFileSync(graphPath, 'utf8')
+      assert(graphOriginal.length > 0, `BB13 Work graph is empty: ${graphRelPath}`)
+
+      // A legal byte change that keeps the graph compilable: the same keys are
+      // written in a different top-level order, so verify consumes a changed
+      // input without a semantic change to the packaged Work behaviour.
+      writeFileSync(graphPath, reorderJsonTopLevelKeys(graphOriginal))
+      commitFixtureChange(fixtureRoot, 'bb13 work graph change')
+      const before = capture('work-graph-change', inputHashes([graphRelPath, mapRelPath]))
+      const { delta } = runPhase('work-graph-change', before)
+      expectDelta('work-graph-change', delta, { verify: 1, smoke: 1 })
+      expectInvalidated('work-graph-change', delta, 'pnpm-verify', ['source'])
+      expectInvalidated('work-graph-change', delta, 'pnpm-smoke-installed', ['artifact'])
+      expectExecuted('work-graph-change', delta, 'pnpm-verify', { beforeStage: before.stages['pnpm-verify'] })
+      expectExecuted('work-graph-change', delta, 'pnpm-smoke-installed', { beforeStage: before.stages['pnpm-smoke-installed'] })
+      observations.at(-1).work_graph = {
+        path: graphRelPath,
+        change: 'legal top-level key reorder of the packaged Work query graph',
+      }
+
+      // An invalid graph shape that the runner builder rejects. The old staged
+      // artifact and evidence stay in place, so a reuse decision would report the
+      // previous PASS for a graph the real gate cannot build.
+      const brokenGraph = JSON.parse(readFileSync(graphPath, 'utf8'))
+      delete brokenGraph.nodes
+      writeFileSync(graphPath, `${JSON.stringify(brokenGraph, null, 2)}\n`)
+      commitFixtureChange(fixtureRoot, 'bb13 invalid work graph')
+      const beforeInvalid = capture('work-graph-invalid', inputHashes([graphRelPath, mapRelPath]))
+      const invalidRun = runLifecycleAdapter(fixtureRoot, shimEnv, join(evidenceDir, 'work-graph-invalid.json'))
+      assert(invalidRun.status !== 0,
+        `BB13 work-graph-invalid reused the previous PASS for a graph the real gate rejects: ${invalidRun.stdout}${invalidRun.stderr}`)
+      assert(!/"idempotent":true/u.test(invalidRun.stdout),
+        `BB13 work-graph-invalid returned the completed validation instead of running the gate: ${invalidRun.stdout.trim()}`)
+      const invalidStore = readLifecycleState(fixtureRoot)
+      const invalidDelta = bb13PhaseDelta(beforeInvalid, { state: invalidStore.state, counts: pnpmInvocationCounts(proofDir) })
+      expectDelta('work-graph-invalid', invalidDelta, { verify: 1, smoke: 0 })
+      expectInvalidated('work-graph-invalid', invalidDelta, 'pnpm-verify', ['source'])
+      const failedVerify = invalidStore.state.stages['pnpm-verify']
+      assert(failedVerify?.status === 'blocked',
+        `BB13 work-graph-invalid verify stage settled ${failedVerify?.status ?? 'missing'}`)
+      assert(failedVerify.receiptId === undefined,
+        'BB13 work-graph-invalid published a pass receipt for a graph the real gate rejects')
+      const untouchedSmoke = stageExecutionSummary(invalidStore.state)['pnpm-smoke-installed']
+      assert(JSON.stringify(untouchedSmoke) === JSON.stringify(beforeInvalid.stages['pnpm-smoke-installed']),
+        'BB13 work-graph-invalid reran or rewrote the dependent smoke stage after verify failed')
+      assert(invalidDelta.invalidations.every(entry => entry.stage_id !== 'pnpm-smoke-installed'),
+        'BB13 work-graph-invalid invalidated the dependent smoke stage without a passing verify')
+      const invalidFailureText = `${failedVerify.error ?? ''}\n${invalidRun.stderr}${invalidRun.stdout}`
+      assert(/pnpm verify failed/u.test(invalidFailureText),
+        `BB13 work-graph-invalid did not surface the failed gate command: ${invalidFailureText.slice(-600)}`)
+      assert(/(graph\.nodes|reading 'map'|build consumer)/iu.test(invalidFailureText),
+        `BB13 work-graph-invalid did not surface the runner builder rejection: ${invalidFailureText.slice(-600)}`)
+      observations.push({
+        phase: 'work-graph-invalid',
+        before: { candidate: beforeInvalid.candidate, input_hashes: beforeInvalid.input_hashes,
+          history_length: beforeInvalid.historyLength, counts: beforeInvalid.counts, stages: beforeInvalid.stages },
+        invocation: { exit: invalidRun.status, stdout: invalidRun.stdout.trim(), stderr: invalidRun.stderr.trim() },
+        delta: invalidDelta, after: { stages: invalidDelta.stages, counts: pnpmInvocationCounts(proofDir) },
+        work_graph: {
+          path: graphRelPath,
+          change: 'removed the nodes array so the DAGpipe runner builder rejects the graph',
+          failure: invalidFailureText.slice(-1200),
+        },
+      })
+
+      // Restore the original graph bytes so the fixture ends on the real graph.
+      // The next entry must re-execute verify after the blocked stage and let the
+      // dependent smoke stage re-verify the artifact instead of reusing a PASS.
+      writeFileSync(graphPath, graphOriginal)
+      commitFixtureChange(fixtureRoot, 'bb13 work graph restore')
+      const beforeRestore = capture('work-graph-restore', inputHashes([graphRelPath, mapRelPath]))
+      const { delta: restoreDelta } = runPhase('work-graph-restore', beforeRestore)
+      expectDelta('work-graph-restore', restoreDelta, { verify: 1, smoke: 1 })
+      expectExecuted('work-graph-restore', restoreDelta, 'pnpm-verify',
+        { beforeStage: beforeRestore.stages['pnpm-verify'], requireInvalidation: false })
+      expectInvalidated('work-graph-restore', restoreDelta, 'pnpm-smoke-installed', ['artifact'])
+      expectExecuted('work-graph-restore', restoreDelta, 'pnpm-smoke-installed',
+        { beforeStage: beforeRestore.stages['pnpm-smoke-installed'] })
+      observations.at(-1).work_graph = {
+        path: graphRelPath,
+        change: 'restored the original graph bytes after the gate rejection',
+      }
+    }
+
     result = {
       status: 'passed',
       public_input: {
@@ -6370,9 +6463,11 @@ async function runBB13(context) {
         store: '.appsdk-control/lifecycle-adapter/stages/teams-lifecycle-admission.json',
         fault: 'one-shot smoke:installed exit 86',
         mutations: ['required evidence file deletion', 'empty commit', 'main-side source advance with empty candidate diff',
-          'source', 'architecture map key reorder', 'module registry key reorder', 'config', 'artifact'],
+          'source', 'architecture map key reorder', 'module registry key reorder', 'config', 'artifact',
+          'Work graph key reorder', 'invalid Work graph shape', 'Work graph restore'],
         map_input: mapRelPath,
         registry_input: registryRelPath,
+        graph_input: 'docs/design/dagpipe/graphs/work-query.graph.json',
       },
       external_observation: {
         fixture_root: fixtureRoot,
@@ -6401,6 +6496,7 @@ async function runBB13(context) {
           head_derived_receipt_path: observation.head_derived_receipt_path,
           main_advance_commit: observation.main_advance_commit,
           candidate_diff_paths: observation.candidate_diff_paths,
+          work_graph: observation.work_graph,
         })),
         final_counts: pnpmInvocationCounts(proofDir),
       },
