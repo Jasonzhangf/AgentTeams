@@ -991,7 +991,9 @@ export class GroupHubImpl implements GroupHub {
     if (actual === undefined) {
       this.sessions = settleIssueOperation(this.sessions, commitId, 'unknown', now)
       this.save()
-      return err('UPSTREAM_ERROR', `${direction} was not confirmed by a read-back; outcome is unknown`)
+      // The write left this hub but no read-back confirmed it: the client must keep its
+      // commit and recover, so the answer is unknown, never a definite refusal.
+      return err('RESULT_UNKNOWN', `${direction} was not confirmed by a read-back; outcome is unknown`)
     }
     return this.settleIssueRead(direction, input, sessionId, commitId, operation, actual)
   }
@@ -1183,7 +1185,7 @@ export class GroupHubImpl implements GroupHub {
       if (this.actions.actions.get(actionId)?.state === 'pending') this.actions = startAction(this.actions, actionId, now)
       this.actions = transitionAction(this.actions, actionId, 'unknown', now)
       this.save()
-      return err('UPSTREAM_ERROR', 'action result was not confirmed by a read-back; outcome is unknown')
+      return err('RESULT_UNKNOWN', 'action result was not confirmed by a read-back; outcome is unknown')
     }
     // A master assignment cannot be refused, so a result from `pending` starts
     // the action instead of failing the transition.
@@ -1302,7 +1304,7 @@ export class GroupHubImpl implements GroupHub {
     const existing = externalOpForCommit(this.ledger, commitId, kind)
     if (existing) {
       if (existing.state === 'confirmed') return { ok: true, result: existing.result }
-      if (existing.state !== 'failed') return { ok: false, result: err('UPSTREAM_ERROR', `${kind} for ${commitId} is ${existing.state}; read back before retrying`) }
+      if (existing.state !== 'failed') return { ok: false, result: err('RESULT_UNKNOWN', `${kind} for ${commitId} is ${existing.state}; read back before retrying`) }
     }
     const begun = beginExternalOp(this.ledger, {
       opId: this.idFactory(), commitId, kind, ownerAgentId,
@@ -1313,20 +1315,28 @@ export class GroupHubImpl implements GroupHub {
     this.ledger = markExternalOpInflight({ operations }, begun.op.opId, now)
     // Persist before the awaited write: a crash leaves a recorded unknown op.
     this.save()
+    // A ServiceError after dispatch may hide an applied write. Decide dispatch
+    // before awaiting so a peer that drops offline mid-flight stays unknown.
+    const dispatched = this.executeExternalOp !== undefined || (this.sendToAgent !== undefined && this.isOnline(ownerAgentId))
     const receipt = this.executeExternalOp
       ? await this.executeExternalOp(begun.op)
       : await this.delegatedReceipt(begun.op)
     if ('code' in receipt) {
+      // A ServiceError is a definite refusal only when the operation was never
+      // dispatched. After a real dispatch the outcome may have applied, so the
+      // client must keep its commit and recover instead of treating it as refused.
       this.ledger = { operations: new Map(this.ledger.operations).set(begun.op.opId, { ...begun.op, state: 'unknown', error: { code: receipt.code, message: receipt.message }, updatedAt: now }) }
       this.save()
-      return { ok: false, result: err(receipt.code, receipt.message) }
+      return { ok: false, result: dispatched
+        ? err('RESULT_UNKNOWN', `${kind} for ${commitId} lost its receipt (${receipt.message}); read back before retrying`)
+        : err(receipt.code, receipt.message) }
     }
     if (receipt.state === 'unknown') {
       // The outcome is a fact even without a confirmed result: persist it so a
       // restart keeps the unknown instead of relabeling the op inflight.
       this.ledger = { operations: new Map(this.ledger.operations).set(begun.op.opId, { ...begun.op, state: 'unknown', updatedAt: now }) }
       this.save()
-      return { ok: false, result: err('UPSTREAM_ERROR', `${kind} outcome is unknown; read back before retrying`) }
+      return { ok: false, result: err('RESULT_UNKNOWN', `${kind} outcome is unknown; read back before retrying`) }
     }
     if (receipt.state === 'failed') {
       // A definite refusal is persisted with its own code: recovery must see it
