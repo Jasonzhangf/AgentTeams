@@ -1,4 +1,4 @@
-import { chmod, lstat, mkdir, open, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -1080,25 +1080,64 @@ export async function readLocalInternalConfig(path: string): Promise<LocalIntern
 
 export async function projectLocalChildConfigs(internalPath: string): Promise<void> {
   const internal = await readLocalInternalConfig(internalPath)
+  const projectionParent = resolve(dirname(internalPath), '.internal')
+  const projectionDirectory = resolve(projectionParent, 'projections')
+  await assertRealProjectionDirectory(projectionParent, 'internal projection parent')
+  await assertRealProjectionDirectory(projectionDirectory, 'internal projection directory')
+  const currentProjections = new Set<string>()
   const relay = internal.relay
   if (relay?.config !== undefined) {
     if (relay.projectionPath === undefined) throw new LocalConfigError('internal relay projectionPath is missing')
-    assertProjectionPath(relay.projectionPath, resolve(dirname(internalPath), '.internal', 'projections', 'relay.json'), 'internal relay')
+    assertProjectionPath(relay.projectionPath, resolve(projectionDirectory, 'relay.json'), 'internal relay')
+    currentProjections.add(resolve(relay.projectionPath))
     await materializeEndpoint(relay.projectionPath, parseProjectionConfig(relay.config, relay.projectionPath))
   }
   const consoleProjection = internal.console
   if (consoleProjection?.config !== undefined) {
     if (consoleProjection.projectionPath === undefined) throw new LocalConfigError('internal console projectionPath is missing')
-    assertProjectionPath(consoleProjection.projectionPath, resolve(dirname(internalPath), '.internal', 'projections', 'console.json'), 'internal console')
+    assertProjectionPath(consoleProjection.projectionPath, resolve(projectionDirectory, 'console.json'), 'internal console')
+    currentProjections.add(resolve(consoleProjection.projectionPath))
     await materializeEndpoint(consoleProjection.projectionPath, parseProjectionConfig(consoleProjection.config, consoleProjection.projectionPath))
   }
   for (const [id, daemon] of Object.entries(internal.daemons ?? {})) {
-    if (daemon.enabled === false) continue
+    if (daemon.enabled === false || daemon.orphaned === true) continue
     if (daemon.config === undefined) continue
     if (daemon.projectionPath === undefined) throw new LocalConfigError(`internal daemon ${id} projectionPath is missing`)
     assertProjectionPath(daemon.projectionPath, expectedProjectionPath(internalPath, id), `internal daemon ${id}`)
+    currentProjections.add(resolve(daemon.projectionPath))
     await materializeEndpoint(daemon.projectionPath, parseProjectionConfig(daemon.config, daemon.projectionPath))
   }
+  if (!await assertRealProjectionDirectory(projectionParent, 'internal projection parent')) return
+  if (!await assertRealProjectionDirectory(projectionDirectory, 'internal projection directory')) return
+  const entries = await readdir(projectionDirectory, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!isProjectionFileName(entry.name)) continue
+    if (entry.isSymbolicLink()) {
+      throw new LocalConfigError(`internal projection entry must not be a symbolic link: ${resolve(projectionDirectory, entry.name)}`)
+    }
+    if (!entry.isFile()) continue
+    const projectionPath = resolve(projectionDirectory, entry.name)
+    if (!currentProjections.has(projectionPath)) await unlink(projectionPath)
+  }
+}
+
+async function assertRealProjectionDirectory(path: string, label: string): Promise<boolean> {
+  let stats
+  try {
+    stats = await lstat(path)
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw new LocalConfigError(`${label} cannot be inspected: ${path}`, cause)
+  }
+  if (stats.isSymbolicLink()) throw new LocalConfigError(`${label} must not be a symbolic link: ${path}`)
+  if (!stats.isDirectory()) throw new LocalConfigError(`${label} must be a real directory: ${path}`)
+  return true
+}
+
+function isProjectionFileName(name: string): boolean {
+  if (!name.endsWith('.json')) return false
+  const id = name.slice(0, -'.json'.length)
+  return id === 'relay' || /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)
 }
 
 function parseProjectionConfig(config: string, projectionPath: string): Record<string, unknown> {

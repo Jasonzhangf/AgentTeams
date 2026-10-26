@@ -1,0 +1,51 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/b17014d-stale-projections-r1
+
+ ↓ runtime/local-config.spec.ts > loads a persisted TOML launcher config and resolves paths relative to the file
+ ↓ runtime/local-config.spec.ts > atomically rejects an exclusive config write without replacing an existing file
+ ↓ runtime/local-config.spec.ts > uses ~/.agentteams/config.toml as the stable default without creating it during read
+ ↓ runtime/local-config.spec.ts > rejects a launcher config with no enabled daemon or unknown fields
+ ↓ runtime/local-config.spec.ts > rejects the reserved relay daemon id before process planning can overwrite ownership
+ ↓ runtime/local-config.spec.ts > loads v2 endpoint intent into internal.toml without materializing editable child JSON at load
+ ↓ runtime/local-config.spec.ts > parses a v2 generated endpoint projection with an openCode launch block
+ ↓ runtime/local-config.spec.ts > rejects a v2 disabled relay instead of silently launching it
+ ↓ runtime/local-config.spec.ts > rejects a v2 endpoint named relay before process planning creates duplicate identities
+ ↓ runtime/local-config.spec.ts > keeps child JSON as an ephemeral projection from internal.toml instead of a second config source
+ ↓ runtime/local-config.spec.ts > reuses internal.toml for the same config revision and preserves lifecycle state when legacy relay JSON disappears
+ ↓ runtime/local-config.spec.ts > rejects internal projection paths outside the runtime projection directory
+ ↓ runtime/local-config.spec.ts > quotes dotted daemon ids in internal.toml so the persisted key remains exact
+ ↓ runtime/local-config.spec.ts > serializes concurrent internal state and Work control updates without dropping either field
+ ↓ runtime/local-config.spec.ts > persists an unaccepted catalog observation without writing an empty accepted source hash
+ ↓ runtime/local-config.spec.ts > persists an unaccepted empty catalog observation while preserving unrelated manual models
+ ↓ runtime/local-config.spec.ts > persists an unaccepted failed catalog observation with its typed provider error
+ ↓ runtime/local-config.spec.ts > keeps a non-empty accepted source hash in persisted catalog observations
+ ↓ runtime/local-config.spec.ts > parses v3 user intent without reading relay or provider JSON and records internal v2 relocation
+ ↓ runtime/local-config.spec.ts > preserves a payload-free service-only receiver connection in the returned spec and internal/child projections
+ ↓ runtime/local-config.spec.ts > initializes v3 through the runtime owner with owned TLS, credential references and no editable relay JSON
+ ↓ runtime/local-config.spec.ts > refuses partial existing TLS before creating config and never overwrites a complete pair
+ ↓ runtime/local-config.spec.ts > validates the complete v3 model before creating config or runtime directories
+ ↓ runtime/local-config.spec.ts > injects the agent table key as HostIdentity.agentId and rejects a repeated identity.agentId
+ ↓ runtime/local-config.spec.ts > rejects v3 receiver/hybrid without connect and model bindings with unknown references
+ ↓ runtime/local-config.spec.ts > preserves system-owned internal relay/daemon material and lifecycle fields across a v3 reload
+ ↓ runtime/local-config.spec.ts > keeps the configured bridge Relay non-orphaned while removed agent projections stay orphaned across v3 reloads
+ ✓ runtime/local-config.spec.ts > removes disabled and removed daemon projections while retaining enabled child projections 53ms
+ ↓ runtime/local-config.spec.ts > does not advance machine source when a v3 compile fails after parse
+ ✓ runtime/local-config.spec.ts > reconciles only stale child projections inside the owned projection directory 6ms
+ ✓ runtime/local-config.spec.ts > rejects a current daemon projection path outside the owned projection directory 2ms
+ ↓ runtime/local-config.spec.ts > projects enabled v3 service intent into daemon child config without treating it as a wire declaration
+ ↓ runtime/local-config.spec.ts > compiles an enabled [console] intent into a system-owned projection and removes it when disabled
+ ↓ runtime/local-config.spec.ts > round-trips [consoleRuntime] through the typed patch port without touching U2 or launcher fields
+ ↓ runtime/local-config.spec.ts > rejects unknown or malformed [consoleRuntime] before any rewrite
+ ↓ runtime/local-config.spec.ts > round-trips work control through the public internal adapter and removes only that table
+ ↓ runtime/local-config.spec.ts > preserves work control across an accepted lifecycle writer and rejects malformed or stale refs
+ ↓ runtime/local-config.spec.ts > resumes a pending migration to verified without rewriting legacy inputs
+ ↓ runtime/local-config.spec.ts > keeps machine source and per-daemon accepted facts separate in internal v2
+ ↓ runtime/local-config.spec.ts > keeps a durable owner-fence uncertain through accepted advancement in the production TOML store
+ ↓ runtime/local-config.spec.ts > rejects owner-fence overwrite and removal when the same operation id has different identity
+ ↓ runtime/local-config.spec.ts > resolves a target observation by full provider identity across multi-provider auth-none and shared-credential layouts
+ ↓ runtime/local-config.spec.ts > rejects corrupt or unsafe persisted internal projection ports without rewriting internal.toml
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 40 skipped (43)
+   Start at  14:06:17
+   Duration  698ms (transform 397ms, setup 0ms, import 517ms, tests 62ms, environment 0ms)
