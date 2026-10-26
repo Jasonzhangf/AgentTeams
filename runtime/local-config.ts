@@ -1080,7 +1080,10 @@ export async function readLocalInternalConfig(path: string): Promise<LocalIntern
 
 export async function projectLocalChildConfigs(internalPath: string): Promise<void> {
   const internal = await readLocalInternalConfig(internalPath)
-  const projectionDirectory = resolve(dirname(internalPath), '.internal', 'projections')
+  const projectionParent = resolve(dirname(internalPath), '.internal')
+  const projectionDirectory = resolve(projectionParent, 'projections')
+  await assertRealProjectionDirectory(projectionParent, 'internal projection parent')
+  await assertRealProjectionDirectory(projectionDirectory, 'internal projection directory')
   const currentProjections = new Set<string>()
   const relay = internal.relay
   if (relay?.config !== undefined) {
@@ -1104,18 +1107,31 @@ export async function projectLocalChildConfigs(internalPath: string): Promise<vo
     currentProjections.add(resolve(daemon.projectionPath))
     await materializeEndpoint(daemon.projectionPath, parseProjectionConfig(daemon.config, daemon.projectionPath))
   }
-  let entries
-  try {
-    entries = await readdir(projectionDirectory, { withFileTypes: true })
-  } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return
-    throw cause
-  }
+  if (!await assertRealProjectionDirectory(projectionParent, 'internal projection parent')) return
+  if (!await assertRealProjectionDirectory(projectionDirectory, 'internal projection directory')) return
+  const entries = await readdir(projectionDirectory, { withFileTypes: true })
   for (const entry of entries) {
-    if (!entry.isFile() || !isProjectionFileName(entry.name)) continue
+    if (!isProjectionFileName(entry.name)) continue
+    if (entry.isSymbolicLink()) {
+      throw new LocalConfigError(`internal projection entry must not be a symbolic link: ${resolve(projectionDirectory, entry.name)}`)
+    }
+    if (!entry.isFile()) continue
     const projectionPath = resolve(projectionDirectory, entry.name)
     if (!currentProjections.has(projectionPath)) await unlink(projectionPath)
   }
+}
+
+async function assertRealProjectionDirectory(path: string, label: string): Promise<boolean> {
+  let stats
+  try {
+    stats = await lstat(path)
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw new LocalConfigError(`${label} cannot be inspected: ${path}`, cause)
+  }
+  if (stats.isSymbolicLink()) throw new LocalConfigError(`${label} must not be a symbolic link: ${path}`)
+  if (!stats.isDirectory()) throw new LocalConfigError(`${label} must be a real directory: ${path}`)
+  return true
 }
 
 function isProjectionFileName(name: string): boolean {

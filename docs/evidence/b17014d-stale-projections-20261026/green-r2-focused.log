@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/b17014d-stale-projections-r1
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed | 40 skipped (45)
+   Start at  14:17:08
+   Duration  834ms (transform 442ms, setup 0ms, import 583ms, tests 105ms, environment 0ms)

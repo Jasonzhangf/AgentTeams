@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { configSourceHash, createTomlRuntimeConfigPersistence, defaultLocalConfigPath, initializeLocalConfig, loadLocalConfig, parseConfigUserSections, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, resumePendingMigration, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalInternalWorkControl } from './local-config.ts'
+import { configSourceHash, createTomlRuntimeConfigPersistence, defaultLocalConfigPath, initializeLocalConfig, loadLocalConfig, LocalConfigError, parseConfigUserSections, projectLocalChildConfigs, readLocalInternalConfig, readLocalInternalWorkControl, resumePendingMigration, writeLocalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalState, writeLocalInternalWorkControl } from './local-config.ts'
 import { parse as parseToml } from 'toml'
 import { loadAgentProcessConfig } from './agent-process.ts'
 import { loadConsoleProcessConfig } from './console-process.ts'
@@ -908,6 +908,55 @@ config = ${JSON.stringify(JSON.stringify({ leasePort: 49203 }))}
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
+it('removes a directly removed daemon projection without recreating it', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-v3-direct-daemon-removal-'))
+  const agentteams = join(directory, '.agentteams')
+  const configPath = join(agentteams, 'config.toml')
+  const internalPath = join(agentteams, 'internal.toml')
+  const projectionDirectory = join(agentteams, '.internal', 'projections')
+  const providerProjection = join(projectionDirectory, 'provider.json')
+  const receiverProjection = join(projectionDirectory, 'receiver.json')
+  try {
+    await writeLocalConfig(configPath, V3_PRIMARY_CONFIG)
+    await writeFile(internalPath, `version = 2
+
+[relay]
+config = ${JSON.stringify(JSON.stringify({ listen: { port: 49211 } }))}
+
+[daemon.provider]
+enabled = true
+role = "provider"
+config = ${JSON.stringify(JSON.stringify({ leasePort: 49212 }))}
+
+[daemon.receiver]
+enabled = true
+role = "receiver"
+config = ${JSON.stringify(JSON.stringify({ leasePort: 49213 }))}
+`)
+    const initial = await loadLocalConfig(configPath)
+    await projectLocalChildConfigs(initial.internalPath!)
+    expect(existsSync(providerProjection)).toBe(true)
+    expect(existsSync(receiverProjection)).toBe(true)
+
+    const providerOnlyConfig = V3_PRIMARY_CONFIG.replace(/\n\[agents\.receiver\][\s\S]*?(?=\n\[providers\.rcc\])/, '')
+    await writeLocalConfig(configPath, providerOnlyConfig)
+    const removed = await loadLocalConfig(configPath)
+    expect(removed.daemons.map(daemon => daemon.id)).toEqual(['provider'])
+    expect((await readLocalInternalConfig(internalPath)).daemons?.receiver).toMatchObject({
+      enabled: true,
+      orphaned: true,
+    })
+
+    await projectLocalChildConfigs(removed.internalPath!)
+    expect(existsSync(providerProjection)).toBe(true)
+    expect(existsSync(receiverProjection)).toBe(false)
+
+    await projectLocalChildConfigs(removed.internalPath!)
+    expect(existsSync(providerProjection)).toBe(true)
+    expect(existsSync(receiverProjection)).toBe(false)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
 it('does not advance machine source when a v3 compile fails after parse', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-v3-invalid-compile-'))
   const agentteams = join(directory, '.agentteams')
@@ -979,6 +1028,42 @@ enabled = true
 `)
     await expect(projectLocalChildConfigs(internalPath)).rejects.toThrow(/internal daemon provider projectionPath must be/)
     expect(existsSync(outsidePath)).toBe(false)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+it('does not follow a redirected projection directory', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-projection-redirect-'))
+  try {
+    for (const redirect of ['internal-parent', 'projections', 'projection-entry'] as const) {
+      const root = join(directory, redirect)
+      const outsideDirectory = join(directory, `${redirect}-outside`)
+      const internalPath = join(root, 'internal.toml')
+      const projectionDirectory = join(root, '.internal', 'projections')
+      await mkdir(root)
+      await mkdir(outsideDirectory)
+      await writeFile(internalPath, 'version = 1\n')
+
+      let outsideProjection = join(outsideDirectory, 'removed.json')
+      if (redirect === 'internal-parent') {
+        await mkdir(join(outsideDirectory, 'projections'))
+        outsideProjection = join(outsideDirectory, 'projections', 'removed.json')
+        await writeFile(outsideProjection, 'outside\n')
+        await symlink(outsideDirectory, join(root, '.internal'), 'dir')
+      } else if (redirect === 'projections') {
+        await mkdir(join(root, '.internal'))
+        await writeFile(outsideProjection, 'outside\n')
+        await symlink(outsideDirectory, projectionDirectory, 'dir')
+      } else {
+        await mkdir(projectionDirectory, { recursive: true })
+        await writeFile(outsideProjection, 'outside\n')
+        await symlink(outsideProjection, join(projectionDirectory, 'removed.json'))
+      }
+
+      const error = await projectLocalChildConfigs(internalPath).catch(cause => cause)
+      expect(error).toBeInstanceOf(LocalConfigError)
+      expect(error).toMatchObject({ message: expect.stringContaining('must not be a symbolic link') })
+      expect(await readFile(outsideProjection, 'utf8')).toBe('outside\n')
+    }
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 

@@ -1,0 +1,68 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/b17014d-stale-projections-r1
+
+ ❯ runtime/local-config.spec.ts (45 tests | 16 failed) 619ms
+   × persists an unaccepted catalog observation without writing an empty accepted source hash 11ms
+   × persists an unaccepted empty catalog observation while preserving unrelated manual models 5ms
+   × persists an unaccepted failed catalog observation with its typed provider error 3ms
+   × keeps a non-empty accepted source hash in persisted catalog observations 3ms
+   × parses v3 user intent without reading relay or provider JSON and records internal v2 relocation 3ms
+   × initializes v3 through the runtime owner with owned TLS, credential references and no editable relay JSON 3ms
+   × refuses partial existing TLS before creating config and never overwrites a complete pair 9ms
+   × preserves system-owned internal relay/daemon material and lifecycle fields across a v3 reload 6ms
+   × keeps the configured bridge Relay non-orphaned while removed agent projections stay orphaned across v3 reloads 5ms
+   × does not advance machine source when a v3 compile fails after parse 3ms
+   × projects enabled v3 service intent into daemon child config without treating it as a wire declaration 3ms
+   × compiles an enabled [console] intent into a system-owned projection and removes it when disabled 5ms
+   × keeps machine source and per-daemon accepted facts separate in internal v2 29ms
+   × keeps a durable owner-fence uncertain through accepted advancement in the production TOML store 11ms
+   × rejects owner-fence overwrite and removal when the same operation id has different identity 4ms
+   × resolves a target observation by full provider identity across multi-provider auth-none and shared-credential layouts 6ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 16 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  runtime/local-config.spec.ts > persists an unaccepted catalog observation without writing an empty accepted source hash
+ FAIL  runtime/local-config.spec.ts > persists an unaccepted empty catalog observation while preserving unrelated manual models
+ FAIL  runtime/local-config.spec.ts > persists an unaccepted failed catalog observation with its typed provider error
+ FAIL  runtime/local-config.spec.ts > keeps a non-empty accepted source hash in persisted catalog observations
+ FAIL  runtime/local-config.spec.ts > parses v3 user intent without reading relay or provider JSON and records internal v2 relocation
+ FAIL  runtime/local-config.spec.ts > initializes v3 through the runtime owner with owned TLS, credential references and no editable relay JSON
+ FAIL  runtime/local-config.spec.ts > preserves system-owned internal relay/daemon material and lifecycle fields across a v3 reload
+ FAIL  runtime/local-config.spec.ts > keeps the configured bridge Relay non-orphaned while removed agent projections stay orphaned across v3 reloads
+ FAIL  runtime/local-config.spec.ts > does not advance machine source when a v3 compile fails after parse
+ FAIL  runtime/local-config.spec.ts > projects enabled v3 service intent into daemon child config without treating it as a wire declaration
+ FAIL  runtime/local-config.spec.ts > compiles an enabled [console] intent into a system-owned projection and removes it when disabled
+ FAIL  runtime/local-config.spec.ts > keeps machine source and per-daemon accepted facts separate in internal v2
+ FAIL  runtime/local-config.spec.ts > keeps a durable owner-fence uncertain through accepted advancement in the production TOML store
+ FAIL  runtime/local-config.spec.ts > rejects owner-fence overwrite and removal when the same operation id has different identity
+ FAIL  runtime/local-config.spec.ts > resolves a target observation by full provider identity across multi-provider auth-none and shared-credential layouts
+Error: listen EPERM: operation not permitted 127.0.0.1
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/16]⎯
+
+ FAIL  runtime/local-config.spec.ts > refuses partial existing TLS before creating config and never overwrites a complete pair
+AssertionError: expected [Function] to throw error matching /TLS material is incomplete/ but got 'listen EPERM: operation not permitted…'
+
+- Expected:
+/TLS material is incomplete/
+
++ Received:
+"listen EPERM: operation not permitted 127.0.0.1"
+
+ ❯ runtime/local-config.spec.ts:705:71
+    703|     await mkdir(tls, { recursive: true, mode: 0o700 })
+    704|     await writeFile(join(tls, 'relay-key.pem'), 'sentinel\n', { mode: …
+    705|     await expect(initializeLocalConfig(configPath, V3_PRIMARY_CONFIG))…
+       |                                                                       ^
+    706|     expect(existsSync(configPath)).toBe(false)
+    707|     expect(await readFile(join(tls, 'relay-key.pem'), 'utf8')).toBe('s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/16]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  16 failed | 29 passed (45)
+   Start at  14:19:56
+   Duration  1.36s (transform 443ms, setup 0ms, import 591ms, tests 619ms, environment 0ms)
+
+
+EXIT=1
