@@ -133,6 +133,10 @@ const sourceRoots = [
   'config',
   'console-host',
   'contracts',
+  // The packaged Work graphs are inputs of the same compile/test run: the
+  // DAGpipe runner build, the graph regression and the packaged Work replay
+  // read them. No other docs tree is a verify input.
+  'docs/design/dagpipe/graphs',
   'dsh-adapter',
   'endpoint',
   'memory-plugin',
