@@ -968,6 +968,106 @@ describe('external op convergence and admission', () => {
     expect(submitted.ok ? '' : submitted.error.code).toBe('RESULT_UNKNOWN')
   })
 
+  it('keeps an unread-back close recoverable by the same commit after a restart', async () => {
+    // The write left the hub but the read named no observed state, so the
+    // external op must stay unknown. A confirmed ledger entry would make the
+    // retry a conflict, so a later read can never settle the close.
+    let closes = 0
+    const { hub, store } = scripted((op) => {
+      if (op.kind === 'issue.close') {
+        closes += 1
+        return confirmed(op, { issueId: '42' })
+      }
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const closed = await hub.handle(OWNER, { kind: 'issue.close', requestId: 'c1', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'shipped' })
+    expect(closed.ok).toBe(false)
+    expect(closed.ok ? '' : closed.error.code).toBe('RESULT_UNKNOWN')
+    // The close is not confirmed by its read-back, so the external op is unknown.
+    expect(lastOps(store).find((op) => op.commitId === 'cc1')?.state).toBe('unknown')
+
+    // A restart must keep the op unknown: nothing is replayed and no op is confirmed.
+    const restarted = createGroupHub({
+      store, isOnline: () => true,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
+      executeExternalOp: async (op) => confirmed(op, { issueId: '42' }),
+    })
+    // The recovery read names the state Vikunja actually reports, so the
+    // unknown op can be settled from the read instead of a second close.
+    const restartedWithRead = createGroupHub({
+      store, isOnline: () => true,
+      now: () => new Date('2026-10-22T00:00:00.000Z'),
+      idFactory: (() => { let n = 0; return () => `id-${++n}` })(),
+      executeExternalOp: async (op) => confirmed(op, op.kind === 'issue.recover' ? { issueId: '42', actualState: 'closed' } : { issueId: '42' }),
+    })
+    const recovered = await restartedWithRead.handle(OWNER, { kind: 'issue.close', requestId: 'c2', commitId: 'cc1', sessionId, reason: 'done', conclusion: 'shipped' })
+    expect(recovered.ok).toBe(true)
+    expect(stateOf(recovered.reply)).toBe('closed')
+    // The retry reads the state back; it never issues a second close.
+    expect(closes).toBe(1)
+  })
+
+  it('keeps an action result without a comment recoverable by the same commit', async () => {
+    // A confirmed receipt without the comment reference is not proof the write
+    // reached Vikunja. The external op must stay unknown, or the same result
+    // commit would be refused as a conflict instead of recovering.
+    let writes = 0
+    const { hub } = scripted((op) => {
+      if (op.kind === 'action.result') {
+        writes += 1
+        return writes === 1 ? confirmed(op, {}) : confirmed(op, { resultRef: 'comment:1' })
+      }
+      if (op.kind === 'issue.recover') return confirmed(op, { found: true, resultRef: 'comment:1' })
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await groupWithEdge(hub)
+    const sessionId = sessionIdOf((await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })).reply)
+    const action = await hub.handle(OWNER, {
+      kind: 'action.create', requestId: 'a1', commitId: 'ac1', sessionId,
+      assigneeAgentId: 'agent-b', actionKind: 'comment', reason: 'r', expectedResult: 'e', replyRequired: true,
+    })
+    const actionId = (action.reply as { action: { actionId: string } }).action.actionId
+    const first = await hub.handle(PEER, { kind: 'action.submit', requestId: 's1', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(first.ok).toBe(false)
+    expect(first.ok ? '' : first.error.code).toBe('RESULT_UNKNOWN')
+
+    const retried = await hub.handle(PEER, { kind: 'action.submit', requestId: 's2', resultCommitId: 'rc1', actionId, resultBody: 'done' })
+    expect(retried.ok).toBe(true)
+    expect((retried.reply as { action: { state: string } }).action.state).toBe('completed')
+    // The same result commit reads its comment back; it never writes a second one.
+    expect(writes).toBe(1)
+  })
+
+  it('keeps a create without an issue id recoverable by the same commit', async () => {
+    // A confirmed receipt that names no issue proves dispatch, not identity.
+    // Treating it as a definite refusal would let the client drop its commit and
+    // create a second issue under a new one.
+    let creates = 0
+    const { hub, store } = scripted((op) => {
+      if (op.kind === 'issue.create') {
+        creates += 1
+        return confirmed(op, {})
+      }
+      return confirmed(op, { issueId: '42' })
+    })
+    const groupId = await groupWithEdge(hub)
+    const first = await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r1', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })
+    expect(first.ok).toBe(false)
+    expect(first.ok ? '' : first.error.code).toBe('RESULT_UNKNOWN')
+    expect(creates).toBe(1)
+    // The unconfirmed identity is persisted as unknown, not as a confirmed create.
+    expect(lastOps(store).find((op) => op.commitId === 'ic1')?.state).toBe('unknown')
+
+    const retried = await hub.handle(OWNER, { kind: 'issue.create', requestId: 'r2', commitId: 'ic1', groupId, vikunjaProjectId: 'p1', title: 't', body: 'b' })
+    expect(retried.ok).toBe(true)
+    expect(sessionIdOf(retried.reply)).toContain('42')
+    // The same commit reads the issue back; it never creates a second one.
+    expect(creates).toBe(1)
+  })
+
   it('keeps UNAVAILABLE when no executor could be reached', async () => {
     const store = memoryStore()
     const offline = createGroupHub({
