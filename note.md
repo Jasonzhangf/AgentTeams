@@ -458,3 +458,19 @@
   固定带所需字段，故本轮属「防协议违例兜底 + 重试可恢复」，不是线上可达缺陷修复；
   汇报口径按其更正表述。
 - 未收口：等待 Carol 按提交复核与最终候选合成；`task-8dde877-console-group-api` 归 Carol。
+
+## 2026-10-26 Console 反馈轮：管理权限拒绝、SSE 空转与 Work/历史独立（已合并 main）
+
+- 三个提交（`97bbc32` 管理拒绝、`8f532f7` SSE 只读抑制与 Work/连接历史独立显示、`f7d85b1`
+  注册表生命周期断言容忍异步 sweep 状态）在候选树通过完整门禁后并入 `main` 并推送，
+  `main == origin/main == f7d85b123188fc7aaf19a42cbf159789342376bc`。
+- 验证证据：GCM 执行者在无沙箱的真实入口跑完整 `pnpm verify`，退出码 0；回归记录 373 个套件、
+  1642 条通过、0 失败/挂起，含真实 Chrome DOM；候选身份记录源码状态为已提交且工作树干净
+  （`/Volumes/Intel/playground/agentteams/.worker-runs/console-feedback-verify-gcm-2/`）。
+- 独立 milestone review 用 `gpt-6.1-sol` medium 只读跑完，结论 pass、blocking/P0/P1 均为 0，
+  回执在 `.worker-runs/console-feedback-review-20261026/console-feedback-milestone-review-1/`。
+- 早前两次 verify 卡死已定位为 GCM 沙箱参数（空 writable_roots）导致 vitest 死锁，非产品缺陷；
+  卡死样本与隔离对比证据保留在同一 `.worker-runs` 目录，不再用该沙箱参数跑全量回归。
+- 边界：浏览器证据只覆盖桌面 Chrome，不证明移动端，也不证明引擎推理；本轮不涉及这些范围。
+- 遗留：主检出目录 `/Volumes/extension/code/AgentTeams` 仍有他人/历史未提交改动并落后 main，
+  按只读保护保留现场，未做任何清理或覆盖。
