@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { object, text, number, loadDirectListenerConfig, loadRelayConfig, type DirectListenerConfig } from './process-config.ts'
 import { parseAgentDeclaration, RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
-import type { AgentDeclaration } from '../packages/shared/src/agent-services.ts'
+import type { AgentDeclaration, AuthenticatedAgent } from '../packages/shared/src/agent-services.ts'
 import { createCliWorkExecutor } from '../agent-host/cli-executor.ts'
 import { createWorkHost } from '../agent-host/work-host.ts'
 import { createWorkIngress } from '../agent-host/work-ingress.ts'
@@ -91,6 +91,26 @@ export interface AgentProcessConfig {
   readonly openCode?: { readonly executable: string; readonly directory: string; readonly configFile: string; readonly port: number; readonly startupTimeoutMs: number; readonly stopTimeoutMs: number }
   readonly directListener?: DirectListenerConfig
   readonly endpoint?: AgentEndpointConfig
+}
+
+/** Runtime owns management policy and the launch context for its recovery guidance. */
+export function authorizeConsoleManagement(
+  config: Pick<AgentProcessConfig, 'declaration' | 'allowedManagers'>,
+  principal: AuthenticatedAgent,
+  localConfigPath?: string,
+): true | ConsoleServiceError {
+  const agentId = config.declaration.identity.agentId
+  if (principal.accountId !== config.declaration.identity.accountId) return {
+    code: 'FORBIDDEN', message: `Console account does not match Agent ${JSON.stringify(agentId)}. Use a Console in the Agent's account.`,
+  }
+  if (principal.scopeId !== config.declaration.scopeId) return {
+    code: 'FORBIDDEN', message: `Console scope does not match Agent ${JSON.stringify(agentId)}. Use a Console in the Agent's scope.`,
+  }
+  if (config.allowedManagers.includes(principal.agentId)) return true
+  const policy = localConfigPath === undefined
+    ? 'Ask the Agent configuration owner to review policy.allowedManagers in its authoritative configuration.'
+    : `Review allowedManagers in [agents.${JSON.stringify(agentId)}.runtime.policy] in ${JSON.stringify(localConfigPath)}.`
+  return { code: 'FORBIDDEN', message: `Agent ${JSON.stringify(agentId)} does not authorize Console ${JSON.stringify(principal.agentId)} as a manager. ${policy} If management access is intended, explicitly authorize this Console identity, apply the change through the formal restart entry, then refresh. No access was granted.` }
 }
 
 /** Per-session active prompt admission; not a global manager or persistent scheduler. */
@@ -1125,8 +1145,7 @@ export async function startAgentProcess(configPath: string, env: NodeJS.ProcessE
           work: { timeoutMs: config.relay.requestTimeoutMs, maxPending: config.relay.maxPendingRequests,
             maxIncoming: config.relay.maxPendingRequests, onRequest: createWorkIngress(host, peer) },
           console: createConsoleIngress({ agentId: config.declaration.identity.agentId, generation: () => daemon!.network.generation,
-            client: consoleClient, authorize: principal => principal.accountId === config.declaration.identity.accountId &&
-              principal.scopeId === config.declaration.scopeId && config.allowedManagers.includes(principal.agentId) }, peer),
+            client: consoleClient, authorize: principal => authorizeConsoleManagement(config, principal, env.TEAMS_LOCAL_CONFIG_PATH) }, peer),
           })
         })().catch(error => {
           // A scoped data failure must not kill registration or imply an owning operation completed.

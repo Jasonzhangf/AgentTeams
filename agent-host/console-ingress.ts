@@ -1,5 +1,5 @@
 import type { AuthenticatedAgent, ServiceErrorCode } from '../packages/shared/src/agent-services.ts'
-import type { ConsoleClientV1, ConsoleCommandV1 } from '../packages/shared/src/console-api.ts'
+import type { ConsoleClientV1, ConsoleCommandV1, ConsoleServiceError } from '../packages/shared/src/console-api.ts'
 import { parseConsoleWireRequest, type ConsoleWireReply, type ConsoleWireRequest } from '../packages/shared/src/console-wire.ts'
 import { assertJsonValue } from '../packages/shared/src/json-value.ts'
 
@@ -12,7 +12,7 @@ export type ConsoleAccess =
 export function createConsoleIngress(options: {
   readonly agentId: string
   readonly generation: () => number
-  readonly authorize: (peer: AuthenticatedAgent, access: ConsoleAccess) => boolean
+  readonly authorize: (peer: AuthenticatedAgent, access: ConsoleAccess) => boolean | ConsoleServiceError
   readonly client: ConsoleClientV1
 }, authenticatedPeer: AuthenticatedAgent) {
   const { agentId, generation, authorize, client } = options
@@ -29,7 +29,12 @@ export function createConsoleIngress(options: {
     const access: ConsoleAccess = request.kind === 'console.projection' ? { kind: 'observe', agentId }
       : request.kind === 'console.command' ? { kind: 'command', agentId, commandKind: request.command.kind }
       : { kind: 'session', agentId, sessionId: request.sessionId }
-    if (!authorize(peer, access)) return denied('FORBIDDEN', 'Agent management policy denied this request')
+    const admission = authorize(peer, access)
+    if (admission !== true) return {
+      kind: 'console.result', correlationId: request.correlationId,
+      result: { ok: false, error: admission === false
+        ? { code: 'FORBIDDEN', message: 'Agent management policy denied this request' } : admission },
+    }
     if (request.kind === 'console.projection') return { kind: 'console.projection.result', correlationId: request.correlationId, projection: await client.readProjection() }
     const result = request.kind === 'console.command' ? await client.command(request.command)
       : await client.sendSession({ agentId, sessionId: request.sessionId }, request.payload)

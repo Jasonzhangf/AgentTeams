@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { ConsoleClientV1, ConsoleServiceError } from '../packages/shared/src/console-api.ts'
+import { ConsoleProjectionError, type ConsoleClientV1 } from '../packages/shared/src/console-api.ts'
+export { ConsoleProjectionError } from '../packages/shared/src/console-api.ts'
 import { parseConsoleWireRequest, type ConsoleWireRequest } from '../packages/shared/src/console-wire.ts'
 import { assertJsonValue } from '../packages/shared/src/json-value.ts'
 import { RelayProtocolError } from '../packages/shared/src/relay-codec.ts'
@@ -7,9 +8,6 @@ import type { RelayClient } from '../network/relay-client.ts'
 import { requestConsole } from '../network/console-channel.ts'
 
 type Request = ConsoleWireRequest extends infer T ? T extends ConsoleWireRequest ? Omit<T, 'targetGeneration' | 'correlationId'> : never : never
-export class ConsoleProjectionError extends Error {
-  constructor(readonly error: ConsoleServiceError) { super(error.message) }
-}
 
 /**
  * One Agent binding over the existing authenticated relay; directory state never grants management rights.

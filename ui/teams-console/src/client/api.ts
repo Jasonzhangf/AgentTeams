@@ -12,7 +12,7 @@ export interface ConsoleHttpClientOptions {
 }
 
 export class ConsoleTransportError extends Error {
-  constructor(message: string, readonly status?: number) {
+  constructor(message: string, readonly status?: number, readonly code?: string) {
     super(message)
     this.name = 'ConsoleTransportError'
   }
@@ -116,13 +116,15 @@ export function createConsoleHttpClient(options: ConsoleHttpClientOptions = {}):
     }
     if (!response.ok) {
       let detail = `HTTP ${response.status}`
+      let code: string | undefined
       try {
         const body = await readJson(response)
         if (isRecord(body) && typeof body.message === 'string') detail = `${detail}: ${body.message}`
+        if (isServiceError(body)) code = body.code
       } catch {
         // Keep the status as the stable transport evidence when the error body is not JSON.
       }
-      throw new ConsoleTransportError(detail, response.status)
+      throw new ConsoleTransportError(detail, response.status, code)
     }
     return readJson(response)
   }

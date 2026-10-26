@@ -11,6 +11,17 @@ const projection: ConsoleProjectionV1 = {
 }
 
 describe('Console HTTP v1 adapter', () => {
+  it('preserves typed HTTP refusal code and guidance beside status', async () => {
+    const message = 'Agent worker denied Console observer; review allowedManagers and restart, then refresh.'
+    const client = createConsoleHttpClient({ fetchImpl: async () => new Response(
+      JSON.stringify({ code: 'FORBIDDEN', message }), { status: 403 }) })
+    await expect(client.readProjection()).rejects.toMatchObject({
+      name: 'ConsoleTransportError', status: 403, code: 'FORBIDDEN', message: `HTTP 403: ${message}`,
+    })
+    const unknown = createConsoleHttpClient({ fetchImpl: async () => new Response(
+      JSON.stringify({ message: 'Console owner request failed; outcome not inferred' }), { status: 502 }) })
+    await expect(unknown.readProjection()).rejects.toMatchObject({ status: 502, code: undefined })
+  })
   it('reads the versioned projection endpoint', async () => {
     const requests: string[] = []
     const client = createConsoleHttpClient({

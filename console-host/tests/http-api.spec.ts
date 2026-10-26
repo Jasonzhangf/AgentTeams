@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createConsoleApiHandler, type ConsoleApiOptions } from '../src/http-api.ts'
+import { ConsoleProjectionError } from '../../packages/shared/src/console-api.ts'
 
 const servers: ReturnType<typeof createServer>[] = []
 afterEach(async () => { await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => server.close(() => resolve())))) })
@@ -22,6 +23,25 @@ it('authenticates reads and mutations before dispatch', async () => {
   expect((await fetch(`${url}/api/v1/command`, { method: 'POST', body: '{}' })).status).toBe(401)
   expect(client.readProjection).not.toHaveBeenCalled()
   expect(client.command).not.toHaveBeenCalled()
+})
+it.each([
+  ['FORBIDDEN', 403], ['STALE_GENERATION', 409], ['UNAVAILABLE', 503],
+] as const)('preserves a typed Console read refusal %s through public HTTP', async (code, status) => {
+  const { url, client } = await start()
+  const error = { code, message: `Owner refused: ${code}` }
+  client.readProjection.mockRejectedValueOnce(new ConsoleProjectionError(error))
+  const response = await fetch(`${url}/api/v1/projection`)
+  expect(response.status).toBe(status)
+  expect(await response.json()).toEqual(error)
+})
+it('does not classify an unknown exception by its message or nested error fields', async () => {
+  const { url, client } = await start()
+  client.readProjection.mockRejectedValueOnce(Object.assign(new Error('secret FORBIDDEN'), {
+    error: { code: 'FORBIDDEN', message: 'private detail' },
+  }))
+  const response = await fetch(`${url}/api/v1/projection`)
+  expect(response.status).toBe(502)
+  expect(await response.json()).toEqual({ message: 'Console owner request failed; outcome not inferred' })
 })
 it('preserves daemon denial and keeps Session JSON out of commands', async () => {
   const { url, client } = await start()

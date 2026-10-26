@@ -16,6 +16,11 @@ export interface ConsoleServiceError extends Omit<ServiceError, 'code'> {
   readonly detail?: SessionCancelUnknownDetail
 }
 
+/** A Console read refusal from its service owner, distinct from transport exceptions. */
+export class ConsoleProjectionError extends Error {
+  constructor(readonly error: ConsoleServiceError) { super(error.message) }
+}
+
 /** Console transport DTOs. Daemons own the source state and command authorization. */
 export interface ConsoleProviderView {
   readonly id: string

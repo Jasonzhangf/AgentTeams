@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ServiceError } from '../../packages/shared/src/agent-services.ts'
-import { parseConsoleCommand, type ConsoleClientV1 } from '../../packages/shared/src/console-api.ts'
+import { ConsoleProjectionError, parseConsoleCommand, type ConsoleClientV1 } from '../../packages/shared/src/console-api.ts'
 import { parseGroupWireRequest, type GroupWireReply, type GroupWireRequest } from '../../packages/shared/src/group-wire.ts'
 import { assertJsonValue } from '../../packages/shared/src/json-value.ts'
 import {
@@ -289,6 +289,14 @@ export function createConsoleApiHandler(options: ConsoleApiOptions) {
         // A route that names its own input code reports it; every earlier refusal keeps the
         // exact previous body, so no existing client sees a new shape.
         else if (error instanceof HttpInputError) reply(response, error.status, error.code === undefined ? { message: error.message } : { code: error.code, message: error.message })
+        else if (error instanceof ConsoleProjectionError) {
+          const { code, message } = error.error
+          const status = code === 'FORBIDDEN' ? 403 : code === 'UNAUTHENTICATED' ? 401
+            : code === 'NOT_FOUND' ? 404 : code === 'INVALID_INPUT' ? 400
+            : code === 'STALE_GENERATION' || code === 'REVISION_CONFLICT' || code === 'CONFLICT' ? 409
+            : code === 'UNAVAILABLE' || code === 'RESOURCE_EXHAUSTED' ? 503 : 502
+          reply(response, status, { code, message })
+        }
         else reply(response, 502, { message: 'Console owner request failed; outcome not inferred' })
       } else response.destroy()
     }

@@ -32,6 +32,19 @@ it('passes authenticated principal to policy and preserves Session business cont
   expect(client.sendSession).toHaveBeenCalledWith({ agentId: 'target', sessionId: 's' }, payload)
   expect(client.command).not.toHaveBeenCalled()
 })
+it('returns the runtime policy refusal without dispatch and checks target/generation first', async () => {
+  const { client } = setup()
+  const error = { code: 'FORBIDDEN' as const, message: 'Console scope does not match target Agent' }
+  const authorize = vi.fn(() => error)
+  const ingress = createConsoleIngress({ agentId: 'target', generation: () => 2, client, authorize },
+    { accountId: 'account', scopeId: 'other', agentId: 'console' })
+  const request = { kind: 'console.projection' as const, correlationId: 'r', targetGeneration: 2, agentId: 'target' }
+  expect(await ingress(request)).toEqual({ kind: 'console.result', correlationId: 'r', result: { ok: false, error } })
+  expect(client.readProjection).not.toHaveBeenCalled()
+  expect(await ingress({ ...request, targetGeneration: 1 })).toMatchObject({ result: { error: { code: 'STALE_GENERATION' } } })
+  expect(await ingress({ ...request, agentId: 'other' })).toMatchObject({ result: { error: { message: 'Console request targets another Agent' } } })
+  expect(authorize).toHaveBeenCalledTimes(1)
+})
 it('does not convert an unknown owner failure into a successful reply', async () => {
   const { ingress, client } = setup()
   client.command.mockRejectedValueOnce(new Error('outcome unknown'))

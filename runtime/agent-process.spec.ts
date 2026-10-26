@@ -16,7 +16,7 @@ import { createRelayConsoleClient } from './relay-console-client.ts'
 import { createConsoleHub } from './console-hub.ts'
 import { createConsoleServer } from '../console-host/src/server.ts'
 import { createConsoleHttpClient } from '../ui/teams-console/src/client/api.ts'
-import { createSessionHost, loadAgentProcessConfig, projectRuntimeAgentRow, resolveWorkChildReply, startAgentProcess } from './agent-process.ts'
+import { authorizeConsoleManagement, createSessionHost, loadAgentProcessConfig, projectRuntimeAgentRow, resolveWorkChildReply, startAgentProcess } from './agent-process.ts'
 import type { ManagedEffectiveHandle, ManagedRuntimeReadiness } from './managed-config-owner.ts'
 import { OpenCodeAdapterError, type OpenCodeEventClient, type OpenCodeSdkEvent, type OpenCodeSessionClient } from '../opencode-adapter/src/index.ts'
 import { RuntimeConfigError } from '../config/runtime-config.ts'
@@ -101,6 +101,31 @@ const browserDemands = [
   { resourceId: 'browser-context', amount: 1 },
   { resourceId: 'browser-slot', amount: 1 },
 ]
+
+it('distinguishes manager policy from account/scope denial without inventing configuration context', () => {
+  const config = { declaration: {
+    identity: { hostId: 'host', machineId: 'machine', agentId: 'target', accountId: 'account', agentKind: 'custom' as const, label: 'Target' },
+    scopeId: 'scope', revision: 1, capabilities: [], routes: [],
+  }, allowedManagers: [] as string[] }
+  const principal = { accountId: 'account', scopeId: 'scope', agentId: 'custom-console' }
+  const refusal = authorizeConsoleManagement(config, principal, '/test-owned/config.toml')
+  expect(refusal).toMatchObject({ code: 'FORBIDDEN', message: expect.stringContaining('[agents."target".runtime.policy]') })
+  expect(refusal).toMatchObject({ message: expect.stringContaining('/test-owned/config.toml') })
+  expect(refusal).toMatchObject({ message: expect.stringContaining('"custom-console"') })
+  expect(refusal).toMatchObject({ message: expect.stringContaining('restart') })
+  expect(config.allowedManagers).toEqual([])
+  const unknownSource = authorizeConsoleManagement(config, principal)
+  expect(unknownSource).toMatchObject({ message: expect.stringContaining('configuration owner') })
+  expect(JSON.stringify(unknownSource)).not.toMatch(/config.toml|__console|agent.json/)
+  for (const wrong of [{ ...principal, accountId: 'other' }, { ...principal, scopeId: 'other' }]) {
+    const denied = authorizeConsoleManagement(config, wrong, '/test-owned/config.toml')
+    expect(denied).toMatchObject({ code: 'FORBIDDEN' })
+    expect(JSON.stringify(denied)).not.toMatch(/allowedManagers|config.toml|restart/)
+  }
+  config.allowedManagers.push(principal.agentId)
+  expect(authorizeConsoleManagement(config, principal)).toBe(true)
+  expect(authorizeConsoleManagement(config, { ...principal, scopeId: 'other' })).toMatchObject({ code: 'FORBIDDEN' })
+})
 
 it('accepts service-only connect intent and rejects retired startup Work fields before publication', async () => {
   const root = join(directory, 'connect-contract')
@@ -342,7 +367,24 @@ process.once('SIGINT', () => server.close(() => process.exit(0)))
   writeFileSync(path, JSON.stringify({ ...config, policy: { ...config.policy, allowedManagers: [] } }))
   const second = child(path)
   expect(await second.ready).toMatchObject({ generation: 2 })
-  await expect(management.readProjection()).rejects.toMatchObject({ error: { code: 'FORBIDDEN' } })
+  await expect(management.readProjection()).rejects.toMatchObject({ error: {
+    code: 'FORBIDDEN', message: expect.stringContaining('does not authorize Console "consumer" as a manager'),
+  } })
+  const refusedConsole = createConsoleServer({ staticRoot: resolve('console-host/static'), uiRoot: resolve('ui/teams-console/lib'),
+    authorize: async request => request.headers.authorization === 'console-test' ? management : undefined })
+  await new Promise<void>(resolve => refusedConsole.listen(0, '127.0.0.1', resolve))
+  try {
+    const baseUrl = `http://127.0.0.1:${(refusedConsole.address() as { port: number }).port}`
+    const fetchImpl: typeof fetch = (url, init) => fetch(url, { ...init, headers: { ...init?.headers, authorization: 'console-test' } })
+    expect((await fetchImpl(baseUrl)).status).toBe(200)
+    const refusal = await fetchImpl(`${baseUrl}/api/v1/projection`)
+    expect(refusal.status).toBe(403)
+    expect(await refusal.json()).toMatchObject({ code: 'FORBIDDEN', message: expect.stringContaining('allowedManagers') })
+    await expect(createConsoleHttpClient({ baseUrl, fetchImpl }).readProjection()).rejects.toMatchObject({
+      status: 403, code: 'FORBIDDEN', message: expect.stringContaining('"consumer"'),
+    })
+    expect(JSON.parse(readFileSync(path, 'utf8')).policy.allowedManagers).toEqual([])
+  } finally { await new Promise<void>(resolve => refusedConsole.close(() => resolve())) }
   const query = await connect(2)
   expect(await query.request({ kind: 'work.get', workId: 'work', requestId: 'request' })).toMatchObject({ control: { state: 'succeeded' } })
   second.process.kill('SIGKILL')
