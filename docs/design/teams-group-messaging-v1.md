@@ -1,6 +1,6 @@
 # Teams 群组通信、issue 会话与 action 执行 v1(修订版)
 
-状态:design 修订版(revision 7)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
+状态:design 修订版(revision 11)。本文件替代原 `teams-group-messaging-v1.md` 的群内消息、会话、action、
 注入、关闭、投递语义。审计反馈和用户确认的决定已落实到对象模型、线协议、权限、投递、
 Session 映射、关闭和分批。本文件是唯一 owner;不并存两套契约。受影响架构映射已同步:模块归属登记在
 `docs/architecture/module-registry.json` 的 `group-messaging` 条目,实现后按
@@ -55,6 +55,34 @@ Session 映射留到第二批。
 revision 6:补齐首版 WebUI 恢复旧议题所需的 `issue.list` 只读协议、SESE 图和验收。
 列表读取 hub 已持久会话,不绑定外部 issue,不查询 Vikunja,不证明外部状态新鲜。
 WebUI 授权沿 `teams-group-webui-design.md`;本轮只改设计,产品修复和运行证据分别验收。
+
+revision 7:允许 pending action 直接报告 blocked/failed,新增持久 `Action.report`,并对齐
+`action.report` 帧字段命名。
+
+revision 8:新增持久 `Action.refusal`,master 拒绝 peer 请求时原因非空、不覆盖原 `reason`;
+外部关闭收敛由 registry daemon 持有的唯一有界 scheduler 驱动,GroupHub 保留 issue 真源、
+读取委托与共用 close settlement。读失败保持 unknown 并拒绝新 action;Console 不承担同步。
+
+revision 9:恢复 13.1 的读取 owner 委派、命令前刷新与在飞缩短边界,并记录第一批有界
+sweep 的实际实现(单轮有界并发、单读超时、30 秒窗口和 registry 状态可观测回执);离线改派
+与在飞缩短列为未实现项,附最小方案与验收,不静默降需求。
+
+revision 10:离线受信 reader 改派与在飞缩短按 13.1 的最小方案实现并验收。只读 `issue.query`
+在发起者离线时换到同群当前有效的在线成员,沿用同一 op/commit 与回执鉴权;无可用受信
+reader 时保持 unknown 并拒绝新 action,不静默降级。registry scheduler 仍只持有一个 timer,
+按 GroupHub 暴露的真实在飞 action 会话集合缩短读取间隔,普通会话不提前读。变更类外部写
+不换 owner 重写。未权威收敛的 close 意图(pending/inflight/unknown)同时封住新准入;
+解封只由读回 closed 的确认或更高代次的新 reopen 意图产生,读回 open 不解封。
+
+revision 11:修正 close 的未权威收敛责任与 scheduler 的 full 时钟。`issue.recover` 只有当前
+状态读,没有原请求的终态和外部序号,因此读回 open 与普通 `issue.query` 证据相同:它既不能
+证明旧 C 从未生效,也不能区分"C 生效后被外部重开",不再据此把原 close op 记为 failed。
+读回 open 或先后不明时保持 unknown/conflict 并继续封准入;读回 closed 按已应用确认完成并
+保持关闭。只有原 owner 的写回执明确失败且能证明未写,或更高代次的新 reopen 意图经真实
+写/读确认后取代旧责任,才解除封口。revision 10 的"原 close 的只读恢复可以解封"按此限定为
+读回 closed。registry scheduler 只在 full pass 真正开始时推进 full 时钟;full 到期时若有
+短定向 pass 在飞,保留 full 待执行、不推进时钟、不把子集 pass 当 full,在飞 pass 结束后由
+下一 tick 执行 full。
 
 ## 2. 被替代的旧语义
 
@@ -158,6 +186,9 @@ Action {
   report?: {                   // 被指派人的持久报告,不代表结果 comment 已完成
     report: 'blocked'|'failed', reason, evidence?, reportedAt
   },
+  refusal?: {                  // master 拒绝 peer 请求的持久原因;不覆盖原 reason
+    reason, refusedAt
+  },
   resultCommitId?,             // 结果提交操作的稳定幂等键
   resultRef?,                  // 写回 Vikunja 的 comment id
   createdAt, completedAt?
@@ -253,6 +284,8 @@ action:未开始的取消;在飞的进入取消或收口,已有副作用保留�
 - blocked 与 failed 不自动推进。由 master 决定重新指派(新 action)或调整;原 action 保持记录。
 - pending 直接报告 blocked/failed 不表示执行已开始,也不改变 peer 不能拒绝 master 有效指派的规则;
   原 action 记录保留,重新指派创建新 action。
+- pending 到 refused 必须有非空原因。refusal.reason 持久保存,发起者刷新 action.list 可见;
+  refusal 不覆盖 action.reason。
 - unknown 不是终态。由执行 owner 按 commitId 回读目标 API 收敛为 completed 或 failed。
   回读无法确定时保持 unknown 并上报,不盲目重试。
 - cancelled 只证明执行已停止。issue 可以先关闭,但关闭报告中必须列出尚未确认停止的 action。
@@ -600,13 +633,51 @@ JSONL 纪律:每条消息一行,含 messageId、sequence、commitId。单写者�
 
 第一批不等 webhook,用明确的状态读取机制收敛。
 
-- 读取 owner 是发起者所在 daemon;离线时由 hub 委派的受信读取 daemon 执行。
+- 读取 owner 首选发起者所在 daemon。发起者离线时,GroupHub 从同一群当前有效且 scope 一致
+  的在线成员中选一个受信 reader;只读 `issue.query` 允许换 owner,沿用同一 op/commit 与
+  回执鉴权。回执 owner 必须匹配被委派 reader,不匹配即拒绝并保持 unknown。无可用受信
+  reader 时保持 unconfirmed/unknown 并拒绝新 action,不静默降级。变更类外部写
+  (`issue.close`、`issue.reopen`、`issue.create`、`action.result` 等)永远沿用记录 owner,
+  不换 daemon 重写。读取失败时保持原投影与 action 责任,不把旧投影当新鲜状态。
 - 刷新触发:定时轮询(默认 30 秒)、每条命令进入前刷新本会话、会话有在飞 action 时缩短间隔。
+  第一批的定时轮询由 registry daemon 启动时创建的唯一有界 scheduler 承担;scheduler 只持有
+  timer 生命周期并逐轮调用 GroupHub 的 sweep,GroupHub 保留 issue 真源、读取委派和共用
+  close settlement。在飞缩短只由这一个 timer 执行:scheduler 读取 GroupHub 从现有 action
+  状态派生的在飞会话集合,只对这批会话按较短间隔(默认 5 秒)触发单次 sweep;普通会话仍只按
+  完整间隔(默认 30 秒)读取,不提前触发。每轮同一时刻最多一个 sweep;单轮读取用有界并发(默认 4)和单读超时
+  (默认 10 秒)推进,整轮在 30 秒窗口内结束。未完成读取的会话记为 unconfirmed 并保持
+  unknown,不按旧投影放行。Console 关闭不停止 scheduler,UI 不拥有轮询,也不创建第二个
+  scheduler。
+- 正式 stop 先清理 registry 自有的 scheduler timer,再关闭 relay;stop 只等待当前这一轮
+  有界 pass 结束,不等待未完成的单读。
 - 最大延迟:默认 30 秒。超过该窗口未读到状态,视为会话状态未知。
-- 读取失败时的准入:会话状态未知时拒绝新 action,返回明确错误,不放行也不缓存待执行。
+- 读取失败时的准入:会话状态未知时拒绝新 action,返回明确错误,不放行也不缓存待执行;投影与
+  action 责任保持原样。每条 `action.create` 进入前刷新本会话,刷新失败即拒绝。
+- 未权威收敛的关闭:最后一条有效 close 意图处于 `pending`、`inflight` 或 `unknown` 时,
+  新 action 在外部读之前拒绝,已有 pending action 的结果提交同样拒绝。一次普通
+  `issue.query` 读到 open 不解除该意图,原 close 的 `issue.recover` 读到 open 同样不解除:
+  两者都只给当前状态,没有原请求的终态或外部序号,无法区分"从未生效"与"生效后被外部重开"。
+  读到 open 或先后不明时保持 unknown/conflict 责任并继续封口;读到 closed 按已应用确认完成
+  并保持 closed。只有原 owner 的写回执明确失败且能证明未写,或更高 `opSeq` 的新 reopen
+  意图经真实写/读确认后取代旧意图,才解除封口。
 - 外部关闭进入与本地关闭共用的收口逻辑:停止新准入、取消队列、通知在飞执行。不重复调用
   Vikunja close,但取消与收口不能跳过。只把 `state` 改成 closed 不算完成。
 - webhook 是第三批的加速通道,只缩短延迟,不改变上述机制和准入规则。
+
+已实现契约:
+
+- `GroupHub.readExternal` 首选 session initiator;initiator 离线时从 `group-registry` 的当前
+  有效成员中选第一个在线成员作为受信 reader,只换 `issue.query` 的 owner。读取沿用
+  `issue.query:<sessionId>` 的 commit,并走 `confirmRead` 的回执鉴权;回执 `fromAgentId`
+  必须等于被委派 reader,否则拒绝并保持 unknown。无 reader 时返回 `UNAVAILABLE`,不发起
+  外部读,也不持久化新状态。
+- 在飞缩短的真实触发来源是 `GroupHub.inflightIssueSessionIds()`:它只从现有 action 状态
+  (`pending`、`accepted`、`in_progress`、`cancel_requested`)派生有在飞责任且仍存在的会话,
+  不新增第二套账本。registry scheduler 仍只有一个 timer;在短间隔 tick 上只对这组会话调用
+  `sweepIssueStates(sessionIds)`(默认 5 秒),普通会话只按完整间隔读取,不提前触发。
+- full 与短定向 pass 的时钟:只有 full pass(不带 `sessionIds`)真正开始执行时才推进 full
+  时钟与在飞时钟。full 到期时若有 pass 在飞,不合并、不推进时钟、不把子集 pass 当 full;
+  在飞 pass 结束后由下一 tick 执行真正的 full。boot pass 按真实 full 计数。
 
 ### 13.2 关闭与成员变更规则
 

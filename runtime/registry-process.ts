@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseDaemonConfigText, resolveDaemonIntent, type DaemonIntentV4, type RegistryDaemonIntent } from '../config/daemon-intent.ts'
-import { createRelayServer, type RelayServer } from '../server/relay.ts'
+import { createRelayServer, type GroupHub, type GroupIssueSweepResult, type RelayServer } from '../server/relay.ts'
 import { createGroupHub } from '../server/group-hub.ts'
 import { createGroupFileStore } from '../server/group-file-store.ts'
 import {
@@ -31,6 +31,26 @@ const TOKEN_FLAG = '--launcher-start-token'
 
 export type RegistryDaemonLifecycleState = 'starting' | 'running' | 'failed' | 'stopped'
 
+export interface RegistryIssueSweep {
+  readonly checked: number
+  readonly changed: number
+  readonly unconfirmed: readonly string[]
+  readonly updatedAt: string
+}
+
+/** The one durable receipt shape the CLI reads back from registry state. */
+export function groupIssueSweepReceipt(
+  result: GroupIssueSweepResult,
+  updatedAt: string = new Date().toISOString(),
+): RegistryIssueSweep {
+  return {
+    checked: result.checked,
+    changed: result.changed,
+    unconfirmed: [...result.unconfirmed],
+    updatedAt,
+  }
+}
+
 export interface RegistryDaemonState {
   readonly version: typeof STATE_VERSION
   readonly configPath: string
@@ -41,6 +61,7 @@ export interface RegistryDaemonState {
   readonly pid: number
   readonly state: RegistryDaemonLifecycleState
   readonly url?: string
+  readonly sweep?: RegistryIssueSweep
   readonly error?: string
   readonly updatedAt: string
 }
@@ -53,6 +74,7 @@ export interface RegistryDaemonStatus {
   readonly generation: number
   readonly pid?: number
   readonly url?: string
+  readonly sweep?: RegistryIssueSweep
   readonly error?: string
 }
 
@@ -69,6 +91,115 @@ export class RegistryProcessError extends Error {
   constructor(readonly code: RegistryProcessErrorCode, message: string, cause?: unknown) {
     super(message, { cause })
     this.name = 'RegistryProcessError'
+  }
+}
+
+/**
+ * The registry daemon owns the one timer that converges issue state when no
+ * Console is open. The timer only decides when a pass runs: GroupHub keeps the
+ * issue truth, delegates each read to the elected owner and applies the shared
+ * close settlement. There is no second scheduler and no UI timer.
+ */
+export const DEFAULT_GROUP_ISSUE_SWEEP_INTERVAL_MS = 30_000
+export const DEFAULT_GROUP_ISSUE_INFLIGHT_SWEEP_INTERVAL_MS = 5_000
+
+export interface GroupIssueSweepSchedulerOptions {
+  readonly intervalMs?: number
+  /** Shorter cadence used only when the hub reports in-flight action sessions. */
+  readonly inflightIntervalMs?: number
+  readonly onResult?: (result: GroupIssueSweepResult) => void | Promise<void>
+  readonly onError?: (error: unknown) => void
+}
+
+export interface GroupIssueSweepScheduler {
+  readonly intervalMs: number
+  readonly inflightIntervalMs: number
+  /** Runs one serialized pass now; concurrent callers share the same pass. */
+  runOnce(): Promise<GroupIssueSweepResult | undefined>
+  /** Clears this scheduler's timer and waits for its own pass to finish. */
+  stop(): Promise<void>
+}
+
+export function startGroupIssueSweepScheduler(
+  hub: GroupHub,
+  options: GroupIssueSweepSchedulerOptions = {},
+): GroupIssueSweepScheduler {
+  const intervalMs = options.intervalMs ?? DEFAULT_GROUP_ISSUE_SWEEP_INTERVAL_MS
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    throw new RegistryProcessError('INVALID_CONFIG', 'group issue sweep interval must be a positive number')
+  }
+  const requestedInflightIntervalMs = options.inflightIntervalMs ?? DEFAULT_GROUP_ISSUE_INFLIGHT_SWEEP_INTERVAL_MS
+  if (!Number.isFinite(requestedInflightIntervalMs) || requestedInflightIntervalMs <= 0) {
+    throw new RegistryProcessError('INVALID_CONFIG', 'group issue in-flight sweep interval must be a positive number')
+  }
+  // The registry owns one timer. A hub that reports live work gets the shorter
+  // cadence; other hubs keep the full interval.
+  const hasInflightSource = hub.inflightIssueSessionIds !== undefined
+  const inflightIntervalMs = hasInflightSource
+    ? Math.min(intervalMs, requestedInflightIntervalMs)
+    : intervalMs
+  const onError = options.onError ?? ((error: unknown) => {
+    console.error(`group issue sweep failed: ${error instanceof Error ? error.message : String(error)}`)
+  })
+  let inFlight: Promise<GroupIssueSweepResult | undefined> | undefined
+  let stopped = false
+  let lastFullPassAt = Date.now()
+  let lastInflightPassAt = lastFullPassAt
+  const runPass = (sessionIds?: readonly string[]): Promise<GroupIssueSweepResult | undefined> => {
+    if (inFlight !== undefined) return inFlight
+    if (stopped) return Promise.resolve(undefined)
+    // A full pass counts for the full window only when it really starts. A due
+    // full pass that would merge into an in-flight short pass keeps its clock
+    // behind, so the next tick after that pass settles runs the full one.
+    if (sessionIds === undefined) {
+      lastFullPassAt = Date.now()
+      lastInflightPassAt = lastFullPassAt
+    }
+    let pass: Promise<GroupIssueSweepResult | undefined>
+    pass = (async () => {
+      if (hub.sweepIssueStates === undefined) throw new Error('group hub has no issue state sweep')
+      const result = await hub.sweepIssueStates(sessionIds)
+      await options.onResult?.(result)
+      return result
+    })().catch((error: unknown) => {
+      onError(error)
+      return undefined
+    }).finally(() => {
+      if (inFlight === pass) inFlight = undefined
+    })
+    inFlight = pass
+    return pass
+  }
+  const runOnce = (): Promise<GroupIssueSweepResult | undefined> => runPass()
+  const timer = setInterval(() => {
+    if (stopped) return
+    const now = Date.now()
+    if (now - lastFullPassAt >= intervalMs) {
+      // A full pass that is due is not satisfied by whatever pass is already in
+      // flight. Its clock stays behind, so a later tick starts the real full
+      // pass over ordinary sessions too.
+      if (inFlight !== undefined) return
+      void runPass()
+      return
+    }
+    if (!hasInflightSource || now - lastInflightPassAt < inflightIntervalMs) return
+    lastInflightPassAt = now
+    const sessionIds = hub.inflightIssueSessionIds?.() ?? []
+    if (sessionIds.length > 0) void runPass(sessionIds)
+  }, Math.min(intervalMs, inflightIntervalMs))
+  timer.unref()
+  // Converge at boot as well as on the interval: a restarted registry should not
+  // serve a stale projection until the first full window has elapsed.
+  void runPass()
+  return {
+    intervalMs,
+    inflightIntervalMs,
+    runOnce,
+    async stop() {
+      stopped = true
+      clearInterval(timer)
+      await inFlight
+    },
   }
 }
 
@@ -158,6 +289,15 @@ export async function readRegistryState(statePath: string): Promise<RegistryDaem
     || !Number.isSafeInteger(state.pid) || !['starting', 'running', 'failed', 'stopped'].includes(state.state)) {
     throw new RegistryProcessError('INVALID_STATUS', `registry state is malformed: ${statePath}`)
   }
+  if (state.sweep !== undefined) {
+    if (typeof state.sweep !== 'object' || state.sweep === null
+      || !Number.isSafeInteger(state.sweep.checked) || !Number.isSafeInteger(state.sweep.changed)
+      || !Array.isArray(state.sweep.unconfirmed)
+      || !state.sweep.unconfirmed.every((entry) => typeof entry === 'string')
+      || typeof state.sweep.updatedAt !== 'string' || state.sweep.updatedAt.length === 0) {
+      throw new RegistryProcessError('INVALID_STATUS', `registry sweep state is malformed: ${statePath}`)
+    }
+  }
   return state
 }
 
@@ -184,6 +324,7 @@ function statusFrom(statePath: string, configPath: string, daemonId: string, sta
     generation: state.generation,
     pid: state.pid,
     ...(state.url === undefined ? {} : { url: state.url }),
+    ...(state.sweep === undefined ? {} : { sweep: state.sweep }),
     ...(state.error === undefined ? {} : { error: state.error }),
   }
 }
@@ -356,6 +497,7 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
     generation: previous?.generation ?? 1,
   } as const
   let server: RelayServer
+  let hub: GroupHub | undefined
   try {
     const credentials = await loadRegistryCredentials(plan, { env })
     const [key, cert] = await Promise.all([readFile(plan.tls.keyFile), readFile(plan.tls.certFile)])
@@ -371,12 +513,15 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
       ...options,
       // Pushes and group frames are addressed inside this one account and scope.
       groupScope: { accountId: intent.daemon.accountId, scopeId: intent.daemon.scopeId },
-      groupHub: (bridge) => createGroupHub({
-        store,
-        sendToAgent: bridge.send,
-        isOnline: bridge.isOnline,
-        externalOpTimeoutMs: 10_000,
-      }),
+      groupHub: (bridge) => {
+        hub = createGroupHub({
+          store,
+          sendToAgent: bridge.send,
+          isOnline: bridge.isOnline,
+          externalOpTimeoutMs: 10_000,
+        })
+        return hub
+      },
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -385,13 +530,29 @@ export async function runRegistryProcess(argv: readonly string[] = process.argv.
   }
   await writeRegistryState(statePath, { ...base, pid: process.pid, state: 'running', url: server.url, updatedAt: new Date().toISOString() })
   console.log(`registry listening ${server.url} config=${base.configPath} pid=${process.pid}`)
+  // The registry owns the one convergence timer. GroupHub keeps the issue truth
+  // and the shared close settlement; this scheduler only holds the timer.
+  let sweep: RegistryIssueSweep | undefined
+  const issueSweeper = hub === undefined ? undefined : startGroupIssueSweepScheduler(hub, {
+    // A detached child has no readable console stream, so the sweep result is
+    // persisted in the one state file the CLI and `registry status` read back.
+    onResult: (result) => {
+      sweep = groupIssueSweepReceipt(result)
+      return writeRegistryState(statePath, { ...base, pid: process.pid, state: 'running', url: server.url, sweep, updatedAt: sweep.updatedAt })
+    },
+  })
   let stopping: Promise<void> | undefined
   const stop = (signal: NodeJS.Signals) => {
     if (stopping) return
-    stopping = server.close()
-      .then(async () => {
-        await writeRegistryState(statePath, { ...base, pid: process.pid, state: 'stopped', updatedAt: new Date().toISOString() })
+    stopping = (async () => {
+      await issueSweeper?.stop()
+      await server.close()
+      await writeRegistryState(statePath, {
+        ...base, pid: process.pid, state: 'stopped',
+        ...(sweep === undefined ? {} : { sweep }),
+        updatedAt: new Date().toISOString(),
       })
+    })()
       .catch(error => {
         process.exitCode = 1
         console.error(`registry shutdown failed after ${signal}: ${error instanceof Error ? error.message : String(error)}`)

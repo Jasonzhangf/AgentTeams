@@ -253,6 +253,55 @@ describe('vikunja sync', () => {
     expect(found).toEqual({ status: 'ok', value: { issueId: '5', title: 'accept-issue', state: 'closed' } })
   })
 
+  it('keeps priority, dates and progress through a full-update close', async () => {
+    // The same full-update stub as above, now with the non-default fields a real
+    // Vikunja task can carry. A body that carries only the identity and body
+    // resets every omitted field, so this catches the field-loss regression.
+    const stored: Record<string, unknown> = {
+      id: 6,
+      title: 'keep-fields',
+      description: 'details',
+      done: false,
+      project_id: 2,
+      priority: 4,
+      due_date: '2026-11-30T00:00:00Z',
+      start_date: '2026-11-01T00:00:00Z',
+      percent_done: 0.25,
+      hex_color: '336699',
+    }
+    const server = await startServer((request, response) => {
+      if (request.method === 'POST') {
+        const body = JSON.parse(request.body) as Record<string, unknown>
+        for (const key of Object.keys(stored)) if (!(key in body)) delete stored[key]
+        Object.assign(stored, body)
+        return json(response, 200, stored)
+      }
+      return json(response, 200, stored)
+    })
+
+    const result = await sync(server).closeIssue({ issueId: '6' })
+
+    expect(result).toEqual({ status: 'ok', value: { issueId: '6', expectedState: 'closed', actualState: 'closed' } })
+    expect(JSON.parse(server.requests[1].body)).toMatchObject({
+      id: 6,
+      project_id: 2,
+      priority: 4,
+      due_date: '2026-11-30T00:00:00Z',
+      start_date: '2026-11-01T00:00:00Z',
+      percent_done: 0.25,
+      hex_color: '336699',
+      done: true,
+    })
+    expect(stored).toMatchObject({
+      priority: 4,
+      due_date: '2026-11-30T00:00:00Z',
+      start_date: '2026-11-01T00:00:00Z',
+      percent_done: 0.25,
+      hex_color: '336699',
+      done: true,
+    })
+  })
+
   it.each([
     [400, 'INVALID_INPUT'],
     [401, 'UNAUTHENTICATED'],

@@ -142,9 +142,8 @@ interface ParsedIssue {
   readonly description: string
   readonly projectId?: string
   /**
-   * Exactly the fields the server really returned as strings, so a full-update write can
-   * re-submit what it means to keep without inventing an empty value for a field the server
-   * never reported.
+   * Exactly the fields the server returned, so a full-update write can re-submit what it
+   * means to keep without inventing an empty value for a field the server never reported.
    */
   readonly preserve: Readonly<Record<string, unknown>>
 }
@@ -193,10 +192,7 @@ function parseIssueRecord(value: unknown): ParsedIssue | undefined {
     state: value.done ? 'closed' : 'open',
     description: typeof value.description === 'string' ? value.description : '',
     ...(projectId === undefined ? {} : { projectId }),
-    preserve: {
-      ...(typeof value.title === 'string' ? { title: value.title } : {}),
-      ...(typeof value.description === 'string' ? { description: value.description } : {}),
-    },
+    preserve: { ...value },
   }
 }
 
@@ -205,17 +201,18 @@ function parseIssueRecord(value: unknown): ParsedIssue | undefined {
  * `done` replaced.
  *
  * Vikunja's `POST /api/v1/tasks/{id}` is a full update — an omitted field is reset — so a body
- * carrying only `done` erases the title and the description. `PATCH` is not an alternative:
- * v2.7.1 answers it with `405 Method Not Allowed`. The description is where `createIssue`
- * writes the stable reference, so losing it also loses `findIssueByStableRef`, and a later
- * sync would create a duplicate issue instead of finding the existing one.
+ * carrying only `done` erases every field it omits, including priority, dates and progress.
+ * `PATCH` is not an alternative: v2.7.1 answers it with `405 Method Not Allowed`. Re-submitting
+ * the complete record the server returned keeps those fields; only the identity types and
+ * `done` are normalized here.
  */
 function preserveOnFullUpdate(issue: ParsedIssue, done: boolean): Record<string, unknown> {
   const id = numericIdentifier(issue.issueId)
   const projectId = issue.projectId === undefined ? undefined : numericIdentifier(issue.projectId) ?? issue.projectId
+  const { id: _id, project_id: _projectId, done: _done, ...preserved } = issue.preserve
   return {
+    ...preserved,
     ...(id === undefined ? {} : { id }),
-    ...issue.preserve,
     done,
     ...(projectId === undefined ? {} : { project_id: projectId }),
   }

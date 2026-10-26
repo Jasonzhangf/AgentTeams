@@ -77,6 +77,16 @@ export type GroupHubResult =
   | { readonly ok: true; readonly reply?: unknown; readonly pushes?: readonly GroupHubPush[] }
   | { readonly ok: false; readonly error: ServiceError }
 
+/**
+ * One bounded external-state pass. `unconfirmed` names sessions whose read did
+ * not prove a state; their projection and action responsibility stay untouched.
+ */
+export interface GroupIssueSweepResult {
+  readonly checked: number
+  readonly changed: number
+  readonly unconfirmed: readonly string[]
+}
+
 export interface GroupHubBridge {
   send(agentId: string, frame: unknown): void
   isOnline(agentId: string): boolean
@@ -85,6 +95,14 @@ export interface GroupHubBridge {
 /** Transport-agnostic group application. The relay owns sockets and envelopes; the hub owns group semantics. */
 export interface GroupHub {
   handle(actor: AuthenticatedAgent, frame: unknown): Promise<GroupHubResult>
+  /**
+   * Optional serialized state-read seam for the registry-owned convergence
+   * scheduler. The hub keeps issue truth and close settlement; the scheduler
+   * only decides when a pass runs.
+   */
+  sweepIssueStates?(sessionIds?: readonly string[]): Promise<GroupIssueSweepResult>
+  /** Live action responsibility derived from the hub's existing action state. */
+  inflightIssueSessionIds?(): readonly string[]
 }
 
 /**

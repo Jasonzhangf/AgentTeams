@@ -2,8 +2,8 @@
   "schema_version": 1,
   "manifest_id": "teams-group-messaging-v1",
   "status": "design",
-  "revision": 7,
-  "supersedes": "revision 6; allows pending actions to report blocked/failed directly, adds a persistent Action.report field, and aligns action.report frame field naming with the typed protocol; revision 6 added the authorized WebUI read-only issue list without changing issue lifecycle authority",
+  "revision": 11,
+  "supersedes": "revision 10; an open read of an unknown close no longer releases its admission seal because a current-state read cannot prove the close never applied, and the full sweep clock advances only when a full pass really starts rather than when a short targeted pass is in flight; revision 10 implemented the offline trusted reader fallback, the in-flight interval shortening and the unknown-close admission seal; revision 9 restored the delegated read owner, command-before-refresh and in-flight shortening boundaries in section 13.1, and recorded the bounded sweep implementation plus the two explicit batch-1 gaps; revision 8 added Action.refusal and the registry-owned bounded external-close sweep; revision 7 added Action.report",
   "canonical_doc": "docs/design/teams-group-messaging-v1.md",
   "owner_modules": ["control-protocol", "server", "network", "runtime", "config"],
   "resources": [
@@ -109,6 +109,18 @@
     "external_op_execution_owner_per_op": true,
     "hub_delegates_external_op_and_projects_result": true,
     "external_close_converges_via_polling_in_batch_1": true,
+    "external_close_sweep_timer_owner": "registry-daemon",
+    "external_close_sweep_requires_console": false,
+    "external_close_sweep_max_passes_in_flight": 1,
+    "external_close_sweep_read_failure_keeps_unknown": true,
+    "external_close_sweep_read_concurrency": 4,
+    "external_close_sweep_single_read_timeout_ms": 10000,
+    "external_close_sweep_deadline_ms": 30000,
+    "external_close_sweep_boot_convergence": true,
+    "external_close_sweep_unconfirmed_surface": "registry-state-sweep-field",
+    "issue_query_command_before_refresh": true,
+    "issue_query_owner_fallback_status": "implemented-batch-1",
+    "issue_sweep_inflight_interval_shortening_status": "implemented-batch-1",
     "webhook_is_batch_3_accelerator": true,
     "external_close_runs_common_cancellation": true,
     "idempotency_keys_for_issue_action_comment": ["commitId", "resultCommitId"],
@@ -127,6 +139,9 @@
     "peer_can_refuse_action": false,
     "peer_can_report_blocked_or_failed": true,
     "master_can_refuse_peer_request_with_reason": true,
+    "action_refusal_reason_persisted": true,
+    "action_refusal_requires_non_empty_reason": true,
+    "action_refusal_overwrites_initiator_reason": false,
     "permission_conditional_on_masters_of": true,
     "command_edge_direction": {
       "master_to_peer": "master.mastersOf contains peer",
@@ -216,9 +231,9 @@
   "evidence_boundary": {
     "design_only": true,
     "implementation_started": true,
-    "this_revision_changes_product_code": false,
+    "this_revision_changes_product_code": true,
     "services_run": false,
     "runtime_acceptance_claimed": false,
-    "graph_validation": "thirteen unchanged graphs retain prior validation; issue-list graph retains the revision 6 validation evidence from 96f1e12; no merge-driven re-validation and no runtime acceptance implied"
+    "graph_validation": "no graph topology change; the existing issue-query, issue-close and issue-reopen graphs are reused by the registry-owned sweep; issue-list keeps its revision 6 validation evidence from 96f1e12; no merge-driven re-validation and no full runtime acceptance implied"
   }
 }

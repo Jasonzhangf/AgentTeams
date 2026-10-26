@@ -117,7 +117,7 @@ describe('action registry execution transitions', () => {
     state = startAction(state, actionId, T2)
     expect(actionOf(state, actionId).state).toBe('in_progress')
     const { state: pendingState, actionId: refusedId } = create(undefined, { commitId: 'c2' })
-    const refused = refuseAction(pendingState, refusedId, T1)
+    const refused = refuseAction(pendingState, refusedId, T1, 'not this role')
     expect(actionOf(refused, refusedId).state).toBe('refused')
     expect(() => transitionAction(refused, refusedId, 'accepted', T1)).toThrow(/cannot transition/)
   })
