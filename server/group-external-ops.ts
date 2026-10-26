@@ -71,6 +71,23 @@ export function markExternalOpInflight(ledger: ExternalOpLedger, opId: string, n
   return replaceOp(ledger, { ...op, state: 'inflight' }, now)
 }
 
+/**
+ * A dispatched write that was not confirmed stays unknown, so the next attempt
+ * reads the external state back instead of writing a second object. A definite
+ * failure is never downgraded: it already names a refusal, not a lost outcome.
+ */
+export function markExternalOpUnknown(
+  ledger: ExternalOpLedger,
+  opId: string,
+  now = new Date().toISOString(),
+  error?: ServiceError,
+): ExternalOpLedger {
+  const op = ledger.operations.get(opId)
+  if (!op) throw new Error(`external-op: unknown op ${opId}`)
+  if (op.state === 'failed') return ledger
+  return replaceOp(ledger, { ...op, state: 'unknown', ...(error === undefined ? {} : { error }) }, now)
+}
+
 export interface ExternalOpReceipt {
   readonly opId: string
   readonly commitId: string

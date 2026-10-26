@@ -59,6 +59,7 @@ import {
   createExternalOpLedger,
   externalOpForCommit,
   markExternalOpInflight,
+  markExternalOpUnknown,
   reconcileAfterRestart,
   type ExternalOpLedger,
 } from './group-external-ops.ts'
@@ -597,7 +598,14 @@ export class GroupHubImpl implements GroupHub {
     if (recorded) {
       if (recorded.state === 'confirmed') {
         const issueId = optionalText((recorded.result as Record<string, unknown> | undefined)?.issueId)
-        if (issueId === undefined) return err('UPSTREAM_ERROR', 'the recorded create has no issue id')
+        if (issueId === undefined) {
+          // A confirmed receipt that names no issue cannot serve the caller, and
+          // a definite refusal would let a new commit create a second issue.
+          // Keep it unknown so the same commit reads the real issue back.
+          this.ledger = markExternalOpUnknown(this.ledger, recorded.opId, this.now().toISOString())
+          this.save()
+          return err('RESULT_UNKNOWN', 'the recorded create has no issue id; read back before retrying')
+        }
         const existing = sessionForIssue(this.sessions, groupId, projectId, issueId)
         return ok({ kind: 'issue.session', requestId: text(input.requestId, 'requestId'), session: existing })
       }
@@ -614,7 +622,17 @@ export class GroupHubImpl implements GroupHub {
     const delegated = await this.delegate('issue.create', commitId, actor.agentId, { groupId, commitId, vikunjaProjectId: projectId, title, body: optionalText(input.body) ?? '' })
     if (!delegated.ok) return delegated.result
     const issueId = optionalText((delegated.result as Record<string, unknown> | undefined)?.issueId)
-    if (!issueId) return err('UPSTREAM_ERROR', 'issue.create returned no issue id')
+    if (!issueId) {
+      // The write was dispatched, but the receipt names no issue to return. The
+      // outcome stays unknown so the same commit reads it back instead of a new
+      // commit creating a second issue.
+      const written = externalOpForCommit(this.ledger, commitId, 'issue.create')
+      if (written !== undefined) {
+        this.ledger = markExternalOpUnknown(this.ledger, written.opId, this.now().toISOString())
+        this.save()
+      }
+      return err('RESULT_UNKNOWN', 'issue.create returned no issue id; read back before retrying')
+    }
     const sessionId = `${groupId}:${projectId}:${issueId}`
     this.sessions = openIssueSession(this.sessions, { sessionId, groupId, vikunjaProjectId: projectId, vikunjaIssueId: issueId, initiatorAgentId: actor.agentId }, this.now().toISOString())
     this.save()
@@ -965,6 +983,9 @@ export class GroupHubImpl implements GroupHub {
       }
       const recoveredState = readObservedState(read.facts)
       if (recoveredState === undefined) {
+        // The read did not confirm the applied state; the write may still exist,
+        // so the external op stays unknown and the same commit reads back again.
+        this.ledger = markExternalOpUnknown(this.ledger, recorded.opId, this.now().toISOString())
         this.sessions = settleIssueOperation(this.sessions, commitId, 'unknown', now)
         this.save()
         return err('RESULT_UNKNOWN', `${direction} for ${commitId} was not read back; the outcome stays unknown`)
@@ -989,6 +1010,11 @@ export class GroupHubImpl implements GroupHub {
     // names no observed state is unknown, never the intended state.
     const actual = readObservedState(delegated.result)
     if (actual === undefined) {
+      // The write may have applied without naming the observed state, so the
+      // external op stays unknown and a retry reads it back instead of reusing
+      // a confirmed receipt whose state was never observed.
+      const written = externalOpForCommit(this.ledger, commitId, opKind)
+      if (written !== undefined) this.ledger = markExternalOpUnknown(this.ledger, written.opId, now)
       this.sessions = settleIssueOperation(this.sessions, commitId, 'unknown', now)
       this.save()
       // The write left this hub but no read-back confirmed it: the client must keep its
@@ -1182,6 +1208,11 @@ export class GroupHubImpl implements GroupHub {
     // action is unknown, never complete.
     const resultRef = optionalText((delegated.result as Record<string, unknown> | undefined)?.resultRef)
     if (resultRef === undefined) {
+      // The external write may have applied even though this receipt named no
+      // comment. Keep the external op unknown so the same result commit can
+      // recover; a confirmed ledger entry would make the retry a conflict.
+      const written = externalOpForCommit(this.ledger, resultCommitId, 'action.result')
+      if (written !== undefined) this.ledger = markExternalOpUnknown(this.ledger, written.opId, now)
       if (this.actions.actions.get(actionId)?.state === 'pending') this.actions = startAction(this.actions, actionId, now)
       this.actions = transitionAction(this.actions, actionId, 'unknown', now)
       this.save()
@@ -1225,6 +1256,7 @@ export class GroupHubImpl implements GroupHub {
       ? optionalText((facts as Record<string, unknown>).resultRef)
       : undefined
     if (resultRef === undefined) {
+      this.ledger = markExternalOpUnknown(this.ledger, recorded.opId, this.now().toISOString())
       return err('RESULT_UNKNOWN', `action.result for ${recorded.commitId} was not found by its result reference; the outcome stays unknown`)
     }
     const now = this.now().toISOString()
@@ -1325,7 +1357,7 @@ export class GroupHubImpl implements GroupHub {
       // A ServiceError is a definite refusal only when the operation was never
       // dispatched. After a real dispatch the outcome may have applied, so the
       // client must keep its commit and recover instead of treating it as refused.
-      this.ledger = { operations: new Map(this.ledger.operations).set(begun.op.opId, { ...begun.op, state: 'unknown', error: { code: receipt.code, message: receipt.message }, updatedAt: now }) }
+      this.ledger = markExternalOpUnknown(this.ledger, begun.op.opId, now, { code: receipt.code, message: receipt.message })
       this.save()
       return { ok: false, result: dispatched
         ? err('RESULT_UNKNOWN', `${kind} for ${commitId} lost its receipt (${receipt.message}); read back before retrying`)
@@ -1334,7 +1366,7 @@ export class GroupHubImpl implements GroupHub {
     if (receipt.state === 'unknown') {
       // The outcome is a fact even without a confirmed result: persist it so a
       // restart keeps the unknown instead of relabeling the op inflight.
-      this.ledger = { operations: new Map(this.ledger.operations).set(begun.op.opId, { ...begun.op, state: 'unknown', updatedAt: now }) }
+      this.ledger = markExternalOpUnknown(this.ledger, begun.op.opId, now)
       this.save()
       return { ok: false, result: err('RESULT_UNKNOWN', `${kind} outcome is unknown; read back before retrying`) }
     }

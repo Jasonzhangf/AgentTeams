@@ -440,3 +440,21 @@
 - 环境备注：本机负载高时 `runtime/managed-opencode-session.spec.ts` 与
   `opencode-adapter/tests/acp-engine.real.spec.ts` 会因真实 OpenCode 启动超时偶发失败，
   单独运行均通过；这两个 owner 不在本批提交范围内。
+
+## 2026-10-26 R1 补丁：未确认外部写统一收敛为 unknown（af5b0da 之后同根因收口）
+
+- 事实（review 根因）：Alice 对 af49f2e 的 R1 复核指出未知写入被当成拒绝；
+  af5b0da 已覆盖部分路径，本轮补齐同一根因的剩余路径：close/reopen 回读未确认、
+  settleIssueRead 无 observedState、action.submit 无 resultRef、recoverActionResult 无 resultRef、
+  issue.create 回执确认但无 issueId（两处：已确认记录与派发后回执）。
+- 修复：新增 `markExternalOpUnknown`（不降级 `failed`），这 6 类路径统一把外部 op 落
+  `unknown` 并返回 `RESULT_UNKNOWN`；delegate 原有两处 unknown 落账复用该 helper。
+  同 commit 重试走恢复读回，不再派发第二次外部写。
+- 验证：`npx vitest run server` 22 文件 257 通过；`npx vitest run console-host` 4 文件
+  16 通过；`npx tsc --noEmit` 干净。新增 3 条 hub 测试覆盖 close 重启恢复、action result
+  无 resultRef 恢复、create 无 issueId 恢复；探针复现 create 无 issueId 时同 commit
+  不再二次 issue.create（creates=1）。
+- 边界（Carol 更正）：生产桥 `issue.create`/`action.result`/`close`/`reopen` 成功回执
+  固定带所需字段，故本轮属「防协议违例兜底 + 重试可恢复」，不是线上可达缺陷修复；
+  汇报口径按其更正表述。
+- 未收口：等待 Carol 按提交复核与最终候选合成；`task-8dde877-console-group-api` 归 Carol。
