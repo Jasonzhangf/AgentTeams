@@ -17,10 +17,19 @@
 | 持久 Work close / B2p-close | 用户 `work close`：CLI → launcher 本地控制 → receiver daemon | `work-close@1`（已注册：graph 已编译并绑定 `teams.close-provider-work`）；保留原 workId、provider/generation/capability/version 与 open 捕获的 operation；无 request/demands | `close-provider-work` 调 provider-authoritative close+dispose；只有 `confirmWorkDestroyed` 后 closed/释放；close failure 或 transport unconfirmed 保留责任 |
 | 一次 Work 查询 / B8 | 用户查询或显式恢复观察：CLI/资源 owner → receiver → provider | 保留原 workId/requestId/target；新 query execution/attempt identity；显式 `serviceSelection` 区分 one-shot endpoint 基线与持久 Work capability 观察；capability 模式必须携原 provider/generation/capability/version/operation，禁止按当前 config/目录重选 provider；当前授权连接代次与原 Work generation 分开；禁止 propose/request 重放 | get 返回原 provider ledger 记录；确认终态、unknown 或明确 NOT_FOUND/FORBIDDEN/UNAVAILABLE 都显式；宿主释放查询连接，不把观察成功写成资源释放；后续显式 cleanup 是 B6 的新生命周期动作 |
 | 一次配置应用 / B3 | 用户 TOML 修改或 Console 配置命令：用户/Console → config owner | 管理权限、expectedRevision 与源文件指纹/CAS；credential 引用可解析；accepted revision 是意图，effective 是运行确认 | durable accepted 后显式 apply/readback；冲突没有写入副作用；apply 失败保留 accepted/effective/error；重试是新 attempt；活动或 uncertain Session 禁止替换基座 |
-| 一次 Console 观察 / B4 | 页面打开/刷新：浏览器 → Console HTTP → 目录和 Agent 公开管理接口 | Basic auth/origin；目录 scope；Agent managers policy；读取当前 generation | 返回真实 online/offline/error projection；拒绝和 unavailable 显式；页面关闭只收尾 Console 自己的连接，不取消 Work/Session |
+| 一次 Console 观察 / B4 | 页面打开/刷新：浏览器 → Console HTTP → 目录和 Agent 公开管理接口 | Basic auth/origin；目录 scope；Agent managers policy；读取当前 generation | 返回真实 online/offline/error projection；拒绝和 unavailable 显式；订阅首帧和业务变化发送完整 snapshot，仅 connections[].status.observedAt 改变不发帧也不增加 seq，发送保留原始观测时间；页面关闭只收尾 Console 自己的连接，不取消 Work/Session |
 | 一次 Session / B5 | 用户发送消息：Console 独立业务入口 → Agent → adapter | Agent 管理权限、session identity、effective runtime；被动 Agent 明确不支持 | 消息/工具最终结果完成；真实 permission pending 是进行中，批准/拒绝进入 adapter；cancel 必须取得执行基座确认；链路失联为 unknown，不自动重放 |
 | 本轮停止 / B6 | 用户停止或启动/运行失败：launcher → 各自有 child owner | expected generation、PID/startToken、已确认的本轮归属；不停止其他 owner | drained/confirmed destruction 后 stopped-clean；未确认外部资源为 stopped-with-retained-obligations；停止失败为 failure；不得将 exit 当外部资源销毁 |
 | 一次交付 / B7 | 单元候选就绪：primary → 既有 lifecycle adapter / review / Git | 当前候选与最新 main、输入指纹、产物和真实入口匹配 | 验证→review→集成→push→cleanup 全齐才 delivered；失败只阻断依赖后继；取消也须核销自有资源；待清理或保留责任不是 delivered |
+
+B4 的管理拒绝由 Agent policy owner 给出原因，经 shared ConsoleProjectionError、HTTP 和 UI
+保留 code/message。manager、account 和 scope 拒绝分别说明，只有 manager 拒绝提供实际
+配置来源的授权指引。界面复用只读刷新；不得自动授权或根据 FORBIDDEN 猜测原因。
+
+B4 的 History 页面分别读取 Work projection 和连接 history。连接历史拒绝不隐藏已读取的
+Work 记录；缺失 works 与已读取的空数组分别显示未提供和无记录。Work closed 只表示生命周期
+关闭，不表示 request 执行成功。刷新这两个观察入口均为只读，不重放 Work 或 Session。
+业务结果正文仍归原 Work receipt/query；不可塞入控制 projection 或 ACP Session history。
 
 对 unknown 的恢复事件必须来自 provider 的公开查询或有执行证据的 trusted recovery；没有证据时返回 retained obligation。主动恢复能力若尚未实现，显式返回 repair-required，并列 owner/对象/解除动作，不能伪装成恢复成功。
 公开查询使用独立 B8 graph，不在 B2/B2p 制造回边。B8 只观察；one-shot `agent-work@2` 仍在本图确认终态后 close+dispose，持久 Work 的 confirmed 之后只能由资源 owner 经独立 `work-close@1` 显式发起并确认销毁；仍 unknown 时不 close，保留 owner/资源/恢复动作。

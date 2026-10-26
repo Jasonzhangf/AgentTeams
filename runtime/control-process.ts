@@ -1064,7 +1064,17 @@ export function createPollingProjectionSubscriber(read: () => Promise<ConsolePro
       running = true
       try {
         const projection = await read()
-        const encoded = JSON.stringify(projection)
+        // Sampling time is not a business change. Keep it in delivered snapshots;
+        // omit only this field from comparison, leaving all other facts intact.
+        const encoded = JSON.stringify({
+          ...projection,
+          ...(projection.connections === undefined ? {} : {
+            connections: projection.connections.map(({ status, ...connection }) => {
+              const { observedAt: _observedAt, ...facts } = status
+              return { ...connection, status: facts }
+            }),
+          }),
+        })
         if (encoded !== last) {
           last = encoded
           seq += 1

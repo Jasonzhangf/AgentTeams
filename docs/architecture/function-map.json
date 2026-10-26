@@ -597,6 +597,7 @@
         "packages/shared/src/console-api.spec.ts"
       ],
       "entry_symbols": [
+        "ConsoleProjectionError",
         "parseConsoleCommand",
         "parseSessionCreateResult",
         "parseSessionCancelConfirmed",

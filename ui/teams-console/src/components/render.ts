@@ -1013,6 +1013,37 @@ function renderInteraction(controller: TeamsConsoleController, state: ConsoleSta
 function renderHistory(controller: TeamsConsoleController, state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
   const value = element('section')
   append(value, renderViewHeader(t.pageHistory))
+  const workSection = element('section')
+  const workHeading = element('h2')
+  workHeading.textContent = t.workRecords
+  const refreshWork = button(t.workRefresh, 'teams-button-secondary', () => { void controller.refresh() }, state.status === 'loading')
+  refreshWork.setAttribute('data-work-refresh', 'true')
+  append(workSection, workHeading, refreshWork)
+  const works = state.projection?.works
+  if (works === undefined || works.length === 0) {
+    const empty = element('p')
+    empty.setAttribute(works === undefined ? 'data-work-unavailable' : 'data-work-empty', 'true')
+    empty.textContent = works === undefined ? t.workRecordsUnavailable : t.workRecordsEmpty
+    append(workSection, empty)
+  } else {
+    const labels = { accepted: t.workAccepted, closing: t.workClosing, closed: t.workClosed, rejected: t.workRejected }
+    for (const work of works) {
+      const row = element('article')
+      row.setAttribute('data-work-id', work.workId)
+      row.setAttribute('data-work-state', work.state)
+      const title = element('h3')
+      title.textContent = `${work.capabilityId} · ${labels[work.state]}`
+      const detail = element('p')
+      detail.textContent = `${work.consumerAgentId} → ${work.providerAgentId} · ${work.capabilityVersion} · ${work.workId}`
+      append(row, title, detail)
+      append(workSection, row)
+    }
+  }
+  const historyHeading = element('h2')
+  historyHeading.textContent = t.connectionHistory
+  const retryHistory = button(t.historyRetry, 'teams-button-secondary', () => { void controller.loadHistory() }, state.historyStatus === 'loading')
+  retryHistory.setAttribute('data-history-retry', 'true')
+  append(value, workSection, historyHeading, retryHistory)
   if (state.historyStatus === 'refused') {
     const p = element('p')
     p.setAttribute('data-history-refused', 'true')

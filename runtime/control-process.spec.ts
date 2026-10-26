@@ -1,9 +1,10 @@
 import { createServer } from 'node:net'
+import { createServer as createHttpServer } from 'node:http'
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { processAlive } from './local-ownership.ts'
 import { createRelayServer, type RelayServer } from '../server/relay.ts'
 import { createRegistrationClient, type RegistrationClient } from '../network/registration-client.ts'
@@ -23,6 +24,7 @@ import {
 } from './control-process.ts'
 import { createAcpHistoryStore } from './acp-history-store.ts'
 import { createTeamsConnectionHistory } from '../network/teams-connection-history.ts'
+import { createConsoleApiHandler } from '../console-host/src/http-api.ts'
 import { readRelationsIntentRecord, relationsIntentScopePath } from '../config/relations-intent-store.ts'
 import { readSessionIntentRecord, sessionIntentScopePath } from '../config/session-intent-store.ts'
 import type { HistoryQuery, ConsoleProjectionSnapshot, TeamsConnectionStatus } from '../packages/shared/src/teams-state.ts'
@@ -772,6 +774,48 @@ it('keeps the typed refusal when the relations record cannot be opened or saved'
   }
 })
 
+it('ignores only connection observation time while streaming every real projection change', async () => {
+  vi.useFakeTimers()
+  let unsubscribe = () => undefined as void
+  try {
+    let observed = 0
+    let projection: ConsoleProjectionSnapshot['projection'] = {
+      version: 1, agents: [], sessions: [], notifications: [], configs: [],
+      connections: [{ status: { version: 1, remoteAgentId: 'peer-a', state: 'disconnected', targetGeneration: 1, observedAt: 'first' }, halfOpen: false }],
+    }
+    const frames: ConsoleProjectionSnapshot[] = []
+    unsubscribe = createPollingProjectionSubscriber(async () => ({
+      ...projection,
+      connections: projection.connections!.map(connection => ({
+        ...connection, status: { ...connection.status, observedAt: `observation-${++observed}` },
+      })),
+    }), 5)({ onSnapshot: frame => frames.push(frame), onHealth: () => undefined })
+    await vi.advanceTimersByTimeAsync(20)
+    expect(observed).toBeGreaterThanOrEqual(4)
+    expect(frames).toHaveLength(1)
+    expect(frames[0]!.projection.connections![0]!.status.observedAt).toBe('observation-1')
+
+    for (const change of [
+      { state: 'ready' as const }, { targetGeneration: 2 }, { role: 'master' as const },
+    ]) {
+      projection = { ...projection, connections: projection.connections!.map(connection => ({ ...connection, status: { ...connection.status, ...change } })) }
+      const before = frames.length
+      await vi.advanceTimersByTimeAsync(5)
+      expect(frames).toHaveLength(before + 1)
+      expect(frames.at(-1)!.projection.connections![0]!.status.observedAt).toBe(`observation-${observed}`)
+    }
+    projection = { ...projection, connections: projection.connections!.map(connection => ({ ...connection, halfOpen: true })) }
+    await vi.advanceTimersByTimeAsync(5)
+    expect(frames).toHaveLength(5)
+    projection = { ...projection, sessions: [{ agentId: 'peer-a', sessionId: 'session-1' }] }
+    await vi.advanceTimersByTimeAsync(5)
+    expect(frames.map(frame => frame.seq)).toEqual([1, 2, 3, 4, 5, 6])
+  } finally {
+    unsubscribe()
+    vi.useRealTimers()
+  }
+})
+
 it('emits a full snapshot only when the polling projection changes and reports loss on owner failure', async () => {
   let projection = { version: 1 as const, agents: [], sessions: [], notifications: [], configs: [] }
   const snapshots: number[] = []
@@ -834,15 +878,52 @@ tlsTrustRef = "file:${join(directory, 'ca.pem')}"
       { kind: 'directory', agentId: 'peer-a', machineId: 'peer-a-host', presence: 'online', generation: 1, capabilities: [] },
     ])
 
-    // The declared projection seam is the SSE feed: a real directory change advances `seq`.
+    // Consume the public HTTP stream against the real registry-backed owner. Repeated
+    // reads change observedAt, but only a real directory change may advance the stream.
     const frames: ConsoleProjectionSnapshot[] = []
-    const unsubscribe = binding.projection.watch!({ onSnapshot: snapshot => { frames.push(snapshot) }, onHealth: () => undefined })
-    await waitFor(() => frames.length >= 1)
-    await registerPeer(registryPort, 'peer-b')
-    await waitFor(() => frames.length >= 2)
-    unsubscribe()
-    expect(frames[frames.length - 1]!.seq).toBeGreaterThan(frames[0]!.seq)
-    expect(frames[frames.length - 1]!.projection.agents.map(agent => agent.agentId)).toContain('peer-b')
+    const http = createHttpServer(createConsoleApiHandler({
+      authorize: async () => client, events: binding.projection.watch,
+    }))
+    await new Promise<void>(resolve => http.listen(0, '127.0.0.1', resolve))
+    const abort = new AbortController()
+    let consumed: Promise<void> | undefined
+    try {
+      const origin = `http://127.0.0.1:${(http.address() as { port: number }).port}`
+      const response = await fetch(`${origin}/api/v1/events`, { signal: abort.signal })
+      expect(response.status).toBe(200)
+      const reader = response.body!.getReader()
+      consumed = (async () => {
+        const decoder = new TextDecoder()
+        let pending = ''
+        try {
+          for (;;) {
+            const next = await reader.read()
+            if (next.done) return
+            pending += decoder.decode(next.value, { stream: true })
+            let boundary: number
+            while ((boundary = pending.indexOf('\n\n')) >= 0) {
+              const event = pending.slice(0, boundary)
+              pending = pending.slice(boundary + 2)
+              if (event.startsWith('event: snapshot\n')) frames.push(JSON.parse(event.slice(event.indexOf('data: ') + 6)))
+            }
+          }
+        } catch (error) {
+          if (!abort.signal.aborted) throw error
+        }
+      })()
+      await waitFor(() => frames.length >= 1)
+      await new Promise(resolve => setTimeout(resolve, 850))
+      expect(frames).toHaveLength(1)
+      await registerPeer(registryPort, 'peer-b')
+      await waitFor(() => frames.some(frame => frame.projection.agents.some(agent => agent.agentId === 'peer-b')))
+      expect(frames.map(frame => frame.seq)).toEqual([1, 2])
+      expect(frames[1]!.projection.connections![0]!.status.observedAt).not.toBe(frames[0]!.projection.connections![0]!.status.observedAt)
+    } finally {
+      abort.abort()
+      await consumed
+      http.closeAllConnections()
+      await new Promise<void>(resolve => http.close(() => resolve()))
+    }
   } finally {
     await binding.stop()
   }

@@ -343,6 +343,45 @@ function runChrome(page: string): string {
 }
 
 describe('D07 four-page DOM contract in a real DOM', () => {
+  it('keeps Work records and read-only recovery controls visible when connection history is unavailable', { timeout: 30_000 }, () => {
+    const directory = mkdtempSync(join(tmpdir(), 'teams-console-work-history-'))
+    onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })
+    const works = ['accepted', 'closing', 'closed', 'rejected'].map(status => ({
+      agentId: 'planner', workId: `work-${status}`, consumerAgentId: 'consumer', providerAgentId: 'planner',
+      capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1, state: status,
+    }))
+    const page = join(directory, 'work-history.html')
+    writeFileSync(page, `<!doctype html><html><body><div id="root"></div><script>
+${script}
+${controllerScript}
+let STATE = ${JSON.stringify(state({ page: 'history', projection: { ...projection, works }, historyStatus: 'refused', historyError: { code: 'HISTORY_UNAVAILABLE', message: 'Connection history owner is not bound.' } }))}
+let projectionReads = 0, historyReads = 0
+controller.refresh = () => { projectionReads++ }
+controller.loadHistory = () => { historyReads++ }
+const root = document.getElementById('root')
+renderConsole(root, controller)
+document.body.dataset.workStates = [...root.querySelectorAll('[data-work-state]')].map(row => row.dataset.workState).join(',')
+document.body.dataset.workReasonHonest = String(!root.querySelector('[data-work-state="closed"]')?.textContent.includes('succeeded'))
+document.body.dataset.historyCodeKept = String(root.querySelector('[data-history-refused]')?.dataset.teamErrorCode === 'HISTORY_UNAVAILABLE')
+root.querySelector('[data-work-refresh]')?.click()
+root.querySelector('[data-history-retry]')?.click()
+document.body.dataset.readonlyRecovery = String(projectionReads === 1 && historyReads === 1)
+STATE = { ...STATE, projection: { ...STATE.projection, works: [] } }
+renderConsole(root, controller)
+document.body.dataset.workEmpty = String(root.querySelector('[data-work-empty]') !== null)
+STATE = { ...STATE, projection: { ...STATE.projection, works: undefined } }
+renderConsole(root, controller)
+document.body.dataset.workUnavailable = String(root.querySelector('[data-work-unavailable]') !== null && root.querySelector('[data-work-empty]') === null)
+</script></body></html>`)
+    const output = runChrome(page)
+    expect(output).toContain('data-work-states="accepted,closing,closed,rejected"')
+    expect(output).toContain('data-work-reason-honest="true"')
+    expect(output).toContain('data-history-code-kept="true"')
+    expect(output).toContain('data-readonly-recovery="true"')
+    expect(output).toContain('data-work-empty="true"')
+    expect(output).toContain('data-work-unavailable="true"')
+  })
+
   it('renders the four pages, owner bands, permissions and history without inventing state', { timeout: 30_000 }, () => {
     const directory = mkdtempSync(join(tmpdir(), 'teams-console-d07-'))
     onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })

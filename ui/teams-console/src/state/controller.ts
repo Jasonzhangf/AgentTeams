@@ -1,5 +1,5 @@
 import type { ConsoleClientV1, ConsoleCommandResultV1, ConsoleProviderView, HistoryPage, HistoryQuery, JsonValue, TeamsConsoleLiveClientV1 } from '../client/protocol.ts'
-import { commandFailureMessage, formatServiceError } from '../client/protocol.ts'
+import { commandFailureMessage, formatServiceError, isServiceError } from '../client/protocol.ts'
 import type { GroupRequestOutcome, GroupRequestSender } from '../client/group-client.ts'
 import type { GroupWireReply, GroupWireRequest } from '../../../../packages/shared/src/group-wire.ts'
 import {
@@ -166,6 +166,7 @@ const liveDefaults = {
 } satisfies Partial<ConsoleState>
 
 function errorText(error: unknown): string {
+  if (isServiceError(error)) return formatServiceError(error)
   return error instanceof Error ? error.message : 'Unknown host error'
 }
 

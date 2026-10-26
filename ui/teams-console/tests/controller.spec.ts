@@ -117,6 +117,23 @@ describe('TeamsConsoleController', () => {
     expect(controller.getSnapshot().error).toContain('daemon unavailable')
   })
 
+  it('keeps the owner refusal visible and clears it after a read-only refresh succeeds', async () => {
+    const fixture = createFixtureClient()
+    const readProjection = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('Agent policy does not authorize this Console. Ask the configuration owner, then refresh.'), { code: 'FORBIDDEN' }))
+      .mockImplementation(() => fixture.readProjection())
+    const command = vi.fn()
+    const controller = new TeamsConsoleController({ ...fixture, readProjection, command })
+    await controller.refresh()
+    expect(controller.getSnapshot().error).toBe('FORBIDDEN: Agent policy does not authorize this Console. Ask the configuration owner, then refresh.')
+    expect(controller.getSnapshot().projection).toBeNull()
+    await controller.refresh()
+    expect(controller.getSnapshot().status).toBe('ready')
+    expect(controller.getSnapshot().error).toBeNull()
+    expect(readProjection).toHaveBeenCalledTimes(2)
+    expect(command).not.toHaveBeenCalled()
+  })
+
   it('rejects an incomplete provider form before sending a command', async () => {
     const controller = new TeamsConsoleController(createFixtureClient())
     await controller.refresh()
@@ -193,6 +210,35 @@ describe('TeamsConsoleController', () => {
     await vi.waitFor(() => expect(controller.getSnapshot().historyStatus).toBe('ready'))
     expect(historyRequests()).toHaveLength(1)
     expect(controller.getSnapshot().page).toBe('history')
+  })
+
+  it('keeps Work observations across a connection-history refusal and refreshes by reads only', async () => {
+    const requests: { url: string; method: string }[] = []
+    const work = { agentId: 'provider', workId: 'work-1', consumerAgentId: 'consumer', providerAgentId: 'provider', capabilityId: 'file-search', capabilityVersion: '1', policyRevision: 1, state: 'closed' }
+    const observed = { version: 1, agents: [], sessions: [], notifications: [], configs: [], works: [work] }
+    const controller = new TeamsConsoleController(createLiveConsoleHttpClient({
+      baseUrl: 'http://localhost:7788',
+      eventSourceImpl: RecordingEventSource as unknown as new (url: string) => EventSource,
+      fetchImpl: async (input, init) => {
+        const url = String(input)
+        requests.push({ url, method: init?.method ?? 'GET' })
+        return url.includes('/api/v1/history')
+          ? new Response(JSON.stringify({ code: 'HISTORY_UNAVAILABLE', message: 'Connection history is not provided.' }), { status: 503 })
+          : new Response(JSON.stringify(observed), { status: 200 })
+      },
+    }))
+    await controller.refresh()
+    controller.selectPage('history')
+    await vi.waitFor(() => expect(controller.getSnapshot().historyStatus).toBe('refused'))
+    expect(controller.getSnapshot().historyError?.code).toBe('HISTORY_UNAVAILABLE')
+    expect(controller.getSnapshot().projection?.works).toEqual([work])
+    await controller.refresh()
+    await controller.loadHistory()
+    expect(controller.getSnapshot().projection?.works).toEqual([work])
+    expect(requests.every(request => request.method === 'GET')).toBe(true)
+    expect(requests.filter(request => request.url.includes('/projection'))).toHaveLength(2)
+    expect(requests.filter(request => request.url.includes('/history'))).toHaveLength(2)
+    controller.destroy()
   })
 
   it('starts the first history read for a page restored from persistence', async () => {
