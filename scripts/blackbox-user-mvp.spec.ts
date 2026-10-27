@@ -543,7 +543,7 @@ describe('cleanup gate before deleting an install root', () => {
 })
 
 describe('failure-terminal stop wrapper', () => {
-  it('returns an observation with the failure fact instead of throwing when the stop fails', { timeout: 20_000 }, async () => {
+  it('returns an observation with the failure fact instead of throwing when the stop fails', async () => {
     // A real child process stands in for the launcher; a fake installed CLI that
     // always exits non-zero stands in for a failing stop. The wrapper must
     // return the observed failure (live resource plus non-zero stop) rather than

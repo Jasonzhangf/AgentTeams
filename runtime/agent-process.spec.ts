@@ -164,6 +164,9 @@ it('loads control-protocol frames through a raw Node transform-types child', () 
 })
 
 it('executes remote Work in an actual Agent process, rejects duplicate ownership and restarts from durable state', async () => {
+  // Real Agent processes answer over the relay; a loaded full-suite host can exceed the
+  // tight production control default, so this test-local deadline leaves load headroom.
+  const consoleDeadlineMs = 15_000
   relay = await createRelayServer({ host: '127.0.0.1', port: 0, cert, key: readFileSync(join(directory, 'key.pem')),
     maxPayload: 65536, maxConnections: 16, maxGrants: 8, maxBufferedAmount: 65536, maxPendingMessages: 16, maxPendingBytes: 131072, grantTtlMs: 10000,
     authenticate: credential => ['provider', 'consumer', 'managed', 'provider2', 'consumer2', 'stale-lock-agent'].includes(credential.slice(7)) && credential.startsWith('Bearer ')
@@ -202,7 +205,7 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
       properties: { query: { type: 'string', minLength: 1 }, maxResults: { type: 'integer', minimum: 1 } } },
     outputSchema: { required: ['query', 'status', 'exitCode', 'matches', 'truncated', 'stdout', 'stderr'] },
   })
-  const management = createRelayConsoleClient(consumer, 'provider', 2000)
+  const management = createRelayConsoleClient(consumer, 'provider', consoleDeadlineMs)
   expect((await management.readProjection()).agents[0]).toMatchObject({ agentId: 'provider', presence: 'online', capabilities: ['file-search'],
     // The real Agent process publishes the declared summary, not only the capability IDs.
     capabilityDetails: [{ capabilityId: 'file-search', version: '1', operations: ['search'],
@@ -213,7 +216,7 @@ it('executes remote Work in an actual Agent process, rejects duplicate ownership
   const dynamicHub = createConsoleHub([], async () => ({
     peers: (await consumer.directory(false)).filter(peer => peer.declaration.identity.agentId !== 'consumer'),
     client: peer => {
-      const remote = createRelayConsoleClient(consumer, peer.declaration.identity.agentId, 2000)
+      const remote = createRelayConsoleClient(consumer, peer.declaration.identity.agentId, consoleDeadlineMs)
       return { ...remote, readProjection: async () => {
         const projection = await remote.readProjection()
         return { ...projection, agents: projection.agents.map(agent => ({ ...agent, capabilities: [] })) }
