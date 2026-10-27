@@ -158,16 +158,13 @@ async function startRealDaemon(input: {
   return { daemon: outcome.daemon, launchInput, provider, store, directory }
 }
 
-async function nextFrames(daemon: AcpAgentDaemon, count = 1, timeoutMs = 30_000): Promise<readonly AcpFrame[]> {
-  const frames: AcpFrame[] = []
+async function awaitPromptDispatched(provider: StubProvider, timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
-  while (frames.length < count && Date.now() < deadline) {
-    const page = await daemon.host.read(ref, 0, 200)
-    frames.push(...page.frames.map(delivery => delivery.frame))
-    if (frames.length < count) await new Promise(resolve => setTimeout(resolve, 10))
+  while (Date.now() < deadline) {
+    if (provider.calls.some(call => call.toolNames.length > 0)) return
+    await new Promise(resolve => setTimeout(resolve, 10))
   }
-  if (frames.length < count) throw new Error(`timed out waiting for ${count} ACP frames (got ${frames.length})`)
-  return frames
+  throw new Error('timed out waiting for the prompt to reach the model provider')
 }
 
 async function awaitFrame(daemon: AcpAgentDaemon, match: (frame: AcpFrame) => boolean, timeoutMs = 60_000): Promise<AcpFrame> {
@@ -247,14 +244,16 @@ describe.skipIf(!engineAvailable)('installed OpenCode ACP engine through the D02
   })
 
   it('cancels a real in-flight prompt through the notification form', { timeout: 90_000 }, async () => {
-    const { daemon, store } = await startRealDaemon({
+    const { daemon, provider, store } = await startRealDaemon({
       plan: ({ toolNames }) => (toolNames.length === 0 ? { kind: 'text', text: 'title' } : { kind: 'slow', text: 'PROBE-LATE', delayMs: 8_000 }),
     })
     await initializeChannel(daemon)
     const sessionId = sessionIdOf(await newSession(daemon))
 
     await daemon.host.receive({ ...ref, frame: { jsonrpc: '2.0', id: 'prompt-1', method: 'session/prompt', params: { sessionId, prompt: [{ type: 'text', text: 'slow' }] } } })
-    await nextFrames(daemon, 1)
+    // The engine answers a cancel that arrives before the turn starts with an
+    // internal error, so prove the prompt reached the provider first.
+    await awaitPromptDispatched(provider)
     await daemon.host.receive({ ...ref, frame: { jsonrpc: '2.0', method: 'session/cancel', params: { sessionId } } })
 
     const result = await awaitFrame(daemon, frame => frame.id === 'prompt-1')
