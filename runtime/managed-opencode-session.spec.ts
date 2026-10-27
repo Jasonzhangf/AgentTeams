@@ -36,23 +36,25 @@ it('sends one real OpenCode Session request through the selected managed provide
     const compiled = { agentId: 'llm-agent', acceptedRevision: 4, primary: { provider: 'probe', model: 'probe-model', protocol: 'openai-chat' as const,
       baseUrl: `http://127.0.0.1:${port}/v1` } }
     const launch = createOpenCodeLaunchConfig(compiled)
+    // Derived from measured worst case at load ~17: startup 4.7s, first message
+    // round-trip 2.4s. Budgets keep >4x headroom without changing assertions.
     const managed = await startManagedOpenCode({ executable: '/Users/fanzhang/.opencode/bin/opencode', directory: join(directory, 'opencode'),
       port: await availablePort(), startupTimeoutMs: 20000, stopTimeoutMs: 3000, compiled, resolveCredential: async () => { throw new Error('no credential') } })
     try {
       const headers = { authorization: managed.authorization, 'content-type': 'application/json' }
-      const sessionResponse = await fetch(`${managed.url}/session`, { method: 'POST', headers, body: JSON.stringify({ title: 'Teams probe' }), signal: AbortSignal.timeout(15000) })
+      const sessionResponse = await fetch(`${managed.url}/session`, { method: 'POST', headers, body: JSON.stringify({ title: 'Teams probe' }), signal: AbortSignal.timeout(5000) })
       expect(sessionResponse.ok).toBe(true)
       const session = await sessionResponse.json() as { id?: string }
       expect(typeof session.id).toBe('string')
       const messageResponse = await fetch(`${managed.url}/session/${session.id}/message`, { method: 'POST', headers,
-        body: JSON.stringify({ parts: [{ type: 'text', text: 'probe request' }], model: { providerID: compiled.primary.provider, modelID: compiled.primary.model } }), signal: AbortSignal.timeout(30000) })
+        body: JSON.stringify({ parts: [{ type: 'text', text: 'probe request' }], model: { providerID: compiled.primary.provider, modelID: compiled.primary.model } }), signal: AbortSignal.timeout(20000) })
       expect(messageResponse.ok).toBe(true)
       const message = await messageResponse.json() as { parts?: readonly { type?: string; text?: string }[] }
       expect(message.parts?.some(part => part.type === 'text' && part.text?.includes('managed-provider-ok'))).toBe(true)
       expect(launch.config.model).toBe('probe/probe-model')
     } finally { await managed.stop() }
   } finally { await new Promise<void>(resolve => provider.close(() => resolve())); await rm(directory, { recursive: true }) }
-}, 90000)
+}, 60000)
 
 async function availablePort(): Promise<number> {
   const listener = createServer(); listener.listen(0, '127.0.0.1'); await once(listener, 'listening')

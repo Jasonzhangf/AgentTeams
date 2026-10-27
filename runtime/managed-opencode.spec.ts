@@ -57,7 +57,9 @@ it('escalates so a substrate that ignores SIGTERM cannot hold stop open', { time
   ].join('\n'))
   await chmod(executable, 0o700)
   const compiled = { agentId: 'a', acceptedRevision: 1, primary: { provider: 'p', model: 'm', protocol: 'openai-chat', baseUrl: 'http://127.0.0.1:1/v1' } }
-  const handle = await startManagedOpenCode({ executable, directory, port: 32148, startupTimeoutMs: 15000, stopTimeoutMs: 2000,
+  // Startup budget derives from the measured worst case (3.0s) with 4x headroom;
+  // the stop window and its 4s assertion stay unchanged.
+  const handle = await startManagedOpenCode({ executable, directory, port: 32148, startupTimeoutMs: 12000, stopTimeoutMs: 2000,
     compiled, resolveCredential: async reference => `resolved:${reference}` })
   const pid = handle.pid
   try {
