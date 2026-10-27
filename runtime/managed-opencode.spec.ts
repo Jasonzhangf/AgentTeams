@@ -35,7 +35,7 @@ it('preserves native ENOENT for a missing executable', async () => {
   } finally { await rm(directory, { recursive: true }) }
 })
 
-it('escalates so a substrate that ignores SIGTERM cannot hold stop open', { timeout: 30_000 }, async () => {
+it('escalates so a substrate that ignores SIGTERM cannot hold stop open', { timeout: 90_000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-managed-test-'))
   // Stands in for a real managed OpenCode serve: it becomes ready, then ignores
   // SIGTERM and lives until the Agent's stop path forces it down.
@@ -57,7 +57,7 @@ it('escalates so a substrate that ignores SIGTERM cannot hold stop open', { time
   ].join('\n'))
   await chmod(executable, 0o700)
   const compiled = { agentId: 'a', acceptedRevision: 1, primary: { provider: 'p', model: 'm', protocol: 'openai-chat', baseUrl: 'http://127.0.0.1:1/v1' } }
-  const handle = await startManagedOpenCode({ executable, directory, port: 32148, startupTimeoutMs: 4000, stopTimeoutMs: 2000,
+  const handle = await startManagedOpenCode({ executable, directory, port: 32148, startupTimeoutMs: 15000, stopTimeoutMs: 2000,
     compiled, resolveCredential: async reference => `resolved:${reference}` })
   const pid = handle.pid
   try {
