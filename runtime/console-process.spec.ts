@@ -93,7 +93,7 @@ it('plans no Console child when [console] is missing or disabled', async () => {
     expect(planLocalProcesses(harnessResult.config, { relayEntry: harnessResult.relay, agentEntry: harnessResult.agent, consoleEntry: harnessResult.consoleChild })
       .map(spec => spec.kind)).toEqual(['relay', 'agent'])
     expect(harnessResult.config.console).toBeUndefined()
-  } finally { await rm(harnessResult.root, { recursive: true, force: true }) }
+  } finally { await rm(harnessResult.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }) }
 })
 
 it('starts an enabled Console child, persists real lifecycle facts, and stops only Console', async () => {
@@ -126,7 +126,7 @@ it('starts an enabled Console child, persists real lifecycle facts, and stops on
     expect(afterStop.daemons?.provider?.pid).toBe(daemonPid)
   } finally {
     try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
-    await rm(harnessResult.root, { recursive: true, force: true })
+    await rm(harnessResult.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -150,7 +150,7 @@ it('persists a typed failure and starts no child when the credential env is miss
     expect(internal.consoleRuntime?.pid).toBeUndefined()
   } finally {
     try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
-    await rm(harnessResult.root, { recursive: true, force: true })
+    await rm(harnessResult.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -191,11 +191,11 @@ setInterval(() => {}, 1000)
       expect((JSON.parse(after.console!.config!) as { listen: { port: number } }).listen.port).toBe(persistedPort)
       expect(after.consoleRuntime).toMatchObject({ state: 'failed' })
       await replacement.stop()
-    } finally { await rm(childWithOccupiedPort.root, { recursive: true, force: true }) }
+    } finally { await rm(childWithOccupiedPort.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }) }
   } finally {
     await new Promise<void>(resolve => occupied.close(() => resolve()))
     try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
-    await rm(harnessResult.root, { recursive: true, force: true })
+    await rm(harnessResult.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }, 15_000)
 
@@ -211,7 +211,7 @@ it('rejects a stale Console generation without rewriting durable facts', async (
     expect(internal.consoleRuntime).toMatchObject({ state: 'online', generation: 1 })
   } finally {
     try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
-    await rm(harnessResult.root, { recursive: true, force: true })
+    await rm(harnessResult.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }, 15_000)
 
@@ -233,7 +233,7 @@ it('serializes Console start and stop so a queued stop cannot be overtaken by a 
     expect(supervisor.state()).toBe('running')
   } finally {
     try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
-    await rm(harnessResult.root, { recursive: true, force: true })
+    await rm(harnessResult.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }, 20_000)
 
@@ -260,7 +260,7 @@ it('never spawns a second Console child while it still owns a live one', async (
     expect(() => process.kill(ownedPid, 0)).not.toThrow()
   } finally {
     try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
-    await rm(harnessResult.root, { recursive: true, force: true })
+    await rm(harnessResult.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }, 15_000)
 
@@ -277,6 +277,6 @@ it('rejects a disabled Console without writing a runtime row', async () => {
     expect((await readLocalInternalConfig(harnessResult.config.internalPath!)).consoleRuntime).toBeUndefined()
   } finally {
     try { await supervisor.stop() } catch { /* best-effort cleanup for test-owned paths */ }
-    await rm(harnessResult.root, { recursive: true, force: true })
+    await rm(harnessResult.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }, 15_000)
