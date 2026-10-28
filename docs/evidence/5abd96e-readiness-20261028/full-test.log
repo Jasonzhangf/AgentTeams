@@ -1,0 +1,94 @@
+
+> agentteams@0.2.0-internal.1 test /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028
+> pnpm build && node scripts/regression.mjs
+
+
+> agentteams@0.2.0-internal.1 build /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028
+> pnpm --dir opencode-adapter build && pnpm --dir console-host build && pnpm --dir ui/teams-console build && pnpm build:runtime
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    55.03 kB │ gzip: 14.30 kB
+ℹ lib/index.d.mts  32.86 kB │ gzip:  7.68 kB
+ℹ 2 files, total: 87.89 kB
+✔ Build complete in 720ms
+
+> @deepseek-ai/teams-console-host@0.1.0 build /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/console-host
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/console-host/package.json 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    36.79 kB │ gzip: 9.22 kB
+ℹ lib/index.d.mts  37.89 kB │ gzip: 8.78 kB
+ℹ 2 files, total: 74.68 kB
+✔ Build complete in 602ms
+
+> @deepseek-ai/teams-console@0.1.0 build /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/ui/teams-console
+> tsc -p tsconfig.build.json && node scripts/finalize-build.mjs
+
+
+> agentteams@0.2.0-internal.1 build:runtime /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+
+Regression gate: TEAMS_CONSOLE_REAL_DOM=1 (real Chrome required)
+(node:16569) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/packages/dagpipe/src/.build/build-2mEe0L)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.46s
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/packages/dagpipe/src/.build/build-BOBIst)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.53s
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling pipeline_runtime v0.1.1 (/Users/fanzhang/.local/share/dagpipe/sdk)
+   Compiling teams-dagpipe-runner v0.1.0 (/Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/packages/dagpipe/src/.build/build-Uaxs0J)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.58s
+blackbox-user-mvp: unknown case: BB99
+Test Files 159 passed
+Tests 1678 passed

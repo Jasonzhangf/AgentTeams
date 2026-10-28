@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  15:21:24
+   Duration  31.31s (transform 134ms, setup 0ms, import 186ms, tests 31.00s, environment 0ms)
+
