@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/webui-session-loop-p0
+
+ ❯ agent-host/acp-host.spec.ts (34 tests | 1 failed | 33 skipped) 17ms
+     × rolls back only the failed dispatch rows and preserves another Session concurrent events 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  agent-host/acp-host.spec.ts > createAcpHost > rolls back only the failed dispatch rows and preserves another Session concurrent events
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ agent-host/acp-host.spec.ts:683:147
+    681|     expect(events.filter(event => event.sessionId === 'session-b')).to…
+    682|     expect(events.some(event => event.sessionId === 'session-a' && eve…
+    683|     expect(events.some(event => event.sessionId === 'session-a' && eve…
+       |                                                                                                                                                   ^
+    684|
+    685|     // A can still resolve its permission and prompt, and its final ev…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 33 skipped (34)
+   Start at  14:22:13
+   Duration  231ms (transform 77ms, setup 0ms, import 96ms, tests 17ms, environment 0ms)
+

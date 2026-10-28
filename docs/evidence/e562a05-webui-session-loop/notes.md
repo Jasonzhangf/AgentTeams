@@ -110,3 +110,39 @@ now uses the real nested content shape). The fixed files were restored byte-iden
 the suites pass 51/51 again. Log: `red-tests-r2.log`. The per-Session test also asserts that each
 Session's own text update and response land on that Session and that both admit a new prompt once
 their response arrives.
+
+## r3 Review-fix round (r2 admission and rollback findings)
+
+The r2 Reviewer returned two blocking findings in `agent-host/acp-host.ts`:
+
+1. Same-Session admission checked `activePrompts` before the asynchronous history append but did
+   not reserve the Session until dispatch. Two overlapping prompts could both pass admission.
+2. A failed dispatch truncated the shared `channel.events` array to its old length. Tool,
+   permission or final events appended by another Session during that dispatch could be deleted.
+
+The r3 code candidate reserves admission synchronously in `promptAdmissions` before the first
+await, then transfers the reservation to `activePrompts` when dispatch establishes the durable
+prompt identity. A failed dispatch now removes only the user projection event ids created by that
+dispatch. It never filters or truncates rows from another Session.
+
+Two public-host red tests reproduce the real asynchronous windows:
+
+- `red-admission-r3.log`: on the old implementation the overlapping prompt resolved instead of
+  returning `CONFLICT`.
+- `red-isolation-r3.log`: on the old implementation Session A's pending-permission event
+  disappeared when Session B's engine send failed.
+
+On the fixed candidate the focused host plus runtime intent-watch suites pass `53/53` in two
+files, exit `0` (`focused-tests-r3.log`). `pnpm typecheck` and `pnpm build` both exit `0`
+(`typecheck-r3.log`, `build-r3.log`). `git diff --check` exits `0`; the code change is limited to
+`agent-host/acp-host.ts` and `agent-host/acp-host.spec.ts`.
+
+The real-process black box was rerun on the r3 candidate and passed `51/51`, exit `0`
+(`black-box-r3-final.log`). It used a real control daemon, a real OpenCode-backed agent daemon and
+real Chrome. Session B completed while Session A was still waiting on its permission, each Session
+kept its own pending permission and final event, and the browser completed its own create, send,
+permission and final-event path.
+
+Evidence: `red-admission-r3.log`, `red-isolation-r3.log`, `focused-tests-r3.log`,
+`typecheck-r3.log`, `build-r3.log`, `black-box-r3-final.log`, `receipt.json`,
+`browser-pending-permission.png`.

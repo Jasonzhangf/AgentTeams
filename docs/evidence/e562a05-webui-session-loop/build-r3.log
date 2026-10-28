@@ -1,0 +1,42 @@
+
+> agentteams@0.2.0-internal.1 build /Volumes/Intel/playground/agentteams/webui-session-loop-p0
+> pnpm --dir opencode-adapter build && pnpm --dir console-host build && pnpm --dir ui/teams-console build && pnpm build:runtime
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/webui-session-loop-p0/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/webui-session-loop-p0/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    55.03 kB │ gzip: 14.30 kB
+ℹ lib/index.d.mts  32.86 kB │ gzip:  7.68 kB
+ℹ 2 files, total: 87.89 kB
+✔ Build complete in 683ms
+
+> @deepseek-ai/teams-console-host@0.1.0 build /Volumes/Intel/playground/agentteams/webui-session-loop-p0/console-host
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/webui-session-loop-p0/console-host/package.json 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    36.79 kB │ gzip: 9.22 kB
+ℹ lib/index.d.mts  37.89 kB │ gzip: 8.78 kB
+ℹ 2 files, total: 74.68 kB
+✔ Build complete in 601ms
+
+> @deepseek-ai/teams-console@0.1.0 build /Volumes/Intel/playground/agentteams/webui-session-loop-p0/ui/teams-console
+> tsc -p tsconfig.build.json && node scripts/finalize-build.mjs
+
+
+> agentteams@0.2.0-internal.1 build:runtime /Volumes/Intel/playground/agentteams/webui-session-loop-p0
+> node -e "require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })" && tsc -p tsconfig.runtime.json
+

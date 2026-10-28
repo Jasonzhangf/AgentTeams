@@ -1,0 +1,52 @@
+PASS [control start] control daemon is live with explicit pid 60720
+PASS [control start] control daemon reports running (running)
+PASS [agent readiness] agent daemon is live with explicit pid 60863
+PASS [agent readiness] agent daemon spawned a live OpenCode child (60905)
+PASS [operable runtime projection] the projection marks the observed agent runtime/sessionCapable
+PASS [operable runtime projection] the runtime row exposes an actionable availability (current)
+PASS [session.create through control intent] control accepted session.create (200)
+PASS [session.create through control intent] control reported the durable accepted revision (1)
+PASS [agent executes session/new and publishes it] the projection carries the new Session (ses_e7b976233ffeMDFsvkpB7YS12S)
+PASS [session.open through control] control opens the published Session
+PASS [message send and timeline events] the { text } body was accepted by the Session ingress (200)
+PASS [message send and timeline events] the user text is projected as a completed timeline part
+PASS [message send and timeline events] the tool state is projected (running)
+PASS [real pending permission with options] the permission exposes once/always/reject (once,always,reject)
+PASS [real pending permission with options] the pending notification names the same real permission id
+PASS [Session B executes while Session A awaits permission] control accepted session.create for Session B (200)
+PASS [Session B executes while Session A awaits permission] the projection carries a distinct Session B (ses_e7b975479ffe73xwcf2JoXKGMU)
+PASS [Session B executes while Session A awaits permission] control opens Session B
+PASS [Session B executes while Session A awaits permission] Session B accepted a message while A was pending (200)
+PASS [Session B executes while Session A awaits permission] Session A is still waiting on its permission while Session B ran
+PASS [Session B executes while Session A awaits permission] Session B carries its own distinct pending permission
+PASS [approval completes the turn] control accepted the permission reply (200)
+PASS [approval completes the turn] the permission is projected resolved (once)
+PASS [approval completes the turn] the assistant final text is projected as a completed part
+PASS [approval completes the turn] the final event is projected completed
+PASS [approval completes the turn] the completed /etc/hosts tool event carries non-empty real text ("##\n# Host Database\n#\n# localhost is used")
+PASS [approval completes the turn] the completed /etc/hosts tool event contains localhost ("##\n# Host Database\n#\n# localhost is used to configure the loopback interface\n# w")
+PASS [Session B completes after its own permission] control accepted Session B permission reply (200)
+PASS [Session B completes after its own permission] Session B final event is completed
+PASS [Session B completes after its own permission] Session B completed tool event carries real /etc/hosts text
+PASS [browser console load] real Chrome loaded the shipped Console and rendered the observed Agent
+PASS [browser creates a session] the live Agent details action was clicked
+PASS [browser creates a session] the live Create session action was clicked
+PASS [browser creates a session] the projection carries the browser-created Session (ses_e7b9740e5ffenKd9IVKxaEDBy7)
+PASS [browser composer enabled] the Interaction tab was clicked
+PASS [browser composer enabled] the browser-created Session selection result was selected
+PASS [browser composer enabled] the Interaction message textarea is enabled
+PASS [browser composer enabled] the Interaction Send button is enabled
+PASS [browser composer enabled] the composer rendered on page interaction
+PASS [browser sends message and renders timeline] the live message composer submitted
+PASS [browser sends message and renders timeline] the live composer issued a Session message request
+PASS [browser sends message and renders timeline] the live Session message targeted Agent e562-agent
+PASS [browser sends message and renders timeline] the live Session message targeted ses_e7b9740e5ffenKd9IVKxaEDBy7, expected ses_e7b9740e5ffenKd9IVKxaEDBy7
+PASS [browser sends message and renders timeline] the browser message is projected as a completed user part
+PASS [browser pending permission options] the live timeline permission choices are once,always,reject
+PASS [browser pending permission options] the live Allow once button is enabled
+PASS [browser pending permission options] the live permission did not fall back to the unavailable hint
+PASS [browser approves and completes] the live Allow once action was clicked
+PASS [browser approves and completes] the live timeline rendered the assistant response
+PASS [browser approves and completes] the live timeline rendered the final event
+PASS [browser approves and completes] the live timeline removed the resolved permission buttons
+# 51/51 checks passed; receipt=/Volumes/Intel/playground/agentteams/webui-session-loop-p0/docs/evidence/e562a05-webui-session-loop/receipt.json

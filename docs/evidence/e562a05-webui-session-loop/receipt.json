@@ -5,7 +5,7 @@
     {
       "step": "control start",
       "ok": true,
-      "message": "control daemon is live with explicit pid 66111"
+      "message": "control daemon is live with explicit pid 60720"
     },
     {
       "step": "control start",
@@ -15,12 +15,12 @@
     {
       "step": "agent readiness",
       "ok": true,
-      "message": "agent daemon is live with explicit pid 66233"
+      "message": "agent daemon is live with explicit pid 60863"
     },
     {
       "step": "agent readiness",
       "ok": true,
-      "message": "agent daemon spawned a live OpenCode child (66272)"
+      "message": "agent daemon spawned a live OpenCode child (60905)"
     },
     {
       "step": "operable runtime projection",
@@ -45,7 +45,7 @@
     {
       "step": "agent executes session/new and publishes it",
       "ok": true,
-      "message": "the projection carries the new Session (ses_e7bab958cffe0TOm3OabreA7I6)"
+      "message": "the projection carries the new Session (ses_e7b976233ffeMDFsvkpB7YS12S)"
     },
     {
       "step": "session.open through control",
@@ -85,7 +85,7 @@
     {
       "step": "Session B executes while Session A awaits permission",
       "ok": true,
-      "message": "the projection carries a distinct Session B (ses_e7bab87d5ffeDAwTTZolj0z0vx)"
+      "message": "the projection carries a distinct Session B (ses_e7b975479ffe73xwcf2JoXKGMU)"
     },
     {
       "step": "Session B executes while Session A awaits permission",
@@ -170,7 +170,7 @@
     {
       "step": "browser creates a session",
       "ok": true,
-      "message": "the projection carries the browser-created Session (ses_e7bab60a2ffeaa2fnKryvn0Mo2)"
+      "message": "the projection carries the browser-created Session (ses_e7b9740e5ffenKd9IVKxaEDBy7)"
     },
     {
       "step": "browser composer enabled",
@@ -215,7 +215,7 @@
     {
       "step": "browser sends message and renders timeline",
       "ok": true,
-      "message": "the live Session message targeted ses_e7bab60a2ffeaa2fnKryvn0Mo2, expected ses_e7bab60a2ffeaa2fnKryvn0Mo2"
+      "message": "the live Session message targeted ses_e7b9740e5ffenKd9IVKxaEDBy7, expected ses_e7b9740e5ffenKd9IVKxaEDBy7"
     },
     {
       "step": "browser sends message and renders timeline",
@@ -258,16 +258,16 @@
       "message": "the live timeline removed the resolved permission buttons"
     }
   ],
-  "root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/e562-blackbox-de9Ls4",
+  "root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/e562-blackbox-MtxUaP",
   "engine": "/Users/fanzhang/.opencode/bin/opencode",
   "control": {
-    "pid": 66111,
-    "origin": "http://127.0.0.1:60716"
+    "pid": 60720,
+    "origin": "http://127.0.0.1:51557"
   },
   "agent": {
-    "pid": 66233,
-    "enginePid": 66272,
-    "ready": "serving agent=e562-agent engine=opencode engineInstance=opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418 enginePid=66272 daemonPid=66233 listener=127.0.0.1:60717 localChannel=127.0.0.1:60717 lanChannel=none capabilitiesRevision=2 registration=disabled dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/e562-blackbox-de9Ls4/agent/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/e562-blackbox-de9Ls4/agent.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1"
+    "pid": 60863,
+    "enginePid": 60905,
+    "ready": "serving agent=e562-agent engine=opencode engineInstance=opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268 enginePid=60905 daemonPid=60863 listener=127.0.0.1:51558 localChannel=127.0.0.1:51558 lanChannel=none capabilitiesRevision=2 registration=disabled dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/e562-blackbox-MtxUaP/agent/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/e562-blackbox-MtxUaP/agent.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1"
   },
   "operableAgent": {
     "kind": "runtime",
@@ -281,7 +281,7 @@
     "sessionCapable": true,
     "sessionAvailability": "current",
     "sessionEffectiveRevision": 1,
-    "currentSessionId": "ses_e7bab9990ffeGN1X6gjUZDuztm"
+    "currentSessionId": "ses_e7b976634ffeFFyit6fJsEVHZ8"
   },
   "sessionCreateCommand": {
     "ok": true,
@@ -289,7 +289,7 @@
       "acceptedRevision": 1
     }
   },
-  "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
+  "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
   "projectionAfterCreate": {
     "version": 1,
     "agents": [
@@ -305,17 +305,17 @@
         "sessionCapable": true,
         "sessionAvailability": "current",
         "sessionEffectiveRevision": 2,
-        "currentSessionId": "ses_e7bab958cffe0TOm3OabreA7I6"
+        "currentSessionId": "ses_e7b976233ffeMDFsvkpB7YS12S"
       }
     ],
     "sessions": [
       {
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6"
+        "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S"
       },
       {
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab9990ffeGN1X6gjUZDuztm"
+        "sessionId": "ses_e7b976634ffeFFyit6fJsEVHZ8"
       }
     ],
     "notifications": [],
@@ -326,7 +326,7 @@
     "ok": true,
     "result": {
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6"
+      "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S"
     }
   },
   "sessionMessageCommand": {
@@ -339,8 +339,8 @@
     "userPart": {
       "eventId": "evt-part-user-acp-history-9",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-      "occurredAt": "2026-10-28T21:04:48.219Z",
+      "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+      "occurredAt": "2026-10-28T21:26:52.082Z",
       "kind": "part",
       "state": "completed",
       "messageId": "msg-acp-history-9",
@@ -351,8 +351,8 @@
     "toolEvent": {
       "eventId": "tool-call_e562_2",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-      "occurredAt": "2026-10-28T21:04:49.905Z",
+      "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+      "occurredAt": "2026-10-28T21:26:53.701Z",
       "kind": "tool",
       "messageId": "msg-asst-acp-history-9",
       "partId": "tool-call_e562_2",
@@ -368,8 +368,8 @@
       {
         "eventId": "evt-user-acp-history-9",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-        "occurredAt": "2026-10-28T21:04:48.219Z",
+        "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+        "occurredAt": "2026-10-28T21:26:52.082Z",
         "kind": "message",
         "state": "completed",
         "messageId": "msg-acp-history-9",
@@ -378,8 +378,8 @@
       {
         "eventId": "evt-part-user-acp-history-9",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-        "occurredAt": "2026-10-28T21:04:48.219Z",
+        "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+        "occurredAt": "2026-10-28T21:26:52.082Z",
         "kind": "part",
         "state": "completed",
         "messageId": "msg-acp-history-9",
@@ -390,8 +390,8 @@
       {
         "eventId": "tool-call_e562_2",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-        "occurredAt": "2026-10-28T21:04:49.905Z",
+        "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+        "occurredAt": "2026-10-28T21:26:53.701Z",
         "kind": "tool",
         "messageId": "msg-asst-acp-history-9",
         "partId": "tool-call_e562_2",
@@ -404,17 +404,17 @@
         "title": "read"
       },
       {
-        "eventId": "permission:acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-1",
+        "eventId": "permission:acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-1",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-        "occurredAt": "2026-10-28T21:04:49.906Z",
+        "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+        "occurredAt": "2026-10-28T21:26:53.706Z",
         "kind": "permission",
         "state": "pending",
-        "permissionId": "acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-1",
+        "permissionId": "acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-1",
         "messageId": "msg-asst-acp-history-9",
         "title": "/etc",
         "metadata": {
-          "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
+          "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
           "toolCall": {
             "toolCallId": "call_e562_2",
             "title": "/etc",
@@ -472,7 +472,7 @@
     ]
   },
   "permission": {
-    "permissionId": "acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-1",
+    "permissionId": "acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-1",
     "options": [
       {
         "optionId": "once",
@@ -492,17 +492,17 @@
     ],
     "notification": {
       "agentId": "e562-agent",
-      "notificationId": "permission:acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-1",
-      "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
+      "notificationId": "permission:acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-1",
+      "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
       "kind": "permission",
       "state": "pending",
       "title": "Permission request",
-      "permissionId": "acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-1"
+      "permissionId": "acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-1"
     }
   },
   "concurrentSessionB": {
-    "sessionId": "ses_e7bab87d5ffeDAwTTZolj0z0vx",
-    "permissionId": "acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-2",
+    "sessionId": "ses_e7b975479ffe73xwcf2JoXKGMU",
+    "permissionId": "acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-2",
     "sessionAStillPending": true
   },
   "permissionReplyCommand": {
@@ -513,20 +513,20 @@
   },
   "completedProjection": {
     "resolved": {
-      "eventId": "permission:acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-1",
+      "eventId": "permission:acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-1",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-      "occurredAt": "2026-10-28T21:04:49.906Z",
+      "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+      "occurredAt": "2026-10-28T21:26:53.706Z",
       "kind": "permission",
       "state": "resolved",
-      "permissionId": "acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-1",
+      "permissionId": "acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-1",
       "decision": "once"
     },
     "assistantText": {
       "eventId": "evt-part-part-asst-acp-history-9",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-      "occurredAt": "2026-10-28T21:04:52.800Z",
+      "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+      "occurredAt": "2026-10-28T21:26:56.648Z",
       "kind": "part",
       "state": "completed",
       "messageId": "msg-asst-acp-history-9",
@@ -537,8 +537,8 @@
     "finalEvent": {
       "eventId": "evt-final-msg-asst-acp-history-9",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-      "occurredAt": "2026-10-28T21:04:52.800Z",
+      "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+      "occurredAt": "2026-10-28T21:26:56.648Z",
       "kind": "final",
       "state": "completed",
       "finish": "end_turn",
@@ -547,8 +547,8 @@
     "completedTool": {
       "eventId": "tool-call_e562_2",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab958cffe0TOm3OabreA7I6",
-      "occurredAt": "2026-10-28T21:04:52.758Z",
+      "sessionId": "ses_e7b976233ffeMDFsvkpB7YS12S",
+      "occurredAt": "2026-10-28T21:26:56.617Z",
       "kind": "tool",
       "messageId": "msg-asst-acp-history-9",
       "partId": "tool-call_e562_2",
@@ -565,12 +565,12 @@
     "notifications": [
       {
         "agentId": "e562-agent",
-        "notificationId": "permission:acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-2",
-        "sessionId": "ses_e7bab87d5ffeDAwTTZolj0z0vx",
+        "notificationId": "permission:acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-2",
+        "sessionId": "ses_e7b975479ffe73xwcf2JoXKGMU",
         "kind": "permission",
         "state": "pending",
         "title": "Permission request",
-        "permissionId": "acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-2"
+        "permissionId": "acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-2"
       }
     ]
   },
@@ -578,8 +578,8 @@
     "final": {
       "eventId": "evt-final-msg-asst-acp-history-16",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab87d5ffeDAwTTZolj0z0vx",
-      "occurredAt": "2026-10-28T21:04:53.781Z",
+      "sessionId": "ses_e7b975479ffe73xwcf2JoXKGMU",
+      "occurredAt": "2026-10-28T21:26:57.636Z",
       "kind": "final",
       "state": "completed",
       "finish": "end_turn",
@@ -588,8 +588,8 @@
     "tool": {
       "eventId": "tool-call_e562_3",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab87d5ffeDAwTTZolj0z0vx",
-      "occurredAt": "2026-10-28T21:04:53.755Z",
+      "sessionId": "ses_e7b975479ffe73xwcf2JoXKGMU",
+      "occurredAt": "2026-10-28T21:26:57.612Z",
       "kind": "tool",
       "messageId": "msg-asst-acp-history-16",
       "partId": "tool-call_e562_3",
@@ -605,11 +605,11 @@
     }
   },
   "browser": {
-    "pid": 70096,
-    "devtools": "ws://127.0.0.1:60821/devtools/browser/6b3a8b02-30c9-4f00-9680-a960c3490fb7"
+    "pid": 63922,
+    "devtools": "ws://127.0.0.1:51629/devtools/browser/25c5287b-af03-425d-a61f-d0d658d79f76"
   },
   "browserSessionCreate": {
-    "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
+    "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
     "accepted": "clicked"
   },
   "browserComposer": {
@@ -619,14 +619,14 @@
   },
   "browserSessionMessageRequest": {
     "method": "POST",
-    "url": "http://127.0.0.1:60716/api/v1/session-message?agentId=e562-agent&sessionId=ses_e7bab60a2ffeaa2fnKryvn0Mo2"
+    "url": "http://127.0.0.1:51557/api/v1/session-message?agentId=e562-agent&sessionId=ses_e7b9740e5ffenKd9IVKxaEDBy7"
   },
   "browserActivity": {
     "userPart": {
       "eventId": "evt-part-user-acp-history-31",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
-      "occurredAt": "2026-10-28T21:05:01.762Z",
+      "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
+      "occurredAt": "2026-10-28T21:27:00.615Z",
       "kind": "part",
       "state": "completed",
       "messageId": "msg-acp-history-31",
@@ -637,17 +637,17 @@
   },
   "browserPermission": {
     "event": {
-      "eventId": "permission:acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-3",
+      "eventId": "permission:acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-3",
       "agentId": "e562-agent",
-      "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
-      "occurredAt": "2026-10-28T21:05:01.789Z",
+      "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
+      "occurredAt": "2026-10-28T21:27:00.653Z",
       "kind": "permission",
       "state": "pending",
-      "permissionId": "acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-3",
+      "permissionId": "acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-3",
       "messageId": "msg-asst-acp-history-31",
       "title": "/etc",
       "metadata": {
-        "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
+        "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
         "toolCall": {
           "toolCallId": "call_e562_7",
           "title": "/etc",
@@ -717,15 +717,15 @@
       "unavailable": false
     },
     "screenshot": "/Volumes/Intel/playground/agentteams/webui-session-loop-p0/docs/evidence/e562a05-webui-session-loop/browser-pending-permission.png",
-    "screenshotBytes": 50048
+    "screenshotBytes": 49913
   },
   "browserCompleted": {
     "projection": [
       {
         "eventId": "evt-user-acp-history-31",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
-        "occurredAt": "2026-10-28T21:05:01.762Z",
+        "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
+        "occurredAt": "2026-10-28T21:27:00.615Z",
         "kind": "message",
         "state": "completed",
         "messageId": "msg-acp-history-31",
@@ -734,8 +734,8 @@
       {
         "eventId": "evt-part-user-acp-history-31",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
-        "occurredAt": "2026-10-28T21:05:01.762Z",
+        "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
+        "occurredAt": "2026-10-28T21:27:00.615Z",
         "kind": "part",
         "state": "completed",
         "messageId": "msg-acp-history-31",
@@ -746,8 +746,8 @@
       {
         "eventId": "tool-call_e562_7",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
-        "occurredAt": "2026-10-28T21:05:02.782Z",
+        "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
+        "occurredAt": "2026-10-28T21:27:02.128Z",
         "kind": "tool",
         "messageId": "msg-asst-acp-history-31",
         "partId": "tool-call_e562_7",
@@ -762,20 +762,20 @@
         "metadata": {}
       },
       {
-        "eventId": "permission:acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-3",
+        "eventId": "permission:acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-3",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
-        "occurredAt": "2026-10-28T21:05:01.789Z",
+        "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
+        "occurredAt": "2026-10-28T21:27:00.653Z",
         "kind": "permission",
         "state": "resolved",
-        "permissionId": "acp-callback-opencode-e562-agent-679d1012-dc14-46be-9cb3-f8faa1f5b418-3",
+        "permissionId": "acp-callback-opencode-e562-agent-84f25c27-5c73-4964-b5bb-fce109a65268-3",
         "decision": "once"
       },
       {
         "eventId": "evt-part-part-asst-acp-history-31",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
-        "occurredAt": "2026-10-28T21:05:02.805Z",
+        "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
+        "occurredAt": "2026-10-28T21:27:02.155Z",
         "kind": "part",
         "state": "completed",
         "messageId": "msg-asst-acp-history-31",
@@ -786,8 +786,8 @@
       {
         "eventId": "evt-asst-msg-asst-acp-history-31",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
-        "occurredAt": "2026-10-28T21:05:02.805Z",
+        "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
+        "occurredAt": "2026-10-28T21:27:02.155Z",
         "kind": "message",
         "state": "completed",
         "messageId": "msg-asst-acp-history-31",
@@ -796,8 +796,8 @@
       {
         "eventId": "evt-final-msg-asst-acp-history-31",
         "agentId": "e562-agent",
-        "sessionId": "ses_e7bab60a2ffeaa2fnKryvn0Mo2",
-        "occurredAt": "2026-10-28T21:05:02.805Z",
+        "sessionId": "ses_e7b9740e5ffenKd9IVKxaEDBy7",
+        "occurredAt": "2026-10-28T21:27:02.155Z",
         "kind": "final",
         "state": "completed",
         "finish": "end_turn",

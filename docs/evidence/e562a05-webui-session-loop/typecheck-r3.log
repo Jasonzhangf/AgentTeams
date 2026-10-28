@@ -1,0 +1,31 @@
+
+> agentteams@0.2.0-internal.1 typecheck /Volumes/Intel/playground/agentteams/webui-session-loop-p0
+> pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck
+
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 build /Volumes/Intel/playground/agentteams/webui-session-loop-p0/opencode-adapter
+> tsdown src/index.ts --out-dir lib --format esm --platform node --target es2022 --dts --clean
+
+ℹ tsdown v0.22.14 powered by rolldown v1.2.7
+ℹ config file: /Volumes/Intel/playground/agentteams/webui-session-loop-p0/opencode-adapter/tsdown.config.ts 
+ℹ entry: src/index.ts
+ℹ target: es2022
+ℹ tsconfig: tsconfig.json
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ lib/index.mjs    55.03 kB │ gzip: 14.30 kB
+ℹ lib/index.d.mts  32.86 kB │ gzip:  7.68 kB
+ℹ 2 files, total: 87.89 kB
+✔ Build complete in 902ms
+
+> @deepseek-ai/teams-opencode-adapter@0.1.0 typecheck /Volumes/Intel/playground/agentteams/webui-session-loop-p0/opencode-adapter
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console-host@0.1.0 typecheck /Volumes/Intel/playground/agentteams/webui-session-loop-p0/console-host
+> tsc --noEmit
+
+
+> @deepseek-ai/teams-console@0.1.0 typecheck /Volumes/Intel/playground/agentteams/webui-session-loop-p0/ui/teams-console
+> tsc -p tsconfig.json --noEmit
+
