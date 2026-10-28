@@ -1408,7 +1408,7 @@ tlsTrustRef = "file:${trustPath}"
       baseUrl: 'http://127.0.0.1:1/v1',
     }))
     const previous = spawn(process.execPath, [
-      '-e', 'setInterval(() => {}, 1000)',
+      '-e', 'setInterval(() => {}, 1000)', '--',
       '--serve', 'dsh', '--config', configPath,
     ], { stdio: 'ignore' })
     const previousPid = previous.pid
