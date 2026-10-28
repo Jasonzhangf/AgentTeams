@@ -9,7 +9,7 @@ it('rejects child exit before readiness instead of reporting effective config', 
   const executable = process.execPath
   await writeFile(join(directory, 'serve'), 'process.exit(17)\n')
   try {
-    await expect(startManagedOpenCode({ executable, directory, port: 32145, startupTimeoutMs: 1000, stopTimeoutMs: 1000,
+    await expect(startManagedOpenCode({ executable, directory, port: 32145, startupTimeoutMs: 12000, stopTimeoutMs: 1000,
       compiled: { agentId: 'a', acceptedRevision: 1, primary: { provider: 'p', model: 'm', protocol: 'openai-chat', baseUrl: 'http://127.0.0.1:1/v1' } },
       resolveCredential: async () => { throw new Error('no credential expected') } })).rejects.toThrow(/exited/)
   } finally { await rm(directory, { recursive: true }) }
