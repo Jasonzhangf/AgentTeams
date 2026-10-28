@@ -538,6 +538,43 @@ async function main() {
   assert(notification?.state === 'pending' && notification.permissionId === permissionEvent.permissionId, 'the pending notification names the same real permission id')
   record('permission', { permissionId: permissionEvent.permissionId, options: permissionEvent.options, notification })
 
+  step = 'Session B executes while Session A awaits permission'
+  const concurrentBaseline = new Set((await readProjection(origin)).sessions.map(row => row.sessionId))
+  const createB = await command(origin, { kind: 'session.create', agentId: AGENT_ID, title: 'E562 black box B' })
+  assert(createB.status === 200 && createB.body.ok === true, `control accepted session.create for Session B (${createB.status})`)
+  const projectionB = await awaitProjection(
+    origin,
+    body => body.sessions?.some(row => row.agentId === AGENT_ID && !concurrentBaseline.has(row.sessionId)) === true,
+    'the agent never published Session B created while Session A was pending',
+  )
+  const sessionB = projectionB.sessions.find(row => row.agentId === AGENT_ID && !concurrentBaseline.has(row.sessionId))
+  assert(sessionB !== undefined && sessionB.sessionId !== created.sessionId, `the projection carries a distinct Session B (${sessionB?.sessionId})`)
+  const openB = await command(origin, { kind: 'session.open', agentId: AGENT_ID, sessionId: sessionB.sessionId })
+  assert(openB.status === 200 && openB.body.ok === true && openB.body.result?.sessionId === sessionB.sessionId, 'control opens Session B')
+  const sentB = await sendMessage(origin, { agentId: AGENT_ID, sessionId: sessionB.sessionId }, { text: 'read /etc/hosts' })
+  assert(sentB.status === 200 && sentB.body.ok === true, `Session B accepted a message while A was pending (${sentB.status})`)
+  const bActivity = await awaitProjection(
+    origin,
+    body => body.sessionEvents?.some(event => event.sessionId === sessionB.sessionId && event.kind === 'part'
+      && event.partType === 'text' && event.text === 'read /etc/hosts') === true
+      && body.sessionEvents?.some(event => event.sessionId === sessionB.sessionId && event.kind === 'tool') === true
+      && body.sessionEvents?.some(event => event.sessionId === sessionB.sessionId && event.kind === 'permission'
+        && event.state === 'pending' && (event.options?.length ?? 0) > 0) === true,
+    'Session B did not execute while Session A awaited permission',
+  )
+  const stillPendingA = bActivity.sessionEvents.some(event => event.sessionId === created.sessionId
+    && event.kind === 'permission' && event.permissionId === permissionEvent.permissionId && event.state === 'pending')
+  assert(stillPendingA, 'Session A is still waiting on its permission while Session B ran')
+  const bPermission = bActivity.sessionEvents.find(event => event.sessionId === sessionB.sessionId
+    && event.kind === 'permission' && event.state === 'pending' && (event.options?.length ?? 0) > 0)
+  assert(bPermission !== undefined && bPermission.permissionId !== permissionEvent.permissionId,
+    'Session B carries its own distinct pending permission')
+  record('concurrentSessionB', {
+    sessionId: sessionB.sessionId,
+    permissionId: bPermission.permissionId,
+    sessionAStillPending: stillPendingA,
+  })
+
   step = 'approval completes the turn'
   const allowOnce = permissionEvent.options.find(option => option.kind === 'once')
   const reply = await command(origin, {
@@ -557,6 +594,8 @@ async function main() {
       && body.sessionEvents?.some(event => event.sessionId === created.sessionId && event.kind === 'part'
         && event.partType === 'text' && event.text.includes('E562-TOOL-DONE')) === true
       && body.sessionEvents?.some(event => event.sessionId === created.sessionId && event.kind === 'final' && event.state === 'completed') === true
+      && body.sessionEvents?.some(event => event.sessionId === created.sessionId && event.kind === 'tool'
+        && event.state === 'completed' && typeof event.output === 'string' && event.output.includes('localhost')) === true
       && body.notifications?.every(row => row.permissionId !== permissionEvent.permissionId) === true,
     'the turn did not complete after the permission reply',
   )
@@ -568,7 +607,40 @@ async function main() {
   assert(resolved?.state === 'resolved' && resolved.decision === 'once', `the permission is projected resolved (${resolved?.decision})`)
   assert(assistantText?.state === 'completed', 'the assistant final text is projected as a completed part')
   assert(finalEvent?.state === 'completed', 'the final event is projected completed')
-  record('completedProjection', { resolved, assistantText, finalEvent, notifications: completed.notifications })
+  const completedTool = completed.sessionEvents.find(event => event.sessionId === created.sessionId
+    && event.kind === 'tool' && event.state === 'completed')
+  assert(typeof completedTool?.output === 'string' && completedTool.output.length > 0,
+    `the completed /etc/hosts tool event carries non-empty real text (${JSON.stringify(completedTool?.output?.slice(0, 40))})`)
+  assert(completedTool.output.includes('localhost'),
+    `the completed /etc/hosts tool event contains localhost (${JSON.stringify(completedTool.output.slice(0, 80))})`)
+  record('completedProjection', { resolved, assistantText, finalEvent, completedTool, notifications: completed.notifications })
+
+  step = 'Session B completes after its own permission'
+  const bAllowOnce = bPermission.options.find(option => option.kind === 'once')
+  const replyB = await command(origin, {
+    kind: 'permission.reply',
+    agentId: AGENT_ID,
+    sessionId: sessionB.sessionId,
+    permissionId: bPermission.permissionId,
+    decision: bAllowOnce.kind,
+    optionId: bAllowOnce.optionId,
+  })
+  assert(replyB.status === 200 && replyB.body.ok === true, `control accepted Session B permission reply (${replyB.status})`)
+  const bCompleted = await awaitProjection(
+    origin,
+    body => body.sessionEvents?.some(event => event.sessionId === sessionB.sessionId && event.kind === 'part'
+      && event.partType === 'text' && event.text.includes('E562-TOOL-DONE') && event.state === 'completed') === true
+      && body.sessionEvents?.some(event => event.sessionId === sessionB.sessionId && event.kind === 'final' && event.state === 'completed') === true
+      && body.sessionEvents?.some(event => event.sessionId === sessionB.sessionId && event.kind === 'tool'
+        && event.state === 'completed' && typeof event.output === 'string' && event.output.includes('localhost')) === true,
+    'Session B did not reach a completed terminal state after its permission reply',
+  )
+  const bFinal = bCompleted.sessionEvents.find(event => event.sessionId === sessionB.sessionId && event.kind === 'final')
+  const bTool = bCompleted.sessionEvents.find(event => event.sessionId === sessionB.sessionId
+    && event.kind === 'tool' && event.state === 'completed')
+  assert(bFinal?.state === 'completed', 'Session B final event is completed')
+  assert(typeof bTool?.output === 'string' && bTool.output.includes('localhost'), 'Session B completed tool event carries real /etc/hosts text')
+  record('concurrentSessionBCompleted', { final: bFinal, tool: bTool })
 
   step = 'browser console load'
   if (!existsSync(CHROME)) throw new Error(`Chrome executable is absent: ${CHROME}`)

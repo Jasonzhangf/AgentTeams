@@ -1,0 +1,699 @@
+{
+  "version": 1,
+  "driver": "e562a05-webui-session-loop",
+  "checks": [
+    {
+      "step": "control start",
+      "ok": true,
+      "message": "control daemon is live with explicit pid 85301"
+    },
+    {
+      "step": "control start",
+      "ok": true,
+      "message": "control daemon reports running (running)"
+    },
+    {
+      "step": "agent readiness",
+      "ok": true,
+      "message": "agent daemon is live with explicit pid 85429"
+    },
+    {
+      "step": "agent readiness",
+      "ok": true,
+      "message": "agent daemon spawned a live OpenCode child (85501)"
+    },
+    {
+      "step": "operable runtime projection",
+      "ok": true,
+      "message": "the projection marks the observed agent runtime/sessionCapable"
+    },
+    {
+      "step": "operable runtime projection",
+      "ok": true,
+      "message": "the runtime row exposes an actionable availability (current)"
+    },
+    {
+      "step": "session.create through control intent",
+      "ok": true,
+      "message": "control accepted session.create (200)"
+    },
+    {
+      "step": "session.create through control intent",
+      "ok": true,
+      "message": "control reported the durable accepted revision (1)"
+    },
+    {
+      "step": "agent executes session/new and publishes it",
+      "ok": true,
+      "message": "the projection carries the new Session (ses_e7bf6f5e3ffeXYIKPzeiDHjsvL)"
+    },
+    {
+      "step": "session.open through control",
+      "ok": true,
+      "message": "control opens the published Session"
+    },
+    {
+      "step": "message send and timeline events",
+      "ok": true,
+      "message": "the { text } body was accepted by the Session ingress (200)"
+    },
+    {
+      "step": "message send and timeline events",
+      "ok": true,
+      "message": "the user text is projected as a completed timeline part"
+    },
+    {
+      "step": "message send and timeline events",
+      "ok": true,
+      "message": "the tool state is projected (running)"
+    },
+    {
+      "step": "real pending permission with options",
+      "ok": true,
+      "message": "the permission exposes once/always/reject (once,always,reject)"
+    },
+    {
+      "step": "real pending permission with options",
+      "ok": true,
+      "message": "the pending notification names the same real permission id"
+    },
+    {
+      "step": "approval completes the turn",
+      "ok": true,
+      "message": "control accepted the permission reply (200)"
+    },
+    {
+      "step": "approval completes the turn",
+      "ok": true,
+      "message": "the permission is projected resolved (once)"
+    },
+    {
+      "step": "approval completes the turn",
+      "ok": true,
+      "message": "the assistant final text is projected as a completed part"
+    },
+    {
+      "step": "approval completes the turn",
+      "ok": true,
+      "message": "the final event is projected completed"
+    },
+    {
+      "step": "browser console load",
+      "ok": true,
+      "message": "real Chrome loaded the shipped Console and rendered the observed Agent"
+    },
+    {
+      "step": "browser creates a session",
+      "ok": true,
+      "message": "the live Agent details action was clicked"
+    },
+    {
+      "step": "browser creates a session",
+      "ok": true,
+      "message": "the live Create session action was clicked"
+    },
+    {
+      "step": "browser creates a session",
+      "ok": true,
+      "message": "the projection carries the browser-created Session (ses_e7bf6d87fffeyVX1Xz21zHqFRX)"
+    },
+    {
+      "step": "browser composer enabled",
+      "ok": true,
+      "message": "the Interaction tab was clicked"
+    },
+    {
+      "step": "browser composer enabled",
+      "ok": true,
+      "message": "the browser-created Session selection result was selected"
+    },
+    {
+      "step": "browser composer enabled",
+      "ok": true,
+      "message": "the Interaction message textarea is enabled"
+    },
+    {
+      "step": "browser composer enabled",
+      "ok": true,
+      "message": "the Interaction Send button is enabled"
+    },
+    {
+      "step": "browser composer enabled",
+      "ok": true,
+      "message": "the composer rendered on page interaction"
+    },
+    {
+      "step": "browser sends message and renders timeline",
+      "ok": true,
+      "message": "the live message composer submitted"
+    },
+    {
+      "step": "browser sends message and renders timeline",
+      "ok": true,
+      "message": "the live composer issued a Session message request"
+    },
+    {
+      "step": "browser sends message and renders timeline",
+      "ok": true,
+      "message": "the live Session message targeted Agent e562-agent"
+    },
+    {
+      "step": "browser sends message and renders timeline",
+      "ok": true,
+      "message": "the live Session message targeted ses_e7bf6d87fffeyVX1Xz21zHqFRX, expected ses_e7bf6d87fffeyVX1Xz21zHqFRX"
+    },
+    {
+      "step": "browser sends message and renders timeline",
+      "ok": true,
+      "message": "the browser message is projected as a completed user part"
+    },
+    {
+      "step": "browser pending permission options",
+      "ok": true,
+      "message": "the live timeline permission choices are once,always,reject"
+    },
+    {
+      "step": "browser pending permission options",
+      "ok": true,
+      "message": "the live Allow once button is enabled"
+    },
+    {
+      "step": "browser pending permission options",
+      "ok": true,
+      "message": "the live permission did not fall back to the unavailable hint"
+    },
+    {
+      "step": "browser approves and completes",
+      "ok": true,
+      "message": "the live Allow once action was clicked"
+    },
+    {
+      "step": "browser approves and completes",
+      "ok": true,
+      "message": "the live timeline rendered the assistant response"
+    },
+    {
+      "step": "browser approves and completes",
+      "ok": true,
+      "message": "the live timeline rendered the final event"
+    },
+    {
+      "step": "browser approves and completes",
+      "ok": true,
+      "message": "the live timeline removed the resolved permission buttons"
+    }
+  ],
+  "root": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/e562-blackbox-3WvKB3",
+  "engine": "/Users/fanzhang/.opencode/bin/opencode",
+  "control": {
+    "pid": 85301,
+    "origin": "http://127.0.0.1:63402"
+  },
+  "agent": {
+    "pid": 85429,
+    "enginePid": 85501,
+    "ready": "serving agent=e562-agent engine=opencode engineInstance=opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877 enginePid=85501 daemonPid=85429 listener=127.0.0.1:63403 localChannel=127.0.0.1:63403 lanChannel=none capabilitiesRevision=2 registration=disabled dataDirectory=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/e562-blackbox-3WvKB3/agent/state config=/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/e562-blackbox-3WvKB3/agent.toml model=probe/probe-model modelVerification=session/new configOptions effectiveRevision=1"
+  },
+  "operableAgent": {
+    "kind": "runtime",
+    "agentId": "e562-agent",
+    "label": "e562-agent",
+    "machineId": "host-e562-agent",
+    "presence": "online",
+    "capabilities": [
+      "acp"
+    ],
+    "sessionCapable": true,
+    "sessionAvailability": "current",
+    "sessionEffectiveRevision": 1,
+    "currentSessionId": "ses_e7bf6f9e2ffeTcsnMeogokExgu"
+  },
+  "sessionCreateCommand": {
+    "ok": true,
+    "result": {
+      "acceptedRevision": 1
+    }
+  },
+  "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+  "projectionAfterCreate": {
+    "version": 1,
+    "agents": [
+      {
+        "kind": "runtime",
+        "agentId": "e562-agent",
+        "label": "e562-agent",
+        "machineId": "host-e562-agent",
+        "presence": "online",
+        "capabilities": [
+          "acp"
+        ],
+        "sessionCapable": true,
+        "sessionAvailability": "current",
+        "sessionEffectiveRevision": 2,
+        "currentSessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL"
+      }
+    ],
+    "sessions": [
+      {
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL"
+      },
+      {
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6f9e2ffeTcsnMeogokExgu"
+      }
+    ],
+    "notifications": [],
+    "configs": [],
+    "connections": []
+  },
+  "sessionOpenCommand": {
+    "ok": true,
+    "result": {
+      "agentId": "e562-agent",
+      "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL"
+    }
+  },
+  "sessionMessageCommand": {
+    "ok": true,
+    "result": {
+      "acceptedRevision": 2
+    }
+  },
+  "activityProjection": {
+    "userPart": {
+      "eventId": "evt-part-user-acp-history-9",
+      "agentId": "e562-agent",
+      "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+      "occurredAt": "2026-10-28T19:42:28.357Z",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg-acp-history-9",
+      "partId": "part-user-acp-history-9",
+      "partType": "text",
+      "text": "read /etc/hosts"
+    },
+    "toolEvent": {
+      "eventId": "tool-call_e562_2",
+      "agentId": "e562-agent",
+      "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+      "occurredAt": "2026-10-28T19:42:32.356Z",
+      "kind": "tool",
+      "messageId": "msg-asst-acp-history-9",
+      "partId": "tool-call_e562_2",
+      "callId": "call_e562_2",
+      "tool": "read",
+      "input": {
+        "filePath": "/etc/hosts"
+      },
+      "state": "running",
+      "title": "read"
+    },
+    "sessionEvents": [
+      {
+        "eventId": "evt-user-acp-history-9",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+        "occurredAt": "2026-10-28T19:42:28.357Z",
+        "kind": "message",
+        "state": "completed",
+        "messageId": "msg-acp-history-9",
+        "role": "user"
+      },
+      {
+        "eventId": "evt-part-user-acp-history-9",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+        "occurredAt": "2026-10-28T19:42:28.357Z",
+        "kind": "part",
+        "state": "completed",
+        "messageId": "msg-acp-history-9",
+        "partId": "part-user-acp-history-9",
+        "partType": "text",
+        "text": "read /etc/hosts"
+      },
+      {
+        "eventId": "tool-call_e562_2",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+        "occurredAt": "2026-10-28T19:42:32.356Z",
+        "kind": "tool",
+        "messageId": "msg-asst-acp-history-9",
+        "partId": "tool-call_e562_2",
+        "callId": "call_e562_2",
+        "tool": "read",
+        "input": {
+          "filePath": "/etc/hosts"
+        },
+        "state": "running",
+        "title": "read"
+      },
+      {
+        "eventId": "permission:acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-1",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+        "occurredAt": "2026-10-28T19:42:32.357Z",
+        "kind": "permission",
+        "state": "pending",
+        "permissionId": "acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-1",
+        "messageId": "msg-asst-acp-history-9",
+        "title": "/etc",
+        "metadata": {
+          "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+          "toolCall": {
+            "toolCallId": "call_e562_2",
+            "title": "/etc",
+            "kind": "other",
+            "status": "pending",
+            "locations": [
+              {
+                "path": "/etc/hosts"
+              },
+              {
+                "path": "/etc"
+              }
+            ],
+            "rawInput": {
+              "filepath": "/etc/hosts",
+              "parentDir": "/etc"
+            }
+          },
+          "options": [
+            {
+              "optionId": "once",
+              "kind": "allow_once",
+              "name": "Allow once"
+            },
+            {
+              "optionId": "always",
+              "kind": "allow_always",
+              "name": "Always allow"
+            },
+            {
+              "optionId": "reject",
+              "kind": "reject_once",
+              "name": "Reject"
+            }
+          ]
+        },
+        "options": [
+          {
+            "optionId": "once",
+            "name": "Allow once",
+            "kind": "once"
+          },
+          {
+            "optionId": "always",
+            "name": "Always allow",
+            "kind": "always"
+          },
+          {
+            "optionId": "reject",
+            "name": "Reject",
+            "kind": "reject"
+          }
+        ]
+      }
+    ]
+  },
+  "permission": {
+    "permissionId": "acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-1",
+    "options": [
+      {
+        "optionId": "once",
+        "name": "Allow once",
+        "kind": "once"
+      },
+      {
+        "optionId": "always",
+        "name": "Always allow",
+        "kind": "always"
+      },
+      {
+        "optionId": "reject",
+        "name": "Reject",
+        "kind": "reject"
+      }
+    ],
+    "notification": {
+      "agentId": "e562-agent",
+      "notificationId": "permission:acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-1",
+      "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+      "kind": "permission",
+      "state": "pending",
+      "title": "Permission request",
+      "permissionId": "acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-1"
+    }
+  },
+  "permissionReplyCommand": {
+    "ok": true,
+    "result": {
+      "acceptedRevision": 3
+    }
+  },
+  "completedProjection": {
+    "resolved": {
+      "eventId": "permission:acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-1",
+      "agentId": "e562-agent",
+      "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+      "occurredAt": "2026-10-28T19:42:32.357Z",
+      "kind": "permission",
+      "state": "resolved",
+      "permissionId": "acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-1",
+      "decision": "once"
+    },
+    "assistantText": {
+      "eventId": "evt-part-part-asst-acp-history-9",
+      "agentId": "e562-agent",
+      "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+      "occurredAt": "2026-10-28T19:42:32.925Z",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg-asst-acp-history-9",
+      "partId": "part-asst-acp-history-9",
+      "partType": "text",
+      "text": "E562-TOOL-DONE"
+    },
+    "finalEvent": {
+      "eventId": "evt-final-msg-asst-acp-history-9",
+      "agentId": "e562-agent",
+      "sessionId": "ses_e7bf6f5e3ffeXYIKPzeiDHjsvL",
+      "occurredAt": "2026-10-28T19:42:32.925Z",
+      "kind": "final",
+      "state": "completed",
+      "finish": "end_turn",
+      "messageId": "msg-asst-acp-history-9"
+    },
+    "notifications": []
+  },
+  "browser": {
+    "pid": 91179,
+    "devtools": "ws://127.0.0.1:63474/devtools/browser/260f9dae-7380-48cf-ac3c-6db512d36efd"
+  },
+  "browserSessionCreate": {
+    "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+    "accepted": "clicked"
+  },
+  "browserComposer": {
+    "textareaDisabled": false,
+    "submitDisabled": false,
+    "page": "interaction"
+  },
+  "browserSessionMessageRequest": {
+    "method": "POST",
+    "url": "http://127.0.0.1:63402/api/v1/session-message?agentId=e562-agent&sessionId=ses_e7bf6d87fffeyVX1Xz21zHqFRX"
+  },
+  "browserActivity": {
+    "userPart": {
+      "eventId": "evt-part-user-acp-history-20",
+      "agentId": "e562-agent",
+      "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+      "occurredAt": "2026-10-28T19:42:35.883Z",
+      "kind": "part",
+      "state": "completed",
+      "messageId": "msg-acp-history-20",
+      "partId": "part-user-acp-history-20",
+      "partType": "text",
+      "text": "read /etc/hosts"
+    }
+  },
+  "browserPermission": {
+    "event": {
+      "eventId": "permission:acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-2",
+      "agentId": "e562-agent",
+      "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+      "occurredAt": "2026-10-28T19:42:35.909Z",
+      "kind": "permission",
+      "state": "pending",
+      "permissionId": "acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-2",
+      "messageId": "msg-asst-acp-history-20",
+      "title": "/etc",
+      "metadata": {
+        "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+        "toolCall": {
+          "toolCallId": "call_e562_4",
+          "title": "/etc",
+          "kind": "other",
+          "status": "pending",
+          "locations": [
+            {
+              "path": "/etc/hosts"
+            },
+            {
+              "path": "/etc"
+            }
+          ],
+          "rawInput": {
+            "filepath": "/etc/hosts",
+            "parentDir": "/etc"
+          }
+        },
+        "options": [
+          {
+            "optionId": "once",
+            "kind": "allow_once",
+            "name": "Allow once"
+          },
+          {
+            "optionId": "always",
+            "kind": "allow_always",
+            "name": "Always allow"
+          },
+          {
+            "optionId": "reject",
+            "kind": "reject_once",
+            "name": "Reject"
+          }
+        ]
+      },
+      "options": [
+        {
+          "optionId": "once",
+          "name": "Allow once",
+          "kind": "once"
+        },
+        {
+          "optionId": "always",
+          "name": "Always allow",
+          "kind": "always"
+        },
+        {
+          "optionId": "reject",
+          "name": "Reject",
+          "kind": "reject"
+        }
+      ]
+    },
+    "rendered": {
+      "optionIds": [
+        "once",
+        "always",
+        "reject"
+      ],
+      "kinds": [
+        "once",
+        "always",
+        "reject"
+      ],
+      "onceDisabled": false,
+      "unavailable": false
+    },
+    "screenshot": "/Volumes/Intel/playground/agentteams/webui-session-loop-p0/docs/evidence/e562a05-webui-session-loop/browser-pending-permission.png",
+    "screenshotBytes": 45166
+  },
+  "browserCompleted": {
+    "projection": [
+      {
+        "eventId": "evt-user-acp-history-20",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+        "occurredAt": "2026-10-28T19:42:35.883Z",
+        "kind": "message",
+        "state": "completed",
+        "messageId": "msg-acp-history-20",
+        "role": "user"
+      },
+      {
+        "eventId": "evt-part-user-acp-history-20",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+        "occurredAt": "2026-10-28T19:42:35.883Z",
+        "kind": "part",
+        "state": "completed",
+        "messageId": "msg-acp-history-20",
+        "partId": "part-user-acp-history-20",
+        "partType": "text",
+        "text": "read /etc/hosts"
+      },
+      {
+        "eventId": "tool-call_e562_4",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+        "occurredAt": "2026-10-28T19:42:37.403Z",
+        "kind": "tool",
+        "messageId": "msg-asst-acp-history-20",
+        "partId": "tool-call_e562_4",
+        "callId": "call_e562_4",
+        "tool": "etc/hosts",
+        "input": {
+          "filePath": "/etc/hosts"
+        },
+        "state": "completed",
+        "output": "",
+        "title": "etc/hosts",
+        "metadata": {}
+      },
+      {
+        "eventId": "permission:acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-2",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+        "occurredAt": "2026-10-28T19:42:35.909Z",
+        "kind": "permission",
+        "state": "resolved",
+        "permissionId": "acp-callback-opencode-e562-agent-9e006557-0127-4a65-a6a1-86a6345a3877-2",
+        "decision": "once"
+      },
+      {
+        "eventId": "evt-part-part-asst-acp-history-20",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+        "occurredAt": "2026-10-28T19:42:37.429Z",
+        "kind": "part",
+        "state": "completed",
+        "messageId": "msg-asst-acp-history-20",
+        "partId": "part-asst-acp-history-20",
+        "partType": "text",
+        "text": "E562-TOOL-DONE"
+      },
+      {
+        "eventId": "evt-asst-msg-asst-acp-history-20",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+        "occurredAt": "2026-10-28T19:42:37.429Z",
+        "kind": "message",
+        "state": "completed",
+        "messageId": "msg-asst-acp-history-20",
+        "role": "assistant"
+      },
+      {
+        "eventId": "evt-final-msg-asst-acp-history-20",
+        "agentId": "e562-agent",
+        "sessionId": "ses_e7bf6d87fffeyVX1Xz21zHqFRX",
+        "occurredAt": "2026-10-28T19:42:37.429Z",
+        "kind": "final",
+        "state": "completed",
+        "finish": "end_turn",
+        "messageId": "msg-asst-acp-history-20"
+      }
+    ],
+    "finalUi": {
+      "assistantText": true,
+      "finalEvents": 1,
+      "pendingPermissionButtons": 0
+    }
+  },
+  "summary": {
+    "checks": 40,
+    "passed": 40
+  }
+}

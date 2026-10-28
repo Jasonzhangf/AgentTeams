@@ -1,0 +1,137 @@
+# e562a05 r2 red-first evidence
+# method: temporarily restored HEAD versions of agent-host/acp-host.ts and runtime/acp-serve.ts, ran the new suites, then restored the fixed files byte-identically (cmp verified)
+# exit=1 with 6 failures
+
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/webui-session-loop-p0
+
+ ❯ agent-host/acp-host.spec.ts (32 tests | 5 failed) 87ms
+     × projects ordered Session events from the real prompt, update, tool and permission frames 10ms
+     × admits a second Session prompt while one Session is already in flight (no cross-Session CONFLICT) 2ms
+     × projects real ACP nested ToolCallContent for completed and failed tool events 3ms
+     × records missing completed tool content as engine.protocol-fault, never an empty success 3ms
+     × records an unsupported tool content block as engine.protocol-fault 4ms
+ ❯ runtime/session-intent-watch.spec.ts (19 tests | 1 failed) 136ms
+     × applies a control intent out of order while the head-of-line message is blocked by a live prompt, then advances the contiguous watermark through all applied revisions without re-sending the control 10ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  agent-host/acp-host.spec.ts > createAcpHost > projects ordered Session events from the real prompt, update, tool and permission frames
+AssertionError: expected { eventId: 'tool-call-1', …(13) } to match object { Object (callId, tool, ...) }
+(11 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "callId": "call-1",
+-   "output": "done",
++   "output": "",
+    "state": "completed",
+    "tool": "read",
+  }
+
+ ❯ agent-host/acp-host.spec.ts:491:23
+    489|     expect(events[1]).toMatchObject({ partType: 'text', text: 'hello',…
+    490|     expect(events[2]).toMatchObject({ partType: 'text', text: 'hi', st…
+    491|     expect(events[3]).toMatchObject({ callId: 'call-1', tool: 'read', …
+       |                       ^
+    492|     expect(events[4]).toMatchObject({ permissionId: pending[0].permiss…
+    493|     expect(events[5]).toMatchObject({ role: 'assistant', state: 'compl…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  agent-host/acp-host.spec.ts > createAcpHost > admits a second Session prompt while one Session is already in flight (no cross-Session CONFLICT)
+AcpError: session session-b already has a prompt in flight
+ ❯ handlePrompt agent-host/acp-host.ts:820:13
+    818|     assertSessionOwner(channel, sessionId)
+    819|     if (channel.activePrompt !== undefined) {
+    820|       throw new AcpError('CONFLICT', `session ${sessionId} already has…
+       |             ^
+    821|     }
+    822|     const eventsAtStart = channel.events.length
+ ❯ receiveClientRequest agent-host/acp-host.ts:891:13
+ ❯ Object.receive agent-host/acp-host.ts:1398:13
+ ❯ agent-host/acp-host.spec.ts:518:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  agent-host/acp-host.spec.ts > createAcpHost > projects real ACP nested ToolCallContent for completed and failed tool events
+AssertionError: expected { eventId: 'tool-call-1', …(13) } to match object { state: 'completed', …(1) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "output": "127.0.0.1	localhost",
++   "output": "",
+    "state": "completed",
+  }
+
+ ❯ agent-host/acp-host.spec.ts:615:23
+    613|     const completed = events.find(event => event.kind === 'tool' && ev…
+    614|     const failed = events.find(event => event.kind === 'tool' && event…
+    615|     expect(completed).toMatchObject({ state: 'completed', output: '127…
+       |                       ^
+    616|     expect(failed).toMatchObject({ state: 'error', error: 'permission …
+    617|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  agent-host/acp-host.spec.ts > createAcpHost > records missing completed tool content as engine.protocol-fault, never an empty success
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ agent-host/acp-host.spec.ts:646:35
+    644|     await flush()
+    645|     const fault = fixture.history.records.find(record => record.event …
+    646|     expect(fault?.error?.message).toContain('ToolCallContent')
+       |                                   ^
+    647|     // A failed projection must not surface as a successful empty tool…
+    648|     const projected = (fixture.host.sessionEvents?.() ?? []).filter(ev…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  agent-host/acp-host.spec.ts > createAcpHost > records an unsupported tool content block as engine.protocol-fault
+AssertionError: expected undefined to be 'INVALID_ACP_FRAME' // Object.is equality
+
+- Expected:
+"INVALID_ACP_FRAME"
+
++ Received:
+undefined
+
+ ❯ agent-host/acp-host.spec.ts:682:32
+    680|     await flush()
+    681|     const fault = fixture.history.records.find(record => record.event …
+    682|     expect(fault?.error?.code).toBe('INVALID_ACP_FRAME')
+       |                                ^
+    683|     expect(fault?.error?.message).toContain('unsupported or malformed')
+    684|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  runtime/session-intent-watch.spec.ts > pending Session write watch > applies a control intent out of order while the head-of-line message is blocked by a live prompt, then advances the contiguous watermark through all applied revisions without re-sending the control
+AssertionError: expected [] to have a length of 2 but got +0
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ runtime/session-intent-watch.spec.ts:270:22
+    268|
+    269|     // The message is parked; the two control intents are applied out …
+    270|     expect(received).toHaveLength(2)
+       |                      ^
+    271|     expect(received[0].frame.result).toMatchObject({ outcome: { outcom…
+    272|     expect(received[1].frame).toMatchObject({ method: 'session/cancel'…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  6 failed | 45 passed (51)
+   Start at  13:55:41
+   Duration  689ms (transform 398ms, setup 0ms, import 533ms, tests 223ms, environment 0ms)
+

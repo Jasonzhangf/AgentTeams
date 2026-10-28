@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AcpChannelRef, AcpIngress } from '../packages/shared/src/acp.ts'
+import { AcpError } from '../packages/shared/src/acp.ts'
 import type { AcpPendingPermission } from '../agent-host/acp-host.ts'
 import {
   readSessionIntentRecord,
@@ -238,6 +239,57 @@ describe('pending Session write watch', () => {
       params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'hello' }] },
     })
     expect(watch.failures()).toEqual([])
+  })
+
+  it('applies a control intent out of order while the head-of-line message is blocked by a live prompt, then advances the contiguous watermark through all applied revisions without re-sending the control', async () => {
+    // revision 0: session.message for session-1, whose channel is mid-prompt -> parked behind it.
+    // revision 1: permission.reply for the same session -> applied out of order.
+    // revision 2: session.cancel for the same session -> applied out of order.
+    await write(0, { op: 'session.message', agentId: 'agent-alpha', sessionId: 'session-1', payload: { text: 'blocked' } })
+    await write(1, { op: 'permission.reply', agentId: 'agent-alpha', sessionId: 'session-1', permissionId: 'permission-1', decision: 'once' })
+    await write(2, { op: 'session.cancel', agentId: 'agent-alpha', sessionId: 'session-1' })
+
+    // The host owns the Session but refuses a concurrent prompt with the engine's own CONFLICT,
+    // modelling the real AcpHost behavior while a prompt is in flight on the shared channel.
+    let blockPrompt = true
+    const received: AcpIngress[] = []
+    const host = {
+      pendingPermissions: () => [pending()],
+      channelForSession: (_sessionId: string) => REF,
+      receive: async (ingress: AcpIngress) => {
+        if (ingress.frame.method === 'session/prompt' && blockPrompt) {
+          throw new AcpError('CONFLICT', 'session session-1 already has a prompt in flight')
+        }
+        received.push(ingress)
+      },
+    }
+    const watch = watchFor(host)
+    await watch.reconcile()
+
+    // The message is parked; the two control intents are applied out of order.
+    expect(received).toHaveLength(2)
+    expect(received[0].frame.result).toMatchObject({ outcome: { outcome: 'selected' } })
+    expect(received[1].frame).toMatchObject({ method: 'session/cancel' })
+    // The blocked message's refusal is recorded, but the pass continues past it.
+    expect(watch.failures().map(failure => failure.code)).toEqual(['CONFLICT'])
+    // The durable watermark stays parked at the head-of-line message; the controls are recorded
+    // process-locally as applied out of order, not in the durable watermark.
+    expect((await readSessionIntentWatermark(watermarkPath)).appliedRevision).toBe(0)
+
+    // The prompt clears; the next pass applies the parked message once and advances the contiguous
+    // watermark through every applied revision without re-sending the controls.
+    blockPrompt = false
+    await watch.reconcile()
+    expect(received).toHaveLength(3)
+    expect(received[2].frame).toMatchObject({ method: 'session/prompt', params: { sessionId: 'session-1' } })
+    expect((await readSessionIntentWatermark(watermarkPath)).appliedRevision).toBe(3)
+    // The control result and cancel were each sent exactly once.
+    expect(received.filter(ingress => ingress.frame.result !== undefined)).toHaveLength(1)
+    expect(received.filter(ingress => ingress.frame.method === 'session/cancel')).toHaveLength(1)
+
+    // A third pass has nothing new to apply and never re-sends a control.
+    await watch.reconcile()
+    expect(received).toHaveLength(3)
   })
 
   it('refuses a write for a Session no open channel owns, and applies it once one does', async () => {

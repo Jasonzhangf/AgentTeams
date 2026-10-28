@@ -1229,13 +1229,25 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
     refuse(intentId, error instanceof AcpError ? error.code : 'ENGINE_UNAVAILABLE', messageOf(error, fallback))
   }
 
-  /** Apply one write. `true` means the write really reached the engine. */
-  const apply = async (intent: SessionIntent): Promise<boolean> => {
+  /**
+   * The outcome of one write. `applied` means it really reached the engine. `activePromptConflict`
+   * marks a `session.message` the host refused because its target Session already has a prompt
+   * in flight; that write is parked behind the prompt instead of breaking the pass.
+   */
+  type ApplyResult =
+    | { readonly applied: true }
+    | { readonly applied: false; readonly activePromptConflict: true }
+    | { readonly applied: false; readonly activePromptConflict: false }
+  const applied = { applied: true } as const
+  const refused = { applied: false, activePromptConflict: false } as const
+  const blockedByPrompt = { applied: false, activePromptConflict: true } as const
+
+  const apply = async (intent: SessionIntent): Promise<ApplyResult> => {
     if (intent.agentId !== input.agentId) {
       // The record path is derived from the target, so a record naming another agent was
       // written where it does not belong. Refuse it instead of applying another's write.
       refuse(intent.intentId, 'FORBIDDEN', `pending Session write names agent ${intent.agentId}, but this daemon is ${input.agentId}`)
-      return false
+      return refused
     }
     try {
       if (intent.kind === 'permission.reply') {
@@ -1243,7 +1255,7 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
           .filter(row => row.sessionId === intent.sessionId && row.permissionId === intent.permissionId)
         if (rows.length !== 1) {
           refuse(intent.intentId, 'CONFLICT', `pending Session write names permission ${intent.permissionId} on session ${intent.sessionId}, but ${rows.length} engine callbacks match`)
-          return false
+          return refused
         }
         const row = rows[0]
         // The Console already chose one engine option, and the frozen command carries it. It is
@@ -1253,19 +1265,19 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
           const named = row.options.find(candidate => candidate.optionId === intent.optionId)
           if (named === undefined) {
             refuse(intent.intentId, 'INVALID_ACP_FRAME', `the engine never offered option ${intent.optionId} for permission ${intent.permissionId}; offered options: ${row.options.map(candidate => candidate.optionId).join(', ') || 'none'}`)
-            return false
+            return refused
           }
           if (named.kind !== intent.decision) {
             // Guessing which of the two contradicting values is right would answer the engine
             // with a decision nobody made, so the mismatch is refused instead.
             refuse(intent.intentId, 'INVALID_ACP_FRAME', `option ${intent.optionId} is kind ${named.kind}, but the write states decision ${intent.decision} for permission ${intent.permissionId}`)
-            return false
+            return refused
           }
           await input.host.receive({
             ...row.ref,
             frame: { jsonrpc: '2.0', id: row.permissionId, result: { outcome: { outcome: 'selected', optionId: named.optionId } } },
           })
-          return true
+          return applied
         }
         // The frozen `optionId` is optional, so a write that named none has only its projected
         // kind to go on. The shipped Console always names the option it rendered (it passes
@@ -1275,13 +1287,13 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
         if (option === undefined) {
           // Never invent an optionId: only the engine's own offered set is selectable.
           refuse(intent.intentId, 'INVALID_ACP_FRAME', `the engine offered no ${intent.decision} option for permission ${intent.permissionId}; offered kinds: ${row.options.map(candidate => candidate.kind).join(', ') || 'none'}`)
-          return false
+          return refused
         }
         await input.host.receive({
           ...row.ref,
           frame: { jsonrpc: '2.0', id: row.permissionId, result: { outcome: { outcome: 'selected', optionId: option.optionId } } },
         })
-        return true
+        return applied
       }
       if (intent.kind === 'session.create') {
         // The daemon's readiness channel is already initialized, so it is the one managed
@@ -1296,17 +1308,17 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
             params: { cwd: input.workspace, mcpServers: [] },
           },
         })
-        return true
+        return applied
       }
       const ref = input.host.channelForSession(intent.sessionId)
       if (ref === undefined) {
         // No open channel owns the Session, so no engine can receive this write.
         refuse(intent.intentId, 'CONFLICT', `no open channel owns session ${intent.sessionId}`)
-        return false
+        return refused
       }
       if (intent.kind === 'session.cancel') {
         await input.host.receive({ ...ref, frame: { jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: intent.sessionId } } })
-        return true
+        return applied
       }
       // An array body stays verbatim; the shipped WebUI's `{ text }` is projected onto the
       // ACP Content Block array the engine's `session/prompt` actually requires.
@@ -1314,10 +1326,16 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
         ...ref,
         frame: { jsonrpc: '2.0', id: `session-intent-${intent.intentId}`, method: 'session/prompt', params: { sessionId: intent.sessionId, prompt: toAcpPromptBlocks(intent.payload) } },
       })
-      return true
+      return applied
     } catch (error) {
       refuseError(intent.intentId, error, `pending Session write ${intent.intentId} could not be applied`)
-      return false
+      if (intent.kind === 'session.message'
+        && error instanceof AcpError
+        && error.code === 'CONFLICT'
+        && input.host.channelForSession(intent.sessionId) !== undefined) {
+        return blockedByPrompt
+      }
+      return refused
     }
   }
 
@@ -1329,8 +1347,19 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
    * watermark, which is the at-least-once boundary this record can offer.
    */
   let appliedThrough: number | undefined
+  /**
+   * Revisions a control intent (`permission.reply`/`session.cancel`) already applied out of the
+   * contiguous watermark order, so its effect is recorded without re-sending the engine frame and
+   * without advancing the durable watermark. A blocked `session.message` stays behind it until the
+   * prompt clears and the next pass advances the contiguous watermark through every applied revision.
+   * The durable watermark is always the fully applied contiguous prefix, never the out-of-order set.
+   */
+  const appliedOutOfOrder = new Set<number>()
 
   const reconcileOnce = async (): Promise<void> => {
+    // Recomputed every pass: true only while the head-of-line message still cannot apply because
+    // its target Session is mid-prompt. A cleared prompt unblocks the message on the next pass.
+    let blockedByActivePrompt = false
     let record
     let watermark
     try {
@@ -1352,11 +1381,46 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
       return
     }
     for (const [index, intent] of view.intents.entries()) {
-      // The loop stops at the first write it cannot apply, so the applied revisions stay a
-      // contiguous run and one revision advances per successful write. The intent at index
-      // `index` carries revision `base + index + 1`.
-      if (!await apply(intent)) break
-      appliedThrough = base + index + 1
+      // The intent at index `index` carries revision `base + index + 1`.
+      const revision = base + index + 1
+      // A control intent applied out of order already reached the engine, so do not send it again
+      // and do not advance the contiguous watermark; just drop the marker when the head catches up.
+      if (appliedOutOfOrder.has(revision)) {
+        if (blockedByActivePrompt) {
+          // The head-of-line message still blocks; the watermark stays put.
+          continue
+        }
+        appliedThrough = revision
+        appliedOutOfOrder.delete(revision)
+        continue
+      }
+      if (blockedByActivePrompt) {
+        // While a head-of-line `session.message` is blocked by a live prompt, only control intents
+        // may apply. Other kinds stay behind the blocked message and are retried on a later pass.
+        if (intent.kind !== 'permission.reply' && intent.kind !== 'session.cancel') {
+          continue
+        }
+        const outcome = await apply(intent)
+        if (outcome.applied) {
+          // Record the effect out of order; the contiguous watermark advances only upstream of this
+          // revision, so the blocked message is never skipped or re-sent and the control is never sent twice.
+          appliedOutOfOrder.add(revision)
+          continue
+        }
+        // A control intent that fails for any other reason keeps the immediate break.
+        break
+      }
+      const outcome = await apply(intent)
+      if (!outcome.applied) {
+        // A `session.message` whose target Session has an in-flight prompt is parked behind the
+        // prompt instead of breaking the whole pass, so a later `permission.reply`/`session.cancel`
+        // can apply out of order and unblock the message. Every other failure keeps the existing
+        // immediate break, preserving order and honest refusal.
+        if (!outcome.activePromptConflict) break
+        blockedByActivePrompt = true
+        continue
+      }
+      appliedThrough = revision
     }
     // Save exactly what was applied, including a partial pass, so the durable watermark
     // never lags a write that already reached the engine. With nothing applied this is

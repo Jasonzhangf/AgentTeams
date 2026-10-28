@@ -169,7 +169,11 @@ interface ChannelState {
   nextSequence: number
   initialized: boolean
   closed: boolean
-  activePrompt?: ActivePrompt
+  /**
+   * The prompts in flight per Session. One channel serves many Sessions, so admission is
+   * per Session: a prompt on Session B must not conflict with a pending prompt on Session A.
+   */
+  readonly activePrompts: Map<string, ActivePrompt>
   events: ConsoleSessionEventView[]
 }
 
@@ -258,13 +262,29 @@ function permissionTitle(frame: AcpFrame): string | undefined {
   return isRecord(toolCall) ? stringField(toolCall.title) : undefined
 }
 
-function contentText(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined
+/**
+ * Extract the text of an ACP `ToolCallContent` array. ACP wraps every block as
+ * `{ type: 'content', content: { type: 'text' | 'error', text: string } }`. Any other shape
+ * is a protocol fault at this owning boundary, never an empty successful result.
+ */
+function extractToolCallContentText(value: unknown): string | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) {
+    throw new AcpError('INVALID_ACP_FRAME', 'tool_call_update content must be an array')
+  }
+  if (value.length === 0) return undefined
   const texts: string[] = []
   for (const block of value) {
-    if (isRecord(block) && typeof block.text === 'string') texts.push(block.text)
+    if (!isRecord(block) || block.type !== 'content' || !isRecord(block.content)) {
+      throw new AcpError('INVALID_ACP_FRAME', 'unsupported or malformed tool_call_update content block')
+    }
+    const content = block.content
+    if ((content.type !== 'text' && content.type !== 'error') || typeof content.text !== 'string') {
+      throw new AcpError('INVALID_ACP_FRAME', 'unsupported or malformed tool_call_update content block')
+    }
+    texts.push(content.text)
   }
-  return texts.length === 0 ? undefined : texts.join('')
+  return texts.join('')
 }
 
 /** Preserve the real ACP error facts in the frozen Console structured-error shape. */
@@ -339,23 +359,33 @@ function projectToolEvent(input: {
         ...(stringField(input.update.title) === undefined ? {} : { title: stringField(input.update.title) }),
         ...(metadata === undefined ? {} : { metadata }),
       }
-    case 'completed':
+    case 'completed': {
+      const output = extractToolCallContentText(input.update.content)
+      if (output === undefined) {
+        throw new AcpError('INVALID_ACP_FRAME', 'completed tool_call_update requires ToolCallContent text')
+      }
       return {
         ...base,
         state: 'completed',
-        output: stringField(input.update.output) ?? contentText(input.update.content) ?? '',
+        output,
         title: stringField(input.update.title) ?? (input.previous?.state === 'completed' ? input.previous.title : tool),
         metadata: metadata ?? {},
         ...(Array.isArray(input.update.attachments) ? { attachments: input.update.attachments as readonly JsonValue[] } : {}),
       }
+    }
     case 'failed':
-    case 'error':
+    case 'error': {
+      const error = extractToolCallContentText(input.update.content) ?? stringField(input.update.error)
+      if (error === undefined) {
+        throw new AcpError('INVALID_ACP_FRAME', 'failed tool_call_update requires error content')
+      }
       return {
         ...base,
         state: 'error',
-        error: stringField(input.update.error) ?? contentText(input.update.content) ?? 'tool call failed',
+        error,
         ...(metadata === undefined ? {} : { metadata }),
       }
+    }
     default: {
       if (input.previous !== undefined) return input.previous
       return { ...base, state: 'pending', raw: JSON.stringify(toolInput) }
@@ -718,7 +748,9 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     // The projection buffer belongs to the Sessions this channel held, so it leaves with
     // them; a later channel can never inherit another channel's history.
     channel.events.length = 0
-    channel.activePrompt = undefined
+    // The prompts in flight are owned by the Sessions this channel held, so they leave with
+    // them; a fresh channel starts with none.
+    channel.activePrompts.clear()
   }
 
   const onEngineEnd = (reason: string): void => {
@@ -816,7 +848,10 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
   const handlePrompt = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
     const sessionId = requireSessionId(frame)
     assertSessionOwner(channel, sessionId)
-    if (channel.activePrompt !== undefined) {
+    // Admission is per Session: a prompt on one Session must not conflict with a pending
+    // prompt on another Session sharing this readiness channel. A second concurrent prompt on
+    // the same Session still fails with CONFLICT.
+    if (channel.activePrompts.has(sessionId)) {
       throw new AcpError('CONFLICT', `session ${sessionId} already has a prompt in flight`)
     }
     const eventsAtStart = channel.events.length
@@ -825,7 +860,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
         const userMessageId = `msg-${entry.recordId}`
         const assistantMessageId = `msg-asst-${entry.recordId}`
         const occurredAt = new Date().toISOString()
-        channel.activePrompt = {
+        const prompt: ActivePrompt = {
           sessionId,
           userMessageId,
           assistantMessageId,
@@ -836,6 +871,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
           textObserved: false,
           reasoningObserved: false,
         }
+        channel.activePrompts.set(sessionId, prompt)
         channel.events.push({
           eventId: `evt-user-${entry.recordId}`,
           agentId: localAgentId,
@@ -864,7 +900,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       })
     } catch (cause) {
       channel.events.length = eventsAtStart
-      channel.activePrompt = undefined
+      channel.activePrompts.delete(sessionId)
       throw cause
     }
   }
@@ -1068,63 +1104,63 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
         }
       }
     }
-    if (pending.method === 'session/prompt'
-      && channel.activePrompt !== undefined
-      && channel.activePrompt.sessionId === pending.sessionId) {
-      const prompt = channel.activePrompt
-      const failed = Object.hasOwn(frame, 'error')
-      const occurredAt = new Date().toISOString()
-      if (prompt.textObserved) {
-        upsertEvent(channel.events, {
-          eventId: `evt-part-${prompt.assistantPartId}`,
+    if (pending.method === 'session/prompt' && pending.sessionId !== undefined) {
+      const prompt = channel.activePrompts.get(pending.sessionId)
+      if (prompt !== undefined) {
+        const failed = Object.hasOwn(frame, 'error')
+        const occurredAt = new Date().toISOString()
+        if (prompt.textObserved) {
+          upsertEvent(channel.events, {
+            eventId: `evt-part-${prompt.assistantPartId}`,
+            agentId: localAgentId,
+            sessionId: prompt.sessionId,
+            occurredAt,
+            kind: 'part',
+            state: 'completed',
+            messageId: prompt.assistantMessageId,
+            partId: prompt.assistantPartId,
+            partType: 'text',
+            text: prompt.text,
+          })
+        }
+        if (prompt.reasoningObserved) {
+          upsertEvent(channel.events, {
+            eventId: `evt-part-${prompt.reasoningPartId}`,
+            agentId: localAgentId,
+            sessionId: prompt.sessionId,
+            occurredAt,
+            kind: 'part',
+            state: 'completed',
+            messageId: prompt.assistantMessageId,
+            partId: prompt.reasoningPartId,
+            partType: 'reasoning',
+            text: prompt.reasoning,
+          })
+        }
+        channel.events.push({
+          eventId: `evt-asst-${prompt.assistantMessageId}`,
           agentId: localAgentId,
           sessionId: prompt.sessionId,
           occurredAt,
-          kind: 'part',
-          state: 'completed',
+          kind: 'message',
+          ...(failed ? { state: 'failed' as const, error: structuredErrorOf(frame) } : { state: 'completed' as const }),
           messageId: prompt.assistantMessageId,
-          partId: prompt.assistantPartId,
-          partType: 'text',
-          text: prompt.text,
+          role: 'assistant',
         })
-      }
-      if (prompt.reasoningObserved) {
-        upsertEvent(channel.events, {
-          eventId: `evt-part-${prompt.reasoningPartId}`,
+        const stopReason = isRecord(frame.result) ? stringField(frame.result.stopReason) : undefined
+        channel.events.push({
+          eventId: `evt-final-${prompt.assistantMessageId}`,
           agentId: localAgentId,
           sessionId: prompt.sessionId,
           occurredAt,
-          kind: 'part',
-          state: 'completed',
+          kind: 'final',
+          ...(failed
+            ? { state: 'failed' as const, error: structuredErrorOf(frame) }
+            : { state: 'completed' as const, ...(stopReason === undefined ? {} : { finish: stopReason }) }),
           messageId: prompt.assistantMessageId,
-          partId: prompt.reasoningPartId,
-          partType: 'reasoning',
-          text: prompt.reasoning,
         })
+        channel.activePrompts.delete(pending.sessionId)
       }
-      channel.events.push({
-        eventId: `evt-asst-${prompt.assistantMessageId}`,
-        agentId: localAgentId,
-        sessionId: prompt.sessionId,
-        occurredAt,
-        kind: 'message',
-        ...(failed ? { state: 'failed' as const, error: structuredErrorOf(frame) } : { state: 'completed' as const }),
-        messageId: prompt.assistantMessageId,
-        role: 'assistant',
-      })
-      const stopReason = isRecord(frame.result) ? stringField(frame.result.stopReason) : undefined
-      channel.events.push({
-        eventId: `evt-final-${prompt.assistantMessageId}`,
-        agentId: localAgentId,
-        sessionId: prompt.sessionId,
-        occurredAt,
-        kind: 'final',
-        ...(failed
-          ? { state: 'failed' as const, error: structuredErrorOf(frame) }
-          : { state: 'completed' as const, ...(stopReason === undefined ? {} : { finish: stopReason }) }),
-        messageId: prompt.assistantMessageId,
-      })
-      channel.activePrompt = undefined
     }
     enqueue(channel, delivery)
   }
@@ -1212,7 +1248,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
         permissionId: outwardId,
         // The callback belongs to the prompt in flight when there is one; otherwise its
         // own stable callback identity is the only correlation the engine really gave.
-        messageId: target.activePrompt?.assistantMessageId ?? `prompt:${outwardId}`,
+        messageId: (sessionId === undefined ? undefined : target.activePrompts.get(sessionId)?.assistantMessageId) ?? `prompt:${outwardId}`,
         title: permissionTitle(frame) ?? 'Permission request',
         metadata: isRecord(frame.params) ? frame.params as JsonValue : {},
         ...(permissionOptions === undefined || permissionOptions.length === 0 ? {} : { options: permissionOptions }),
@@ -1226,7 +1262,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
    * no active prompt owns no assistant message and is delivered without an event.
    */
   const captureSessionUpdate = (channel: ChannelState, sessionId: string, update: Record<string, unknown>): void => {
-    const prompt = channel.activePrompt?.sessionId === sessionId ? channel.activePrompt : undefined
+    const prompt = channel.activePrompts.get(sessionId)
     if (prompt === undefined) return
     const sessionUpdate = stringField(update.sessionUpdate)
     const occurredAt = new Date().toISOString()
@@ -1375,6 +1411,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       nextSequence: 1,
       initialized: false,
       closed: false,
+      activePrompts: new Map<string, ActivePrompt>(),
       events: [],
     })
   }

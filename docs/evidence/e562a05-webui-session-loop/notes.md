@@ -84,3 +84,30 @@ Evidence files:
 - The daemon's readiness-channel Session can still appear in observations.
 - Full `pnpm verify` and AppSDK compile/verify were not run for this worker
   candidate.
+
+## r2 Review-fix round (e562a05 P1-1a, P1-1b, P1-2)
+
+Changes: per-Session `activePrompts` admission in `agent-host/acp-host.ts`; out-of-order
+`permission.reply`/`session.cancel` behind a blocked head-of-line `session.message` in
+`runtime/acp-serve.ts`; strict ACP `ToolCallContent` projection with `engine.protocol-fault` on
+unsupported or missing content. The black-box driver gained Session A/B interleaving and a
+`localhost` assertion on the completed `/etc/hosts` tool event.
+
+Verified on the current tree: focused `agent-host` + `runtime` intent-watch suites 51/51 pass
+(exit 0), `tsc --noEmit` exit 0, `pnpm build` exit 0. UI sources unchanged, so the r1 D07 UI
+gate evidence is reused.
+
+Not verified: the real black-box run and the commit. The sandbox disables loopback listeners
+(`listen EPERM`, `CODEX_SANDBOX_NETWORK_DISABLED=1`) and denies writes to the worktree gitdir
+(`index.lock: Operation not permitted`); an escalated retry was refused by policy. Receipt
+`receipt.json` is removed; the r1 receipt stays as `receipt-r1-passing.json` history only.
+
+Evidence: `focused-tests-r2.log`, `typecheck-r2.log`, `build-r2.log`, `black-box-r2-blocked.log`,
+`commit-r2-blocked.log`.
+
+Red-first check for the r2 fixes: restoring the HEAD versions of `agent-host/acp-host.ts` and
+`runtime/acp-serve.ts` made 6 tests fail (the five new cases plus the ordered-projection test that
+now uses the real nested content shape). The fixed files were restored byte-identically (cmp) and
+the suites pass 51/51 again. Log: `red-tests-r2.log`. The per-Session test also asserts that each
+Session's own text update and response land on that Session and that both admit a new prompt once
+their response arrives.

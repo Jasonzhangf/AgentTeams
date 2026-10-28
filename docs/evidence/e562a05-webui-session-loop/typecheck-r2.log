@@ -1,0 +1,3 @@
+# e562a05 r2 typecheck
+# command: npx tsc --noEmit -p tsconfig.json
+# exit=0

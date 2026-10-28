@@ -442,7 +442,13 @@ describe('createAcpHost', () => {
       method: 'session/update',
       params: {
         sessionId: 'session-1',
-        update: { sessionUpdate: 'tool_call_update', toolCallId: 'call-1', title: 'read', output: 'done', status: 'completed' },
+        update: {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'call-1',
+          title: 'read',
+          status: 'completed',
+          content: [{ type: 'content', content: { type: 'text', text: 'done' } }],
+        },
       },
     })
     fixture.duplex.push({
@@ -490,6 +496,191 @@ describe('createAcpHost', () => {
     // The projection leaves with the Session ids it belongs to.
     await fixture.host.close(ref1)
     expect(fixture.host.sessionEvents?.() ?? []).toEqual([])
+  })
+
+  it('admits a second Session prompt while one Session is already in flight (no cross-Session CONFLICT)', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const childA = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: childA, result: { sessionId: 'session-a' } })
+    const childB = await newSession(fixture, ref1, 2)
+    fixture.duplex.push({ jsonrpc: '2.0', id: childB, result: { sessionId: 'session-b' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    // Session A prompt goes in flight.
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 3, method: 'session/prompt', params: { sessionId: 'session-a', prompt: [{ type: 'text', text: 'a' }] } },
+    })
+    // Session B prompt on the same shared channel must not be blocked by A.
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 4, method: 'session/prompt', params: { sessionId: 'session-b', prompt: [{ type: 'text', text: 'b' }] } },
+    })
+    const sends = fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')
+    expect(sends).toHaveLength(2)
+
+    // A second concurrent prompt on the same Session still fails with CONFLICT.
+    await expect(fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 5, method: 'session/prompt', params: { sessionId: 'session-a', prompt: [{ type: 'text', text: 'a-again' }] } },
+    })).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(2)
+
+    // Each in-flight prompt keeps its own identity: a text update and a response for one Session
+    // must land on that Session's own message, never on the other Session's in-flight prompt.
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-b', update: { sessionUpdate: 'agent_message_chunk', content: { text: 'reply-b' } } },
+    })
+    await flush()
+    fixture.duplex.push({ jsonrpc: '2.0', id: sends[1].id, result: { stopReason: 'end_turn' } })
+    fixture.duplex.push({ jsonrpc: '2.0', id: sends[0].id, result: { stopReason: 'end_turn' } })
+    await flush()
+
+    const events = fixture.host.sessionEvents?.() ?? []
+    const textsOf = (sessionId: string): string[] => events
+      .filter(event => event.sessionId === sessionId && event.kind === 'part' && event.partType === 'text')
+      .map(event => (event as { text?: string }).text ?? '')
+    // The engine's text update for B belongs to B; A keeps only its own prompt text.
+    expect(textsOf('session-b')).toEqual(['b', 'reply-b'])
+    expect(textsOf('session-a')).toEqual(['a'])
+    expect(events.some(event => event.sessionId === 'session-b' && event.kind === 'final' && event.state === 'completed')).toBe(true)
+    expect(events.some(event => event.sessionId === 'session-a' && event.kind === 'final' && event.state === 'completed')).toBe(true)
+
+    // Both responses released their own entry, so each Session admits a new prompt again.
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 6, method: 'session/prompt', params: { sessionId: 'session-a', prompt: [{ type: 'text', text: 'a2' }] } },
+    })
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 7, method: 'session/prompt', params: { sessionId: 'session-b', prompt: [{ type: 'text', text: 'b2' }] } },
+    })
+    expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(4)
+  })
+
+  it('projects real ACP nested ToolCallContent for completed and failed tool events', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'read /etc/hosts' }] } },
+    })
+    const promptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+
+    // Completed tool with the real nested content shape from the OpenCode ACP sample.
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'call-1',
+          title: 'read',
+          status: 'completed',
+          content: [{ type: 'content', content: { type: 'text', text: '127.0.0.1\tlocalhost' } }],
+        },
+      },
+    })
+    // Failed tool with nested error content.
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'call-2',
+          title: 'read',
+          status: 'failed',
+          content: [{ type: 'content', content: { type: 'error', text: 'permission denied' } }],
+        },
+      },
+    })
+    await flush()
+
+    const events = fixture.host.sessionEvents?.() ?? []
+    const completed = events.find(event => event.kind === 'tool' && event.callId === 'call-1')
+    const failed = events.find(event => event.kind === 'tool' && event.callId === 'call-2')
+    expect(completed).toMatchObject({ state: 'completed', output: '127.0.0.1\tlocalhost' })
+    expect(failed).toMatchObject({ state: 'error', error: 'permission denied' })
+
+    // The prompt resolves so the channel can release.
+    fixture.duplex.push({ jsonrpc: '2.0', id: promptChild, result: { stopReason: 'end_turn' } })
+    await flush()
+  })
+
+  it('records missing completed tool content as engine.protocol-fault, never an empty success', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'read /etc/hosts' }] } },
+    })
+
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: { sessionUpdate: 'tool_call_update', toolCallId: 'call-1', title: 'read', status: 'completed' },
+      },
+    })
+    await flush()
+    const fault = fixture.history.records.find(record => record.event === 'engine.protocol-fault')
+    expect(fault?.error?.message).toContain('ToolCallContent')
+    // A failed projection must not surface as a successful empty tool event in the projection.
+    const projected = (fixture.host.sessionEvents?.() ?? []).filter(event => event.eventId !== undefined)
+    expect(projected).not.toContainEqual(
+      expect.objectContaining({ kind: 'tool', state: 'completed', output: '' }))
+  })
+
+  it('records an unsupported tool content block as engine.protocol-fault', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'read /etc/hosts' }] } },
+    })
+
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'call-2',
+          title: 'read',
+          status: 'completed',
+          content: [{ type: 'text', text: 'wrong shape' }],
+        },
+      },
+    })
+    await flush()
+    const fault = fixture.history.records.find(record => record.event === 'engine.protocol-fault')
+    expect(fault?.error?.code).toBe('INVALID_ACP_FRAME')
+    expect(fault?.error?.message).toContain('unsupported or malformed')
   })
 
   it('cancels explicitly when no controller owns a permission callback', async () => {

@@ -1,0 +1,26 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/webui-session-loop-p0
+
+ ❯ runtime/serve-egress.spec.ts (5 tests | 5 failed) 420ms
+     × dials a declared peer over a real TLS socket, negotiates as initiator and opens the one channel 162ms
+     × disconnect closes the live channel and the transport, and removes the row 52ms
+     × refuses a duplicate connect while the peer is live with CONFLICT 46ms
+     × refuses an unknown peer and a peer without an explicit endpoint with typed codes 66ms
+     × records a typed failure for a refused dial and never fabricates a live row 93ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  runtime/serve-egress.spec.ts > serve egress owner (the daemon dials its declared peers) > dials a declared peer over a real TLS socket, negotiates as initiator and opens the one channel
+ FAIL  runtime/serve-egress.spec.ts > serve egress owner (the daemon dials its declared peers) > disconnect closes the live channel and the transport, and removes the row
+ FAIL  runtime/serve-egress.spec.ts > serve egress owner (the daemon dials its declared peers) > refuses a duplicate connect while the peer is live with CONFLICT
+ FAIL  runtime/serve-egress.spec.ts > serve egress owner (the daemon dials its declared peers) > refuses an unknown peer and a peer without an explicit endpoint with typed codes
+ FAIL  runtime/serve-egress.spec.ts > serve egress owner (the daemon dials its declared peers) > records a typed failure for a refused dial and never fabricates a live row
+Error: listen EPERM: operation not permitted 127.0.0.1
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  5 failed | 19 passed (24)
+   Start at  13:50:28
+   Duration  955ms (transform 349ms, setup 0ms, import 468ms, tests 1.18s, environment 0ms)
+

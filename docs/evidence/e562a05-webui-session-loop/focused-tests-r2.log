@@ -1,0 +1,13 @@
+# e562a05 r2 focused suites (agent-host + runtime intent watch)
+# command: npx vitest run agent-host/acp-host.spec.ts runtime/session-intent-watch.spec.ts
+# exit=0
+# tree: worktree sources at 2026-10-28T20:56:01Z
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/webui-session-loop-p0
+
+
+ Test Files  2 passed (2)
+      Tests  51 passed (51)
+   Start at  13:55:52
+   Duration  610ms (transform 357ms, setup 0ms, import 487ms, tests 185ms, environment 0ms)
+

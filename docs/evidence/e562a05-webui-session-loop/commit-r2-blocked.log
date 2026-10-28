@@ -1,0 +1,7 @@
+# e562a05 r2 commit blocked
+# 2026-10-28T20:53:54Z
+# gitdir: /Volumes/extension/code/AgentTeams/.git/worktrees/webui-session-loop-p0 (outside writable roots)
+$ git add runtime/acp-serve.ts
+fatal: Unable to create '/Volumes/extension/code/AgentTeams/.git/worktrees/webui-session-loop-p0/index.lock': Operation not permitted
+exit=128
+# escalated retry: refusal, approval policy is Never
