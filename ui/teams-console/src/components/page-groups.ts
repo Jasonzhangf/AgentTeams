@@ -15,13 +15,14 @@ import { append, button, element } from './dom.ts'
  */
 
 
-function inputField(labelText: string, marker: string, placeholder?: string): HTMLElement {
+function groupInputField(labelText: string, marker: string, placeholder?: string): HTMLElement {
   const field = element('label', 'teams-group-field')
   const caption = element('span', 'teams-group-label')
   caption.textContent = labelText
   const input = element('input', 'teams-input')
   input.type = 'text'
   input.dataset.groupInput = marker
+  input.dataset.focusKey = `group-input:${marker}`
   if (placeholder !== undefined) input.placeholder = placeholder
   append(field, caption, input)
   return field
@@ -34,6 +35,7 @@ function textField(labelText: string, marker: string): HTMLElement {
   const area = element('textarea', 'teams-textarea')
   area.rows = 3
   area.dataset.groupInput = marker
+  area.dataset.focusKey = `group-input:${marker}`
   append(field, caption, area)
   return field
 }
@@ -41,6 +43,15 @@ function textField(labelText: string, marker: string): HTMLElement {
 function valueOf(root: HTMLElement, marker: string): string {
   const node = root.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-group-input="${marker}"]`)
   return node === null ? '' : node.value
+}
+
+function clearGroupInputs(scope: Element | null, markers: readonly string[]): void {
+  if (scope === null) return
+  for (const marker of markers) {
+    for (const node of scope.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[data-group-input="${marker}"]`)) {
+      node.value = ''
+    }
+  }
 }
 
 function groupStateBadge(state: GroupWorkspaceState, t: Record<MessageKey, string>): HTMLElement {
@@ -151,10 +162,12 @@ function renderGroupList(state: GroupWorkspaceState, controller: TeamsConsoleCon
 
   const createForm = element('div', 'teams-group-create')
   createForm.dataset.groupCreate = 'true'
-  append(createForm, inputField(t.groupName, 'group-create-name'))
+  append(createForm, groupInputField(t.groupName, 'group-create-name'))
   append(createForm, button(t.groupCreate, 'teams-button-primary', async () => {
+    const scope = createForm.closest('.teams-root') ?? column
     const name = valueOf(createForm, 'group-create-name')
-    await controller.createGroup(name)
+    const ok = await controller.createGroup(name)
+    if (ok) clearGroupInputs(scope, ['group-create-name'])
   }, state.mutation !== null))
   append(column, createForm)
   return column
@@ -320,12 +333,14 @@ function renderIssuePanel(state: GroupWorkspaceState, controller: TeamsConsoleCo
     append(section, renderIssueList(state, controller, t))
     const form = element('div', 'teams-group-form')
     append(form,
-      inputField(t.groupIssueTitle, 'issue-title'),
+      groupInputField(t.groupIssueTitle, 'issue-title'),
       textField(t.groupIssueBody, 'issue-body'),
-      inputField(t.groupIssueProject, 'issue-project'),
+      groupInputField(t.groupIssueProject, 'issue-project', state.issues[0]?.vikunjaProjectId ?? state.selectedGroupId ?? 'default'),
     )
     const create = button(t.groupIssueCreate, 'teams-button-primary', async () => {
-      await controller.createIssue(valueOf(form, 'issue-title'), valueOf(form, 'issue-body'), valueOf(form, 'issue-project'))
+      const scope = form.closest('.teams-root') ?? section
+      const ok = await controller.createIssue(valueOf(form, 'issue-title'), valueOf(form, 'issue-body'), valueOf(form, 'issue-project'))
+      if (ok) clearGroupInputs(scope, ['issue-title', 'issue-body', 'issue-project'])
     }, disabled)
     create.dataset.groupIssueAction = 'create'
     append(form, create)
@@ -340,7 +355,7 @@ function renderIssuePanel(state: GroupWorkspaceState, controller: TeamsConsoleCo
   summary.textContent = `${issue.state} · ${issue.vikunjaProjectId}/${issue.vikunjaIssueId}`
   append(section, summary)
   const form = element('div', 'teams-group-form')
-  append(form, inputField(t.groupIssueReason, 'issue-reason'), inputField(t.groupIssueConclusion, 'issue-conclusion'))
+  append(form, groupInputField(t.groupIssueReason, 'issue-reason'), groupInputField(t.groupIssueConclusion, 'issue-conclusion'))
   const close = button(t.groupIssueClose, 'teams-button-secondary', async () => {
     await controller.closeIssue(valueOf(form, 'issue-reason'), valueOf(form, 'issue-conclusion'))
   }, disabled || issue.state !== 'open')
@@ -507,30 +522,41 @@ function renderActionItem(
   const result = element('input', 'teams-input')
   result.type = 'text'
   result.dataset.groupInput = `action-result-${action.actionId}`
+  result.dataset.focusKey = `group-input:action-result-${action.actionId}`
   const submit = button(t.groupActionSubmit, 'teams-button-secondary', async () => {
-    await controller.submitAction(action.actionId, result.value)
+    const scope = item.closest('.teams-root') ?? item
+    const ok = await controller.submitAction(action.actionId, result.value)
+    if (ok) clearGroupInputs(scope, [`action-result-${action.actionId}`])
   }, disabled || !(action.state === 'pending' || action.state === 'accepted' || action.state === 'in_progress'))
   submit.dataset.groupActionVerb = 'submit'
   const reasonInput = element('input', 'teams-input')
   reasonInput.type = 'text'
   reasonInput.dataset.groupInput = `action-reason-${action.actionId}`
+  reasonInput.dataset.focusKey = `group-input:action-reason-${action.actionId}`
   const evidenceInput = element('input', 'teams-input')
   evidenceInput.type = 'text'
   evidenceInput.dataset.groupInput = `action-evidence-${action.actionId}`
+  evidenceInput.dataset.focusKey = `group-input:action-evidence-${action.actionId}`
   const mayRefuse = canRefuseAction(group, action, actorId)
   item.dataset.groupActionRefusePermitted = String(mayRefuse)
   const refuse = button(t.groupActionRefuse, 'teams-button-secondary', async () => {
-    await controller.refuseAction(action.actionId, reasonInput.value)
+    const scope = item.closest('.teams-root') ?? item
+    const ok = await controller.refuseAction(action.actionId, reasonInput.value)
+    if (ok) clearGroupInputs(scope, [`action-reason-${action.actionId}`])
   }, disabled || !mayRefuse)
   refuse.dataset.groupActionVerb = 'refuse'
   const mayReport = canReportAction(group, action, actorId)
   item.dataset.groupActionReportPermitted = String(mayReport)
   const blocked = button(t.groupActionReportBlocked, 'teams-button-secondary', async () => {
-    await controller.reportAction(action.actionId, 'blocked', reasonInput.value, evidenceInput.value)
+    const scope = item.closest('.teams-root') ?? item
+    const ok = await controller.reportAction(action.actionId, 'blocked', reasonInput.value, evidenceInput.value)
+    if (ok) clearGroupInputs(scope, [`action-reason-${action.actionId}`, `action-evidence-${action.actionId}`])
   }, disabled || !mayReport)
   blocked.dataset.groupActionVerb = 'report-blocked'
   const failed = button(t.groupActionReportFailed, 'teams-button-secondary', async () => {
-    await controller.reportAction(action.actionId, 'failed', reasonInput.value, evidenceInput.value)
+    const scope = item.closest('.teams-root') ?? item
+    const ok = await controller.reportAction(action.actionId, 'failed', reasonInput.value, evidenceInput.value)
+    if (ok) clearGroupInputs(scope, [`action-reason-${action.actionId}`, `action-evidence-${action.actionId}`])
   }, disabled || !mayReport)
   failed.dataset.groupActionVerb = 'report-failed'
   append(row, result, submit, reasonInput, evidenceInput, refuse, blocked, failed)
@@ -636,9 +662,11 @@ function renderActionPanel(state: GroupWorkspaceState, controller: TeamsConsoleC
     }
     append(assigneeField, assigneeLabel, assignee)
   }
-  append(form, assigneeField, inputField(t.groupActionReason, 'action-reason'), inputField(t.groupActionResult, 'action-expected'))
+  append(form, assigneeField, groupInputField(t.groupActionReason, 'action-reason'), groupInputField(t.groupActionResult, 'action-expected'))
   const create = button(t.groupActionCreate, 'teams-button-primary', async () => {
-    await controller.createAction(assignee.value, valueOf(form, 'action-reason'), valueOf(form, 'action-expected'))
+    const scope = form.closest('.teams-root') ?? section
+    const ok = await controller.createAction(assignee.value, valueOf(form, 'action-reason'), valueOf(form, 'action-expected'))
+    if (ok) clearGroupInputs(scope, ['action-reason', 'action-expected'])
   }, disabled || state.issue === null || assignable.length === 0)
   create.dataset.groupActionCreate = 'true'
   append(form, create)
@@ -797,7 +825,13 @@ function renderConfirm(state: GroupWorkspaceState, controller: TeamsConsoleContr
       })), t.groupCloseImpact, 'confirm', t))
     }
   }
-  const accept = button(t.groupConfirmAccept, 'teams-button-primary', async () => { await controller.confirmPendingGroupAction() })
+  const accept = button(t.groupConfirmAccept, 'teams-button-primary', async () => {
+    const scope = panel.closest('.teams-root') ?? panel
+    const ok = await controller.confirmPendingGroupAction()
+    if (ok && (confirm.frame.kind === 'issue.close' || confirm.frame.kind === 'issue.reopen')) {
+      clearGroupInputs(scope, ['issue-reason', 'issue-conclusion'])
+    }
+  })
   accept.dataset.groupConfirmAccept = 'true'
   const cancel = button(t.groupConfirmCancel, 'teams-button-secondary', () => { controller.cancelPendingGroupAction() })
   cancel.dataset.groupConfirmCancel = 'true'

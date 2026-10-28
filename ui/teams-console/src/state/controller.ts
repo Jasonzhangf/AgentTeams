@@ -11,7 +11,7 @@ import {
 } from './group-workspace.ts'
 import { readDraft, readFocus, readPage, writeDraft, writeFocus, writePage, type DraftPersistence } from './drafts.ts'
 import { ProjectionObservationController, type ObservationSession } from './observation.ts'
-import { canSubmitMembership, projectMembershipDraft, selectNetworkMembers, type NetworkMemberDraft } from '../components/page-networking.ts'
+import { canSubmitMembership, projectMembershipDraft, removeNetworkMember, selectNetworkMembers, type NetworkMemberDraft } from '../components/page-networking.ts'
 import { teamPages } from './model.ts'
 import type { ConsoleEntry, TeamPage } from './model.ts'
 
@@ -370,6 +370,14 @@ export class TeamsConsoleController {
     return this.runRefusedAction('Connect', () => this.client.command({ kind: 'connection.connect', agentId }))
   }
 
+  async disconnectAgent(agentId: string): Promise<boolean> {
+    return this.runRefusedAction('Disconnect', () => this.client.command({ kind: 'connection.disconnect', agentId }))
+  }
+
+  removeNetworkMember(agentId: string): void {
+    this.setMembershipDraft(removeNetworkMember(this.state.membershipDraft, agentId))
+  }
+
   async applyMembership(expectedRevision: number, members: readonly NetworkMemberDraft[]): Promise<boolean> {
     const projection = this.state.projection
     const known = projection === null ? [] : projectMembershipDraft(projection, members)
@@ -602,7 +610,8 @@ export class TeamsConsoleController {
         this.update({ busy: null, error: 'Send message succeeded, but the host projection could not be refreshed.' })
         return false
       }
-      this.update({ busy: null, notice: actionResult('Send message', result) })
+      this.update({ busy: null, messageDraft: '', notice: actionResult('Send message', result) })
+      writeDraft(this.persistence, 'message', '')
       return true
     } catch (error) {
       this.update({ busy: null, error: `Send message: ${errorText(error)}` })
@@ -1319,13 +1328,14 @@ export class TeamsConsoleController {
     return this.send({ kind: 'group.grant', requestId: '', groupId, agentId: actorId, role: actor.role, mastersOf })
   }
 
-  async createIssue(title: string, body: string, vikunjaProjectId: string): Promise<boolean> {
+  async createIssue(title: string, body: string, vikunjaProjectId = ''): Promise<boolean> {
     const groupId = this.state.group.selectedGroupId
     if (groupId === undefined) {
       this.updateGroup(state => ({ ...state, error: { code: 'INVALID_INPUT', message: 'Select a group before creating an issue.' } }))
       return false
     }
-    return this.send({ kind: 'issue.create', requestId: '', commitId: '', groupId, vikunjaProjectId, title, body })
+    const resolvedProjectId = vikunjaProjectId.trim() || this.state.group.issues[0]?.vikunjaProjectId || groupId
+    return this.send({ kind: 'issue.create', requestId: '', commitId: '', groupId, vikunjaProjectId: resolvedProjectId, title, body })
   }
 
   /**

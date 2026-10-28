@@ -21,7 +21,7 @@ type MessageKey =
   | 'declaredServices' | 'capabilityDetailUnavailable' | 'capabilityDetailEmpty' | 'noDeclaredResources'
   | 'declaredCapacity' | 'operations'
   | 'pageDiscovery' | 'pageNetworking' | 'pageInteraction' | 'pageHistory'
-  | 'connect' | 'draft' | 'accepted' | 'master' | 'peer' | 'applyMembership'
+  | 'connect' | 'disconnect' | 'removeDraftMember' | 'draft' | 'accepted' | 'master' | 'peer' | 'applyMembership'
   | 'historyPrev' | 'historyRequest' | 'historyUnavailable' | 'permissionOptionsUnavailable'
   | 'workRecords' | 'workRecordsUnavailable' | 'workRecordsEmpty' | 'workRefresh' | 'connectionHistory' | 'historyRetry'
   | 'workAccepted' | 'workClosing' | 'workClosed' | 'workRejected'
@@ -66,7 +66,7 @@ const en: Record<MessageKey, string> = {
   declaredServices: 'Declared services', capabilityDetailUnavailable: 'Service and resource detail is unavailable.', capabilityDetailEmpty: 'This Agent declares no services.',
   noDeclaredResources: 'No declared resources', declaredCapacity: 'Declared capacity', operations: 'Operations',
   pageDiscovery: 'Discover', pageNetworking: 'Network', pageInteraction: 'Interact', pageHistory: 'History',
-  connect: 'Connect', draft: 'Draft', accepted: 'Accepted', master: 'Master', peer: 'Peer', applyMembership: 'Apply membership',
+  connect: 'Connect', disconnect: 'Disconnect', removeDraftMember: 'Remove', draft: 'Draft', accepted: 'Accepted', master: 'Master', peer: 'Peer', applyMembership: 'Apply membership',
   historyPrev: 'Previous page', historyRequest: 'Request history is refused by the owner.', historyUnavailable: 'History is unavailable.', permissionOptionsUnavailable: 'Permission choices are unavailable from the engine callback.',
   workRecords: 'Work records', workRecordsUnavailable: 'This connection does not provide Work records.', workRecordsEmpty: 'No Work records.', workRefresh: 'Refresh Work records', connectionHistory: 'Connection history', historyRetry: 'Retry connection history',
   workAccepted: 'Accepted', workClosing: 'Closing', workClosed: 'Closed', workRejected: 'Rejected',
@@ -119,7 +119,7 @@ const zh: Record<MessageKey, string> = {
   declaredServices: '已声明服务', capabilityDetailUnavailable: '服务与资源明细不可用。', capabilityDetailEmpty: '该智能体未声明任何服务。',
   noDeclaredResources: '未声明资源', declaredCapacity: '声明容量', operations: '操作',
   pageDiscovery: '发现', pageNetworking: '组网', pageInteraction: '交互', pageHistory: '历史',
-  connect: '连接', draft: '草稿', accepted: '已接受', master: '主节点', peer: '对等节点', applyMembership: '提交组网草稿',
+  connect: '连接', disconnect: '断开连接', removeDraftMember: '移除', draft: '草稿', accepted: '已接受', master: '主节点', peer: '对等节点', applyMembership: '提交组网草稿',
   historyPrev: '上一页', historyRequest: '请求历史被所有者拒绝。', historyUnavailable: '历史不可用。', permissionOptionsUnavailable: '引擎回调未提供权限选择。',
   workRecords: 'Work 记录', workRecordsUnavailable: '当前连接未提供 Work 记录。', workRecordsEmpty: '暂无 Work 记录。', workRefresh: '刷新 Work 记录', connectionHistory: '连接历史', historyRetry: '重试连接历史',
   workAccepted: '已接纳', workClosing: '关闭中', workClosed: '已关闭', workRejected: '已拒绝',

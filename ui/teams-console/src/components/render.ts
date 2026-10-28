@@ -409,15 +409,11 @@ function renderSearch(controller: TeamsConsoleController, state: ConsoleState, t
   labelText.textContent = t.search
   const input = element('input', 'teams-input')
   input.type = 'search'
+  input.dataset.focusKey = 'search:input'
   input.placeholder = t.searchPlaceholder
   input.value = state.query
   input.addEventListener('input', () => {
     controller.setQuery(input.value)
-    const next = root.querySelector<HTMLInputElement>('.teams-search input')
-    if (next !== null) {
-      next.focus()
-      next.setSelectionRange(next.value.length, next.value.length)
-    }
   })
   append(label, labelText, input)
   append(value, label)
@@ -551,8 +547,14 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
   labelText.textContent = t.message
   const textarea = element('textarea', 'teams-textarea')
   textarea.required = true
+  textarea.dataset.focusKey = 'session:message'
   textarea.placeholder = t.message
+  textarea.value = state.messageDraft ?? ''
   textarea.setAttribute('aria-required', 'true')
+  textarea.addEventListener('input', () => {
+    textarea.setCustomValidity('')
+    controller.setMessageDraft?.(textarea.value)
+  })
   append(label, labelText, textarea)
   const actions = element('div', 'teams-button-row')
   const agent = state.projection?.agents.find(candidate => candidate.agentId === agentId)
@@ -575,9 +577,15 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
       return
     }
     textarea.setCustomValidity('')
+    const root = value.closest<HTMLElement>('.teams-root')
     const payload: JsonValue = { text: textarea.value }
     await controller.sendSession(agentId, sessionId, payload)
-    if (controller.getSnapshot().error === null) textarea.value = ''
+    if (controller.getSnapshot().error === null) {
+      textarea.value = ''
+      controller.setMessageDraft?.('')
+      const liveTextarea = root?.querySelector<HTMLTextAreaElement>('textarea[data-focus-key="session:message"]')
+      if (liveTextarea !== null && liveTextarea !== undefined) liveTextarea.value = ''
+    }
   }
   // Send is a Session action: the browser must never submit one the owner will refuse.
   const send = button(t.send, 'teams-button-primary', () => undefined, actionDisabled(state) || !operable)
@@ -598,6 +606,7 @@ function inputField<T extends keyof ProviderDraft>(labelText: string, draft: Pro
   title.textContent = labelText
   const input = element('input', 'teams-input')
   input.type = type
+  input.dataset.focusKey = `provider:${String(key)}`
   input.value = String(draft[key])
   input.addEventListener('input', () => { controller.setProviderDraft(key, input.value as ProviderDraft[T]) })
   append(label, title, input)
@@ -909,7 +918,13 @@ function renderDiscovery(controller: TeamsConsoleController, state: ConsoleState
   const projection = state.projection
   if (projection === null) return value
   const agents = projectAgents(projection)
-  append(value, renderViewHeader(t.pageDiscovery), teamsStateBands(undefined, undefined, state.observation.observation))
+  const primaryAgent = state.observation.observation === 'live'
+    ? (agents.find(candidate => candidate.agentId === state.selectedAgentId) ?? agents[0])
+    : undefined
+  const primaryConnection = state.observation.observation === 'live'
+    ? ((projection.connections ?? []).find(conn => primaryAgent !== undefined && conn.status.remoteAgentId === primaryAgent.agentId) ?? (projection.connections ?? [])[0])
+    : undefined
+  append(value, renderViewHeader(t.pageDiscovery), teamsStateBands(primaryAgent, primaryConnection, state.observation.observation))
   const list = element('ul', 'teams-team-list')
   for (const agent of agents) {
     const row = element('li')
@@ -922,12 +937,18 @@ function renderDiscovery(controller: TeamsConsoleController, state: ConsoleState
     title.textContent = `${agent.label} (${agent.agentId})`
     const meta = element('span')
     meta.textContent = `${agent.kind} · ${agent.capabilities.join(', ') || t.capabilities}`
+    const connections = (projection.connections ?? []).filter(connection => connection.status.remoteAgentId === agent.agentId)
+    const activeConnection = connections.some(connection => connection.status.state !== 'closed' && connection.status.state !== 'disconnected')
     const actions = element('div')
     append(actions, button(t.connect, 'teams-button-primary', async () => { await controller.connectAgent(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:connect`))
+    if (activeConnection) {
+      const disconnectBtn = button(t.disconnect, 'teams-button-secondary', async () => { await controller.disconnectAgent?.(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:disconnect`)
+      disconnectBtn.dataset.agentDisconnect = agent.agentId
+      append(actions, disconnectBtn)
+    }
     append(actions, button(t.details, 'teams-button-secondary', () => { controller.openAgent(agent.agentId) }, actionDisabled(state), `agent:${agent.agentId}:details`))
     if (projection.configs.some(config => config.agentId === agent.agentId)) append(actions, button(t.configure, 'teams-button-secondary', () => { controller.openSettings(agent.agentId) }, actionDisabled(state)))
     append(row, title, meta, actions)
-    const connections = (projection.connections ?? []).filter(connection => connection.status.remoteAgentId === agent.agentId)
     if (connections.length > 0) {
       const connectionsList = element('ul', 'teams-connection-list')
       for (const connection of connections) {
@@ -963,7 +984,13 @@ function renderNetworking(controller: TeamsConsoleController, state: ConsoleStat
     const item = element('li')
     item.setAttribute('data-team-role-draft', member.role)
     item.setAttribute('data-agent-id', member.agentId)
-    item.textContent = `${agentName(projection, member.agentId, t)} · ${member.role}`
+    const label = element('span')
+    label.textContent = `${agentName(projection, member.agentId, t)} · ${member.role}`
+    const removeBtn = button(t.removeDraftMember, 'teams-button-secondary', () => {
+      controller.removeNetworkMember?.(member.agentId)
+    }, actionDisabled(state))
+    removeBtn.dataset.teamDraftRemove = member.agentId
+    append(item, label, removeBtn)
     append(draftList, item)
   }
   const roleControls = element('div')
@@ -995,15 +1022,46 @@ function renderInteraction(controller: TeamsConsoleController, state: ConsoleSta
   const projection = state.projection
   if (projection === null) return value
   append(value, renderViewHeader(t.pageInteraction))
-  const agent = projection.agents.find(candidate => candidate.agentId === state.selectedAgentId)
   const selectedSession = projection.sessions.find(session => session.sessionId === state.selectedSessionId) ?? projection.sessions[0]
   const list = element('ul')
   for (const session of projection.sessions) {
     const item = element('li')
-    item.textContent = `${agentName(projection, session.agentId, t)} · ${session.sessionId}`
+    item.dataset.sessionItem = session.sessionId
+    const isSelected = session.sessionId === selectedSession?.sessionId
+    const selectBtn = button(
+      `${agentName(projection, session.agentId, t)} · ${session.sessionId}`,
+      isSelected ? 'teams-button-primary' : 'teams-button-secondary',
+      () => {
+        controller.selectAgent?.(session.agentId)
+        controller.selectSessionSessionId?.(session.sessionId)
+      },
+      actionDisabled(state),
+      `session:select:${session.sessionId}`,
+    )
+    selectBtn.dataset.sessionSelect = session.sessionId
+    selectBtn.setAttribute('aria-current', isSelected ? 'true' : 'false')
+    append(item, selectBtn)
     append(list, item)
   }
   append(value, list)
+  const pendingNotifications = (projection.notifications ?? []).filter(notification => notification.state === 'pending')
+  if (pendingNotifications.length > 0) {
+    const noticeList = element('ul', 'teams-list')
+    noticeList.dataset.interactionNotifications = 'true'
+    for (const notification of pendingNotifications) {
+      const row = element('li')
+      row.dataset.notificationId = notification.notificationId
+      const text = element('span')
+      text.textContent = `${agentName(projection, notification.agentId, t)} · ${notification.title}`
+      const ack = button(t.acknowledge, 'teams-button-secondary', async () => {
+        await controller.acknowledge(notification.notificationId, notification.agentId)
+      }, actionDisabled(state))
+      ack.dataset.notificationAck = notification.notificationId
+      append(row, text, ack)
+      append(noticeList, row)
+    }
+    append(value, noticeList)
+  }
   if (selectedSession !== undefined) {
     append(value, renderSessionDrawer(controller, { ...state, selectedSessionId: selectedSession.sessionId, selectedAgentId: selectedSession.agentId, cancelState: state.cancelState }, selectedSession.agentId, selectedSession.sessionId, t))
   }
@@ -1084,9 +1142,112 @@ function renderStatus(state: ConsoleState, t: Record<MessageKey, string>): HTMLE
   return status
 }
 
+interface CapturedDomState {
+  readonly focusKey: string | null
+  readonly groupInputKey: string | null
+  readonly selectionStart: number | null
+  readonly selectionEnd: number | null
+  readonly selectedGroupId: string | null
+  readonly issueSessionId: string | null
+  readonly groupInputs: ReadonlyMap<string, string>
+  readonly sessionDraft: string | null
+  readonly scrollPositions: ReadonlyMap<string, { readonly top: number; readonly left: number }>
+}
+
+function captureDomState(root: HTMLElement): CapturedDomState {
+  const doc = root.ownerDocument
+  const active = doc?.activeElement
+  let focusKey: string | null = null
+  let groupInputKey: string | null = null
+  let selectionStart: number | null = null
+  let selectionEnd: number | null = null
+  if (active instanceof HTMLElement && root.contains(active)) {
+    focusKey = active.getAttribute('data-focus-key')
+    groupInputKey = active.getAttribute('data-group-input')
+    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+      try {
+        selectionStart = active.selectionStart
+        selectionEnd = active.selectionEnd
+      } catch {
+        selectionStart = null
+        selectionEnd = null
+      }
+    }
+  }
+  const selectedGroupId = root.querySelector('[data-group-selected-id]')?.getAttribute('data-group-selected-id') ?? null
+  const issueSessionId = root.querySelector('[data-group-issue-session]')?.getAttribute('data-group-issue-session') ?? null
+  const groupInputs = new Map<string, string>()
+  for (const node of root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-group-input]')) {
+    const key = node.getAttribute('data-group-input')
+    if (key !== null && node.value.length > 0) {
+      groupInputs.set(key, node.value)
+    }
+  }
+  const sessionTextarea = root.querySelector<HTMLTextAreaElement>('textarea[data-focus-key="session:message"]')
+  const sessionDraft = sessionTextarea !== null && sessionTextarea.value.length > 0 ? sessionTextarea.value : null
+  const scrollPositions = new Map<string, { readonly top: number; readonly left: number }>()
+  for (const selector of ['.teams-content', '.teams-drawer', '.teams-group-messages', '.teams-group-detail', '.teams-group-list', '.teams-timeline']) {
+    const el = root.querySelector<HTMLElement>(selector)
+    if (el !== null && (el.scrollTop > 0 || el.scrollLeft > 0)) {
+      scrollPositions.set(selector, { top: el.scrollTop, left: el.scrollLeft })
+    }
+  }
+  return { focusKey, groupInputKey, selectionStart, selectionEnd, selectedGroupId, issueSessionId, groupInputs, sessionDraft, scrollPositions }
+}
+
+function restoreDomState(root: HTMLElement, captured: CapturedDomState, state: ConsoleState): void {
+  const currentGroupId = state.group?.selectedGroupId ?? null
+  const currentIssueId = state.group?.issue?.sessionId ?? null
+  const sameGroup = captured.selectedGroupId === null || captured.selectedGroupId === currentGroupId
+  const sameIssue = captured.issueSessionId === currentIssueId
+  for (const [key, val] of captured.groupInputs) {
+    if (key !== 'group-create-name' && !sameGroup) continue
+    if ((key.startsWith('action-') || key === 'issue-reason' || key === 'issue-conclusion') && !sameIssue) continue
+    for (const target of root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-group-input="${key}"]`)) {
+      if (target instanceof HTMLSelectElement) {
+        if (Array.from(target.options).some(option => option.value === val)) {
+          target.value = val
+        }
+      } else if (target.value === '') {
+        target.value = val
+      }
+    }
+  }
+  if (captured.sessionDraft !== null) {
+    const sessionTextarea = root.querySelector<HTMLTextAreaElement>('textarea[data-focus-key="session:message"]')
+    if (sessionTextarea !== null && sessionTextarea.value === '') {
+      sessionTextarea.value = captured.sessionDraft
+    }
+  }
+  for (const [selector, pos] of captured.scrollPositions) {
+    const el = root.querySelector<HTMLElement>(selector)
+    if (el !== null) {
+      el.scrollTop = pos.top
+      el.scrollLeft = pos.left
+    }
+  }
+  const target = captured.focusKey !== null
+    ? root.querySelector<HTMLElement>(`[data-focus-key="${captured.focusKey}"]`)
+    : captured.groupInputKey !== null
+      ? root.querySelector<HTMLElement>(`[data-group-input="${captured.groupInputKey}"]`)
+      : null
+  if (target !== null && !(target as HTMLInputElement | HTMLButtonElement).disabled) {
+    target.focus()
+    if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) && captured.selectionStart !== null && captured.selectionEnd !== null) {
+      try {
+        const max = target.value.length
+        target.setSelectionRange(Math.min(captured.selectionStart, max), Math.min(captured.selectionEnd, max))
+      } catch {
+        // Ignore input types that do not support selection ranges.
+      }
+    }
+  }
+}
+
 export function renderConsole(root: HTMLElement, controller: TeamsConsoleController, options: RenderOptions = {}): void {
   const state = controller.getSnapshot()
   const t = messages(state.locale)
+  const captured = captureDomState(root)
   root.className = 'teams-root'
   root.replaceChildren()
   if (!state.open) {
@@ -1167,4 +1328,5 @@ export function renderConsole(root: HTMLElement, controller: TeamsConsoleControl
     flag.textContent = options.fixtureLabel
     append(root, flag)
   }
+  restoreDomState(root, captured, state)
 }
