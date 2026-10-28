@@ -36,10 +36,11 @@ it('sends one real OpenCode Session request through the selected managed provide
     const compiled = { agentId: 'llm-agent', acceptedRevision: 4, primary: { provider: 'probe', model: 'probe-model', protocol: 'openai-chat' as const,
       baseUrl: `http://127.0.0.1:${port}/v1` } }
     const launch = createOpenCodeLaunchConfig(compiled)
-    // Derived from measured worst case at load ~17: startup 4.7s, first message
-    // round-trip 2.4s. Budgets keep >4x headroom without changing assertions.
+    // The real engine startup and closeout budgets align with the 45s
+    // real-engine initialize budget (ea7b75a), so a loaded host does not turn a
+    // real OpenCode start into a false deadline failure. Assertions are unchanged.
     const managed = await startManagedOpenCode({ executable: '/Users/fanzhang/.opencode/bin/opencode', directory: join(directory, 'opencode'),
-      port: await availablePort(), startupTimeoutMs: 20000, stopTimeoutMs: 3000, compiled, resolveCredential: async () => { throw new Error('no credential') } })
+      port: await availablePort(), startupTimeoutMs: 45000, stopTimeoutMs: 45000, compiled, resolveCredential: async () => { throw new Error('no credential') } })
     try {
       const headers = { authorization: managed.authorization, 'content-type': 'application/json' }
       const sessionResponse = await fetch(`${managed.url}/session`, { method: 'POST', headers, body: JSON.stringify({ title: 'Teams probe' }), signal: AbortSignal.timeout(5000) })
@@ -54,7 +55,7 @@ it('sends one real OpenCode Session request through the selected managed provide
       expect(launch.config.model).toBe('probe/probe-model')
     } finally { await managed.stop() }
   } finally { await new Promise<void>(resolve => provider.close(() => resolve())); await rm(directory, { recursive: true }) }
-}, 60000)
+}, 150000)
 
 async function availablePort(): Promise<number> {
   const listener = createServer(); listener.listen(0, '127.0.0.1'); await once(listener, 'listening')

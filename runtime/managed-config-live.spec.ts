@@ -6,10 +6,12 @@ import { createJsonFileConfigPersistence, createRuntimeConfigStore } from '../co
 import { createConsoleConfigBinding } from './console-config.ts'
 import { createManagedConfigOwner, createManagedConfigOwnerPersistence } from './managed-config-owner.ts'
 
-const startupTimeoutMs = 10_000
-const stopTimeoutMs = 3_000
+// Align the real-engine startup and closeout budgets with the 45s real-engine
+// initialize budget (ea7b75a) so a loaded host does not fail a real OpenCode start.
+const startupTimeoutMs = 45_000
+const stopTimeoutMs = 45_000
 
-it('applies accepted Teams config to a real isolated OpenCode child and reads effective revision', { timeout: 18_000 }, async () => {
+it('applies accepted Teams config to a real isolated OpenCode child and reads effective revision', { timeout: 150_000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'teams-managed-live-'))
   const persistence = createJsonFileConfigPersistence(join(directory, 'teams-config.json'))
   const store = createRuntimeConfigStore(persistence, { agentId: 'llm-agent' })
