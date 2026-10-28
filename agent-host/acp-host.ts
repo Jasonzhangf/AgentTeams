@@ -174,6 +174,11 @@ interface ChannelState {
    * per Session: a prompt on Session B must not conflict with a pending prompt on Session A.
    */
   readonly activePrompts: Map<string, ActivePrompt>
+  /**
+   * Session admissions reserved before the first asynchronous boundary. A prompt holds this
+   * reservation until its durable request append establishes the `ActivePrompt` entry.
+   */
+  readonly promptAdmissions: Set<string>
   events: ConsoleSessionEventView[]
 }
 
@@ -751,6 +756,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     // The prompts in flight are owned by the Sessions this channel held, so they leave with
     // them; a fresh channel starts with none.
     channel.activePrompts.clear()
+    channel.promptAdmissions.clear()
   }
 
   const onEngineEnd = (reason: string): void => {
@@ -848,13 +854,15 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
   const handlePrompt = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
     const sessionId = requireSessionId(frame)
     assertSessionOwner(channel, sessionId)
-    // Admission is per Session: a prompt on one Session must not conflict with a pending
-    // prompt on another Session sharing this readiness channel. A second concurrent prompt on
-    // the same Session still fails with CONFLICT.
-    if (channel.activePrompts.has(sessionId)) {
+    // Admission is reserved before any await. `dispatchToEngine` awaits the durable request
+    // append before it can establish the in-flight prompt, so two overlapping prompts for
+    // one Session must be rejected from this synchronous reservation instead of both passing
+    // the same check. Prompts on other Sessions remain independent.
+    if (channel.activePrompts.has(sessionId) || channel.promptAdmissions.has(sessionId)) {
       throw new AcpError('CONFLICT', `session ${sessionId} already has a prompt in flight`)
     }
-    const eventsAtStart = channel.events.length
+    channel.promptAdmissions.add(sessionId)
+    const dispatchedEventIds: string[] = []
     try {
       await dispatchToEngine(channel, frame, entry => {
         const userMessageId = `msg-${entry.recordId}`
@@ -872,8 +880,10 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
           reasoningObserved: false,
         }
         channel.activePrompts.set(sessionId, prompt)
+        channel.promptAdmissions.delete(sessionId)
+        const userEventId = `evt-user-${entry.recordId}`
         channel.events.push({
-          eventId: `evt-user-${entry.recordId}`,
+          eventId: userEventId,
           agentId: localAgentId,
           sessionId,
           occurredAt,
@@ -882,10 +892,12 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
           messageId: userMessageId,
           role: 'user',
         })
+        dispatchedEventIds.push(userEventId)
         const text = promptText(frame)
         if (text !== undefined) {
+          const userPartEventId = `evt-part-user-${entry.recordId}`
           channel.events.push({
-            eventId: `evt-part-user-${entry.recordId}`,
+            eventId: userPartEventId,
             agentId: localAgentId,
             sessionId,
             occurredAt,
@@ -896,11 +908,19 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
             partType: 'text',
             text,
           })
+          dispatchedEventIds.push(userPartEventId)
         }
       })
     } catch (cause) {
-      channel.events.length = eventsAtStart
+      // Roll back only the rows this dispatch created. Another Session can append tool,
+      // permission or final events while this dispatch is in flight, and those rows must
+      // never be removed by an unrelated failure.
+      for (const eventId of dispatchedEventIds) {
+        const index = channel.events.findIndex(event => event.eventId === eventId)
+        if (index >= 0) channel.events.splice(index, 1)
+      }
       channel.activePrompts.delete(sessionId)
+      channel.promptAdmissions.delete(sessionId)
       throw cause
     }
   }
@@ -1160,6 +1180,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
           messageId: prompt.assistantMessageId,
         })
         channel.activePrompts.delete(pending.sessionId)
+        channel.promptAdmissions.delete(pending.sessionId)
       }
     }
     enqueue(channel, delivery)
@@ -1412,6 +1433,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       initialized: false,
       closed: false,
       activePrompts: new Map<string, ActivePrompt>(),
+      promptAdmissions: new Set<string>(),
       events: [],
     })
   }

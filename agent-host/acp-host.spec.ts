@@ -16,6 +16,7 @@ class FakeDuplex implements AcpDuplex {
   private readonly waiters: { resolve: (frame: AcpFrame) => void; reject: (error: Error) => void }[] = []
   private closedResult: ClosedResult | null = null
   private resolveClosed!: (result: ClosedResult) => void
+  private sendGate?: Promise<void>
 
   constructor() {
     this.closed = new Promise(resolve => { this.resolveClosed = resolve })
@@ -29,8 +30,25 @@ class FakeDuplex implements AcpDuplex {
   }
 
   send(frame: AcpFrame): Promise<void> {
+    if (this.sendGate !== undefined) {
+      return this.sendGate.then(() => { this.sent.push(frame) })
+    }
     this.sent.push(frame)
     return Promise.resolve()
+  }
+
+  /** Hold every engine send until the returned gate is released or rejected. */
+  holdSends(): { release: () => void; reject: (error: Error) => void } {
+    let release!: () => void
+    let reject!: (error: Error) => void
+    this.sendGate = new Promise<void>((resolve, fail) => {
+      release = resolve
+      reject = fail
+    })
+    return {
+      release: () => { this.sendGate = undefined; release() },
+      reject: (error: Error) => { this.sendGate = undefined; reject(error) },
+    }
   }
 
   async close(): Promise<void> { this.end() }
@@ -561,6 +579,120 @@ describe('createAcpHost', () => {
       frame: { jsonrpc: '2.0', id: 7, method: 'session/prompt', params: { sessionId: 'session-b', prompt: [{ type: 'text', text: 'b2' }] } },
     })
     expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(4)
+  })
+
+  it('reserves same-Session admission before the first history append so an overlapping prompt is rejected', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    // Hold the durable request append so the first prompt is still waiting at the first
+    // asynchronous boundary. A second prompt for the same Session must not pass admission
+    // while that reservation is held.
+    const release = fixture.history.holdAppends()
+    const first = fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'first' }] } },
+    })
+    await flush()
+    const second = fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 3, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'second' }] } },
+    })
+    release()
+
+    await expect(second).rejects.toMatchObject({ code: 'CONFLICT' })
+    await first
+    const sends = fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')
+    expect(sends).toHaveLength(1)
+    expect(sends[0].params).toMatchObject({ sessionId: 'session-1', prompt: [{ type: 'text', text: 'first' }] })
+  })
+
+  it('rolls back only the failed dispatch rows and preserves another Session concurrent events', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const childA = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: childA, result: { sessionId: 'session-a' } })
+    const childB = await newSession(fixture, ref1, 2)
+    fixture.duplex.push({ jsonrpc: '2.0', id: childB, result: { sessionId: 'session-b' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    // Session A goes in flight and emits a tool event before B starts.
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 3, method: 'session/prompt', params: { sessionId: 'session-a', prompt: [{ type: 'text', text: 'a' }] } },
+    })
+    const aPromptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-a', update: { sessionUpdate: 'tool_call', toolCallId: 'call-a', title: 'read', rawInput: { path: '/tmp/a' }, status: 'pending' } },
+    })
+    await flush()
+
+    // B reaches its engine send and stops on a deferred gate, then fails after A has
+    // advanced. This is the window where a length-based rollback would remove A's rows.
+    const gate = fixture.duplex.holdSends()
+    const bPrompt = fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 4, method: 'session/prompt', params: { sessionId: 'session-b', prompt: [{ type: 'text', text: 'b' }] } },
+    })
+    await flush()
+
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'session-a',
+        update: {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'call-a',
+          title: 'read',
+          status: 'completed',
+          content: [{ type: 'content', content: { type: 'text', text: 'done' } }],
+        },
+      },
+    })
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      id: 'engine-permission-a',
+      method: 'session/request_permission',
+      params: {
+        sessionId: 'session-a',
+        toolCall: { toolCallId: 'call-a', title: 'read' },
+        options: [{ optionId: 'once', name: 'Allow once', kind: 'allow_once' }],
+      },
+    })
+    await flush()
+    const pendingA = fixture.host.pendingPermissions().find(item => item.sessionId === 'session-a')
+    expect(pendingA).toBeDefined()
+
+    gate.reject(new Error('engine send failed'))
+    await expect(bPrompt).rejects.toMatchObject({ code: 'ENGINE_UNAVAILABLE' })
+
+    // B's own projection rows are removed, while A's tool and permission events survive.
+    const events = fixture.host.sessionEvents?.() ?? []
+    expect(events.filter(event => event.sessionId === 'session-b')).toEqual([])
+    expect(events.some(event => event.sessionId === 'session-a' && event.kind === 'tool' && event.callId === 'call-a')).toBe(true)
+    expect(events.some(event => event.sessionId === 'session-a' && event.kind === 'permission' && event.permissionId === pendingA?.permissionId)).toBe(true)
+
+    // A can still resolve its permission and prompt, and its final event remains intact.
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: pendingA!.permissionId, result: { outcome: { outcome: 'selected', optionId: 'once' } } },
+    })
+    fixture.duplex.push({ jsonrpc: '2.0', id: aPromptChild, result: { stopReason: 'end_turn' } })
+    await flush()
+
+    const finalEvents = fixture.host.sessionEvents?.() ?? []
+    expect(finalEvents.some(event => event.sessionId === 'session-a' && event.kind === 'final' && event.state === 'completed')).toBe(true)
+    expect(finalEvents.filter(event => event.sessionId === 'session-b')).toEqual([])
   })
 
   it('projects real ACP nested ToolCallContent for completed and failed tool events', async () => {
