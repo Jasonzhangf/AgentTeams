@@ -1,0 +1,54 @@
+
+ RUN  v4.1.11 /Volumes/Intel/playground/agentteams/webui-session-loop-p0
+
+ ❯ agent-host/acp-host.spec.ts (36 tests | 2 failed | 34 skipped) 20ms
+     × isolates a shared tool call id by owning Session instead of merging fields 14ms
+     × keeps an earlier prompt tool row when the same Session reuses a call id in a later prompt 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  agent-host/acp-host.spec.ts > createAcpHost > isolates a shared tool call id by owning Session instead of merging fields
+AssertionError: expected [ { …(11) } ] to have a length of 2 but got 1
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ agent-host/acp-host.spec.ts:631:22
+    629|     const toolRows = events.filter((event): event is Extract<ConsoleSe…
+    630|       event.kind === 'tool' && event.callId === 'call-shared')
+    631|     expect(toolRows).toHaveLength(2)
+       |                      ^
+    632|     const a = toolRows.find(event => event.sessionId === 'session-a')
+    633|     const b = toolRows.find(event => event.sessionId === 'session-b')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  agent-host/acp-host.spec.ts > createAcpHost > keeps an earlier prompt tool row when the same Session reuses a call id in a later prompt
+AssertionError: expected [ { …(14) } ] to have a length of 2 but got 1
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ agent-host/acp-host.spec.ts:718:22
+    716|     const toolRows = (fixture.host.sessionEvents?.() ?? []).filter((ev…
+    717|       event.kind === 'tool' && event.callId === 'call-shared')
+    718|     expect(toolRows).toHaveLength(2)
+       |                      ^
+    719|     const earlier = toolRows.find(event => event.messageId === firstTo…
+    720|     const later = toolRows.find(event => event.messageId !== firstTool…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 34 skipped (36)
+   Start at  14:38:35
+   Duration  236ms (transform 78ms, setup 0ms, import 97ms, tests 20ms, environment 0ms)
+
+EXIT=1

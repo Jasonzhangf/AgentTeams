@@ -146,3 +146,34 @@ permission and final-event path.
 Evidence: `red-admission-r3.log`, `red-isolation-r3.log`, `focused-tests-r3.log`,
 `typecheck-r3.log`, `build-r3.log`, `black-box-r3-final.log`, `receipt.json`,
 `browser-pending-permission.png`.
+
+## r4 Review-fix round (tool-call projection identity)
+
+The r3 Reviewer found that tool projection used the engine `toolCallId` as channel-wide
+identity. A second Session that reused a call id could inherit the first Session's
+title/input and replace its row. A later prompt in one Session could also replace the
+earlier prompt's tool history by reusing a call id.
+
+`captureSessionUpdate` now finds the previous tool row only when Session, assistant prompt
+message and call id all match. `projectToolEvent` derives its `eventId` and first `partId`
+from those three values, while the public `callId` keeps the engine's original value.
+
+Two public-host tests reproduce the two collision windows:
+
+- `red-new-tests.log`: before the fix, both the cross-Session and later-prompt cases
+  retained one row instead of two (`2 failed | 34 skipped`, exit `1`).
+- `green-new-tests.log`: after the fix, both cases pass (`2 passed | 34 skipped`, exit `0`).
+
+On the r4 candidate the focused host plus runtime intent-watch suites pass `55/55` in two
+files, exit `0` (`focused-tests-r4.log`). `pnpm typecheck` and `pnpm build` both exit `0`
+(`typecheck-r4.log`, `build-r4.log`). `git diff --check` exits `0`; the code change is
+limited to `agent-host/acp-host.ts` and `agent-host/acp-host.spec.ts`.
+
+The real-process black box was rerun on the r4 candidate and passed `51/51`, exit `0`
+(`black-box-r4-final.log`). It used a real control daemon, a real OpenCode-backed agent
+daemon and real Chrome. The existing Session A/B interleaving, permission, completed tool
+output, browser create/send/approval and final-event checks remained green.
+
+Evidence: `red-new-tests.log`, `green-new-tests.log`, `focused-tests-r4.log`,
+`typecheck-r4.log`, `build-r4.log`, `black-box-r4-final.log`, `receipt.json`,
+`browser-pending-permission.png`.
