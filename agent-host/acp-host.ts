@@ -9,7 +9,11 @@ import type {
   HistoryRecord,
 } from '../packages/shared/src/acp.ts'
 import { AcpError, parseAcpFrame } from '../packages/shared/src/acp.ts'
-import type { ConsolePermissionOption } from '../packages/shared/src/console-api.ts'
+import type {
+  ConsolePermissionOption,
+  ConsoleSessionEventView,
+  OpenCodeStructuredError,
+} from '../packages/shared/src/console-api.ts'
 import type { EngineHandle } from '../packages/shared/src/engine.ts'
 import type { AcpPolicySnapshot } from '../config/acp-policy.ts'
 import type { AcpHistoryPort } from './acp-history.ts'
@@ -86,6 +90,18 @@ export interface AcpHost {
    * transcript is invented here.
    */
   openedSessions(): readonly string[]
+  /**
+   * The ordered Console events the open channels projected from real engine frames.
+   *
+   * The host is the one boundary every engine frame crosses, so it is the owner of this
+   * projection: a Session that a channel no longer holds contributes no events, and the
+   * buffer is cleared with the same `releaseSessions` lifecycle as its Session ids.
+   *
+   * `createAcpHost` always provides this projection. Legacy observability wrappers in
+   * `network/` implement the same transport surface but are outside this module's lifetime,
+   * so they may omit it; the publisher treats a missing source as an empty event set.
+   */
+  sessionEvents?(): readonly ConsoleSessionEventView[]
 }
 
 export interface CreateAcpHostInput {
@@ -131,6 +147,14 @@ interface PendingCallback {
 
 interface ActivePrompt {
   readonly sessionId: string
+  readonly userMessageId: string
+  readonly assistantMessageId: string
+  readonly assistantPartId: string
+  readonly reasoningPartId: string
+  text: string
+  reasoning: string
+  textObserved: boolean
+  reasoningObserved: boolean
 }
 
 interface ChannelState {
@@ -146,6 +170,7 @@ interface ChannelState {
   initialized: boolean
   closed: boolean
   activePrompt?: ActivePrompt
+  events: ConsoleSessionEventView[]
 }
 
 type HistoryInput = Omit<HistoryRecord, 'recordId' | 'sequence'>
@@ -207,6 +232,135 @@ function cloneJson(value: JsonValue): JsonValue {
     return output
   }
   return value
+}
+
+function stringField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+/** The user text a `session/prompt` carried, when every prompt block is text. */
+function promptText(frame: AcpFrame): string | undefined {
+  if (!isRecord(frame.params)) return undefined
+  const prompt = frame.params.prompt
+  if (!Array.isArray(prompt)) return undefined
+  const texts: string[] = []
+  for (const block of prompt) {
+    if (!isRecord(block) || block.type !== 'text' || typeof block.text !== 'string') return undefined
+    texts.push(block.text)
+  }
+  return texts.length === 0 ? undefined : texts.join('')
+}
+
+/** The engine's own permission subject when its callback carries one; never invented. */
+function permissionTitle(frame: AcpFrame): string | undefined {
+  if (!isRecord(frame.params)) return undefined
+  const toolCall = frame.params.toolCall
+  return isRecord(toolCall) ? stringField(toolCall.title) : undefined
+}
+
+function contentText(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined
+  const texts: string[] = []
+  for (const block of value) {
+    if (isRecord(block) && typeof block.text === 'string') texts.push(block.text)
+  }
+  return texts.length === 0 ? undefined : texts.join('')
+}
+
+/** Preserve the real ACP error facts in the frozen Console structured-error shape. */
+function structuredErrorOf(frame: AcpFrame): OpenCodeStructuredError {
+  const error = isRecord(frame.error) ? frame.error : {}
+  const code = typeof error.code === 'string' || typeof error.code === 'number' ? String(error.code) : 'UPSTREAM_ERROR'
+  return {
+    name: 'UnknownError',
+    data: { code, message: typeof error.message === 'string' ? error.message : 'engine prompt failed' },
+  }
+}
+
+/** The operator's decision, read from the engine option set the callback really offered. */
+function permissionDecisionOf(
+  result: JsonValue | undefined,
+  options: readonly ConsolePermissionOption[] | undefined,
+): 'once' | 'always' | 'reject' | 'unknown' {
+  if (!isRecord(result) || !isRecord(result.outcome) || result.outcome.outcome !== 'selected') return 'unknown'
+  const optionId = stringField(result.outcome.optionId)
+  if (optionId === undefined) return 'unknown'
+  return options?.find(candidate => candidate.optionId === optionId)?.kind ?? 'unknown'
+}
+
+function upsertEvent(events: ConsoleSessionEventView[], event: ConsoleSessionEventView): void {
+  const index = events.findIndex(candidate => candidate.eventId === event.eventId)
+  if (index < 0) events.push(event)
+  else events[index] = event
+}
+
+type ToolEvent = Extract<ConsoleSessionEventView, { readonly kind: 'tool' }>
+
+/**
+ * Project one engine `tool_call`/`tool_call_update` into the frozen Console tool union.
+ * The update's own identity and fields win; a later update that carries only a status
+ * reuses the tool and input the earlier frame really reported.
+ */
+function projectToolEvent(input: {
+  readonly agentId: string
+  readonly sessionId: string
+  readonly messageId: string
+  readonly occurredAt: string
+  readonly update: Record<string, unknown>
+  readonly previous?: ToolEvent
+}): ToolEvent | undefined {
+  const callId = stringField(input.update.toolCallId) ?? input.previous?.callId
+  if (callId === undefined) return undefined
+  const tool = stringField(input.update.title) ?? input.previous?.tool ?? stringField(input.update.kind) ?? 'tool'
+  const partId = input.previous?.partId ?? `tool-${callId}`
+  const toolInput = cloneJson((input.update.rawInput ?? input.update.input ?? input.previous?.input ?? {}) as JsonValue)
+  const base = {
+    eventId: `tool-${callId}`,
+    agentId: input.agentId,
+    sessionId: input.sessionId,
+    occurredAt: input.occurredAt,
+    kind: 'tool' as const,
+    messageId: input.messageId,
+    partId,
+    callId,
+    tool,
+    input: toolInput,
+  }
+  const metadata = isRecord(input.update.metadata) ? input.update.metadata as JsonValue : undefined
+  const status = stringField(input.update.status) ?? (input.previous === undefined ? 'pending' : input.previous.state)
+  switch (status) {
+    case 'pending':
+      return { ...base, state: 'pending', raw: typeof input.update.rawInput === 'string' ? input.update.rawInput : JSON.stringify(toolInput) }
+    case 'in_progress':
+    case 'running':
+      return {
+        ...base,
+        state: 'running',
+        ...(stringField(input.update.title) === undefined ? {} : { title: stringField(input.update.title) }),
+        ...(metadata === undefined ? {} : { metadata }),
+      }
+    case 'completed':
+      return {
+        ...base,
+        state: 'completed',
+        output: stringField(input.update.output) ?? contentText(input.update.content) ?? '',
+        title: stringField(input.update.title) ?? (input.previous?.state === 'completed' ? input.previous.title : tool),
+        metadata: metadata ?? {},
+        ...(Array.isArray(input.update.attachments) ? { attachments: input.update.attachments as readonly JsonValue[] } : {}),
+      }
+    case 'failed':
+    case 'error':
+      return {
+        ...base,
+        state: 'error',
+        error: stringField(input.update.error) ?? contentText(input.update.content) ?? 'tool call failed',
+        ...(metadata === undefined ? {} : { metadata }),
+      }
+    default: {
+      if (input.previous !== undefined) return input.previous
+      return { ...base, state: 'pending', raw: JSON.stringify(toolInput) }
+    }
+  }
 }
 
 /**
@@ -561,6 +715,9 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
   const releaseSessions = (channel: ChannelState): void => {
     for (const sessionId of channel.sessions) sessionOwners.delete(sessionId)
     channel.sessions.clear()
+    // The projection buffer belongs to the Sessions this channel held, so it leaves with
+    // them; a later channel can never inherit another channel's history.
+    channel.events.length = 0
     channel.activePrompt = undefined
   }
 
@@ -602,7 +759,11 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     enqueue(channel, { ...projectInitializeResult(initializeResult, channel.policy), id: frame.id as AcpRpcId })
   }
 
-  const dispatchToEngine = async (channel: ChannelState, frame: AcpFrame): Promise<void> => {
+  const dispatchToEngine = async (
+    channel: ChannelState,
+    frame: AcpFrame,
+    onDispatched?: (entry: HistoryRecord) => void,
+  ): Promise<void> => {
     const method = methodOf(frame)
     if (method === undefined) throw new AcpError('INVALID_ACP_FRAME', 'ACP dispatch requires a method')
     const originalId = frame.id as AcpRpcId
@@ -620,6 +781,9 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       sessionId,
       frame,
     }))
+    // The caller records its own projection row before the engine sees the frame, so a fast
+    // engine response can never be attributed to a prompt whose identity is not set yet.
+    onDispatched?.(entry)
     const pending: PendingRequest = {
       originalId,
       originalIdKey,
@@ -655,10 +819,51 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     if (channel.activePrompt !== undefined) {
       throw new AcpError('CONFLICT', `session ${sessionId} already has a prompt in flight`)
     }
-    channel.activePrompt = { sessionId }
+    const eventsAtStart = channel.events.length
     try {
-      await dispatchToEngine(channel, frame)
+      await dispatchToEngine(channel, frame, entry => {
+        const userMessageId = `msg-${entry.recordId}`
+        const assistantMessageId = `msg-asst-${entry.recordId}`
+        const occurredAt = new Date().toISOString()
+        channel.activePrompt = {
+          sessionId,
+          userMessageId,
+          assistantMessageId,
+          assistantPartId: `part-asst-${entry.recordId}`,
+          reasoningPartId: `part-reasoning-${entry.recordId}`,
+          text: '',
+          reasoning: '',
+          textObserved: false,
+          reasoningObserved: false,
+        }
+        channel.events.push({
+          eventId: `evt-user-${entry.recordId}`,
+          agentId: localAgentId,
+          sessionId,
+          occurredAt,
+          kind: 'message',
+          state: 'completed',
+          messageId: userMessageId,
+          role: 'user',
+        })
+        const text = promptText(frame)
+        if (text !== undefined) {
+          channel.events.push({
+            eventId: `evt-part-user-${entry.recordId}`,
+            agentId: localAgentId,
+            sessionId,
+            occurredAt,
+            kind: 'part',
+            state: 'completed',
+            messageId: userMessageId,
+            partId: `part-user-${entry.recordId}`,
+            partType: 'text',
+            text,
+          })
+        }
+      })
     } catch (cause) {
+      channel.events.length = eventsAtStart
       channel.activePrompt = undefined
       throw cause
     }
@@ -774,6 +979,22 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     }
     outwardCallbacks.delete(idKey)
     channel.pendingCallbacks.delete(idKey)
+    if (pending.method === 'session/request_permission' && pending.sessionId !== undefined) {
+      const pendingEvent = channel.events.find(event =>
+        event.kind === 'permission' && event.state === 'pending' && event.permissionId === pending.outwardId)
+      if (pendingEvent !== undefined) {
+        upsertEvent(channel.events, {
+          eventId: pendingEvent.eventId,
+          agentId: pendingEvent.agentId,
+          sessionId: pendingEvent.sessionId,
+          ...(pendingEvent.occurredAt === undefined ? {} : { occurredAt: pendingEvent.occurredAt }),
+          kind: 'permission',
+          state: 'resolved',
+          permissionId: pending.outwardId,
+          decision: permissionDecisionOf(delivered.result, pending.permissionOptions),
+        })
+      }
+    }
     await safeAppend(historyEntry('callback.reply', {
       connectionId: channel.ref.connectionId,
       channelId: channel.ref.channelId,
@@ -850,6 +1071,59 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     if (pending.method === 'session/prompt'
       && channel.activePrompt !== undefined
       && channel.activePrompt.sessionId === pending.sessionId) {
+      const prompt = channel.activePrompt
+      const failed = Object.hasOwn(frame, 'error')
+      const occurredAt = new Date().toISOString()
+      if (prompt.textObserved) {
+        upsertEvent(channel.events, {
+          eventId: `evt-part-${prompt.assistantPartId}`,
+          agentId: localAgentId,
+          sessionId: prompt.sessionId,
+          occurredAt,
+          kind: 'part',
+          state: 'completed',
+          messageId: prompt.assistantMessageId,
+          partId: prompt.assistantPartId,
+          partType: 'text',
+          text: prompt.text,
+        })
+      }
+      if (prompt.reasoningObserved) {
+        upsertEvent(channel.events, {
+          eventId: `evt-part-${prompt.reasoningPartId}`,
+          agentId: localAgentId,
+          sessionId: prompt.sessionId,
+          occurredAt,
+          kind: 'part',
+          state: 'completed',
+          messageId: prompt.assistantMessageId,
+          partId: prompt.reasoningPartId,
+          partType: 'reasoning',
+          text: prompt.reasoning,
+        })
+      }
+      channel.events.push({
+        eventId: `evt-asst-${prompt.assistantMessageId}`,
+        agentId: localAgentId,
+        sessionId: prompt.sessionId,
+        occurredAt,
+        kind: 'message',
+        ...(failed ? { state: 'failed' as const, error: structuredErrorOf(frame) } : { state: 'completed' as const }),
+        messageId: prompt.assistantMessageId,
+        role: 'assistant',
+      })
+      const stopReason = isRecord(frame.result) ? stringField(frame.result.stopReason) : undefined
+      channel.events.push({
+        eventId: `evt-final-${prompt.assistantMessageId}`,
+        agentId: localAgentId,
+        sessionId: prompt.sessionId,
+        occurredAt,
+        kind: 'final',
+        ...(failed
+          ? { state: 'failed' as const, error: structuredErrorOf(frame) }
+          : { state: 'completed' as const, ...(stopReason === undefined ? {} : { finish: stopReason }) }),
+        messageId: prompt.assistantMessageId,
+      })
       channel.activePrompt = undefined
     }
     enqueue(channel, delivery)
@@ -925,7 +1199,78 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       target.pendingCallbacks.delete(idKey)
       if (method === 'session/request_permission') await sendPermissionCancellation(engineId)
       else await respondCallbackError(engineId, { code: 'CALLBACK_UNAVAILABLE', message: 'controller delivery backlog is full' })
+      return
     }
+    if (method === 'session/request_permission' && sessionId !== undefined) {
+      target.events.push({
+        eventId: `permission:${outwardId}`,
+        agentId: localAgentId,
+        sessionId,
+        occurredAt: new Date().toISOString(),
+        kind: 'permission',
+        state: 'pending',
+        permissionId: outwardId,
+        // The callback belongs to the prompt in flight when there is one; otherwise its
+        // own stable callback identity is the only correlation the engine really gave.
+        messageId: target.activePrompt?.assistantMessageId ?? `prompt:${outwardId}`,
+        title: permissionTitle(frame) ?? 'Permission request',
+        metadata: isRecord(frame.params) ? frame.params as JsonValue : {},
+        ...(permissionOptions === undefined || permissionOptions.length === 0 ? {} : { options: permissionOptions }),
+      })
+    }
+  }
+
+  /**
+   * Project the engine's own `session/update` frames onto the frozen Console event union.
+   * Every identity comes from the prompt in flight or the engine's update; an update with
+   * no active prompt owns no assistant message and is delivered without an event.
+   */
+  const captureSessionUpdate = (channel: ChannelState, sessionId: string, update: Record<string, unknown>): void => {
+    const prompt = channel.activePrompt?.sessionId === sessionId ? channel.activePrompt : undefined
+    if (prompt === undefined) return
+    const sessionUpdate = stringField(update.sessionUpdate)
+    const occurredAt = new Date().toISOString()
+    if (sessionUpdate === 'agent_message_chunk' || sessionUpdate === 'agent_thought_chunk') {
+      const content = isRecord(update.content) ? update.content : undefined
+      const text = content === undefined || typeof content.text !== 'string' ? undefined : content.text
+      if (text === undefined) return
+      const isThought = sessionUpdate === 'agent_thought_chunk'
+      const partId = isThought ? prompt.reasoningPartId : prompt.assistantPartId
+      if (isThought) {
+        prompt.reasoning += text
+        prompt.reasoningObserved = true
+      } else {
+        prompt.text += text
+        prompt.textObserved = true
+      }
+      upsertEvent(channel.events, {
+        eventId: `evt-part-${partId}`,
+        agentId: localAgentId,
+        sessionId,
+        occurredAt,
+        kind: 'part',
+        state: 'pending',
+        messageId: prompt.assistantMessageId,
+        partId,
+        partType: isThought ? 'reasoning' : 'text',
+        text: isThought ? prompt.reasoning : prompt.text,
+      })
+      return
+    }
+    if (sessionUpdate !== 'tool_call' && sessionUpdate !== 'tool_call_update') return
+    const callId = stringField(update.toolCallId)
+    const previous = callId === undefined
+      ? undefined
+      : channel.events.find((event): event is ToolEvent => event.kind === 'tool' && event.callId === callId)
+    const event = projectToolEvent({
+      agentId: localAgentId,
+      sessionId,
+      messageId: prompt.assistantMessageId,
+      occurredAt,
+      update,
+      ...(previous === undefined ? {} : { previous }),
+    })
+    if (event !== undefined) upsertEvent(channel.events, event)
   }
 
   const handleEngineNotification = async (frame: AcpFrame): Promise<void> => {
@@ -943,6 +1288,9 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       sessionId,
       frame,
     }))
+    if (methodOf(frame) === 'session/update' && sessionId !== undefined && isRecord(frame.params) && isRecord(frame.params.update)) {
+      captureSessionUpdate(target, sessionId, frame.params.update)
+    }
     enqueue(target, frame)
   }
 
@@ -1027,6 +1375,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       nextSequence: 1,
       initialized: false,
       closed: false,
+      events: [],
     })
   }
 
@@ -1133,5 +1482,14 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     return rows
   }
 
-  return { open, receive, read, close, pendingPermissions, channelForSession, openedSessions }
+  const sessionEvents = (): readonly ConsoleSessionEventView[] => {
+    const rows: ConsoleSessionEventView[] = []
+    for (const channel of channels.values()) {
+      if (channel.closed) continue
+      rows.push(...channel.events)
+    }
+    return rows
+  }
+
+  return { open, receive, read, close, pendingPermissions, channelForSession, openedSessions, sessionEvents }
 }

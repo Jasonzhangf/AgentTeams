@@ -27,6 +27,7 @@ import { createTeamsConnectionHistory } from '../network/teams-connection-histor
 import { createConsoleApiHandler } from '../console-host/src/http-api.ts'
 import { readRelationsIntentRecord, relationsIntentScopePath } from '../config/relations-intent-store.ts'
 import { readSessionIntentRecord, sessionIntentScopePath } from '../config/session-intent-store.ts'
+import { sessionObservationScopePath, writeSessionObservationRecord } from '../config/session-observation-store.ts'
 import type { HistoryQuery, ConsoleProjectionSnapshot, TeamsConnectionStatus } from '../packages/shared/src/teams-state.ts'
 
 let directory: string
@@ -458,13 +459,13 @@ it('keeps the connection projection absent and relation and Session commands typ
     .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
   expect(await owner.command({ kind: 'session.cancel', agentId: 'a', sessionId: 's' }))
     .toMatchObject({ ok: false, error: { code: 'UNAVAILABLE' } })
-  // A command that must return real engine data stays typed unsupported even when the record
-  // facts are bound: a one-way intent record cannot carry a response.
+  // No-owner Session create/open are supported only for a declared peer. An undeclared target
+  // has no resolvable record path, so the owner refuses it instead of guessing one.
   const facts = createControlOwner({ relations: { peers: {}, allowedRoles: [], home: '/tmp/unused-home' } })
   expect(await facts.command({ kind: 'session.create', agentId: 'a' }))
-    .toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
   expect(await facts.command({ kind: 'session.open', agentId: 'a', sessionId: 's' }))
-    .toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_OPERATION' } })
+    .toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
 
   // A bound read port projects the frozen status verbatim and never mutates it.
   const status: TeamsConnectionStatus = { version: 1, remoteAgentId: 'b', state: 'negotiating', targetGeneration: 2,
@@ -554,6 +555,117 @@ it('writes the Session write commands as one durable pending-write record and re
   expect(existsSync(sessionRecordPath(freshHome, 'agent-not-declared'))).toBe(false)
   // One record per target agent: the declared peer's own record is the only one written.
   expect(existsSync(sessionRecordPath(freshHome, 'peer-b'))).toBe(false)
+})
+
+it('creates a Session and opens only an observed Session without an in-process owner', async () => {
+  const port = await freePort()
+  const dataDirectory = join(directory, `state-session-create-${port}`)
+  const configPath = track(await controlConfig({ port, dataDirectory, peers: ['peer-b'] }))
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-session-create-${port}`)
+  const owner = createControlOwner({
+    relations: { peers: intent.peers, allowedRoles: intent.relations.allowed, home },
+  })
+
+  expect(await owner.command({ kind: 'session.create', agentId: 'peer-b', title: 'New session' }))
+    .toEqual({ ok: true, result: { acceptedRevision: 1 } })
+  expect(await readSessionIntentRecord(sessionRecordPath(home))).toMatchObject({
+    revision: 1,
+    intents: [{ kind: 'session.create', agentId: 'peer-b', title: 'New session' }],
+  })
+
+  // The observation record is the only authority for an existing Session id.
+  expect(await owner.command({ kind: 'session.open', agentId: 'peer-b', sessionId: 'session-1' }))
+    .toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
+  const observationPath = sessionObservationScopePath({ home, accountId: 'local', scopeId: 'local', agentId: 'peer-b' })
+  expect(await writeSessionObservationRecord(observationPath, 0, {
+    agentId: 'peer-b',
+    sessions: [{ sessionId: 'session-1' }],
+    permissions: [],
+  })).toMatchObject({ status: 'applied', effectiveRevision: 1 })
+  expect(await owner.command({ kind: 'session.open', agentId: 'peer-b', sessionId: 'session-1' }))
+    .toEqual({ ok: true, result: { agentId: 'peer-b', sessionId: 'session-1' } })
+})
+
+it('projects an observed declared peer as an operable runtime agent with its Session events', async () => {
+  const port = await freePort()
+  const configPath = track(await controlConfig({
+    port,
+    dataDirectory: join(directory, `state-observed-runtime-${port}`),
+    peers: ['peer-b'],
+  }))
+  const intent = await loadControlIntent(configPath)
+  const home = join(directory, `home-observed-runtime-${port}`)
+  mkdirSync(home, { recursive: true })
+  const options = [
+    { optionId: 'once', name: 'Allow once', kind: 'once' as const },
+    { optionId: 'always', name: 'Always allow', kind: 'always' as const },
+    { optionId: 'reject', name: 'Reject', kind: 'reject' as const },
+  ]
+  const sessionEvents = [
+    {
+      eventId: 'evt-user-observed',
+      agentId: 'peer-b',
+      sessionId: 'session-1',
+      kind: 'message' as const,
+      state: 'completed' as const,
+      messageId: 'msg-user-observed',
+      role: 'user' as const,
+    },
+    {
+      eventId: 'evt-permission-observed',
+      agentId: 'peer-b',
+      sessionId: 'session-1',
+      kind: 'permission' as const,
+      state: 'pending' as const,
+      permissionId: 'permission-1',
+      messageId: 'msg-assistant-observed',
+      title: 'Run a command',
+      metadata: {},
+      options,
+    },
+  ]
+  const observationPath = sessionObservationScopePath({ home, accountId: 'local', scopeId: 'local', agentId: 'peer-b' })
+  expect(await writeSessionObservationRecord(observationPath, 0, {
+    agentId: 'peer-b',
+    sessions: [{ sessionId: 'session-1' }],
+    permissions: [{ notificationId: 'notification:permission-1', sessionId: 'session-1', permissionId: 'permission-1', options }],
+    sessionEvents,
+  })).toMatchObject({ status: 'applied', effectiveRevision: 1 })
+
+  const previousHome = process.env.HOME
+  process.env.HOME = home
+  try {
+    const binding = await createControlNetworkStatus(intent, {})
+    try {
+      const projection = await binding.projection.read()
+      expect(projection.agents).toMatchObject([{
+        kind: 'runtime',
+        agentId: 'peer-b',
+        presence: 'online',
+        sessionCapable: true,
+        sessionAvailability: 'current',
+        currentSessionId: 'session-1',
+        sessionEffectiveRevision: 1,
+      }])
+      expect(projection.sessions).toEqual([{ agentId: 'peer-b', sessionId: 'session-1' }])
+      expect(projection.sessionEvents).toEqual(sessionEvents)
+      expect(projection.notifications).toEqual([{
+        agentId: 'peer-b',
+        notificationId: 'notification:permission-1',
+        sessionId: 'session-1',
+        kind: 'permission',
+        state: 'pending',
+        title: 'Permission request',
+        permissionId: 'permission-1',
+      }])
+    } finally {
+      await binding.stop()
+    }
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME
+    else process.env.HOME = previousHome
+  }
 })
 
 it('carries the frozen engine optionId verbatim instead of letting the reader guess one', async () => {

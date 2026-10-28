@@ -132,6 +132,27 @@ describe('session intent record', () => {
     })
   })
 
+  it('accepts a session.create that names no Session and carries its optional title', async () => {
+    await withStore(async path => {
+      expect(applied(await writeSessionIntentRecord(path, 0, { op: 'session.create', agentId: 'agent-alpha' }))).toBe(1)
+      expect(applied(await writeSessionIntentRecord(path, 1, { op: 'session.create', agentId: 'agent-alpha', title: 'New session' }))).toBe(2)
+      const record = await readSessionIntentRecord(path)
+      expect(record?.intents[0]).toMatchObject({ kind: 'session.create', agentId: 'agent-alpha' })
+      // The reading daemon creates the Session, so the writer cannot name an id yet.
+      expect(record?.intents[0]).not.toHaveProperty('sessionId')
+      expect(record?.intents[1]).toMatchObject({ kind: 'session.create', title: 'New session' })
+      expect(record?.intents[1]).not.toHaveProperty('sessionId')
+    })
+  })
+
+  it('refuses a session.create title that is present but empty', async () => {
+    await withStore(async path => {
+      const result = await writeSessionIntentRecord(path, 0, { op: 'session.create', agentId: 'agent-alpha', title: '' })
+      expect(result).toMatchObject({ status: 'failed', error: { code: 'INVALID_INPUT' } })
+      expect(await readSessionIntentRecord(path)).toBeUndefined()
+    })
+  })
+
   it('is a typed throw on a broken record and never overwrites it', async () => {
     await withStore(async path => {
       // A well-formed record at revision 2 carries two intents, one per revision.
@@ -148,6 +169,8 @@ describe('session intent record', () => {
       await writeFile(path, '{"version":1,"revision":1,"oldestRevision":2,"intents":[],"updatedAt":"t"}\n')
       await expect(readSessionIntentRecord(path)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
       await writeFile(path, '{"version":1,"revision":1,"oldestRevision":1,"intents":[{"intentId":"i","kind":"session.cancel","agentId":"bad agent","sessionId":"s"}],"updatedAt":"t"}\n')
+      await expect(readSessionIntentRecord(path)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+      await writeFile(path, '{"version":1,"revision":1,"oldestRevision":1,"intents":[{"intentId":"i","kind":"session.create","agentId":"agent-alpha","title":""}],"updatedAt":"t"}\n')
       await expect(readSessionIntentRecord(path)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
     })
   })

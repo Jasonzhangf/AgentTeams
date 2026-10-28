@@ -136,6 +136,21 @@ describe('Console HTTP v1 adapter', () => {
     expect(await sendValid.sendSession({ agentId: 'planner', sessionId: 's' }, { text: 'probe' })).toMatchObject({ ok: true })
   })
 
+  it('accepts the control daemon durable acceptedRevision receipt for session.create', async () => {
+    const respond = (body: unknown) => async () => new Response(JSON.stringify(body), { status: 200 })
+
+    const receipt = createConsoleHttpClient({ fetchImpl: respond({ ok: true, result: { acceptedRevision: 1 } }) })
+    await expect(receipt.command({ kind: 'session.create', agentId: 'planner' })).resolves.toMatchObject({ ok: true })
+
+    const malformed = createConsoleHttpClient({ fetchImpl: respond({ ok: true, result: { acceptedRevision: -1 } }) })
+    await expect(malformed.command({ kind: 'session.create', agentId: 'planner' }))
+      .rejects.toThrow(/invalid v1 command result/)
+
+    const extraKey = createConsoleHttpClient({ fetchImpl: respond({ ok: true, result: { acceptedRevision: 1, agentId: 'planner' } }) })
+    await expect(extraKey.command({ kind: 'session.create', agentId: 'planner' }))
+      .rejects.toThrow(/invalid v1 command result/)
+  })
+
   it('admits observe-only work and relation rows and still rejects unknown projection keys', async () => {
     const work = {
       agentId: 'provider', workId: 'offline-work', consumerAgentId: 'consumer', providerAgentId: 'provider',

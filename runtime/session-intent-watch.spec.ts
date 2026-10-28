@@ -12,7 +12,7 @@ import {
   writeSessionIntentRecord,
   type SessionIntentChange,
 } from '../config/session-intent-store.ts'
-import { createSessionIntentWatch, type SessionIntentWatchInput } from './acp-serve.ts'
+import { createSessionIntentWatch, toAcpPromptBlocks, type SessionIntentWatchInput } from './acp-serve.ts'
 
 /**
  * The watch maps the three frozen Session writes onto the engine's own ACP frames, and it
@@ -83,9 +83,42 @@ const watchFor = (
   recordPath: options.recordPath ?? recordPath,
   watermarkPath,
   agentId: options.agentId ?? 'agent-alpha',
+  readinessRef: REF,
+  workspace: '/tmp/workspace',
 })
 
 describe('pending Session write watch', () => {
+  it('creates a Session on the daemon own managed channel, not a guessed controller channel', async () => {
+    await write(0, { op: 'session.create', agentId: 'agent-alpha', title: 'New session' })
+    const host = recordingHost()
+    const watch = watchFor(host)
+    await watch.reconcile()
+    expect(host.received).toEqual([{
+      ...REF,
+      frame: {
+        jsonrpc: '2.0',
+        id: expect.any(String),
+        method: 'session/new',
+        params: { cwd: '/tmp/workspace', mcpServers: [] },
+      },
+    }])
+    expect(watch.failures()).toEqual([])
+    expect((await readSessionIntentWatermark(watermarkPath)).appliedRevision).toBe(1)
+    expect((await readSessionIntentRecord(recordPath))?.intents[0]).toMatchObject({ kind: 'session.create', title: 'New session' })
+  })
+
+  it('maps the shipped { text } body onto ACP Content Blocks and passes every other shape through', () => {
+    expect(toAcpPromptBlocks({ text: 'hello' })).toEqual([{ type: 'text', text: 'hello' }])
+    // An existing Content Block array is the engine's own shape and keeps its identity.
+    const array = [{ type: 'text', text: 'hello' }]
+    expect(toAcpPromptBlocks(array)).toBe(array)
+    // A body with more than the single `text` key is not a shippable shorthand and is untouched.
+    const extra = { text: 'hello', keep: [1, null] }
+    expect(toAcpPromptBlocks(extra)).toBe(extra)
+    expect(toAcpPromptBlocks(null)).toBe(null)
+    expect(toAcpPromptBlocks('plain')).toBe('plain')
+  })
+
   it('answers the engine callback the write names, with the engine own option for the decision', async () => {
     await write(0, { op: 'permission.reply', agentId: 'agent-alpha', sessionId: 'session-1', permissionId: 'permission-1', decision: 'always' })
     const host = recordingHost({ pending: [pending()] })
@@ -194,6 +227,19 @@ describe('pending Session write watch', () => {
     expect(watch.failures()).toEqual([])
   })
 
+  it('prompts with the ACP Content Block array for the shipped { text } body', async () => {
+    await write(0, { op: 'session.message', agentId: 'agent-alpha', sessionId: 'session-1', payload: { text: 'hello' } })
+    const host = recordingHost({ sessions: { 'session-1': REF } })
+    const watch = watchFor(host)
+    await watch.reconcile()
+    expect(host.received[0]?.frame).toMatchObject({
+      jsonrpc: '2.0',
+      method: 'session/prompt',
+      params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'hello' }] },
+    })
+    expect(watch.failures()).toEqual([])
+  })
+
   it('refuses a write for a Session no open channel owns, and applies it once one does', async () => {
     await write(0, { op: 'session.cancel', agentId: 'agent-alpha', sessionId: 'session-unknown' })
     const absent = recordingHost({ sessions: { 'session-1': REF } })
@@ -287,6 +333,8 @@ describe('pending Session write watch', () => {
         recordPath,
         watermarkPath: join(frozen, 'watermark.json'),
         agentId: 'agent-alpha',
+        readinessRef: REF,
+        workspace: '/tmp/workspace',
       })
 
       await watch.reconcile()
@@ -318,7 +366,7 @@ describe('pending Session write watch', () => {
       // The engine is slow, so the next poll arrives while this write is still in flight.
       receive: async (ingress: AcpIngress) => { received.push(ingress); await gate },
     }
-    const watch = createSessionIntentWatch({ host, recordPath, watermarkPath, agentId: 'agent-alpha' })
+    const watch = createSessionIntentWatch({ host, recordPath, watermarkPath, agentId: 'agent-alpha', readinessRef: REF, workspace: '/tmp/workspace' })
 
     const first = watch.reconcile()
     // Let the first pass reach the engine and block there, before it can save its watermark.

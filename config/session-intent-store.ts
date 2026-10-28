@@ -68,6 +68,12 @@ export type SessionIntent =
     /** The business body, carried verbatim; the transport never parses or strips it. */
     readonly payload: JsonValue
   }
+  | {
+    readonly intentId: string
+    readonly kind: 'session.create'
+    readonly agentId: string
+    readonly title?: string
+  }
 
 export interface SessionIntentRecord {
   readonly version: SessionIntentVersion
@@ -78,11 +84,12 @@ export interface SessionIntentRecord {
   readonly updatedAt: string
 }
 
-/** The three mutations the frozen Session write commands need. */
+/** The mutations the frozen Session write commands need. */
 export type SessionIntentChange =
   | { readonly op: 'permission.reply'; readonly agentId: string; readonly sessionId: string; readonly permissionId: string; readonly decision: SessionPermissionDecision; readonly optionId?: string }
   | { readonly op: 'session.cancel'; readonly agentId: string; readonly sessionId: string }
   | { readonly op: 'session.message'; readonly agentId: string; readonly sessionId: string; readonly payload: JsonValue }
+  | { readonly op: 'session.create'; readonly agentId: string; readonly title?: string }
 
 /** The owning daemon's record path. One derivation serves the writer and the reader. */
 export function sessionIntentPath(dataDirectory: string): string {
@@ -190,13 +197,17 @@ function isJsonValue(value: unknown): boolean {
 /** Validate one change on its own terms, before the stored record is read. */
 function validateChange(value: unknown): ConfigApplyError | undefined {
   if (!isTable(value)) return invalid('session intent change must be a table')
-  if (value.op !== 'permission.reply' && value.op !== 'session.cancel' && value.op !== 'session.message') {
-    return invalid('session intent change must be permission.reply, session.cancel, or session.message')
+  if (value.op !== 'permission.reply' && value.op !== 'session.cancel' && value.op !== 'session.message' && value.op !== 'session.create') {
+    return invalid('session intent change must be permission.reply, session.cancel, session.message, or session.create')
   }
   const agentError = requireAgentId(value.agentId, 'session intent change agentId')
   if (agentError !== undefined) return agentError
-  const sessionError = requireText(value.sessionId, 'session intent change sessionId')
-  if (sessionError !== undefined) return sessionError
+  // `session.create` names no Session: the reading daemon creates a new one, so it cannot
+  // name an id it does not own yet. The other three writes address an existing Session.
+  if (value.op !== 'session.create') {
+    const sessionError = requireText(value.sessionId, 'session intent change sessionId')
+    if (sessionError !== undefined) return sessionError
+  }
   if (value.op === 'permission.reply') {
     const permissionError = requireText(value.permissionId, 'session intent change permissionId')
     if (permissionError !== undefined) return permissionError
@@ -214,6 +225,10 @@ function validateChange(value: unknown): ConfigApplyError | undefined {
     // A missing body is refused here; an explicit `null` body is a real body and is carried.
     if (!Object.hasOwn(value, 'payload')) return invalid('session intent change payload is required')
     if (!isJsonValue(value.payload)) return invalid('session intent change payload must be a JSON value')
+    return undefined
+  }
+  if (value.op === 'session.create') {
+    if (value.title !== undefined) return requireText(value.title, 'session intent change title')
   }
   return undefined
 }
@@ -236,6 +251,14 @@ function parseIntent(value: unknown, label: string): SessionIntent {
     }
   }
   if (value.kind === 'session.cancel') return { ...base, kind: 'session.cancel' }
+  if (value.kind === 'session.create') {
+    return {
+      intentId: value.intentId as string,
+      agentId: value.agentId as string,
+      kind: 'session.create',
+      ...(value.title === undefined ? {} : { title: value.title as string }),
+    }
+  }
   return { ...base, kind: 'session.message', payload: value.payload as JsonValue }
 }
 
@@ -436,7 +459,9 @@ export async function writeSessionIntentRecord(
     ? { intentId: randomUUID(), kind: 'permission.reply', agentId: next.agentId, sessionId: next.sessionId, permissionId: next.permissionId, decision: next.decision, ...(next.optionId === undefined ? {} : { optionId: next.optionId }) }
     : next.op === 'session.cancel'
       ? { intentId: randomUUID(), kind: 'session.cancel', agentId: next.agentId, sessionId: next.sessionId }
-      : { intentId: randomUUID(), kind: 'session.message', agentId: next.agentId, sessionId: next.sessionId, payload: next.payload }
+      : next.op === 'session.create'
+        ? { intentId: randomUUID(), kind: 'session.create', agentId: next.agentId, ...(next.title === undefined ? {} : { title: next.title }) }
+        : { intentId: randomUUID(), kind: 'session.message', agentId: next.agentId, sessionId: next.sessionId, payload: next.payload }
 
   // The retained window is fixed: the newest intents survive and the oldest are dropped.
   // `oldestRevision` reports what the window no longer carries, so a reader that fell

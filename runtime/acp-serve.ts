@@ -331,6 +331,10 @@ function messageOf(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /**
  * Translate a config rejection into the one ACP fault family. The original
  * config code and message stay in `detail`, so a caller never loses which config
@@ -1158,6 +1162,26 @@ export interface SessionIntentWatchInput {
   readonly watermarkPath: string
   /** This daemon's own accepted identity. A record that names another agent is refused. */
   readonly agentId: string
+  /**
+   * The daemon's own managed channel. `session.create` has no Session yet, so the daemon
+   * creates it on the channel it already initialized during readiness instead of inventing
+   * a controller channel.
+   */
+  readonly readinessRef: AcpChannelRef
+  /** The workspace the daemon's own accepted intent declares. */
+  readonly workspace: string
+}
+
+/**
+ * The one Console body → ACP prompt mapping. The shipped WebUI submits `{ text }`, while
+ * ACP `session/prompt` carries an ordered Content Block array. An existing array, and any
+ * other shape, is passed through unchanged for the engine's own schema decision.
+ */
+export function toAcpPromptBlocks(payload: JsonValue): JsonValue {
+  if (isRecord(payload) && Object.keys(payload).length === 1 && typeof payload.text === 'string') {
+    return [{ type: 'text', text: payload.text }]
+  }
+  return payload
 }
 
 export interface SessionIntentWatch {
@@ -1259,6 +1283,21 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
         })
         return true
       }
+      if (intent.kind === 'session.create') {
+        // The daemon's readiness channel is already initialized, so it is the one managed
+        // channel that can open a new Session without inventing a controller channel. The
+        // host records the returned id in its own channel and the publisher projects it.
+        await input.host.receive({
+          ...input.readinessRef,
+          frame: {
+            jsonrpc: '2.0',
+            id: `session-intent-${intent.intentId}`,
+            method: 'session/new',
+            params: { cwd: input.workspace, mcpServers: [] },
+          },
+        })
+        return true
+      }
       const ref = input.host.channelForSession(intent.sessionId)
       if (ref === undefined) {
         // No open channel owns the Session, so no engine can receive this write.
@@ -1269,10 +1308,11 @@ export function createSessionIntentWatch(input: SessionIntentWatchInput): Sessio
         await input.host.receive({ ...ref, frame: { jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: intent.sessionId } } })
         return true
       }
-      // The body stays verbatim: the watch never parses, rewrites, or strips it.
+      // An array body stays verbatim; the shipped WebUI's `{ text }` is projected onto the
+      // ACP Content Block array the engine's `session/prompt` actually requires.
       await input.host.receive({
         ...ref,
-        frame: { jsonrpc: '2.0', id: `session-intent-${intent.intentId}`, method: 'session/prompt', params: { sessionId: intent.sessionId, prompt: intent.payload } },
+        frame: { jsonrpc: '2.0', id: `session-intent-${intent.intentId}`, method: 'session/prompt', params: { sessionId: intent.sessionId, prompt: toAcpPromptBlocks(intent.payload) } },
       })
       return true
     } catch (error) {
@@ -2009,6 +2049,8 @@ async function startAcpServeLocked(intent: AcpServeIntent, options: AcpServeRunt
         recordPath: agentSessionIntentPath(homedir(), agent.daemon),
         watermarkPath: sessionIntentWatermarkPath(agent.daemon.dataDirectory),
         agentId: agent.daemon.id,
+        readinessRef,
+        workspace,
       })
       const sessionTimer = setInterval(() => { void sessionWatch.reconcile() }, RELATIONS_INTENT_POLL_INTERVAL_MS)
       sessionTimer.unref()
@@ -2025,6 +2067,25 @@ async function startAcpServeLocked(intent: AcpServeIntent, options: AcpServeRunt
       })
       const observationTimer = setInterval(() => { void sessionObservation.publish() }, RELATIONS_INTENT_POLL_INTERVAL_MS)
       observationTimer.unref()
+
+      // `session.create` opens Sessions on the daemon's own readiness channel. Nothing else
+      // reads that channel after bootstrap, so this drain keeps a long run of creations from
+      // filling its bounded delivery backlog and blocking a later `session/new` result.
+      let managedDeliveryCursor = 0
+      const drainManagedChannel = async (): Promise<void> => {
+        for (;;) {
+          let page
+          try {
+            page = await daemon.host.read(readinessRef, managedDeliveryCursor, DELIVERY_PAGE_LIMIT)
+          } catch {
+            return
+          }
+          managedDeliveryCursor = page.nextSequence
+          if (page.frames.length === 0) return
+        }
+      }
+      const managedDrainTimer = setInterval(() => { void drainManagedChannel() }, RELATIONS_INTENT_POLL_INTERVAL_MS)
+      managedDrainTimer.unref()
 
       const teamsStatus = createTeamsStatusPort({
         ledger,
@@ -2055,6 +2116,8 @@ async function startAcpServeLocked(intent: AcpServeIntent, options: AcpServeRunt
           // The publisher stops with the same fence, so no observation is read out of a
           // host that is already releasing its Sessions.
           clearInterval(observationTimer)
+          // The managed-channel drain stops before that channel is closed.
+          clearInterval(managedDrainTimer)
           // Order: the daemon's own egress rows, the LAN listener, the local
           // server (which destroys its channels), the registration client, then
           // the daemon and the owned directory. The egress closes BEFORE the host

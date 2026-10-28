@@ -42,6 +42,7 @@ import {
   type ConsoleCommandV1,
   type ConsoleClientV1,
   type ConsoleProjectionV1,
+  type ConsoleSessionEventView,
   type JsonValue,
 } from '../packages/shared/src/console-api.ts'
 import {
@@ -565,13 +566,11 @@ type ControlRelationsCommand = Extract<ConsoleCommandV1,
   { readonly kind: 'connection.connect' | 'connection.disconnect' | 'network.membership.apply' }>
 
 /**
- * The two frozen Session write commands the control daemon writes as intent, and nothing
- * else. `session.create` and `session.open` are deliberately absent: both must return real
- * engine data (a new `sessionId`, a transcript), and a one-way intent record cannot carry a
- * response, so they stay typed unsupported instead of pretending to answer.
+ * The three Session write commands the control daemon writes as intent. `session.open` is
+ * not a write: it is validated against the peer's published observation below.
  */
 type ControlSessionCommand = Extract<ConsoleCommandV1,
-  { readonly kind: 'permission.reply' | 'session.cancel' }>
+  { readonly kind: 'permission.reply' | 'session.cancel' | 'session.create' }>
 
 /**
  * One typed command result from one durable CAS write. The result reports the accepted
@@ -623,10 +622,10 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
     // daemon's own writes removes that interleaving.
     return await serializeSessionWrite(async () => {
       if (command.kind === 'permission.reply') {
-        return await sessionWrite(command.agentId, command.sessionId, target => ({
+        return await sessionWrite(command.agentId, target => ({
           op: 'permission.reply',
           agentId: target.agentId,
-          sessionId: target.sessionId,
+          sessionId: command.sessionId,
           permissionId: command.permissionId,
           decision: command.decision,
           // The frozen command may carry the engine option the Console chose. It is carried
@@ -634,7 +633,14 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
           ...(command.optionId === undefined ? {} : { optionId: command.optionId }),
         }))
       }
-      return await sessionWrite(command.agentId, command.sessionId, target => ({ op: 'session.cancel', agentId: target.agentId, sessionId: target.sessionId }))
+      if (command.kind === 'session.create') {
+        return await sessionWrite(command.agentId, target => ({
+          op: 'session.create',
+          agentId: target.agentId,
+          ...(command.title === undefined ? {} : { title: command.title }),
+        }))
+      }
+      return await sessionWrite(command.agentId, target => ({ op: 'session.cancel', agentId: target.agentId, sessionId: command.sessionId }))
     })
   }
 
@@ -648,8 +654,7 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
 
   const sessionWrite = async (
     agentId: string,
-    sessionId: string,
-    change: (target: { readonly agentId: string; readonly sessionId: string }) => SessionIntentChange,
+    change: (target: { readonly agentId: string }) => SessionIntentChange,
   ): Promise<ConsoleCommandResultV1> => {
     if (relations === undefined) {
       return { ok: false, error: { code: 'UNAVAILABLE', message: 'the accepted control intent is not bound to this control daemon; the pending Session write record is unavailable' } }
@@ -666,13 +671,40 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
       // durable record is the CAS base. This daemon is that record's single writer, and the
       // store still applies the CAS.
       const current = await readSessionIntentRecord(path)
-      return relationsWriteResult(await writeSessionIntentRecord(path, current?.revision ?? 0, change({ agentId, sessionId })))
+      return relationsWriteResult(await writeSessionIntentRecord(path, current?.revision ?? 0, change({ agentId })))
     } catch (error) {
       // A broken stored record is the store's own typed throw: refuse it here and leave the
       // durable bytes untouched instead of overwriting them.
       if (error instanceof RuntimeConfigError) return { ok: false, error: { code: error.code, message: error.message } }
       throw error
     }
+  }
+
+  /**
+   * Open an existing Session without an in-process owner. The only authority for the id is
+   * the peer's own published observation record: a Session the agent daemon did not publish
+   * is not one this Console may report as current.
+   */
+  const sessionOpen = async (command: Extract<ConsoleCommandV1, { readonly kind: 'session.open' }>): Promise<ConsoleCommandResultV1> => {
+    if (relations === undefined) {
+      return { ok: false, error: { code: 'UNAVAILABLE', message: 'the accepted control intent is not bound to this control daemon; the Session observation record is unavailable' } }
+    }
+    const target = Object.values(relations.peers).find(peer => peer.agentId === command.agentId)
+    if (target === undefined) {
+      return { ok: false, error: { code: 'FORBIDDEN', message: `agentId ${command.agentId} is not declared by this control daemon's accepted peers` } }
+    }
+    const path = sessionObservationScopePath({ home: relations.home, accountId: target.accountId, scopeId: target.scopeId, agentId: target.agentId })
+    let record: Awaited<ReturnType<typeof readSessionObservationRecord>>
+    try {
+      record = await readSessionObservationRecord(path)
+    } catch (error) {
+      if (error instanceof RuntimeConfigError) return { ok: false, error: { code: error.code, message: error.message } }
+      throw error
+    }
+    if (record === undefined || !record.sessions.some(session => session.sessionId === command.sessionId)) {
+      return { ok: false, error: { code: 'NOT_FOUND', message: `session ${command.sessionId} is not published by agent ${command.agentId}` } }
+    }
+    return { ok: true, result: { agentId: command.agentId, sessionId: command.sessionId } }
   }
 
   /**
@@ -737,6 +769,8 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
         return await sessionCommand(command)
       }
       if (owner === undefined) {
+        if (command.kind === 'session.create') return await sessionCommand(command)
+        if (command.kind === 'session.open') return await sessionOpen(command)
         return { ok: false, error: { code: 'UNSUPPORTED_OPERATION', message: `no owner is bound for ${command.kind}` } }
       }
       return await owner.command(command)
@@ -746,10 +780,10 @@ export function createControlOwner(options: CreateControlOwnerOptions): ConsoleC
       // The dedicated Session body ingress. The body is carried verbatim; this daemon never
       // parses, strips, or inspects it, and it never becomes a control frame. It writes the
       // same record as the Session commands, so it goes through the same serialization.
-      return await serializeSessionWrite(async () => await sessionWrite(target.agentId, target.sessionId, resolved => ({
+      return await serializeSessionWrite(async () => await sessionWrite(target.agentId, resolved => ({
         op: 'session.message',
         agentId: resolved.agentId,
-        sessionId: resolved.sessionId,
+        sessionId: target.sessionId,
         payload,
       })))
     },
@@ -931,9 +965,11 @@ export async function readObservedSessionProjection(input: {
   readonly peers: readonly { readonly agentId: string; readonly accountId: string; readonly scopeId: string }[]
   /** The presence the directory readback reports, by agent. A missing agent has no report. */
   readonly presence: ReadonlyMap<string, string>
-}): Promise<Pick<ConsoleProjectionV1, 'sessions' | 'notifications'>> {
+}): Promise<Pick<ConsoleProjectionV1, 'sessions' | 'notifications' | 'sessionEvents'> & { readonly observedAgents?: ReadonlyMap<string, { readonly revision: number; readonly sessions: readonly { readonly sessionId: string }[] }> }> {
   const sessions: { readonly agentId: string; readonly sessionId: string }[] = []
   const notifications: ConsoleProjectionV1['notifications'][number][] = []
+  const sessionEvents: ConsoleSessionEventView[] = []
+  const observedAgents = new Map<string, { readonly revision: number; readonly sessions: readonly { readonly sessionId: string }[] }>()
   for (const peer of input.peers) {
     const reported = input.presence.get(peer.agentId)
     if (reported !== undefined && reported !== 'online') continue
@@ -953,6 +989,8 @@ export async function readObservedSessionProjection(input: {
       continue
     }
     for (const row of record.sessions) sessions.push({ agentId: peer.agentId, sessionId: row.sessionId })
+    const events = record.sessionEvents ?? []
+    sessionEvents.push(...events)
     for (const row of record.permissions) {
       notifications.push({
         agentId: peer.agentId,
@@ -963,9 +1001,32 @@ export async function readObservedSessionProjection(input: {
         title: PENDING_PERMISSION_TITLE,
         permissionId: row.permissionId,
       })
+      // The approval buttons read options from a pending event, not from the notification
+      // row. A publisher that carried options but no event (an older writer) still yields a
+      // real choice set, synthesized from the same real permission identity it published.
+      if (row.options === undefined || row.options.length === 0) continue
+      if (events.some(event => event.kind === 'permission' && event.permissionId === row.permissionId)) continue
+      sessionEvents.push({
+        eventId: row.notificationId,
+        agentId: peer.agentId,
+        sessionId: row.sessionId,
+        kind: 'permission',
+        state: 'pending',
+        permissionId: row.permissionId,
+        messageId: `prompt:${row.permissionId}`,
+        title: PENDING_PERMISSION_TITLE,
+        metadata: {},
+        options: row.options,
+      })
     }
+    observedAgents.set(peer.agentId, { revision: record.revision, sessions: record.sessions })
   }
-  return { sessions, notifications }
+  return {
+    sessions,
+    notifications,
+    ...(sessionEvents.length === 0 ? {} : { sessionEvents }),
+    ...(observedAgents.size === 0 ? {} : { observedAgents }),
+  }
 }
 
 export async function createControlNetworkStatus(intent: ControlDaemonIntent, env: NodeJS.ProcessEnv): Promise<ControlNetworkStatusBinding> {
@@ -1041,13 +1102,68 @@ export async function createControlNetworkStatus(intent: ControlDaemonIntent, en
   const port = (): TeamsStatusPort => createTeamsStatusPort({ ledger, localAgentId, directory, registration: currentRegistration(), history })
   const readProjection = async (): Promise<ConsoleProjectionV1> => {
     await refreshDirectory()
-    const agents: readonly ConsoleAgentObservationV1[] = peers.map(directoryAgentObservation)
     const observed = await readObservedSessionProjection({
       home: homedir(),
       peers: Object.values(intent.peers),
       presence: new Map(peers.map(peer => [peer.declaration.identity.agentId, peer.presence])),
     })
-    return projectionWithConnections({ version: 1, agents, sessions: observed.sessions, notifications: observed.notifications, configs: [] }, port())
+    const agents: ConsoleAgentObservationV1[] = []
+    const directoryIds = new Set<string>()
+    for (const peer of peers) {
+      const peerId = peer.declaration.identity.agentId
+      directoryIds.add(peerId)
+      const directory = directoryAgentObservation(peer)
+      const observation = observed.observedAgents?.get(peerId)
+      if (observation === undefined) {
+        agents.push(directory)
+        continue
+      }
+      // A peer whose own daemon published a valid observation is a real runtime row: its
+      // Session availability and current Session come from that record, never from the
+      // directory's mere registration.
+      agents.push({
+        kind: 'runtime',
+        agentId: directory.agentId,
+        label: directory.label,
+        machineId: directory.machineId,
+        ...(directory.generation === undefined ? {} : { generation: directory.generation }),
+        presence: 'online',
+        capabilities: directory.capabilities,
+        ...(directory.capabilityDetails === undefined ? {} : { capabilityDetails: directory.capabilityDetails }),
+        sessionCapable: true,
+        sessionAvailability: observation.sessions.length > 0 ? 'current' : 'no-current',
+        sessionEffectiveRevision: observation.revision,
+        ...(observation.sessions[0] === undefined ? {} : { currentSessionId: observation.sessions[0].sessionId }),
+      })
+    }
+    // Without a registry the directory is empty, but the daemon's own accepted peers are
+    // still real declared targets. A declared peer that published a valid observation gets
+    // one honest local runtime row so the Console can operate it.
+    for (const peer of Object.values(intent.peers)) {
+      if (directoryIds.has(peer.agentId)) continue
+      const observation = observed.observedAgents?.get(peer.agentId)
+      if (observation === undefined) continue
+      agents.push({
+        kind: 'runtime',
+        agentId: peer.agentId,
+        label: peer.agentId,
+        machineId: peer.hostId,
+        presence: 'online',
+        capabilities: ['acp'],
+        sessionCapable: true,
+        sessionAvailability: observation.sessions.length > 0 ? 'current' : 'no-current',
+        sessionEffectiveRevision: observation.revision,
+        ...(observation.sessions[0] === undefined ? {} : { currentSessionId: observation.sessions[0].sessionId }),
+      })
+    }
+    return projectionWithConnections({
+      version: 1,
+      agents,
+      sessions: observed.sessions,
+      notifications: observed.notifications,
+      configs: [],
+      ...(observed.sessionEvents === undefined || observed.sessionEvents.length === 0 ? {} : { sessionEvents: observed.sessionEvents }),
+    }, port())
   }
   return {
     port: { connections: () => port().connections(), history: query => port().history(query) },

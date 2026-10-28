@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import type { ConsolePermissionOption, ConsoleSessionEventView } from '../packages/shared/src/console-api.ts'
+import { parseConsoleSessionEvent, parsePermissionOptions } from '../packages/shared/src/console-api.ts'
 import type { ConfigApplyError, ConfigApplyResult } from './runtime-config.ts'
 import { RuntimeConfigError } from './runtime-config.ts'
 import { sessionIntentScopeDirectory } from './session-intent-store.ts'
@@ -44,6 +46,8 @@ export interface SessionObservationPermission {
   readonly notificationId: string
   readonly sessionId: string
   readonly permissionId: string
+  /** The engine-provided choice set; absent when the engine offered none. */
+  readonly options?: readonly ConsolePermissionOption[]
 }
 
 export interface SessionObservationRecord {
@@ -53,6 +57,8 @@ export interface SessionObservationRecord {
   readonly updatedAt: string
   readonly sessions: readonly SessionObservationSession[]
   readonly permissions: readonly SessionObservationPermission[]
+  /** Ordered engine events for the Sessions this snapshot reports. */
+  readonly sessionEvents?: readonly ConsoleSessionEventView[]
 }
 
 /** The observation the agent daemon publishes; the store owns version, revision and time. */
@@ -60,6 +66,7 @@ export interface SessionObservationSnapshot {
   readonly agentId: string
   readonly sessions: readonly SessionObservationSession[]
   readonly permissions: readonly SessionObservationPermission[]
+  readonly sessionEvents?: readonly ConsoleSessionEventView[]
 }
 
 /**
@@ -92,6 +99,32 @@ function isTable(value: unknown): value is Record<string, unknown> {
 
 function requireText(value: unknown, label: string): ConfigApplyError | undefined {
   if (typeof value !== 'string' || value.length === 0) return invalid(`${label} must be a non-empty string`)
+  return undefined
+}
+
+/** Validate one engine option set through the one frozen Console parser. */
+function validateOptions(value: unknown, label: string): ConfigApplyError | undefined {
+  try {
+    parsePermissionOptions(value)
+    return undefined
+  } catch (cause) {
+    return invalid(`${label}: ${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+}
+
+/** Validate one ordered event against the frozen Console event union. */
+function validateSessionEvents(value: unknown, sessionIds: ReadonlySet<string>): ConfigApplyError | undefined {
+  if (!Array.isArray(value)) return invalid('session observation snapshot sessionEvents must be an array')
+  for (const [index, event] of value.entries()) {
+    try {
+      parseConsoleSessionEvent(event)
+    } catch (cause) {
+      return invalid(`session observation snapshot sessionEvents[${index}]: ${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+    if (!sessionIds.has(event.sessionId)) {
+      return invalid(`session observation snapshot sessionEvents[${index}] names session ${event.sessionId}, which it does not report`)
+    }
+  }
   return undefined
 }
 
@@ -130,6 +163,14 @@ function validateSnapshot(value: unknown): ConfigApplyError | undefined {
     if (!sessionIds.has(permission.sessionId as string)) {
       return invalid(`session observation snapshot permissions[${index}] names session ${permission.sessionId as string}, which it does not report`)
     }
+    if (permission.options !== undefined) {
+      const optionsError = validateOptions(permission.options, `session observation snapshot permissions[${index}].options`)
+      if (optionsError !== undefined) return optionsError
+    }
+  }
+  if (value.sessionEvents !== undefined) {
+    const eventsError = validateSessionEvents(value.sessionEvents, sessionIds)
+    if (eventsError !== undefined) return eventsError
   }
   return undefined
 }
@@ -142,7 +183,9 @@ function parseSnapshot(value: Record<string, unknown>): SessionObservationSnapsh
       notificationId: permission.notificationId as string,
       sessionId: permission.sessionId as string,
       permissionId: permission.permissionId as string,
+      ...(permission.options === undefined ? {} : { options: permission.options as readonly ConsolePermissionOption[] }),
     })),
+    ...(value.sessionEvents === undefined ? {} : { sessionEvents: value.sessionEvents as readonly ConsoleSessionEventView[] }),
   }
 }
 

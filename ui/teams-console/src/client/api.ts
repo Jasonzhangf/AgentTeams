@@ -27,6 +27,19 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): b
   return Object.keys(value).every(key => allowed.has(key))
 }
 
+/**
+ * The control daemon writes `session.create` as a durable intent record and returns only
+ * the accepted CAS revision; it cannot synchronously know the engine Session id. That closed
+ * control receipt is a real success, accepted beside the direct-owner `SessionCreateResult`
+ * shape an engine-bound path would carry.
+ */
+function isDurableAcceptedReceipt(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  if (!hasOnlyKeys(value, ['acceptedRevision'])) return false
+  const revision = value.acceptedRevision
+  return typeof revision === 'number' && Number.isInteger(revision) && revision >= 0
+}
+
 const PROJECTION_KEYS = ['version', 'agents', 'sessions', 'notifications', 'configs', 'sessionEvents', 'works', 'relations', 'connections'] as const
 const WORK_KEYS = ['agentId', 'workId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'policyRevision', 'state'] as const
 const RELATION_KEYS = ['agentId', 'consumerAgentId', 'providerAgentId', 'capabilityId', 'capabilityVersion', 'relationPermission', 'workId'] as const
@@ -67,7 +80,7 @@ function isProjection(value: unknown): value is ConsoleProjectionV1 {
 function isValidCommandSuccess(kind: string, result: unknown): boolean {
   // Every accepted Session command has a closed, kind-specific result shape. Any other
   // accepted command carries no structured result at the HTTP boundary.
-  if (kind === 'session.create') return parses(parseSessionCreateResult, result)
+  if (kind === 'session.create') return parses(parseSessionCreateResult, result) || isDurableAcceptedReceipt(result)
   if (kind === 'session.cancel') return parses(parseSessionCancelConfirmed, result) || parses(parseSessionCancelUnknownDetail, result)
   if (kind === 'permission.reply') return parses(parsePermissionReplyResult, result)
   if (result === undefined) return true

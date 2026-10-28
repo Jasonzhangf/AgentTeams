@@ -1,4 +1,5 @@
 import type { AcpHost, AcpPendingPermission } from '../agent-host/acp-host.ts'
+import type { ConsolePermissionOption } from '../packages/shared/src/console-api.ts'
 import type { ConfigErrorCode } from '../config/runtime-config.ts'
 import {
   readSessionObservationRecord,
@@ -23,7 +24,7 @@ import {
  * writes nothing: the record's revision is a real event count, not a heartbeat.
  */
 export interface SessionObservationPublisherInput {
-  readonly host: Pick<AcpHost, 'openedSessions' | 'pendingPermissions'>
+  readonly host: Pick<AcpHost, 'openedSessions' | 'pendingPermissions' | 'sessionEvents'>
   /** The one record path for this daemon. `config/session-observation-store.ts` owns it. */
   readonly recordPath: string
   /** This daemon's own accepted identity. A record that names another agent is refused. */
@@ -61,19 +62,30 @@ export function sessionObservationNotificationId(permissionId: string): string {
 /** The whole observation this pass observes, in one canonical order. */
 function observe(input: SessionObservationPublisherInput): SessionObservationSnapshot {
   const sessions = [...new Set(input.host.openedSessions())].sort()
-  const byNotification = new Map<string, { readonly notificationId: string; readonly sessionId: string; readonly permissionId: string }>()
+  const byNotification = new Map<string, { readonly notificationId: string; readonly sessionId: string; readonly permissionId: string; readonly options: readonly ConsolePermissionOption[] }>()
   for (const pending of input.host.pendingPermissions() as readonly AcpPendingPermission[]) {
     const notificationId = sessionObservationNotificationId(pending.permissionId)
     // A permission whose Session the host no longer reports would cross the record's own
     // rule, and the store refuses it. Drop it here for the same reason: a row the reader
     // cannot name its Session for is not an observation this daemon may publish.
     if (!sessions.includes(pending.sessionId)) continue
-    byNotification.set(notificationId, { notificationId, sessionId: pending.sessionId, permissionId: pending.permissionId })
+    byNotification.set(notificationId, { notificationId, sessionId: pending.sessionId, permissionId: pending.permissionId, options: pending.options })
   }
+  // The events the host itself projected for its open channels. Only rows whose Session is
+  // in the same snapshot survive, so the record's crossing rule is preserved here too.
+  const sessionIds = new Set(sessions)
+  const sessionEvents = (input.host.sessionEvents?.() ?? []).filter(event => sessionIds.has(event.sessionId))
   return {
     agentId: input.agentId,
     sessions: sessions.map(sessionId => ({ sessionId })),
-    permissions: [...byNotification.values()].sort((left, right) => left.notificationId.localeCompare(right.notificationId)),
+    permissions: [...byNotification.values()].sort((left, right) => left.notificationId.localeCompare(right.notificationId))
+      .map(({ notificationId, sessionId, permissionId, options }) => ({
+        notificationId,
+        sessionId,
+        permissionId,
+        ...(options.length === 0 ? {} : { options }),
+      })),
+    ...(sessionEvents.length === 0 ? {} : { sessionEvents }),
   }
 }
 

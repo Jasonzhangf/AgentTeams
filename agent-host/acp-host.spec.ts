@@ -404,6 +404,94 @@ describe('createAcpHost', () => {
     expect(fixture.host.openedSessions()).toEqual([])
   })
 
+  it('projects ordered Session events from the real prompt, update, tool and permission frames', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    await fixture.host.receive({
+      ...ref1,
+      frame: {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'session/prompt',
+        params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'hello' }] },
+      },
+    })
+    const promptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-1', update: { sessionUpdate: 'agent_message_chunk', content: { text: 'hi' } } },
+    })
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: { sessionUpdate: 'tool_call', toolCallId: 'call-1', title: 'read', rawInput: { path: '/tmp/x' }, status: 'pending' },
+      },
+    })
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: { sessionUpdate: 'tool_call_update', toolCallId: 'call-1', title: 'read', output: 'done', status: 'completed' },
+      },
+    })
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      id: 'engine-permission-events',
+      method: 'session/request_permission',
+      params: {
+        sessionId: 'session-1',
+        toolCall: { toolCallId: 'call-1', title: 'read' },
+        options: [
+          { optionId: 'once', name: 'Allow once', kind: 'allow_once' },
+          { optionId: 'reject', name: 'Reject', kind: 'reject_once' },
+        ],
+      },
+    })
+    await flush()
+
+    const pending = fixture.host.pendingPermissions()
+    expect(pending).toHaveLength(1)
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: pending[0].permissionId, result: { outcome: { outcome: 'selected', optionId: 'once' } } },
+    })
+    fixture.duplex.push({ jsonrpc: '2.0', id: promptChild, result: { stopReason: 'end_turn' } })
+    await flush()
+
+    const events = fixture.host.sessionEvents?.() ?? []
+    expect(events.map(event => [event.kind, event.state])).toEqual([
+      ['message', 'completed'],
+      ['part', 'completed'],
+      ['part', 'completed'],
+      ['tool', 'completed'],
+      ['permission', 'resolved'],
+      ['message', 'completed'],
+      ['final', 'completed'],
+    ])
+    expect(events[0]).toMatchObject({ role: 'user', state: 'completed' })
+    expect(events[1]).toMatchObject({ partType: 'text', text: 'hello', state: 'completed' })
+    expect(events[2]).toMatchObject({ partType: 'text', text: 'hi', state: 'completed' })
+    expect(events[3]).toMatchObject({ callId: 'call-1', tool: 'read', state: 'completed', output: 'done' })
+    expect(events[4]).toMatchObject({ permissionId: pending[0].permissionId, state: 'resolved', decision: 'once' })
+    expect(events[5]).toMatchObject({ role: 'assistant', state: 'completed' })
+    expect(events[6]).toMatchObject({ state: 'completed', finish: 'end_turn' })
+
+    // The projection leaves with the Session ids it belongs to.
+    await fixture.host.close(ref1)
+    expect(fixture.host.sessionEvents?.() ?? []).toEqual([])
+  })
+
   it('cancels explicitly when no controller owns a permission callback', async () => {
     const fixture = makeFixture()
     await open(fixture, ref1)

@@ -12,6 +12,7 @@ import {
 } from './session-observation-store.ts'
 import { SESSION_INTENT_FILE_NAME, sessionIntentScopePath } from './session-intent-store.ts'
 import type { ConfigApplyResult } from './runtime-config.ts'
+import type { ConsoleSessionEventView } from '../packages/shared/src/console-api.ts'
 
 /**
  * The agent daemon publishes its own Session and permission observation; the control daemon
@@ -27,6 +28,16 @@ const SNAPSHOT: SessionObservationSnapshot = {
   agentId: 'agent-alpha',
   sessions: [{ sessionId: 'ses-1' }],
   permissions: [{ notificationId: 'permission:acp-callback-1', sessionId: 'ses-1', permissionId: 'acp-callback-1' }],
+}
+
+const USER_EVENT: ConsoleSessionEventView = {
+  eventId: 'evt-user-1',
+  agentId: 'agent-alpha',
+  sessionId: 'ses-1',
+  kind: 'message',
+  state: 'completed',
+  messageId: 'msg-1',
+  role: 'user',
 }
 
 function applied(result: ConfigApplyResult): number {
@@ -102,6 +113,68 @@ describe('session observation store', () => {
       const record = await readSessionObservationRecord(path)
       expect(record?.sessions).toEqual([{ sessionId: 'ses-1' }, { sessionId: 'ses-2' }])
       expect(record?.permissions).toEqual([])
+    })
+  })
+
+  it('carries the engine permission options and the ordered Session events', async () => {
+    await withStore(async path => {
+      const permissionOptions = [
+        { optionId: 'once', name: 'Allow once', kind: 'once' as const },
+        { optionId: 'always', name: 'Always allow', kind: 'always' as const },
+        { optionId: 'reject', name: 'Reject', kind: 'reject' as const },
+      ]
+      const events: readonly ConsoleSessionEventView[] = [
+        USER_EVENT,
+        {
+          eventId: 'evt-part-1',
+          agentId: 'agent-alpha',
+          sessionId: 'ses-1',
+          kind: 'part',
+          state: 'completed',
+          messageId: 'msg-asst-1',
+          partId: 'part-1',
+          partType: 'text',
+          text: 'hello',
+        },
+      ]
+      expect(applied(await writeSessionObservationRecord(path, 0, {
+        agentId: 'agent-alpha',
+        sessions: [{ sessionId: 'ses-1' }],
+        permissions: [{ notificationId: 'permission:acp-callback-1', sessionId: 'ses-1', permissionId: 'acp-callback-1', options: permissionOptions }],
+        sessionEvents: events,
+      }))).toBe(1)
+      const record = await readSessionObservationRecord(path)
+      expect(record?.permissions[0]?.options).toEqual(permissionOptions)
+      expect(record?.sessionEvents).toEqual(events)
+    })
+  })
+
+  it('refuses a Session event that names a Session the snapshot does not report', async () => {
+    await withStore(async path => {
+      const result = await writeSessionObservationRecord(path, 0, {
+        agentId: 'agent-alpha',
+        sessions: [{ sessionId: 'ses-1' }],
+        permissions: [],
+        sessionEvents: [{ ...USER_EVENT, sessionId: 'ses-other' }],
+      })
+      expect(result).toMatchObject({ status: 'failed', error: { code: 'INVALID_INPUT' } })
+      expect(await readSessionObservationRecord(path)).toBeUndefined()
+    })
+  })
+
+  it('refuses a malformed engine option set instead of projecting it', async () => {
+    await withStore(async path => {
+      const result = await writeSessionObservationRecord(path, 0, {
+        agentId: 'agent-alpha',
+        sessions: [{ sessionId: 'ses-1' }],
+        permissions: [{
+          notificationId: 'permission:acp-callback-1',
+          sessionId: 'ses-1',
+          permissionId: 'acp-callback-1',
+          options: [{ optionId: 'once', name: 'Allow once', kind: 'sometimes' }],
+        } as unknown as SessionObservationSnapshot['permissions'][number]],
+      })
+      expect(result).toMatchObject({ status: 'failed', error: { code: 'INVALID_INPUT' } })
     })
   })
 
