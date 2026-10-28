@@ -1742,11 +1742,39 @@ async function startAcpServeLocked(intent: AcpServeIntent, options: AcpServeRunt
     resolveCredential: reference => resolveCredentialReference(reference, env),
   })
   if (outcome.kind === 'failed') {
-    // A failed start reaps its child unless the engine refused to exit; its home
-    // is released only when the cleanup record proves the child is gone.
-    if (outcome.cleanup?.kind !== 'retained') {
-      await removeOwnedDirectory().catch(() => undefined)
+    // A failed start reaps its child unless the engine refused to exit. A
+    // retained child keeps its engine home, and this start has not published a
+    // state record yet: write one now, naming only the retained engine, so the
+    // next start converges that exact owner instead of treating the directory
+    // as fresh and creating a second engine. The failed start owns no serving
+    // daemon, so `daemonPid` stays 0 and a later start never signals this
+    // process.
+    if (outcome.cleanup?.kind === 'retained') {
+      const retainedPid = outcome.cleanup.pid
+      try {
+        await writeAcpServeState(statePath, {
+          version: 2,
+          agentId: agent.daemon.id,
+          daemonPid: 0,
+          daemonStart: null,
+          enginePid: retainedPid,
+          engineStart: (await processStartTime(retainedPid)) ?? null,
+          engineInstanceId,
+          engineKind: engine.kind,
+          engineExecutable: executable,
+          dataDirectory,
+          configPath: intent.configPath,
+        })
+      } catch (cause) {
+        throw new AcpError('ENGINE_UNAVAILABLE',
+          `engine pid=${retainedPid} did not confirm exit and its ownership record could not be written: ${messageOf(cause, 'write failed')}`,
+          outcome.fault.detail)
+      }
+      throw new AcpError(outcome.fault.code,
+        `engine start failed: ${outcome.fault.message}; retained engine pid=${retainedPid} is recorded for the next start to converge`,
+        outcome.fault.detail)
     }
+    await removeOwnedDirectory().catch(() => undefined)
     throw new AcpError(outcome.fault.code, `engine start failed: ${outcome.fault.message}`, outcome.fault.detail)
   }
   const daemon = outcome.daemon
