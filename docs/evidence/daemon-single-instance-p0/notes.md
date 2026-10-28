@@ -83,3 +83,28 @@
 - Independent review of `ebbdf95` is still required before integration.
 - No merge, push or installed-copy/restart/deployed-entrypoint/cross-device
   receipt is claimed in this note.
+
+## Architecture boundary adjudication (2026-10-28, David)
+
+- The earlier "Not closed" boundary question — whether a project-wide
+  "one daemon per project" rule should exist, and whether it conflicts with
+  the v4 contract that one config declares one daemon — is now adjudicated.
+- **Single-instance scope key** (binding): `(daemonKind, daemonId, dataDirectory)`.
+  One config / one data directory allows at most one live generation process at
+  any time; a repeat start of the same `(daemonKind, daemonId, dataDirectory)`
+  converges and replaces the previous one by explicit PID.
+- Different config files (each owning its own `daemonId` and `dataDirectory`,
+  e.g. one registry + one control + many agents in one project) MUST run
+  concurrently. No cross-config or cross-daemonKind global single-process lock.
+- v3 legacy local supervisor (`agentteams start` / `local-ownership.ts`): the
+  single-instance key is its `stateRoot` (`dataDirectory`); at most one active
+  supervisor tree per `stateRoot`.
+- Conclusion: the implementation already merged in main (same config/dataDirectory
+  + explicit PID + `agent-serve-state.lock` convergence) fully satisfies this
+  boundary. It removes orphan-process accumulation from repeat starts while
+  preserving the AGENTS.md v4 one-config-one-daemon contract. No further code
+  change is required by this adjudication.
+- Source of record: David message `m1793202204031-419` (subject: 架构边界裁决：
+  单实例唯一性作用域为 (daemonKind, daemonId, dataDirectory)，不破坏 v4 一配置一
+  daemon 契约). A dedicated design file was referenced but is not in the repo;
+  this note carries the adjudicated text verbatim.
