@@ -1,5 +1,5 @@
 import { accessSync, statSync } from 'node:fs'
-import { mkdir, readFile, rm } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { createServer, isIP, type Server, type Socket } from 'node:net'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
@@ -47,6 +47,7 @@ import {
   writeLocalGroupEndpointRecord,
 } from '../config/local-group-endpoint-store.ts'
 import { createSessionObservationPublisher, type SessionObservationFailure } from './session-observation-publisher.ts'
+import { processAlive, processCommand, terminateProcess } from './local-ownership.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
 import { rpcErrorFrame, type AcpHost } from '../agent-host/acp-host.ts'
 import { openCodeAcpAdapter } from '../opencode-adapter/src/acp-engine.ts'
@@ -123,6 +124,8 @@ import {
 
 const DEFAULT_INITIALIZE_TIMEOUT_MS = 20_000
 const DEFAULT_STOP_TIMEOUT_MS = 5_000
+const DEFAULT_HARD_KILL_MS = 2_000
+const SERVE_STATE_FILE = 'agent-serve-state.json'
 const CHANNEL_POLL_INTERVAL_MS = 5
 const DELIVERY_PAGE_LIMIT = 200
 const QUICK_START_AGENT_ID = 'agent'
@@ -172,6 +175,32 @@ export interface AcpServeRuntimeOptions {
   readonly stopTimeoutMs?: number
   /** Live registration status transitions; the readiness line reports the start state. */
   readonly onRegistrationStatus?: (status: RegistrationStatus) => void
+}
+
+/**
+ * The one durable ownership record for an agent serve. The daemon data
+ * directory is the single-instance scope, so a start must converge the previous
+ * daemon and its engine child before it creates the owned engine home.
+ */
+interface PersistedAcpServeState {
+  readonly version: 1
+  readonly agentId: string
+  readonly daemonPid: number
+  readonly enginePid: number
+  readonly engineInstanceId: string
+  readonly dataDirectory: string
+  readonly configPath: string | null
+}
+
+/**
+ * In-process handles keyed by the same data directory. Programmatic callers and
+ * tests can start a serve twice in one process, where the daemon pid is this
+ * process and the persisted record alone cannot stop the old listener/host.
+ */
+const activeInProcessServes = new Map<string, () => Promise<unknown>>()
+
+export function acpServeStatePath(dataDirectory: string): string {
+  return join(resolve(dataDirectory), SERVE_STATE_FILE)
 }
 
 /** Which inbound channel the configured listener address selects. */
@@ -1392,6 +1421,111 @@ async function withdrawLocalGroupEndpoint(path: string): Promise<LocalGroupEndpo
   }
 }
 
+function isPersistedAcpServeState(value: unknown): value is PersistedAcpServeState {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Partial<PersistedAcpServeState>
+  return record.version === 1 &&
+    typeof record.agentId === 'string' && record.agentId.length > 0 &&
+    Number.isSafeInteger(record.daemonPid) && (record.daemonPid as number) >= 0 &&
+    Number.isSafeInteger(record.enginePid) && (record.enginePid as number) >= 0 &&
+    typeof record.engineInstanceId === 'string' &&
+    typeof record.dataDirectory === 'string' && record.dataDirectory.length > 0 &&
+    (record.configPath === null || typeof record.configPath === 'string')
+}
+
+async function readAcpServeState(path: string): Promise<PersistedAcpServeState | undefined> {
+  let text: string
+  try {
+    text = await readFile(path, 'utf8')
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw new AcpError('ENGINE_UNAVAILABLE', `serve state cannot be read (${path}): ${messageOf(cause, 'read failed')}`)
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    // A record we cannot read may still describe a live daemon. Refuse to start
+    // a second one instead of guessing that the old runtime is gone.
+    throw new AcpError('ENGINE_UNAVAILABLE', `serve state is not valid JSON (${path}); refusing a second start while its owner may still run`)
+  }
+  if (!isPersistedAcpServeState(parsed)) {
+    throw new AcpError('ENGINE_UNAVAILABLE', `serve state has an unsupported shape (${path}); refusing a second start while its owner may still run`)
+  }
+  return parsed
+}
+
+async function writeAcpServeState(path: string, state: PersistedAcpServeState): Promise<void> {
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 })
+    await rename(temporary, path)
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined)
+  }
+}
+
+async function terminateOwnedPid(pid: number, expected: readonly string[], message: string, gracefulMs: number): Promise<void> {
+  const command = await processCommand(pid)
+  if (command === undefined || !expected.some(fragment => command.includes(fragment))) {
+    throw new AcpError('ENGINE_UNAVAILABLE', `${message} pid=${pid} does not match its recorded ownership`)
+  }
+  const termination = await terminateProcess(pid, { gracefulMs, hardMs: DEFAULT_HARD_KILL_MS })
+  if (termination === 'unresponsive') {
+    throw new AcpError('ENGINE_UNAVAILABLE', `${message} pid=${pid} did not exit after SIGTERM and SIGKILL`)
+  }
+}
+
+/**
+ * Converge one data directory to a single live serve. A previous daemon and its
+ * engine are stopped by their recorded, ownership-checked PIDs before the new
+ * start touches the owned engine home; an unrelated reused PID is never
+ * signalled.
+ */
+async function convergeAcpServe(input: {
+  readonly dataDirectory: string
+  readonly statePath: string
+  readonly agentId: string
+  readonly executable: string
+  readonly ownedDirectory: string
+  readonly stopTimeoutMs: number
+}): Promise<void> {
+  const inProcess = activeInProcessServes.get(input.dataDirectory)
+  if (inProcess !== undefined) {
+    activeInProcessServes.delete(input.dataDirectory)
+    await inProcess()
+  }
+  const previous = await readAcpServeState(input.statePath)
+  if (previous === undefined) return
+  if (previous.dataDirectory !== input.dataDirectory || previous.agentId !== input.agentId) {
+    throw new AcpError('ENGINE_UNAVAILABLE',
+      `serve state at ${input.statePath} belongs to agent ${previous.agentId} in ${previous.dataDirectory}`)
+  }
+  if (previous.daemonPid === process.pid) {
+    throw new AcpError('ENGINE_UNAVAILABLE',
+      `serve state says this process already owns ${input.dataDirectory}, but no active handle is registered`)
+  }
+  if (previous.daemonPid > 0 && processAlive(previous.daemonPid)) {
+    if (previous.daemonPid > 0) {
+      await terminateOwnedPid(
+        previous.daemonPid,
+        ['--serve', input.dataDirectory, ...(previous.configPath === null ? [] : [previous.configPath])],
+        `existing serve daemon for agent ${input.agentId}`,
+        input.stopTimeoutMs,
+      )
+    }
+  }
+  if (previous.enginePid > 0 && previous.enginePid !== process.pid && processAlive(previous.enginePid)) {
+    await terminateOwnedPid(
+      previous.enginePid,
+      [input.executable, input.ownedDirectory, input.dataDirectory],
+      `existing serve engine for agent ${input.agentId}`,
+      input.stopTimeoutMs,
+    )
+  }
+  await rm(input.statePath, { force: true })
+}
+
 /**
  * Start exactly one agent daemon and serve local ACP channels on its configured
  * listener. Every failure before the listener is bound stops the spawned engine
@@ -1416,9 +1550,23 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     ? resolveOpenCodeExecutable(engine.executable, env)
     : resolveDshExecutable(engine.executable, env)
   const dataDirectory = resolve(agent.daemon.dataDirectory)
+  const statePath = acpServeStatePath(dataDirectory)
   const ownedDirectory = join(dataDirectory, 'engine')
   const workspace = engine.workspace ?? join(dataDirectory, 'workspace')
+  const initializeTimeoutMs = options.initializeTimeoutMs ?? DEFAULT_INITIALIZE_TIMEOUT_MS
+  const stopTimeoutMs = options.stopTimeoutMs ?? DEFAULT_STOP_TIMEOUT_MS
   await mkdir(dataDirectory, { recursive: true, mode: 0o700 })
+  // A start replaces the previous serve for this data directory. Converge before
+  // creating or removing the owned engine home, so a live owner's engine files
+  // are never deleted under it.
+  await convergeAcpServe({
+    dataDirectory,
+    statePath,
+    agentId: agent.daemon.id,
+    executable,
+    ownedDirectory,
+    stopTimeoutMs,
+  })
   // The workspace is created before the owned engine directory: it may outlive
   // this entry, so a failure here must not leave an owned engine home behind.
   await mkdir(workspace, { recursive: true, mode: 0o700 })
@@ -1470,8 +1618,6 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
   }
   const launch = await guardOwnedDirectory(() => adapter.compileLaunch(launchInput))
   const historyStore = await guardOwnedDirectory(() => createAcpHistoryStore({ directory: dataDirectory }))
-  const initializeTimeoutMs = options.initializeTimeoutMs ?? DEFAULT_INITIALIZE_TIMEOUT_MS
-  const stopTimeoutMs = options.stopTimeoutMs ?? DEFAULT_STOP_TIMEOUT_MS
 
   const outcome = await startAcpAgentDaemon({
     launch,
@@ -1495,6 +1641,23 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     throw new AcpError(outcome.fault.code, `engine start failed: ${outcome.fault.message}`, outcome.fault.detail)
   }
   const daemon = outcome.daemon
+  let registeredStop: (() => Promise<unknown>) | undefined
+  try {
+    await writeAcpServeState(statePath, {
+      version: 1,
+      agentId: agent.daemon.id,
+      daemonPid: process.pid,
+      enginePid: daemon.handle.pid,
+      engineInstanceId,
+      dataDirectory,
+      configPath: intent.configPath,
+    })
+  } catch (cause) {
+    await daemon.stop().catch(() => undefined)
+    await removeOwnedDirectory().catch(() => undefined)
+    await rm(statePath, { force: true }).catch(() => undefined)
+    throw cause instanceof AcpError ? cause : new AcpError('ENGINE_UNAVAILABLE', messageOf(cause, 'serve state could not be written'))
+  }
 
   try {
     const readinessRef: AcpChannelRef = {
@@ -1766,12 +1929,14 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
           // The engine is gone, so its owned home (DSH_HOME and the derived patch
           // file, or the OpenCode home) is released on this stop path too.
           await removeOwnedDirectory().catch(() => undefined)
+          if (activeInProcessServes.get(dataDirectory) === stop) activeInProcessServes.delete(dataDirectory)
+          await rm(statePath, { force: true }).catch(() => undefined)
           return { engine: engineStop, channels }
         })()
         return stopping
       }
 
-      return {
+      const handle: AcpServeHandle = {
         agentId: agent.daemon.id,
         groupSocketPath: groupMessaging?.socketPath ?? null,
         groupEndpoint: {
@@ -1822,6 +1987,9 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
         daemon,
         stop,
       }
+      registeredStop = stop
+      activeInProcessServes.set(dataDirectory, stop)
+      return handle
     } catch (cause) {
       if (egress !== undefined) await egress.close().catch(() => undefined)
       // A partially started serve releases the CLI socket it opened.
@@ -1838,11 +2006,19 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       }
       if (lan !== undefined) await lan.close().catch(() => undefined)
       await local.close().catch(() => undefined)
+      if (registeredStop !== undefined && activeInProcessServes.get(dataDirectory) === registeredStop) {
+        activeInProcessServes.delete(dataDirectory)
+      }
+      await rm(statePath, { force: true }).catch(() => undefined)
       throw cause
     }
   } catch (cause) {
     await daemon.stop().catch(() => undefined)
     await removeOwnedDirectory().catch(() => undefined)
+    if (registeredStop !== undefined && activeInProcessServes.get(dataDirectory) === registeredStop) {
+      activeInProcessServes.delete(dataDirectory)
+    }
+    await rm(statePath, { force: true }).catch(() => undefined)
     throw cause instanceof AcpError ? cause : new AcpError('ENGINE_UNAVAILABLE', messageOf(cause, 'ACP serve start failed'))
   }
 }

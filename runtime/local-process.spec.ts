@@ -123,7 +123,7 @@ config = "browser.json"
   }
 })
 
-it('starts detached, reports persisted status, rejects stale stop, and survives caller return', async () => {
+it('starts detached, converges a running launcher, rejects stale stop, and survives caller return', async () => {
   const root = await mkdtemp(join(tmpdir(), 'teams-local-detached-'))
   const path = join(root, 'config.toml')
   try {
@@ -164,19 +164,31 @@ relay = { endpoint = "wss://127.0.0.1:1", credentialEnv = "AUTH", connectTimeout
     const firstLauncher = firstInternal.launcher
     expect(firstLauncher?.pid).toBeGreaterThan(0)
     expect(firstLauncher?.startToken).toBeTypeOf('string')
-    await writeLocalInternalLauncherState(first.internalPath, {
-      pid: firstLauncher!.pid!, generation: first.generation, startToken: firstLauncher!.startToken!, state: 'failed', error: 'cleanup remains unconfirmed',
-    })
+    expect(firstLauncher?.state).toBe('running')
+    // A second start while generation 1 is running must converge it by explicit
+    // PID instead of refusing the start.
     const second = await startLocalProcess(path, { relayEntry: relay, agentEntry: agent, nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 3000 })
     expect(second).toMatchObject({ state: 'running', generation: 2 })
     expect(second.generation).toBeGreaterThan(first.generation)
     expect(() => process.kill(firstLauncher!.pid!, 0)).toThrow()
-    await stopLocalProcess(path, second.generation)
+
+    // The same convergence also covers a failed record whose recorded pid is
+    // still alive, which is the crash-window case.
+    const secondInternal = await readLocalInternalConfig(second.internalPath)
+    const secondLauncher = secondInternal.launcher
+    expect(secondLauncher?.state).toBe('running')
+    await writeLocalInternalLauncherState(first.internalPath, {
+      pid: secondLauncher!.pid!, generation: second.generation, startToken: secondLauncher!.startToken!, state: 'failed', error: 'cleanup remains unconfirmed',
+    })
+    const third = await startLocalProcess(path, { relayEntry: relay, agentEntry: agent, nodeArguments: ['--experimental-transform-types'], startupTimeoutMs: 3000 })
+    expect(third).toMatchObject({ state: 'running', generation: 3 })
+    expect(() => process.kill(secondLauncher!.pid!, 0)).toThrow()
+    await stopLocalProcess(path, third.generation)
   } finally {
     try { await stopLocalProcess(path) } catch { /* cleanup is best effort for test-only paths */ }
     await rm(root, { recursive: true, force: true })
   }
-}, 20000)
+}, 30000)
 
 it('keeps daemon state on the launcher generation and rejects stale writers', async () => {
   const root = await mkdtemp(join(tmpdir(), 'at-gen-'))

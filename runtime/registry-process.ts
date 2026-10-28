@@ -13,7 +13,7 @@ import {
   loadRegistryCredentials,
   resolveRegistryServerPlan,
 } from '../server/registry-intent.ts'
-import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
+import { processAlive, processCommand, processOwnsConfigCommand, terminateProcess } from './local-ownership.ts'
 
 /**
  * Runtime single writer for the local registry companion. It composes the
@@ -374,7 +374,12 @@ export async function startRegistryDaemon(configPath: string, options: RegistryD
     if (!(await ownsPersistedProcess(previous))) {
       throw new RegistryProcessError('STALE_OWNER', `registry pid=${previous.pid} does not match its persisted start token`)
     }
-    throw new RegistryProcessError('ALREADY_RUNNING', `registry is already running pid=${previous.pid} generation=${previous.generation}`)
+    // A start replaces the previous generation for this config. SIGTERM is the
+    // graceful path; a process that ignores it is killed by explicit PID.
+    const termination = await terminateProcess(previous.pid, { gracefulMs: 5_000, hardMs: 2_000 })
+    if (termination === 'unresponsive') {
+      throw new RegistryProcessError('STOP_TIMEOUT', `registry pid=${previous.pid} did not exit after SIGTERM and SIGKILL`)
+    }
   }
   const generation = (previous?.generation ?? 0) + 1
   const startToken = randomUUID()
@@ -470,8 +475,10 @@ export async function stopRegistryDaemon(configPath: string, expectedGeneration?
   if (!(await ownsPersistedProcess(state))) {
     throw new RegistryProcessError('STALE_OWNER', `registry pid=${state.pid} does not match its persisted start token`)
   }
-  process.kill(state.pid, 'SIGTERM')
-  await waitForProcessExit(state.pid, 5_000)
+  const termination = await terminateProcess(state.pid, { gracefulMs: 5_000, hardMs: 2_000 })
+  if (termination === 'unresponsive') {
+    throw new RegistryProcessError('STOP_TIMEOUT', `registry pid=${state.pid} did not exit after SIGTERM and SIGKILL`)
+  }
   const stopped: RegistryDaemonState = { ...state, state: 'stopped', updatedAt: new Date().toISOString() }
   await writeRegistryState(statePath, stopped)
   return statusFrom(statePath, resolvedConfigPath, intent.daemon.id, stopped)

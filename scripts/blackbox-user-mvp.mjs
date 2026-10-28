@@ -6395,23 +6395,32 @@ async function runBB14(context) {
   try {
     ensureUserConfig(fixture, evidenceDir)
     lifecycle = startAndReadLifecycle(fixture, evidenceDir, 'bb14')
+    const firstGeneration = lifecycle.parsed.generation
+    const firstPid = lifecycle.parsed.pid
     sentinel = await startSentinel()
-    const duplicate = run(fixture.cli, ['start', '--config', fixture.configPath], {
+    const duplicate = runChecked(fixture.cli, ['start', '--config', fixture.configPath], {
       cwd: fixture.temporaryRoot,
       env: fixture.env,
-      expectNonZero: true,
       logPath: join(evidenceDir, 'bb14-duplicate-start.json'),
     })
-    assert(/already running|ALREADY_RUNNING/iu.test(`${duplicate.stdout}\n${duplicate.stderr}`),
-      `duplicate start did not report an explicit running error: ${duplicate.stdout}${duplicate.stderr}`)
+    // Single-instance convergence: the second start replaces the first launcher
+    // generation, so the duplicate is a successful start, the old launcher pid
+    // exits and the status moves to the next generation.
+    assert(!processAlive(lifecycle.parsed.pid), 'the first launcher pid survived a duplicate start that should have replaced it')
     const statusBeforeStop = runChecked(fixture.cli, ['status', '--config', fixture.configPath], {
       cwd: fixture.temporaryRoot,
       env: fixture.env,
       logPath: join(evidenceDir, 'bb14-status-before-stop.json'),
     })
     const parsedBeforeStop = parseCliStatus(statusBeforeStop.stdout)
-    assert(parsedBeforeStop.state === 'running' && parsedBeforeStop.generation === lifecycle.parsed.generation &&
-      parsedBeforeStop.pid === lifecycle.parsed.pid, 'duplicate start changed the owned generation or launcher')
+    assert(parsedBeforeStop.state === 'running' && parsedBeforeStop.generation === lifecycle.parsed.generation + 1 &&
+      parsedBeforeStop.pid !== lifecycle.parsed.pid && processAlive(parsedBeforeStop.pid),
+      'duplicate start did not converge to a new live launcher generation')
+    const internal = parseInternal(join(dirname(fixture.configPath), 'internal.toml'), defaultAgentIds)
+    assert(internal.launcher.generation === parsedBeforeStop.generation && internal.launcher.pid === parsedBeforeStop.pid,
+      'internal launcher facts do not match the converged status')
+    lifecycle = { start: duplicate, status: statusBeforeStop, parsed: parsedBeforeStop, internal }
+    fixture.lifecycle = lifecycle
     const final = await stopAndAssertClean(fixture, lifecycle, evidenceDir, 'bb14')
     assert(processAlive(sentinel.pid), 'unrelated sentinel process was stopped by lifecycle cleanup')
     assert(listeningPids(sentinel.port).includes(sentinel.pid), 'unrelated sentinel listener was stopped by lifecycle cleanup')
@@ -6440,10 +6449,12 @@ async function runBB14(context) {
       status: 'passed',
       public_input: {
         package: context.packRoot,
-        commands: ['agentteams init', 'agentteams start', 'agentteams start (duplicate failure)', 'agentteams status', 'agentteams stop --generation <generation>'],
+        commands: ['agentteams init', 'agentteams start', 'agentteams start (duplicate convergence)', 'agentteams status', 'agentteams stop --generation <generation>'],
       },
       external_observation: {
-        first_generation: lifecycle.parsed.generation,
+        first_generation: firstGeneration,
+        first_pid: firstPid,
+        first_pid_alive_after_duplicate: processAlive(firstPid),
         duplicate_start_stdout: duplicate.stdout,
         duplicate_start_stderr: duplicate.stderr,
         status_before_stop: parsedBeforeStop,

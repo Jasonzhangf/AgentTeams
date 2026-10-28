@@ -33,6 +33,7 @@ import {
 import { localGroupEndpointScopePath, readLocalGroupEndpointRecord } from '../config/local-group-endpoint-store.ts'
 import type { AgentRegistration } from './registry-registration.ts'
 import { sendLocalMessageRequest } from './local-message-socket.ts'
+import { processAlive } from './local-ownership.ts'
 
 /**
  * `--serve <engine>` entry evidence (owner: runtime).
@@ -1338,6 +1339,58 @@ tlsTrustRef = "file:${trustPath}"
     const receipt = await handle.stop()
     expect(receipt.channels).toBe(0)
     expect(handle.egress.list()).toEqual([])
+  })
+
+  it('converges a second serve on the same data directory before touching the owned engine home', { timeout: 60_000 }, async () => {
+    const directory = await temporaryDirectory()
+    const fakeEngine = await writeFakeDshEngine(directory)
+    const firstPort = await availableLoopbackPort()
+    const configPath = join(directory, 'agent-single-instance.toml')
+    await writeFile(configPath, dshAgentConfig({
+      executable: fakeEngine,
+      port: firstPort,
+      dataDirectory: join(directory, 'state'),
+      workspace: join(directory, 'workspace'),
+      baseUrl: 'http://127.0.0.1:1/v1',
+    }))
+    const first = await startDshServe({ configPath })
+    const firstState = JSON.parse(await readFile(join(first.dataDirectory, 'agent-serve-state.json'), 'utf8')) as {
+      readonly daemonPid: number
+      readonly enginePid: number
+      readonly agentId: string
+    }
+    expect(firstState.daemonPid).toBe(process.pid)
+    expect(firstState.enginePid).toBe(first.enginePid)
+    expect(firstState.agentId).toBe('reasoner-dsh')
+    expect(processAlive(first.enginePid)).toBe(true)
+
+    const secondPort = await availableLoopbackPort()
+    await writeFile(configPath, dshAgentConfig({
+      executable: fakeEngine,
+      port: secondPort,
+      dataDirectory: join(directory, 'state'),
+      workspace: join(directory, 'workspace'),
+      baseUrl: 'http://127.0.0.1:1/v1',
+    }))
+    const second = await startDshServe({ configPath })
+    handles.delete(second)
+    expect(second.dataDirectory).toBe(first.dataDirectory)
+    expect(second.enginePid).not.toBe(first.enginePid)
+    expect(processAlive(first.enginePid)).toBe(false)
+    expect(second.listener).toEqual({ ip: '127.0.0.1', port: secondPort })
+    expect(existsSync(join(second.dataDirectory, 'engine'))).toBe(true)
+    const secondState = JSON.parse(await readFile(join(second.dataDirectory, 'agent-serve-state.json'), 'utf8')) as {
+      readonly daemonPid: number
+      readonly enginePid: number
+    }
+    expect(secondState.daemonPid).toBe(process.pid)
+    expect(secondState.enginePid).toBe(second.enginePid)
+
+    const receipt = await second.stop()
+    expect(receipt.engine.kind).toBe('exited')
+    expect(processAlive(second.enginePid)).toBe(false)
+    expect(existsSync(join(second.dataDirectory, 'engine'))).toBe(false)
+    expect(existsSync(join(second.dataDirectory, 'agent-serve-state.json'))).toBe(false)
   })
 
   it.skipIf(lanIpv4() === undefined)('binds the authenticated LAN channel onto the same host and admits only a real credential', async () => {

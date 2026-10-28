@@ -9,6 +9,28 @@ export function processAlive(pid: number): boolean {
   catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' }
 }
 
+export type ProcessTermination = 'exited' | 'killed' | 'unresponsive'
+
+export async function terminateProcess(
+  pid: number,
+  options: { readonly gracefulMs: number; readonly hardMs: number },
+): Promise<ProcessTermination> {
+  if (!processAlive(pid)) return 'exited'
+  try { process.kill(pid, 'SIGTERM') } catch { /* the liveness checks below report the outcome */ }
+  if (await waitForProcessGone(pid, options.gracefulMs)) return 'exited'
+  try { process.kill(pid, 'SIGKILL') } catch { /* the liveness check below reports the outcome */ }
+  return await waitForProcessGone(pid, options.hardMs) ? 'killed' : 'unresponsive'
+}
+
+async function waitForProcessGone(pid: number, deadlineMs: number): Promise<boolean> {
+  const deadline = Date.now() + deadlineMs
+  while (Date.now() < deadline) {
+    if (!processAlive(pid)) return true
+    await new Promise(resolveDelay => setTimeout(resolveDelay, 25))
+  }
+  return !processAlive(pid)
+}
+
 export async function processCommand(pid: number): Promise<string | undefined> {
   try { return (await execFile('ps', ['-p', String(pid), '-o', 'command='])).stdout }
   catch { return undefined }

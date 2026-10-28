@@ -65,7 +65,7 @@ import { membershipHistoryEvents, projectTeamsMembership, type TeamsMembershipVi
 import { createTeamsStatusPort, type TeamsStatusPort } from '../network/teams-status.ts'
 import { createAcpHistoryStore } from './acp-history-store.ts'
 import { directoryAgentObservation } from './console-hub.ts'
-import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
+import { processAlive, processCommand, processOwnsConfigCommand, terminateProcess } from './local-ownership.ts'
 import { RegistrationProcessError, startDaemonRegistration, type AgentRegistration } from './registry-registration.ts'
 
 /**
@@ -369,7 +369,12 @@ export async function startControlDaemon(configPath: string, options: ControlDae
     if (!(await ownsPersistedProcess(previous))) {
       throw new ControlProcessError('STALE_OWNER', `control pid=${previous.pid} does not match its persisted start token`)
     }
-    throw new ControlProcessError('ALREADY_RUNNING', `control is already running pid=${previous.pid} generation=${previous.generation}`)
+    // A start replaces the previous generation for this config. SIGTERM is the
+    // graceful path; a process that ignores it is killed by explicit PID.
+    const termination = await terminateProcess(previous.pid, { gracefulMs: 5_000, hardMs: 2_000 })
+    if (termination === 'unresponsive') {
+      throw new ControlProcessError('STOP_TIMEOUT', `control pid=${previous.pid} did not exit after SIGTERM and SIGKILL`)
+    }
   }
   const generation = (previous?.generation ?? 0) + 1
   const startToken = randomUUID()
@@ -467,8 +472,10 @@ export async function stopControlDaemon(configPath: string, expectedGeneration?:
   if (!(await ownsPersistedProcess(state))) {
     throw new ControlProcessError('STALE_OWNER', `control pid=${state.pid} does not match its persisted start token`)
   }
-  process.kill(state.pid, 'SIGTERM')
-  await waitForProcessExit(state.pid, 5_000)
+  const termination = await terminateProcess(state.pid, { gracefulMs: 5_000, hardMs: 2_000 })
+  if (termination === 'unresponsive') {
+    throw new ControlProcessError('STOP_TIMEOUT', `control pid=${state.pid} did not exit after SIGTERM and SIGKILL`)
+  }
   await removeOwnedState(statePath)
   return statusFrom(intent, statePath, resolvedConfigPath, undefined)
 }

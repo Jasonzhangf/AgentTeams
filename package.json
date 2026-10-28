@@ -24,8 +24,8 @@
     "arm64"
   ],
   "scripts": {
-    "test": "pnpm build:runtime && pnpm --dir opencode-adapter build && node scripts/regression.mjs",
-    "prepack": "pnpm build:runtime",
+    "test": "pnpm build && node scripts/regression.mjs",
+    "prepack": "pnpm build",
     "typecheck": "pnpm --dir opencode-adapter build && tsc --noEmit && pnpm --dir opencode-adapter typecheck && pnpm --dir console-host typecheck && pnpm --dir ui/teams-console typecheck",
     "build": "pnpm --dir opencode-adapter build && pnpm --dir console-host build && pnpm --dir ui/teams-console build && pnpm build:runtime",
     "build:runtime": "node -e \"require('node:fs').rmSync('generated/runtime-lib', { recursive: true, force: true })\" && tsc -p tsconfig.runtime.json",

@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { classifyLocalConsoleStatus, createLocalSupervisor, readLocalDaemonStatusProjection, type LocalDaemonEndpointProjection, type LocalSupervisor } from './local-supervisor.ts'
 import { defaultLocalConfigPath, loadLocalConfig, readLocalInternalConfig, writeLocalInternalConsoleRuntime, writeLocalInternalLauncherState, writeLocalInternalRecoveryState, type LocalInternalLauncherConfig } from './local-config.ts'
-import { processAlive, processCommand, processOwnsConfigCommand } from './local-ownership.ts'
+import { processAlive, processCommand, processOwnsConfigCommand, terminateProcess } from './local-ownership.ts'
 import { sendLocalConsoleControlRequest, type LocalConsoleControlKind, type LocalConsolePublicStatus } from './local-work-control.ts'
 
 export interface LocalLauncherStatus {
@@ -20,7 +20,7 @@ export interface LocalLauncherStatus {
 }
 
 export class LocalProcessError extends Error {
-  constructor(readonly code: 'NOT_RUNNING' | 'STALE_GENERATION' | 'STALE_OWNER' | 'START_TIMEOUT' | 'ALREADY_RUNNING' | 'STARTING' | 'INVALID_STATUS' | 'CONSOLE_NOT_RUNNING' | 'CONSOLE_DISABLED' | 'CONSOLE_CREDENTIAL_MISSING' | 'CONSOLE_PORT_OCCUPIED' | 'CONSOLE_ASSET_MISSING' | 'CONSOLE_RETAINED' | 'CONSOLE_START_FAILED' | 'CONSOLE_STATUS_UNAVAILABLE' | 'CONSOLE_PROCESS_EXITED', message: string) {
+  constructor(readonly code: 'NOT_RUNNING' | 'STALE_GENERATION' | 'STALE_OWNER' | 'START_TIMEOUT' | 'STOP_TIMEOUT' | 'ALREADY_RUNNING' | 'STARTING' | 'INVALID_STATUS' | 'CONSOLE_NOT_RUNNING' | 'CONSOLE_DISABLED' | 'CONSOLE_CREDENTIAL_MISSING' | 'CONSOLE_PORT_OCCUPIED' | 'CONSOLE_ASSET_MISSING' | 'CONSOLE_RETAINED' | 'CONSOLE_START_FAILED' | 'CONSOLE_STATUS_UNAVAILABLE' | 'CONSOLE_PROCESS_EXITED', message: string) {
     super(message)
     this.name = 'LocalProcessError'
   }
@@ -133,8 +133,10 @@ async function stopOwnedLauncher(configPath: string, launcher: LocalInternalLaun
   if (!(await processOwnsStartToken(pid, launcher.startToken, configPath))) {
     throw new LocalProcessError('STALE_OWNER', `local supervisor pid=${pid} does not match its persisted start token`)
   }
-  process.kill(pid, 'SIGTERM')
-  await waitForProcessExit(pid, 2_000)
+  const termination = await terminateProcess(pid, { gracefulMs: 2_000, hardMs: 1_000 })
+  if (termination === 'unresponsive') {
+    throw new LocalProcessError('STOP_TIMEOUT', `local supervisor pid=${pid} did not exit after SIGTERM and SIGKILL`)
+  }
 }
 
 async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLocalInternalConfig>>, consoleConfigPath?: string): Promise<void> {
@@ -168,8 +170,10 @@ async function stopOwnedDescendants(internal: Awaited<ReturnType<typeof readLoca
     if (command === undefined || candidate.entryPath === undefined || !processOwnsConfigCommand(command, candidate.configPath, candidate.entryPath, candidate.startToken)) {
       throw new LocalProcessError('STALE_OWNER', `owned child pid=${candidate.pid} cannot be validated for ${candidate.id}`)
     }
-    process.kill(candidate.pid, 'SIGTERM')
-    await waitForProcessExit(candidate.pid, 2_000)
+    const termination = await terminateProcess(candidate.pid, { gracefulMs: 2_000, hardMs: 1_000 })
+    if (termination === 'unresponsive') {
+      throw new LocalProcessError('STOP_TIMEOUT', `owned child pid=${candidate.pid} did not exit after SIGTERM and SIGKILL`)
+    }
   }
 }
 
@@ -194,11 +198,9 @@ async function stopRetainedConsoleRuntime(
       await writeLocalInternalConsoleRuntime(config.internalPath, { enabled: runtime.enabled, state: 'retained', pid: runtime.pid, startToken: runtime.startToken, entryPath: runtime.entryPath, error: { code: 'CONSOLE_RETAINED', message } })
       throw new LocalProcessError('CONSOLE_RETAINED', message)
     }
-    process.kill(runtime.pid, 'SIGTERM')
-    try {
-      await waitForProcessExit(runtime.pid, 2_000)
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause)
+    const termination = await terminateProcess(runtime.pid, { gracefulMs: 2_000, hardMs: 1_000 })
+    if (termination === 'unresponsive') {
+      const message = `retained Console pid=${runtime.pid} did not exit after SIGTERM and SIGKILL`
       await writeLocalInternalConsoleRuntime(config.internalPath, { enabled: runtime.enabled, state: 'retained', pid: runtime.pid, startToken: runtime.startToken, entryPath: runtime.entryPath, error: { code: 'CONSOLE_RETAINED', message } })
       throw new LocalProcessError('CONSOLE_RETAINED', message)
     }
@@ -336,17 +338,16 @@ export async function startLocalProcess(configPath = defaultLocalConfigPath(), o
   if (config.internalPath === undefined) throw new LocalProcessError('NOT_RUNNING', 'local config has no runtime internal state')
   return await withLauncherStartLock(config.internalPath, async () => {
     const current = await readLocalInternalConfig(config.internalPath!)
-    if (current.launcher?.state === 'starting') {
-      throw new LocalProcessError('ALREADY_RUNNING', `local supervisor is already starting generation=${current.launcher.generation}`)
-    }
-    if (current.launcher?.state === 'running' && current.launcher.pid !== undefined && current.launcher.pid > 0 && processAlive(current.launcher.pid)) {
-      if (!(await processOwnsStartToken(current.launcher.pid, current.launcher.startToken, config.configPath))) {
-        throw new LocalProcessError('STALE_OWNER', `local supervisor pid=${current.launcher.pid} does not match its persisted start token`)
-      }
-      throw new LocalProcessError('ALREADY_RUNNING', `local supervisor is already running pid=${current.launcher.pid} generation=${current.launcher.generation}`)
-    }
-    if (current.launcher !== undefined && current.launcher.state !== 'stopped') {
-      await recoverDeadLauncher(config.internalPath!, config.configPath, current, current.launcher, 'stopped', config.console?.configPath)
+    const previous = current.launcher
+    if (previous !== undefined && previous.state !== 'stopped') {
+      // A start replaces the previous launcher generation for this config. Recovery
+      // owns the graceful stop and its explicit-PID SIGKILL fallback.
+      await recoverDeadLauncher(config.internalPath!, config.configPath, current, previous, 'stopped', config.console?.configPath)
+    } else {
+      // A stopped launcher may still leave a retained Console child recorded;
+      // the new start must converge it before it spawns a generation that could
+      // collide on the Console port.
+      await stopRetainedConsoleRuntime(config, current)
     }
     const latest = await readLocalInternalConfig(config.internalPath!)
     const nextGeneration = (latest.launcher?.generation ?? 0) + 1

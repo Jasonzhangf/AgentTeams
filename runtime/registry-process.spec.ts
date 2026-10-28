@@ -132,12 +132,15 @@ it('starts the production registry entry, reports it running and stops it by exp
   expect((await statusRegistryDaemon(configPath)).state).toBe('stopped')
 })
 
-it('refuses a second start while the registry generation is alive', async () => {
+it('replaces a live registry generation on start', async () => {
   const configPath = track(await registryConfig())
-  const started = await startRegistryDaemon(configPath)
-  await expectFault(startRegistryDaemon(configPath), 'ALREADY_RUNNING')
-  expect((await statusRegistryDaemon(configPath)).generation).toBe(started.generation)
-})
+  const started = await startRegistryDaemon(configPath, { startupTimeoutMs: 20_000 })
+  const restarted = await startRegistryDaemon(configPath, { startupTimeoutMs: 20_000 })
+  expect(processAlive(started.pid!)).toBe(false)
+  expect(restarted.pid).not.toBe(started.pid)
+  expect(restarted.generation).toBe(started.generation + 1)
+  expect((await statusRegistryDaemon(configPath)).generation).toBe(restarted.generation)
+}, 60_000)
 
 it('refuses a stop from a stale generation without touching the live process', async () => {
   const configPath = track(await registryConfig())
