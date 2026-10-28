@@ -3,8 +3,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { spawn, spawnSync } from 'node:child_process'
 import {
-  symlinkSync,
   closeSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -14,6 +14,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -5906,16 +5907,21 @@ async function runBB13(context) {
   try {
     runChecked('git', ['clone', '--quiet', '--no-local', root, fixtureRoot], { cwd: root, logPath: join(evidenceDir, 'git-clone.json') })
     runChecked('git', ['checkout', '--quiet', '--detach', context.candidate.head_commit], { cwd: fixtureRoot, logPath: join(evidenceDir, 'git-checkout.json') })
-    for (const packageDir of ['', 'opencode-adapter', 'console-host', 'ui/teams-console']) {
-      const source = join(root, packageDir, 'node_modules')
-      if (existsSync(source)) symlinkSync(source, join(fixtureRoot, packageDir, 'node_modules'), 'dir')
-    }
+    // Keep the clean fixture self-contained. Symlinking the worktree's
+    // node_modules makes every vitest worker read from /Volumes; transient
+    // EPERM there turns the lifecycle gate into a flaky failure unrelated to
+    // the candidate. The offline install creates the fixture's own dependency
+    // tree on the same filesystem as the fixture.
+    runChecked(realPnpm, ['install', '--offline', '--frozen-lockfile'], {
+      cwd: fixtureRoot,
+      logPath: join(evidenceDir, 'pnpm-install.json'),
+    })
     // The project installs its pinned AppSDK binary at `.appsdk/sdk.bin` and the
     // lifecycle verify stage needs that exact binary. A clone has no local install,
     // and the `appsdk` on PATH may be another build that rewrites tracked governance
     // files. Mirror the project's own pin, exactly like the dependency links above.
     const pinnedSdk = join(root, '.appsdk', 'sdk.bin')
-    if (existsSync(pinnedSdk)) symlinkSync(pinnedSdk, join(fixtureRoot, '.appsdk', 'sdk.bin'), 'file')
+    if (existsSync(pinnedSdk)) copyFileSync(pinnedSdk, join(fixtureRoot, '.appsdk', 'sdk.bin'))
     // The repository ignores node_modules as a directory, so a node_modules symlink
     // is still untracked. The lifecycle adapter requires a fully clean candidate, so
     // exclude the fixture's own dependency links without touching tracked files.

@@ -36,6 +36,13 @@ export async function processCommand(pid: number): Promise<string | undefined> {
   catch { return undefined }
 }
 
+export async function processStartTime(pid: number): Promise<string | undefined> {
+  try {
+    const started = (await execFile('ps', ['-p', String(pid), '-o', 'lstart='])).stdout.trim()
+    return started === '' ? undefined : started
+  } catch { return undefined }
+}
+
 function splitProcessCommand(command: string): readonly string[] {
   const args: string[] = []
   let current = ''

@@ -47,7 +47,7 @@ import {
   writeLocalGroupEndpointRecord,
 } from '../config/local-group-endpoint-store.ts'
 import { createSessionObservationPublisher, type SessionObservationFailure } from './session-observation-publisher.ts'
-import { processAlive, processCommand, terminateProcess } from './local-ownership.ts'
+import { processAlive, processCommand, processStartTime, terminateProcess } from './local-ownership.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
 import { rpcErrorFrame, type AcpHost } from '../agent-host/acp-host.ts'
 import { openCodeAcpAdapter } from '../opencode-adapter/src/acp-engine.ts'
@@ -183,11 +183,15 @@ export interface AcpServeRuntimeOptions {
  * daemon and its engine child before it creates the owned engine home.
  */
 interface PersistedAcpServeState {
-  readonly version: 1
+  readonly version: 2
   readonly agentId: string
   readonly daemonPid: number
+  readonly daemonStart: string | null
   readonly enginePid: number
+  readonly engineStart: string | null
   readonly engineInstanceId: string
+  readonly engineKind: EngineKind
+  readonly engineExecutable: string
   readonly dataDirectory: string
   readonly configPath: string | null
 }
@@ -1424,11 +1428,15 @@ async function withdrawLocalGroupEndpoint(path: string): Promise<LocalGroupEndpo
 function isPersistedAcpServeState(value: unknown): value is PersistedAcpServeState {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Partial<PersistedAcpServeState>
-  return record.version === 1 &&
+  return record.version === 2 &&
     typeof record.agentId === 'string' && record.agentId.length > 0 &&
     Number.isSafeInteger(record.daemonPid) && (record.daemonPid as number) >= 0 &&
+    (record.daemonStart === null || typeof record.daemonStart === 'string') &&
     Number.isSafeInteger(record.enginePid) && (record.enginePid as number) >= 0 &&
+    (record.engineStart === null || typeof record.engineStart === 'string') &&
     typeof record.engineInstanceId === 'string' &&
+    (record.engineKind === 'opencode' || record.engineKind === 'dsh') &&
+    typeof record.engineExecutable === 'string' && record.engineExecutable.length > 0 &&
     typeof record.dataDirectory === 'string' && record.dataDirectory.length > 0 &&
     (record.configPath === null || typeof record.configPath === 'string')
 }
@@ -1465,9 +1473,21 @@ async function writeAcpServeState(path: string, state: PersistedAcpServeState): 
   }
 }
 
-async function terminateOwnedPid(pid: number, expected: readonly string[], message: string, gracefulMs: number): Promise<void> {
+async function terminateOwnedPid(
+  pid: number,
+  recordedStart: string | null,
+  fallbackFragments: readonly string[],
+  message: string,
+  gracefulMs: number,
+): Promise<void> {
+  const currentStart = await processStartTime(pid)
+  if (recordedStart !== null) {
+    if (currentStart !== recordedStart) {
+      throw new AcpError('ENGINE_UNAVAILABLE', `${message} pid=${pid} was reused by another process`)
+    }
+  }
   const command = await processCommand(pid)
-  if (command === undefined || !expected.some(fragment => command.includes(fragment))) {
+  if (command === undefined || !fallbackFragments.every(fragment => command.includes(fragment))) {
     throw new AcpError('ENGINE_UNAVAILABLE', `${message} pid=${pid} does not match its recorded ownership`)
   }
   const termination = await terminateProcess(pid, { gracefulMs, hardMs: DEFAULT_HARD_KILL_MS })
@@ -1509,7 +1529,8 @@ async function convergeAcpServe(input: {
     if (previous.daemonPid > 0) {
       await terminateOwnedPid(
         previous.daemonPid,
-        ['--serve', input.dataDirectory, ...(previous.configPath === null ? [] : [previous.configPath])],
+        previous.daemonStart,
+        ['--serve', previous.engineKind, ...(previous.configPath === null ? [] : [previous.configPath])],
         `existing serve daemon for agent ${input.agentId}`,
         input.stopTimeoutMs,
       )
@@ -1518,7 +1539,8 @@ async function convergeAcpServe(input: {
   if (previous.enginePid > 0 && previous.enginePid !== process.pid && processAlive(previous.enginePid)) {
     await terminateOwnedPid(
       previous.enginePid,
-      [input.executable, input.ownedDirectory, input.dataDirectory],
+      previous.engineStart,
+      [previous.engineExecutable],
       `existing serve engine for agent ${input.agentId}`,
       input.stopTimeoutMs,
     )
@@ -1644,11 +1666,15 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
   let registeredStop: (() => Promise<unknown>) | undefined
   try {
     await writeAcpServeState(statePath, {
-      version: 1,
+      version: 2,
       agentId: agent.daemon.id,
       daemonPid: process.pid,
+      daemonStart: (await processStartTime(process.pid)) ?? null,
       enginePid: daemon.handle.pid,
+      engineStart: (await processStartTime(daemon.handle.pid)) ?? null,
       engineInstanceId,
+      engineKind: engine.kind,
+      engineExecutable: executable,
       dataDirectory,
       configPath: intent.configPath,
     })

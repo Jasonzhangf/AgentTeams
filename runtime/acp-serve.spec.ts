@@ -1,6 +1,6 @@
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { createServer, createConnection, type Socket } from 'node:net'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { chmodSync, existsSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, networkInterfaces, tmpdir } from 'node:os'
@@ -15,6 +15,7 @@ import { connectDirectWssTarget } from '../network/direct-route.ts'
 import { negotiatedAgreement, runTeamsNegotiation } from '../network/teams-negotiation.ts'
 import type { RegistrationStatus } from '../network/registration-client.ts'
 import {
+  acpServeStatePath,
   acpCapabilityDeclarations,
   classifyServeListener,
   engineAdapterFor,
@@ -33,7 +34,7 @@ import {
 import { localGroupEndpointScopePath, readLocalGroupEndpointRecord } from '../config/local-group-endpoint-store.ts'
 import type { AgentRegistration } from './registry-registration.ts'
 import { sendLocalMessageRequest } from './local-message-socket.ts'
-import { processAlive } from './local-ownership.ts'
+import { processAlive, processStartTime, terminateProcess } from './local-ownership.ts'
 
 /**
  * `--serve <engine>` entry evidence (owner: runtime).
@@ -1391,6 +1392,61 @@ tlsTrustRef = "file:${trustPath}"
     expect(processAlive(second.enginePid)).toBe(false)
     expect(existsSync(join(second.dataDirectory, 'engine'))).toBe(false)
     expect(existsSync(join(second.dataDirectory, 'agent-serve-state.json'))).toBe(false)
+  })
+
+  it('converges a cross-process serve by recorded pid and process start time', { timeout: 60_000 }, async () => {
+    const directory = await temporaryDirectory()
+    const fakeEngine = await writeFakeDshEngine(directory)
+    const dataDirectory = join(directory, 'state')
+    const configPath = join(directory, 'agent-cross-process.toml')
+    const port = await availableLoopbackPort()
+    await writeFile(configPath, dshAgentConfig({
+      executable: fakeEngine,
+      port,
+      dataDirectory,
+      workspace: join(directory, 'workspace'),
+      baseUrl: 'http://127.0.0.1:1/v1',
+    }))
+    const previous = spawn(process.execPath, [
+      '-e', 'setInterval(() => {}, 1000)',
+      '--serve', 'dsh', '--config', configPath,
+    ], { stdio: 'ignore' })
+    const previousPid = previous.pid
+    expect(previousPid).toBeTypeOf('number')
+    if (previousPid === undefined) throw new Error('spawned fixture has no pid')
+    let handle: AcpServeHandle | undefined
+    try {
+      let previousStart: string | undefined
+      for (let attempt = 0; attempt < 100 && previousStart === undefined; attempt += 1) {
+        previousStart = await processStartTime(previousPid)
+        if (previousStart === undefined) await new Promise(resolveWait => setTimeout(resolveWait, 25))
+      }
+      expect(previousStart).toBeDefined()
+      await mkdir(dataDirectory, { recursive: true, mode: 0o700 })
+      await writeFile(acpServeStatePath(dataDirectory), `${JSON.stringify({
+        version: 2,
+        agentId: 'reasoner-dsh',
+        daemonPid: previousPid,
+        daemonStart: previousStart,
+        enginePid: 0,
+        engineStart: null,
+        engineInstanceId: 'stale-instance',
+        engineKind: 'dsh',
+        engineExecutable: fakeEngine,
+        dataDirectory,
+        configPath,
+      }, null, 2)}\n`)
+
+      handle = await startDshServe({ configPath })
+      expect(processAlive(previousPid)).toBe(false)
+      expect(handle.enginePid).toBeGreaterThan(0)
+      expect(processAlive(handle.enginePid)).toBe(true)
+      expect(JSON.parse(await readFile(join(dataDirectory, 'agent-serve-state.json'), 'utf8')))
+        .toMatchObject({ version: 2, daemonPid: process.pid, enginePid: handle.enginePid })
+    } finally {
+      if (processAlive(previousPid)) await terminateProcess(previousPid, { gracefulMs: 1_000, hardMs: 1_000 })
+      if (handle !== undefined) await handle.stop()
+    }
   })
 
   it.skipIf(lanIpv4() === undefined)('binds the authenticated LAN channel onto the same host and admits only a real credential', async () => {
