@@ -322,6 +322,19 @@ function upsertEvent(events: ConsoleSessionEventView[], event: ConsoleSessionEve
 type ToolEvent = Extract<ConsoleSessionEventView, { readonly kind: 'tool' }>
 
 /**
+ * Derive a tool row identity from its owning Session, prompt message and the engine call
+ * id. The call id alone is not channel-unique: two Sessions or two prompts may reuse it.
+ * The public `callId` keeps the engine's original value; only this derived id is scoped.
+ */
+function toolProjectionId(input: {
+  readonly sessionId: string
+  readonly messageId: string
+  readonly callId: string
+}): string {
+  return `tool-${input.sessionId}-${input.messageId}-${input.callId}`
+}
+
+/**
  * Project one engine `tool_call`/`tool_call_update` into the frozen Console tool union.
  * The update's own identity and fields win; a later update that carries only a status
  * reuses the tool and input the earlier frame really reported.
@@ -336,11 +349,12 @@ function projectToolEvent(input: {
 }): ToolEvent | undefined {
   const callId = stringField(input.update.toolCallId) ?? input.previous?.callId
   if (callId === undefined) return undefined
+  const projectionId = toolProjectionId({ sessionId: input.sessionId, messageId: input.messageId, callId })
   const tool = stringField(input.update.title) ?? input.previous?.tool ?? stringField(input.update.kind) ?? 'tool'
-  const partId = input.previous?.partId ?? `tool-${callId}`
+  const partId = input.previous?.partId ?? projectionId
   const toolInput = cloneJson((input.update.rawInput ?? input.update.input ?? input.previous?.input ?? {}) as JsonValue)
   const base = {
-    eventId: `tool-${callId}`,
+    eventId: projectionId,
     agentId: input.agentId,
     sessionId: input.sessionId,
     occurredAt: input.occurredAt,
@@ -1318,7 +1332,11 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     const callId = stringField(update.toolCallId)
     const previous = callId === undefined
       ? undefined
-      : channel.events.find((event): event is ToolEvent => event.kind === 'tool' && event.callId === callId)
+      : channel.events.find((event): event is ToolEvent =>
+          event.kind === 'tool' &&
+          event.sessionId === sessionId &&
+          event.messageId === prompt.assistantMessageId &&
+          event.callId === callId)
     const event = projectToolEvent({
       agentId: localAgentId,
       sessionId,

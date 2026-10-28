@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AcpFault, AcpFrame, HistoryRecord } from '../packages/shared/src/acp.ts'
 import { AcpError } from '../packages/shared/src/acp.ts'
+import type { ConsoleSessionEventView } from '../packages/shared/src/console-api.ts'
 import type { AcpDuplex, EngineHandle } from '../packages/shared/src/engine.ts'
 import { assertAcpAllowed, extractAcpCapabilities, resolveAcpPolicy } from '../config/acp-policy.ts'
 import type { AcpHistoryPort } from './acp-history.ts'
@@ -579,6 +580,151 @@ describe('createAcpHost', () => {
       frame: { jsonrpc: '2.0', id: 7, method: 'session/prompt', params: { sessionId: 'session-b', prompt: [{ type: 'text', text: 'b2' }] } },
     })
     expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(4)
+  })
+
+  it('isolates a shared tool call id by owning Session instead of merging fields', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const childA = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: childA, result: { sessionId: 'session-a' } })
+    const childB = await newSession(fixture, ref1, 2)
+    fixture.duplex.push({ jsonrpc: '2.0', id: childB, result: { sessionId: 'session-b' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 3, method: 'session/prompt', params: { sessionId: 'session-a', prompt: [{ type: 'text', text: 'a' }] } },
+    })
+    const aPromptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 4, method: 'session/prompt', params: { sessionId: 'session-b', prompt: [{ type: 'text', text: 'b' }] } },
+    })
+    const bPromptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+
+    // Both Sessions emit the same engine call id with their own title and input.
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-a', update: { sessionUpdate: 'tool_call', toolCallId: 'call-shared', title: 'read-a', rawInput: { path: '/tmp/a' }, status: 'pending' } },
+    })
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-b', update: { sessionUpdate: 'tool_call', toolCallId: 'call-shared', title: 'write-b', rawInput: { path: '/tmp/b' }, status: 'pending' } },
+    })
+    await flush()
+
+    // A status-only update for B must inherit B's own tool and input, never A's.
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-b', update: { sessionUpdate: 'tool_call_update', toolCallId: 'call-shared', status: 'running' } },
+    })
+    await flush()
+
+    const events = fixture.host.sessionEvents?.() ?? []
+    const toolRows = events.filter((event): event is Extract<ConsoleSessionEventView, { readonly kind: 'tool' }> =>
+      event.kind === 'tool' && event.callId === 'call-shared')
+    expect(toolRows).toHaveLength(2)
+    const a = toolRows.find(event => event.sessionId === 'session-a')
+    const b = toolRows.find(event => event.sessionId === 'session-b')
+    expect(a).toMatchObject({ state: 'pending', tool: 'read-a', input: { path: '/tmp/a' }, callId: 'call-shared' })
+    expect(b).toMatchObject({ state: 'running', tool: 'write-b', input: { path: '/tmp/b' }, callId: 'call-shared' })
+    expect(a!.eventId).not.toBe(b!.eventId)
+    expect(a!.partId).not.toBe(b!.partId)
+
+    // Completing each Session keeps its own row, fields and output.
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-a', update: { sessionUpdate: 'tool_call_update', toolCallId: 'call-shared', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'a-output' } }] } },
+    })
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-b', update: { sessionUpdate: 'tool_call_update', toolCallId: 'call-shared', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'b-output' } }] } },
+    })
+    await flush()
+
+    const completed = (fixture.host.sessionEvents?.() ?? []).filter((event): event is Extract<ConsoleSessionEventView, { readonly kind: 'tool' }> =>
+      event.kind === 'tool' && event.callId === 'call-shared')
+    expect(completed).toHaveLength(2)
+    expect(completed.find(event => event.sessionId === 'session-a'))
+      .toMatchObject({ state: 'completed', tool: 'read-a', input: { path: '/tmp/a' }, output: 'a-output', callId: 'call-shared' })
+    expect(completed.find(event => event.sessionId === 'session-b'))
+      .toMatchObject({ state: 'completed', tool: 'write-b', input: { path: '/tmp/b' }, output: 'b-output', callId: 'call-shared' })
+
+    fixture.duplex.push({ jsonrpc: '2.0', id: aPromptChild, result: { stopReason: 'end_turn' } })
+    fixture.duplex.push({ jsonrpc: '2.0', id: bPromptChild, result: { stopReason: 'end_turn' } })
+    await flush()
+  })
+
+  it('keeps an earlier prompt tool row when the same Session reuses a call id in a later prompt', async () => {
+    const fixture = makeFixture()
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'first' }] } },
+    })
+    const firstPromptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-1', update: { sessionUpdate: 'tool_call', toolCallId: 'call-shared', title: 'read-first', rawInput: { path: '/tmp/first' }, status: 'pending' } },
+    })
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-1', update: { sessionUpdate: 'tool_call_update', toolCallId: 'call-shared', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'first-output' } }] } },
+    })
+    fixture.duplex.push({ jsonrpc: '2.0', id: firstPromptChild, result: { stopReason: 'end_turn' } })
+    await flush()
+
+    const firstTools = (fixture.host.sessionEvents?.() ?? []).filter((event): event is Extract<ConsoleSessionEventView, { readonly kind: 'tool' }> =>
+      event.kind === 'tool' && event.callId === 'call-shared')
+    expect(firstTools).toHaveLength(1)
+    expect(firstTools[0]).toMatchObject({ sessionId: 'session-1', tool: 'read-first', input: { path: '/tmp/first' }, output: 'first-output', state: 'completed', callId: 'call-shared' })
+
+    // A later prompt reuses the same engine call id and carries its own title, input and output.
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 3, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'second' }] } },
+    })
+    const secondPromptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-1', update: { sessionUpdate: 'tool_call', toolCallId: 'call-shared', title: 'write-second', rawInput: { path: '/tmp/second' }, status: 'pending' } },
+    })
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-1', update: { sessionUpdate: 'tool_call_update', toolCallId: 'call-shared', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'second-output' } }] } },
+    })
+    fixture.duplex.push({ jsonrpc: '2.0', id: secondPromptChild, result: { stopReason: 'end_turn' } })
+    await flush()
+
+    const toolRows = (fixture.host.sessionEvents?.() ?? []).filter((event): event is Extract<ConsoleSessionEventView, { readonly kind: 'tool' }> =>
+      event.kind === 'tool' && event.callId === 'call-shared')
+    expect(toolRows).toHaveLength(2)
+    const earlier = toolRows.find(event => event.messageId === firstTools[0].messageId)
+    const later = toolRows.find(event => event.messageId !== firstTools[0].messageId)
+    expect(earlier).toMatchObject({ tool: 'read-first', input: { path: '/tmp/first' }, output: 'first-output', state: 'completed', callId: 'call-shared' })
+    expect(later).toMatchObject({ tool: 'write-second', input: { path: '/tmp/second' }, output: 'second-output', state: 'completed', callId: 'call-shared' })
+    expect(earlier!.eventId).not.toBe(later!.eventId)
+    expect(earlier!.partId).not.toBe(later!.partId)
+    expect(earlier!.messageId).not.toBe(later!.messageId)
+    expect(earlier!.callId).toBe('call-shared')
+    expect(later!.callId).toBe('call-shared')
   })
 
   it('reserves same-Session admission before the first history append so an overlapping prompt is rejected', async () => {
