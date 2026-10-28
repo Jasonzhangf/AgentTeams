@@ -93,17 +93,16 @@ Changes: per-Session `activePrompts` admission in `agent-host/acp-host.ts`; out-
 unsupported or missing content. The black-box driver gained Session A/B interleaving and a
 `localhost` assertion on the completed `/etc/hosts` tool event.
 
-Verified on the current tree: focused `agent-host` + `runtime` intent-watch suites 51/51 pass
-(exit 0), `tsc --noEmit` exit 0, `pnpm build` exit 0. UI sources unchanged, so the r1 D07 UI
-gate evidence is reused.
+Verified on the current tree and with a real-process run: focused `agent-host` + `runtime`
+intent-watch suites 51/51 pass (2 files, exit 0), `tsc --noEmit` exit 0, `pnpm build` exit 0.
+UI sources unchanged, so the r1 D07 UI gate evidence is reused (73/73).
 
-Not verified: the real black-box run and the commit. The sandbox disables loopback listeners
-(`listen EPERM`, `CODEX_SANDBOX_NETWORK_DISABLED=1`) and denies writes to the worktree gitdir
-(`index.lock: Operation not permitted`); an escalated retry was refused by policy. Receipt
-`receipt.json` is removed; the r1 receipt stays as `receipt-r1-passing.json` history only.
+Real black box used a real control daemon, a real OpenCode-backed agent daemon and real Chrome:
+`51/51` checks passed, exit 0. `receipt.json` summary is `checks=51, passed=51` with no `failed`.
+`receipt-r1-passing.json` stays as `r1` history only.
 
-Evidence: `focused-tests-r2.log`, `typecheck-r2.log`, `build-r2.log`, `black-box-r2-blocked.log`,
-`commit-r2-blocked.log`.
+Evidence: `focused-tests-r2.log`, `red-tests-r2.log`, `typecheck-r2.log`, `build-r2.log`,
+`black-box-r2-final.log`, `receipt.json`.
 
 Red-first check for the r2 fixes: restoring the HEAD versions of `agent-host/acp-host.ts` and
 `runtime/acp-serve.ts` made 6 tests fail (the five new cases plus the ordered-projection test that
