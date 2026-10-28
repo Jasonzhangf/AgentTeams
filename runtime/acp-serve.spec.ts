@@ -1449,6 +1449,96 @@ tlsTrustRef = "file:${trustPath}"
     }
   })
 
+  it('serializes concurrent starts for one data directory and leaves one live engine', { timeout: 120_000 }, async () => {
+    const directory = await temporaryDirectory()
+    const fakeEngine = await writeFakeDshEngine(directory)
+    const port = await availableLoopbackPort()
+    const dataDirectory = join(directory, 'state')
+    const configPath = join(directory, 'agent-concurrent.toml')
+    await writeFile(configPath, dshAgentConfig({
+      executable: fakeEngine,
+      port,
+      dataDirectory,
+      workspace: join(directory, 'workspace'),
+      baseUrl: 'http://127.0.0.1:1/v1',
+    }))
+
+    const [first, second] = await Promise.all([
+      startDshServe({ configPath }),
+      startDshServe({ configPath }),
+    ])
+    const state = JSON.parse(await readFile(acpServeStatePath(dataDirectory), 'utf8')) as {
+      readonly daemonPid: number
+      readonly enginePid: number
+      readonly engineInstanceId: string
+    }
+    const owned = [first, second].filter(handle => handle.engineInstanceId === state.engineInstanceId)
+    expect(owned).toHaveLength(1)
+    const winner = owned[0]!
+    const loser = first === winner ? second : first
+    expect(state.daemonPid).toBe(process.pid)
+    expect(winner.enginePid).toBe(state.enginePid)
+    expect(processAlive(winner.enginePid)).toBe(true)
+    expect(loser.enginePid).not.toBe(winner.enginePid)
+    expect(processAlive(loser.enginePid)).toBe(false)
+
+    // A late stop from the replaced handle must not remove the winner's record
+    // or its shared engine home.
+    const lateReceipt = await loser.stop()
+    expect(lateReceipt.engine.kind).toBe('exited')
+    expect(existsSync(acpServeStatePath(dataDirectory))).toBe(true)
+    expect(existsSync(join(dataDirectory, 'engine'))).toBe(true)
+    expect(processAlive(winner.enginePid)).toBe(true)
+
+    const receipt = await winner.stop()
+    expect(receipt.engine.kind).toBe('exited')
+    expect(processAlive(winner.enginePid)).toBe(false)
+    expect(existsSync(acpServeStatePath(dataDirectory))).toBe(false)
+    expect(existsSync(join(dataDirectory, 'engine'))).toBe(false)
+  })
+
+  it('keeps the record and engine home when a stop cannot confirm the engine exited', { timeout: 60_000 }, async () => {
+    const directory = await temporaryDirectory()
+    const fakeEngine = await writeFakeDshEngine(directory)
+    const port = await availableLoopbackPort()
+    const dataDirectory = join(directory, 'state')
+    const configPath = join(directory, 'agent-retained.toml')
+    await writeFile(configPath, dshAgentConfig({
+      executable: fakeEngine,
+      port,
+      dataDirectory,
+      workspace: join(directory, 'workspace'),
+      baseUrl: 'http://127.0.0.1:1/v1',
+    }))
+    const handle = await startDshServe({ configPath })
+    const enginePid = handle.enginePid
+    const statePath = acpServeStatePath(dataDirectory)
+    const realStop = handle.daemon.stop
+    handle.daemon.stop = async () => ({
+      kind: 'retained',
+      pid: enginePid,
+      error: { code: 'ENGINE_UNAVAILABLE', message: 'simulated unresponsive engine' },
+    })
+    try {
+      const receipt = await handle.stop()
+      expect(receipt.engine.kind).toBe('retained')
+      expect(existsSync(statePath)).toBe(true)
+      expect(existsSync(join(dataDirectory, 'engine'))).toBe(true)
+      expect(processAlive(enginePid)).toBe(true)
+
+      // The preserved record still names this process, so a second start refuses
+      // instead of creating another engine.
+      await expect(startDshServe({ configPath })).rejects.toMatchObject({ code: 'ENGINE_UNAVAILABLE' })
+      expect(existsSync(statePath)).toBe(true)
+      expect(existsSync(join(dataDirectory, 'engine'))).toBe(true)
+      expect(processAlive(enginePid)).toBe(true)
+    } finally {
+      handle.daemon.stop = realStop
+      await terminateProcess(enginePid, { gracefulMs: 1_000, hardMs: 1_000 }).catch(() => undefined)
+      await rm(statePath, { force: true }).catch(() => undefined)
+    }
+  })
+
   it.skipIf(lanIpv4() === undefined)('binds the authenticated LAN channel onto the same host and admits only a real credential', async () => {
     const ip = lanIpv4()
     if (ip === undefined) throw new Error('no LAN interface')

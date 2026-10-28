@@ -1,5 +1,5 @@
 import { accessSync, statSync } from 'node:fs'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { createServer, isIP, type Server, type Socket } from 'node:net'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
@@ -125,7 +125,11 @@ import {
 const DEFAULT_INITIALIZE_TIMEOUT_MS = 20_000
 const DEFAULT_STOP_TIMEOUT_MS = 5_000
 const DEFAULT_HARD_KILL_MS = 2_000
+/** A concurrent start waits for the holder, then converges the record it published. */
+const SERVE_START_LOCK_TIMEOUT_MS = 60_000
+const SERVE_START_LOCK_POLL_MS = 50
 const SERVE_STATE_FILE = 'agent-serve-state.json'
+const SERVE_STATE_LOCK_FILE = 'agent-serve-state.lock'
 const CHANNEL_POLL_INTERVAL_MS = 5
 const DELIVERY_PAGE_LIMIT = 200
 const QUICK_START_AGENT_ID = 'agent'
@@ -201,10 +205,15 @@ interface PersistedAcpServeState {
  * tests can start a serve twice in one process, where the daemon pid is this
  * process and the persisted record alone cannot stop the old listener/host.
  */
-const activeInProcessServes = new Map<string, () => Promise<unknown>>()
+const activeInProcessServes = new Map<string, () => Promise<AcpServeStopReceipt>>()
 
 export function acpServeStatePath(dataDirectory: string): string {
   return join(resolve(dataDirectory), SERVE_STATE_FILE)
+}
+
+/** The start lock lives beside the state record so one directory has one start at a time. */
+function acpServeStateLockPath(dataDirectory: string): string {
+  return join(resolve(dataDirectory), SERVE_STATE_LOCK_FILE)
 }
 
 /** Which inbound channel the configured listener address selects. */
@@ -1497,6 +1506,50 @@ async function terminateOwnedPid(
 }
 
 /**
+ * One cross-process start at a time for a data directory.
+ *
+ * The lock covers the whole start: converge the previous owner, create the
+ * owned engine home, start the engine, publish the state record and open the
+ * listener. A second start waits for the holder and then converges the record
+ * the holder published, so it can never create a second engine from a stale
+ * read. A lock left by a dead process is reclaimed; a live holder that does not
+ * finish within the timeout is a typed refusal, never a blind second start.
+ */
+async function withAcpServeStartLock<T>(dataDirectory: string, task: () => Promise<T>): Promise<T> {
+  const lockPath = acpServeStateLockPath(dataDirectory)
+  const deadline = Date.now() + SERVE_START_LOCK_TIMEOUT_MS
+  let handle: Awaited<ReturnType<typeof open>>
+  while (true) {
+    try {
+      handle = await open(lockPath, 'wx', 0o600)
+      break
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code !== 'EEXIST') throw cause
+      let ownerPid: number | undefined
+      try {
+        const value = Number.parseInt((await readFile(lockPath, 'utf8')).trim(), 10)
+        if (Number.isSafeInteger(value) && value > 0) ownerPid = value
+      } catch { /* keep the lock when its owner cannot be read */ }
+      if (ownerPid !== undefined && !processAlive(ownerPid)) {
+        await rm(lockPath, { force: true })
+        continue
+      }
+      if (Date.now() >= deadline) {
+        throw new AcpError('ENGINE_UNAVAILABLE', `another serve start for ${dataDirectory} is still in progress`)
+      }
+      await new Promise(resolveWait => setTimeout(resolveWait, SERVE_START_LOCK_POLL_MS))
+    }
+  }
+  try {
+    await handle.writeFile(`${process.pid}\n`)
+    return await task()
+  } finally {
+    await handle.close()
+    await rm(lockPath, { force: true })
+  }
+}
+
+/**
  * Converge one data directory to a single live serve. A previous daemon and its
  * engine are stopped by their recorded, ownership-checked PIDs before the new
  * start touches the owned engine home; an unrelated reused PID is never
@@ -1512,8 +1565,15 @@ async function convergeAcpServe(input: {
 }): Promise<void> {
   const inProcess = activeInProcessServes.get(input.dataDirectory)
   if (inProcess !== undefined) {
-    activeInProcessServes.delete(input.dataDirectory)
-    await inProcess()
+    // The old handle releases its own map entry, state record and engine home
+    // only after it confirms the engine exited. Do not delete the entry before
+    // the stop: a retained engine must keep its ownership record so no second
+    // start can be mistaken for a fresh directory.
+    const receipt = await inProcess()
+    if (receipt.engine.kind === 'retained') {
+      throw new AcpError('ENGINE_UNAVAILABLE',
+        `existing serve for ${input.dataDirectory} did not confirm its engine stopped; refusing a replacement start`)
+    }
   }
   const previous = await readAcpServeState(input.statePath)
   if (previous === undefined) return
@@ -1545,6 +1605,9 @@ async function convergeAcpServe(input: {
       input.stopTimeoutMs,
     )
   }
+  // Both recorded processes are confirmed gone, so the old engine home is stale
+  // derived state and must not be reused by the replacement engine.
+  await rm(input.ownedDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }).catch(() => undefined)
   await rm(input.statePath, { force: true })
 }
 
@@ -1554,6 +1617,17 @@ async function convergeAcpServe(input: {
  * and rethrows the typed fault, so a failed start never leaves a child behind.
  */
 export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRuntimeOptions = {}): Promise<AcpServeHandle> {
+  const dataDirectory = resolve(intent.intent.daemon.dataDirectory)
+  await mkdir(dataDirectory, { recursive: true, mode: 0o700 })
+  return await withAcpServeStartLock(dataDirectory, () => startAcpServeLocked(intent, options))
+}
+
+/**
+ * The start body that runs while this data directory's start lock is held. Its
+ * convergent stop and its failure cleanup both release the state record and the
+ * owned engine home only when the engine's exit is confirmed.
+ */
+async function startAcpServeLocked(intent: AcpServeIntent, options: AcpServeRuntimeOptions = {}): Promise<AcpServeHandle> {
   const env = options.env ?? process.env
   const agent = intent.intent
   const engine = agent.engine
@@ -1613,6 +1687,17 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       throw cause
     }
   }
+  /**
+   * The engine's confirmed exit is the only proof that its owned home and the
+   * published state record may be released. A retained engine keeps both, so a
+   * later start converges the recorded owner instead of creating a second one.
+   */
+  const releaseOwnedServe = async (engineStop: EngineStopResult | undefined): Promise<boolean> => {
+    if (engineStop === undefined || engineStop.kind !== 'exited') return false
+    await removeOwnedDirectory().catch(() => undefined)
+    await rm(statePath, { force: true }).catch(() => undefined)
+    return true
+  }
 
   // The daemon's own published listener generation. The direct listener target,
   // the ingress responder context and the egress initiator's
@@ -1657,13 +1742,29 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
     resolveCredential: reference => resolveCredentialReference(reference, env),
   })
   if (outcome.kind === 'failed') {
-    // No child survives a failed start (`startAcpAgentDaemon` reaps it), so the
-    // owned engine home is removed here too.
-    await removeOwnedDirectory().catch(() => undefined)
+    // A failed start reaps its child unless the engine refused to exit; its home
+    // is released only when the cleanup record proves the child is gone.
+    if (outcome.cleanup?.kind !== 'retained') {
+      await removeOwnedDirectory().catch(() => undefined)
+    }
     throw new AcpError(outcome.fault.code, `engine start failed: ${outcome.fault.message}`, outcome.fault.detail)
   }
   const daemon = outcome.daemon
-  let registeredStop: (() => Promise<unknown>) | undefined
+  let registeredStop: (() => Promise<AcpServeStopReceipt>) | undefined
+  /**
+   * Only the handle that still owns the published record may remove the shared
+   * engine home and the record. A replacement writes a new engineInstanceId
+   * under the same data directory, so an old handle's later stop keeps it.
+   */
+  const ownsCurrentRecord = async (): Promise<boolean> => {
+    try {
+      const current = await readAcpServeState(statePath)
+      return current !== undefined && current.engineInstanceId === engineInstanceId && current.daemonPid === process.pid
+    } catch {
+      // An unreadable record cannot prove ownership, so keep its resources.
+      return false
+    }
+  }
   try {
     await writeAcpServeState(statePath, {
       version: 2,
@@ -1679,9 +1780,12 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       configPath: intent.configPath,
     })
   } catch (cause) {
-    await daemon.stop().catch(() => undefined)
-    await removeOwnedDirectory().catch(() => undefined)
-    await rm(statePath, { force: true }).catch(() => undefined)
+    const engineStop = await daemon.stop().catch(() => undefined)
+    await releaseOwnedServe(engineStop)
+    if (engineStop?.kind === 'retained') {
+      throw new AcpError('ENGINE_UNAVAILABLE',
+        `serve state could not be written and engine pid=${engineStop.pid} did not confirm exit; its engine home was preserved`)
+    }
     throw cause instanceof AcpError ? cause : new AcpError('ENGINE_UNAVAILABLE', messageOf(cause, 'serve state could not be written'))
   }
 
@@ -1952,11 +2056,15 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
             await registration.client.stop().catch(() => undefined)
           }
           const engineStop = await daemon.stop()
-          // The engine is gone, so its owned home (DSH_HOME and the derived patch
-          // file, or the OpenCode home) is released on this stop path too.
-          await removeOwnedDirectory().catch(() => undefined)
+          // The engine's confirmed exit releases the owned home (DSH_HOME and the
+          // derived patch file, or the OpenCode home) and the state record. A
+          // retained engine keeps both, so the next start can converge it. The
+          // handle releases them only while it still owns the published record.
+          if (engineStop.kind === 'exited' && await ownsCurrentRecord()) {
+            await removeOwnedDirectory().catch(() => undefined)
+            await rm(statePath, { force: true }).catch(() => undefined)
+          }
           if (activeInProcessServes.get(dataDirectory) === stop) activeInProcessServes.delete(dataDirectory)
-          await rm(statePath, { force: true }).catch(() => undefined)
           return { engine: engineStop, channels }
         })()
         return stopping
@@ -2035,16 +2143,20 @@ export async function startAcpServe(intent: AcpServeIntent, options: AcpServeRun
       if (registeredStop !== undefined && activeInProcessServes.get(dataDirectory) === registeredStop) {
         activeInProcessServes.delete(dataDirectory)
       }
-      await rm(statePath, { force: true }).catch(() => undefined)
+      // The outer handler stops the engine and releases the state record and
+      // engine home only when that stop confirms the engine exited.
       throw cause
     }
   } catch (cause) {
-    await daemon.stop().catch(() => undefined)
-    await removeOwnedDirectory().catch(() => undefined)
+    const engineStop = await daemon.stop().catch(() => undefined)
     if (registeredStop !== undefined && activeInProcessServes.get(dataDirectory) === registeredStop) {
       activeInProcessServes.delete(dataDirectory)
     }
-    await rm(statePath, { force: true }).catch(() => undefined)
+    const released = await releaseOwnedServe(engineStop)
+    if (!released) {
+      throw new AcpError('ENGINE_UNAVAILABLE',
+        `ACP serve start failed and the engine did not confirm exit; its state record and engine home were preserved`)
+    }
     throw cause instanceof AcpError ? cause : new AcpError('ENGINE_UNAVAILABLE', messageOf(cause, 'ACP serve start failed'))
   }
 }
