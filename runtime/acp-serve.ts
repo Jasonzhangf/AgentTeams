@@ -122,7 +122,7 @@ import {
  * registration client is online.
  */
 
-const DEFAULT_INITIALIZE_TIMEOUT_MS = 20_000
+const DEFAULT_INITIALIZE_TIMEOUT_MS = 45_000
 const DEFAULT_STOP_TIMEOUT_MS = 5_000
 const DEFAULT_HARD_KILL_MS = 2_000
 /** A concurrent start waits for the holder, then converges the record it published. */

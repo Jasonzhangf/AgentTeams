@@ -144,7 +144,7 @@ async function startRealDaemon(input: {
       enforceablePolicies: openCodeAcpAdapter.enforceablePolicies,
     },
     history: store,
-    initialize: { params: { protocolVersion: 1, clientCapabilities: {} }, timeoutMs: 20_000 },
+    initialize: { params: { protocolVersion: 1, clientCapabilities: {} }, timeoutMs: 45_000 },
     stopTimeoutMs: 5_000,
     agentId: 'agent-a',
     resolveCredential: async reference => {
