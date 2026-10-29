@@ -499,5 +499,6 @@
   `pnpm test`（regression）382 套件 1714 passed/0；`pnpm smoke` 0；build:governance 0；
   黑盒 BB08/BB09/BB10 全 passed（pack root=generated/modules/teams-source/lib，commit f58f6a9）。
 - 交付：ff-only merge 入 main，`origin/main == f58f6a9`；主树 `git status` 干净；`pnpm typecheck` 0。
-- 资源清理：webui-ux-f1-f3-a / webui-ux-f1-f3-b 已干净（无 dirty、无 active pid），按 SESE 关闭：
-  `git worktree remove --force` + `prune`，并确认 `test ! -e`；保留 `.worker-runs` 证据目录。
+- 资源清理：webui-ux-f1-f3-a / webui-ux-f1-f3-b / integration-provider-ux-20261029 均已干净
+  （无 dirty、无 active pid），按 SESE 关闭：`git worktree remove` + `prune`，确认 `test ! -e`，
+  删除已合并分支；保留 `.worker-runs` 证据目录，worktree 1/10（仅 main）。
