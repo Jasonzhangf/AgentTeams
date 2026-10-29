@@ -1695,7 +1695,7 @@ appendFileSync(recordPath, JSON.stringify(record) + '\\n')
 
 let released = existsSync(releasePath)
 while (!released) {
-  await new Promise(resolve => setTimeout(resolve, 10))
+  await new Promise(resolve => setTimeout(resolve, 5))
   released = existsSync(releasePath)
 }
 
@@ -2073,7 +2073,7 @@ async function runBB07ExecutionFailure(context) {
     const launch = await waitForAsync(() => {
       const records = barrier.launches()
       return records.find(record => record.real_pid === undefined)
-    }, 10_000, 'the BB07 search wrapper launch record')
+    }, 10_000, 'the BB07 search wrapper launch record', 10)
     assert(openRun.isSettled() === false, 'the BB07 CLI finished before the wrapper barrier was established')
     assert(Number.isSafeInteger(launch.wrapper_pid) && processAlive(launch.wrapper_pid),
       `the BB07 wrapper PID is not active: ${JSON.stringify(launch)}`)
@@ -2082,7 +2082,7 @@ async function runBB07ExecutionFailure(context) {
     const real = await waitForAsync(() => {
       const records = barrier.launches()
       return records.find(record => Number.isSafeInteger(record.real_pid) && record.real_pid > 0)
-    }, 10_000, 'the BB07 real search process record')
+    }, 10_000, 'the BB07 real search process record', 10)
     assert(openRun.isSettled() === false, 'the BB07 CLI finished before the real search process was active')
     assert(processAlive(real.real_pid), `the BB07 real search PID is not active: ${JSON.stringify(real)}`)
     assert(processAlive(launch.wrapper_pid), 'the BB07 search wrapper exited before fault injection')
@@ -3452,7 +3452,7 @@ function openCodeExecutablePath(evidenceDir) {
   return resolved
 }
 
-async function waitForAsync(probe, timeoutMs, label) {
+async function waitForAsync(probe, timeoutMs, label, intervalMs = 250) {
   const deadline = Date.now() + timeoutMs
   for (;;) {
     const value = await probe()
@@ -3462,7 +3462,7 @@ async function waitForAsync(probe, timeoutMs, label) {
       absent.absentObservation = true
       throw absent
     }
-    await new Promise(resolveDelay => setTimeout(resolveDelay, 250))
+    await new Promise(resolveDelay => setTimeout(resolveDelay, intervalMs))
   }
 }
 
