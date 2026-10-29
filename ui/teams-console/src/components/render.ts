@@ -1,6 +1,6 @@
 import type { ConsoleEntry, TeamPage, UiStatus } from '../state/model.ts'
-import { canOperateSession, modelLabel, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerById, providerLabel, teamPages } from '../state/model.ts'
-import type { ConsoleState, DrawerState, ProviderDraft, TeamsConsoleController } from '../state/controller.ts'
+import { canOperateSession, projectAgents, projectConfig, projectNotifications, projectSessionFlow, projectSessions, providerLabel, teamPages } from '../state/model.ts'
+import type { ConsoleState, DrawerState, TeamsConsoleController } from '../state/controller.ts'
 import { messages, type Locale, type MessageKey } from '../client/locale.ts'
 import type { ConsoleProviderView, JsonValue } from '../client/protocol.ts'
 import { append, button, element } from './dom.ts'
@@ -600,96 +600,11 @@ function renderSessionDrawer(controller: TeamsConsoleController, state: ConsoleS
   return value
 }
 
-function inputField<T extends keyof ProviderDraft>(labelText: string, draft: ProviderDraft, key: T, controller: TeamsConsoleController, type: 'text' | 'url' = 'text'): HTMLElement {
-  const label = element('label', 'teams-field')
-  const title = element('span')
-  title.textContent = labelText
-  const input = element('input', 'teams-input')
-  input.type = type
-  input.dataset.focusKey = `provider:${String(key)}`
-  input.value = String(draft[key])
-  input.addEventListener('input', () => { controller.setProviderDraft(key, input.value as ProviderDraft[T]) })
-  append(label, title, input)
-  return label
-}
-
-function renderProviderForm(controller: TeamsConsoleController, state: ConsoleState, agentId: string, t: Record<MessageKey, string>): HTMLElement {
-  const draft = state.providerDraft
-  const form = element('form', 'teams-config-form')
-  const title = element('h3')
-  title.textContent = state.editingProviderId === undefined ? t.addProvider : t.editProvider
-  const fields = element('div', 'teams-field-grid')
-  append(fields,
-    inputField(t.providerId, draft, 'id', controller),
-    inputField(t.providerLabel, draft, 'label', controller),
-    inputField(t.apiBaseUrl, draft, 'apiBaseUrl', controller, 'url'),
-  )
-  const protocolLabel = element('label', 'teams-field')
-  const protocolTitle = element('span')
-  protocolTitle.textContent = t.protocol
-  const protocol = element('select', 'teams-select')
-  for (const value of ['openai-chat', 'openai-responses'] as const) {
-    const option = element('option')
-    option.value = value
-    option.textContent = value
-    option.selected = draft.protocol === value
-    protocol.append(option)
-  }
-  protocol.addEventListener('change', () => { controller.setProviderDraft('protocol', protocol.value as ProviderDraft['protocol']) })
-  append(protocolLabel, protocolTitle, protocol)
-
-  const authLabel = element('label', 'teams-field')
-  const authTitle = element('span')
-  authTitle.textContent = t.authKind
-  const auth = element('select', 'teams-select')
-  for (const value of ['none', 'bearer'] as const) {
-    const option = element('option')
-    option.value = value
-    option.textContent = value === 'none' ? t.noAuth : t.bearer
-    option.selected = draft.authKind === value
-    auth.append(option)
-  }
-  auth.addEventListener('change', () => { controller.setProviderAuthKind(auth.value as ProviderDraft['authKind']) })
-  append(authLabel, authTitle, auth)
-  append(fields, protocolLabel, authLabel)
-
-  if (draft.authKind === 'bearer') {
-    const credential = inputField(t.credentialRef, draft, 'credentialRef', controller)
-    credential.classList.add('teams-field-full')
-    const hint = element('span', 'teams-field-hint')
-    hint.textContent = t.credentialHint
-    credential.append(hint)
-    append(fields, credential)
-  }
-
-  const enabled = element('label', 'teams-checkbox teams-field-full')
-  const checkbox = element('input')
-  checkbox.type = 'checkbox'
-  checkbox.checked = draft.enabled
-  checkbox.addEventListener('change', () => { controller.setProviderDraft('enabled', checkbox.checked) })
-  const enabledText = element('span')
-  enabledText.textContent = t.enabled
-  append(enabled, checkbox, enabledText)
-  append(fields, enabled)
-
-  const actions = element('div', 'teams-button-row')
-  append(actions,
-    button(t.saveProvider, 'teams-button-primary', async () => { await controller.putProvider(agentId) }, actionDisabled(state)),
-    button(t.cancel, 'teams-button-secondary', () => { controller.closeProviderForm() }, actionDisabled(state)),
-  )
-  form.addEventListener('submit', async event => {
-    event.preventDefault()
-    await controller.putProvider(agentId)
-  })
-  append(form, title, fields, actions)
-  return form
-}
-
 function catalogClass(state: ConsoleProviderView['catalogState']): string {
   return state === 'ready' ? 'is-ready' : state === 'empty' ? 'is-empty' : state === 'error' ? 'is-error' : ''
 }
 
-function renderProviderCard(controller: TeamsConsoleController, state: ConsoleState, agentId: string, provider: ConsoleProviderView, modelId: string | undefined, t: Record<MessageKey, string>): HTMLElement {
+function renderProviderCard(provider: ConsoleProviderView, modelId: string | undefined, t: Record<MessageKey, string>): HTMLElement {
   const card = element('article', 'teams-provider-card')
   const header = element('div', 'teams-provider-header')
   const titleGroup = element('div', 'teams-identity-copy')
@@ -707,35 +622,31 @@ function renderProviderCard(controller: TeamsConsoleController, state: ConsoleSt
     error.textContent = `${provider.error.code}: ${provider.error.message}`
     append(details, error)
   }
-  const actions = element('div', 'teams-provider-actions')
-  append(actions,
-    button(t.editProvider, 'teams-button-secondary', () => { controller.editProvider(provider) }, actionDisabled(state)),
-    button(t.refreshModels, 'teams-button-secondary', async () => { await controller.refreshModels(agentId, provider.id) }, actionDisabled(state)),
-  )
-  const modelRow = element('div', 'teams-model-row')
-  const modelField = element('label', 'teams-field')
-  const modelTitle = element('span')
-  modelTitle.textContent = t.selectModel
-  const select = element('select', 'teams-select')
-  const unknown = modelId !== undefined && !provider.models.some(model => model.id === modelId)
-  const placeholder = element('option')
-  placeholder.value = ''
-  placeholder.textContent = unknown ? `${t.unknownModel}: ${modelId}` : provider.models.length === 0 ? t.noModels : t.selectModel
-  placeholder.selected = !provider.models.some(model => model.id === modelId)
-  placeholder.disabled = provider.models.length > 0 && !unknown
-  select.append(placeholder)
-  for (const model of provider.models) {
-    const option = element('option')
-    option.value = model.id
-    option.textContent = model.label ?? model.id
-    option.selected = model.id === modelId
-    select.append(option)
+  const modelList = element('div', 'teams-provider-models')
+  if (provider.models.length === 0) {
+    const none = element('span', 'teams-field-hint')
+    none.textContent = t.noModels
+    append(modelList, none)
+  } else {
+    const list = element('ul', 'teams-model-list')
+    for (const model of provider.models) {
+      const item = element('li', 'teams-model-item')
+      item.dataset.providerModel = model.id
+      item.textContent = model.label ?? model.id
+      if (modelId !== undefined && model.id === modelId) {
+        item.classList.add('is-bound')
+      }
+      append(list, item)
+    }
+    append(modelList, list)
   }
-  append(modelField, modelTitle, select)
-  const bind = button(t.bindModel, 'teams-button-primary', async () => { await controller.bindModel(agentId, provider.id, select.value) }, actionDisabled(state) || provider.models.length === 0 || select.value.length === 0)
-  select.addEventListener('change', () => { bind.disabled = actionDisabled(controller.getSnapshot()) || select.value.length === 0 })
-  append(modelRow, modelField, bind)
-  append(details, actions, modelRow)
+  if (modelId !== undefined) {
+    const bound = element('span', 'teams-model-bound')
+    const isKnown = provider.models.some(model => model.id === modelId)
+    bound.textContent = isKnown ? `${t.boundModel}: ${modelId}` : `${t.unknownModel}: ${modelId}`
+    append(modelList, bound)
+  }
+  append(details, modelList)
   append(card, header, details)
   return card
 }
@@ -763,7 +674,11 @@ function renderSettings(controller: TeamsConsoleController, state: ConsoleState,
   }
   select.addEventListener('change', () => { if (select.value.length > 0) controller.selectAgent(select.value) })
   append(agentField, agentTitle, select)
-  append(toolbar, agentField, button(t.addProvider, 'teams-button-primary', () => { controller.beginAddProvider() }, actionDisabled(state)))
+  append(toolbar, agentField)
+  const readonly = element('span', 'teams-config-readonly')
+  readonly.dataset.configReadonly = 'true'
+  readonly.textContent = t.configReadonly
+  append(toolbar, readonly)
   append(value, renderViewHeader(t.settings, undefined), toolbar)
 
   const agentId = state.selectedAgentId
@@ -780,6 +695,9 @@ function renderSettings(controller: TeamsConsoleController, state: ConsoleState,
     append(value, unavailable)
     return value
   }
+  // The Console surface is a read-only projection of the config-owned source of truth.
+  // Provider/model binding is managed in the configuration file; this view never issues a
+  // config.putProvider / config.bindModel / config.refreshModels / config.apply command.
   if (config.applyState === 'uncertain') {
     const note = element('p', 'teams-field-hint')
     note.textContent = t.applyUncertain
@@ -816,20 +734,14 @@ function renderSettings(controller: TeamsConsoleController, state: ConsoleState,
     error.textContent = `${config.error.code}: ${config.error.message}`
     append(value, error)
   }
-  if (state.providerFormOpen) {
-    append(value, renderProviderForm(controller, state, agentId, t))
-  }
   if (config.providers.length === 0) {
-    append(value, emptyState(t.addProvider))
+    append(value, emptyState(t.noProvidersProjected))
   } else {
     const providers = element('div', 'teams-provider-list')
     const agent = projectAgents(projection).find(candidate => candidate.agentId === agentId)
-    for (const provider of config.providers) append(providers, renderProviderCard(controller, state, agentId, provider, agent?.providerId === provider.id ? agent.modelId : undefined, t))
+    for (const provider of config.providers) append(providers, renderProviderCard(provider, agent?.providerId === provider.id ? agent.modelId : undefined, t))
     append(value, providers)
   }
-  const footer = element('div', 'teams-footer-row')
-  append(footer, button(t.applyConfig, 'teams-button-primary', async () => { await controller.applyConfig(agentId) }, actionDisabled(state)))
-  append(value, footer)
   return value
 }
 
@@ -1203,10 +1115,6 @@ function localizeStatus(text: string, t: Record<MessageKey, string>): string {
     'Disconnect': t.disconnect,
     'Apply membership': t.applyMembership,
     'Submit network draft': t.applyMembership,
-    'Refresh models': t.refreshModels,
-    'Bind model': t.bindModel,
-    'Save provider': t.saveProvider,
-    'Apply configuration': t.applyConfig,
   }
   if (text.endsWith(acceptedSuffix)) {
     const localized = labels[text.slice(0, text.length - acceptedSuffix.length)]

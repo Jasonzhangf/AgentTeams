@@ -118,66 +118,59 @@ describe('declared capability rendering in a real DOM', () => {
   })
 })
 
-describe('BB09 refresh completion in a real DOM', () => {
-  it('keeps the busy window distinct from completion and enables bind after reselection', { timeout: 30_000 }, () => {
+describe('config settings read-only in a real DOM', () => {
+  it('renders the settings drawer read-only with a projected binding and no write buttons', { timeout: 30_000 }, () => {
     const script = [classicModule('client/locale.ts'), classicModule('state/model.ts'), classicModule('state/group-workspace.ts'), classicModule('components/dom.ts'), classicModule('components/page-groups.ts'), classicModule('components/render.ts')].join('\n')
     if (/(^|\n)\s*(import|export)\b/.test(script)) throw new Error('classic module bundling left module syntax behind')
-    const directory = mkdtempSync(join(tmpdir(), 'teams-console-busy-window-'))
+    const directory = mkdtempSync(join(tmpdir(), 'teams-console-config-readonly-'))
     onTestFinished(() => {
       rmSync(directory, { recursive: true, force: true })
     })
-    const page = join(directory, 'busy-window.html')
-    const busyWindowScript = `<!doctype html>
+    const page = join(directory, 'config-readonly.html')
+    const readOnlyScript = `<!doctype html>
 <html><body>
   <div id="root"></div>
   <script>
 ${script}
     const projection = { version: 1, agents: [{ kind: 'runtime', agentId: 'provider', label: 'Provider',
-      machineId: 'M1', presence: 'online', capabilities: [], sessionCapable: false, sessionAvailability: 'no-current' }],
-      sessions: [], notifications: [], configs: [{ agentId: 'provider', acceptedRevision: 1, providers: [{
+      machineId: 'M1', presence: 'online', capabilities: ['session'], sessionCapable: true, sessionAvailability: 'current' }],
+      sessions: [], notifications: [], configs: [{ agentId: 'provider', acceptedRevision: 7, effectiveRevision: 6,
+        acceptedBinding: { primary: { providerInstanceId: 'rcc', modelId: 'deepseek-v4' },
+          backup: { providerInstanceId: 'rcc', modelId: 'deepseek-v4-reasoner' } },
+        providers: [{
         id: 'p', label: 'Provider', protocol: 'openai-chat', apiBaseUrl: 'http://127.0.0.1:1/v1', enabled: true,
-        authKind: 'none', catalogState: 'ready', models: [{ id: 'bb-console-model', label: 'BB Console Model' }],
+        authKind: 'none', catalogState: 'ready',
+        models: [{ id: 'deepseek-v4', label: 'DeepSeek V4' }, { id: 'deepseek-v4-reasoner', label: 'DeepSeek V4 Reasoner' }],
       }] }] }
     let state = { open: true, entry: 'topology', drawer: { kind: 'settings', agentId: 'provider' },
       drawerStack: [{ kind: 'settings', agentId: 'provider' }], drawerExpanded: false, projection,
-      status: 'ready', error: null, notice: null, busy: 'Refresh models', query: '', locale: 'en',
-      selectedAgentId: 'provider', providerFormOpen: false, editingProviderId: undefined,
-      providerDraft: { id: '', label: '', protocol: 'openai-chat', apiBaseUrl: '', enabled: true, authKind: 'none', credentialRef: '' } }
+      status: 'ready', error: null, notice: null, busy: null, query: '', locale: 'en',
+      selectedAgentId: 'provider' }
     const root = document.getElementById('root')
     const controller = { getSnapshot: () => state }
     renderConsole(root, controller)
-    const modelSelect = () => document.querySelector('article.teams-provider-card select.teams-select')
-    const bindButton = () => document.querySelector('article.teams-provider-card .teams-model-row .teams-button-primary')
-    document.body.dataset.modelVisibleBusy = String([...modelSelect().options].some(option => option.value === 'bb-console-model'))
-    // Select the model through the real change event before reading the disabled state, so the
-    // "no model selected" disjunct is already false and the busy window is the only reason the
-    // bind button can still be disabled.
-    modelSelect().value = 'bb-console-model'
-    modelSelect().dispatchEvent(new Event('change', { bubbles: true }))
-    document.body.dataset.bindDisabledBusy = String(bindButton().disabled)
-    state = { ...state, busy: null, notice: 'Refresh models: accepted by Agent' }
-    renderConsole(root, controller)
-    document.body.dataset.selectResetAfterComplete = String(modelSelect().value === '')
-    document.body.dataset.bindDisabledAfterComplete = String(bindButton().disabled)
-    modelSelect().value = 'bb-console-model'
-    modelSelect().dispatchEvent(new Event('change', { bubbles: true }))
-    document.body.dataset.bindEnabledAfterReselect = String(bindButton().disabled === false)
-    // The change listener is not the only place that binds the busy window. Re-render with the
-    // owner's binding in place, so actionDisabled alone decides the paint-time disabled state
-    // and the "no model selected" disjunct is already false there too.
-    const boundProjection = { ...projection, agents: [{ ...projection.agents[0], providerId: 'p', modelId: 'bb-console-model' }] }
-    state = { ...state, busy: 'Refresh models', projection: boundProjection }
-    renderConsole(root, controller)
-    document.body.dataset.bindDisabledBusyBound = String(bindButton().disabled)
+    const body = root.querySelector('.teams-drawer-body')
+    document.body.dataset.configReadonly = String(body.querySelector('[data-config-readonly="true"]') !== null)
+    document.body.dataset.settingsBodyButtons = String(body.querySelectorAll('button').length)
+    const binding = body.querySelector('[data-config-binding="true"]')
+    document.body.dataset.bindingPrimary = String((binding?.textContent ?? '').includes('rcc/deepseek-v4'))
+    document.body.dataset.bindingBackup = String((binding?.textContent ?? '').includes('deepseek-v4-reasoner'))
+    const revisions = body.querySelector('.teams-revision-row')
+    document.body.dataset.revisions = String((revisions?.textContent ?? '').includes('7') && (revisions?.textContent ?? '').includes('6'))
+    document.body.dataset.modelReadonly = String(body.querySelector('[data-provider-model="deepseek-v4"]') !== null)
+    document.body.dataset.noWriteForm = String(body.querySelector('.teams-config-form') === null
+      && body.querySelector('.teams-model-row') === null
+      && body.querySelector('article.teams-provider-card .teams-provider-actions') === null)
   </script>
 </body></html>`
-    writeFileSync(page, busyWindowScript)
+    writeFileSync(page, readOnlyScript)
     const output = runChrome(page, 20_000)
-    expect(output).toContain('data-model-visible-busy="true"')
-    expect(output).toContain('data-bind-disabled-busy="true"')
-    expect(output).toContain('data-bind-disabled-busy-bound="true"')
-    expect(output).toContain('data-select-reset-after-complete="true"')
-    expect(output).toContain('data-bind-disabled-after-complete="true"')
-    expect(output).toContain('data-bind-enabled-after-reselect="true"')
+    expect(output).toContain('data-config-readonly="true"')
+    expect(output).toContain('data-settings-body-buttons="0"')
+    expect(output).toContain('data-binding-primary="true"')
+    expect(output).toContain('data-binding-backup="true"')
+    expect(output).toContain('data-revisions="true"')
+    expect(output).toContain('data-model-readonly="true"')
+    expect(output).toContain('data-no-write-form="true"')
   })
 })

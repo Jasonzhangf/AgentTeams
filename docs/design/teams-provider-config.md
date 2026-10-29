@@ -20,6 +20,12 @@ Console 是可离线客户端；目标 daemon 的 config 持久化接受的 revi
 每个 daemon 自己保存配置。首版跨 Agent 复制配置是显式逐目标操作，不实现隐式
 全局合并；各目标独立报告 accepted/effective。共享模板库不属于首版前置。
 
+Console UI 的 provider/model 配置面只读（2026-10-29）：配置文件（及配置 owner 的
+显式命令）是唯一写入口，Console 只投影 `acceptedRevision`、`effectiveRevision`、
+`providers` 与 `acceptedBinding`，不提供新增/编辑 provider、绑定 model、刷新模型
+目录或 apply config 的写控件。Console 收到这些写入意图时在本地显式拒绝并提示
+“配置由配置文件管理”，不得伪造成功；运行时的其它配置写路径不由该 UI 约束改变。
+
 ## 2. OpenMinis 参考依据
 
 本轮从 `https://github.com/OpenMinis/OpenMinis.git` 获取 `origin/main`，核对提交

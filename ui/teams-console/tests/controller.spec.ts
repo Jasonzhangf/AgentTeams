@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { TeamsConsoleController } from '../src/state/controller.ts'
 import { createLiveConsoleHttpClient } from '../src/client/live-client.ts'
-import { projectAgents } from '../src/state/model.ts'
 import { createFixtureClient } from '../src/fixture.ts'
 
 /** Minimal EventSource double: the live client only needs add/remove/close. */
@@ -27,11 +26,20 @@ describe('TeamsConsoleController', () => {
     expect(client.sentPayloads).toEqual([{ text: 'hello' }])
   })
 
-  it('does not bind a model absent from the host catalog', async () => {
-    const controller = new TeamsConsoleController(createFixtureClient())
+  it('refuses a model bind and never dispatches a config command', async () => {
+    const client = createFixtureClient()
+    const kinds: string[] = []
+    const controller = new TeamsConsoleController({
+      ...client,
+      async command(request) {
+        kinds.push(request.kind)
+        return client.command(request)
+      },
+    })
     await controller.refresh()
     await expect(controller.bindModel('planner', 'empty-provider', 'guessed-model')).resolves.toBe(false)
-    expect(controller.getSnapshot().error).toContain('unknown model')
+    expect(controller.getSnapshot().error).toBe(controller.configReadonlyError)
+    expect(kinds).toEqual([])
   })
 
   it('surfaces revision conflicts and keeps the error visible', async () => {
@@ -134,42 +142,22 @@ describe('TeamsConsoleController', () => {
     expect(command).not.toHaveBeenCalled()
   })
 
-  it('rejects an incomplete provider form before sending a command', async () => {
-    const controller = new TeamsConsoleController(createFixtureClient())
+  it('refuses provider, catalog and apply writes and never dispatches a config command', async () => {
+    const client = createFixtureClient()
+    const kinds: string[] = []
+    const controller = new TeamsConsoleController({
+      ...client,
+      async command(request) {
+        kinds.push(request.kind)
+        return client.command(request)
+      },
+    })
     await controller.refresh()
-    controller.beginAddProvider()
     await expect(controller.putProvider('planner')).resolves.toBe(false)
-    expect(controller.getSnapshot().error).toContain('ID, label, and API base URL')
-  })
-
-  it('adds a provider through config.putProvider and refreshes accepted state', async () => {
-    const controller = new TeamsConsoleController(createFixtureClient())
-    await controller.refresh()
-    controller.beginAddProvider()
-    controller.setProviderDraft('id', 'new-provider')
-    controller.setProviderDraft('label', 'New provider')
-    controller.setProviderDraft('apiBaseUrl', 'https://provider.invalid/v1')
-    await expect(controller.putProvider('planner')).resolves.toBe(true)
-    expect(controller.getSnapshot().projection?.configs[0]?.providers.some(provider => provider.id === 'new-provider')).toBe(true)
-  })
-
-  it('refreshes an empty provider catalog without selecting the returned model', async () => {
-    const controller = new TeamsConsoleController(createFixtureClient())
-    await controller.refresh()
-    await expect(controller.refreshModels('planner', 'empty-provider')).resolves.toBe(true)
-    const provider = controller.getSnapshot().projection?.configs[0]?.providers.find(candidate => candidate.id === 'empty-provider')
-    expect(provider?.models).toEqual([{ id: 'refreshed-model', label: 'Refreshed model' }])
-    const planner = projectAgents(controller.getSnapshot().projection!).find(agent => agent.agentId === 'planner')
-    expect(planner?.modelId).toBe('deepseek-v4')
-  })
-
-  it('moves accepted config to effective revision only after apply', async () => {
-    const controller = new TeamsConsoleController(createFixtureClient())
-    await controller.refresh()
-    await expect(controller.applyConfig('planner')).resolves.toBe(true)
-    const config = controller.getSnapshot().projection?.configs[0]
-    expect(config?.effectiveRevision).toBe(config?.acceptedRevision)
-    expect(controller.getSnapshot().notice).toBe('Apply configuration: accepted by Agent')
+    await expect(controller.refreshModels('planner', 'empty-provider')).resolves.toBe(false)
+    await expect(controller.applyConfig('planner')).resolves.toBe(false)
+    expect(controller.getSnapshot().error).toBe(controller.configReadonlyError)
+    expect(kinds.filter(kind => kind.startsWith('config.'))).toEqual([])
   })
 
   it('refreshes the owner projection after sending instead of appending UI-owned transcript state', async () => {

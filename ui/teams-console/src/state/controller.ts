@@ -20,16 +20,6 @@ export type DrawerState =
   | { readonly kind: 'session'; readonly agentId: string; readonly sessionId: string }
   | { readonly kind: 'settings'; readonly agentId?: string }
 
-export interface ProviderDraft {
-  readonly id: string
-  readonly label: string
-  readonly protocol: 'openai-chat' | 'openai-responses'
-  readonly apiBaseUrl: string
-  readonly enabled: boolean
-  readonly authKind: 'none' | 'bearer'
-  readonly credentialRef: string
-}
-
 export interface ConsoleState {
   readonly open: boolean
   readonly entry: ConsoleEntry
@@ -44,9 +34,6 @@ export interface ConsoleState {
   readonly query: string
   readonly locale: 'en' | 'zh'
   readonly selectedAgentId: string | undefined
-  readonly providerFormOpen: boolean
-  readonly editingProviderId: string | undefined
-  readonly providerDraft: ProviderDraft
   readonly live: boolean
   readonly page: TeamPage
   readonly observation: ObservationSession
@@ -63,16 +50,6 @@ export interface ConsoleState {
   /** True when the injected client also carries the additive group request port. */
   readonly groupCapable: boolean
   readonly group: GroupWorkspaceState
-}
-
-export const emptyProviderDraft: ProviderDraft = {
-  id: '',
-  label: '',
-  protocol: 'openai-chat',
-  apiBaseUrl: '',
-  enabled: true,
-  authKind: 'none',
-  credentialRef: '',
 }
 
 /**
@@ -129,9 +106,6 @@ export const initialConsoleState: ConsoleState = {
   query: '',
   locale: 'en',
   selectedAgentId: undefined,
-  providerFormOpen: false,
-  editingProviderId: undefined,
-  providerDraft: emptyProviderDraft,
   live: false,
   page: 'discovery',
   observation: { projection: null, observation: 'unknown', health: { state: 'live' } },
@@ -168,10 +142,6 @@ const liveDefaults = {
 function errorText(error: unknown): string {
   if (isServiceError(error)) return formatServiceError(error)
   return error instanceof Error ? error.message : 'Unknown host error'
-}
-
-function cloneDraft(draft: ProviderDraft): ProviderDraft {
-  return { ...draft }
 }
 
 function typedError(error: unknown): { readonly code: string; readonly message: string } {
@@ -478,9 +448,6 @@ export class TeamsConsoleController {
       drawerStack: stack,
       drawerExpanded: false,
       selectedAgentId: agentId ?? this.state.selectedAgentId,
-      providerFormOpen: false,
-      editingProviderId: undefined,
-      providerDraft: emptyProviderDraft,
       error: null,
     })
   }
@@ -491,9 +458,6 @@ export class TeamsConsoleController {
       drawer: stack.at(-1) ?? null,
       drawerStack: stack,
       drawerExpanded: false,
-      providerFormOpen: false,
-      editingProviderId: undefined,
-      providerDraft: emptyProviderDraft,
     })
   }
 
@@ -502,7 +466,7 @@ export class TeamsConsoleController {
   }
 
   selectAgent(agentId: string): void {
-    this.update({ selectedAgentId: agentId, providerFormOpen: false, editingProviderId: undefined, providerDraft: emptyProviderDraft, error: null })
+    this.update({ selectedAgentId: agentId, error: null })
   }
 
   private pushDrawer(drawer: DrawerState): void {
@@ -512,39 +476,6 @@ export class TeamsConsoleController {
       drawerExpanded: false,
       error: null,
     })
-  }
-
-  beginAddProvider(): void {
-    this.update({ providerFormOpen: true, editingProviderId: undefined, providerDraft: cloneDraft(emptyProviderDraft), error: null })
-  }
-
-  closeProviderForm(): void {
-    this.update({ providerFormOpen: false, editingProviderId: undefined, providerDraft: emptyProviderDraft, error: null })
-  }
-
-  editProvider(provider: ConsoleProviderView): void {
-    this.update({
-      editingProviderId: provider.id,
-      providerFormOpen: true,
-      providerDraft: {
-        id: provider.id,
-        label: provider.label,
-        protocol: provider.protocol,
-        apiBaseUrl: provider.apiBaseUrl,
-        enabled: provider.enabled,
-        authKind: provider.authKind,
-        credentialRef: '',
-      },
-      error: null,
-    })
-  }
-
-  setProviderDraft<K extends keyof ProviderDraft>(key: K, value: ProviderDraft[K]): void {
-    this.state = { ...this.state, providerDraft: { ...this.state.providerDraft, [key]: value } }
-  }
-
-  setProviderAuthKind(authKind: ProviderDraft['authKind']): void {
-    this.update({ providerDraft: { ...this.state.providerDraft, authKind } })
   }
 
   private async refreshAfterAction(): Promise<boolean> {
@@ -619,85 +550,32 @@ export class TeamsConsoleController {
     }
   }
 
-  async refreshModels(agentId: string, providerId: string): Promise<boolean> {
-    const config = this.state.projection?.configs.find(candidate => candidate.agentId === agentId)
-    if (config === undefined) {
-      this.update({ error: 'Refresh models: Agent config is not projected.' })
-      return false
-    }
-    return this.runAction('Refresh models', () => this.client.command({
-      kind: 'config.refreshModels',
-      agentId,
-      expectedRevision: config.acceptedRevision,
-      providerId,
-    }))
+  /**
+   * The Console provider/model surface is read-only. Provider, model-binding, catalog and
+   * apply changes are owned by the configuration file, not the UI. These entries keep their
+   * signatures so existing typed clients keep compiling, but they refuse the write locally
+   * with an honest message instead of dispatching a config-mutating command.
+   */
+  readonly configReadonlyError = 'Provider and model configuration is managed in the configuration file; this Console shows the accepted projection only.'
+
+  async refreshModels(_agentId: string, _providerId: string): Promise<boolean> {
+    this.update({ error: this.configReadonlyError })
+    return false
   }
 
-  async bindModel(agentId: string, providerId: string, modelId: string): Promise<boolean> {
-    if (modelId.length === 0) {
-      this.update({ error: 'Bind model: select a model returned by the host catalog.' })
-      return false
-    }
-    const config = this.state.projection?.configs.find(candidate => candidate.agentId === agentId)
-    const provider = config?.providers.find(candidate => candidate.id === providerId)
-    if (config === undefined || provider === undefined) {
-      this.update({ error: 'Bind model: provider config is not projected.' })
-      return false
-    }
-    if (!provider.models.some(model => model.id === modelId)) {
-      this.update({ error: `Bind model: unknown model "${modelId}"; refresh the catalog first.` })
-      return false
-    }
-    return this.runAction('Bind model', () => this.client.command({
-      kind: 'config.bindModel',
-      agentId,
-      expectedRevision: config.acceptedRevision,
-      providerId,
-      modelId,
-    }))
+  async bindModel(_agentId: string, _providerId: string, _modelId: string): Promise<boolean> {
+    this.update({ error: this.configReadonlyError })
+    return false
   }
 
-  async putProvider(agentId: string): Promise<boolean> {
-    const draft = this.state.providerDraft
-    if (draft.id.trim().length === 0 || draft.label.trim().length === 0 || draft.apiBaseUrl.trim().length === 0) {
-      this.update({ error: 'Save provider: ID, label, and API base URL are required.' })
-      return false
-    }
-    try {
-      const parsed = new URL(draft.apiBaseUrl)
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('API base URL must use http or https.')
-    } catch (error) {
-      this.update({ error: `Save provider: ${errorText(error)}` })
-      return false
-    }
-    if (draft.authKind === 'bearer' && draft.credentialRef.trim().length === 0) {
-      this.update({ error: 'Save provider: a credential reference is required for bearer auth; values never belong in Teams UI.' })
-      return false
-    }
-    const config = this.state.projection?.configs.find(candidate => candidate.agentId === agentId)
-    if (config === undefined) {
-      this.update({ error: 'Save provider: Agent config is not projected.' })
-      return false
-    }
-    return this.runAction('Save provider', () => this.client.command({
-      kind: 'config.putProvider',
-      agentId,
-      expectedRevision: config.acceptedRevision,
-      provider: {
-        id: draft.id.trim(),
-        label: draft.label.trim(),
-        protocol: draft.protocol,
-        apiBaseUrl: draft.apiBaseUrl.trim(),
-        enabled: draft.enabled,
-        auth: draft.authKind === 'none'
-          ? { kind: 'none' }
-          : { kind: 'bearer', credentialRef: draft.credentialRef.trim() },
-      },
-    }))
+  async putProvider(_agentId: string): Promise<boolean> {
+    this.update({ error: this.configReadonlyError })
+    return false
   }
 
-  async applyConfig(agentId: string): Promise<boolean> {
-    return this.runAction('Apply configuration', () => this.client.command({ kind: 'config.apply', agentId }))
+  async applyConfig(_agentId: string): Promise<boolean> {
+    this.update({ error: this.configReadonlyError })
+    return false
   }
 
   dismissNotice(): void {
