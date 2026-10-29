@@ -1,7 +1,44 @@
-import { RuntimeConfigError, type CredentialResolver, type ModelEntry, type ProviderModelClient, type RuntimeConfigApplier, type RuntimeConfigStore } from '../config/runtime-config.ts'
-import { parseConsoleCommand, type ConsoleCommandV1, type ConsoleCommandResultV1, type ConsoleProjectionV1 } from '../packages/shared/src/console-api.ts'
+import { RuntimeConfigError, type CredentialResolver, type DaemonRuntimeConfigView, type ModelEntry, type ProviderModelClient, type RuntimeConfigApplier, type RuntimeConfigStore } from '../config/runtime-config.ts'
+import { parseConsoleCommand, type ConsoleCommandV1, type ConsoleCommandResultV1, type ConsoleConfigObservationV1 } from '../packages/shared/src/console-api.ts'
 
 type ConfigCommand = Extract<ConsoleCommandV1, { kind: `config.${string}` }>
+
+/**
+ * Project one daemon's config view into the Console's config row.
+ *
+ * This is the single mapping owner for that row: the control daemon's config binding
+ * serves it directly, and the agent daemon publishes the same row inside its Session
+ * observation so the Console still sees provider/model status for a peer whose config
+ * it cannot ask for. It never carries a credential value, only `authKind` and refs.
+ */
+export function projectConsoleConfigObservation(agentId: string, config: DaemonRuntimeConfigView): ConsoleConfigObservationV1 {
+  if (!agentId) throw new Error('Console config projection requires an Agent ID')
+  const acceptedBinding = config.acceptedRevision === 0
+    ? null
+    : config.agents[agentId]
+  if (acceptedBinding === undefined) {
+    throw new RuntimeConfigError({ code: 'UNAVAILABLE', message: `config: accepted binding for ${agentId} is missing` })
+  }
+  return {
+    agentId, acceptedRevision: config.acceptedRevision, applyState: config.applyState,
+    acceptedBinding,
+    ...(config.effectiveRevision === undefined ? {} : { effectiveRevision: config.effectiveRevision }),
+    ...(config.lastApplyError === undefined ? {} : { error: config.lastApplyError }),
+    providers: Object.values(config.providers).map(provider => {
+      const catalog = config.catalogs[provider.id]
+      if (!catalog) throw new RuntimeConfigError({ code: 'UNAVAILABLE', message: 'Provider catalog state is missing', providerInstanceId: provider.id })
+      return {
+        id: provider.id, label: provider.label, protocol: provider.protocol, apiBaseUrl: provider.apiBaseUrl,
+        enabled: provider.enabled, authKind: provider.auth.kind, catalogState: catalog.state,
+        ...(catalog.error === undefined ? {} : { error: catalog.error }),
+        models: catalog.entries.map(entry => {
+          const label = entry.overrides.label ?? entry.base.label
+          return { id: entry.ref.modelId, ...(label === undefined ? {} : { label }) }
+        }),
+      }
+    }),
+  }
+}
 
 /** Daemon assembly port. Caller authenticates the principal; config remains the durable owner. */
 export function createConsoleConfigBinding(options: {
@@ -48,34 +85,7 @@ export function createConsoleConfigBinding(options: {
       }
   }
   return {
-    readProjection: async (): Promise<ConsoleProjectionV1['configs'][number]> => {
-      const config = await store.read()
-      const acceptedBinding = config.acceptedRevision === 0
-        ? null
-        : config.agents[agentId]
-      if (acceptedBinding === undefined) {
-        throw new RuntimeConfigError({ code: 'UNAVAILABLE', message: `config: accepted binding for ${agentId} is missing` })
-      }
-      return {
-        agentId, acceptedRevision: config.acceptedRevision, applyState: config.applyState,
-        acceptedBinding,
-        ...(config.effectiveRevision === undefined ? {} : { effectiveRevision: config.effectiveRevision }),
-        ...(config.lastApplyError === undefined ? {} : { error: config.lastApplyError }),
-        providers: Object.values(config.providers).map(provider => {
-          const catalog = config.catalogs[provider.id]
-          if (!catalog) throw new RuntimeConfigError({ code: 'UNAVAILABLE', message: 'Provider catalog state is missing', providerInstanceId: provider.id })
-          return {
-            id: provider.id, label: provider.label, protocol: provider.protocol, apiBaseUrl: provider.apiBaseUrl,
-            enabled: provider.enabled, authKind: provider.auth.kind, catalogState: catalog.state,
-            ...(catalog.error === undefined ? {} : { error: catalog.error }),
-            models: catalog.entries.map(entry => {
-              const label = entry.overrides.label ?? entry.base.label
-              return { id: entry.ref.modelId, ...(label === undefined ? {} : { label }) }
-            }),
-          }
-        }),
-      }
-    },
+    readProjection: async (): Promise<ConsoleConfigObservationV1> => projectConsoleConfigObservation(agentId, await store.read()),
     command: async (input: ConfigCommand): Promise<ConsoleCommandResultV1> => {
       try {
         await dispatch(input)

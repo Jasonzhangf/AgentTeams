@@ -24,7 +24,7 @@ import {
 } from '../config/daemon-intent.ts'
 import type { AcpPolicySnapshot } from '../config/acp-policy.ts'
 import type { AgentModelBinding, ConfigErrorCode, ConfigTargetIdentity, ModelRef, VersionedRuntimeConfig } from '../config/runtime-config.ts'
-import { providerIntentFingerprint, RuntimeConfigError } from '../config/runtime-config.ts'
+import { createRuntimeConfigStore, providerIntentFingerprint, RuntimeConfigError } from '../config/runtime-config.ts'
 import {
   readRelationsIntentRecord,
   relationsIntentScopePath,
@@ -47,6 +47,8 @@ import {
   writeLocalGroupEndpointRecord,
 } from '../config/local-group-endpoint-store.ts'
 import { createSessionObservationPublisher, type SessionObservationFailure } from './session-observation-publisher.ts'
+import { createTomlRuntimeConfigPersistence } from './local-config.ts'
+import { projectConsoleConfigObservation } from './console-config.ts'
 import { processAlive, processCommand, processStartTime, terminateProcess } from './local-ownership.ts'
 import { createStdioAcpDuplex } from '../acp-adapter/stdio.ts'
 import { rpcErrorFrame, type AcpHost } from '../agent-host/acp-host.ts'
@@ -2124,10 +2126,28 @@ async function startAcpServeLocked(intent: AcpServeIntent, options: AcpServeRunt
       // this daemon publishes its own observation to the one durable record the control
       // daemon reads. The host is the Session and A2.6 permission owner, so this publisher
       // reads both facts from it and never tracks either one a second time.
+      //
+      // The config row rides in the same record. The config file stays the single source:
+      // this producer reads the same durable config store the daemon accepted from, so an
+      // external config.toml edit appears as a new accepted revision without a second
+      // ledger or a control-to-agent channel. A quick-start daemon has no config file, so
+      // it publishes no config row.
+      const readConfigObservation = intent.configPath === null
+        ? undefined
+        : (() => {
+            const configPath = resolve(intent.configPath)
+            const internalPath = env.TEAMS_LOCAL_INTERNAL_PATH ?? resolve(configPath, '..', 'internal.toml')
+            const store = createRuntimeConfigStore(
+              createTomlRuntimeConfigPersistence({ configPath, internalPath, agentId: agent.daemon.id }),
+              { agentId: agent.daemon.id },
+            )
+            return async () => projectConsoleConfigObservation(agent.daemon.id, await store.read())
+          })()
       const sessionObservation = createSessionObservationPublisher({
         host: daemon.host,
         recordPath: agentSessionObservationPath(homedir(), agent.daemon),
         agentId: agent.daemon.id,
+        ...(readConfigObservation === undefined ? {} : { readConfigObservation }),
       })
       const observationTimer = setInterval(() => { void sessionObservation.publish() }, RELATIONS_INTENT_POLL_INTERVAL_MS)
       observationTimer.unref()

@@ -251,6 +251,15 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
   const createClient = deps.createClient ?? createOpenCodeSessionClient
   const buffers = new Map<string, ConsoleSessionEventView[]>()
   const operations = new Map<string, SessionOperationRecord>()
+  /**
+   * Sessions whose current turn is being retried on the same target, and the last failure
+   * each retry published. A retry window hides its intermediate `final(failed)` rows from
+   * the public projection: the Console must not see a failed turn the daemon is still
+   * retrying. A later successful attempt drops the held row, and only an exhausted retry
+   * publishes the last real failure.
+   */
+  const retryingSessions = new Set<string>()
+  const heldFailures = new Map<string, ConsoleSessionEventView>()
   const pendingCancels = new Map<string, { readonly abortOperationId: string; readonly promptMessageId: string; readonly resolve: (messageId: string | undefined) => void }>()
   let observation: SessionObservationState = { state: 'live' }
   let dropped = 0
@@ -275,6 +284,16 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     while (list.length > limit) { list.shift(); degrade('Session projection buffer reached its bound') }
     buffers.set(event.sessionId, list)
   }
+  /**
+   * A transient failure inside a retry window is an internal attempt, not a turn outcome, so
+   * it is held instead of projected. A user abort is a real outcome and is never held.
+   */
+  const holdFailure = (event: ConsoleSessionEventView): boolean => {
+    if (event.kind !== 'final' || event.state !== 'failed') return false
+    if (!retryingSessions.has(event.sessionId) || event.error.name === 'MessageAbortedError') return false
+    heldFailures.set(event.sessionId, event)
+    return true
+  }
   const settlePendingCancel = (sessionId: string, abortOperationId: string, messageId: string | undefined): void => {
     const pending = pendingCancels.get(sessionId)
     if (pending === undefined || pending.abortOperationId !== abortOperationId) return
@@ -292,6 +311,8 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       if (pending !== undefined) { pendingCancels.delete(sessionId); pending.resolve(undefined) }
     }
     buffers.clear()
+    retryingSessions.clear()
+    heldFailures.clear()
   }
   // A second distinct assistant identity for one owned request is a multi-match:
   // the design keeps that binding unresolved and forbids confirming a cancel from it.
@@ -322,6 +343,23 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
     const bound = operations.get(event.sessionId)
     if (event.kind === 'final' && bound !== undefined && bound.promptMessageId === event.messageId) operations.delete(event.sessionId)
   }
+  /**
+   * End a turn whose retry window really ran. A later attempt may have succeeded, in which
+   * case the held failure is dropped; otherwise the last real failure is the public outcome
+   * and the turn is over, so the held failure is published and the operation record is
+   * released for a new turn. Returns whether a held failure was published.
+   */
+  const settleRetriedTurn = (sessionId: string, operationId: string): boolean => {
+    retryingSessions.delete(sessionId)
+    const held = heldFailures.get(sessionId)
+    heldFailures.delete(sessionId)
+    if (held === undefined) return false
+    buffer(held)
+    // Only the turn that really ran releases its own record; a newer turn keeps its claim.
+    const current = operations.get(sessionId)
+    if (current !== undefined && current.operationId === operationId) operations.delete(sessionId)
+    return true
+  }
   const consume = async (client: OpenCodeSessionClient & OpenCodeEventClient, controller: AbortController): Promise<void> => {
     try {
       for await (const raw of subscribeOpenCodeEvents(client, controller.signal)) {
@@ -331,6 +369,9 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
         if (projected.kind === 'ignored') continue
         if (projected.kind !== 'event') { degrade(projected.reason); continue }
         const event: ConsoleSessionEventView = { ...projected.event, agentId: deps.agentId }
+        // A held attempt must not bind or release the turn either: it is not that turn's
+        // outcome, so correlation only sees the events the projection really publishes.
+        if (holdFailure(event)) continue
         buffer(event)
         correlate(event, projected.parentMessageId)
       }
@@ -496,21 +537,41 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
       operations.set(sessionId, record)
       const streamChange = ensureStream()
       if (streamChange !== undefined) await streamChange
-      const outcome = await useAdapter(
-        async (client, handle, markDispatched) => await promptOpenCodeSession(client, sessionId, decoded.text, handle.modelTarget, record.requestMessageId, markDispatched),
-        handle => effectiveHandleIdentity(handle) === record.handleFingerprint
-          ? undefined
-          : sessionFailure('CONFLICT', `Session runtime changed from revision ${record.effectiveRevision} to ${handle.effectiveRevision}`),
-      )
+      // A bounded retry stays on the one bound target: the adapter never switches provider
+      // or backup. Each retry marks the turn so its transient failure is held out of the
+      // public projection until the turn really ends.
+      let outcome
+      try {
+        outcome = await useAdapter(
+          async (client, handle, markDispatched) => await promptOpenCodeSession(client, sessionId, decoded.text, handle.modelTarget, record.requestMessageId, markDispatched, {
+            onRetry: () => { retryingSessions.add(sessionId) },
+          }),
+          handle => effectiveHandleIdentity(handle) === record.handleFingerprint
+            ? undefined
+            : sessionFailure('CONFLICT', `Session runtime changed from revision ${record.effectiveRevision} to ${handle.effectiveRevision}`),
+        )
+      } catch (error) {
+        // A thrown turn failure ends the turn exactly like a returned one, so the held
+        // failure is published and the record released before the failure propagates.
+        settleRetriedTurn(sessionId, record.operationId)
+        throw error
+      }
       const current = operations.get(sessionId)
       const owned = current !== undefined && current.operationId === record.operationId
       if (!outcome.ok) {
+        // An exhausted retry is a finished turn: publish its last real failure and reopen
+        // admission. A dispatch that failed without any retry keeps the record as before.
+        settleRetriedTurn(sessionId, record.operationId)
         // A transport return is not proof that the prompt ended, so only an explicit
         // pre-dispatch rejection may release the not-yet-started record. Every other
         // failure keeps it owned, and a later prompt still conflicts.
         if (outcome.preDispatch && owned && current.promptMessageId === undefined) operations.delete(sessionId)
         return outcome.result
       }
+      // The turn really ended successfully: a held failure was a transient attempt, dropped
+      // rather than published, and the window is closed for later turns.
+      retryingSessions.delete(sessionId)
+      heldFailures.delete(sessionId)
       // The synchronous response binds the assistant identity only when it names this
       // request; an unbound return keeps the record so admission stays closed.
       if (owned && outcome.value !== undefined) {

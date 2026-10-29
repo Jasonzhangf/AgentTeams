@@ -91,6 +91,13 @@ class MemoryPersistence implements RuntimeConfigPersistence {
     return { sourceRevision: this.sourceRevision, sourceHash: this.sourceHash }
   }
 
+  /** Simulates an external hand edit of config.toml: source advances, accepted stays. */
+  editMachineExternally(patch: (sections: RuntimeConfigStoreSections) => RuntimeConfigStoreSections): void {
+    this.machine = structuredClone(patch(this.machine))
+    this.sourceRevision += 1
+    this.sourceHash = `sha256:external-${this.sourceRevision}`
+  }
+
   async acceptMachineSourceUnlocked(agentId: string, input: {
     sourceRevision: number
     sourceHash: string
@@ -479,5 +486,42 @@ describe('Teams config owner', () => {
     const snapshot = await store.read()
     ;(snapshot.providers[rcc.id] as { label: string }).label = 'read mutation'
     expect((await store.read()).providers[rcc.id]?.label).toBe('RCC')
+  })
+
+  it('auto-adopts an externally edited machine source and advances the accepted source revision', async () => {
+    const persistence = new MemoryPersistence()
+    const store = createRuntimeConfigStore(persistence)
+    const before = await store.putProviderInstance(0, rcc)
+    expect(before.acceptedSourceHash).toBe('sha256:1')
+
+    persistence.editMachineExternally(sections => ({
+      ...sections,
+      providers: { ...sections.providers, [rcc.id]: { ...sections.providers[rcc.id]!, label: 'RCC edited externally' } },
+    }))
+
+    const after = await store.read()
+    // The external edit is auto-adopted into the accepted view: the accepted
+    // binding revision advances by exactly one, mirroring the file persistence's
+    // restart reconcile, and the accepted source identity follows the file.
+    expect(after.acceptedRevision).toBe(before.acceptedRevision + 1)
+    expect(after.sourceHash).toBe('sha256:external-2')
+    expect(after.acceptedSourceHash).toBe(after.sourceHash)
+    expect(after.acceptedSourceRevision).toBe(after.sourceRevision)
+    expect(after.providers[rcc.id]?.label).toBe('RCC edited externally')
+  })
+
+  it('does not throw SOURCE_CHANGED when a later mutation runs after an external edit', async () => {
+    const persistence = new MemoryPersistence()
+    const store = createRuntimeConfigStore(persistence)
+    await store.putProviderInstance(0, rcc)
+
+    persistence.editMachineExternally(sections => ({
+      ...sections,
+      providers: { ...sections.providers, [rcc.id]: { ...sections.providers[rcc.id]!, label: 'RCC edited externally' } },
+    }))
+
+    const fresh = await store.read()
+    const state = await store.putProviderInstance(fresh.acceptedRevision, { ...rcc, label: 'RCC now managed' })
+    expect(state.providers[rcc.id]?.label).toBe('RCC now managed')
   })
 })

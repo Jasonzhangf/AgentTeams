@@ -1642,3 +1642,55 @@ config = ${JSON.stringify(relayConfig)}
     }
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
+
+it('auto-adopts an external config.toml edit through the production TOML persistence', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'teams-v3-toml-auto-adopt-'))
+  const configPath = join(directory, 'config.toml')
+  const internalPath = join(directory, 'internal.toml')
+  try {
+    const oldText = `version = 3
+
+[providers.rcc]
+protocol = "openai-chat"
+apiBaseUrl = "http://127.0.0.1:4444/v1"
+label = "RCC old"
+enabled = true
+
+[[models]]
+provider = "rcc"
+id = "gpt-5.5"
+
+[agents.provider.model]
+primary = { provider = "rcc", model = "gpt-5.5" }
+`
+    const oldHash = configSourceHash(oldText)
+    await writeFile(configPath, oldText)
+    await writeFile(internalPath, `version = 2
+sourceRevision = 1
+sourceHash = ${JSON.stringify(oldHash)}
+
+[configRuntime.accepted.provider]
+acceptedRevision = 1
+acceptedSourceRevision = 1
+acceptedSourceHash = ${JSON.stringify(oldHash)}
+`)
+    // External hand edit: change the provider label only.
+    const newText = oldText.replace('RCC old', 'RCC new')
+    await writeFile(configPath, newText)
+
+    const persistence = createTomlRuntimeConfigPersistence({ configPath, internalPath, agentId: 'provider' })
+    const store = createRuntimeConfigStore(persistence, { agentId: 'provider' })
+    const view = await store.read()
+    // config.toml is the single source of truth for the view.
+    expect(view.providers.rcc?.label).toBe('RCC new')
+    // The external edit is auto-adopted: accepted revision advances exactly once
+    // and the accepted source identity follows the file.
+    expect(view.acceptedRevision).toBe(2)
+    expect(view.acceptedSourceHash).toBe(configSourceHash(newText))
+    expect(view.acceptedSourceRevision).toBe(view.sourceRevision)
+
+    // A later mutation uses the adopted revision and does not throw SOURCE_CHANGED.
+    const mutation = await store.putProviderInstance(view.acceptedRevision, { ...view.providers.rcc!, label: 'RCC managed' })
+    expect(mutation.providers.rcc?.label).toBe('RCC managed')
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})

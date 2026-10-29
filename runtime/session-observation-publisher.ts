@@ -1,5 +1,5 @@
 import type { AcpHost, AcpPendingPermission } from '../agent-host/acp-host.ts'
-import type { ConsolePermissionOption } from '../packages/shared/src/console-api.ts'
+import type { ConsoleConfigObservationV1, ConsolePermissionOption } from '../packages/shared/src/console-api.ts'
 import type { ConfigErrorCode } from '../config/runtime-config.ts'
 import {
   readSessionObservationRecord,
@@ -29,6 +29,12 @@ export interface SessionObservationPublisherInput {
   readonly recordPath: string
   /** This daemon's own accepted identity. A record that names another agent is refused. */
   readonly agentId: string
+  /**
+   * Producer of this daemon's config row from the config owner's view. Optional: a
+   * daemon without an LLM config (passive capability) omits it and publishes no config.
+   * Returning `undefined` means "no config to show", not an empty success.
+   */
+  readonly readConfigObservation?: () => Promise<ConsoleConfigObservationV1 | undefined>
 }
 
 /**
@@ -60,7 +66,7 @@ export function sessionObservationNotificationId(permissionId: string): string {
 }
 
 /** The whole observation this pass observes, in one canonical order. */
-function observe(input: SessionObservationPublisherInput): SessionObservationSnapshot {
+function observe(input: SessionObservationPublisherInput, config: ConsoleConfigObservationV1 | undefined): SessionObservationSnapshot {
   const sessions = [...new Set(input.host.openedSessions())].sort()
   const byNotification = new Map<string, { readonly notificationId: string; readonly sessionId: string; readonly permissionId: string; readonly options: readonly ConsolePermissionOption[] }>()
   for (const pending of input.host.pendingPermissions() as readonly AcpPendingPermission[]) {
@@ -86,6 +92,7 @@ function observe(input: SessionObservationPublisherInput): SessionObservationSna
         ...(options.length === 0 ? {} : { options }),
       })),
     ...(sessionEvents.length === 0 ? {} : { sessionEvents }),
+    ...(config === undefined ? {} : { config }),
   }
 }
 
@@ -127,7 +134,13 @@ export function createSessionObservationPublisher(input: SessionObservationPubli
     }
     published = record === undefined
       ? undefined
-      : { agentId: record.agentId, sessions: record.sessions, permissions: record.permissions }
+      : {
+          agentId: record.agentId,
+          sessions: record.sessions,
+          permissions: record.permissions,
+          ...(record.sessionEvents === undefined ? {} : { sessionEvents: record.sessionEvents }),
+          ...(record.config === undefined ? {} : { config: record.config }),
+        }
     revision = record?.revision ?? 0
     seeded = true
   }
@@ -140,7 +153,15 @@ export function createSessionObservationPublisher(input: SessionObservationPubli
   const runPass = async (): Promise<void> => {
     try {
       if (!seeded) await seed()
-      const snapshot = observe(input)
+      let config: ConsoleConfigObservationV1 | undefined
+      if (input.readConfigObservation !== undefined) {
+        try {
+          config = await input.readConfigObservation()
+        } catch (error) {
+          refuse((error as { readonly code?: ConfigErrorCode }).code ?? 'UNAVAILABLE', error instanceof Error ? error.message : String(error))
+        }
+      }
+      const snapshot = observe(input, config)
       // Nothing changed: the revision stays, so the control daemon's polling readback reports
       // no new event and the Console receives no frame for a heartbeat.
       if (same(published, snapshot)) return

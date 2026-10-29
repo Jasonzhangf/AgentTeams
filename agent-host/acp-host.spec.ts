@@ -142,7 +142,7 @@ function makePolicy(blacklist: readonly string[] = []): ReturnType<typeof resolv
   })
 }
 
-function makeFixture(policy = makePolicy(), maxDeliveryBacklog = 16): Fixture {
+function makeFixture(policy = makePolicy(), maxDeliveryBacklog = 16, promptRetry?: { readonly maxAttempts?: number; readonly sleep?: (milliseconds: number) => Promise<void> }): Fixture {
   const duplex = new FakeDuplex()
   let resolveExit!: (result: { readonly code: number | null; readonly signal: string | null }) => void
   const exited = new Promise<{ readonly code: number | null; readonly signal: string | null }>(resolve => { resolveExit = resolve })
@@ -166,6 +166,7 @@ function makeFixture(policy = makePolicy(), maxDeliveryBacklog = 16): Fixture {
     agentId: 'agent-a',
     maxDeliveryBacklog,
     onHistoryFault: fault => faults.push(fault),
+    ...(promptRetry === undefined ? {} : { promptRetry }),
   })
   return { host, duplex, history, faults, exit: () => resolveExit({ code: 0, signal: null }), policy }
 }
@@ -1197,6 +1198,135 @@ describe('createAcpHost', () => {
       ...ref1,
       frame: { jsonrpc: '2.0', id: 4, method: 'session/new', params: {} },
     })).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+
+  it('retries a failed prompt that produced no output on the same Session and answers once', async () => {
+    const fixture = makeFixture(makePolicy(), 16, { maxAttempts: 3, sleep: async () => {} })
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'hello' }] } },
+    })
+    const firstChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+    // The engine fails the first attempt as a JSON-RPC internal error: transient, no output.
+    fixture.duplex.push({ jsonrpc: '2.0', id: firstChild, error: { code: -32603, message: 'Internal error' } })
+    await flush()
+    // The retry takes a fresh child id under the same client request, and the client sees
+    // nothing yet: the in-flight prompt is still one prompt.
+    const retried = fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')
+    expect(retried).toHaveLength(2)
+    expect(retried[1].id).not.toBe(firstChild)
+    expect(await readFrames(fixture, ref1)).toHaveLength(0)
+
+    fixture.duplex.push({ jsonrpc: '2.0', id: retried[1].id, result: { stopReason: 'end_turn' } })
+    await flush()
+    const frames = await readFrames(fixture, ref1)
+    expect(frames).toHaveLength(1)
+    expect(frames[0]).toMatchObject({ id: 2, result: { stopReason: 'end_turn' } })
+    expect(frames[0].error).toBeUndefined()
+    const events = fixture.host.sessionEvents?.() ?? []
+    const finals = events.filter(event => event.kind === 'final')
+    expect(finals).toHaveLength(1)
+    expect(finals[0].state).toBe('completed')
+  })
+
+  it('does not retry a prompt that already produced output, and reports its real failure', async () => {
+    const fixture = makeFixture(makePolicy(), 16, { maxAttempts: 3, sleep: async () => {} })
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'hello' }] } },
+    })
+    const promptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: { sessionId: 'session-1', update: { sessionUpdate: 'agent_message_chunk', content: { text: 'partial' } } },
+    })
+    await flush()
+    fixture.duplex.push({ jsonrpc: '2.0', id: promptChild, error: { code: -32603, message: 'Internal error' } })
+    await flush()
+    // Output was already published, so repeating the turn would duplicate it: one failure.
+    expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(1)
+    const terminal = (await readFrames(fixture, ref1)).filter(frame => frame.id === 2)
+    expect(terminal).toHaveLength(1)
+    expect(terminal[0].error).toBeDefined()
+    const events = fixture.host.sessionEvents?.() ?? []
+    expect(events.filter(event => event.kind === 'final' && event.state === 'failed')).toHaveLength(1)
+    expect(events.some(event => event.kind === 'part' && event.partType === 'text' && (event as { text?: string }).text === 'partial')).toBe(true)
+  })
+
+  it('stops at the bounded attempt count and reports the last real failure', async () => {
+    const fixture = makeFixture(makePolicy(), 16, { maxAttempts: 3, sleep: async () => {} })
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'hello' }] } },
+    })
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const dispatched = fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')
+      expect(dispatched).toHaveLength(attempt)
+      fixture.duplex.push({ jsonrpc: '2.0', id: dispatched[dispatched.length - 1].id, error: { code: -32603, message: 'Internal error' } })
+      await flush()
+    }
+    // Exactly the bound was spent, and the client is answered once with the real fault.
+    expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(3)
+    const terminal = (await readFrames(fixture, ref1)).filter(frame => frame.id === 2)
+    expect(terminal).toHaveLength(1)
+    expect(terminal[0].error).toBeDefined()
+    const events = fixture.host.sessionEvents?.() ?? []
+    expect(events.filter(event => event.kind === 'final' && event.state === 'failed')).toHaveLength(1)
+    // Admission is released: the same Session accepts a new prompt afterwards.
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 3, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'again' }] } },
+    })
+    expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(4)
+  })
+
+  it('does not dispatch a retry into a channel that closed during the backoff', async () => {
+    let releaseSleep!: () => void
+    const sleepGate = new Promise<void>(resolve => { releaseSleep = resolve })
+    const fixture = makeFixture(makePolicy(), 16, { maxAttempts: 3, sleep: async () => { await sleepGate } })
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'hello' }] } },
+    })
+    const promptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+    fixture.duplex.push({ jsonrpc: '2.0', id: promptChild, error: { code: -32603, message: 'Internal error' } })
+    await flush()
+    // The backoff is still pending when the client closes its channel. The retry must not
+    // fabricate a new engine dispatch or a delivery for a client that is no longer there.
+    await fixture.host.close(ref1)
+    releaseSleep()
+    await flush()
+    expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(1)
+    expect(await readFrames(fixture, ref1)).toHaveLength(0)
   })
 })
 

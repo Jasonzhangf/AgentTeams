@@ -227,4 +227,116 @@ describe('OpenAI model catalog client', () => {
       providerInstanceId: 'provider-local',
     })
   })
+
+  it('retries 429 then succeeds on the second attempt', async () => {
+    let attempts = 0
+    const sleeps: number[] = []
+    const client = createOpenAIModelCatalogClient({
+      maxAttempts: 3,
+      sleep: async ms => { sleeps.push(ms) },
+      fetch: async () => {
+        attempts += 1
+        return attempts === 1
+          ? new Response('retry later', { status: 429, headers: { 'retry-after': '2' } })
+          : new Response(JSON.stringify({ object: 'list', data: [{ id: 'model-a' }] }), { status: 200 })
+      },
+    })
+
+    const result = await client.listModels({ provider: provider('http://127.0.0.1:1/v1'), credential: credential() })
+    expect(result).toEqual([{ modelId: 'model-a', metadata: {} }])
+    expect(attempts).toBe(2)
+    expect(sleeps).toEqual([2000])
+  })
+
+  it.each([502, 503, 504] as const)('retries HTTP %s then succeeds', async status => {
+    let attempts = 0
+    const client = createOpenAIModelCatalogClient({
+      maxAttempts: 3,
+      sleep: async () => {},
+      fetch: async () => {
+        attempts += 1
+        return attempts === 1
+          ? new Response('failure', { status })
+          : new Response(JSON.stringify({ object: 'list', data: [{ id: 'model-a' }] }), { status: 200 })
+      },
+    })
+
+    const result = await client.listModels({ provider: provider('http://127.0.0.1:1/v1'), credential: credential() })
+    expect(result).toEqual([{ modelId: 'model-a', metadata: {} }])
+    expect(attempts).toBe(2)
+  })
+
+  it('does not retry 401 and rejects as UNAUTHENTICATED', async () => {
+    let attempts = 0
+    const client = createOpenAIModelCatalogClient({
+      maxAttempts: 3,
+      sleep: async () => {},
+      fetch: async () => {
+        attempts += 1
+        return new Response('denied', { status: 401 })
+      },
+    })
+
+    await expect(client.listModels({ provider: provider('http://127.0.0.1:1/v1'), credential: credential() })).rejects.toMatchObject({
+      code: 'UNAUTHENTICATED',
+      providerInstanceId: 'provider-local',
+    })
+    expect(attempts).toBe(1)
+  })
+
+  it('exhausts retries when the upstream keeps failing with 500', async () => {
+    let attempts = 0
+    const client = createOpenAIModelCatalogClient({
+      maxAttempts: 3,
+      sleep: async () => {},
+      fetch: async () => {
+        attempts += 1
+        return new Response('failure', { status: 500 })
+      },
+    })
+
+    await expect(client.listModels({ provider: provider('http://127.0.0.1:1/v1'), credential: credential() })).rejects.toMatchObject({
+      code: 'UPSTREAM_ERROR',
+      status: 500,
+      providerInstanceId: 'provider-local',
+    })
+    expect(attempts).toBe(3)
+  })
+
+  it('retries a transport-level network failure and exhausts the bound', async () => {
+    let attempts = 0
+    const client = createOpenAIModelCatalogClient({
+      maxAttempts: 3,
+      sleep: async () => {},
+      fetch: async () => {
+        attempts += 1
+        throw new TypeError('fetch failed')
+      },
+    })
+
+    await expect(client.listModels({ provider: provider('http://127.0.0.1:1/v1'), credential: credential() })).rejects.toMatchObject({
+      code: 'UNAVAILABLE',
+      providerInstanceId: 'provider-local',
+    })
+    expect(attempts).toBe(3)
+  })
+
+  it('applies exponential backoff 250ms then 500ms for repeat transient failures', async () => {
+    let attempts = 0
+    const sleeps: number[] = []
+    const client = createOpenAIModelCatalogClient({
+      maxAttempts: 3,
+      sleep: async ms => { sleeps.push(ms) },
+      fetch: async () => {
+        attempts += 1
+        if (attempts <= 2) return new Response('failure', { status: 503 })
+        return new Response(JSON.stringify({ object: 'list', data: [{ id: 'model-a' }] }), { status: 200 })
+      },
+    })
+
+    const result = await client.listModels({ provider: provider('http://127.0.0.1:1/v1'), credential: credential() })
+    expect(result).toEqual([{ modelId: 'model-a', metadata: {} }])
+    expect(attempts).toBe(3)
+    expect(sleeps).toEqual([250, 500])
+  })
 })

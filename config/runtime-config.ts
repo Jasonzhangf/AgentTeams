@@ -828,11 +828,27 @@ export function createRuntimeConfigStore(
 ): RuntimeConfigStore {
   const agentId = options.agentId ?? persistence.agentId ?? 'default'
   let applyInFlight = false
-  const load = () => persistence.loadDaemonUnlocked(agentId)
-  const assertAcceptedSource = (view: DaemonRuntimeConfigView): void => {
+  // The config.toml file is the single source of truth. When an external edit
+  // changes the file hash, the accepted config auto-adopts the new machine
+  // source: the accepted source revision/hash/snapshot advance to the file, while
+  // the accepted *binding* revision stays put. The caller reads the view again
+  // to observe the adopted source identity. This replaces the prior SOURCE_CHANGED
+  // throw, which forced an explicit accept after every hand edit.
+  const load = async (): Promise<DaemonRuntimeConfigView> => {
+    const view = await persistence.loadDaemonUnlocked(agentId)
     if (view.acceptedSourceHash !== '' && view.sourceHash !== view.acceptedSourceHash) {
-      throw error('SOURCE_CHANGED', 'config: config.toml has unaccepted changes; explicit accept required')
+      await persistence.acceptMachineSourceUnlocked(agentId, {
+        sourceRevision: view.sourceRevision,
+        sourceHash: view.sourceHash,
+        expectedAcceptedRevision: view.acceptedRevision,
+        expectedAcceptedSourceHash: view.acceptedSourceHash,
+      })
+      return persistence.loadDaemonUnlocked(agentId)
     }
+    return view
+  }
+  const assertAcceptedSource = (_view: DaemonRuntimeConfigView): void => {
+    // No throw: load() already auto-adopted any changed machine source.
   }
   const mutate = async (
     expectedRevision: number,

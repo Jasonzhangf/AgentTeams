@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import type { ConsolePermissionOption, ConsoleSessionEventView } from '../packages/shared/src/console-api.ts'
-import { parseConsoleSessionEvent, parsePermissionOptions } from '../packages/shared/src/console-api.ts'
+import type { ConsoleConfigObservationV1, ConsolePermissionOption, ConsoleSessionEventView } from '../packages/shared/src/console-api.ts'
+import { parseConsoleProjection, parseConsoleSessionEvent, parsePermissionOptions } from '../packages/shared/src/console-api.ts'
 import type { ConfigApplyError, ConfigApplyResult } from './runtime-config.ts'
 import { RuntimeConfigError } from './runtime-config.ts'
 import { sessionIntentScopeDirectory } from './session-intent-store.ts'
@@ -59,6 +59,12 @@ export interface SessionObservationRecord {
   readonly permissions: readonly SessionObservationPermission[]
   /** Ordered engine events for the Sessions this snapshot reports. */
   readonly sessionEvents?: readonly ConsoleSessionEventView[]
+  /**
+   * This daemon's own config view (providers/models/accepted binding) so the Console
+   * can show provider/model status without a control-to-agent channel. Additive and
+   * optional; it never carries a credential value.
+   */
+  readonly config?: ConsoleConfigObservationV1
 }
 
 /** The observation the agent daemon publishes; the store owns version, revision and time. */
@@ -67,6 +73,7 @@ export interface SessionObservationSnapshot {
   readonly sessions: readonly SessionObservationSession[]
   readonly permissions: readonly SessionObservationPermission[]
   readonly sessionEvents?: readonly ConsoleSessionEventView[]
+  readonly config?: ConsoleConfigObservationV1
 }
 
 /**
@@ -172,6 +179,15 @@ function validateSnapshot(value: unknown): ConfigApplyError | undefined {
     const eventsError = validateSessionEvents(value.sessionEvents, sessionIds)
     if (eventsError !== undefined) return eventsError
   }
+  if (value.config !== undefined) {
+    // Reuse the frozen Console projection parser so the additive config row cannot
+    // drift from `ConsoleProjectionV1.configs[]`. A malformed row is refused here.
+    try {
+      parseConsoleProjection({ version: 1, agents: [], sessions: [], notifications: [], configs: [value.config] })
+    } catch (cause) {
+      return invalid(`session observation snapshot config: ${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
   return undefined
 }
 
@@ -186,6 +202,7 @@ function parseSnapshot(value: Record<string, unknown>): SessionObservationSnapsh
       ...(permission.options === undefined ? {} : { options: permission.options as readonly ConsolePermissionOption[] }),
     })),
     ...(value.sessionEvents === undefined ? {} : { sessionEvents: value.sessionEvents as readonly ConsoleSessionEventView[] }),
+    ...(value.config === undefined ? {} : { config: value.config as ConsoleConfigObservationV1 }),
   }
 }
 

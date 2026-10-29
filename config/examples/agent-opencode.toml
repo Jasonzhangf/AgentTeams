@@ -1,7 +1,12 @@
 # D00 example: one OpenCode agent daemon.
 # Start: agentteams --serve opencode --config config/examples/agent-opencode.toml
 # Explicit CLI values (--serve/--ip/--port) win over this file.
-# Placeholder credential references only; never commit a real secret.
+#
+# Real local defaults. The provider points at the local RouteCodex RCC server on
+# port 4444 (see /Volumes/extension/.rcc/config.toml [servers.routecodex_v3_4444]),
+# which serves an OpenAI-compatible chat endpoint at http://127.0.0.1:4444/v1.
+# No credential reference is required because the local RCC server accepts
+# unauthenticated local requests; do not put a real secret in an example.
 version = 4
 
 [daemon]
@@ -31,17 +36,16 @@ callbackExecutor = "controller"
 [relations]
 allowed = ["master", "peer"]
 
-[providers.openai]
+[providers.rcc-4444]
 protocol = "openai-chat"
-apiBaseUrl = "https://api.example.test/v1"
-label = "Example OpenAI-compatible provider"
+apiBaseUrl = "http://127.0.0.1:4444/v1"
+label = "Local RCC 4444"
 enabled = true
-credentialEnv = "EXAMPLE_OPENAI_API_KEY"
 
 [[models]]
-provider = "openai"
-id = "example-large"
-label = "Example large model"
+provider = "rcc-4444"
+id = "gpt-5.5"
+label = "GPT 5.5 (RCC 4444)"
 contextWindow = 128000
 maxOutputTokens = 16384
 tools = true
@@ -50,14 +54,20 @@ inputModalities = ["text", "image"]
 outputModalities = ["text"]
 
 [[models]]
-provider = "openai"
-id = "example-small"
-label = "Example small model"
+provider = "rcc-4444"
+id = "kk.glm-5.3-flash"
+label = "GLM 5.3 Flash (RCC 4444)"
+contextWindow = 128000
+maxOutputTokens = 8192
+tools = true
+streaming = true
+inputModalities = ["text"]
+outputModalities = ["text"]
 
 [model.primary]
-provider = "openai"
-model = "example-large"
+provider = "rcc-4444"
+model = "gpt-5.5"
 
 [model.backup]
-provider = "openai"
-model = "example-small"
+provider = "rcc-4444"
+model = "kk.glm-5.3-flash"

@@ -49,6 +49,49 @@ describe('control Session observation projection', () => {
     }
   })
 
+  it('projects the config row each peer daemon published in its own observation', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'control-observation-'))
+    try {
+      const path = sessionObservationScopePath({ home, ...PEER })
+      const config = {
+        agentId: 'agent-alpha',
+        acceptedRevision: 3,
+        effectiveRevision: 3,
+        applyState: 'clean' as const,
+        acceptedBinding: { primary: { providerInstanceId: 'rcc-4444', modelId: 'gpt-5.5' } },
+        providers: [{
+          id: 'rcc-4444',
+          label: 'Local RCC 4444',
+          protocol: 'openai-chat' as const,
+          apiBaseUrl: 'http://127.0.0.1:4444/v1',
+          enabled: true,
+          authKind: 'none' as const,
+          catalogState: 'ready' as const,
+          models: [{ id: 'gpt-5.5', label: 'gpt-5.5' }],
+        }],
+      }
+      expect((await writeSessionObservationRecord(path, 0, {
+        agentId: 'agent-alpha',
+        sessions: [{ sessionId: 'ses-1' }],
+        permissions: [],
+        config,
+      })).status).toBe('applied')
+      const projected = await readObservedSessionProjection({ home, peers: [PEER], presence: new Map([['agent-alpha', 'online']]) })
+      expect(projected.configs).toEqual([config])
+      // A peer that published no config contributes no config row, never an invented one.
+      const withoutConfig = await mkdtemp(join(tmpdir(), 'control-observation-'))
+      try {
+        await publish(withoutConfig, PEER)
+        const bare = await readObservedSessionProjection({ home: withoutConfig, peers: [PEER], presence: new Map([['agent-alpha', 'online']]) })
+        expect(bare.configs).toBeUndefined()
+      } finally {
+        await rm(withoutConfig, { recursive: true, force: true })
+      }
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
   it('projects nothing for a peer the directory reports as not online', async () => {
     const home = await mkdtemp(join(tmpdir(), 'control-observation-'))
     try {

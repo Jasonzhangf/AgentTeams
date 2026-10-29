@@ -389,19 +389,28 @@ export interface ConsoleProjectionV1 {
     readonly permissionId?: string; readonly priority?: 'low' | 'normal' | 'high' | 'critical'
     readonly occurredAt?: string; readonly detail?: string
   }[]
-  readonly configs: readonly {
-    readonly agentId: string; readonly acceptedRevision: number; readonly effectiveRevision?: number
-    /** Durable config-owner fence projection; always emitted by the U2 config binding. */
-    readonly applyState?: 'clean' | 'uncertain'
-    /** Accepted binding from the same config view; null before the first explicit accept. */
-    readonly acceptedBinding?: ConsoleAcceptedBinding | null
-    readonly providers: readonly ConsoleProviderView[]; readonly error?: ConsoleServiceError
-  }[]
+  readonly configs: readonly ConsoleConfigObservationV1[]
   readonly sessionEvents?: readonly ConsoleSessionEventView[]
   readonly works?: readonly ConsoleWorkView[]
   readonly relations?: readonly ConsoleRelationView[]
   /** Additive Teams connection rows projected from the network status port; absent when unbound. */
   readonly connections?: readonly ConsoleConnectionView[]
+}
+
+/**
+ * One Console config row: a single Agent's accepted + effective configuration
+ * view. It is carried both by the control-daemon projection and, additively, by
+ * the agent daemon's Session observation so a Console can show provider/model
+ * status without a control-to-agent channel. It never carries a credential
+ * value — only `authKind`, model ids/labels and binding references.
+ */
+export interface ConsoleConfigObservationV1 {
+  readonly agentId: string; readonly acceptedRevision: number; readonly effectiveRevision?: number
+  /** Durable config-owner fence projection; always emitted by the U2 config binding. */
+  readonly applyState?: 'clean' | 'uncertain'
+  /** Accepted binding from the same config view; null before the first explicit accept. */
+  readonly acceptedBinding?: ConsoleAcceptedBinding | null
+  readonly providers: readonly ConsoleProviderView[]; readonly error?: ConsoleServiceError
 }
 export interface ConsoleWorkView {
   readonly agentId: string

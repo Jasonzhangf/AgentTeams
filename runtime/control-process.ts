@@ -41,6 +41,7 @@ import {
   type ConsoleCommandResultV1,
   type ConsoleCommandV1,
   type ConsoleClientV1,
+  type ConsoleConfigObservationV1,
   type ConsoleProjectionV1,
   type ConsoleSessionEventView,
   type JsonValue,
@@ -965,10 +966,17 @@ export async function readObservedSessionProjection(input: {
   readonly peers: readonly { readonly agentId: string; readonly accountId: string; readonly scopeId: string }[]
   /** The presence the directory readback reports, by agent. A missing agent has no report. */
   readonly presence: ReadonlyMap<string, string>
-}): Promise<Pick<ConsoleProjectionV1, 'sessions' | 'notifications' | 'sessionEvents'> & { readonly observedAgents?: ReadonlyMap<string, { readonly revision: number; readonly sessions: readonly { readonly sessionId: string }[] }> }> {
+}): Promise<Pick<ConsoleProjectionV1, 'sessions' | 'notifications' | 'sessionEvents'> & {
+  readonly configs?: readonly ConsoleConfigObservationV1[]
+  readonly observedAgents?: ReadonlyMap<string, { readonly revision: number; readonly sessions: readonly { readonly sessionId: string }[] }>
+}> {
   const sessions: { readonly agentId: string; readonly sessionId: string }[] = []
   const notifications: ConsoleProjectionV1['notifications'][number][] = []
   const sessionEvents: ConsoleSessionEventView[] = []
+  // Each agent daemon publishes its own config row inside its observation, because the
+  // control daemon has no channel to ask it. The record's writer already refused a row
+  // that `parseConsoleProjection` rejects, so a valid row is projected as the owner wrote it.
+  const configs: ConsoleConfigObservationV1[] = []
   const observedAgents = new Map<string, { readonly revision: number; readonly sessions: readonly { readonly sessionId: string }[] }>()
   for (const peer of input.peers) {
     const reported = input.presence.get(peer.agentId)
@@ -991,6 +999,7 @@ export async function readObservedSessionProjection(input: {
     for (const row of record.sessions) sessions.push({ agentId: peer.agentId, sessionId: row.sessionId })
     const events = record.sessionEvents ?? []
     sessionEvents.push(...events)
+    if (record.config !== undefined) configs.push(record.config)
     for (const row of record.permissions) {
       notifications.push({
         agentId: peer.agentId,
@@ -1024,6 +1033,7 @@ export async function readObservedSessionProjection(input: {
   return {
     sessions,
     notifications,
+    ...(configs.length === 0 ? {} : { configs }),
     ...(sessionEvents.length === 0 ? {} : { sessionEvents }),
     ...(observedAgents.size === 0 ? {} : { observedAgents }),
   }
@@ -1161,7 +1171,9 @@ export async function createControlNetworkStatus(intent: ControlDaemonIntent, en
       agents,
       sessions: observed.sessions,
       notifications: observed.notifications,
-      configs: [],
+      // Each peer daemon publishes its own config row in its observation; this daemon
+      // owns no second ledger and asks no peer over a channel.
+      configs: observed.configs ?? [],
       ...(observed.sessionEvents === undefined || observed.sessionEvents.length === 0 ? {} : { sessionEvents: observed.sessionEvents }),
     }, port())
   }

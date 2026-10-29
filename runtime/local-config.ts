@@ -1782,6 +1782,24 @@ async function persistLocalV3ConfigLocked(
       ...(runtime?.startToken === undefined ? {} : { startToken: runtime.startToken }),
     }
   }
+  // External config.toml edits are auto-adopted on load: when the admitted machine
+  // source hash differs from a daemon's accepted source hash, advance that daemon's
+  // acceptedRevision by one and re-sync acceptedSourceRevision/Hash plus the snapshot
+  // from the new file sections. A daemon that never accepted keeps no slice.
+  const acceptedNext: Record<string, LocalInternalConfigRuntimeAccepted> = { ...(latest?.configRuntime?.accepted ?? {}) }
+  if (admitted.sourceHash !== existing?.sourceHash) {
+    const sections = text.trim() === '' ? { providers: {}, models: [], bindings: {} } : parseConfigUserSections(configRoot(text, configPath))
+    const snapshot = JSON.stringify(snapshotFromSections(sections))
+    for (const [agentId, slice] of Object.entries(acceptedNext)) {
+      if (slice.acceptedSourceHash === admitted.sourceHash) continue
+      acceptedNext[agentId] = {
+        acceptedRevision: slice.acceptedRevision + 1,
+        acceptedSourceRevision: admitted.sourceRevision,
+        acceptedSourceHash: admitted.sourceHash,
+        snapshot,
+      }
+    }
+  }
   await writeLocalInternalConfig(internalPath, {
     ...(latest ?? { version: 2 as const }),
     version: 2,
@@ -1793,7 +1811,9 @@ async function persistLocalV3ConfigLocked(
     relay: { projectionPath: result.relayProjectionPath, config: JSON.stringify(result.relayConfig) },
     console: result.consoleProjection,
     daemons,
-    configRuntime: latest?.configRuntime ?? { accepted: {}, effective: {}, catalogs: {} },
+    configRuntime: latest?.configRuntime === undefined
+      ? { accepted: {}, effective: {}, catalogs: {} }
+      : { ...latest.configRuntime, accepted: acceptedNext },
   })
   return {
     version: 3,
@@ -2336,7 +2356,11 @@ export function createTomlRuntimeConfigPersistence(options: {
     const internal = await readInternalOrEmpty(internalPath)
     const sections = text.trim() === '' ? { providers: {}, models: [], bindings: {} } : parseConfigUserSections(configRoot(text, configPath))
     const accepted = acceptedSlice(internal, targetAgentId)
-    const snapshot = accepted?.snapshot === undefined ? snapshotFromSections(sections) : parseJson<VersionedRuntimeConfig>(accepted.snapshot, `configRuntime.accepted.${targetAgentId}.snapshot`)
+    // The config.toml file is the single source of truth for the accepted user
+    // intent. The per-daemon accepted slice in internal.toml only carries the
+    // accepted source identity and revision; the snapshot view is always rebuilt
+    // from the current file sections instead of a frozen `accepted.snapshot`.
+    const snapshot = snapshotFromSections(sections)
     const effective = effectiveSlice(internal, targetAgentId)
     const observations = observationsFor(internal, targetAgentId)
     const catalogs: Record<string, { state: VersionedRuntimeConfig['catalogs'][string]['state']; entries: ModelEntry[]; refreshedAt?: string; error?: ConfigApplyError }> = {}

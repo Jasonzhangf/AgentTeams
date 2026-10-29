@@ -10,11 +10,22 @@ import { RuntimeConfigError } from './runtime-config.ts'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const DEFAULT_MAX_RESPONSE_BYTES = 1_048_576
+const DEFAULT_MAX_ATTEMPTS = 3
+const DEFAULT_RETRY_BASE_MS = 250
 
 export interface OpenAIModelCatalogClientOptions {
   readonly timeoutMs?: number
   readonly maxResponseBytes?: number
+  /** Retry attempts for transient failures, including the first try. Default 3 (first + 2 retries). */
+  readonly maxAttempts?: number
+  /** Delay between retries; tests inject a no-op or a recorder instead of real timers. */
+  readonly sleep?: (milliseconds: number) => Promise<void>
+  /** Fetch implementation; tests inject a fake to avoid binding a socket. */
+  readonly fetch?: typeof globalThis.fetch
 }
+
+/** HTTP statuses whose request may be retried without changing semantics on a new attempt. */
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504])
 
 function configError(
   provider: ProviderInstance,
@@ -181,37 +192,85 @@ function parseDescriptors(body: string, provider: ProviderInstance): readonly Pr
 export function createOpenAIModelCatalogClient(options: OpenAIModelCatalogClientOptions = {}): ProviderModelClient {
   const timeoutMs = option(options.timeoutMs, DEFAULT_TIMEOUT_MS, 'model catalog timeoutMs')
   const maxResponseBytes = option(options.maxResponseBytes, DEFAULT_MAX_RESPONSE_BYTES, 'model catalog maxResponseBytes')
+  const maxAttempts = option(options.maxAttempts, DEFAULT_MAX_ATTEMPTS, 'model catalog maxAttempts')
+  const sleep = options.sleep ?? (async (milliseconds: number) => { await new Promise<void>(resolve => setTimeout(resolve, milliseconds)) })
+  const fetchImpl = options.fetch ?? globalThis.fetch
   return {
     listModels: async ({ provider, credential }) => {
       const endpoint = modelEndpoint(provider)
       const headers = headersFor(provider, credential)
-      if (typeof globalThis.fetch !== 'function') throw configError(provider, 'UNAVAILABLE', 'config: fetch is unavailable')
-      const controller = new AbortController()
-      let timedOut = false
-      const timer = setTimeout(() => {
-        timedOut = true
-        controller.abort()
-      }, timeoutMs)
-      try {
-        const response = await globalThis.fetch(endpoint, {
-          method: 'GET',
-          headers,
-          redirect: 'manual',
-          signal: controller.signal,
-        })
-        if (!response.ok) {
-          throw configError(provider, statusCode(response.status), `config: model catalog request returned HTTP ${response.status}`, response.status)
-        }
-        const body = await readResponseBody(response, provider, maxResponseBytes)
-        return parseDescriptors(body, provider)
-      } catch (cause) {
-        controller.abort()
-        if (cause instanceof RuntimeConfigError) throw cause
-        if (timedOut || isAbortError(cause)) throw configError(provider, 'UNAVAILABLE', 'config: model catalog request timed out')
-        throw configError(provider, 'UNAVAILABLE', 'config: model catalog request failed')
-      } finally {
-        clearTimeout(timer)
+      if (typeof fetchImpl !== 'function') throw configError(provider, 'UNAVAILABLE', 'config: fetch is unavailable')
+      let lastError: unknown
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const result = await attemptListModels(fetchImpl, timeoutMs, endpoint, headers, provider, maxResponseBytes)
+        if (result.ok) return result.value
+        lastError = result.error
+        if (!result.retryable || attempt >= maxAttempts) break
+        await sleep(result.retryAfterMs ?? backoffDelayFor(attempt))
       }
+      throw lastError instanceof Error ? lastError : configError(provider, 'UNAVAILABLE', 'config: model catalog request failed')
     },
   }
+}
+
+type CatalogAttempt =
+  | { readonly ok: true; readonly value: readonly ProviderModelDescriptor[] }
+  | { readonly ok: false; readonly error: RuntimeConfigError; readonly retryable: boolean; readonly retryAfterMs?: number }
+
+async function attemptListModels(
+  fetchImpl: typeof globalThis.fetch,
+  timeoutMs: number,
+  endpoint: URL,
+  headers: Headers,
+  provider: ProviderInstance,
+  maxResponseBytes: number,
+): Promise<CatalogAttempt> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => { controller.abort() }, timeoutMs)
+  let response: Response
+  try {
+    response = await fetchImpl(endpoint, { method: 'GET', headers, redirect: 'manual', signal: controller.signal })
+  } catch (cause) {
+    clearTimeout(timer)
+    if (cause instanceof RuntimeConfigError) return { ok: false, error: cause, retryable: false }
+    const error = controller.signal.aborted || isAbortError(cause)
+      ? configError(provider, 'UNAVAILABLE', 'config: model catalog request timed out')
+      : configError(provider, 'UNAVAILABLE', 'config: model catalog request failed')
+    return { ok: false, error, retryable: true }
+  }
+  try {
+    if (!response.ok) {
+      const retryable = RETRYABLE_STATUS.has(response.status)
+      const retryAfterMs = retryable ? parseRetryAfter(response.headers.get('retry-after')) : undefined
+      const error = configError(provider, statusCode(response.status), `config: model catalog request returned HTTP ${response.status}`, response.status)
+      return { ok: false, error, retryable, ...(retryAfterMs === undefined ? {} : { retryAfterMs }) }
+    }
+    const body = await readResponseBody(response, provider, maxResponseBytes)
+    return { ok: true, value: parseDescriptors(body, provider) }
+  } catch (cause) {
+    if (cause instanceof RuntimeConfigError) return { ok: false, error: cause, retryable: false }
+    return { ok: false, error: configError(provider, 'UNAVAILABLE', 'config: model catalog response failed'), retryable: true }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** Retry-After is delta-seconds or an HTTP-date; anything else falls back to backoff. */
+function parseRetryAfter(value: string | null): number | undefined {
+  if (value === null || value.trim() === '') return undefined
+  const seconds = Number(value)
+  if (Number.isFinite(seconds)) return seconds >= 0 ? Math.round(seconds * 1000) : undefined
+  const date = Date.parse(value)
+  if (Number.isNaN(date)) return undefined
+  return Math.max(0, date - Date.now())
+}
+
+/**
+ * Bounded exponential backoff between attempts: 250ms after the first failure,
+ * 500ms after the second. The contract fixes the sequence; a real deployment may
+ * read Retry-After from a 429/503 response to cap this, but tests inject `sleep`
+ * and `maxAttempts`, so the bound is deterministic here.
+ */
+function backoffDelayFor(attempt: number): number {
+  return Math.min(DEFAULT_RETRY_BASE_MS * 2 ** (attempt - 1), DEFAULT_RETRY_BASE_MS * 2)
 }
