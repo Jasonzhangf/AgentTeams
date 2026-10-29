@@ -177,3 +177,21 @@ output, browser create/send/approval and final-event checks remained green.
 Evidence: `red-new-tests.log`, `green-new-tests.log`, `focused-tests-r4.log`,
 `typecheck-r4.log`, `build-r4.log`, `black-box-r4-final.log`, `receipt.json`,
 `browser-pending-permission.png`.
+
+## r5 Installed-artifact and Control/Agent restart black-box acceptance
+
+`black-box-session-loop.mjs` now packs and installs the staged package
+(`generated/modules/teams-source/lib`) into an isolated prefix outside the source tree
+and drives the installed CLI and WebUI assets end-to-end (`65/65` checks passed, exit `0`,
+updated `receipt.json`):
+
+1. Installed CLI resolution outside the source tree (`1` check).
+2. The full `50` Session-loop, concurrent Session B, real Chrome DOM, composer, timeline,
+   and permission approval checks against the installed package.
+3. Control daemon restart persistence (`4` checks): `agentteams control stop` stops the
+   previous PID, `agentteams control start` spawns a new PID, and `/api/v1/projection`
+   recovers the operable runtime agent and retains both created Sessions.
+4. Agent daemon (`--serve opencode`) convergent restart (`10` checks): stopping and
+   restarting `--serve opencode` on the same config and port spawns a new daemon PID and
+   a new OpenCode child PID, reconverges the control projection, and completes a fresh
+   post-restart Session create -> open -> prompt -> permission approval -> final turn.

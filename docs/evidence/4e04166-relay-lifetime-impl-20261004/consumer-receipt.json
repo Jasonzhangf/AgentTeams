@@ -1,0 +1,272 @@
+{
+  "bugId": "4e04166",
+  "verifiedAt": "2026-10-29T00:29:13.658Z",
+  "status": "passed",
+  "installedCliRealpath": "/private/tmp/at-4e-nb0E1P/prefix/node_modules/agentteams/cli/agentteams.mjs",
+  "grantTtlMs": 1500,
+  "requestTimeoutMs": 20000,
+  "openElapsedMs": 5359,
+  "closeElapsedMs": 886,
+  "workId": "989b6318-dcc3-4c76-9906-331da9bb4246",
+  "contextId": "browser-context-240305e6-9a91-4cbc-aa22-c35de8c7e7d9",
+  "profile": "teams-bb-provider-949304ec1ea0d45aa908608e2cb7e5c7ff52d6e3683a5372c52acac367d36708",
+  "stoppedGeneration": 1,
+  "openReceipt": {
+    "status": "completed",
+    "control": {
+      "projectId": "agentteams-local-work",
+      "graphId": "agentteams.work-open",
+      "graphVersion": "1",
+      "executionId": "919e837e-d6e6-4789-8b5a-8218dab0bc92",
+      "attemptId": "3dbd2191-393b-4199-ac2d-bdf25548a7cd",
+      "workId": "989b6318-dcc3-4c76-9906-331da9bb4246",
+      "requestId": "4f5a4e58-e47e-4ae7-8cb7-0daa5e734102",
+      "providerAgentId": "bb-provider",
+      "targetGeneration": 1,
+      "serviceSelection": "capability",
+      "capabilityId": "browser",
+      "capabilityVersion": "1",
+      "operation": "context.create",
+      "requestState": "succeeded",
+      "workClosure": "retained"
+    },
+    "business": {
+      "contextId": "browser-context-240305e6-9a91-4cbc-aa22-c35de8c7e7d9",
+      "profile": "teams-bb-provider-949304ec1ea0d45aa908608e2cb7e5c7ff52d6e3683a5372c52acac367d36708",
+      "raw": {
+        "cmd": "start",
+        "ephemeral": false,
+        "headless": true,
+        "issuedAt": "2026-10-29T00:29:10.161Z",
+        "profile": "teams-bb-provider-949304ec1ea0d45aa908608e2cb7e5c7ff52d6e3683a5372c52acac367d36708",
+        "reused": false,
+        "sessionId": "camoufox-88154",
+        "target": "t_446f6edf2b4b",
+        "traceId": "cli-1793233746865",
+        "url": "http://127.0.0.1:62634/"
+      },
+      "sessionId": "camoufox-88154"
+    },
+    "cleanup": {
+      "channelsOpened": 1,
+      "channelsDisposed": 1
+    },
+    "evidence": {
+      "execution": "completed",
+      "graphId": "agentteams.work-open",
+      "graphVersion": "1",
+      "nodeSchedule": [
+        "resolve-service",
+        "open-link",
+        "admit-work",
+        "request-work",
+        "return-held-work"
+      ],
+      "nodeCompletion": [
+        "resolve-service",
+        "open-link",
+        "admit-work",
+        "request-work",
+        "return-held-work"
+      ],
+      "hostOperations": [
+        "agentWork.findProvider",
+        "agentWork.open",
+        "agentWork.propose",
+        "agentWork.request",
+        "agentWork.dispose"
+      ]
+    }
+  },
+  "snapshotReceipt": {
+    "status": "completed",
+    "control": {
+      "projectId": "agentteams-local-work",
+      "graphId": "agentteams.work-request",
+      "graphVersion": "1",
+      "executionId": "5a68ca1e-74f3-4b59-9889-4d8cc4c00ca6",
+      "attemptId": "24c7b959-4d1c-4f7c-b75e-06d03d996034",
+      "workId": "989b6318-dcc3-4c76-9906-331da9bb4246",
+      "requestId": "4f3fc6bd-ddbd-4c4b-8919-19307e3bfe17",
+      "providerAgentId": "bb-provider",
+      "targetGeneration": 1,
+      "serviceSelection": "capability",
+      "capabilityId": "browser",
+      "capabilityVersion": "1",
+      "operation": "snapshot",
+      "requestState": "succeeded",
+      "workClosure": "retained"
+    },
+    "containsMarker": true
+  },
+  "closeReceipt": {
+    "status": "completed",
+    "control": {
+      "projectId": "agentteams-local-work",
+      "graphId": "agentteams.work-close",
+      "graphVersion": "1",
+      "executionId": "a6ec09fa-d989-444c-b1d6-c7e00773cbe0",
+      "attemptId": "813d31a5-3fab-41e5-a0a5-30a96210611e",
+      "workId": "989b6318-dcc3-4c76-9906-331da9bb4246",
+      "requestId": "dcf0e67a-dd11-40c9-9000-93e35c1e97a8",
+      "providerAgentId": "bb-provider",
+      "targetGeneration": 1,
+      "serviceSelection": "capability",
+      "capabilityId": "browser",
+      "capabilityVersion": "1",
+      "operation": "context.create",
+      "workClosure": "closed"
+    },
+    "cleanup": {
+      "channelsOpened": 1,
+      "channelsDisposed": 1
+    },
+    "evidence": {
+      "execution": "completed",
+      "graphId": "agentteams.work-close",
+      "graphVersion": "1",
+      "nodeSchedule": [
+        "resolve-service",
+        "open-link",
+        "close-work"
+      ],
+      "nodeCompletion": [
+        "resolve-service",
+        "open-link",
+        "close-work"
+      ],
+      "hostOperations": [
+        "agentWork.findProvider",
+        "agentWork.open",
+        "agentWork.close",
+        "agentWork.dispose"
+      ]
+    }
+  },
+  "providerLedgerFinal": {
+    "workState": "closed",
+    "allocations": [
+      {
+        "allocationId": "allocation-2a0aeb0a-2c83-4db4-a38c-2f937267e70a",
+        "resourceId": "browser-context",
+        "state": "released"
+      },
+      {
+        "allocationId": "allocation-bc2d118c-712b-4e99-8c12-3ba783f5d736",
+        "resourceId": "browser-slot",
+        "state": "released"
+      },
+      {
+        "allocationId": "allocation-51f1b7b4-4f22-4fa6-b110-42baa5ab460d",
+        "resourceId": "browser-slot",
+        "state": "released"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "ok": true,
+      "message": "staged pack root exists at /Volumes/Intel/playground/agentteams/david-mvp-closeout-20261028/generated/modules/teams-source/lib"
+    },
+    {
+      "ok": true,
+      "message": "resolved camo executable (/opt/homebrew/bin/camo)"
+    },
+    {
+      "ok": true,
+      "message": "resolved rg executable (/opt/homebrew/bin/rg)"
+    },
+    {
+      "ok": true,
+      "message": "machine Camoufox cache exists at /Users/fanzhang/Library/Caches/camoufox"
+    },
+    {
+      "ok": true,
+      "message": "installed CLI resolves outside the source tree (/private/tmp/at-4e-nb0E1P/prefix/node_modules/agentteams/cli/agentteams.mjs)"
+    },
+    {
+      "ok": true,
+      "message": "internal.toml patched with grantTtlMs = 1500"
+    },
+    {
+      "ok": true,
+      "message": "internal.toml patched with requestTimeoutMs = 20000"
+    },
+    {
+      "ok": true,
+      "message": "installed lifecycle running at generation=1"
+    },
+    {
+      "ok": true,
+      "message": "active internal.toml retains grantTtlMs = 1500 after start"
+    },
+    {
+      "ok": true,
+      "message": "active internal.toml retains requestTimeoutMs = 20000 after start"
+    },
+    {
+      "ok": true,
+      "message": "live relay.json projection has grantTtlMs=1500"
+    },
+    {
+      "ok": true,
+      "message": "live receiver projection has requestTimeoutMs=20000"
+    },
+    {
+      "ok": true,
+      "message": "provider endpoint is online at generation=1"
+    },
+    {
+      "ok": true,
+      "message": "real Camoufox context.create took 5359ms (> grantTtlMs 1500ms)"
+    },
+    {
+      "ok": true,
+      "message": "opened Relay data link survived past grantTtlMs=1500ms and returned synchronous completion (status=completed, requestState=succeeded)"
+    },
+    {
+      "ok": true,
+      "message": "received persistent workId=989b6318-dcc3-4c76-9906-331da9bb4246"
+    },
+    {
+      "ok": true,
+      "message": "received real browser contextId=browser-context-240305e6-9a91-4cbc-aa22-c35de8c7e7d9"
+    },
+    {
+      "ok": true,
+      "message": "received real browser profile=teams-bb-provider-949304ec1ea0d45aa908608e2cb7e5c7ff52d6e3683a5372c52acac367d36708"
+    },
+    {
+      "ok": true,
+      "message": "real Camoufox OS process is running for profile=teams-bb-provider-949304ec1ea0d45aa908608e2cb7e5c7ff52d6e3683a5372c52acac367d36708 (pids=[88452])"
+    },
+    {
+      "ok": true,
+      "message": "browser snapshot request succeeded on persistent Work 989b6318-dcc3-4c76-9906-331da9bb4246"
+    },
+    {
+      "ok": true,
+      "message": "browser snapshot business payload contains live page marker (4e04166-camo-live-marker)"
+    },
+    {
+      "ok": true,
+      "message": "browser work close completed synchronously (elapsed=886ms, workClosure=closed)"
+    },
+    {
+      "ok": true,
+      "message": "provider ledger confirms workId=989b6318-dcc3-4c76-9906-331da9bb4246 state=closed"
+    },
+    {
+      "ok": true,
+      "message": "provider ledger confirms all 3 resource allocations released"
+    },
+    {
+      "ok": true,
+      "message": "all Camoufox browser processes for isolated HOME are stopped"
+    },
+    {
+      "ok": true,
+      "message": "all fixture daemon processes for isolated HOME are stopped"
+    }
+  ]
+}

@@ -127,3 +127,15 @@ add2b96e84e26a780b30a258bdf995c95cfcbbf858dcf0e5bed20584e77b84b9  docs/architect
   This stage owns only `server/relay.ts`, `server/relay.spec.ts`, and this note
   file. The note does not freeze its own tree hash. Primary retains independent
   review, commit, integration, push, memory, and source cleanup.
+- 2026-10-28 / public consumer black-box replay | `replay-4e04166-browser-consumer.mjs`
+  packs and installs the candidate package outside the source tree, sets Relay
+  `grantTtlMs = 1500` and `requestTimeoutMs = 20000`, starts `bb-provider` and
+  `bb-receiver` through the installed CLI, and runs `agentteams work open` for
+  `browser` `context.create` against a real Camoufox browser process. The open
+  operation took `5359ms` (`> grantTtlMs = 1500ms`) and completed synchronously
+  on the single opened Relay data link (`status: "completed"`,
+  `requestState: "succeeded"`), followed by `work request` (`snapshot` containing
+  the live page marker), `work close` (`workClosure: "closed"`), provider ledger
+  verification (`state: "closed"` and all `3` resource allocations `released`),
+  and full Camoufox/daemon cleanup (`26/26` checks passed, exit `0`, receipt in
+  `consumer-receipt.json`).

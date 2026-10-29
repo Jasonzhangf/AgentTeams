@@ -22,31 +22,32 @@
  * daemon, control daemon, intent records, observation records, permission callback and HTTP
  * projection are all real processes and real files.
  *
- * Honest boundary: this is source-tree evidence using the worktree CLI and the real OpenCode
- * executable, not an installed artifact. It proves the daemon/control loop and the source-tree
- * browser DOM, not an upstream model or an installed package.
+ * Honest boundary: when `generated/modules/teams-source/lib/package.json` exists (or `AGENTTEAMS_CLI`
+ * points to an installed copy), this packs and installs the candidate into an isolated prefix outside
+ * the source tree and runs the full Session-loop, real Chrome DOM, Control daemon restart persistence,
+ * and Agent daemon (`--serve opencode`) convergent restart checks against the installed package.
  *
  * Usage: node docs/evidence/e562a05-webui-session-loop/black-box-session-loop.mjs
  * Env: OPENCODE_EXECUTABLE, E562_STEP_DEADLINE_MS, E562_OVERALL_DEADLINE_MS,
- *      E562_RECEIPT_PATH, CHROME_BIN
+ *      E562_RECEIPT_PATH, E562_SCREENSHOT_PATH, E562_REPO_ROOT, CHROME_BIN
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const evidenceDirectory = dirname(fileURLToPath(import.meta.url))
-const repositoryRoot = resolve(evidenceDirectory, '..', '..', '..')
-const CLI = process.env.AGENTTEAMS_CLI ?? join(repositoryRoot, 'cli', 'agentteams.mjs')
-const CLI_ROOT = process.env.AGENTTEAMS_CLI === undefined ? repositoryRoot : resolve(dirname(process.env.AGENTTEAMS_CLI), '..')
+const repositoryRoot = process.env.E562_REPO_ROOT ?? resolve(evidenceDirectory, '..', '..', '..')
+let CLI = process.env.AGENTTEAMS_CLI ?? join(repositoryRoot, 'cli', 'agentteams.mjs')
+let CLI_ROOT = process.env.AGENTTEAMS_CLI === undefined ? repositoryRoot : resolve(dirname(process.env.AGENTTEAMS_CLI), '..')
 const OPENCODE = process.env.OPENCODE_EXECUTABLE ?? '/Users/fanzhang/.opencode/bin/opencode'
 const CHROME = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const RECEIPT_PATH = process.env.E562_RECEIPT_PATH ?? join(evidenceDirectory, 'receipt.json')
-const SCREENSHOT_PATH = join(evidenceDirectory, 'browser-pending-permission.png')
+const SCREENSHOT_PATH = process.env.E562_SCREENSHOT_PATH ?? join(evidenceDirectory, 'browser-pending-permission.png')
 const STEP_DEADLINE_MS = Number(process.env.E562_STEP_DEADLINE_MS ?? 120_000)
 const OVERALL_DEADLINE_MS = Number(process.env.E562_OVERALL_DEADLINE_MS ?? 900_000)
 
@@ -323,12 +324,18 @@ async function sendMessage(origin, target, payload) {
 async function awaitProjection(origin, match, label) {
   const deadline = Date.now() + STEP_DEADLINE_MS
   let observed
+  let lastError
   while (Date.now() < deadline) {
-    observed = await readProjection(origin)
-    if (match(observed)) return observed
+    try {
+      observed = await readProjection(origin)
+      lastError = undefined
+      if (match(observed)) return observed
+    } catch (error) {
+      lastError = error
+    }
     await new Promise(resolveWait => setTimeout(resolveWait, 200))
   }
-  throw new Error(`${label}: projection did not match within ${STEP_DEADLINE_MS}ms; observed=${JSON.stringify(observed).slice(0, 2400)}`)
+  throw new Error(`${label}: projection did not match within ${STEP_DEADLINE_MS}ms; lastError=${lastError?.message ?? 'none'}; observed=${JSON.stringify(observed).slice(0, 2400)}`)
 }
 
 async function connectCdp(wsUrl) {
@@ -443,6 +450,28 @@ async function main() {
     E562_PROBE_API_KEY: PROVIDER_CREDENTIAL,
     [PASSWORD_ENV]: PASSWORD,
   }
+
+  step = 'installed package setup'
+  const packRoot = join(repositoryRoot, 'generated', 'modules', 'teams-source', 'lib')
+  if (process.env.AGENTTEAMS_CLI === undefined && existsSync(join(packRoot, 'package.json'))) {
+    const packDest = join(ownedRoot, 'pack')
+    const prefix = join(ownedRoot, 'prefix')
+    const npmCache = join(ownedRoot, 'npm-cache')
+    await mkdir(packDest, { recursive: true })
+    await mkdir(prefix, { recursive: true })
+    await mkdir(npmCache, { recursive: true })
+    const npmEnv = { ...process.env, ...operatorEnv, npm_config_cache: npmCache }
+    const packed = spawnSync('npm', ['pack', packRoot, '--pack-destination', packDest, '--json'], { cwd: ownedRoot, env: npmEnv, encoding: 'utf8' })
+    if (packed.status !== 0) throw new Error(`npm pack failed: ${packed.stderr || packed.stdout}`)
+    const tarball = join(packDest, JSON.parse(packed.stdout)[0].filename)
+    const installed = spawnSync('npm', ['install', '--prefix', prefix, '--no-audit', '--no-fund', '--no-package-lock', '--no-save', tarball], { cwd: ownedRoot, env: npmEnv, encoding: 'utf8' })
+    if (installed.status !== 0) throw new Error(`npm install failed: ${installed.stderr || installed.stdout}`)
+    CLI_ROOT = realpathSync(join(prefix, 'node_modules', 'agentteams'))
+    CLI = realpathSync(join(prefix, 'node_modules', '.bin', 'agentteams'))
+  }
+  assert(CLI.startsWith(CLI_ROOT + sep) && !CLI.startsWith(repositoryRoot + sep), `installed CLI resolves outside the source tree (${CLI})`)
+  record('installedCli', { cli: CLI, cliRoot: CLI_ROOT })
+
   provider = await startStubProvider()
   const controlPort = await availableLoopbackPort()
   const agentPort = await availableLoopbackPort()
@@ -877,6 +906,102 @@ async function main() {
   assert(finalUi.finalEvents >= 1, 'the live timeline rendered the final event')
   assert(finalUi.pendingPermissionButtons === 0, 'the live timeline removed the resolved permission buttons')
   record('browserCompleted', { projection: browserCompleted.sessionEvents.filter(event => event.sessionId === browserCreated.sessionId), finalUi })
+
+  step = 'control daemon restart persistence'
+  const previousControlPid = controlPid
+  runCli(['control', 'stop', '--config', controlConfigPath], operatorEnv)
+  assert(!processAlive(previousControlPid), `previous control daemon pid ${previousControlPid} is stopped`)
+  runCli(['control', 'start', '--config', controlConfigPath], operatorEnv)
+  const restartedStatusLine = runCli(['control', 'status', '--config', controlConfigPath], operatorEnv).trim().split('\n').filter(Boolean).at(-1)
+  const restartedControlStatus = parseFields(restartedStatusLine)
+  controlPid = Number(restartedControlStatus.pid)
+  assert(Number.isSafeInteger(controlPid) && controlPid !== previousControlPid && processAlive(controlPid),
+    `control daemon restarted with a new live pid (${previousControlPid} -> ${controlPid})`)
+  assert(restartedControlStatus.state === 'running', `restarted control daemon reports running (${restartedControlStatus.state})`)
+  const projectionAfterControlRestart = await awaitProjection(
+    origin,
+    body => body.agents?.some(row => row.agentId === AGENT_ID && row.kind === 'runtime' && row.sessionCapable === true) === true
+      && body.sessions?.some(row => row.sessionId === created.sessionId) === true
+      && body.sessions?.some(row => row.sessionId === browserCreated.sessionId) === true,
+    'restarted control daemon did not recover the operable agent and persisted sessions',
+  )
+  assert(projectionAfterControlRestart.sessions.some(row => row.sessionId === created.sessionId)
+    && projectionAfterControlRestart.sessions.some(row => row.sessionId === browserCreated.sessionId),
+  'restarted control daemon projection retains both created sessions')
+  record('controlRestart', { previousPid: previousControlPid, newPid: controlPid, sessions: projectionAfterControlRestart.sessions.map(s => s.sessionId) })
+
+  step = 'agent daemon convergent restart and post-restart session turn'
+  const previousAgentPid = agent.child.pid
+  const previousEnginePid = Number(readyFields.enginePid)
+  agent.child.kill('SIGTERM')
+  {
+    const deadline = Date.now() + 15_000
+    while (agent.child.exitCode === null && Date.now() < deadline) await new Promise(resolveWait => setTimeout(resolveWait, 100))
+    if (agent.child.exitCode === null && processAlive(previousAgentPid)) process.kill(previousAgentPid, 'SIGKILL')
+  }
+  assert(!processAlive(previousAgentPid), `previous agent daemon pid ${previousAgentPid} exited`)
+  agent = spawnAgent('127.0.0.1', agentPort, agentPath, operatorEnv)
+  const restartedAgentReady = await awaitAgentReady(agent)
+  const restartedReadyFields = parseFields(restartedAgentReady)
+  assert(agent.child.pid > 0 && agent.child.pid !== previousAgentPid && processAlive(agent.child.pid),
+    `agent daemon restarted on the same config and port with a new live pid (${previousAgentPid} -> ${agent.child.pid})`)
+  assert(restartedReadyFields.enginePid !== undefined && processAlive(Number(restartedReadyFields.enginePid)),
+    `restarted agent daemon spawned a live OpenCode child (${restartedReadyFields.enginePid})`)
+  await awaitProjection(
+    origin,
+    body => body.agents?.some(row => row.agentId === AGENT_ID && row.kind === 'runtime' && row.sessionCapable === true
+      && (row.sessionAvailability === 'current' || row.sessionAvailability === 'no-current')) === true,
+    'control projection did not converge to the restarted agent runtime',
+  )
+  const postRestartBaseline = new Set((await readProjection(origin)).sessions.map(row => row.sessionId))
+  const postRestartCreate = await command(origin, { kind: 'session.create', agentId: AGENT_ID, title: 'E562 post-restart' })
+  assert(postRestartCreate.status === 200 && postRestartCreate.body.ok === true, `control accepted post-restart session.create (${postRestartCreate.status})`)
+  const postRestartProjection = await awaitProjection(
+    origin,
+    body => body.sessions?.some(row => row.agentId === AGENT_ID && !postRestartBaseline.has(row.sessionId)) === true,
+    'restarted agent never published the post-restart Session',
+  )
+  const postRestartSession = postRestartProjection.sessions.find(row => row.agentId === AGENT_ID && !postRestartBaseline.has(row.sessionId))
+  assert(postRestartSession !== undefined, `restarted agent published post-restart Session (${postRestartSession?.sessionId})`)
+  const postRestartOpen = await command(origin, { kind: 'session.open', agentId: AGENT_ID, sessionId: postRestartSession.sessionId })
+  assert(postRestartOpen.status === 200 && postRestartOpen.body.ok === true, 'control opened the post-restart Session')
+  const postRestartSend = await sendMessage(origin, { agentId: AGENT_ID, sessionId: postRestartSession.sessionId }, { text: 'read /etc/hosts' })
+  assert(postRestartSend.status === 200 && postRestartSend.body.ok === true, `restarted agent accepted a message on the post-restart Session (${postRestartSend.status})`)
+  const postRestartPermProj = await awaitProjection(
+    origin,
+    body => body.sessionEvents?.some(event => event.sessionId === postRestartSession.sessionId && event.kind === 'permission'
+      && event.state === 'pending' && (event.options?.length ?? 0) > 0) === true,
+    'post-restart Session did not emit a pending permission',
+  )
+  const postRestartPerm = postRestartPermProj.sessionEvents.find(event => event.sessionId === postRestartSession.sessionId
+    && event.kind === 'permission' && event.state === 'pending')
+  const postRestartAllowOnce = postRestartPerm.options.find(option => option.kind === 'once')
+  const postRestartReply = await command(origin, {
+    kind: 'permission.reply',
+    agentId: AGENT_ID,
+    sessionId: postRestartSession.sessionId,
+    permissionId: postRestartPerm.permissionId,
+    decision: postRestartAllowOnce.kind,
+    optionId: postRestartAllowOnce.optionId,
+  })
+  assert(postRestartReply.status === 200 && postRestartReply.body.ok === true, `control accepted post-restart permission reply (${postRestartReply.status})`)
+  const postRestartCompleted = await awaitProjection(
+    origin,
+    body => body.sessionEvents?.some(event => event.sessionId === postRestartSession.sessionId && event.kind === 'part'
+      && event.partType === 'text' && event.text.includes('E562-TOOL-DONE') && event.state === 'completed') === true
+      && body.sessionEvents?.some(event => event.sessionId === postRestartSession.sessionId && event.kind === 'final' && event.state === 'completed') === true,
+    'post-restart Session turn did not complete after permission reply',
+  )
+  const postRestartFinal = postRestartCompleted.sessionEvents.find(event => event.sessionId === postRestartSession.sessionId && event.kind === 'final')
+  assert(postRestartFinal?.state === 'completed', 'post-restart Session turn completed end-to-end')
+  record('agentRestart', {
+    previousPid: previousAgentPid,
+    previousEnginePid,
+    newPid: agent.child.pid,
+    newEnginePid: Number(restartedReadyFields.enginePid),
+    postRestartSessionId: postRestartSession.sessionId,
+    finalState: postRestartFinal?.state,
+  })
 
   receipts.summary = { checks: checks.length, passed: checks.filter(entry => entry.ok).length }
 }
