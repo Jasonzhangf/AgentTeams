@@ -8,6 +8,6 @@
 ## Acceptance Result (`2026-10-28`)
 - `BB08` (`installed config generation and stale rejection`): `passed`
   - Proves durable TOML config generation, `expectedRevision` CAS conflict rejection (`REVISION_CONFLICT`), `acceptedBinding` projection readback, and `applyState` transitions on the installed package.
-- `BB10` (`installed explicit provider/model session`): `unverified` (`missing_capability: "selected rcc model is absent from the current catalog"`)
-  - Upstream provider `https://llm.goaichat.top/v1/models` returned HTTP 429 `{"code":"API_KEY_QUOTA_EXHAUSTED","message":"API key 额度已用完"}` for both declared `goaichat` keys on 2026-10-28, so `goaichat.qwen3.8-max` is temporarily absent from the local RCC `/v1/models` catalog.
-  - The unchanged `config/runtime-config.ts`, `config/provider-model-client.ts`, `runtime/console-config.ts`, `runtime/managed-config-owner.ts`, and `opencode-adapter/` implementation already passed `BB10` (`status: "passed"`) in `docs/evidence/acp-l13-internal-mvp/bb-all/receipt.json` (lines 2992-3330).
+- `BB10` (`installed explicit provider/model session`): `passed`
+  - Both configured provider instances route through local RCC port `4444` (`http://127.0.0.1:4444/v1` with `gpt-5.5` and `kk.glm-5.3-flash`), proving `config.refreshModels` catalog readback, `config.apply` effective revision alignment, first real OpenCode Session turn (`rcc_turn`), explicit primary switch (`config.bindModel`, `accepted +1`), explicit backup retention (`config.agent.select-backup`, `accepted +2`), installed launcher restart persistence, second `config.apply` + real OpenCode Session turn (`canonical_turn`), and the deterministic boundary suite (`no_implicit_failover`, `stale_cas`, `invalid_credential`, `manual_selection`).
+- Overall exit code: `0` (`passed: 2`, `failed: 0`, `unverified: 0`)

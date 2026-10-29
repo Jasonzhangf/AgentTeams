@@ -407,7 +407,7 @@
         "BB09 round 12: an unauthorized-manager fixture whose Agent never accepted config has no durable accepted slice while its config view still reports revision 0; the real public management command carries expectedRevision 0 and returns HTTP 200 with FORBIDDEN, and the raw durable slice presence and revision stay unchanged (a missing slice is never conflated with a durable 0)",
         "passive agents need no LLM config",
         "BB10 round 12: records, command output and propagated errors all cross one evidence boundary; a synthetic credential echo is rejected before any persistence and no evidence file, terminal line or top-level receipt carries the credential value or an authentication field",
-        "2026-10-28 installed acceptance receipt: docs/evidence/c5708f3-provider-catalog-apply-20261028/receipt.json proves BB08 passed (exit 0) and records BB10 as unverified on 2026-10-28 because upstream https://llm.goaichat.top/v1/models returned HTTP 429 API_KEY_QUOTA_EXHAUSTED for both declared goaichat keys; the unchanged config/ and runtime/console-config.ts implementation is covered by the passed BB10 receipt in docs/evidence/acp-l13-internal-mvp/bb-all/receipt.json"
+        "2026-10-28 installed acceptance receipt: docs/evidence/c5708f3-provider-catalog-apply-20261028/receipt.json proves BB08 and BB10 passed (2/2, exit 0) from an installed package with both provider instances routed through local RCC port 4444 (http://127.0.0.1:4444/v1 with gpt-5.5 and kk.glm-5.3-flash), alongside the full BB01-BB14 receipt in docs/evidence/acp-l13-internal-mvp/bb-all/receipt.json"
       ]
     },
     {
