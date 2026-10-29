@@ -13,6 +13,7 @@ type MessageKey =
   | 'catalogReady' | 'catalogEmpty' | 'catalogStale' | 'applyConfig' | 'applied' | 'notConfigured'
   | 'notSelected' | 'actionFailed' | 'actionSucceeded' | 'fixtureLabel' | 'unknownAgent'
   | 'provider' | 'model' | 'unknownModel' | 'credentialHint' | 'messageRequired' | 'noAgentConfig'
+  | 'acceptedBinding' | 'primaryModel' | 'backupModel' | 'applyUncertain' | 'configUnavailable'
   | 'noResults' | 'sessionUntitled' | 'online' | 'offline' | 'unknown' | 'capabilities'
   | 'expand' | 'collapse' | 'activity' | 'activityUnavailable' | 'activityEmpty'
   | 'invalidNotificationTarget' | 'createSession' | 'cancelSession' | 'directoryRow'
@@ -22,6 +23,7 @@ type MessageKey =
   | 'declaredCapacity' | 'operations'
   | 'pageDiscovery' | 'pageNetworking' | 'pageInteraction' | 'pageHistory'
   | 'connect' | 'disconnect' | 'removeDraftMember' | 'draft' | 'accepted' | 'master' | 'peer' | 'applyMembership'
+  | 'networkingDraft' | 'networkingAccepted' | 'relationCapability' | 'relationPermission'
   | 'historyPrev' | 'historyRequest' | 'historyUnavailable' | 'permissionOptionsUnavailable'
   | 'workRecords' | 'workRecordsUnavailable' | 'workRecordsEmpty' | 'workRefresh' | 'connectionHistory' | 'historyRetry'
   | 'workAccepted' | 'workClosing' | 'workClosed' | 'workRejected'
@@ -37,7 +39,7 @@ type MessageKey =
   | 'groupActionResult' | 'groupActionSubmit' | 'groupActionRefuse' | 'groupActionReport'
   | 'groupActionReportKind' | 'groupActionReportReason' | 'groupActionReportEvidence'
   | 'groupActionRefusalReason' | 'groupActionRefusedAt'
-  | 'groupActionReportBlocked' | 'groupActionReportFailed'
+  | 'groupActionReportBlocked' | 'groupActionReportFailed' | 'groupActionAdvanced'
   | 'groupPhaseLoading' | 'groupPhaseEmpty' | 'groupPhaseLive'
   | 'groupNotConfigured' | 'groupUnreachable' | 'groupRefused' | 'groupUnknown' | 'groupFailed'
   | 'groupRetry' | 'groupConfirm' | 'groupConfirmAccept' | 'groupConfirmCancel' | 'groupNoMessages'
@@ -57,6 +59,7 @@ const en: Record<MessageKey, string> = {
   addProvider: 'Add provider', editProvider: 'Edit provider', providerId: 'Provider ID', providerLabel: 'Label', protocol: 'Protocol', apiBaseUrl: 'API base URL', enabled: 'Enabled', authKind: 'Auth', noAuth: 'None', bearer: 'Credential reference', credentialRef: 'Credential reference', saveProvider: 'Save provider',
   cancel: 'Cancel', refreshModels: 'Refresh models', bindModel: 'Bind model', selectModel: 'Select a model', noModels: 'No models published', catalogError: 'Catalog error', catalogReady: 'Ready', catalogEmpty: 'Empty', catalogStale: 'Stale', applyConfig: 'Apply configuration', applied: 'Applied', notConfigured: 'Not configured', notSelected: 'Model not selected', actionFailed: 'Action failed', actionSucceeded: 'Action complete', fixtureLabel: 'Browser fixture — host projection only', unknownAgent: 'Unknown Agent',
   provider: 'Provider', model: 'Model', unknownModel: 'Unknown model', credentialHint: 'Use a host-owned credential reference. Do not paste a credential value here.', messageRequired: 'Message is required.', noAgentConfig: 'This Agent has no projected configuration.',
+  acceptedBinding: 'Accepted binding', primaryModel: 'Primary model', backupModel: 'Backup model', applyUncertain: 'The accepted configuration may not be active on the Agent yet.', configUnavailable: 'Provider configuration is not projected by this host.',
   noResults: 'No matching results.', sessionUntitled: 'Untitled session', online: 'Online', offline: 'Offline', unknown: 'Unknown', capabilities: 'Capabilities',
   expand: 'Expand', collapse: 'Collapse', activity: 'Session activity', activityUnavailable: 'Session activity is not projected by this host.', activityEmpty: 'No activity has been projected for this session.',
   invalidNotificationTarget: 'This interactive notification has no existing Session target.',
@@ -67,6 +70,7 @@ const en: Record<MessageKey, string> = {
   noDeclaredResources: 'No declared resources', declaredCapacity: 'Declared capacity', operations: 'Operations',
   pageDiscovery: 'Discover', pageNetworking: 'Network', pageInteraction: 'Interact', pageHistory: 'History',
   connect: 'Connect', disconnect: 'Disconnect', removeDraftMember: 'Remove', draft: 'Draft', accepted: 'Accepted', master: 'Master', peer: 'Peer', applyMembership: 'Apply membership',
+  networkingDraft: 'Draft membership', networkingAccepted: 'Effective relations', relationCapability: 'Capability', relationPermission: 'Permission',
   historyPrev: 'Previous page', historyRequest: 'Request history is refused by the owner.', historyUnavailable: 'History is unavailable.', permissionOptionsUnavailable: 'Permission choices are unavailable from the engine callback.',
   workRecords: 'Work records', workRecordsUnavailable: 'This connection does not provide Work records.', workRecordsEmpty: 'No Work records.', workRefresh: 'Refresh Work records', connectionHistory: 'Connection history', historyRetry: 'Retry connection history',
   workAccepted: 'Accepted', workClosing: 'Closing', workClosed: 'Closed', workRejected: 'Rejected',
@@ -83,7 +87,7 @@ const en: Record<MessageKey, string> = {
   groupActionResult: 'Result body', groupActionSubmit: 'Submit result', groupActionRefuse: 'Refuse action', groupActionReport: 'Report blocked or failed',
   groupActionReportKind: 'Report', groupActionReportReason: 'Reported reason', groupActionReportEvidence: 'Evidence',
   groupActionRefusalReason: 'Refusal reason', groupActionRefusedAt: 'Refused at',
-  groupActionReportBlocked: 'Report blocked', groupActionReportFailed: 'Report failed',
+  groupActionReportBlocked: 'Report blocked', groupActionReportFailed: 'Report failed', groupActionAdvanced: 'Advanced',
   groupPhaseLoading: 'Loading groups…', groupPhaseEmpty: 'No group exists yet. Create one to start a conversation.', groupPhaseLive: 'Group workspace',
   groupNotConfigured: 'The group endpoint is not configured on this Console host.', groupUnreachable: 'The group endpoint exists but the agent is unreachable.',
   groupRefused: 'The group owner refused this request.', groupUnknown: 'The owner outcome is unknown. Retry with the same commit.', groupFailed: 'The group workspace could not be loaded.',
@@ -110,6 +114,7 @@ const zh: Record<MessageKey, string> = {
   addProvider: '新增服务', editProvider: '编辑服务', providerId: '服务 ID', providerLabel: '名称', protocol: '协议', apiBaseUrl: '接口地址', enabled: '启用', authKind: '鉴权方式', noAuth: '无', bearer: '凭据引用', credentialRef: '凭据引用', saveProvider: '保存服务',
   cancel: '取消', refreshModels: '刷新模型', bindModel: '绑定模型', selectModel: '选择模型', noModels: '暂无可用模型', catalogError: '加载失败', catalogReady: '已加载', catalogEmpty: '暂无模型', catalogStale: '已过期', applyConfig: '应用配置', applied: '已应用', notConfigured: '未配置服务', notSelected: '未选择模型', actionFailed: '操作失败', actionSucceeded: '操作完成', fixtureLabel: '浏览器演示 — 仅展示主机数据，不连接实际服务', unknownAgent: '未知智能体',
   provider: '服务', model: '模型', unknownModel: '未知模型', credentialHint: '请填写主机中的凭据引用，不要粘贴凭据值。', messageRequired: '请输入消息。', noAgentConfig: '该智能体没有可用的配置数据。',
+  acceptedBinding: '已接受绑定', primaryModel: '主模型', backupModel: '备用模型', applyUncertain: '已接受的配置可能尚未在智能体上生效。', configUnavailable: '该主机未投影服务配置。',
   noResults: '没有匹配结果。', sessionUntitled: '未命名会话', online: '在线', offline: '离线', unknown: '未知', capabilities: '能力',
   expand: '展开', collapse: '收起', activity: '会话动态', activityUnavailable: '当前主机未提供会话动态。', activityEmpty: '该会话暂无动态。',
   invalidNotificationTarget: '该交互通知没有可用的会话目标。',
@@ -120,6 +125,7 @@ const zh: Record<MessageKey, string> = {
   noDeclaredResources: '未声明资源', declaredCapacity: '声明容量', operations: '操作',
   pageDiscovery: '发现', pageNetworking: '组网', pageInteraction: '交互', pageHistory: '历史',
   connect: '连接', disconnect: '断开连接', removeDraftMember: '移除', draft: '草稿', accepted: '已接受', master: '主节点', peer: '对等节点', applyMembership: '提交组网草稿',
+  networkingDraft: '组网草稿', networkingAccepted: '已生效关系', relationCapability: '能力', relationPermission: '权限',
   historyPrev: '上一页', historyRequest: '请求历史被所有者拒绝。', historyUnavailable: '历史不可用。', permissionOptionsUnavailable: '引擎回调未提供权限选择。',
   workRecords: 'Work 记录', workRecordsUnavailable: '当前连接未提供 Work 记录。', workRecordsEmpty: '暂无 Work 记录。', workRefresh: '刷新 Work 记录', connectionHistory: '连接历史', historyRetry: '重试连接历史',
   workAccepted: '已接纳', workClosing: '关闭中', workClosed: '已关闭', workRejected: '已拒绝',
@@ -136,7 +142,7 @@ const zh: Record<MessageKey, string> = {
   groupActionResult: '结果内容', groupActionSubmit: '提交结果', groupActionRefuse: '拒绝行动', groupActionReport: '上报阻塞或失败',
   groupActionReportKind: '上报', groupActionReportReason: '上报原因', groupActionReportEvidence: '证据',
   groupActionRefusalReason: '拒绝原因', groupActionRefusedAt: '拒绝时间',
-  groupActionReportBlocked: '上报阻塞', groupActionReportFailed: '上报失败',
+  groupActionReportBlocked: '上报阻塞', groupActionReportFailed: '上报失败', groupActionAdvanced: '高级字段',
   groupPhaseLoading: '正在加载群组…', groupPhaseEmpty: '还没有群组。创建一个群组即可开始对话。', groupPhaseLive: '群组工作区',
   groupNotConfigured: '当前控制台没有配置群组入口。', groupUnreachable: '群组入口存在，但无法连接到对应智能体。',
   groupRefused: '群组所有者拒绝了这次请求。', groupUnknown: '所有者结果未知。请用同一个提交重试。', groupFailed: '无法加载群组工作区。',

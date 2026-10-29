@@ -1012,6 +1012,78 @@ export const teamsStyles = String.raw`
   background: var(--teams-surface-raised);
 }
 
+/* The confirmation stays in place but never grows past the viewport; a long close-impact
+   list scrolls inside the panel instead of pushing the accept/cancel controls off screen. */
+.teams-group-confirm {
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.teams-group-action-advanced {
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.teams-group-action-advanced > summary {
+  cursor: pointer;
+  color: var(--teams-muted);
+  font-size: 0.78rem;
+}
+
+.teams-group-action-advanced > .teams-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.teams-note-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--teams-muted);
+}
+
+.teams-relation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--teams-border);
+  border-radius: 8px;
+  background: var(--teams-surface);
+}
+
+.teams-relation-direction {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.teams-relation-meta {
+  font-size: 12px;
+  color: var(--teams-muted);
+  overflow-wrap: anywhere;
+}
+
+.teams-config-binding {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--teams-border);
+  border-radius: 8px;
+  background: var(--teams-surface-raised);
+}
+
+.teams-config-binding-row {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .teams-group-message-body,
 .teams-group-action-reason,
 .teams-group-action-head,

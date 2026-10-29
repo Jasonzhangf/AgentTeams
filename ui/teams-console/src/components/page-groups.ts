@@ -332,11 +332,12 @@ function renderIssuePanel(state: GroupWorkspaceState, controller: TeamsConsoleCo
     // is empty, refused or unreadable; the panel never asks for a Vikunja or session id.
     append(section, renderIssueList(state, controller, t))
     const form = element('div', 'teams-group-form')
-    append(form,
-      groupInputField(t.groupIssueTitle, 'issue-title'),
-      textField(t.groupIssueBody, 'issue-body'),
-      groupInputField(t.groupIssueProject, 'issue-project', state.issues[0]?.vikunjaProjectId ?? state.selectedGroupId ?? 'default'),
-    )
+    append(form, groupInputField(t.groupIssueTitle, 'issue-title'), textField(t.groupIssueBody, 'issue-body'))
+    // The internal project id is derived from the group's first issue or the group itself.
+    // It stays a defaulted double-check field instead of a required blind input.
+    const project = groupInputField(t.groupIssueProject, 'issue-project', state.issues[0]?.vikunjaProjectId ?? state.selectedGroupId ?? 'default')
+    project.querySelector('input')!.dataset.groupInputDefault = 'true'
+    append(form, project)
     const create = button(t.groupIssueCreate, 'teams-button-primary', async () => {
       const scope = form.closest('.teams-root') ?? section
       const ok = await controller.createIssue(valueOf(form, 'issue-title'), valueOf(form, 'issue-body'), valueOf(form, 'issue-project'))
@@ -518,49 +519,69 @@ function renderActionItem(
   if (report !== null) append(item, report)
   const refusal = renderActionRefusal(action, t)
   if (refusal !== null) append(item, refusal)
-  const row = element('div', 'teams-group-action-row')
-  const result = element('input', 'teams-input')
-  result.type = 'text'
-  result.dataset.groupInput = `action-result-${action.actionId}`
-  result.dataset.focusKey = `group-input:action-result-${action.actionId}`
-  const submit = button(t.groupActionSubmit, 'teams-button-secondary', async () => {
-    const scope = item.closest('.teams-root') ?? item
-    const ok = await controller.submitAction(action.actionId, result.value)
-    if (ok) clearGroupInputs(scope, [`action-result-${action.actionId}`])
-  }, disabled || !(action.state === 'pending' || action.state === 'accepted' || action.state === 'in_progress'))
-  submit.dataset.groupActionVerb = 'submit'
-  const reasonInput = element('input', 'teams-input')
-  reasonInput.type = 'text'
-  reasonInput.dataset.groupInput = `action-reason-${action.actionId}`
-  reasonInput.dataset.focusKey = `group-input:action-reason-${action.actionId}`
-  const evidenceInput = element('input', 'teams-input')
-  evidenceInput.type = 'text'
-  evidenceInput.dataset.groupInput = `action-evidence-${action.actionId}`
-  evidenceInput.dataset.focusKey = `group-input:action-evidence-${action.actionId}`
   const mayRefuse = canRefuseAction(group, action, actorId)
   item.dataset.groupActionRefusePermitted = String(mayRefuse)
-  const refuse = button(t.groupActionRefuse, 'teams-button-secondary', async () => {
-    const scope = item.closest('.teams-root') ?? item
-    const ok = await controller.refuseAction(action.actionId, reasonInput.value)
-    if (ok) clearGroupInputs(scope, [`action-reason-${action.actionId}`])
-  }, disabled || !mayRefuse)
-  refuse.dataset.groupActionVerb = 'refuse'
   const mayReport = canReportAction(group, action, actorId)
   item.dataset.groupActionReportPermitted = String(mayReport)
-  const blocked = button(t.groupActionReportBlocked, 'teams-button-secondary', async () => {
-    const scope = item.closest('.teams-root') ?? item
-    const ok = await controller.reportAction(action.actionId, 'blocked', reasonInput.value, evidenceInput.value)
-    if (ok) clearGroupInputs(scope, [`action-reason-${action.actionId}`, `action-evidence-${action.actionId}`])
-  }, disabled || !mayReport)
-  blocked.dataset.groupActionVerb = 'report-blocked'
-  const failed = button(t.groupActionReportFailed, 'teams-button-secondary', async () => {
-    const scope = item.closest('.teams-root') ?? item
-    const ok = await controller.reportAction(action.actionId, 'failed', reasonInput.value, evidenceInput.value)
-    if (ok) clearGroupInputs(scope, [`action-reason-${action.actionId}`, `action-evidence-${action.actionId}`])
-  }, disabled || !mayReport)
-  failed.dataset.groupActionVerb = 'report-failed'
-  append(row, result, submit, reasonInput, evidenceInput, refuse, blocked, failed)
-  append(item, row)
+  // Operation controls belong to a live action. A terminal action keeps only its recorded
+  // facts; the item still carries the permission markers the surface reads from deeper.
+  if (unfinishedAction(action.state)) {
+    const row = element('div', 'teams-group-action-row')
+    const result = element('input', 'teams-input')
+    result.type = 'text'
+    result.dataset.groupInput = `action-result-${action.actionId}`
+    result.dataset.focusKey = `group-input:action-result-${action.actionId}`
+    const submit = button(t.groupActionSubmit, 'teams-button-secondary', async () => {
+      const scope = item.closest('.teams-root') ?? item
+      const ok = await controller.submitAction(action.actionId, result.value)
+      if (ok) clearGroupInputs(scope, [`action-result-${action.actionId}`])
+    }, disabled || !(action.state === 'pending' || action.state === 'accepted' || action.state === 'in_progress'))
+    submit.dataset.groupActionVerb = 'submit'
+    append(row, result, submit)
+    append(item, row)
+    if (mayRefuse || mayReport) {
+      // Secondary report/refuse fields are advanced: the primary result stays on the row and
+      // these stay folded until the operator needs them.
+      const advanced = element('details', 'teams-group-action-advanced')
+      const advancedTitle = element('summary')
+      advancedTitle.textContent = t.groupActionAdvanced
+      const reasonInput = element('input', 'teams-input')
+      reasonInput.type = 'text'
+      reasonInput.dataset.groupInput = `action-reason-${action.actionId}`
+      reasonInput.dataset.focusKey = `group-input:action-reason-${action.actionId}`
+      const evidenceInput = element('input', 'teams-input')
+      evidenceInput.type = 'text'
+      evidenceInput.dataset.groupInput = `action-evidence-${action.actionId}`
+      evidenceInput.dataset.focusKey = `group-input:action-evidence-${action.actionId}`
+      const advancedActions = element('div', 'teams-group-action-row')
+      if (mayRefuse) {
+        const refuse = button(t.groupActionRefuse, 'teams-button-secondary', async () => {
+          const scope = item.closest('.teams-root') ?? item
+          const ok = await controller.refuseAction(action.actionId, reasonInput.value)
+          if (ok) clearGroupInputs(scope, [`action-reason-${action.actionId}`])
+        }, disabled || !mayRefuse)
+        refuse.dataset.groupActionVerb = 'refuse'
+        append(advancedActions, refuse)
+      }
+      if (mayReport) {
+        const blocked = button(t.groupActionReportBlocked, 'teams-button-secondary', async () => {
+          const scope = item.closest('.teams-root') ?? item
+          const ok = await controller.reportAction(action.actionId, 'blocked', reasonInput.value, evidenceInput.value)
+          if (ok) clearGroupInputs(scope, [`action-reason-${action.actionId}`, `action-evidence-${action.actionId}`])
+        }, disabled || !mayReport)
+        blocked.dataset.groupActionVerb = 'report-blocked'
+        const failed = button(t.groupActionReportFailed, 'teams-button-secondary', async () => {
+          const scope = item.closest('.teams-root') ?? item
+          const ok = await controller.reportAction(action.actionId, 'failed', reasonInput.value, evidenceInput.value)
+          if (ok) clearGroupInputs(scope, [`action-reason-${action.actionId}`, `action-evidence-${action.actionId}`])
+        }, disabled || !mayReport)
+        failed.dataset.groupActionVerb = 'report-failed'
+        append(advancedActions, blocked, failed)
+      }
+      append(advanced, advancedTitle, reasonInput, evidenceInput, advancedActions)
+      append(item, advanced)
+    }
+  }
   // Action and commit ids are diagnostics, not part of the task the user performs.
   const diagnostics = element('details', 'teams-group-action-diagnostics')
   diagnostics.dataset.groupActionDiagnostics = action.actionId
@@ -813,7 +834,10 @@ function renderConfirm(state: GroupWorkspaceState, controller: TeamsConsoleContr
   title.textContent = t.groupConfirm
   const target = element('p')
   target.dataset.groupConfirmTarget = confirm.intentKey
-  target.textContent = `${t.groupTarget}: ${confirm.intentKey}`
+  const humanTarget = confirm.frame.kind === 'issue.close' || confirm.frame.kind === 'issue.reopen'
+    ? t.groupIssue
+    : t.groupActions
+  target.textContent = `${t.groupTarget}: ${humanTarget}`
   append(panel, title, target)
   if (confirm.frame.kind === 'issue.close') {
     const affected = closeAffectedActions(state)

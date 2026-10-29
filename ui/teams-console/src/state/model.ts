@@ -1,4 +1,5 @@
 import type { ConsoleCapabilityDetail, ConsoleProjectionV1, ConsoleProviderView, ConsoleSessionEventView } from '../client/protocol.ts'
+import type { ConsoleAcceptedBinding } from '../client/protocol.ts'
 
 export type ConsoleEntry = 'topology' | 'conversations' | 'notifications' | 'search' | 'memory'
 export type TeamPage = 'discovery' | 'networking' | 'interaction' | 'history' | 'groups'
@@ -68,6 +69,10 @@ export interface AgentConfigView {
   readonly agentId: string
   readonly acceptedRevision: number
   readonly effectiveRevision?: number
+  /** Durable config-owner fence projection; `uncertain` means the active state is unproven. */
+  readonly applyState?: 'clean' | 'uncertain'
+  /** Accepted binding from the same config view; null before the first explicit accept. */
+  readonly acceptedBinding?: ConsoleAcceptedBinding | null
   readonly providers: readonly ConsoleProviderView[]
   readonly error?: { readonly code: string; readonly message: string }
 }
