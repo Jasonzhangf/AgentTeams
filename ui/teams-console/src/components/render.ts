@@ -900,13 +900,28 @@ function pageLabel(page: TeamPage, t: Record<MessageKey, string>): string {
   }
 }
 
-function band(label: string, token: string): HTMLElement {
+function connectionStateLabel(state: string, t: Record<MessageKey, string>): string {
+  switch (state) {
+    case 'disconnected': return t.connectionDisconnected
+    case 'connecting': return t.connectionConnecting
+    case 'authenticating': return t.connectionAuthenticating
+    case 'negotiating': return t.connectionNegotiating
+    case 'ready': return t.connectionReady
+    case 'closed': return t.connectionClosed
+    case 'failed': return t.connectionFailed
+    default: return state
+  }
+}
+
+function band(label: string, labelText: string, token: string, tokenText: string): HTMLElement {
   const section = element('section')
   section.setAttribute('data-team-band', label)
+  const name = element('span', 'teams-band-label')
+  name.textContent = labelText
   const span = element('span')
   span.setAttribute('data-band-state', token)
-  span.textContent = token
-  append(section, span)
+  span.textContent = tokenText
+  append(section, name, span)
   return section
 }
 
@@ -915,14 +930,17 @@ function band(label: string, token: string): HTMLElement {
  * owner projection; none is derived from UI animation. `data-team-observation` is the
  * frozen marker the black box reads to decide whether any animation may remain.
  */
-function teamsStateBands(agent?: import('../state/model.ts').AgentRow, connection?: import('../client/protocol.ts').ConsoleConnectionView, observation: 'unknown' | 'stale' | 'live' = 'unknown'): HTMLElement {
+function teamsStateBands(agent: import('../state/model.ts').AgentRow | undefined, connection: import('../client/protocol.ts').ConsoleConnectionView | undefined, observation: 'unknown' | 'stale' | 'live' = 'unknown', t: Record<MessageKey, string>): HTMLElement {
   const value = element('div', 'teams-state-bands')
   value.setAttribute('data-team-observation', observation)
+  const presence = agent?.presence ?? 'unknown'
+  const connectionState = connection?.status.state ?? 'disconnected'
+  const availability = agent?.kind === 'runtime' ? agent.sessionAvailability ?? 'not-applicable' : 'not-applicable'
   append(value,
-    band('registration', agent?.presence ?? 'unknown'),
-    band('connection', connection?.status.state ?? 'disconnected'),
-    band('engine', agent?.kind === 'runtime' ? agent.sessionAvailability ?? 'not-applicable' : 'not-applicable'),
-    band('request', 'idle'),
+    band('registration', t.bandRegistration, presence, presenceLabel(presence, t)),
+    band('connection', t.bandConnection, connectionState, connectionStateLabel(connectionState, t)),
+    band('engine', t.bandEngine, availability, sessionAvailabilityLabel(availability, t)),
+    band('request', t.bandRequest, 'idle', t.requestIdle),
   )
   return value
 }
@@ -950,7 +968,7 @@ function renderDiscovery(controller: TeamsConsoleController, state: ConsoleState
   const primaryConnection = state.observation.observation === 'live'
     ? ((projection.connections ?? []).find(conn => primaryAgent !== undefined && conn.status.remoteAgentId === primaryAgent.agentId) ?? (projection.connections ?? [])[0])
     : undefined
-  append(value, renderViewHeader(t.pageDiscovery), teamsStateBands(primaryAgent, primaryConnection, state.observation.observation))
+  append(value, renderViewHeader(t.pageDiscovery), teamsStateBands(primaryAgent, primaryConnection, state.observation.observation, t))
   const list = element('ul', 'teams-team-list')
   for (const agent of agents) {
     const row = element('li')

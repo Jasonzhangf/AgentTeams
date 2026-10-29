@@ -1352,6 +1352,43 @@ export const teamsStyles = String.raw`
   }
 }
 
+.teams-state-bands {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 18px;
+}
+
+.teams-state-bands > section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--teams-border);
+  border-radius: 8px;
+  background: var(--teams-surface);
+}
+
+.teams-state-bands .teams-band-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--teams-muted);
+}
+
+.teams-state-bands [data-band-state] {
+  font-size: 13px;
+  color: var(--teams-ink);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .teams-state-bands {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (forced-colors: active) {
   .teams-root :where(button, input, select, textarea):focus-visible {
     outline: 2px solid CanvasText;

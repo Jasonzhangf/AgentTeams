@@ -48,6 +48,9 @@ type MessageKey =
   | 'groupCloseImpact' | 'groupStopReport' | 'groupStopPending' | 'groupStopAccepted'
   | 'groupStopInProgress' | 'groupStopCancelRequested' | 'groupStopBlocked' | 'groupStopFailed'
   | 'groupStopCompleted' | 'groupStopRefused' | 'groupStopCancelled' | 'groupStopUnknown'
+  | 'bandRegistration' | 'bandConnection' | 'bandEngine' | 'bandRequest'
+  | 'connectionDisconnected' | 'connectionConnecting' | 'connectionAuthenticating' | 'connectionNegotiating' | 'connectionReady' | 'connectionClosed' | 'connectionFailed'
+  | 'requestIdle'
 
 const en: Record<MessageKey, string> = {
   brand: 'Teams Console', topology: 'Agents', conversations: 'Sessions', notifications: 'Notifications', search: 'Search', memory: 'Memory', settings: 'Provider configuration',
@@ -74,6 +77,9 @@ const en: Record<MessageKey, string> = {
   historyPrev: 'Previous page', historyRequest: 'Request history is refused by the owner.', historyUnavailable: 'History is unavailable.', permissionOptionsUnavailable: 'Permission choices are unavailable from the engine callback.',
   workRecords: 'Work records', workRecordsUnavailable: 'This connection does not provide Work records.', workRecordsEmpty: 'No Work records.', workRefresh: 'Refresh Work records', connectionHistory: 'Connection history', historyRetry: 'Retry connection history',
   workAccepted: 'Accepted', workClosing: 'Closing', workClosed: 'Closed', workRejected: 'Rejected',
+  bandRegistration: 'Registration', bandConnection: 'Connection', bandEngine: 'Engine', bandRequest: 'Request',
+  connectionDisconnected: 'Disconnected', connectionConnecting: 'Connecting', connectionAuthenticating: 'Authenticating', connectionNegotiating: 'Negotiating', connectionReady: 'Ready', connectionClosed: 'Closed', connectionFailed: 'Failed',
+  requestIdle: 'Idle',
   cancelRequested: 'Cancel requested', cancelConfirmed: 'Cancel confirmed', cancelUnknown: 'Cancel outcome unknown',
   pageGroups: 'Groups', groupList: 'Groups', groupSelected: 'Selected group', groupMembers: 'Members', groupMessages: 'Messages', groupComposer: 'Message the group',
   groupSend: 'Send message', groupCreate: 'Create group', groupName: 'Group name', groupInvite: 'Invite member', groupInviteAgent: 'Agent ID', groupInviteRole: 'Role',
@@ -129,6 +135,9 @@ const zh: Record<MessageKey, string> = {
   historyPrev: '上一页', historyRequest: '请求历史被所有者拒绝。', historyUnavailable: '历史不可用。', permissionOptionsUnavailable: '引擎回调未提供权限选择。',
   workRecords: 'Work 记录', workRecordsUnavailable: '当前连接未提供 Work 记录。', workRecordsEmpty: '暂无 Work 记录。', workRefresh: '刷新 Work 记录', connectionHistory: '连接历史', historyRetry: '重试连接历史',
   workAccepted: '已接纳', workClosing: '关闭中', workClosed: '已关闭', workRejected: '已拒绝',
+  bandRegistration: '注册', bandConnection: '连接', bandEngine: '引擎', bandRequest: '请求',
+  connectionDisconnected: '未连接', connectionConnecting: '连接中', connectionAuthenticating: '认证中', connectionNegotiating: '协商中', connectionReady: '就绪', connectionClosed: '已关闭', connectionFailed: '失败',
+  requestIdle: '空闲',
   cancelRequested: '已请求取消', cancelConfirmed: '取消已确认', cancelUnknown: '取消结果未知',
   pageGroups: '群组', groupList: '群组', groupSelected: '当前群组', groupMembers: '成员', groupMessages: '消息', groupComposer: '向群组发送消息',
   groupSend: '发送消息', groupCreate: '创建群组', groupName: '群组名称', groupInvite: '邀请成员', groupInviteAgent: '智能体 ID', groupInviteRole: '角色',

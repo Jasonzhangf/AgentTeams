@@ -10,4 +10,12 @@ describe('Chinese console copy', () => {
     expect(t.selectModel).toBe('选择模型')
     expect(t.noAgentConfig).toBe('该智能体没有可用的配置数据。')
   })
+
+  it('localizes the discovery state bands instead of showing raw owner tokens', () => {
+    const t = messages('zh')
+    expect([t.bandRegistration, t.bandConnection, t.bandEngine, t.bandRequest]).toEqual(['注册', '连接', '引擎', '请求'])
+    expect([t.connectionDisconnected, t.connectionConnecting, t.connectionAuthenticating, t.connectionNegotiating, t.connectionReady, t.connectionClosed, t.connectionFailed])
+      .toEqual(['未连接', '连接中', '认证中', '协商中', '就绪', '已关闭', '失败'])
+    expect(t.requestIdle).toBe('空闲')
+  })
 })
