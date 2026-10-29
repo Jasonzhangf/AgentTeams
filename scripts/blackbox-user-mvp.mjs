@@ -4635,6 +4635,7 @@ const rccServerId = 'routecodex_v3_4444'
 // catalog (`GET <baseUrl>/models`). Teams persists and sends exactly this token:
 // no `/` <-> `.` rewrite, no guessing.
 const rccSelectedModelToken = 'gpt-5.5'
+const rccCanonicalModelToken = 'kk.glm-5.3-flash'
 const bb10DispatchTimeoutMs = 120_000
 const bb10VisibleTaskPrompt = '请用一句简短中文解释什么是回声。不要调用工具，也不要读写文件。'
 const bb10BoundarySyntheticCredentialEnv = 'AGENTTEAMS_BB10_BOUNDARY_SYNTHETIC_KEY'
@@ -4835,22 +4836,28 @@ async function resolveBb10Preconditions(evidenceDir) {
       'the selected RCC model token is not in the then-current catalog',
       { url: rccCatalog.url, model_count: rccCatalog.ids.length })
   }
+  if (!rccCatalog.ids.includes(rccCanonicalModelToken)) {
+    bb10SourceFailure('canonical declared model is absent from the current catalog',
+      'the canonical RCC model token is not in the then-current catalog',
+      { url: rccCatalog.url, model_count: rccCatalog.ids.length })
+  }
   if (!existsSync(canonicalProviderSourcePath)) {
     bb10SourceFailure('canonical provider source is unavailable', 'the declared canonical provider source is missing',
       { source: canonicalProviderSourcePath })
   }
-  const canonical = parseCanonicalProviderSource(readFileSync(canonicalProviderSourcePath, 'utf8'), canonicalProviderSourcePath)
-  if (canonical.instanceId !== canonicalProviderId) {
+  const canonicalSource = parseCanonicalProviderSource(readFileSync(canonicalProviderSourcePath, 'utf8'), canonicalProviderSourcePath)
+  if (canonicalSource.instanceId !== canonicalProviderId) {
     bb10SourceFailure('canonical provider identity changed',
       'the declared provider id no longer maps to the Teams instance id this case binds',
-      { instance_id: canonical.instanceId })
+      { instance_id: canonicalSource.instanceId })
   }
-  const canonicalCatalog = await probeProviderCatalog(canonical.baseUrl, 'canonical endpoint is unreachable',
-    `the canonical provider ${canonical.id}`)
-  if (canonicalCatalog.status !== 200 && canonicalCatalog.status !== 401) {
-    bb10SourceFailure('canonical catalog is unavailable', `the canonical endpoint returned HTTP ${canonicalCatalog.status}`,
-      { url: canonicalCatalog.url })
+  const canonical = {
+    ...canonicalSource,
+    baseUrl: rcc.baseUrl,
+    protocol: rcc.protocol,
+    defaultModel: rccCanonicalModelToken,
   }
+  const canonicalCatalog = rccCatalog
   const credentialValue = readDeclaredSecretKey(canonical.secretFile, canonical.secretKey)
   // Register the real canonical credential with the run-level evidence boundary
   // before any BB10 evidence is written and before the launcher is started.
