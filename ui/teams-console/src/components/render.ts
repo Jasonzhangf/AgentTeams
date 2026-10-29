@@ -48,13 +48,13 @@ function actionDisabled(state: ConsoleState): boolean {
 
 function sessionEventTitle(event: import('../client/protocol.ts').ConsoleSessionEventView, t: Record<MessageKey, string>): string {
   switch (event.kind) {
-    case 'message': return `${event.role} ${event.state}`
-    case 'part': return `${event.partType} ${event.state}`
-    case 'tool': return `${event.tool} ${event.state}`
-    case 'permission': return event.state === 'pending' ? `${t.permission} ${event.title}` : `${t.permission} ${event.decision}`
-    case 'final': return `final ${event.state}`
-    case 'error': return `error ${event.error.name}`
-    case 'cancel': return `cancel ${event.state}`
+    case 'message': return event.role
+    case 'part': return event.partType
+    case 'tool': return event.tool
+    case 'permission': return event.state === 'pending' ? event.title : `${t.permission} ${event.decision}`
+    case 'final': return event.state === 'failed' ? event.error.name : event.finish ?? t.session
+    case 'error': return event.error.name
+    case 'cancel': return event.state === 'unknown' ? event.reason : t.cancelSession
     default: return t.details
   }
 }
@@ -773,8 +773,34 @@ function renderSettings(controller: TeamsConsoleController, state: ConsoleState,
   }
   const config = projectConfig(projection, agentId)
   if (config === undefined) {
-    append(value, emptyState(t.noAgentConfig))
+    // An empty configs list means this host projects no configuration at all; a list with other
+    // rows means only this Agent has none. Both stay read-only and neither invents a config.
+    const unavailable = emptyState(projection.configs.length === 0 ? t.configUnavailable : t.noAgentConfig)
+    unavailable.dataset.configUnavailable = 'true'
+    append(value, unavailable)
     return value
+  }
+  if (config.applyState === 'uncertain') {
+    const note = element('p', 'teams-field-hint')
+    note.textContent = t.applyUncertain
+    append(value, note)
+  }
+  const binding = config.acceptedBinding
+  if (binding !== undefined && binding !== null) {
+    const bindingPanel = element('div', 'teams-config-binding')
+    bindingPanel.dataset.configBinding = 'true'
+    const title = element('span', 'teams-note-heading')
+    title.textContent = t.acceptedBinding
+    append(bindingPanel, title)
+    const primary = element('div', 'teams-config-binding-row')
+    primary.textContent = `${t.primaryModel}: ${binding.primary.providerInstanceId}/${binding.primary.modelId}`
+    append(bindingPanel, primary)
+    if (binding.backup !== undefined) {
+      const backup = element('div', 'teams-config-binding-row')
+      backup.textContent = `${t.backupModel}: ${binding.backup.providerInstanceId}/${binding.backup.modelId}`
+      append(bindingPanel, backup)
+    }
+    append(value, bindingPanel)
   }
   const revisions = element('div', 'teams-revision-row')
   const accepted = element('span', 'teams-revision')
@@ -1009,10 +1035,18 @@ function renderNetworking(controller: TeamsConsoleController, state: ConsoleStat
   for (const relation of projection.relations ?? []) {
     const item = element('li')
     item.setAttribute('data-team-role-accepted', relation.relationPermission)
-    item.textContent = `${agentName(projection, relation.providerAgentId, t)} → ${agentName(projection, relation.consumerAgentId, t)} · ${relation.capabilityId}@${relation.capabilityVersion} · ${relation.relationPermission}`
+    const card = element('div', 'teams-relation-card')
+    const direction = element('span', 'teams-relation-direction')
+    direction.textContent = `${agentName(projection, relation.providerAgentId, t)} → ${agentName(projection, relation.consumerAgentId, t)}`
+    const meta = element('span', 'teams-relation-meta')
+    meta.textContent = `${t.relationCapability}: ${relation.capabilityId}@${relation.capabilityVersion} · ${t.relationPermission}: ${relation.relationPermission}`
+    append(card, direction, meta)
+    append(item, card)
     append(acceptedList, item)
   }
-  append(accepted, acceptedList)
+  const acceptedHeading = element('h3', 'teams-note-heading')
+  acceptedHeading.textContent = t.networkingAccepted
+  append(accepted, acceptedHeading, acceptedList)
   append(value, draft, accepted)
   return value
 }
@@ -1023,7 +1057,7 @@ function renderInteraction(controller: TeamsConsoleController, state: ConsoleSta
   if (projection === null) return value
   append(value, renderViewHeader(t.pageInteraction))
   const selectedSession = projection.sessions.find(session => session.sessionId === state.selectedSessionId) ?? projection.sessions[0]
-  const list = element('ul')
+  const list = element('ul', 'teams-session-selector-list')
   for (const session of projection.sessions) {
     const item = element('li')
     item.dataset.sessionItem = session.sessionId
@@ -1049,7 +1083,7 @@ function renderInteraction(controller: TeamsConsoleController, state: ConsoleSta
     const noticeList = element('ul', 'teams-list')
     noticeList.dataset.interactionNotifications = 'true'
     for (const notification of pendingNotifications) {
-      const row = element('li')
+      const row = element('li', 'teams-list-item teams-notification-pending')
       row.dataset.notificationId = notification.notificationId
       const text = element('span')
       text.textContent = `${agentName(projection, notification.agentId, t)} · ${notification.title}`
@@ -1133,11 +1167,46 @@ function renderHistory(controller: TeamsConsoleController, state: ConsoleState, 
   return value
 }
 
+/**
+ * Localize the human-readable status line. English keeps `${label}: accepted by Agent`
+ * verbatim so every existing en assertion holds; Chinese maps the known action labels
+ * and the receipt suffix to Chinese copy and never shows the internal JSON receipt.
+ */
+function localizeStatus(text: string, t: Record<MessageKey, string>): string {
+  const acceptedSuffix = ': accepted by Agent'
+  const labels: Record<string, string> = {
+    'Send message': t.groupSend,
+    'Open session': t.openSession,
+    'Create session': t.createSession,
+    'Cancel session': t.cancelSession,
+    'Acknowledge notification': t.acknowledge,
+    'Permission reply': t.permission,
+    'Connect': t.connect,
+    'Disconnect': t.disconnect,
+    'Apply membership': t.applyMembership,
+    'Submit network draft': t.applyMembership,
+    'Refresh models': t.refreshModels,
+    'Bind model': t.bindModel,
+    'Save provider': t.saveProvider,
+    'Apply configuration': t.applyConfig,
+  }
+  if (text.endsWith(acceptedSuffix)) {
+    const localized = labels[text.slice(0, text.length - acceptedSuffix.length)]
+    return localized === undefined ? text : `${localized}：${t.acceptedByAgent}`
+  }
+  if (text.endsWith('…')) {
+    const localized = labels[text.slice(0, -1)]
+    if (localized !== undefined) return `${localized}…`
+  }
+  return text
+}
+
 function renderStatus(state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
   const status = element('div', `teams-live-region ${state.error === null ? '' : 'is-error'}`)
   status.setAttribute('role', 'status')
   status.setAttribute('aria-live', state.error === null ? 'polite' : 'assertive')
-  status.textContent = state.error ?? state.notice ?? (state.busy === null ? '' : `${state.busy}…`)
+  const base = state.error ?? state.notice ?? (state.busy === null ? '' : `${state.busy}…`)
+  status.textContent = state.locale === 'zh' ? localizeStatus(base, t) : base
   if (state.status === 'loading' && state.projection === null) status.textContent = t.loading
   return status
 }
@@ -1150,6 +1219,7 @@ interface CapturedDomState {
   readonly selectedGroupId: string | null
   readonly issueSessionId: string | null
   readonly groupInputs: ReadonlyMap<string, string>
+  readonly providerInputs: ReadonlyMap<string, string>
   readonly sessionDraft: string | null
   readonly scrollPositions: ReadonlyMap<string, { readonly top: number; readonly left: number }>
 }
@@ -1185,6 +1255,11 @@ function captureDomState(root: HTMLElement): CapturedDomState {
   }
   const sessionTextarea = root.querySelector<HTMLTextAreaElement>('textarea[data-focus-key="session:message"]')
   const sessionDraft = sessionTextarea !== null && sessionTextarea.value.length > 0 ? sessionTextarea.value : null
+  const providerInputs = new Map<string, string>()
+  for (const node of root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-focus-key^="provider:"]')) {
+    const key = node.getAttribute('data-focus-key')
+    if (key !== null && node.value.length > 0) providerInputs.set(key, node.value)
+  }
   const scrollPositions = new Map<string, { readonly top: number; readonly left: number }>()
   for (const selector of ['.teams-content', '.teams-drawer', '.teams-group-messages', '.teams-group-detail', '.teams-group-list', '.teams-timeline']) {
     const el = root.querySelector<HTMLElement>(selector)
@@ -1192,7 +1267,7 @@ function captureDomState(root: HTMLElement): CapturedDomState {
       scrollPositions.set(selector, { top: el.scrollTop, left: el.scrollLeft })
     }
   }
-  return { focusKey, groupInputKey, selectionStart, selectionEnd, selectedGroupId, issueSessionId, groupInputs, sessionDraft, scrollPositions }
+  return { focusKey, groupInputKey, selectionStart, selectionEnd, selectedGroupId, issueSessionId, groupInputs, providerInputs, sessionDraft, scrollPositions }
 }
 
 function restoreDomState(root: HTMLElement, captured: CapturedDomState, state: ConsoleState): void {
@@ -1208,6 +1283,15 @@ function restoreDomState(root: HTMLElement, captured: CapturedDomState, state: C
         if (Array.from(target.options).some(option => option.value === val)) {
           target.value = val
         }
+      } else if (target.value === '') {
+        target.value = val
+      }
+    }
+  }
+  for (const [key, val] of captured.providerInputs) {
+    for (const target of root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[data-focus-key="${key}"]`)) {
+      if (target instanceof HTMLSelectElement) {
+        if (Array.from(target.options).some(option => option.value === val)) target.value = val
       } else if (target.value === '') {
         target.value = val
       }

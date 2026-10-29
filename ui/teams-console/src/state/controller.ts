@@ -190,8 +190,8 @@ function contextMatches(view: GroupRequestContext, owner: GroupRequestContext): 
   return true
 }
 
-function actionResult(label: string, result: Extract<ConsoleCommandResultV1, { readonly ok: true }>): string {
-  return result.result === undefined ? `${label}: accepted by Agent` : `${label}: ${JSON.stringify(result.result)}`
+function actionResult(label: string): string {
+  return `${label}: accepted by Agent`
 }
 
 export class TeamsConsoleController {
@@ -446,7 +446,7 @@ export class TeamsConsoleController {
         return false
       }
       const refreshed = await this.refreshAfterAction()
-      this.update({ busy: null, notice: actionResult(label, result) })
+      this.update({ busy: null, notice: actionResult(label) })
       return refreshed
     } catch (error) {
       this.update({ busy: null, error: `${label}: ${errorText(error)}` })
@@ -565,7 +565,7 @@ export class TeamsConsoleController {
         this.update({ busy: null, error: `${label} succeeded, but the host projection could not be refreshed.` })
         return false
       }
-      this.update({ busy: null, notice: actionResult(label, result) })
+      this.update({ busy: null, notice: actionResult(label) })
       return true
     } catch (error) {
       this.update({ busy: null, error: `${label}: ${errorText(error)}` })
@@ -610,7 +610,7 @@ export class TeamsConsoleController {
         this.update({ busy: null, error: 'Send message succeeded, but the host projection could not be refreshed.' })
         return false
       }
-      this.update({ busy: null, messageDraft: '', notice: actionResult('Send message', result) })
+      this.update({ busy: null, messageDraft: '', notice: actionResult('Send message') })
       writeDraft(this.persistence, 'message', '')
       return true
     } catch (error) {

@@ -16,6 +16,8 @@ import type {
 
 export type {
   ConsoleAgentObservationV1,
+  ConsoleAcceptedBinding,
+  ConsoleBindingRef,
   ConsoleCapabilityDetail,
   ConsoleClientV1,
   ConsoleCommandResultV1,

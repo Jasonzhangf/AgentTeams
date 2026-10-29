@@ -377,6 +377,51 @@ export const teamsStyles = String.raw`
   gap: 10px;
 }
 
+/* Every page list owns its own reset; a browser default 40px indent plus a list marker
+   is what squeezed the 390px discovery and interaction views into a narrow column. */
+.teams-list,
+.teams-team-list,
+.teams-connection-list,
+.teams-session-selector-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.teams-team-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.teams-team-list > li {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--teams-border);
+  border-radius: var(--teams-radius);
+  background: var(--teams-surface-raised);
+}
+
+.teams-team-list > li > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.teams-connection-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--teams-muted);
+  font-size: 12px;
+}
+
+.teams-session-selector-list {
+  display: grid;
+  gap: 8px;
+}
+
 .teams-list-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -385,6 +430,11 @@ export const teamsStyles = String.raw`
   width: 100%;
   padding: 14px 16px;
   text-align: start;
+}
+
+.teams-list-item > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .teams-list-item:hover,
@@ -737,15 +787,22 @@ export const teamsStyles = String.raw`
 
 @media (max-width: 780px) {
   .teams-overlay {
-    place-items: end stretch;
+    place-items: stretch;
     padding: 0;
   }
 
   .teams-panel {
     width: 100%;
-    max-height: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
     border: 0;
     border-radius: 0;
+  }
+
+  .teams-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 16px;
   }
 
   .teams-header {
@@ -768,11 +825,6 @@ export const teamsStyles = String.raw`
 
   .teams-header-actions > * {
     flex: 0 0 auto;
-  }
-
-  .teams-content {
-    min-height: 0;
-    padding: 20px 16px 28px;
   }
 
   .teams-view-header,
@@ -803,13 +855,20 @@ export const teamsStyles = String.raw`
     grid-template-columns: 1fr;
   }
 
+  /* The drawer sits on its own mask layer inside the full-height panel, and its header
+     keeps a readable title column instead of being squeezed by the action buttons. */
+  .teams-drawer-layer {
+    z-index: 20;
+    background: oklch(0.04 0.02 255 / 0.55);
+  }
+
   .teams-drawer {
     top: auto;
     right: 0;
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: 92%;
+    max-height: calc(100dvh - 48px);
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
@@ -819,8 +878,22 @@ export const teamsStyles = String.raw`
 
   .teams-drawer.is-expanded {
     top: 0;
-    max-height: 100%;
+    max-height: 100dvh;
     border-radius: 0;
+  }
+
+  .teams-drawer-header {
+    flex-wrap: wrap;
+  }
+
+  .teams-drawer-heading {
+    flex: 1 1 auto;
+    min-width: 160px;
+  }
+
+  .teams-drawer-heading strong,
+  .teams-drawer-heading span {
+    overflow-wrap: anywhere;
   }
 
   .teams-drawer-header,
@@ -1010,6 +1083,78 @@ export const teamsStyles = String.raw`
   border: 1px solid var(--teams-border);
   border-radius: 10px;
   background: var(--teams-surface-raised);
+}
+
+/* The confirmation stays in place but never grows past the viewport; a long close-impact
+   list scrolls inside the panel instead of pushing the accept/cancel controls off screen. */
+.teams-group-confirm {
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.teams-group-action-advanced {
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.teams-group-action-advanced > summary {
+  cursor: pointer;
+  color: var(--teams-muted);
+  font-size: 0.78rem;
+}
+
+.teams-group-action-advanced > .teams-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.teams-note-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--teams-muted);
+}
+
+.teams-relation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--teams-border);
+  border-radius: 8px;
+  background: var(--teams-surface);
+}
+
+.teams-relation-direction {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.teams-relation-meta {
+  font-size: 12px;
+  color: var(--teams-muted);
+  overflow-wrap: anywhere;
+}
+
+.teams-config-binding {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--teams-border);
+  border-radius: 8px;
+  background: var(--teams-surface-raised);
+}
+
+.teams-config-binding-row {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .teams-group-message-body,
