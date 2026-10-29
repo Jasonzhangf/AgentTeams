@@ -439,6 +439,7 @@ async function withPromptRetry<T>(
   const sleep = options?.sleep ?? (async (milliseconds: number) => { await new Promise<void>(resolve => setTimeout(resolve, milliseconds)) })
   let lastError: unknown
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (attempt > 1 && options?.shouldRetry?.() === false) throw lastError
     try {
       return await task()
     } catch (error) {

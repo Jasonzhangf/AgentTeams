@@ -1233,6 +1233,13 @@ describe('Session host admission, cancel causality and observation', () => {
     h = sessionHarness({
       promptAttempts: [new OpenCodeAdapterError('session.prompt', 'UPSTREAM_ERROR', 'upstream 503', 503)],
       beforePromptSettles: async attempt => {
+        // The engine binds the assistant message first, so `correlate` replaces the operation
+        // record with a copy. The retry gate must still see the output published afterwards.
+        h.channel.push({
+          type: 'message.updated',
+          properties: { info: { id: 'assistant-1', role: 'assistant', sessionID: 's1', parentID: h.prompts[0].messageId } },
+        })
+        await tick()
         h.channel.push({
           type: 'message.part.updated',
           properties: { part: { sessionID: 's1', messageID: 'assistant-1', id: `part-${attempt}`, type: 'text', text: 'partial' } },

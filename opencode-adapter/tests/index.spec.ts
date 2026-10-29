@@ -756,4 +756,24 @@ describe('OpenCode Teams adapter', () => {
     })).rejects.toMatchObject({ operation: 'session.prompt', status: 503 })
     expect(attempts).toBe(1)
   })
+
+  it('does not dispatch a retry when output appears during the backoff', async () => {
+    let attempts = 0
+    let outputObserved = false
+    const client = {
+      session: {
+        prompt: async () => {
+          attempts += 1
+          return { data: undefined, error: { message: 'busy' }, response: { status: 503 } }
+        },
+      },
+    }
+    await expect(promptOpenCodeSession(client as never, 'ses_backoff', 'hello', { providerID: 'p', modelID: 'm' }, 'msg_user', undefined, {
+      maxAttempts: 3,
+      // Simulate the event stream publishing output while the failed attempt is backing off.
+      sleep: async () => { outputObserved = true },
+      shouldRetry: () => !outputObserved,
+    })).rejects.toMatchObject({ operation: 'session.prompt', status: 503 })
+    expect(attempts).toBe(1)
+  })
 })

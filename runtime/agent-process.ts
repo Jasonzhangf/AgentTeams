@@ -554,7 +554,13 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
         outcome = await useAdapter(
           async (client, handle, markDispatched) => await promptOpenCodeSession(client, sessionId, decoded.text, handle.modelTarget, record.requestMessageId, markDispatched, {
             onRetry: () => { retryingSessions.add(sessionId) },
-            shouldRetry: () => record.outputObserved !== true,
+            // Read the current record: `correlate` replaces the map entry with a bound copy,
+            // so the dispatch snapshot must not be the only source of this turn's state.
+            shouldRetry: () => {
+              const current = operations.get(sessionId)
+              if (current === undefined || current.operationId !== record.operationId) return false
+              return current.outputObserved !== true
+            },
           }),
           handle => effectiveHandleIdentity(handle) === record.handleFingerprint
             ? undefined
