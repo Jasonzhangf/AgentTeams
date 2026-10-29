@@ -187,7 +187,10 @@ describe('TeamsConsoleController', () => {
     await expect(controller.sendSession('planner', 'planner-current', { text: 'owner refresh' })).resolves.toBe(true)
     expect(reads).toBe(2)
     expect(controller.getSnapshot().projection?.sessionEvents).toHaveLength((before ?? 0) + 1)
-    expect(controller.getSnapshot().notice).toContain('{"accepted":true}')
+    const notice = controller.getSnapshot().notice ?? ''
+    expect(notice).toBe('Send message: accepted by Agent')
+    expect(notice).not.toContain('{')
+    expect(notice).not.toContain('acceptedRevision')
   })
 
   it('reads history when the history view is opened, because its only other trigger is disabled', async () => {

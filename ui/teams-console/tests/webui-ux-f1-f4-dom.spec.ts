@@ -257,12 +257,14 @@ const panel = root.querySelector('.teams-panel')
 const shortPanel = document.querySelector('#short .teams-panel')
 const drawerHeading = document.querySelector('#drawn .teams-drawer .teams-drawer-heading strong')
 const ack = root.querySelector('[data-notification-ack="n-pending"]')
-const eventTitle = root.querySelector('.teams-session-event .teams-session-event-header strong')
+const eventHeader = root.querySelector('.teams-session-event .teams-session-event-header')
+const eventTitle = eventHeader?.querySelector('strong')
+const stateWords = (eventHeader?.textContent ?? '').split('completed').length - 1
 document.body.dataset.panelTop = String(panel ? Math.round(panel.getBoundingClientRect().top) : -1)
 document.body.dataset.panelInView = String(panel !== null && panel.getBoundingClientRect().top >= 0 && panel.getBoundingClientRect().bottom <= window.innerHeight + 1)
 document.body.dataset.ackInRow = String(ack !== null && ack.closest('li') !== null && ack.closest('li') === root.querySelector('[data-notification-id="n-pending"]'))
 document.body.dataset.noHorizontalOverflow = String(document.documentElement.scrollWidth <= window.innerWidth + 1)
-document.body.dataset.timelineSingleState = String(eventTitle !== null && eventTitle.textContent === 'user completed')
+document.body.dataset.timelineSingleState = String(eventTitle !== null && eventTitle.textContent === 'user' && stateWords === 1)
 document.body.dataset.drawerHeadingW = String(drawerHeading ? Math.round(drawerHeading.getBoundingClientRect().width) : -1)
 document.body.dataset.shortPanelTop = String(shortPanel ? Math.round(shortPanel.getBoundingClientRect().top) : -1)
   </script>
@@ -277,12 +279,11 @@ document.body.dataset.shortPanelTop = String(shortPanel ? Math.round(shortPanel.
     for (const flag of ['panel-in-view', 'ack-in-row', 'no-horizontal-overflow', 'timeline-single-state']) {
       expect(output, flag).toContain(`data-${flag}="true"`)
     }
-    // Recorded (not asserted green): mobile-ux-findings F3 draws an unused top gap for short
-    // content and squeezes the drawer heading. Those are out of this task's David scope; the
-    // measured values are preserved here and reported as gaps rather than silently fixed.
+    // M-F3 closes both earlier gaps: a short page still starts at the viewport top, and the
+    // drawer title keeps a readable column instead of being squeezed by the header actions.
     const headingWidth = Number(/data-drawer-heading-w="(-?\d+)"/.exec(output)?.[1] ?? '-1')
     const shortTop = Number(/data-short-panel-top="(-?\d+)"/.exec(output)?.[1] ?? '-1')
-    expect(headingWidth).toBeGreaterThan(0)
-    expect(shortTop).toBeGreaterThanOrEqual(0)
+    expect(headingWidth).toBeGreaterThanOrEqual(160)
+    expect(shortTop).toBe(0)
   })
 })

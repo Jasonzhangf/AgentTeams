@@ -48,13 +48,13 @@ function actionDisabled(state: ConsoleState): boolean {
 
 function sessionEventTitle(event: import('../client/protocol.ts').ConsoleSessionEventView, t: Record<MessageKey, string>): string {
   switch (event.kind) {
-    case 'message': return `${event.role} ${event.state}`
-    case 'part': return `${event.partType} ${event.state}`
-    case 'tool': return `${event.tool} ${event.state}`
-    case 'permission': return event.state === 'pending' ? `${t.permission} ${event.title}` : `${t.permission} ${event.decision}`
-    case 'final': return `final ${event.state}`
-    case 'error': return `error ${event.error.name}`
-    case 'cancel': return `cancel ${event.state}`
+    case 'message': return event.role
+    case 'part': return event.partType
+    case 'tool': return event.tool
+    case 'permission': return event.state === 'pending' ? event.title : `${t.permission} ${event.decision}`
+    case 'final': return event.state === 'failed' ? event.error.name : event.finish ?? t.session
+    case 'error': return event.error.name
+    case 'cancel': return event.state === 'unknown' ? event.reason : t.cancelSession
     default: return t.details
   }
 }
@@ -1057,7 +1057,7 @@ function renderInteraction(controller: TeamsConsoleController, state: ConsoleSta
   if (projection === null) return value
   append(value, renderViewHeader(t.pageInteraction))
   const selectedSession = projection.sessions.find(session => session.sessionId === state.selectedSessionId) ?? projection.sessions[0]
-  const list = element('ul')
+  const list = element('ul', 'teams-session-selector-list')
   for (const session of projection.sessions) {
     const item = element('li')
     item.dataset.sessionItem = session.sessionId
@@ -1083,7 +1083,7 @@ function renderInteraction(controller: TeamsConsoleController, state: ConsoleSta
     const noticeList = element('ul', 'teams-list')
     noticeList.dataset.interactionNotifications = 'true'
     for (const notification of pendingNotifications) {
-      const row = element('li')
+      const row = element('li', 'teams-list-item teams-notification-pending')
       row.dataset.notificationId = notification.notificationId
       const text = element('span')
       text.textContent = `${agentName(projection, notification.agentId, t)} · ${notification.title}`
@@ -1167,11 +1167,46 @@ function renderHistory(controller: TeamsConsoleController, state: ConsoleState, 
   return value
 }
 
+/**
+ * Localize the human-readable status line. English keeps `${label}: accepted by Agent`
+ * verbatim so every existing en assertion holds; Chinese maps the known action labels
+ * and the receipt suffix to Chinese copy and never shows the internal JSON receipt.
+ */
+function localizeStatus(text: string, t: Record<MessageKey, string>): string {
+  const acceptedSuffix = ': accepted by Agent'
+  const labels: Record<string, string> = {
+    'Send message': t.groupSend,
+    'Open session': t.openSession,
+    'Create session': t.createSession,
+    'Cancel session': t.cancelSession,
+    'Acknowledge notification': t.acknowledge,
+    'Permission reply': t.permission,
+    'Connect': t.connect,
+    'Disconnect': t.disconnect,
+    'Apply membership': t.applyMembership,
+    'Submit network draft': t.applyMembership,
+    'Refresh models': t.refreshModels,
+    'Bind model': t.bindModel,
+    'Save provider': t.saveProvider,
+    'Apply configuration': t.applyConfig,
+  }
+  if (text.endsWith(acceptedSuffix)) {
+    const localized = labels[text.slice(0, text.length - acceptedSuffix.length)]
+    return localized === undefined ? text : `${localized}：${t.acceptedByAgent}`
+  }
+  if (text.endsWith('…')) {
+    const localized = labels[text.slice(0, -1)]
+    if (localized !== undefined) return `${localized}…`
+  }
+  return text
+}
+
 function renderStatus(state: ConsoleState, t: Record<MessageKey, string>): HTMLElement {
   const status = element('div', `teams-live-region ${state.error === null ? '' : 'is-error'}`)
   status.setAttribute('role', 'status')
   status.setAttribute('aria-live', state.error === null ? 'polite' : 'assertive')
-  status.textContent = state.error ?? state.notice ?? (state.busy === null ? '' : `${state.busy}…`)
+  const base = state.error ?? state.notice ?? (state.busy === null ? '' : `${state.busy}…`)
+  status.textContent = state.locale === 'zh' ? localizeStatus(base, t) : base
   if (state.status === 'loading' && state.projection === null) status.textContent = t.loading
   return status
 }

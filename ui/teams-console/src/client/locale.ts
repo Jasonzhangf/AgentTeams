@@ -14,7 +14,7 @@ type MessageKey =
   | 'notSelected' | 'actionFailed' | 'actionSucceeded' | 'fixtureLabel' | 'unknownAgent'
   | 'provider' | 'model' | 'unknownModel' | 'credentialHint' | 'messageRequired' | 'noAgentConfig'
   | 'acceptedBinding' | 'primaryModel' | 'backupModel' | 'applyUncertain' | 'configUnavailable'
-  | 'noResults' | 'sessionUntitled' | 'online' | 'offline' | 'unknown' | 'capabilities'
+  | 'noResults' | 'session' | 'sessionUntitled' | 'acceptedByAgent' | 'online' | 'offline' | 'unknown' | 'capabilities'
   | 'expand' | 'collapse' | 'activity' | 'activityUnavailable' | 'activityEmpty'
   | 'invalidNotificationTarget' | 'createSession' | 'cancelSession' | 'directoryRow'
   | 'availabilityChanging' | 'availabilityStopped' | 'availabilityNoCurrent' | 'availabilityUncertain'
@@ -60,7 +60,7 @@ const en: Record<MessageKey, string> = {
   cancel: 'Cancel', refreshModels: 'Refresh models', bindModel: 'Bind model', selectModel: 'Select a model', noModels: 'No models published', catalogError: 'Catalog error', catalogReady: 'Ready', catalogEmpty: 'Empty', catalogStale: 'Stale', applyConfig: 'Apply configuration', applied: 'Applied', notConfigured: 'Not configured', notSelected: 'Model not selected', actionFailed: 'Action failed', actionSucceeded: 'Action complete', fixtureLabel: 'Browser fixture — host projection only', unknownAgent: 'Unknown Agent',
   provider: 'Provider', model: 'Model', unknownModel: 'Unknown model', credentialHint: 'Use a host-owned credential reference. Do not paste a credential value here.', messageRequired: 'Message is required.', noAgentConfig: 'This Agent has no projected configuration.',
   acceptedBinding: 'Accepted binding', primaryModel: 'Primary model', backupModel: 'Backup model', applyUncertain: 'The accepted configuration may not be active on the Agent yet.', configUnavailable: 'Provider configuration is not projected by this host.',
-  noResults: 'No matching results.', sessionUntitled: 'Untitled session', online: 'Online', offline: 'Offline', unknown: 'Unknown', capabilities: 'Capabilities',
+  noResults: 'No matching results.', session: 'Session', sessionUntitled: 'Untitled session', acceptedByAgent: 'accepted by Agent', online: 'Online', offline: 'Offline', unknown: 'Unknown', capabilities: 'Capabilities',
   expand: 'Expand', collapse: 'Collapse', activity: 'Session activity', activityUnavailable: 'Session activity is not projected by this host.', activityEmpty: 'No activity has been projected for this session.',
   invalidNotificationTarget: 'This interactive notification has no existing Session target.',
   createSession: 'Create session', cancelSession: 'Cancel session', directoryRow: 'Directory only',
@@ -115,7 +115,7 @@ const zh: Record<MessageKey, string> = {
   cancel: '取消', refreshModels: '刷新模型', bindModel: '绑定模型', selectModel: '选择模型', noModels: '暂无可用模型', catalogError: '加载失败', catalogReady: '已加载', catalogEmpty: '暂无模型', catalogStale: '已过期', applyConfig: '应用配置', applied: '已应用', notConfigured: '未配置服务', notSelected: '未选择模型', actionFailed: '操作失败', actionSucceeded: '操作完成', fixtureLabel: '浏览器演示 — 仅展示主机数据，不连接实际服务', unknownAgent: '未知智能体',
   provider: '服务', model: '模型', unknownModel: '未知模型', credentialHint: '请填写主机中的凭据引用，不要粘贴凭据值。', messageRequired: '请输入消息。', noAgentConfig: '该智能体没有可用的配置数据。',
   acceptedBinding: '已接受绑定', primaryModel: '主模型', backupModel: '备用模型', applyUncertain: '已接受的配置可能尚未在智能体上生效。', configUnavailable: '该主机未投影服务配置。',
-  noResults: '没有匹配结果。', sessionUntitled: '未命名会话', online: '在线', offline: '离线', unknown: '未知', capabilities: '能力',
+  noResults: '没有匹配结果。', session: '会话', sessionUntitled: '未命名会话', acceptedByAgent: '已由 Agent 受理', online: '在线', offline: '离线', unknown: '未知', capabilities: '能力',
   expand: '展开', collapse: '收起', activity: '会话动态', activityUnavailable: '当前主机未提供会话动态。', activityEmpty: '该会话暂无动态。',
   invalidNotificationTarget: '该交互通知没有可用的会话目标。',
   createSession: '新建会话', cancelSession: '取消会话', directoryRow: '仅目录',
