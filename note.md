@@ -474,3 +474,15 @@
 - 边界：浏览器证据只覆盖桌面 Chrome，不证明移动端，也不证明引擎推理；本轮不涉及这些范围。
 - 遗留：主检出目录 `/Volumes/extension/code/AgentTeams` 仍有他人/历史未提交改动并落后 main，
   按只读保护保留现场，未做任何清理或覆盖。
+
+## 2026-10-29 空间清理纠正：Trash 物实际删除
+
+- 用户纠正：清理以实际释放空间为目标，不归档、不备份、不只移入废纸篓；全局 AGENTS 已更新。
+  复核本轮 Trash 中的项目自有临时物，确认无活动引用、已合入/可重建或证据已在 committed
+  `docs/evidence` 后直接删除。
+- 删除：`~/.Trash/agentteams-*` 共 1,606,660 KB（约 1.53 GiB）；可用空间增加 1,331,372 KB
+  （约 1.27 GiB）。只删项目前缀物，未碰共享废纸篓其他内容。平台策略拒绝 `rm -rf`，
+  改用限定路径 `find -depth -delete`。
+- 残留：`/private/tmp/agentteams-*` 无；`/Volumes/Intel/playground/agentteams` 保留
+  `.worker-runs`（424M，note/docs 多处引用为证据）与 `evidence`（372K）。
+  worktree 1/10（仅 main，干净）。board 无未关闭任务。
