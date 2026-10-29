@@ -486,3 +486,18 @@
 - 残留：`/private/tmp/agentteams-*` 无；`/Volumes/Intel/playground/agentteams` 保留
   `.worker-runs`（424M，note/docs 多处引用为证据）与 `evidence`（372K）。
   worktree 1/10（仅 main，干净）。board 无未关闭任务。
+
+## 2026-10-29 integration-provider-ux-20261029 收口（新头 f58f6a9）
+
+- 承接分支 `integration-provider-ux-20261029`（base=b4cca1b）的未交付头，包含三条用户线：
+  配置以文件为唯一真源（8d1bee3）、provider 错误重试边界（a6e40f2/d94138f）、WebUI 状态带本地化（556f0d1）。
+- 补一处遗漏：发现页状态带此前直接向中文界面输出 owner 原始 token（registration/connection/ready/idle），
+  未本地化、无标签。改动 `ui/teams-console` 的 locale/render/styles 三文件：显示本地化标签与状态文案，
+  保留 `data-team-band`/`data-band-state` 原始 token 供黑盒与验收读取；新增卡片栅格与 520px 两列布局。
+  新增 `tests/locale.spec.ts` 本地化断言（1 用例）。
+- 验证：build 0；`pnpm --filter @deepseek-ai/teams-console typecheck` 0；ui test 159 passed/0；
+  `pnpm test`（regression）382 套件 1714 passed/0；`pnpm smoke` 0；build:governance 0；
+  黑盒 BB08/BB09/BB10 全 passed（pack root=generated/modules/teams-source/lib，commit f58f6a9）。
+- 交付：ff-only merge 入 main，`origin/main == f58f6a9`；主树 `git status` 干净；`pnpm typecheck` 0。
+- 资源清理：webui-ux-f1-f3-a / webui-ux-f1-f3-b 已干净（无 dirty、无 active pid），按 SESE 关闭：
+  `git worktree remove --force` + `prune`，并确认 `test ! -e`；保留 `.worker-runs` 证据目录。
