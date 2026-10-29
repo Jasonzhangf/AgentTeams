@@ -2458,7 +2458,8 @@ socket.once('error', () => finish(false))
 
 const bb09StubProviderId = 'bb-console-stub'
 const bb09StubModelId = 'bb-console-model'
-const bb09RefreshSuccessNotice = 'Refresh models: accepted by Agent'
+/** The installed Console mounts with `locale: 'zh'`, so the supported notice is localized. */
+const bb09RefreshSuccessNotice = '刷新模型：已由 Agent 受理'
 
 function bb09RefreshCompletion(state) {
   return state.selectedAgent === workProviderId

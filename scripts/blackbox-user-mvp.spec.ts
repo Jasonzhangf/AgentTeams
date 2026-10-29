@@ -979,15 +979,16 @@ describe('BB09 config operation semantics', () => {
     const busy = {
       selectedAgent: 'bb-provider',
       models: ['', 'bb-console-model'],
-      liveRegion: 'Refresh models…',
+      liveRegion: '刷新模型…',
       liveRegionIsError: false,
       refreshDisabled: true,
     }
     expect(bb09RefreshCompletion(busy)).toBe(false)
-    expect(bb09RefreshCompletion({ ...busy, liveRegion: 'Refresh models: accepted by Agent', refreshDisabled: false })).toBe(true)
-    expect(bb09RefreshCompletion({ ...busy, liveRegion: 'Refresh models: accepted by Agent' })).toBe(false)
-    expect(bb09RefreshCompletion({ ...busy, liveRegion: 'Refresh models: host unavailable', refreshDisabled: false, liveRegionIsError: true })).toBe(false)
-    expect(bb09RefreshCompletion({ ...busy, selectedAgent: 'bb-receiver', liveRegion: 'Refresh models: accepted by Agent', refreshDisabled: false })).toBe(false)
+    expect(bb09RefreshCompletion({ ...busy, liveRegion: '刷新模型：已由 Agent 受理', refreshDisabled: false })).toBe(true)
+    expect(bb09RefreshCompletion({ ...busy, liveRegion: '刷新模型：已由 Agent 受理' })).toBe(false)
+    expect(bb09RefreshCompletion({ ...busy, liveRegion: '刷新模型：主机不可用', refreshDisabled: false, liveRegionIsError: true })).toBe(false)
+    expect(bb09RefreshCompletion({ ...busy, selectedAgent: 'bb-receiver', liveRegion: '刷新模型：已由 Agent 受理', refreshDisabled: false })).toBe(false)
+    expect(bb09RefreshCompletion({ ...busy, liveRegion: 'Refresh models: accepted by Agent', refreshDisabled: false })).toBe(false)
   })
 
   it('uses a real accepting bindModel operation after refresh stays observation-only', async () => {
