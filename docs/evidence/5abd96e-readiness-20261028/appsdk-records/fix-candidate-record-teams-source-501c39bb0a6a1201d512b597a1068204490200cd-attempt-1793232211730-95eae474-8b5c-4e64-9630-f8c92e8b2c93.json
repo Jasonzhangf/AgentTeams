@@ -1,0 +1,25 @@
+{
+  "fix_candidate_id": "fix-501c39bb0a6a-attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93",
+  "issue_id": "teams-lifecycle-admission",
+  "module_id": "teams-source",
+  "worktree_id": "worktree-501c39bb0a6a",
+  "base_commit": "a47728292bae924d7b0756c371f1545c30811228",
+  "head_commit": "501c39bb0a6a1201d512b597a1068204490200cd",
+  "tree_hash": "54ee103440ee6096ba807c0dbc61b152f068f05d",
+  "diff_hash": "sha256:9ee3ac08ab1051f43cec6a288143a8750ff0028bde2ff89ee9b51c088402f4ae",
+  "design_id": "teams-lifecycle-admission",
+  "owner": "agentteams::lifecycle-adapter:v1",
+  "scope_hash": "sha256:7c95c6f4481927efdb33fed0bd3a6bc67d25cb51e6b0184143c0c27622ed077c",
+  "changed_paths": [
+    "docs/evidence/5abd96e-readiness-20261028/admission-1.log",
+    "docs/evidence/5abd96e-readiness-20261028/notes.md"
+  ],
+  "verification_evidence_ids": [
+    "attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93-whitebox",
+    "attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93-artifact",
+    "attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93-install",
+    "attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93-restart",
+    "attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93-blackbox"
+  ],
+  "created_at": "2026-10-29T00:03:31.732Z"
+}

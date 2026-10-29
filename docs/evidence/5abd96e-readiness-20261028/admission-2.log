@@ -1,0 +1,5 @@
+
+> agentteams@0.2.0-internal.1 lifecycle:admission /Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028
+> node scripts/lifecycle-adapter.mjs
+
+{"ok":true,"attempt":"attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93","candidate":"501c39bb0a6a1201d512b597a1068204490200cd","artifact_hash":"sha256:c411e376542f320b8c33a6cfbc29046318b553d414b483484c67bbff6fca36a8","records":"/Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/.appsdk/records/pre-review-validation-record-teams-source-501c39bb0a6a1201d512b597a1068204490200cd-attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93.json"}

@@ -1,0 +1,33 @@
+{
+  "evidence_id": "attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93-whitebox",
+  "issue_id": "teams-lifecycle-admission",
+  "experiment_id": "teams-lifecycle-admission",
+  "phase": "development_whitebox",
+  "kind": "gate",
+  "source_commit": "501c39bb0a6a1201d512b597a1068204490200cd",
+  "scope": {
+    "module_id": "teams-source",
+    "entrypoint": "pnpm verify"
+  },
+  "producer": {
+    "adapter": "agentteams::lifecycle-adapter:v1",
+    "identity": "agentteams::lifecycle-adapter:v1/whitebox"
+  },
+  "result": "pass",
+  "created_at": "2026-10-29T00:10:35.309Z",
+  "expires_at": "2026-10-30T00:10:35.308Z",
+  "input_hashes": [
+    "sha256:c4eb80e230998edf544967b12a475cc17263144e6786a80d8afd963d15df66b4",
+    "sha256:7312f8c6784b284ed491a256fcc72d45416fff0454f0c6148d4748bfd16df1f7"
+  ],
+  "scope_hash": "sha256:7c95c6f4481927efdb33fed0bd3a6bc67d25cb51e6b0184143c0c27622ed077c",
+  "artifact_hash": "sha256:c411e376542f320b8c33a6cfbc29046318b553d414b483484c67bbff6fca36a8",
+  "entrypoint": "pnpm verify",
+  "execution_surface": "development_whitebox",
+  "execution": {
+    "mode": "executed",
+    "receipt_id": "stage-pnpm-verify-1793232635308",
+    "receipt_path": "/Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-verify-1793232635308.json"
+  },
+  "command": "pnpm verify"
+}

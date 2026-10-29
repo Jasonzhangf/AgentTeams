@@ -1,0 +1,34 @@
+{
+  "evidence_id": "attempt-1793232211730-95eae474-8b5c-4e64-9630-f8c92e8b2c93-blackbox",
+  "issue_id": "teams-lifecycle-admission",
+  "experiment_id": "teams-lifecycle-admission",
+  "phase": "deployed_blackbox",
+  "kind": "runtime",
+  "source_commit": "501c39bb0a6a1201d512b597a1068204490200cd",
+  "scope": {
+    "module_id": "teams-source",
+    "entrypoint": "pnpm smoke:installed -> installed agentteams CLI start/status/stop -> installed Relay and two Agent entrypoints with actual restart generation/PID evidence"
+  },
+  "producer": {
+    "adapter": "agentteams::lifecycle-adapter:v1",
+    "identity": "agentteams::lifecycle-adapter:v1/deployment"
+  },
+  "result": "pass",
+  "created_at": "2026-10-29T00:11:24.724Z",
+  "expires_at": "2026-10-30T00:11:24.363Z",
+  "input_hashes": [
+    "sha256:a9daca025a48d34b4965664bcdee1ce784e03b5e8a2c1e16bac3f37d72fee8bb",
+    "sha256:2fc81e66ece30ca9b48bca02e9a265df21a7d76aefeab81fe52e52a25f02f684"
+  ],
+  "scope_hash": "sha256:7c95c6f4481927efdb33fed0bd3a6bc67d25cb51e6b0184143c0c27622ed077c",
+  "artifact_hash": "sha256:c411e376542f320b8c33a6cfbc29046318b553d414b483484c67bbff6fca36a8",
+  "environment_id": "sha256:5c6fb18ac57b8a18e749f35d2e92db484d5aeaf72d553bfa3c6ad331698ea581",
+  "entrypoint": "pnpm smoke:installed -> installed agentteams CLI start/status/stop -> installed Relay and two Agent entrypoints with actual restart generation/PID evidence",
+  "execution_surface": "deployed_blackbox",
+  "execution": {
+    "mode": "executed",
+    "receipt_id": "stage-pnpm-smoke-installed-1793232684363",
+    "receipt_path": "/Volumes/Intel/playground/agentteams/5abd96e-readiness-20261028/.appsdk-control/lifecycle-adapter/stages/receipts/stage-pnpm-smoke-installed-1793232684363.json"
+  },
+  "command": "pnpm smoke:installed"
+}
