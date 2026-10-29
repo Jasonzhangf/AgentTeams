@@ -22,6 +22,16 @@
  * daemon, control daemon, intent records, observation records, permission callback and HTTP
  * projection are all real processes and real files.
  *
+  * Extra paths (env E562_EXTRA_PATHS=1): after the desktop Allow-once turn, the driver
+  * performs two additional browser-driven permission turns and one mobile viewport check.
+  * Reject clicks data-permission-kind="reject" and asserts resolved decision reject with no
+  * completed tool output. Allow always clicks data-permission-kind="always" and asserts
+  * resolved decision always, completed /etc/hosts tool text and assistant final text.
+  * Mobile sets 390x844 device metrics and asserts the discovery page, agent drawer,
+  * interaction tab, composer and pending permission buttons render inside the viewport with
+  * no horizontal overflow, capturing E562_MOBILE_SCREENSHOT_PATH.
+  * The default run (without E562_EXTRA_PATHS=1) is unchanged.
+  *
  * Honest boundary: when `generated/modules/teams-source/lib/package.json` exists (or `AGENTTEAMS_CLI`
  * points to an installed copy), this packs and installs the candidate into an isolated prefix outside
  * the source tree and runs the full Session-loop, real Chrome DOM, Control daemon restart persistence,
@@ -29,7 +39,8 @@
  *
  * Usage: node docs/evidence/e562a05-webui-session-loop/black-box-session-loop.mjs
  * Env: OPENCODE_EXECUTABLE, E562_STEP_DEADLINE_MS, E562_OVERALL_DEADLINE_MS,
- *      E562_RECEIPT_PATH, E562_SCREENSHOT_PATH, E562_REPO_ROOT, CHROME_BIN
+  *      E562_RECEIPT_PATH, E562_SCREENSHOT_PATH, E562_MOBILE_SCREENSHOT_PATH,
+  *      E562_REPO_ROOT, CHROME_BIN, E562_EXTRA_PATHS
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createServer as createHttpServer } from 'node:http'
@@ -48,6 +59,8 @@ const OPENCODE = process.env.OPENCODE_EXECUTABLE ?? '/Users/fanzhang/.opencode/b
 const CHROME = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const RECEIPT_PATH = process.env.E562_RECEIPT_PATH ?? join(evidenceDirectory, 'receipt.json')
 const SCREENSHOT_PATH = process.env.E562_SCREENSHOT_PATH ?? join(evidenceDirectory, 'browser-pending-permission.png')
+const MOBILE_SCREENSHOT_PATH = process.env.E562_MOBILE_SCREENSHOT_PATH ?? join(evidenceDirectory, 'mobile-pending-permission.png')
+const EXTRA_PATHS = process.env.E562_EXTRA_PATHS === '1'
 const STEP_DEADLINE_MS = Number(process.env.E562_STEP_DEADLINE_MS ?? 120_000)
 const OVERALL_DEADLINE_MS = Number(process.env.E562_OVERALL_DEADLINE_MS ?? 900_000)
 
@@ -421,13 +434,198 @@ async function openBrowser(origin) {
   return chrome
 }
 
-async function captureScreenshot() {
+async function captureScreenshotTo(path) {
   const shot = await chrome.cdp.send('Page.captureScreenshot', { format: 'png' }, chrome.sessionId)
   if (typeof shot.data !== 'string' || shot.data.length === 0) throw new Error('Page.captureScreenshot returned no data')
   const png = Buffer.from(shot.data, 'base64')
   if (png.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('browser screenshot is not a PNG')
-  await writeFile(SCREENSHOT_PATH, png)
+  await writeFile(path, png)
   return png.length
+}
+
+async function captureScreenshot() {
+  return await captureScreenshotTo(SCREENSHOT_PATH)
+}
+
+async function setDeviceMetrics(width, height) {
+  await chrome.cdp.send('Emulation.setDeviceMetricsOverride', {
+    width, height, deviceScaleFactor: 2, mobile: true,
+    screenWidth: width, screenHeight: height,
+  }, chrome.sessionId)
+}
+
+async function clearDeviceMetrics() {
+  await chrome.cdp.send('Emulation.clearDeviceMetricsOverride', {}, chrome.sessionId)
+}
+
+/**
+ * Drives one full Console turn in the live DOM and answers the pending permission with the
+ * requested kind. It creates the Session through the Agent drawer, selects it on the Interaction
+ * page, sends a message that forces one real permission, then clicks the real button whose
+ * data-permission-kind matches targetKind. It returns the resolved projection so the caller can
+ * assert per-decision expectations.
+ */
+async function browserPermissionTurn({ origin, label, targetKind, beforeClick }) {
+  step = `${label}: return to the discovery page`
+  const discoveryTab = await evaluate(
+    chrome.cdp,
+    chrome.sessionId,
+    `(() => {
+      if (document.querySelector('[data-team-page-view="discovery"]') !== null) return 'already';
+      const tab = document.querySelector('[data-team-page="discovery"]');
+      if (tab === null) return 'absent';
+      tab.click();
+      return 'clicked';
+    })()`,
+  )
+  assert(discoveryTab === 'clicked' || discoveryTab === 'already', `${label}: the discovery tab was ${discoveryTab}`)
+  await awaitUi(
+    chrome.cdp,
+    chrome.sessionId,
+    `document.querySelector('[data-team-page-view="discovery"]') !== null && document.querySelector('[data-agent-id="${AGENT_ID}"]') !== null`,
+    `${label}: the discovery page did not render the observed Agent again`,
+  )
+
+  step = `${label}: create a Session through the control intent`
+  const baseline = new Set((await readProjection(origin)).sessions.map(row => row.sessionId))
+  const create = await command(origin, { kind: 'session.create', agentId: AGENT_ID, title: `E562 ${label}` })
+  assert(create.status === 200 && create.body.ok === true, `${label}: control accepted session.create (${create.status})`)
+  const createdProjection = await awaitProjection(
+    origin,
+    body => body.sessions?.some(row => row.agentId === AGENT_ID && !baseline.has(row.sessionId)) === true,
+    `${label}: the control session.create never produced an observed Session`,
+  )
+  const session = createdProjection.sessions.find(row => row.agentId === AGENT_ID && !baseline.has(row.sessionId))
+  assert(session !== undefined, `${label}: the projection carries the created Session (${session?.sessionId})`)
+  record(`${label}Session`, { sessionId: session.sessionId })
+
+  step = `${label}: select the Session and enable the composer`
+  const interactionClicked = await evaluate(
+    chrome.cdp,
+    chrome.sessionId,
+    `(() => { const tab = document.querySelector('[data-team-page="interaction"]'); if (tab === null) return 'absent'; tab.click(); return 'clicked' })()`,
+  )
+  assert(interactionClicked === 'clicked', `${label}: the Interaction tab was ${interactionClicked}`)
+  await awaitUi(chrome.cdp, chrome.sessionId, `document.querySelector('[data-team-page-view="interaction"]') !== null`, `${label}: the Interaction page did not render`)
+  await evaluate(
+    chrome.cdp,
+    chrome.sessionId,
+    `(() => {
+      const refresh = [...document.querySelectorAll('.teams-header-actions button')]
+        .find(button => button.textContent === 'Refresh' || button.textContent === '刷新');
+      if (refresh === undefined || refresh.disabled) return 'refresh-unavailable';
+      refresh.click();
+      return 'refreshed';
+    })()`,
+  )
+  await awaitUi(
+    chrome.cdp,
+    chrome.sessionId,
+    `(() => {
+      const button = document.querySelector('[data-session-select=${JSON.stringify(session.sessionId)}]');
+      return button !== null && button.disabled === false;
+    })()`,
+    `${label}: the refreshed Interaction page did not expose the new Session`,
+  )
+  const selected = await evaluate(
+    chrome.cdp,
+    chrome.sessionId,
+    `(() => {
+      const button = document.querySelector('[data-session-select=${JSON.stringify(session.sessionId)}]');
+      if (button === null || button.disabled) return 'absent-or-disabled';
+      button.click();
+      return 'selected';
+    })()`,
+  )
+  assert(selected === 'selected', `${label}: the new Session selection result was ${selected}`)
+  await awaitUi(
+    chrome.cdp,
+    chrome.sessionId,
+    `document.querySelector('[data-session-select=${JSON.stringify(session.sessionId)}]')?.getAttribute('aria-current') === 'true'`,
+    `${label}: the new Session was not marked as the current selection`,
+  )
+  await awaitUi(
+    chrome.cdp,
+    chrome.sessionId,
+    `(() => {
+      const textarea = document.querySelector('textarea[data-focus-key="session:message"]');
+      const form = textarea?.closest('form');
+      return form !== null && form !== undefined && form.innerText.includes(${JSON.stringify(session.sessionId)});
+    })()`,
+    `${label}: the composer did not bind to the new Session`,
+  )
+
+  step = `${label}: send a message that forces a real permission`
+  const submitted = await awaitUi(
+    chrome.cdp,
+    chrome.sessionId,
+    `(() => {
+      const textarea = document.querySelector('textarea[data-focus-key="session:message"]');
+      const form = textarea?.closest('form');
+      const submit = form?.querySelector('button[type="submit"]');
+      if (textarea === null || textarea === undefined || form === null || form === undefined || submit === null || submit === undefined) return null;
+      if (!form.innerText.includes(${JSON.stringify(session.sessionId)})) return null;
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(textarea, 'read /etc/hosts');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      const liveTextarea = document.querySelector('textarea[data-focus-key="session:message"]');
+      const liveForm = liveTextarea?.closest('form');
+      const liveSubmit = liveForm?.querySelector('button[type="submit"]');
+      if (liveTextarea === null || liveTextarea === undefined || liveForm === null || liveForm === undefined || liveSubmit === null || liveSubmit === undefined) return null;
+      if (!liveForm.checkValidity()) return null;
+      liveForm.requestSubmit(liveSubmit);
+      return true;
+    })()`,
+    `${label}: the composer never bound to the new Session and submitted`,
+  )
+  assert(submitted === true, `${label}: the live message composer submitted`)
+  const permissionProjection = await awaitProjection(
+    origin,
+    body => body.sessionEvents?.some(event => event.sessionId === session.sessionId && event.kind === 'permission'
+      && event.state === 'pending' && (event.options?.length ?? 0) > 0) === true,
+    `${label}: the Session never carried a pending permission with options`,
+  )
+  const permission = permissionProjection.sessionEvents.find(event => event.sessionId === session.sessionId
+    && event.kind === 'permission' && event.state === 'pending')
+  const permissionUi = await awaitUi(
+    chrome.cdp,
+    chrome.sessionId,
+    `(() => {
+      const buttons = [...document.querySelectorAll('[data-permission-option]')];
+      const kinds = buttons.map(button => button.getAttribute('data-permission-kind'));
+      if (!kinds.includes('once') || !kinds.includes('always') || !kinds.includes('reject')) return null;
+      return { kinds, targetDisabled: document.querySelector('[data-permission-kind=${JSON.stringify(targetKind)}]')?.disabled ?? true };
+    })()`,
+    `${label}: the live timeline did not render the once/always/reject permission buttons`,
+  )
+  assert(permissionUi.targetDisabled === false, `${label}: the target ${targetKind} permission button is enabled`)
+
+  if (beforeClick !== undefined) await beforeClick({ sessionId: session.sessionId, permissionId: permission.permissionId, permissionUi })
+
+  step = `${label}: click ${targetKind} in the live DOM`
+  const replyClicked = await evaluate(
+    chrome.cdp,
+    chrome.sessionId,
+    `(() => { const button = document.querySelector('[data-permission-kind=${JSON.stringify(targetKind)}]'); if (button === null || button.disabled) return 'disabled'; button.click(); return 'clicked' })()`,
+  )
+  assert(replyClicked === 'clicked', `${label}: the live ${targetKind} action was ${replyClicked}`)
+  const resolvedProjection = await awaitProjection(
+    origin,
+    body => body.sessionEvents?.some(event => event.sessionId === session.sessionId && event.kind === 'permission'
+      && event.permissionId === permission.permissionId && event.state === 'resolved' && event.decision === targetKind) === true,
+    `${label}: the live ${targetKind} click did not resolve the permission with decision ${targetKind}`,
+  )
+  const resolved = resolvedProjection.sessionEvents.find(event => event.sessionId === session.sessionId
+    && event.kind === 'permission' && event.permissionId === permission.permissionId)
+  assert(resolved?.decision === targetKind, `${label}: the permission is projected resolved (${resolved?.decision})`)
+  await awaitUi(
+    chrome.cdp,
+    chrome.sessionId,
+    `document.querySelectorAll('[data-permission-option]').length === 0`,
+    `${label}: the live timeline did not remove the resolved permission buttons`,
+  )
+  record(`${label}Turn`, { sessionId: session.sessionId, permissionId: permission.permissionId, resolved })
+  return { sessionId: session.sessionId, permissionId: permission.permissionId, projection: resolvedProjection, resolved, permission }
 }
 
 function permissionOptionKinds(event) {
@@ -906,6 +1104,116 @@ async function main() {
   assert(finalUi.finalEvents >= 1, 'the live timeline rendered the final event')
   assert(finalUi.pendingPermissionButtons === 0, 'the live timeline removed the resolved permission buttons')
   record('browserCompleted', { projection: browserCompleted.sessionEvents.filter(event => event.sessionId === browserCreated.sessionId), finalUi })
+
+  if (EXTRA_PATHS) {
+    step = 'extra: Reject path in the live DOM'
+    const rejectTurn = await browserPermissionTurn({ origin, label: 'reject', targetKind: 'reject' })
+    assert(rejectTurn.resolved.decision === 'reject', 'the Reject click produced decision reject')
+    const rejectEvents = rejectTurn.projection.sessionEvents.filter(event => event.sessionId === rejectTurn.sessionId)
+    const rejectToolCompleted = rejectEvents.some(event => event.kind === 'tool' && event.state === 'completed' && typeof event.output === 'string' && event.output.includes('localhost'))
+    assert(rejectToolCompleted === false, 'the Reject decision did not complete the denied tool')
+    record('rejectPath', { sessionId: rejectTurn.sessionId, decision: rejectTurn.resolved.decision, events: rejectEvents })
+
+    step = 'extra: Allow always path in the live DOM with a 390x844 permission layout check'
+    const alwaysTurn = await browserPermissionTurn({
+      origin,
+      label: 'always',
+      targetKind: 'always',
+      beforeClick: async () => {
+        await setDeviceMetrics(390, 844)
+        const mobileLayout = await awaitUi(
+          chrome.cdp,
+          chrome.sessionId,
+          `(() => {
+            if (window.innerWidth !== 390) return null;
+            const buttons = [...document.querySelectorAll('[data-permission-option]')];
+            if (buttons.length < 3) return null;
+            buttons[buttons.length - 1].scrollIntoView({ block: 'nearest' });
+            const horizontalOverflow = document.documentElement.scrollWidth > window.innerWidth + 1;
+            const textarea = document.querySelector('textarea[data-focus-key="session:message"]');
+            const textareaRect = textarea?.getBoundingClientRect();
+            const buttonRects = buttons.map(button => {
+              const r = button.getBoundingClientRect();
+              return { kind: button.getAttribute('data-permission-kind'), left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+            });
+            const buttonsFitHorizontally = buttonRects.every(r => r.width > 0 && r.height > 0 && r.left >= -1 && r.right <= window.innerWidth + 1);
+            const composerFits = textareaRect !== undefined && textareaRect !== null && textareaRect.width > 0 && textareaRect.left >= -1 && textareaRect.right <= window.innerWidth + 1;
+            if (horizontalOverflow || !buttonsFitHorizontally || !composerFits) return null;
+            return {
+              innerWidth: window.innerWidth, innerHeight: window.innerHeight,
+              horizontalOverflow, buttonRects,
+              composerRect: { left: textareaRect.left, right: textareaRect.right, width: textareaRect.width },
+            };
+          })()`,
+          'mobile: the 390px permission layout overflowed or the composer did not fit',
+        )
+        assert(mobileLayout.horizontalOverflow === false, 'mobile: the 390px page has no horizontal overflow')
+        assert(mobileLayout.buttonRects.length >= 3, 'mobile: all three permission buttons render at 390px')
+        assert(mobileLayout.buttonRects.every(rect => rect.width > 0 && rect.height > 0), 'mobile: every permission button has a real tap area at 390px')
+        const mobileScreenshotBytes = await captureScreenshotTo(MOBILE_SCREENSHOT_PATH)
+        record('mobilePermissionLayout', { ...mobileLayout, screenshot: MOBILE_SCREENSHOT_PATH, screenshotBytes: mobileScreenshotBytes })
+        await clearDeviceMetrics()
+      },
+    })
+    assert(alwaysTurn.resolved.decision === 'always', 'the Allow always click produced decision always')
+    const alwaysEvents = alwaysTurn.projection.sessionEvents.filter(event => event.sessionId === alwaysTurn.sessionId)
+    const alwaysToolCompleted = alwaysEvents.some(event => event.kind === 'tool' && event.state === 'completed' && typeof event.output === 'string' && event.output.includes('localhost'))
+    const alwaysAssistantText = alwaysEvents.some(event => event.kind === 'part' && event.partType === 'text' && event.text.includes('E562-TOOL-DONE') && event.state === 'completed')
+    const alwaysFinal = alwaysEvents.some(event => event.kind === 'final' && event.state === 'completed')
+    assert(alwaysToolCompleted === true, 'the Allow always decision completed the real /etc/hosts tool')
+    assert(alwaysAssistantText === true, 'the Allow always turn produced the assistant final text')
+    assert(alwaysFinal === true, 'the Allow always turn reached a completed final event')
+    record('alwaysPath', { sessionId: alwaysTurn.sessionId, decision: alwaysTurn.resolved.decision, events: alwaysEvents })
+
+    step = 'extra: mobile viewport (390x844) discovery page and Agent drawer'
+    await setDeviceMetrics(390, 844)
+    const mobileDiscovery = await awaitUi(
+      chrome.cdp,
+      chrome.sessionId,
+      `(() => {
+        if (window.innerWidth !== 390) return null;
+        const tab = document.querySelector('[data-team-page="discovery"]');
+        if (tab === null) return null;
+        if (document.querySelector('[data-team-page-view="discovery"]') === null) tab.click();
+        const agentRow = document.querySelector('[data-agent-id="${AGENT_ID}"]');
+        if (agentRow === null) return null;
+        const rect = agentRow.getBoundingClientRect();
+        const horizontalOverflow = document.documentElement.scrollWidth > window.innerWidth + 1;
+        if (horizontalOverflow || rect.right > window.innerWidth + 1) return null;
+        return { innerWidth: window.innerWidth, horizontalOverflow, agentRect: { left: rect.left, right: rect.right, width: rect.width } };
+      })()`,
+      'mobile: the discovery page did not fit the 390px viewport',
+    )
+    assert(mobileDiscovery.horizontalOverflow === false, 'mobile: the discovery page has no horizontal overflow')
+    const drawerOpened = await evaluate(
+      chrome.cdp,
+      chrome.sessionId,
+      `(() => { const button = document.querySelector('[data-focus-key="agent:${AGENT_ID}:details"]'); if (button === null) return 'absent'; button.click(); return 'clicked' })()`,
+    )
+    assert(drawerOpened === 'clicked', `mobile: the Agent details action was ${drawerOpened}`)
+    const mobileDrawer = await awaitUi(
+      chrome.cdp,
+      chrome.sessionId,
+      `(() => {
+        const create = document.querySelector('[data-focus-key="drawer-agent:${AGENT_ID}:create-session"]');
+        if (create === null) return null;
+        const createRect = create.getBoundingClientRect();
+        const drawer = document.querySelector('.teams-drawer');
+        const drawerRect = drawer?.getBoundingClientRect();
+        const horizontalOverflow = document.documentElement.scrollWidth > window.innerWidth + 1;
+        if (horizontalOverflow || createRect.width <= 0 || createRect.right > window.innerWidth + 1) return null;
+        return { innerWidth: window.innerWidth, createRect: { left: createRect.left, right: createRect.right, width: createRect.width }, drawerWidth: drawerRect?.width ?? null, horizontalOverflow };
+      })()`,
+      'mobile: the Agent drawer did not fit the 390px viewport',
+    )
+    assert(mobileDrawer.horizontalOverflow === false, 'mobile: the Agent drawer has no horizontal overflow')
+    const mobileDiscoveryShot = MOBILE_SCREENSHOT_PATH.replace(/\.png$/, '-discovery.png')
+    const mobileDiscoveryBytes = await captureScreenshotTo(mobileDiscoveryShot)
+    record('mobileDiscoveryLayout', { ...mobileDiscovery, drawer: mobileDrawer, screenshot: mobileDiscoveryShot, screenshotBytes: mobileDiscoveryBytes })
+    await evaluate(chrome.cdp, chrome.sessionId, `document.querySelector('.teams-drawer-header .teams-header-actions button:last-child')?.click()`)
+    await awaitUi(chrome.cdp, chrome.sessionId, `document.querySelector('.teams-drawer') === null`, 'mobile: the Agent drawer did not close')
+    await clearDeviceMetrics()
+  }
 
   step = 'control daemon restart persistence'
   const previousControlPid = controlPid
