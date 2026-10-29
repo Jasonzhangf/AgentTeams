@@ -1,6 +1,7 @@
 # D00 example: one control daemon (WebUI backend). No engine, no ACP.
 # Start: agentteams control start --config config/examples/control.toml
-# Placeholder credential references only; never commit a real secret.
+# Real local defaults: discovery and peers point at loopback (127.0.0.1).
+# Credential and TLS references stay placeholders; never commit a real secret.
 version = 4
 
 [daemon]
@@ -25,7 +26,7 @@ allowed = ["master", "peer"]
 
 [discovery]
 serverId = "lan-registry"
-endpoint = "wss://192.168.1.10:7444"
+endpoint = "wss://127.0.0.1:7444"
 credentialRef = "env:EXAMPLE_DISCOVERY_CREDENTIAL"
 tlsTrustRef = "file:./certs/registry-ca.pem"
 
@@ -34,6 +35,6 @@ agentId = "reasoner-a"
 hostId = "host-a"
 accountId = "local"
 scopeId = "local"
-endpoint = "wss://192.168.1.21:7443"
+endpoint = "wss://127.0.0.1:7443"
 credentialRef = "env:EXAMPLE_CONTROL_TO_REASONER"
 tlsTrustRef = "file:./certs/agent-ca.pem"

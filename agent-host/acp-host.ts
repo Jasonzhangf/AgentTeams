@@ -121,6 +121,16 @@ export interface CreateAcpHostInput {
   readonly maxDeliveryBacklog?: number
   /** Observable history-write failure; never carried inside an ACP payload. */
   readonly onHistoryFault?: (fault: AcpFault) => void
+  /**
+   * Bounded same-target retry for a `session/prompt` the engine failed before producing any
+   * output. `maxAttempts` counts the first dispatch. `sleep` exists so tests record the
+   * backoff instead of waiting for it. This never switches provider or backup.
+   */
+  readonly promptRetry?: {
+    readonly maxAttempts?: number
+    readonly baseDelayMs?: number
+    readonly sleep?: (milliseconds: number) => Promise<void>
+  }
 }
 
 interface PendingRequest {
@@ -155,6 +165,8 @@ interface ActivePrompt {
   reasoning: string
   textObserved: boolean
   reasoningObserved: boolean
+  /** Dispatches spent on this turn. The first dispatch counts as one. */
+  attempts: number
 }
 
 interface ChannelState {
@@ -300,6 +312,48 @@ function structuredErrorOf(frame: AcpFrame): OpenCodeStructuredError {
     name: 'UnknownError',
     data: { code, message: typeof error.message === 'string' ? error.message : 'engine prompt failed' },
   }
+}
+
+/** HTTP statuses a bounded retry treats as transient. */
+const RETRYABLE_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504])
+/** Engine fault codes that are transient by construction. */
+const RETRYABLE_FAULT_CODES = new Set(['ENGINE_UNAVAILABLE', 'CALLBACK_UNAVAILABLE', 'RESULT_UNKNOWN'])
+/** Engine fault codes a second attempt cannot fix. */
+const TERMINAL_FAULT_CODES = new Set([
+  'INVALID_ACP_FRAME',
+  'UNSUPPORTED_METHOD',
+  'UNSUPPORTED_CAPABILITY',
+  'UNSUPPORTED_POLICY',
+  'UNSUPPORTED_CONFIGURATION',
+  'CAPABILITY_DENIED',
+  'AUTHENTICATION_REQUIRED',
+  'STALE_GENERATION',
+  'SESSION_OWNERSHIP_CONFLICT',
+  'HISTORY_UNAVAILABLE',
+  'CONFLICT',
+  'FORBIDDEN',
+])
+
+/**
+ * Whether one engine `session/prompt` failure may be retried on the same Session and the
+ * same target. `-32603` is the engine's JSON-RPC internal error, the numeric code a
+ * transient upstream failure arrives under. An auth rejection, a credential echo, a policy
+ * refusal or an ownership conflict is terminal: a second attempt cannot change it.
+ */
+export function isRetryablePromptFault(frame: AcpFrame): boolean {
+  if (!isRecord(frame.error)) return false
+  const rawCode = frame.error.code
+  const code = typeof rawCode === 'string' || typeof rawCode === 'number' ? String(rawCode) : ''
+  const message = typeof frame.error.message === 'string' ? frame.error.message : ''
+  if (/credential|api[-_ ]?key|authorization|bearer/i.test(message)) return false
+  if (TERMINAL_FAULT_CODES.has(code)) return false
+  if (RETRYABLE_FAULT_CODES.has(code)) return true
+  const detail = isRecord(frame.error.detail) ? frame.error.detail : undefined
+  const statusField = typeof detail?.status === 'number' ? detail.status : Number.NaN
+  const statusInMessage = Number(message.match(/\b(?:408|429|500|502|503|504)\b/)?.[0] ?? Number.NaN)
+  if (RETRYABLE_HTTP_STATUS.has(statusField) || RETRYABLE_HTTP_STATUS.has(statusInMessage)) return true
+  if (rawCode === -32603) return true
+  return /timeout|timed out|ECONNRESET|ECONNREFUSED|EPIPE|socket hang up|fetch failed|network|overloaded|temporarily unavailable|rate limit/i.test(message)
 }
 
 /** The operator's decision, read from the engine option set the callback really offered. */
@@ -604,6 +658,14 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     throw new AcpError('UNSUPPORTED_CONFIGURATION', 'maxDeliveryBacklog must be a positive safe integer')
   }
   const localAgentId = input.agentId ?? engineInstanceId
+  const promptRetry = {
+    maxAttempts: input.promptRetry?.maxAttempts ?? 3,
+    baseDelayMs: input.promptRetry?.baseDelayMs ?? 250,
+    sleep: input.promptRetry?.sleep ?? (async (milliseconds: number) => { await new Promise<void>(resolve => setTimeout(resolve, milliseconds)) }),
+  }
+  if (!Number.isSafeInteger(promptRetry.maxAttempts) || promptRetry.maxAttempts < 1) {
+    throw new AcpError('UNSUPPORTED_CONFIGURATION', 'promptRetry.maxAttempts must be a positive safe integer')
+  }
 
   const channels = new Map<string, ChannelState>()
   const sessionOwners = new Map<string, string>()
@@ -892,6 +954,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
           reasoning: '',
           textObserved: false,
           reasoningObserved: false,
+          attempts: 1,
         }
         channel.activePrompts.set(sessionId, prompt)
         channel.promptAdmissions.delete(sessionId)
@@ -1091,6 +1154,102 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     }
   }
 
+  /**
+   * Project one engine prompt outcome into the channel's public Session events. The turn then
+   * owns nothing more, so both its admission placeholder and its reservation are released.
+   */
+  const projectPromptOutcome = (channel: ChannelState, prompt: ActivePrompt, frame: AcpFrame): void => {
+    const failed = Object.hasOwn(frame, 'error')
+    const occurredAt = new Date().toISOString()
+    if (prompt.textObserved) {
+      upsertEvent(channel.events, {
+        eventId: `evt-part-${prompt.assistantPartId}`,
+        agentId: localAgentId,
+        sessionId: prompt.sessionId,
+        occurredAt,
+        kind: 'part',
+        state: 'completed',
+        messageId: prompt.assistantMessageId,
+        partId: prompt.assistantPartId,
+        partType: 'text',
+        text: prompt.text,
+      })
+    }
+    if (prompt.reasoningObserved) {
+      upsertEvent(channel.events, {
+        eventId: `evt-part-${prompt.reasoningPartId}`,
+        agentId: localAgentId,
+        sessionId: prompt.sessionId,
+        occurredAt,
+        kind: 'part',
+        state: 'completed',
+        messageId: prompt.assistantMessageId,
+        partId: prompt.reasoningPartId,
+        partType: 'reasoning',
+        text: prompt.reasoning,
+      })
+    }
+    channel.events.push({
+      eventId: `evt-asst-${prompt.assistantMessageId}`,
+      agentId: localAgentId,
+      sessionId: prompt.sessionId,
+      occurredAt,
+      kind: 'message',
+      ...(failed ? { state: 'failed' as const, error: structuredErrorOf(frame) } : { state: 'completed' as const }),
+      messageId: prompt.assistantMessageId,
+      role: 'assistant',
+    })
+    const stopReason = isRecord(frame.result) ? stringField(frame.result.stopReason) : undefined
+    channel.events.push({
+      eventId: `evt-final-${prompt.assistantMessageId}`,
+      agentId: localAgentId,
+      sessionId: prompt.sessionId,
+      occurredAt,
+      kind: 'final',
+      ...(failed
+        ? { state: 'failed' as const, error: structuredErrorOf(frame) }
+        : { state: 'completed' as const, ...(stopReason === undefined ? {} : { finish: stopReason }) }),
+      messageId: prompt.assistantMessageId,
+    })
+    channel.activePrompts.delete(prompt.sessionId)
+    channel.promptAdmissions.delete(prompt.sessionId)
+  }
+
+  /**
+   * Re-dispatch one retryable `session/prompt` after a backoff. The admission placeholder
+   * stays in `activePrompts`, so the Console keeps exactly one in-flight prompt for the
+   * Session while the turn is retried. The retry takes a fresh child id under the same client
+   * request, so the eventual outcome still answers the original request id. The wait runs off
+   * the engine read loop: awaiting it here would delay every other frame on the channel.
+   */
+  const retryPrompt = (channel: ChannelState, pending: PendingRequest, prompt: ActivePrompt): void => {
+    prompt.attempts += 1
+    const delayMs = promptRetry.baseDelayMs * 2 ** (prompt.attempts - 2)
+    void (async () => {
+      await promptRetry.sleep(delayMs)
+      // The retry only answers a client that still owns the in-flight prompt. A channel that
+      // closed while the backoff waited settled the request already, starting a new turn for
+      // the Session must not inherit this one, and the engine may have ended in the same
+      // window; every path stops without inventing a delivery for a client that is gone.
+      if (channel.closed || channel.activePrompts.get(prompt.sessionId) !== prompt) return
+      const ended = rpcErrorFrame(pending.originalId, { code: 'ENGINE_UNAVAILABLE', message: 'ACP engine ended before the prompt retry' })
+      if (engineEnded) {
+        projectPromptOutcome(channel, prompt, ended)
+        enqueue(channel, ended)
+        return
+      }
+      try {
+        await dispatchToEngine(channel, pending.frame)
+        return
+      } catch (cause) {
+        // The resend itself failed: this attempt is the turn's real failure, reported once.
+        const failure = rpcErrorFrame(pending.originalId, faultFrom(cause, 'ENGINE_UNAVAILABLE'))
+        projectPromptOutcome(channel, prompt, failure)
+        enqueue(channel, failure)
+      }
+    })()
+  }
+
   const handleEngineResponse = async (frame: AcpFrame): Promise<void> => {
     const id = frame.id as AcpRpcId
     const pending = childRequests.get(rpcIdKey(id))
@@ -1141,60 +1300,14 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
     if (pending.method === 'session/prompt' && pending.sessionId !== undefined) {
       const prompt = channel.activePrompts.get(pending.sessionId)
       if (prompt !== undefined) {
-        const failed = Object.hasOwn(frame, 'error')
-        const occurredAt = new Date().toISOString()
-        if (prompt.textObserved) {
-          upsertEvent(channel.events, {
-            eventId: `evt-part-${prompt.assistantPartId}`,
-            agentId: localAgentId,
-            sessionId: prompt.sessionId,
-            occurredAt,
-            kind: 'part',
-            state: 'completed',
-            messageId: prompt.assistantMessageId,
-            partId: prompt.assistantPartId,
-            partType: 'text',
-            text: prompt.text,
-          })
+        // Retry only a turn that produced nothing the Console already saw: output means the
+        // attempt really ran, so repeating it would duplicate or contradict published parts.
+        if (Object.hasOwn(frame, 'error') && !prompt.textObserved && !prompt.reasoningObserved
+          && prompt.attempts < promptRetry.maxAttempts && isRetryablePromptFault(frame)) {
+          retryPrompt(channel, pending, prompt)
+          return
         }
-        if (prompt.reasoningObserved) {
-          upsertEvent(channel.events, {
-            eventId: `evt-part-${prompt.reasoningPartId}`,
-            agentId: localAgentId,
-            sessionId: prompt.sessionId,
-            occurredAt,
-            kind: 'part',
-            state: 'completed',
-            messageId: prompt.assistantMessageId,
-            partId: prompt.reasoningPartId,
-            partType: 'reasoning',
-            text: prompt.reasoning,
-          })
-        }
-        channel.events.push({
-          eventId: `evt-asst-${prompt.assistantMessageId}`,
-          agentId: localAgentId,
-          sessionId: prompt.sessionId,
-          occurredAt,
-          kind: 'message',
-          ...(failed ? { state: 'failed' as const, error: structuredErrorOf(frame) } : { state: 'completed' as const }),
-          messageId: prompt.assistantMessageId,
-          role: 'assistant',
-        })
-        const stopReason = isRecord(frame.result) ? stringField(frame.result.stopReason) : undefined
-        channel.events.push({
-          eventId: `evt-final-${prompt.assistantMessageId}`,
-          agentId: localAgentId,
-          sessionId: prompt.sessionId,
-          occurredAt,
-          kind: 'final',
-          ...(failed
-            ? { state: 'failed' as const, error: structuredErrorOf(frame) }
-            : { state: 'completed' as const, ...(stopReason === undefined ? {} : { finish: stopReason }) }),
-          messageId: prompt.assistantMessageId,
-        })
-        channel.activePrompts.delete(pending.sessionId)
-        channel.promptAdmissions.delete(pending.sessionId)
+        projectPromptOutcome(channel, prompt, frame)
       }
     }
     enqueue(channel, delivery)

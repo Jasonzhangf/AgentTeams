@@ -2,7 +2,8 @@
 # The public kind is `registry`; the implementation reuses the existing
 # server/Relay directory, so no second directory store is created.
 # Start: agentteams registry start --config config/examples/registry.toml
-# Placeholder credential references only; never commit a real secret.
+# Real local defaults: loopback (127.0.0.1) listen. Credential references
+# stay placeholders; never commit a real secret.
 #
 # The registry reuses the TLS-only server/Relay, so a registry `listen` always
 # needs an explicit certificate and key, including this loopback address.

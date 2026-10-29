@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { AcpPendingPermission } from '../agent-host/acp-host.ts'
 import { readSessionObservationRecord, sessionObservationScopePath } from '../config/session-observation-store.ts'
 import { createSessionObservationPublisher } from './session-observation-publisher.ts'
-import type { ConsoleSessionEventView } from '../packages/shared/src/console-api.ts'
+import type { ConsoleConfigObservationV1, ConsoleSessionEventView } from '../packages/shared/src/console-api.ts'
 
 /**
  * The agent daemon publishes the Sessions its engine really opened and the permission
@@ -37,6 +37,7 @@ function pending(permissionId: string, sessionId: string): AcpPendingPermission 
 async function withPublisher(
   task: (engine: FakeEngine, publisher: ReturnType<typeof createSessionObservationPublisher>, path: string) => Promise<void>,
   initial?: Partial<FakeEngine>,
+  options?: { readonly readConfigObservation?: () => Promise<ConsoleConfigObservationV1 | undefined> },
 ): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), 'session-observation-publisher-'))
   const path = sessionObservationScopePath({ home: directory, accountId: 'local', scopeId: 'local', agentId: 'agent-alpha' })
@@ -45,6 +46,7 @@ async function withPublisher(
     host: { openedSessions: () => engine.sessions, pendingPermissions: () => engine.permissions, sessionEvents: () => engine.events },
     recordPath: path,
     agentId: 'agent-alpha',
+    ...(options?.readConfigObservation === undefined ? {} : { readConfigObservation: options.readConfigObservation }),
   })
   try {
     await task(engine, publisher, path)
@@ -216,5 +218,48 @@ describe('session observation publisher', () => {
       expect((await readSessionObservationRecord(path))?.revision).toBe(10)
       expect((await readSessionObservationRecord(path))?.sessions).toEqual([{ sessionId: 'ses-2' }])
     }, { sessions: ['ses-1'] })
+  })
+
+  it('carries this daemon config row into the record and writes nothing when it is unchanged', async () => {
+    let reads = 0
+    const config: ConsoleConfigObservationV1 = {
+      agentId: 'agent-alpha',
+      acceptedRevision: 2,
+      effectiveRevision: 2,
+      applyState: 'clean',
+      acceptedBinding: { primary: { providerInstanceId: 'rcc-4444', modelId: 'gpt-5.5' } },
+      providers: [{
+        id: 'rcc-4444',
+        label: 'Local RCC 4444',
+        protocol: 'openai-chat',
+        apiBaseUrl: 'http://127.0.0.1:4444/v1',
+        enabled: true,
+        authKind: 'none',
+        catalogState: 'ready',
+        models: [{ id: 'gpt-5.5', label: 'gpt-5.5' }],
+      }],
+    }
+    await withPublisher(async (_engine, publisher, path) => {
+      await publisher.publish()
+      const first = await readSessionObservationRecord(path)
+      expect(first?.config).toMatchObject({ agentId: 'agent-alpha', acceptedRevision: 2, providers: [{ id: 'rcc-4444' }] })
+      expect(first?.revision).toBe(1)
+      // Two more passes read the same config: the row is unchanged, so no revision is written.
+      await publisher.publish()
+      await publisher.publish()
+      expect((await readSessionObservationRecord(path))?.revision).toBe(1)
+      expect(reads).toBe(3)
+    }, undefined, { readConfigObservation: async () => { reads += 1; return config } })
+  })
+
+  it('records a typed refusal and publishes no config row when the config producer fails', async () => {
+    await withPublisher(async (_engine, publisher, path) => {
+      await publisher.publish()
+      const record = await readSessionObservationRecord(path)
+      expect(record?.config).toBeUndefined()
+      expect(publisher.failures()).toMatchObject([{ agentId: 'agent-alpha', code: 'UNAVAILABLE', message: 'config unreadable' }])
+    }, undefined, {
+      readConfigObservation: async () => { throw Object.assign(new Error('config unreadable'), { code: 'UNAVAILABLE' }) },
+    })
   })
 })

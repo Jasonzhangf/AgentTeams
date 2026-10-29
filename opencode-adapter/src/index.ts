@@ -351,15 +351,23 @@ function validateOpenCodeModelTarget(target: OpenCodeModelTarget | undefined): O
   return { providerID, modelID }
 }
 
-export async function sendOpenCodeMessage(client: OpenCodeSessionClient, sessionId: string, text: string, target?: OpenCodeModelTarget): Promise<void> {
+export async function sendOpenCodeMessage(
+  client: OpenCodeSessionClient,
+  sessionId: string,
+  text: string,
+  target?: OpenCodeModelTarget,
+  retry?: OpenCodePromptRetryOptions,
+): Promise<void> {
   if (text.trim() === '') throw new Error('OpenCode message must not be empty')
   const selectedTarget = validateOpenCodeModelTarget(target)
   const body: OpenCodeSessionPromptBody = {
     parts: [{ type: 'text', text }],
     ...(selectedTarget === undefined ? {} : { model: selectedTarget }),
   }
-  const result = await client.session.prompt({ path: { id: sessionId }, body })
-  unwrapOpenCodeResponse(result, 'session.prompt', true)
+  await withPromptRetry('session.prompt', retry, async () => {
+    const result = await client.session.prompt({ path: { id: sessionId }, body })
+    unwrapOpenCodeResponse(result, 'session.prompt', true)
+  })
 }
 
 /**
@@ -382,6 +390,61 @@ function validatePromptMessageId(messageId: string | undefined): string | undefi
     throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', 'OpenCode prompt messageID must be a msg_-prefixed Session.Message.ID')
   }
   return messageId
+}
+
+export interface OpenCodePromptRetryOptions {
+  /** Total attempts including the first. Default 3 (first + 2 retries). */
+  readonly maxAttempts?: number
+  /** Delay between retries; tests inject a recorder instead of real timers. */
+  readonly sleep?: (milliseconds: number) => Promise<void>
+  /**
+   * Called once per retry, before the backoff wait. It tells the caller the attempt failed
+   * and another one is coming, so the caller can hold that attempt's transient outcome out
+   * of its public projection instead of publishing a failure it is still retrying.
+   */
+  readonly onRetry?: (attempt: { readonly failedAttempt: number; readonly nextAttempt: number; readonly delayMs: number }) => void
+}
+
+/** A `session.prompt` failure may be retried on the same provider/target only. */
+const PROMPT_RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504])
+
+/**
+ * Retryable = transient upstream/network failure on the same target. Auth rejections
+ * (401/403), a credential echo in the message, or any non-transient adapter error are
+ * terminal. This never switches provider or backup: the caller's target is unchanged.
+ */
+export function isRetryablePromptError(error: unknown): boolean {
+  if (!(error instanceof OpenCodeAdapterError)) return false
+  if (error.code === 'UNAUTHENTICATED' || error.code === 'FORBIDDEN') return false
+  if (/credential|api[-_ ]?key|authorization|bearer/i.test(error.message)) return false
+  if (error.status !== undefined) return PROMPT_RETRYABLE_STATUS.has(error.status)
+  // Network-class failure with no HTTP status.
+  return error.code === 'UPSTREAM_ERROR' || error.code === 'UNAVAILABLE'
+}
+
+async function withPromptRetry<T>(
+  operation: string,
+  options: OpenCodePromptRetryOptions | undefined,
+  task: () => Promise<T>,
+): Promise<T> {
+  const maxAttempts = options?.maxAttempts ?? 3
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+    throw new OpenCodeAdapterError(operation, 'INVALID_INPUT', 'OpenCode prompt maxAttempts must be a positive integer')
+  }
+  const sleep = options?.sleep ?? (async (milliseconds: number) => { await new Promise<void>(resolve => setTimeout(resolve, milliseconds)) })
+  let lastError: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await task()
+    } catch (error) {
+      lastError = error
+      if (!isRetryablePromptError(error) || attempt >= maxAttempts) throw error
+      const delayMs = 250 * 2 ** (attempt - 1)
+      options?.onRetry?.({ failedAttempt: attempt, nextAttempt: attempt + 1, delayMs })
+      await sleep(delayMs)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new OpenCodeAdapterError(operation, 'UNAVAILABLE', `OpenCode ${operation} failed`)
 }
 
 /**
@@ -410,6 +473,7 @@ export async function promptOpenCodeSession(
   target: OpenCodeModelTarget,
   messageId: string,
   onDispatch?: () => void,
+  retry?: OpenCodePromptRetryOptions,
 ): Promise<OpenCodePromptBinding | undefined> {
   if (text.trim() === '') throw new OpenCodeAdapterError('session.prompt', 'INVALID_INPUT', 'OpenCode message must not be empty')
   const selectedTarget = validateOpenCodeModelTarget(target)
@@ -420,16 +484,18 @@ export async function promptOpenCodeSession(
     parts: [{ type: 'text' as const, text }] as [{ type: 'text'; text: string }],
     model: selectedTarget,
   }
-  onDispatch?.()
-  const result = await client.session.prompt({ path: { id: sessionId }, body })
-  const response = unwrapOpenCodeResponse(result, 'session.prompt', true)
-  const info = asRecord(asRecord(response)?.info)
-  const assistantId = info === undefined ? undefined : stringField(info.id)
-  const boundSession = info === undefined ? undefined : stringField(info.sessionID)
-  const parentId = info === undefined ? undefined : stringField(info.parentID)
-  if (assistantId === undefined || boundSession === undefined || parentId === undefined) return undefined
-  if (boundSession !== sessionId || parentId !== validatedMessageId) return undefined
-  return { messageId: assistantId, sessionId: boundSession, parentId }
+  return await withPromptRetry('session.prompt', retry, async () => {
+    onDispatch?.()
+    const result = await client.session.prompt({ path: { id: sessionId }, body })
+    const response = unwrapOpenCodeResponse(result, 'session.prompt', true)
+    const info = asRecord(asRecord(response)?.info)
+    const assistantId = info === undefined ? undefined : stringField(info.id)
+    const boundSession = info === undefined ? undefined : stringField(info.sessionID)
+    const parentId = info === undefined ? undefined : stringField(info.parentID)
+    if (assistantId === undefined || boundSession === undefined || parentId === undefined) return undefined
+    if (boundSession !== sessionId || parentId !== validatedMessageId) return undefined
+    return { messageId: assistantId, sessionId: boundSession, parentId }
+  })
 }
 
 /**

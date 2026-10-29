@@ -663,4 +663,77 @@ describe('OpenCode Teams adapter', () => {
     expect(await pending).toMatchObject({ done: true })
     expect(forwarded).toEqual({ signal: controller.signal })
   })
+
+  it('retries a transient session.prompt failure on the same target then succeeds', async () => {
+    let attempts = 0
+    const sleeps: number[] = []
+    const client = {
+      session: {
+        prompt: async () => {
+          attempts += 1
+          if (attempts === 1) return { data: undefined, error: { message: 'busy' }, response: { status: 503 } }
+          return { data: {} }
+        },
+      },
+    }
+    await sendOpenCodeMessage(client as never, 'ses_retry', 'hello', { providerID: 'rcc-4444', modelID: 'gpt-5.5' }, {
+      maxAttempts: 3,
+      sleep: async ms => { sleeps.push(ms) },
+    })
+    expect(attempts).toBe(2)
+    expect(sleeps).toEqual([250])
+  })
+
+  it('exhausts the retry bound and keeps the last upstream error', async () => {
+    let attempts = 0
+    const client = {
+      session: {
+        prompt: async () => {
+          attempts += 1
+          return { data: undefined, error: { message: 'server error' }, response: { status: 500 } }
+        },
+      },
+    }
+    await expect(sendOpenCodeMessage(client as never, 'ses_exhaust', 'hello', { providerID: 'p', modelID: 'm' }, {
+      maxAttempts: 3,
+      sleep: async () => {},
+    })).rejects.toMatchObject({ operation: 'session.prompt', status: 500 })
+    expect(attempts).toBe(3)
+  })
+
+  it('does not retry an auth rejection (401)', async () => {
+    let attempts = 0
+    const client = {
+      session: {
+        prompt: async () => {
+          attempts += 1
+          return { data: undefined, error: { message: 'unauthorized' }, response: { status: 401 } }
+        },
+      },
+    }
+    await expect(sendOpenCodeMessage(client as never, 'ses_auth', 'hello', { providerID: 'p', modelID: 'm' }, {
+      maxAttempts: 3,
+      sleep: async () => {},
+    })).rejects.toMatchObject({ code: 'UNAUTHENTICATED', status: 401 })
+    expect(attempts).toBe(1)
+  })
+
+  it('retries promptOpenCodeSession on a 429 then returns the real binding', async () => {
+    let attempts = 0
+    const client = {
+      session: {
+        prompt: async () => {
+          attempts += 1
+          if (attempts === 1) return { data: undefined, error: { message: 'rate limited' }, response: { status: 429 } }
+          return { data: { info: { id: 'msg_asst', sessionID: 'ses_ok', parentID: 'msg_user' } } }
+        },
+      },
+    }
+    const binding = await promptOpenCodeSession(client as never, 'ses_ok', 'hello', { providerID: 'p', modelID: 'm' }, 'msg_user', undefined, {
+      maxAttempts: 3,
+      sleep: async () => {},
+    })
+    expect(binding).toEqual({ messageId: 'msg_asst', sessionId: 'ses_ok', parentId: 'msg_user' })
+    expect(attempts).toBe(2)
+  })
 })

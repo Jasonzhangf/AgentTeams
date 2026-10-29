@@ -230,4 +230,37 @@ describe('session observation store', () => {
       await expect(readSessionObservationRecord(path)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
     })
   })
+
+  it('round-trips the daemon config row and refuses one the Console projection rejects', async () => {
+    await withStore(async path => {
+      const config = {
+        agentId: 'agent-alpha',
+        acceptedRevision: 2,
+        effectiveRevision: 2,
+        applyState: 'clean' as const,
+        acceptedBinding: { primary: { providerInstanceId: 'rcc-4444', modelId: 'gpt-5.5' } },
+        providers: [{
+          id: 'rcc-4444',
+          label: 'Local RCC 4444',
+          protocol: 'openai-chat' as const,
+          apiBaseUrl: 'http://127.0.0.1:4444/v1',
+          enabled: true,
+          authKind: 'none' as const,
+          catalogState: 'ready' as const,
+          models: [{ id: 'gpt-5.5', label: 'gpt-5.5' }],
+        }],
+      }
+      const revision = applied(await writeSessionObservationRecord(path, 0, { ...SNAPSHOT, config }))
+      expect(revision).toBe(1)
+      expect((await readSessionObservationRecord(path))?.config).toEqual(config)
+      // The row is validated by the frozen Console projection, so a malformed one is refused
+      // before it is written instead of reaching a Console as a broken provider list.
+      const refused = await writeSessionObservationRecord(path, 1, {
+        ...SNAPSHOT,
+        config: { agentId: 'agent-alpha', acceptedRevision: 2, providers: 'nope' } as never,
+      })
+      expect(refused).toMatchObject({ status: 'failed', error: { code: 'INVALID_INPUT' } })
+      expect((await readSessionObservationRecord(path))?.revision).toBe(1)
+    })
+  })
 })

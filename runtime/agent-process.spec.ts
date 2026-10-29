@@ -1024,7 +1024,7 @@ function sessionEventChannel() {
   }
 }
 
-function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; listError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean; readiness?: ManagedRuntimeReadiness; useError?: RuntimeConfigError; listedSessions?: readonly { id: string; title?: string }[]; messages?: Readonly<Record<string, readonly unknown[]>> } = {}) {
+function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; promptAttempts?: readonly (OpenCodeAdapterError | 'ok')[]; onPromptAttempt?: (attempt: number) => void; listError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean; readiness?: ManagedRuntimeReadiness; useError?: RuntimeConfigError; listedSessions?: readonly { id: string; title?: string }[]; messages?: Readonly<Record<string, readonly unknown[]>> } = {}) {
   let channel = sessionEventChannel()
   let subscriptions = 0
   const prompts: { sessionId: string; text: string; messageId?: string }[] = []
@@ -1048,7 +1048,10 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
       status: async () => ({ data: {} }),
       prompt: async ({ path, body }) => {
         prompts.push({ sessionId: path.id, text: body.parts[0].text, messageId: body.messageID })
-        if (options.promptError) throw options.promptError
+        const attempt = prompts.length
+        options.onPromptAttempt?.(attempt)
+        const scripted = options.promptAttempts?.[attempt - 1] ?? options.promptError
+        if (scripted !== undefined && scripted !== 'ok') throw scripted
         if (options.holdPrompt) await new Promise<void>(resolve => { pendingPrompts.push(resolve) })
         if (options.bindPrompt) return { data: { info: { id: 'assistant-sync', sessionID: path.id, parentID: body.messageID }, parts: [] } }
         return { data: {} }
@@ -1214,11 +1217,49 @@ describe('Session host admission, cancel causality and observation', () => {
     expect(rejected.prompts).toHaveLength(1)
 
     // A failed exchange is not proof that nothing was dispatched, so it propagates and the
-    // runtime goes uncertain instead of reopening admission.
+    // runtime goes uncertain instead of reporting success. The retry is bounded and stays on
+    // the one bound target, so the three attempts share this turn's single request id.
     const upstream = sessionHarness({ promptError: new OpenCodeAdapterError('session.prompt', 'UPSTREAM_ERROR', 'boom', 503) })
     await expect(upstream.host.sendSession('s1', { text: 'hi' })).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
     expect(upstream.isUncertain()).toBe(true)
-    expect(upstream.prompts).toHaveLength(1)
+    expect(upstream.prompts).toHaveLength(3)
+    expect(new Set(upstream.prompts.map(prompt => prompt.messageId)).size).toBe(1)
+    expect(new Set(upstream.prompts.map(prompt => prompt.text))).toEqual(new Set(['hi']))
+  })
+
+  it('holds a retried turn failure out of the public projection and drops it when a later attempt succeeds', async () => {
+    const failedAttempt = () => new OpenCodeAdapterError('session.prompt', 'UPSTREAM_ERROR', 'upstream 503', 503)
+    const h = sessionHarness({
+      promptAttempts: [failedAttempt(), failedAttempt(), 'ok'],
+      bindPrompt: true,
+      onPromptAttempt: attempt => {
+        // Each failed attempt publishes its own engine failure event on the same Session.
+        h.channel.push({ type: 'message.updated', properties: { info: { id: `assistant-attempt-${attempt}`, role: 'assistant', sessionID: 's1', error: { name: 'APIError', data: { statusCode: 500 } } } } })
+      },
+    })
+    expect(await h.host.sendSession('s1', { text: 'hi' })).toMatchObject({ ok: true })
+    expect(h.prompts).toHaveLength(3)
+    // The two transient failures never reached the public projection; only the real turn did.
+    expect(h.host.sessionEvents().filter(event => event.kind === 'final' && event.state === 'failed')).toHaveLength(0)
+  })
+
+  it('publishes only the last real failure when a bounded retry exhausts and releases the turn', async () => {
+    const failedAttempt = () => new OpenCodeAdapterError('session.prompt', 'UPSTREAM_ERROR', 'upstream 500', 500)
+    const h = sessionHarness({
+      // A pinned current readiness lets the release itself be observed after the failure.
+      readiness: { state: 'current', effectiveRevision: 3, modelTarget: { providerID: 'p', modelID: 'm' }, activeOperations: 0 },
+      promptAttempts: [failedAttempt(), failedAttempt(), failedAttempt()],
+      onPromptAttempt: attempt => {
+        h.channel.push({ type: 'message.updated', properties: { info: { id: `assistant-attempt-${attempt}`, role: 'assistant', sessionID: 's1', error: { name: 'APIError', data: { statusCode: 500 } } } } })
+      },
+    })
+    await expect(h.host.sendSession('s1', { text: 'hi' })).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
+    expect(h.prompts).toHaveLength(3)
+    const failures = h.host.sessionEvents().filter(event => event.kind === 'final' && event.state === 'failed')
+    expect(failures).toHaveLength(1)
+    expect(failures[0]).toMatchObject({ messageId: 'assistant-attempt-3' })
+    // The exhausted turn is over, so a new turn is admitted instead of conflicting forever.
+    expect(await h.host.sendSession('s1', { text: 'again' })).toMatchObject({ ok: true })
   })
 
   it('releases the record when prompt validation rejects before the SDK call', async () => {

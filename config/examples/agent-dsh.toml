@@ -1,7 +1,11 @@
 # D00 example: one DSH agent daemon.
 # Start: agentteams --serve dsh --config config/examples/agent-dsh.toml
 # Explicit CLI values (--serve/--ip/--port) win over this file.
-# Placeholder credential references only; never commit a real secret.
+#
+# Real local defaults. The provider points at the local RouteCodex RCC server on
+# port 4444, which serves an OpenAI-compatible responses endpoint at
+# http://127.0.0.1:4444/v1. No credential reference is required for the local
+# unauthenticated RCC server.
 version = 4
 
 [daemon]
@@ -30,21 +34,20 @@ callbackExecutor = "controller"
 [relations]
 allowed = ["peer"]
 
-[providers.example]
+[providers.rcc-4444]
 protocol = "openai-responses"
-apiBaseUrl = "https://responses.example.test/v1"
-label = "Example responses provider"
+apiBaseUrl = "http://127.0.0.1:4444/v1"
+label = "Local RCC 4444"
 enabled = true
-credentialEnv = "EXAMPLE_RESPONSES_API_KEY"
 
 [[models]]
-provider = "example"
-id = "example-reasoning"
-label = "Example reasoning model"
+provider = "rcc-4444"
+id = "gpt-5.5"
+label = "GPT 5.5 (RCC 4444)"
 contextWindow = 200000
 reasoning = true
 streaming = true
 
 [model.primary]
-provider = "example"
-model = "example-reasoning"
+provider = "rcc-4444"
+model = "gpt-5.5"

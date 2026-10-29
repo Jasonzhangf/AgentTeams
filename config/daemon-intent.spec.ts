@@ -611,11 +611,11 @@ describe('D00 example configs', () => {
 
     const compiledAgent = compileDaemonIntent(opencode, { configDirectory: examplesDirectory })
     expect(compiledAgent.agents['reasoner-a']).toEqual({
-      primary: { providerInstanceId: 'openai', modelId: 'example-large' },
-      backup: { providerInstanceId: 'openai', modelId: 'example-small' },
+      primary: { providerInstanceId: 'rcc-4444', modelId: 'gpt-5.5' },
+      backup: { providerInstanceId: 'rcc-4444', modelId: 'kk.glm-5.3-flash' },
     })
     expect(compileDaemonIntent(dsh, { configDirectory: examplesDirectory }).agents['reasoner-b']).toEqual({
-      primary: { providerInstanceId: 'example', modelId: 'example-reasoning' },
+      primary: { providerInstanceId: 'rcc-4444', modelId: 'gpt-5.5' },
     })
     expect(compileDaemonIntent(control, { configDirectory: examplesDirectory }).agents).toEqual({})
     expect(compileDaemonIntent(registry, { configDirectory: examplesDirectory }).providers).toEqual({})
