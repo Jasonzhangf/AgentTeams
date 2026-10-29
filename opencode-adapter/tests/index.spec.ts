@@ -736,4 +736,24 @@ describe('OpenCode Teams adapter', () => {
     expect(binding).toEqual({ messageId: 'msg_asst', sessionId: 'ses_ok', parentId: 'msg_user' })
     expect(attempts).toBe(2)
   })
+
+  it('does not retry a prompt after the caller observed published output', async () => {
+    let attempts = 0
+    let outputObserved = false
+    const client = {
+      session: {
+        prompt: async () => {
+          attempts += 1
+          outputObserved = true
+          return { data: undefined, error: { message: 'busy' }, response: { status: 503 } }
+        },
+      },
+    }
+    await expect(promptOpenCodeSession(client as never, 'ses_output', 'hello', { providerID: 'p', modelID: 'm' }, 'msg_user', undefined, {
+      maxAttempts: 3,
+      sleep: async () => {},
+      shouldRetry: () => !outputObserved,
+    })).rejects.toMatchObject({ operation: 'session.prompt', status: 503 })
+    expect(attempts).toBe(1)
+  })
 })

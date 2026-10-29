@@ -403,6 +403,11 @@ export interface OpenCodePromptRetryOptions {
    * of its public projection instead of publishing a failure it is still retrying.
    */
   readonly onRetry?: (attempt: { readonly failedAttempt: number; readonly nextAttempt: number; readonly delayMs: number }) => void
+  /**
+   * The turn already produced output or an execution side effect the caller published, so
+   * repeating it would duplicate work. Read at failure time, after the attempt ran.
+   */
+  readonly shouldRetry?: () => boolean
 }
 
 /** A `session.prompt` failure may be retried on the same provider/target only. */
@@ -439,6 +444,7 @@ async function withPromptRetry<T>(
     } catch (error) {
       lastError = error
       if (!isRetryablePromptError(error) || attempt >= maxAttempts) throw error
+      if (options?.shouldRetry?.() === false) throw error
       const delayMs = 250 * 2 ** (attempt - 1)
       options?.onRetry?.({ failedAttempt: attempt, nextAttempt: attempt + 1, delayMs })
       await sleep(delayMs)

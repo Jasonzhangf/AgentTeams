@@ -165,6 +165,8 @@ interface ActivePrompt {
   reasoning: string
   textObserved: boolean
   reasoningObserved: boolean
+  /** A tool call or permission request has already reached the engine-facing stream. */
+  executionObserved: boolean
   /** Dispatches spent on this turn. The first dispatch counts as one. */
   attempts: number
 }
@@ -316,6 +318,8 @@ function structuredErrorOf(frame: AcpFrame): OpenCodeStructuredError {
 
 /** HTTP statuses a bounded retry treats as transient. */
 const RETRYABLE_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504])
+/** HTTP statuses that prove the target or credential is rejected, so a retry cannot help. */
+const AUTH_REJECTED_HTTP_STATUS = new Set([401, 403])
 /** Engine fault codes that are transient by construction. */
 const RETRYABLE_FAULT_CODES = new Set(['ENGINE_UNAVAILABLE', 'CALLBACK_UNAVAILABLE', 'RESULT_UNKNOWN'])
 /** Engine fault codes a second attempt cannot fix. */
@@ -350,7 +354,8 @@ export function isRetryablePromptFault(frame: AcpFrame): boolean {
   if (RETRYABLE_FAULT_CODES.has(code)) return true
   const detail = isRecord(frame.error.detail) ? frame.error.detail : undefined
   const statusField = typeof detail?.status === 'number' ? detail.status : Number.NaN
-  const statusInMessage = Number(message.match(/\b(?:408|429|500|502|503|504)\b/)?.[0] ?? Number.NaN)
+  const statusInMessage = Number(message.match(/\b(?:401|403|408|429|500|502|503|504)\b/)?.[0] ?? Number.NaN)
+  if (AUTH_REJECTED_HTTP_STATUS.has(statusField) || AUTH_REJECTED_HTTP_STATUS.has(statusInMessage)) return false
   if (RETRYABLE_HTTP_STATUS.has(statusField) || RETRYABLE_HTTP_STATUS.has(statusInMessage)) return true
   if (rawCode === -32603) return true
   return /timeout|timed out|ECONNRESET|ECONNREFUSED|EPIPE|socket hang up|fetch failed|network|overloaded|temporarily unavailable|rate limit/i.test(message)
@@ -954,6 +959,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
           reasoning: '',
           textObserved: false,
           reasoningObserved: false,
+          executionObserved: false,
           attempts: 1,
         }
         channel.activePrompts.set(sessionId, prompt)
@@ -1302,7 +1308,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       if (prompt !== undefined) {
         // Retry only a turn that produced nothing the Console already saw: output means the
         // attempt really ran, so repeating it would duplicate or contradict published parts.
-        if (Object.hasOwn(frame, 'error') && !prompt.textObserved && !prompt.reasoningObserved
+        if (Object.hasOwn(frame, 'error') && !prompt.textObserved && !prompt.reasoningObserved && !prompt.executionObserved
           && prompt.attempts < promptRetry.maxAttempts && isRetryablePromptFault(frame)) {
           retryPrompt(channel, pending, prompt)
           return
@@ -1386,6 +1392,8 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       return
     }
     if (method === 'session/request_permission' && sessionId !== undefined) {
+      const activePrompt = target.activePrompts.get(sessionId)
+      if (activePrompt !== undefined) activePrompt.executionObserved = true
       target.events.push({
         eventId: `permission:${outwardId}`,
         agentId: localAgentId,
@@ -1442,6 +1450,7 @@ export function createAcpHost(input: CreateAcpHostInput): AcpHost {
       return
     }
     if (sessionUpdate !== 'tool_call' && sessionUpdate !== 'tool_call_update') return
+    prompt.executionObserved = true
     const callId = stringField(update.toolCallId)
     const previous = callId === undefined
       ? undefined

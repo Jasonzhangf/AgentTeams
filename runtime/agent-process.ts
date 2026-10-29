@@ -131,6 +131,11 @@ interface SessionOperationRecord {
   readonly promptMatchIds?: readonly string[]
   readonly abortOperationId?: string
   readonly acceptedAt: string
+  /**
+   * Set once the engine stream publishes content or an execution side effect for this turn.
+   * A retry after that point would duplicate published output, so the retry is refused.
+   */
+  outputObserved?: boolean
 }
 
 /** Owner-scoped ports the Session host consumes; never a second config or lifecycle owner. */
@@ -372,6 +377,10 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
         // A held attempt must not bind or release the turn either: it is not that turn's
         // outcome, so correlation only sees the events the projection really publishes.
         if (holdFailure(event)) continue
+        if (event.kind === 'part' || event.kind === 'tool' || event.kind === 'permission') {
+          const active = operations.get(event.sessionId)
+          if (active !== undefined) active.outputObserved = true
+        }
         buffer(event)
         correlate(event, projected.parentMessageId)
       }
@@ -545,6 +554,7 @@ export function createSessionHost(deps: SessionHostDeps): SessionHost {
         outcome = await useAdapter(
           async (client, handle, markDispatched) => await promptOpenCodeSession(client, sessionId, decoded.text, handle.modelTarget, record.requestMessageId, markDispatched, {
             onRetry: () => { retryingSessions.add(sessionId) },
+            shouldRetry: () => record.outputObserved !== true,
           }),
           handle => effectiveHandleIdentity(handle) === record.handleFingerprint
             ? undefined

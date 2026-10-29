@@ -6,7 +6,7 @@ import type { AcpDuplex, EngineHandle } from '../packages/shared/src/engine.ts'
 import { assertAcpAllowed, extractAcpCapabilities, resolveAcpPolicy } from '../config/acp-policy.ts'
 import type { AcpHistoryPort } from './acp-history.ts'
 import type { AcpPolicyAssert } from './acp-host.ts'
-import { adjudicatePermissionReply, createAcpHost, projectPermissionOptions } from './acp-host.ts'
+import { adjudicatePermissionReply, createAcpHost, isRetryablePromptFault, projectPermissionOptions } from './acp-host.ts'
 
 type ClosedResult = { readonly kind: 'eof' } | { readonly kind: 'failed'; readonly error: AcpFault }
 
@@ -1302,6 +1302,41 @@ describe('createAcpHost', () => {
     expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(4)
   })
 
+  it('does not retry a prompt after a tool call was already published', async () => {
+    const fixture = makeFixture(makePolicy(), 16, { maxAttempts: 3, sleep: async () => {} })
+    await open(fixture, ref1)
+    await initialize(fixture, ref1, 1)
+    const child = await newSession(fixture, ref1, 1)
+    fixture.duplex.push({ jsonrpc: '2.0', id: child, result: { sessionId: 'session-1' } })
+    await flush()
+    await readFrames(fixture, ref1)
+
+    await fixture.host.receive({
+      ...ref1,
+      frame: { jsonrpc: '2.0', id: 2, method: 'session/prompt', params: { sessionId: 'session-1', prompt: [{ type: 'text', text: 'hello' }] } },
+    })
+    const promptChild = fixture.duplex.sent[fixture.duplex.sent.length - 1].id
+    fixture.duplex.push({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: { sessionUpdate: 'tool_call', toolCallId: 'call-1', title: 'read', rawInput: { path: '/tmp/x' }, status: 'pending' },
+      },
+    })
+    await flush()
+    fixture.duplex.push({ jsonrpc: '2.0', id: promptChild, error: { code: -32603, message: 'Internal error' } })
+    await flush()
+    // A published tool call is an execution side effect: repeating the turn could run it twice.
+    expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(1)
+    const terminal = (await readFrames(fixture, ref1)).filter(frame => frame.id === 2)
+    expect(terminal).toHaveLength(1)
+    expect(terminal[0].error).toBeDefined()
+    const events = fixture.host.sessionEvents?.() ?? []
+    expect(events.some(event => event.kind === 'tool' && event.callId === 'call-1')).toBe(true)
+    expect(events.filter(event => event.kind === 'final' && event.state === 'failed')).toHaveLength(1)
+  })
+
   it('does not dispatch a retry into a channel that closed during the backoff', async () => {
     let releaseSleep!: () => void
     const sleepGate = new Promise<void>(resolve => { releaseSleep = resolve })
@@ -1327,6 +1362,18 @@ describe('createAcpHost', () => {
     await flush()
     expect(fixture.duplex.sent.filter(frame => frame.method === 'session/prompt')).toHaveLength(1)
     expect(await readFrames(fixture, ref1)).toHaveLength(0)
+  })
+})
+
+describe('prompt retry fault classification', () => {
+  it('refuses a retry for a -32603 wrapped 401 or 403', () => {
+    expect(isRetryablePromptFault({ jsonrpc: '2.0', id: 1, error: { code: -32603, message: 'Internal error', detail: { status: 401 } } })).toBe(false)
+    expect(isRetryablePromptFault({ jsonrpc: '2.0', id: 1, error: { code: -32603, message: 'HTTP 403 Forbidden' } })).toBe(false)
+  })
+
+  it('keeps transient 429 and 503 failures retryable', () => {
+    expect(isRetryablePromptFault({ jsonrpc: '2.0', id: 1, error: { code: -32603, message: 'Internal error', detail: { status: 429 } } })).toBe(true)
+    expect(isRetryablePromptFault({ jsonrpc: '2.0', id: 1, error: { code: -32603, message: 'HTTP 503 Service Unavailable' } })).toBe(true)
   })
 })
 

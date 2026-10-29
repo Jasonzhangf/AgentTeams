@@ -1024,7 +1024,7 @@ function sessionEventChannel() {
   }
 }
 
-function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; promptAttempts?: readonly (OpenCodeAdapterError | 'ok')[]; onPromptAttempt?: (attempt: number) => void; listError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean; readiness?: ManagedRuntimeReadiness; useError?: RuntimeConfigError; listedSessions?: readonly { id: string; title?: string }[]; messages?: Readonly<Record<string, readonly unknown[]>> } = {}) {
+function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean | undefined; abortResponse?: 'absent'; getError?: OpenCodeAdapterError; promptError?: OpenCodeAdapterError; promptAttempts?: readonly (OpenCodeAdapterError | 'ok')[]; onPromptAttempt?: (attempt: number) => void; beforePromptSettles?: (attempt: number) => Promise<void>; listError?: OpenCodeAdapterError; bindPrompt?: boolean; abortHold?: boolean; readiness?: ManagedRuntimeReadiness; useError?: RuntimeConfigError; listedSessions?: readonly { id: string; title?: string }[]; messages?: Readonly<Record<string, readonly unknown[]>> } = {}) {
   let channel = sessionEventChannel()
   let subscriptions = 0
   const prompts: { sessionId: string; text: string; messageId?: string }[] = []
@@ -1050,6 +1050,7 @@ function sessionHarness(options: { holdPrompt?: boolean; abortAccepted?: boolean
         prompts.push({ sessionId: path.id, text: body.parts[0].text, messageId: body.messageID })
         const attempt = prompts.length
         options.onPromptAttempt?.(attempt)
+        if (options.beforePromptSettles !== undefined) await options.beforePromptSettles(attempt)
         const scripted = options.promptAttempts?.[attempt - 1] ?? options.promptError
         if (scripted !== undefined && scripted !== 'ok') throw scripted
         if (options.holdPrompt) await new Promise<void>(resolve => { pendingPrompts.push(resolve) })
@@ -1225,6 +1226,24 @@ describe('Session host admission, cancel causality and observation', () => {
     expect(upstream.prompts).toHaveLength(3)
     expect(new Set(upstream.prompts.map(prompt => prompt.messageId)).size).toBe(1)
     expect(new Set(upstream.prompts.map(prompt => prompt.text))).toEqual(new Set(['hi']))
+  })
+
+  it('does not retry a turn after the engine stream published output', async () => {
+    let h!: ReturnType<typeof sessionHarness>
+    h = sessionHarness({
+      promptAttempts: [new OpenCodeAdapterError('session.prompt', 'UPSTREAM_ERROR', 'upstream 503', 503)],
+      beforePromptSettles: async attempt => {
+        h.channel.push({
+          type: 'message.part.updated',
+          properties: { part: { sessionID: 's1', messageID: 'assistant-1', id: `part-${attempt}`, type: 'text', text: 'partial' } },
+        })
+        await tick()
+        await tick()
+      },
+    })
+    await expect(h.host.sendSession('s1', { text: 'hi' })).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
+    expect(h.prompts).toHaveLength(1)
+    expect(h.host.sessionEvents().some(event => event.kind === 'part' && (event as { text?: string }).text === 'partial')).toBe(true)
   })
 
   it('holds a retried turn failure out of the public projection and drops it when a later attempt succeeds', async () => {
