@@ -4634,7 +4634,7 @@ const rccServerId = 'routecodex_v3_4444'
 // The RCC API token this case persists and sends, taken from the then-current
 // catalog (`GET <baseUrl>/models`). Teams persists and sends exactly this token:
 // no `/` <-> `.` rewrite, no guessing.
-const rccSelectedModelToken = 'goaichat.qwen3.8-max'
+const rccSelectedModelToken = 'gpt-5.5'
 const bb10DispatchTimeoutMs = 120_000
 const bb10VisibleTaskPrompt = '请用一句简短中文解释什么是回声。不要调用工具，也不要读写文件。'
 const bb10BoundarySyntheticCredentialEnv = 'AGENTTEAMS_BB10_BOUNDARY_SYNTHETIC_KEY'

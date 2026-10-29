@@ -733,7 +733,7 @@ describe('BB10 isolated config and launch environment', () => {
     }, '/usr/bin/rg')
     expect(text).toContain('credentialEnv = "TEAMS_BB10_CANONICAL_API_KEY"')
     expect(text).toContain('provider = "rcc-4444"')
-    expect(text).toContain('model = "goaichat.qwen3.8-max"')
+    expect(text).toContain('model = "gpt-5.5"')
     expect(text).toContain('provider = "goaichat"')
     expect(text).toContain('id = "sample-max"')
     expect(text).toContain('apiBaseUrl = "https://example.invalid/v1"')
@@ -1086,7 +1086,7 @@ backup = { provider = "${sessionBackupProviderId}", model = "${sessionBackupMode
     const root = temporaryRoot()
     const agentId = 'bb-provider'
     const canonical = { providerInstanceId: 'goaichat', modelId: 'glm-5.3' }
-    const rcc = { providerInstanceId: 'rcc-4444', modelId: 'goaichat.qwen3.8-max' }
+    const rcc = { providerInstanceId: 'rcc-4444', modelId: 'gpt-5.5' }
     const store = createRuntimeConfigStore(createJsonFileConfigPersistence(join(root, 'config.json')))
     const binding = createConsoleConfigBinding({
       agentId,
