@@ -23,3 +23,15 @@ tree before integration.
 
 Raw logs: `focused.log`, `real-1.log`, `real-2.log`, `real-3.log`,
 `full-test.log`.
+
+## BB13 and lifecycle admission
+
+`node scripts/blackbox-user-mvp.mjs --case BB13 --receipt bb13.json` passed
+with `exit_code 0` and `BB13 status passed`.
+
+`pnpm lifecycle:admission` first run exited 1. The failure was one
+temperature-sensitive `server/group-loop.spec.ts` case:
+`registry did not report running within 10000ms` (startup timeout on a busy
+single-flight host). All 1676 other tests passed. This is a real infra timing
+window, not a candidate defect. The second run therefore uses a quieter
+single-flight window before I report an admission result.
