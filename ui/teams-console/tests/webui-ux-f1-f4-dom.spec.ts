@@ -110,27 +110,21 @@ function baseState(overrides) {
   }, overrides)
 }
 
-// ---- F1 + F4: Settings provider inputs, acceptedBinding, applyState, and empty-config degrade ----
-let settingsState = baseState({ drawer: { kind: 'settings', agentId: 'planner' }, drawerStack: [{ kind: 'settings', agentId: 'planner' }], providerFormOpen: true })
+// ---- F1 + F4: Settings read-only projection, acceptedBinding, applyState, and empty-config degrade ----
 const rootSettings = document.getElementById('settings')
 const settingsController = {
-  getSnapshot: () => settingsState,
-  setProviderDraft(key, value) { settingsState = { ...settingsState, providerDraft: { ...settingsState.providerDraft, [key]: value } } },
-  setProviderAuthKind() {}, beginAddProvider() {}, editProvider() {}, refreshModels: async () => true,
-  bindModel: async () => true, applyConfig: async () => true, putProvider: async () => true, closeProviderForm() {}, closeDrawer() {}, toggleDrawerExpanded() {},
+  getSnapshot: () => baseState({ drawer: { kind: 'settings', agentId: 'planner' }, drawerStack: [{ kind: 'settings', agentId: 'planner' }] }),
+  closeDrawer() {}, toggleDrawerExpanded() {},
 }
 renderConsole(rootSettings, settingsController)
-const providerField = rootSettings.querySelector('[data-focus-key="provider:label"]')
-providerField.focus()
-providerField.value = 'Draft provider label'
-providerField.dispatchEvent(new Event('input', { bubbles: true }))
-providerField.setSelectionRange(3, 8)
-renderConsole(rootSettings, settingsController)
-const providerAfter = rootSettings.querySelector('[data-focus-key="provider:label"]')
-document.body.dataset.providerValueKept = String(providerAfter.value === 'Draft provider label')
-document.body.dataset.providerFocusedKept = String(document.activeElement === providerAfter)
-document.body.dataset.providerSelKept = String(providerAfter.selectionStart === 3 && providerAfter.selectionEnd === 8)
-document.body.dataset.providerModelVisible = String([...rootSettings.querySelectorAll('article.teams-provider-card select.teams-select option')].some(option => option.value === 'gpt-5.5'))
+document.body.dataset.configReadonly = String(rootSettings.querySelector('[data-config-readonly="true"]') !== null)
+document.body.dataset.noWriteForm = String(rootSettings.querySelector('.teams-config-form') === null
+  && rootSettings.querySelector('.teams-model-row') === null
+  && rootSettings.querySelector('.teams-provider-actions') === null
+  && rootSettings.querySelectorAll('.teams-drawer-body button').length === 0)
+document.body.dataset.providerReadonly = String(rootSettings.querySelectorAll('article.teams-provider-card').length > 0
+  && rootSettings.querySelector('.teams-provider-list') !== null)
+document.body.dataset.providerModelVisible = String([...rootSettings.querySelectorAll('[data-provider-model]')].some(option => option.getAttribute('data-provider-model') === 'gpt-5.5'))
 const bindingRow = rootSettings.querySelector('[data-config-binding="true"]')
 document.body.dataset.bindingPrimary = String((bindingRow?.textContent ?? '').includes('rcc-4444/gpt-5.5'))
 document.body.dataset.bindingBackup = String((bindingRow?.textContent ?? '').includes('kk.glm-5.3-flash'))
@@ -203,7 +197,7 @@ document.body.dataset.confirmKeepsMarker = String(confirmPanel?.querySelector('[
     writeFileSync(file, page)
     const output = runChrome(file)
     for (const flag of [
-      'provider-value-kept', 'provider-focused-kept', 'provider-sel-kept', 'provider-model-visible',
+      'config-readonly', 'no-write-form', 'provider-readonly', 'provider-model-visible',
       'binding-primary', 'binding-backup', 'apply-uncertain', 'config-degraded', 'row-missing-wording',
       'relation-card', 'draft-remove-button',
       'pending-row-visible', 'advanced-collapsed', 'advanced-holds-report', 'report-marker-kept',
