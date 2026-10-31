@@ -1,0 +1,326 @@
+{
+  "unit": "phase1-acceptance-20261031-browser",
+  "produced_at": "2026-10-31T09:09:31.814Z",
+  "head_commit": "6d7dcf9d19bba415aa566b910cc4ec472ae2bf44",
+  "source_root": "/Volumes/Intel/playground/agentteams/phase1-acceptance-20261031",
+  "evidence_directory": "/tmp/at-p1-work/browser",
+  "artifact": {
+    "mode": "final",
+    "release_eligible": false,
+    "content_sha256": "0ae9cd4273fa2ce5ec423b4ccabf6efe9a48c8bbdb528f10995a5be01ec0197d",
+    "files": 317
+  },
+  "installed": {
+    "prefix": "/tmp/at-p1-browser/c5-V8cQkr/prefix",
+    "root": "/private/tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams",
+    "cli": "/private/tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams/cli/agentteams.mjs"
+  },
+  "daemons": {
+    "registry": 17583,
+    "agent": 17610,
+    "agent_engine_children": [
+      17614
+    ],
+    "control": 18086,
+    "chrome": 18433
+  },
+  "measurements": {
+    "daemonCommands": {
+      "registry": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /private/tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams/generated/runtime-lib/runtime/registry-process.js --config /tmp/at-p1-browser/c5-V8cQkr/registry.toml --launcher-start-token 47bb68cd-2d36-4925-b3fb-34406bc38547",
+      "agent": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams/cli/agentteams.mjs --serve opencode --ip 127.0.0.1 --port 63559 --config /tmp/at-p1-browser/c5-V8cQkr/agent.toml",
+      "control": "/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node /private/tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js --config /tmp/at-p1-browser/c5-V8cQkr/control.toml --start-token a1cdd105-6a9a-425a-9e21-885dcf1ba50f"
+    },
+    "controlEntryPath": "/private/tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js",
+    "servedAssets": [
+      {
+        "path": "/console-entry.js",
+        "relative": "console-host/static/console-entry.js",
+        "sha256": "647b8d8f6335e3746e1fd7fbddfab3e04e6db016f3240ef02787d1630a679435",
+        "bytes": 458
+      },
+      {
+        "path": "/ui/browser.js",
+        "relative": "ui/teams-console/browser.js",
+        "sha256": "249feb99c704cb5cb56ebdeb5f4617bf6f49efba1a4d5d3e879a2b18716f9a7c",
+        "bytes": 353
+      }
+    ],
+    "documentSha256": "2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21",
+    "pageProjection": {
+      "version": 1,
+      "agents": [
+        "reasoner-a"
+      ],
+      "bytes": 617
+    },
+    "domMarkers": {
+      "pages": [
+        "discovery",
+        "networking",
+        "interaction",
+        "history",
+        "groups"
+      ],
+      "view": "discovery",
+      "bands": [
+        "registration",
+        "connection",
+        "engine",
+        "request"
+      ],
+      "bandStates": [
+        "online",
+        "disconnected",
+        "not-applicable",
+        "idle"
+      ],
+      "observation": "live",
+      "cancel": null,
+      "permissionOptions": [],
+      "connectionRows": [
+        "reasoner-a"
+      ],
+      "agentRows": [
+        "reasoner-a"
+      ]
+    },
+    "sse": {
+      "seq": 1,
+      "agents": [
+        "reasoner-a"
+      ]
+    },
+    "history": {
+      "count": "0",
+      "records": 0,
+      "prevEnabled": "false"
+    },
+    "groups": {
+      "access": "ready",
+      "phase": "idle",
+      "hasErrorPanel": false,
+      "errorCode": null,
+      "hasLiveWorkspace": false,
+      "isEmpty": false,
+      "isLoading": true,
+      "text": "正在加载群组… 当前以 reasoner-a 正在加载群组…",
+      "availableRender": true,
+      "unavailableRender": false
+    },
+    "settingsDrawer": {
+      "readonly": true,
+      "buttons": 0,
+      "noForm": true,
+      "noModelRow": true,
+      "noProviderActions": true,
+      "emptyUnavailable": false,
+      "providerCards": 0,
+      "text": "服务配置 选择智能体 选择智能体 reasoner-a 此视图只读。请在配置文件中管理服务与模型绑定。 选择智能体"
+    },
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+      "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+      "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+      "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    ],
+    "failedRequests": [
+      {
+        "path": "/favicon.ico",
+        "status": 404
+      },
+      {
+        "path": "/api/v1/group-request",
+        "status": 400
+      },
+      {
+        "path": "/api/v1/group-request",
+        "status": 400
+      },
+      {
+        "path": "/api/v1/group-request",
+        "status": 400
+      },
+      {
+        "path": "/api/v1/group-request",
+        "status": 400
+      }
+    ],
+    "groupRequests": [
+      {
+        "path": "/api/v1/group-request",
+        "status": 400
+      },
+      {
+        "path": "/api/v1/group-request",
+        "status": 400
+      },
+      {
+        "path": "/api/v1/group-request",
+        "status": 400
+      },
+      {
+        "path": "/api/v1/group-request",
+        "status": 400
+      }
+    ],
+    "desktopScreenshot": {
+      "path": "/tmp/at-p1-work/browser/desktop-1440x960.png",
+      "bytes": 43578,
+      "width": 1440,
+      "height": 960,
+      "viewport": {
+        "width": 1440,
+        "height": 960,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "layout": {
+        "innerWidth": 1440,
+        "innerHeight": 960,
+        "scrollWidth": 1440,
+        "overflow": 0,
+        "pageView": "discovery",
+        "pageNames": [
+          "discovery",
+          "networking",
+          "interaction",
+          "history",
+          "groups"
+        ],
+        "agentRows": [
+          "reasoner-a"
+        ],
+        "agentVisible": true,
+        "headerVisible": true
+      }
+    },
+    "mobileScreenshot": {
+      "path": "/tmp/at-p1-work/browser/mobile-390x844.png",
+      "bytes": 72218,
+      "width": 780,
+      "height": 1688,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 2,
+        "mobile": true
+      },
+      "layout": {
+        "innerWidth": 390,
+        "innerHeight": 844,
+        "scrollWidth": 390,
+        "overflow": 0,
+        "pageView": "discovery",
+        "pageNames": [
+          "discovery",
+          "networking",
+          "interaction",
+          "history",
+          "groups"
+        ],
+        "agentRows": [
+          "reasoner-a"
+        ],
+        "agentVisible": true,
+        "headerVisible": true
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "installed artifact — staged package reused",
+      "detail": "staged mode=final release_eligible=false content_sha256=0ae9cd4273fa2ce5ec423b4ccabf6efe9a48c8bbdb528f10995a5be01ec0197d files=317 head=6d7dcf9d19bba415aa566b910cc4ec472ae2bf44"
+    },
+    {
+      "name": "installed artifact — isolated install",
+      "detail": "npm pack agentteams-0.2.0-internal.1.tgz (1706846 bytes) + npm install --prefix prefix; installed root=/private/tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams cli=/private/tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams/cli/agentteams.mjs"
+    },
+    {
+      "name": "installed artifact — carries the compiled runtime and the UI assets",
+      "detail": "present in the installed package: cli/agentteams.mjs, generated/runtime-lib/runtime/control-process.js, generated/runtime-lib/runtime/acp-serve.js, console-host/static/console.html, console-host/static/console-entry.js, ui/teams-console/browser.js"
+    },
+    {
+      "name": "installed daemons — registry, agent, control all from the installed CLI",
+      "detail": "registry pid=17583 (127.0.0.1:63557); agent pid=17610 (127.0.0.1:63559, engine children=1); control pid=18086 (127.0.0.1:63558); all launched from /private/tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams/cli/agentteams.mjs"
+    },
+    {
+      "name": "installed provenance — the running daemons are the installed copy",
+      "detail": "every Teams daemon command line was inspected and resolves inside the install: registry pid=17583, agent pid=17610, control pid=18086; the control daemon's own state entryPath=/private/tmp/at-p1-browser/c5-V8cQkr/prefix/node_modules/agentteams/generated/runtime-lib/runtime/control-process.js; none of those three command lines names the source tree (Chrome is excluded: it is not part of the installed package)"
+    },
+    {
+      "name": "origin challenge",
+      "detail": "the installed origin answered an anonymous GET / with 401 challenge=\"Basic realm=\"AgentTeams\", charset=\"UTF-8\"\""
+    },
+    {
+      "name": "served asset provenance — the installed files are what the origin served",
+      "detail": "document sha256=2b9ebd60aab3baf1e0f93ce910db30e872884a1f0c88bc8f8962861c61820e21; /console-entry.js=647b8d8f6335e3746e1fd7fbddfab3e04e6db016f3240ef02787d1630a679435 (458 bytes) == installed console-host/static/console-entry.js; /ui/browser.js=249feb99c704cb5cb56ebdeb5f4617bf6f49efba1a4d5d3e879a2b18716f9a7c (353 bytes) == installed ui/teams-console/browser.js"
+    },
+    {
+      "name": "chrome launch",
+      "detail": "real Chrome pid=18433 --headless=new own --user-data-dir, devtools=ws://127.0.0.1:63603/devtools/browser/29243753-e1fd-4838-9f4f-e32ce5d278ef"
+    },
+    {
+      "name": "page load",
+      "detail": "the installed origin loaded in real Chrome: http://127.0.0.1:63558/ title=\"AgentTeams Console\" readyState=complete Document=200 text/html"
+    },
+    {
+      "name": "page module graph",
+      "detail": "the page received /console-entry.js (200) and 25 /ui/ modules, all 200; all 25 byte-match the installed package"
+    },
+    {
+      "name": "page fetch",
+      "detail": "the page's own same-origin fetch('/api/v1/projection') -> 200 application/json, 617 bytes; version=1 agents=[\"reasoner-a\"]; the same registered agent set and the same frozen empty interaction arrays as an independent read (whole-document byte equality is not claimed for a live directory)"
+    },
+    {
+      "name": "DOM markers",
+      "detail": "live DOM of the installed entry: pages=discovery,networking,interaction,history,groups view=discovery bands=registration,connection,engine,request states=online,disconnected,not-applicable,idle observation=live; data-team-cancel and data-permission-option are ABSENT because this control daemon binds no Session owner (the existing D06/D08 gap), and their absence is not claimed as evidence"
+    },
+    {
+      "name": "live page subscription",
+      "detail": "the installed entry opened its own /api/v1/events (HTTP 200) and started its observation controller (data-team-observation=live)"
+    },
+    {
+      "name": "real agent row",
+      "detail": "the installed WebUI rendered the real registered agent from the live directory: data-agent-id=reasoner-a"
+    },
+    {
+      "name": "SSE frame",
+      "detail": "a driver-owned EventSource on the installed origin received a real snapshot: seq=1 agents=[\"reasoner-a\"]"
+    },
+    {
+      "name": "five pages",
+      "detail": "the live page switched through all five frozen views in real Chrome: discovery -> networking -> interaction -> history -> groups; the history view rendered data-history-count=0 with 0 record row(s); the groups view rendered access=ready phase=idle as an explicit loading shell (no live workspace), with NO live group workspace claim"
+    },
+    {
+      "name": "settings read-only surface",
+      "detail": "the installed settings drawer carries data-config-readonly=true, 0 body button(s), and no .teams-config-form / .teams-model-row / .teams-provider-actions; provider cards projected=0; config-unavailable empty marker=false"
+    },
+    {
+      "name": "page runtime errors",
+      "detail": "0 uncaught page exceptions across the whole installed-browser session (262 CDP events); 5 generic console error(s) map only to the expected /favicon.ico 404 and 4 /api/v1/group-request 400(s) from the groups view (control composes no group endpoint; live group workspace NOT claimed): [\"Failed to load resource: the server responded with a status of 404 (Not Found)\",\"Failed to load resource: the server responded with a status of 400 (Bad Request)\",\"Failed to load resource: the server responded with a status of 400 (Bad Request)\",\"Failed to load resource: the server responded with a status of 400 (Bad Request)\",\"Failed to load resource: the server responded with a status of 400 (Bad Request)\"]"
+    },
+    {
+      "name": "desktop 1440x960",
+      "detail": "real PNG 1440x960, 43578 bytes; innerWidth=1440 innerHeight=960 overflow=0; pages=discovery,networking,interaction,history,groups agent=reasoner-a visible; desktop-1440x960.png"
+    },
+    {
+      "name": "mobile 390x844",
+      "detail": "real PNG 780x1688, 72218 bytes; innerWidth=390 innerHeight=844 overflow=0; pages=discovery,networking,interaction,history,groups agent=reasoner-a visible; viewport emulation only (not cellular); mobile-390x844.png"
+    }
+  ],
+  "cleanup": {
+    "owned": [
+      17583,
+      17610,
+      17614,
+      18086,
+      18433
+    ],
+    "stillAlive": [],
+    "strays": 0,
+    "chromeStrays": 0
+  },
+  "gaps": [],
+  "result": "PASS"
+}

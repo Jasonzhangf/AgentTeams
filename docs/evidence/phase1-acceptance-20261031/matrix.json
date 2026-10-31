@@ -1,0 +1,463 @@
+{
+  "schema_version": 1,
+  "unit": "phase1-acceptance-20261031",
+  "generated_at": "2026-10-31T09:15:00Z",
+  "identity": {
+    "origin_main": "6d7dcf9d19bba415aa566b910cc4ec472ae2bf44",
+    "head": "6d7dcf9d19bba415aa566b910cc4ec472ae2bf44",
+    "tree": "f22bf13a2da37a4f04add2a97460794bc18fe216",
+    "branch": "codex/phase1-acceptance-20261031",
+    "worktree": "/Volumes/Intel/playground/agentteams/phase1-acceptance-20261031",
+    "run_date": "2026-10-31",
+    "timezone": "America/Los_Angeles",
+    "merge_parents": [
+      "b7236b2a4dad0308e2769011d71effc0c0bad543",
+      "0bb9c97fcd5a20e1a4d807234f1f0d240efabf2f"
+    ]
+  },
+  "bugs": [
+    "c5e5d4f",
+    "8ea5f7c",
+    "3c437d7"
+  ],
+  "dimensions": [
+    {
+      "id": 1,
+      "name": "Source / test / review / merge",
+      "entrypoint_command": "pnpm install --frozen-lockfile && pnpm typecheck && pnpm test && pnpm build:governance",
+      "verdict": "PASS (source, test, build, merge); no independent overall review record for the exact merge commit",
+      "first_missing_or_failing_node": "none for source, test, build or merge; an independent overall review record for the exact 6d7dcf9 merge commit was not found in the accessible worker-run evidence",
+      "raw_error": "none",
+      "evidence_path": [
+        "docs/evidence/phase1-acceptance-20261031/source/install.log",
+        "docs/evidence/phase1-acceptance-20261031/source/typecheck.log",
+        "docs/evidence/phase1-acceptance-20261031/source/pnpm-test.log",
+        "docs/evidence/phase1-acceptance-20261031/source/build-governance.log",
+        "docs/evidence/phase1-acceptance-20261031/source/package-receipt.json",
+        "docs/evidence/phase1-acceptance-20261031/source/git-state.txt",
+        "docs/evidence/phase1-acceptance-20261031/source/remote-head.txt"
+      ],
+      "prerequisite_owner": "local Node 22 and pnpm toolchain; integration and delivery owner (Jenny) with the author",
+      "next_executable_task": "Record this matrix against c5e5d4f. If an exact-merge independent review is required, run one overall review on 6d7dcf9; otherwise no code action is needed.",
+      "facts": {
+        "install_exit": 0,
+        "typecheck_exit": 0,
+        "test_files_passed": 162,
+        "tests_passed": 1714,
+        "test_exit": 0,
+        "build_governance_exit": 0,
+        "staged_package": {
+          "mode": "final",
+          "release_eligible": false,
+          "files": 317,
+          "content_sha256": "0ae9cd4273fa2ce5ec423b4ccabf6efe9a48c8bbdb528f10995a5be01ec0197d",
+          "head_commit": "6d7dcf9d19bba415aa566b910cc4ec472ae2bf44",
+          "tree_hash": "f22bf13a2da37a4f04add2a97460794bc18fe216",
+          "source_state": "committed"
+        },
+        "origin_main_matches_head": true,
+        "merge_commit_parents": [
+          "b7236b2a4dad0308e2769011d71effc0c0bad543",
+          "0bb9c97fcd5a20e1a4d807234f1f0d240efabf2f"
+        ]
+      },
+      "boundary": "The same-tree installed black box (10/10) and the full 1714-test run cover the read-only config surface. This matrix does not claim an independent review PASS for the 6d7dcf9 merge commit."
+    },
+    {
+      "id": 2,
+      "name": "Installed artifact and local Relay/Agent start/restart",
+      "entrypoint_command": "node scripts/installed-runtime-smoke.mjs --pack-root generated/modules/teams-source/lib --receipt-path docs/evidence/phase1-acceptance-20261031/installed/installed-runtime-smoke.receipt.json",
+      "verdict": "PASS",
+      "first_missing_or_failing_node": "none",
+      "raw_error": "none",
+      "evidence_path": [
+        "docs/evidence/phase1-acceptance-20261031/installed/installed-runtime-smoke.receipt.json",
+        "docs/evidence/phase1-acceptance-20261031/installed/installed-runtime-smoke.log",
+        "docs/evidence/phase1-acceptance-20261031/source/package-receipt.json"
+      ],
+      "prerequisite_owner": "installed npm tarball path and local host; U1 package/lifecycle owner",
+      "next_executable_task": "Reuse this receipt for release admission while the candidate is unchanged. No action for acceptance.",
+      "facts": {
+        "lifecycle_status": "passed",
+        "start_generation": 1,
+        "start_launcher_pid": 34834,
+        "start_processes": {
+          "relay": 34835,
+          "installed-provider": 34861,
+          "installed-receiver": 34949
+        },
+        "stop": "state=stopped generation=1",
+        "restart_generation": 2,
+        "restart_launcher_pid": 36898,
+        "restart_processes": {
+          "relay": 36901,
+          "installed-provider": 36902,
+          "installed-receiver": 36932
+        },
+        "console_entrypoints": {
+          "unauthorized": 401,
+          "page": 200,
+          "consoleEntry": 200,
+          "browser": 200,
+          "icon": 200,
+          "crossSite": 401
+        }
+      },
+      "boundary": "This is an isolated installed copy with loopback listeners. It is not an OS-managed or public deployment, and it does not prove public Relay or NAT."
+    },
+    {
+      "id": 3,
+      "name": "Desktop 1440x960 real Chrome and WebUI user journey",
+      "entrypoint_command": "TMPDIR=/tmp/at-p1-browser C5E5_SOURCE_ROOT=/Volumes/Intel/playground/agentteams/phase1-acceptance-20261031 C5E5_BROWSER_EVIDENCE_DIR=<evidence>/browser CHROME_BIN='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' node browser/browser-acceptance.mjs",
+      "verdict": "PASS for desktop layout, five-view switching, SSE and settings read-only; full journey reused from b7236b2 with a tree boundary",
+      "first_missing_or_failing_node": "none for the 6d7dcf9 desktop DOM, five views, SSE and settings read-only checks; an exact-tree replay of the full WebUI journey was not performed, and the groups view reached only a loading shell against a control daemon with no group endpoint",
+      "raw_error": "none; the groups view produced expected /api/v1/group-request 400 responses because the control daemon composes no group endpoint",
+      "evidence_path": [
+        "docs/evidence/phase1-acceptance-20261031/browser/browser-acceptance.receipt.json",
+        "docs/evidence/phase1-acceptance-20261031/browser/browser-acceptance.log",
+        "docs/evidence/phase1-acceptance-20261031/browser/desktop-1440x960.png",
+        "docs/evidence/phase1-acceptance-20261031/browser/browser-acceptance.mjs",
+        "docs/evidence/phase1-acceptance-20261031/reused/webui-journey-acceptance-RESULT.md"
+      ],
+      "prerequisite_owner": "local Chrome and an installed Console origin; WebUI owner (ui/teams-console) with the console host owner; journey producer owner",
+      "next_executable_task": "Attach the screenshot and receipt to c5e5d4f. If an exact-tree full journey replay is required, run the webui-journey producer on 6d7dcf9; otherwise keep the b7236b2 reuse boundary.",
+      "facts": {
+        "checks_passed": 20,
+        "exit": 0,
+        "desktop_screenshot": {
+          "path": "docs/evidence/phase1-acceptance-20261031/browser/desktop-1440x960.png",
+          "width": 1440,
+          "height": 960,
+          "bytes": 43578,
+          "overflow": 0,
+          "innerWidth": 1440,
+          "innerHeight": 960,
+          "scrollWidth": 1440
+        },
+        "five_views": [
+          "discovery",
+          "networking",
+          "interaction",
+          "history",
+          "groups"
+        ],
+        "groups_view": {
+          "access": "ready",
+          "phase": "idle",
+          "isLoading": true,
+          "hasLiveWorkspace": false,
+          "text": "正在加载群组… 当前以 reasoner-a 正在加载群组…",
+          "live_workspace_claimed": false
+        },
+        "sse_snapshot": {
+          "seq": 1,
+          "agents": [
+            "reasoner-a"
+          ]
+        },
+        "settings_readonly": {
+          "readonly_marker": true,
+          "body_buttons": 0,
+          "no_config_form": true,
+          "no_model_row": true,
+          "no_provider_actions": true
+        },
+        "ui_modules_byte_matched": 25,
+        "uncaught_exceptions": 0,
+        "expected_failed_requests": {
+          "favicon_404": 1,
+          "group_request_400": 4
+        },
+        "reused_journey": {
+          "base": "b7236b2a4dad0308e2769011d71effc0c0bad543",
+          "results": "95/95 and 37/37 PASS",
+          "tree_delta": "b7236b2..6d7dcf9 changes are limited to the read-only Console config surface, its tests, and two architecture maps"
+        }
+      },
+      "boundary": "The desktop Chrome run is an installed-artifact run on loopback. The full WebUI journey is reused from b7236b2 because the 6d7dcf9 delta is the read-only config surface already covered by same-tree installed evidence. No live group workspace is claimed."
+    },
+    {
+      "id": 4,
+      "name": "Mobile 390x844 viewport vs physical cellular device",
+      "entrypoint_command": "same browser producer with Emulation.setDeviceMetricsOverride width=390, height=844, deviceScaleFactor=2, mobile=true",
+      "verdict": "PASS for viewport only; physical cellular device unavailable",
+      "first_missing_or_failing_node": "a real phone and a cellular or authorized LAN path are absent; a physical cellular claim was not attempted",
+      "raw_error": "none; cellular was not executed",
+      "evidence_path": [
+        "docs/evidence/phase1-acceptance-20261031/browser/mobile-390x844.png",
+        "docs/evidence/phase1-acceptance-20261031/browser/browser-acceptance.receipt.json",
+        "docs/evidence/phase1-acceptance-20261031/browser/browser-acceptance.log"
+      ],
+      "prerequisite_owner": "WebUI owner for layout; device and cellular environment owner for any future cellular claim (not provided)",
+      "next_executable_task": "Provide one real phone with a cellular or authorized LAN path and replay the same producer. Keep the viewport-only boundary until then.",
+      "facts": {
+        "screenshot": {
+          "path": "docs/evidence/phase1-acceptance-20261031/browser/mobile-390x844.png",
+          "width": 780,
+          "height": 1688,
+          "cssWidth": 390,
+          "cssHeight": 844,
+          "deviceScaleFactor": 2,
+          "bytes": 72218,
+          "overflow": 0
+        },
+        "five_views_present": true,
+        "agent_row_visible": "reasoner-a",
+        "cellular_claim": false
+      },
+      "boundary": "Viewport emulation only. The project treats mobile entrypoints and physical cellular behavior as post-MVP; a narrow desktop replay is not a mobile product claim."
+    },
+    {
+      "id": 5,
+      "name": "Direct transport: LAN local WSS vs public N3/STUN/NAT",
+      "entrypoint_command": "local evidence: node docs/evidence/acp-l9-command-side-20261013/black-box-self-dial.mjs and node docs/evidence/acp-d05-network-20261010/isolated-transport-observation.mjs; public gate: pnpm exec vitest run packages/shared/src/work-wire.spec.ts agent-host/work-host.spec.ts agent-host/cli-executor.spec.ts network/relay-client.spec.ts runtime/agent-process.spec.ts",
+      "verdict": "partial: local/LAN WSS direct transport evidence is reused at source/local level; public N3/STUN/NAT is unavailable (post-MVP)",
+      "first_missing_or_failing_node": "deployed public direct endpoint and a real NAT/STUN path are absent; the public gate was not executed",
+      "raw_error": "none; the public gate was not executed",
+      "evidence_path": [
+        "docs/architecture/verification-map.json",
+        "docs/development-governance.md",
+        "docs/evidence/acp-l9-command-side-20261013/black-box-self-dial.mjs",
+        "docs/evidence/acp-l9-command-side-20261013/notes.md",
+        "docs/evidence/acp-d05-network-20261010/isolated-transport-observation.mjs",
+        "docs/evidence/acp-d05-network-20261010/notes.md"
+      ],
+      "prerequisite_owner": "network owner for direct route/transport; deployment and infrastructure owner for the public endpoint and NAT",
+      "next_executable_task": "Provide a deployed public endpoint and one real NAT egress, then run the teams-peer-work-execution-public-nat command and bind the public replay receipt.",
+      "facts": {
+        "local_lan_wss_evidence": "reused source/local evidence: real TLS listener, real admission, real hello and real ACP frame exchange; two real --serve opencode daemons with a real registry in the L9 command-side driver",
+        "public_n3_stun_nat": "unavailable",
+        "gate": {
+          "id": "teams-peer-work-execution-public-nat",
+          "status": "design",
+          "required": false,
+          "phase": "post-mvp"
+        },
+        "loopback_substitution": false
+      },
+      "boundary": "The local/LAN WSS evidence is source/local evidence from earlier trees, not a public direct transport claim. Loopback, health, or mock evidence is not used for public N3/STUN/NAT."
+    },
+    {
+      "id": 6,
+      "name": "Dual-NAT public Relay Work",
+      "entrypoint_command": "not executed; declared post-MVP gate teams-relay-process-deployment-public plus teams-peer-work-execution-public-nat",
+      "verdict": "unavailable",
+      "first_missing_or_failing_node": "public Relay deployment receipt and a NAT-to-NAT transport path are absent; there is no second independent NAT host",
+      "raw_error": "none; the gate was not executed",
+      "evidence_path": [
+        "docs/architecture/verification-map.json",
+        "docs/development-governance.md",
+        "docs/evidence/phase1-acceptance-20261031/installed/installed-runtime-smoke.receipt.json"
+      ],
+      "prerequisite_owner": "server and Relay owner plus infrastructure and NAT owner",
+      "next_executable_task": "Deploy the packaged Relay on a public host, bind installation and public-entrypoint receipts, then replay a dual-NAT Work path through it.",
+      "facts": {
+        "public_relay_deployment_gate": {
+          "id": "teams-relay-process-deployment-public",
+          "status": "design",
+          "required": false,
+          "phase": "post-mvp"
+        },
+        "dual_nat_gate": {
+          "id": "teams-peer-work-execution-public-nat",
+          "status": "design",
+          "required": false,
+          "phase": "post-mvp"
+        },
+        "local_installed_relay": "loopback only; explicitly not public or NAT evidence",
+        "public_relay_claim": false,
+        "dual_nat_claim": false
+      },
+      "boundary": "The installed Relay smoke is a local loopback lifecycle check. It does not prove a public Relay, NAT traversal, dual NAT, or cross-network Work."
+    },
+    {
+      "id": 7,
+      "name": "Provider config file-single-source read-only UI, live RCC 4444 turns, bounded retry",
+      "entrypoint_command": "reused same-tree evidence: node evidence/provider-closure.mjs (32/32) and the installed config-readonly black box (10/10); this run also asserts the settings drawer read-only surface in browser/browser-acceptance.mjs",
+      "verdict": "PASS (reused same-tree 0bb9c97 evidence; 0bb9c97 tree equals 6d7dcf9 tree)",
+      "first_missing_or_failing_node": "none for the reused same-tree evidence; the provider instance id goaichat remains a misleading label, although its effective base URL was http://127.0.0.1:4444/v1",
+      "raw_error": "none",
+      "evidence_path": [
+        "docs/evidence/phase1-acceptance-20261031/reused/webui-provider-closure-corrected-0bb9c97-RESULT.md",
+        "docs/evidence/phase1-acceptance-20261031/reused/config-readonly-ui-installed-0bb9c97-RESULT.md",
+        "docs/evidence/phase1-acceptance-20261031/browser/browser-acceptance.receipt.json"
+      ],
+      "prerequisite_owner": "local RCC endpoint at 127.0.0.1:4444; config and provider owner (U2/U6); WebUI owner",
+      "next_executable_task": "Optionally rename the goaichat instance label to avoid ambiguity in later acceptance records. No code change is needed for acceptance.",
+      "facts": {
+        "same_tree": true,
+        "evidence_tree": "f22bf13a2da37a4f04add2a97460794bc18fe216",
+        "provider_closure_checks": "32/32 PASS",
+        "config_readonly_installed_checks": "10/10 PASS",
+        "real_rcc_endpoint": "http://127.0.0.1:4444/v1",
+        "bounded_retry": {
+          "main_status_sequence": [
+            429,
+            429,
+            200
+          ],
+          "title_status": 200,
+          "title_consumed_retry": false,
+          "final_state": "completed"
+        },
+        "terminal_401": {
+          "main_status_sequence": [
+            401
+          ],
+          "final_state": "failed",
+          "replay_observed": false
+        },
+        "config_writes": [
+          "config.putProvider -> UNSUPPORTED_OPERATION",
+          "config.bindModel -> UNSUPPORTED_OPERATION",
+          "config.refreshModels -> UNSUPPORTED_OPERATION",
+          "config.apply -> UNSUPPORTED_OPERATION"
+        ],
+        "settings_drawer": {
+          "readonly_marker": true,
+          "body_buttons": 0,
+          "write_controls": 0
+        },
+        "config_toml_single_source": "BB08 passed: revision 2 -> 3, generation 1 -> 2, stale generation typed rejection"
+      },
+      "boundary": "The provider and read-only evidence is reused because 0bb9c97 has the same tree as 6d7dcf9. The goaichat label is misleading; every recorded turn used the local RCC endpoint on port 4444. No external Goaichat host was contacted."
+    },
+    {
+      "id": 8,
+      "name": "Console-offline Agent Work",
+      "entrypoint_command": "node scripts/installed-runtime-smoke.mjs --pack-root generated/modules/teams-source/lib --receipt-path docs/evidence/phase1-acceptance-20261031/installed/installed-runtime-smoke.receipt.json",
+      "verdict": "PASS",
+      "first_missing_or_failing_node": "none",
+      "raw_error": "none",
+      "evidence_path": [
+        "docs/evidence/phase1-acceptance-20261031/installed/installed-runtime-smoke.receipt.json",
+        "docs/evidence/phase1-acceptance-20261031/installed/installed-runtime-smoke.log"
+      ],
+      "prerequisite_owner": "installed stack and local host; U5 console lifecycle owner with the runtime and Work owner",
+      "next_executable_task": "Record this receipt against c5e5d4f and keep the Work ID for later readback. No code action.",
+      "facts": {
+        "console_lifecycle": {
+          "status": "online",
+          "generation": 1,
+          "pid": 35052,
+          "unauthorized": 401,
+          "authenticated": 200,
+          "crossSite": 401,
+          "stopState": "stopped",
+          "launcherAndDaemonsUnchanged": true,
+          "workAfterStop": "completed",
+          "restartState": "online",
+          "restartedGeneration": 2,
+          "consolePidChanged": true,
+          "forbiddenFlagRejected": true
+        },
+        "work": {
+          "workId": "471d8c64-c725-4750-a067-afda644838bd",
+          "requestId": "e85597a4-a1b1-48d7-9e73-eb7b93bf5319",
+          "providerAgentId": "installed-provider",
+          "capabilityId": "file-search",
+          "requestState": "succeeded",
+          "graphId": "agentteams.agent-work",
+          "businessStatus": "matched",
+          "exitCode": 0
+        },
+        "console_offline_claim": true
+      },
+      "boundary": "This is the local installed lifecycle. It proves Console-offline Work on the local stack, not the post-MVP Console-offline public/NAT gate."
+    }
+  ],
+  "reused_evidence": [
+    {
+      "unit": "webui-provider-closure-corrected-0bb9c97-20261029",
+      "base": "0bb9c97fcd5a20e1a4d807234f1f0d240efabf2f",
+      "tree": "f22bf13a2da37a4f04add2a97460794bc18fe216",
+      "same_tree_as_6d7dcf9": true,
+      "result": "32/32 PASS",
+      "source_path": "/Volumes/Intel/playground/agentteams/.worker-runs/webui-provider-closure-corrected-0bb9c97-20261029/RESULT.md",
+      "copied_path": "docs/evidence/phase1-acceptance-20261031/reused/webui-provider-closure-corrected-0bb9c97-RESULT.md"
+    },
+    {
+      "unit": "config-readonly-ui-installed-0bb9c97-20261029",
+      "base": "0bb9c97fcd5a20e1a4d807234f1f0d240efabf2f",
+      "tree": "f22bf13a2da37a4f04add2a97460794bc18fe216",
+      "same_tree_as_6d7dcf9": true,
+      "result": "10/10 PASS",
+      "source_path": "/Volumes/Intel/playground/agentteams/.worker-runs/config-readonly-ui-installed-0bb9c97-20261029/RESULT.md",
+      "copied_path": "docs/evidence/phase1-acceptance-20261031/reused/config-readonly-ui-installed-0bb9c97-RESULT.md"
+    },
+    {
+      "unit": "webui-journey-acceptance-20261029",
+      "base": "b7236b2a4dad0308e2769011d71effc0c0bad543",
+      "tree": "not f22bf13a",
+      "same_tree_as_6d7dcf9": false,
+      "result": "95/95 and 37/37 PASS",
+      "source_path": "/Volumes/Intel/playground/agentteams/.worker-runs/webui-journey-acceptance-20261029/RESULT.md",
+      "copied_path": "docs/evidence/phase1-acceptance-20261031/reused/webui-journey-acceptance-RESULT.md",
+      "boundary": "Supporting evidence with a tree boundary. The b7236b2..6d7dcf9 product delta is the read-only Console config surface, its tests and two maps; same-tree installed evidence covers that surface."
+    },
+    {
+      "unit": "c5e5d4f-acceptance-20261029",
+      "base": "b7236b2a4dad0308e2769011d71effc0c0bad543",
+      "same_tree_as_6d7dcf9": false,
+      "result": "prior acceptance record; superseded by this directory's 6d7dcf9 runs",
+      "source_path": "/Volumes/Intel/playground/agentteams/.worker-runs/c5e5d4f-acceptance-20261029/RESULT.md",
+      "copied_path": "docs/evidence/phase1-acceptance-20261031/reused/c5e5d4f-prior-acceptance-RESULT.md",
+      "boundary": "Context only. The current browser and installed receipts supersede its browser and installed results."
+    }
+  ],
+  "unavailable": [
+    {
+      "item": "physical cellular mobile device",
+      "gate": "teams-static-ui-replay (partial) plus the device environment",
+      "reason": "no real phone or cellular path was provided; viewport emulation is not a physical device claim",
+      "owner": "WebUI owner plus device and cellular environment owner"
+    },
+    {
+      "item": "public direct transport and N3/STUN/NAT",
+      "gate": "teams-peer-work-execution-public-nat",
+      "gate_state": "design, required=false, phase=post-mvp",
+      "reason": "no deployed public direct endpoint and no real NAT/STUN path",
+      "owner": "network owner plus deployment and infrastructure owner"
+    },
+    {
+      "item": "public Relay deployment",
+      "gate": "teams-relay-process-deployment-public",
+      "gate_state": "design, required=false, phase=post-mvp",
+      "reason": "no packaged public Relay installation and no public entrypoint receipt",
+      "owner": "server and Relay owner plus infrastructure owner"
+    },
+    {
+      "item": "dual-NAT Work through public Relay",
+      "gate": "teams-peer-work-execution-public-nat and the public Relay deployment gate",
+      "gate_state": "design, required=false, phase=post-mvp",
+      "reason": "no second independent NAT host and no proven public Relay",
+      "owner": "server, Relay, network and NAT infrastructure owners"
+    }
+  ],
+  "review_boundary": {
+    "merge_verified": true,
+    "merge_commit": "6d7dcf9d19bba415aa566b910cc4ec472ae2bf44",
+    "merge_parents": [
+      "b7236b2a4dad0308e2769011d71effc0c0bad543",
+      "0bb9c97fcd5a20e1a4d807234f1f0d240efabf2f"
+    ],
+    "independent_overall_review_for_exact_merge": "not found in accessible worker-run evidence",
+    "covered_by": "same-tree installed black box 10/10 and full 1714-test run"
+  },
+  "cleanup": {
+    "record": "docs/evidence/phase1-acceptance-20261031/cleanup.json",
+    "owned_processes_dead": true,
+    "owned_temp_roots_removed": true,
+    "pre_existing_untouched": [
+      {
+        "pid": 24441,
+        "what": "l13-test Console control process"
+      },
+      {
+        "pid": 87339,
+        "what": "l13-test registry process"
+      }
+    ]
+  },
+  "bug_comment_record": "docs/evidence/phase1-acceptance-20261031/bug-comments.json"
+}

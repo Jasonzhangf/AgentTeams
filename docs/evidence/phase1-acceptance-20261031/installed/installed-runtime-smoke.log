@@ -1,0 +1,2 @@
+u1-installed-receipt /tmp/at-p1-work/installed/installed-runtime-smoke.receipt.json sha256:1cd07259f2382cb5776539c48427629226c3315f3bdd329be7a4753678b82aa6
+Installed runtime smoke passed: the staged final package was installed outside the source tree and consumed through installed CLI/Relay/Agent lifecycle plus Console entrypoints.

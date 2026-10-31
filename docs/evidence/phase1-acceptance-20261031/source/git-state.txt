@@ -1,0 +1,20 @@
+# captured 2026-10-31T09:14:38Z
+branch: codex/phase1-acceptance-20261031
+head: 6d7dcf9d19bba415aa566b910cc4ec472ae2bf44
+tree: f22bf13a2da37a4f04add2a97460794bc18fe216
+origin/main: 6d7dcf9d19bba415aa566b910cc4ec472ae2bf44
+status:
+?? docs/evidence/phase1-acceptance-20261031/browser/browser-acceptance.log
+?? docs/evidence/phase1-acceptance-20261031/browser/browser-acceptance.mjs
+?? docs/evidence/phase1-acceptance-20261031/browser/browser-acceptance.receipt.json
+?? docs/evidence/phase1-acceptance-20261031/browser/desktop-1440x960.png
+?? docs/evidence/phase1-acceptance-20261031/browser/mobile-390x844.png
+?? docs/evidence/phase1-acceptance-20261031/installed/installed-runtime-smoke.log
+?? docs/evidence/phase1-acceptance-20261031/installed/installed-runtime-smoke.receipt.json
+?? docs/evidence/phase1-acceptance-20261031/source/build-governance.log
+?? docs/evidence/phase1-acceptance-20261031/source/git-state.txt
+?? docs/evidence/phase1-acceptance-20261031/source/install.log
+?? docs/evidence/phase1-acceptance-20261031/source/package-receipt.json
+?? docs/evidence/phase1-acceptance-20261031/source/pnpm-test.log
+?? docs/evidence/phase1-acceptance-20261031/source/typecheck.log
+status_excluding_evidence:

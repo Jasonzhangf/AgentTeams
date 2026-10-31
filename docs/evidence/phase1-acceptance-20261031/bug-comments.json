@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "unit": "phase1-acceptance-20261031",
+  "recorded_at": "2026-10-31T09:20:00Z",
+  "bugs": [
+    {
+      "id": "c5e5d4f",
+      "title": "[V1 P1] Real desktop/mobile and relay acceptance audit",
+      "state_after_comment": "open",
+      "comment_id": "ca56ed5",
+      "comment_number": 8,
+      "comment_excerpt": "Phase 1 V1 acceptance evidence at origin/main 6d7dcf9 (tree f22bf13a). Source/test/build PASS, installed Relay+2 Agents start/stop/restart PASS, real Chrome desktop/mobile PASS, same-tree provider config 32/32 and read-only 10/10 PASS, Console-offline Work PASS. Physical cellular, public N3/STUN/NAT, public Relay and dual-NAT are post-MVP unavailable. No bug close.",
+      "verified_with": "appsdk bug show c5e5d4f"
+    },
+    {
+      "id": "8ea5f7c",
+      "title": "[N3 P1] Direct transport and network resilience audit",
+      "state_after_comment": "open",
+      "comment_id": "8be0a35",
+      "comment_number": 43,
+      "comment_excerpt": "N3 direct transport acceptance evidence at 6d7dcf9 (tree f22bf13a). Local/LAN WSS source-level evidence reused; public N3/STUN/NAT and dual-NAT public Relay unavailable (teams-peer-work-execution-public-nat design/required=false/phase=post-mvp). No loopback/health/mock public claim. Bug remains open.",
+      "verified_with": "appsdk bug show 8ea5f7c"
+    },
+    {
+      "id": "3c437d7",
+      "title": "[V1 P1] External deployment and dual-NAT acceptance",
+      "state_after_comment": "open",
+      "comment_id": "31cb413",
+      "comment_number": 36,
+      "comment_excerpt": "External deployment and dual-NAT acceptance evidence at 6d7dcf9 (tree f22bf13a). Local installed artifact PASS (loopback only); public Relay deployment and dual-NAT Work unavailable (teams-relay-process-deployment-public and teams-peer-work-execution-public-nat are design/required=false/phase=post-mvp). No loopback/health substitution. Bug remains open.",
+      "verified_with": "appsdk bug show 3c437d7"
+    }
+  ],
+  "all_bugs_open": true,
+  "no_bug_closed": true,
+  "evidence_root": "docs/evidence/phase1-acceptance-20261031/"
+}

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "unit": "phase1-acceptance-20261031",
+  "recorded_at": "2026-10-31T09:16:00Z",
+  "method": "explicit PIDs only; process.kill(pid, 0) checks; no pkill, killall, kill $(...), xargs kill or tmux action",
+  "kill0_checked_at": "2026-10-31T09:15:00Z",
+  "all_owned_pids_dead": true,
+  "owned_pids": [
+    { "pid": 34834, "source": "installed-runtime-smoke start launcher generation 1", "alive_after_kill0": false },
+    { "pid": 34835, "source": "installed-runtime-smoke start relay generation 1", "alive_after_kill0": false },
+    { "pid": 34861, "source": "installed-runtime-smoke start provider generation 1", "alive_after_kill0": false },
+    { "pid": 34949, "source": "installed-runtime-smoke start receiver generation 1", "alive_after_kill0": false },
+    { "pid": 35052, "source": "installed-runtime-smoke console generation 1", "alive_after_kill0": false },
+    { "pid": 36898, "source": "installed-runtime-smoke restart launcher generation 2", "alive_after_kill0": false },
+    { "pid": 36901, "source": "installed-runtime-smoke restart relay generation 2", "alive_after_kill0": false },
+    { "pid": 36902, "source": "installed-runtime-smoke restart provider generation 2", "alive_after_kill0": false },
+    { "pid": 36932, "source": "installed-runtime-smoke restart receiver generation 2", "alive_after_kill0": false },
+    { "pid": 50892, "source": "browser run 1 registry", "alive_after_kill0": false },
+    { "pid": 50922, "source": "browser run 1 agent", "alive_after_kill0": false },
+    { "pid": 50979, "source": "browser run 1 engine child", "alive_after_kill0": false },
+    { "pid": 52740, "source": "browser run 1 control", "alive_after_kill0": false },
+    { "pid": 52939, "source": "browser run 1 chrome", "alive_after_kill0": false },
+    { "pid": 57573, "source": "browser run 2 registry", "alive_after_kill0": false },
+    { "pid": 57604, "source": "browser run 2 agent", "alive_after_kill0": false },
+    { "pid": 57605, "source": "browser run 2 engine child", "alive_after_kill0": false },
+    { "pid": 58021, "source": "browser run 2 control", "alive_after_kill0": false },
+    { "pid": 58201, "source": "browser run 2 chrome", "alive_after_kill0": false },
+    { "pid": 40352, "source": "browser run 3 registry", "alive_after_kill0": false },
+    { "pid": 40426, "source": "browser run 3 agent", "alive_after_kill0": false },
+    { "pid": 40451, "source": "browser run 3 engine child", "alive_after_kill0": false },
+    { "pid": 40823, "source": "browser run 3 control", "alive_after_kill0": false },
+    { "pid": 41222, "source": "browser run 3 chrome", "alive_after_kill0": false },
+    { "pid": 6592, "source": "browser run 4 registry", "alive_after_kill0": false },
+    { "pid": 6595, "source": "browser run 4 agent", "alive_after_kill0": false },
+    { "pid": 6600, "source": "browser run 4 engine child", "alive_after_kill0": false },
+    { "pid": 7099, "source": "browser run 4 control", "alive_after_kill0": false },
+    { "pid": 7457, "source": "browser run 4 chrome", "alive_after_kill0": false },
+    { "pid": 17583, "source": "browser final run registry", "alive_after_kill0": false },
+    { "pid": 17610, "source": "browser final run agent", "alive_after_kill0": false },
+    { "pid": 17614, "source": "browser final run engine child", "alive_after_kill0": false },
+    { "pid": 18086, "source": "browser final run control", "alive_after_kill0": false },
+    { "pid": 18433, "source": "browser final run chrome", "alive_after_kill0": false }
+  ],
+  "temp_roots": [
+    { "path": "/tmp/at-p1-work", "purpose": "source, installed and browser evidence staging", "removed": true },
+    { "path": "/tmp/at-p1-browser", "purpose": "short TMPDIR for the browser producer socket paths", "removed": true },
+    { "path": "/tmp/at-p1-browser/c5-WFg7Zx", "purpose": "retained root of the failed adapted browser run", "removed": true },
+    { "path": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/at5Ftcm2", "purpose": "installed-runtime-smoke temporary root", "removed": true },
+    { "path": "/var/folders/jm/blkk8bbd6v78rv2pwxgxh3kr0000gn/T/c5-0pszMq", "purpose": "browser run 1 owned root", "removed": true }
+  ],
+  "pre_existing_untouched": [
+    { "pid": 24441, "what": "l13-test Console control process", "action": "none" },
+    { "pid": 87339, "what": "l13-test registry process", "action": "none" }
+  ],
+  "notes": [
+    "The browser producer removed its owned root on every successful run and reported zero owned processes alive and zero temp-root matches.",
+    "The failed adapted run retained /tmp/at-p1-browser/c5-WFg7Zx; it was removed with a direct filesystem call on the owned path.",
+    "The installed-runtime-smoke script removed its temporary root and left no processes.",
+    "No process outside this task was signalled or terminated."
+  ]
+}
