@@ -502,3 +502,22 @@
 - 资源清理：webui-ux-f1-f3-a / webui-ux-f1-f3-b / integration-provider-ux-20261029 均已干净
   （无 dirty、无 active pid），按 SESE 关闭：`git worktree remove` + `prune`，确认 `test ! -e`，
   删除已合并分支；保留 `.worker-runs` 证据目录，worktree 1/10（仅 main）。
+
+## 2026-10-31 Phase 1 本地验收收口（Alice 执行，Jenny 集成）
+
+- 用户要求：根据当前进度把第一阶段要交付的部分和 peer 一起推进，有未完成任务就用长程目标订阅推进。
+- 恢复与调度：重武装 `docs/goals/teams-long-running-delivery.md` goal 订阅（25m，active），发布 board 任务
+  `phase1-acceptance-20261031`（p1，observation），邀请 peer Alice；Alice 接受后派 GCM worker 执行。
+- 证据根：`docs/evidence/phase1-acceptance-20261031/`（`README.md`、`matrix.json` 8 维、`cleanup.json`、
+  `bug-comments.json`、`source/`、`installed/`、`browser/`、`reused/`）。
+- 真实入口（均在 `origin/main` `6d7dcf9` / tree `f22bf13a`）：
+  - `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm test`（162 files / 1714 tests）、`pnpm build:governance` 全 PASS。
+  - `node scripts/installed-runtime-smoke.mjs`：Relay + 2 Agent start/stop/restart（gen1→gen2）PASS，Console 401/200/cross-site 401，Console-offline Work `471d8c64-…` 完成。
+  - 真实 Chrome：桌面 `1440x960`、移动 `390x844`（DPR2）20/20 checks PASS，五视图、SSE seq=1、Settings `data-config-readonly=true`、0 uncaught。
+  - Provider 单源只读 UI + 真实 RCC 4444 turns 与有界重试 32/32 PASS（同 tree `0bb9c97^{tree}`）；打包只读黑盒 10/10 PASS（reused/）。
+- 残余（Post-MVP，显式 unavailable，未 mock/冒充）：物理蜂窝真机、公网 N3/STUN/NAT 直连、公网 Relay 部署、公网 Relay 双 NAT Work。对应 gate
+  `teams-peer-work-execution-public-nat`、`teams-relay-process-deployment-public` 为 design/post-mvp；`3c437d7`/`8ea5f7c`/`c5e5d4f` 保持 `[open]` 并在 bug 评论（#8/#43/#36）记录证据与下一步。
+- 独立验证（Jenny）：候选 `1467960` parent `6d7dcf9`，diff 仅 `docs/evidence/phase1-acceptance-20261031/**` 23 文件；worktree clean；installed receipt `lifecycle.status=passed`；PNG 尺寸 1440x960 与 780x1688；截图与 receipt 真实存在；bug 评论落盘且仍 open。
+- 交付与回执：collab task review `--accept`（integration_required）→ `git merge --ff-only` → push，`main == origin/main == 1467960184dc1c2cf2e9b6cd2514d93d029440e9`；`collab task integrated` 记录 `1467960`；`collab task close` 返回 lifecycle complete、cleanup verified。
+- 资源清理：按 SESE 关闭 `git worktree remove` + `prune`，确认路径已删除；删除已合并分支 `codex/phase1-acceptance-20261031`；worktree 1/10（仅 main），主树干净。board 0 未关闭任务。
+- 剩余责任：goal 订阅保持 active（25m）；`c5e5d4f`/`8ea5f7c`/`3c437d7` 公网/蜂窝项等外部环境就绪后由对应 owner 按 Post-MVP gate 重放；Phase 1 本地 LAN MVP 验收已收口。
