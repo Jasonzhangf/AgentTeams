@@ -1,0 +1,6 @@
+<!-- project-memory:v1 {"category":"knowledge","created_at":"2026-10-31T10:45:06.435256+00:00","id":"phase1-acceptance-20261031-review-6d7dcf9","importance":0,"memory_level":3,"review_evidence":[],"review_status":"unreviewed","source_refs":[],"tags":["acceptance","agentteams","ai-reviewed","exact-review","human-unreviewed","local-mvp","phase1"],"updated_at":"2026-10-31T10:45:06.435256+00:00"} -->
+
+# Phase 1 本地 MVP 验收与 6d7dcf9 独立审查收口
+
+AgentTeams Phase 1 本地网络 MVP 在候选 6d7dcf9（merge(webui) read-only Console provider config，tree f22bf13a）完成验收并集成。主校验单元 phase1-acceptance-20261031：pnpm test 162 files / 1714 tests、typecheck、build:governance 全 PASS；installed-runtime-smoke 真实 Relay + 2 Agent start/stop/restart、Console 401/200/cross-site、Console-offline Work 完成；真实 Chrome 桌面 1440x960 与移动 390x844 20/20；Provider 单源只读 UI + 真实 RCC 4444 32/32、打包只读 10/10。Alice 对 6d7dcf9 作出独立整体审查 PASS（0 P0 / 0 P1），审查文件 docs/evidence/phase1-acceptance-20261031/review-6d7dcf9.md。集成合并 15f456b 已推送，main == origin/main == 15f456b；任务 phase1-6d7dcf9-exact-merge-review 已 integrated/close，候选 worktree 与分支已 SESE 清理。证据根 docs/evidence/phase1-acceptance-20261031/。适用边界：本地 LAN MVP；剩余 c5e5d4f（物理蜂窝/部分桌面移动）、8ea5f7c（公网直连/STUN/NAT）、3c437d7（外部部署/dual-NAT）为 Post-MVP 外部环境门禁，保持 open，未完成。
+<!-- project-memory:end -->

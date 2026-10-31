@@ -351,6 +351,10 @@ _Empty._
 - tags: `ai-reviewed`, `design`, `human-unreviewed`, `local-mvp`, `persistent-work`
 - details: [L2/persistent-work-design-20261004.md](L2/persistent-work-design-20261004.md)
 
+### Phase 1 本地 MVP 验收与 6d7dcf9 独立审查收口
+- tags: `acceptance`, `agentteams`, `ai-reviewed`, `exact-review`, `human-unreviewed`, `local-mvp`, `phase1`
+- details: [L2/phase1-acceptance-20261031-review-6d7dcf9.md](L2/phase1-acceptance-20261031-review-6d7dcf9.md)
+
 ### RCC 4444 managed OpenCode live replay
 - tags: `ai-reviewed`, `human-unreviewed`, `live-replay`, `managed-opencode`, `rcc`
 - details: [L2/rcc-managed-live-20260906.md](L2/rcc-managed-live-20260906.md)
