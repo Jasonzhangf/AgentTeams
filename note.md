@@ -532,3 +532,12 @@
   - `c5e5d4f`：需物理蜂窝真机。
 - 恢复条件：用户提供上述外部环境后，重新执行 `appsdk goal subscribe --goal docs/goals/teams-long-running-delivery.md --interval 25m` 并派对应 owner 重放 Post-MVP gate。
 - 保留：direct-message 接收保留；daemon 管理的 `project-patrol` 仍 armed（未声称已取消；`progress_revision=0` eligibility 与 15m<25m cadence gap 仍为运行时事实）。
+
+## 2026-10-31 长程订阅恢复与 Alice 交回
+
+- 用户再次要求：按当前进度与 peer 推进第一阶段交付，有未完成任务时用长程目标订阅推进。先前“不重新武装”的决定已被本次明确指令取代。
+- 恢复：`appsdk goal subscribe --goal docs/goals/teams-long-running-delivery.md --interval 25m`，`appsdk goal status` 为 `active=true`、`observed=subscribed`，订阅 `sub-m1793440911946-760`。
+- 第一阶段：`phase1-acceptance-20261031` 已 review accepted、integrated、closed；`main == origin/main == 65c61e3`，board 无未关闭任务，worktree 1/10（仅 main，干净）。
+- Alice 裁决：operation `presence-binding-…-Alice-1-1793412132464` 已应用为 `online`，证据为 tmux server/session/pane 存活、snapshot 返回 Alice 缓冲区、`endpoint_live=true` 且 `identity_valid=true`。
+- 交回：已向 Alice 发送 `m1793440911154-759`，交付 phase1 审阅结果并批准 idle；保留 direct-message，不新建轮询。
+- 未结：`c5e5d4f`、`8ea5f7c`、`3c437d7` 仍为外部环境 Post-MVP 门禁；环境就绪后由对应 owner 重放。
