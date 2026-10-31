@@ -541,3 +541,13 @@
 - Alice 裁决：operation `presence-binding-…-Alice-1-1793412132464` 已应用为 `online`，证据为 tmux server/session/pane 存活、snapshot 返回 Alice 缓冲区、`endpoint_live=true` 且 `identity_valid=true`。
 - 交回：已向 Alice 发送 `m1793440911154-759`，交付 phase1 审阅结果并批准 idle；保留 direct-message，不新建轮询。
 - 未结：`c5e5d4f`、`8ea5f7c`、`3c437d7` 仍为外部环境 Post-MVP 门禁；环境就绪后由对应 owner 重放。
+
+## 2026-10-31 Phase 1 独立整体审查收口与阶段记忆晋升
+
+- 审查任务 `phase1-6d7dcf9-exact-merge-review` 已 close。Alice（命名独立审查者）对合并提交 `6d7dcf9`（tree `f22bf13a`）出具 PASS，0 P0、0 P1。
+- 审查文件：`docs/evidence/phase1-acceptance-20261031/review-6d7dcf9.md`（commit `b087a44`）。
+- 集成：合并 `15f456b`（parents `ac0693d` + `b087a44`）已 push；`main == origin/main == 15f456b`。
+- 资源清理：候选 worktree `/Volumes/Intel/playground/agentteams/phase1-6d7dcf9-exact-merge-review` 与分支 `codex/phase1-6d7dcf9-exact-merge-review` 已按 SESE 删除；worktree 1/10（仅 main，干净）；board 0 未关闭任务。
+- 阶段记忆：官方 `project-memory` 入口写入 L3 并晋升 L2，id `phase1-acceptance-20261031-review-6d7dcf9`，tags `agentteams`、`ai-reviewed`、`human-unreviewed`、`phase1`、`acceptance`、`local-mvp`、`exact-review`；verify 为 level 2 / reviewed。
+- 回执：`af5c167` 追加评论 #30 记录收口；已向 Alice 发送 idle 批准 `m1793443325739-815`，direct-message 保留。
+- 剩余责任：长程 goal 订阅 active（25m）；`c5e5d4f` / `8ea5f7c` / `3c437d7` 为 Post-MVP 外部环境门禁，保持 open，未伪造完成。
