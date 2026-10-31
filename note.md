@@ -521,3 +521,14 @@
 - 交付与回执：collab task review `--accept`（integration_required）→ `git merge --ff-only` → push，`main == origin/main == 1467960184dc1c2cf2e9b6cd2514d93d029440e9`；`collab task integrated` 记录 `1467960`；`collab task close` 返回 lifecycle complete、cleanup verified。
 - 资源清理：按 SESE 关闭 `git worktree remove` + `prune`，确认路径已删除；删除已合并分支 `codex/phase1-acceptance-20261031`；worktree 1/10（仅 main），主树干净。board 0 未关闭任务。
 - 剩余责任：goal 订阅保持 active（25m）；`c5e5d4f`/`8ea5f7c`/`3c437d7` 公网/蜂窝项等外部环境就绪后由对应 owner 按 Post-MVP gate 重放；Phase 1 本地 LAN MVP 验收已收口。
+
+## 2026-10-31 巡检暂停（一阶段本地收口后）
+
+- 触发：goal deadline 已消费（`LAST_REMINDER=true`）；`appsdk goal status` 为 `active=false`、`recovery_required`。
+- 已核对：board 0 未关闭任务；无进行中的 GCM/worker；worktree 1/10（仅 `main`，干净）；`main == origin/main == 6f6b145`；无 `/tmp/at-p1-*` 残留。
+- 决定：不重新武装 25m goal deadline。Phase 1 本地 LAN MVP 验收已完成并集成；剩余三项均为外部环境阻塞，无本机可执行入口：
+  - `3c437d7`：需公网 `wss://` 端点+证书+服务单元、两台 NAT 主机、凭据授权。
+  - `8ea5f7c`：需公网 direct/STUN/NAT 端点与真实 NAT 出口。
+  - `c5e5d4f`：需物理蜂窝真机。
+- 恢复条件：用户提供上述外部环境后，重新执行 `appsdk goal subscribe --goal docs/goals/teams-long-running-delivery.md --interval 25m` 并派对应 owner 重放 Post-MVP gate。
+- 保留：direct-message 接收保留；daemon 管理的 `project-patrol` 仍 armed（未声称已取消；`progress_revision=0` eligibility 与 15m<25m cadence gap 仍为运行时事实）。
