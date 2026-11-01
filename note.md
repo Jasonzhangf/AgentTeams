@@ -564,3 +564,13 @@
 - 回执：已通过 `collab ceo reply --in-reply-to m1793534861587-257` 回报，消息 `m1793535362387-290`。
 - 未解决：`collab ceo progress` 返回 `CEO_AUTHORITY_REQUIRED`（本人非 CEO）；
   `c5e5d4f` / `8ea5f7c` / `3c437d7` 仍为 Post-MVP 外部环境门禁，环境就绪后由对应 owner 重放。
+
+## 2026-11-01 停机决定：不再续订有限 goal 调度
+
+- 触发：12:41:27Z 续订的 goal deadline 于 13:07 到期并消费（`m1793538388370-377`，`LAST_REMINDER=true`）。
+- 核对：board 0 未关闭任务；`ready_authorized_work=false`；worktree 1/10（仅 main，干净）；inbox 无未读消息。
+- 决定：不再次 `appsdk goal subscribe`。无可推进本地工作，阻塞已上报 CEO（`m1793535362387-290`）并由
+  `master_wake.wake_hold` 记录解除条件。按 goal 合同关闭本人有限 goal 调度，避免空转续订。
+- 保留：daemon 管理的 `master-idle project-patrol`（`sub-m1793435564045-635`）仍 armed；
+  direct-message 接收保留。新增本地任务或外部环境就绪后，重新执行
+  `appsdk goal subscribe --goal docs/goals/teams-long-running-delivery.md --interval 25m` 并派对应 owner。
