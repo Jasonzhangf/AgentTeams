@@ -441,9 +441,17 @@ _Empty._
 
 ## Level 3 — new or unreviewed
 
+### 本机 agent 独立运行：非回环监听、无 peer 组队、每配置单 daemon
+- tags: `agentteams`, `independent`, `local`, `no-peers`, `non-loopback`, `single-daemon`
+- details: [L3/local-agent-independent-run.md](L3/local-agent-independent-run.md)
+
 ### Superseded memory write for 41f0ea2
 - tags: `41f0ea2`, `superseded`
 - details: [L3/memory-45d66e4888339c10.md](L3/memory-45d66e4888339c10.md)
+
+### 符号探索优先使用全局 nn-code Skill
+- tags: `agentteams`, `call-chain`, `javascript`, `nn-code`, `symbol-exploration`, `typescript`
+- details: [L3/symbol-exploration-prefer-nn-code.md](L3/symbol-exploration-prefer-nn-code.md)
 
 ### Project memory writes require explicit identity
 - tags: `agentteams`, `governance`, `process`, `project-memory`
