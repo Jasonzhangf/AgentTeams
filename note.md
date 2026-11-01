@@ -551,3 +551,16 @@
 - 阶段记忆：官方 `project-memory` 入口写入 L3 并晋升 L2，id `phase1-acceptance-20261031-review-6d7dcf9`，tags `agentteams`、`ai-reviewed`、`human-unreviewed`、`phase1`、`acceptance`、`local-mvp`、`exact-review`；verify 为 level 2 / reviewed。
 - 回执：`af5c167` 追加评论 #30 记录收口；已向 Alice 发送 idle 批准 `m1793443325739-815`，direct-message 保留。
 - 剩余责任：长程 goal 订阅 active（25m）；`c5e5d4f` / `8ea5f7c` / `3c437d7` 为 Post-MVP 外部环境门禁，保持 open，未伪造完成。
+
+## 2026-11-01 长程目标与巡检恢复（CEO 要求核对）
+
+- 触发：Alice 转发用户要求，核对本人项目长程目标与日常巡检，消费 `m1793534861587-257`。
+- 恢复：`appsdk goal subscribe --goal docs/goals/teams-long-running-delivery.md --interval 25m`；
+  `appsdk goal status` 为 `active=true`、`Desired=subscribed`、`Observed=subscribed`，注册时间 2026-11-01T12:14:55Z。
+- 巡检：`project-patrol` 仍 armed（`sub-m1793435564045-635`），`interval_ms=900000`、`target_interval_ms=1500000`、
+  `cadence_runtime_gap=PATROL_CADENCE_RUNTIME_GAP`。renew 被 daemon deduplicated（`changed=false`），节奏未达 25 分钟目标，如实报告未对齐。
+- 状态：board 0 未关闭任务；worktree 1/10（仅 main，干净）；无进行中 worker。
+  peer `%136` 与 `Alice` 均无未关闭任务、goal/patrol 未武装，属无受托子目标，无需恢复；未代改他人订阅。
+- 回执：已通过 `collab ceo reply --in-reply-to m1793534861587-257` 回报，消息 `m1793535362387-290`。
+- 未解决：`collab ceo progress` 返回 `CEO_AUTHORITY_REQUIRED`（本人非 CEO）；
+  `c5e5d4f` / `8ea5f7c` / `3c437d7` 仍为 Post-MVP 外部环境门禁，环境就绪后由对应 owner 重放。
