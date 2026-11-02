@@ -588,3 +588,10 @@
   `consumed=false`）；已补登 AppSDK upstream bug `6a39174`（P1）。
 - 处理边界：未重启 daemon、未伪造送达、未修改运行态；等待 AppSDK owner 核对 CLI 与
   daemon 版本一致性，并在该确认前保留原错。
+- 2026-11-02 复核更正：`m1793598181358-406` 已不在保留邮箱中，不能作为可验证送达证据；
+  `6a39174` 在 AppSDK 中仍为 open。当前本机 `collab --version` 为 `0.2.0389`，与失败时记录
+  的 `0.2.0411` 不一致，且本轮 `collab context` 已成功，进一步证明是 CLI/daemon 版本漂移。
+- 跨项目重发：已通过当前 master-to-master 通道向 `appsdk.Jenny` 入队
+  `m1793598871198-413`（`durable=true`、`consumed=false`、
+  `notification=tmux-input-submitted`），要求核对 `invocation_cwd` 兼容性、修复版本和
+  AgentTeams 后续动作。入队与宿主输入提交不等于对方消费或实际回信。
