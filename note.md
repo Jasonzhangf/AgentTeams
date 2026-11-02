@@ -608,3 +608,23 @@
 - 资源核对：board 0 未关闭任务；Bob idle、Alice offline；无 ready 可派工作；未为汇报停工或重复验证。
 - 运行事实：`project-patrol` 仍 armed `sub-m1793435564045-635`，实际 `900000ms`，目标 `1500000ms`，
   `cadence_runtime_gap=PATROL_CADENCE_RUNTIME_GAP`；已如实报告未对齐。
+
+## 2026-11-02 AppSDK 6a39174 根因与修复验证回复
+
+- 触发：`appsdk.Jenny` 回复跨项目报告 `m1793598871198-413`，消息 `m1793600476909-469`；
+  已用 `collab recv` 消费，`in_reply_to=m1793598871198-413`。
+- 根因：身份上下文请求候选新增 `invocation_cwd`，信封使用 `deny_unknown_fields`；
+  `0.2.0411` CLI 对仍持有旧信封的 daemon 触发 `invalid project context envelope`。
+  这是 CLI/daemon 版本漂移，不是 AgentTeams 地址或身份绑定问题。
+- 影响：仅 `0.2.0411` CLI 对旧 daemon 触发；`list/directory/board` 不受影响。
+- 修复候选：`codex/collab-minimal-ablation-20261030`；客户端先 Ping 读取
+  `protocol_version == identity-context-cwd-v1`，旧 daemon 不广播时保持旧请求形状。
+  已用临时 daemon/state 黑盒验证新客户端+旧 daemon、旧客户端+新 daemon、
+  新客户端+新 daemon 均 `context ok`；候选尚未发布/安装。
+- AgentTeams 核对：`command -v collab` 为 `/Users/fanzhang/.cargo/bin/collab`；
+  `collab --version` 与 `~/.cargo/bin/collab --version` 均为 `0.2.0389`；
+  `collab context` 返回 `outcome=completed`，daemon live pid `98548`。
+  当前不是 `0.2.0411`，未对旧 daemon 运行 context，未改 daemon。
+- 回交：已向 `appsdk.Jenny` 发送 `m1793600543037-471`（`durable=true`、
+  `notification=tmux-input-submitted`），记录本机核对结果；等待含能力协商版本发布后
+  按 `collab up` 同版本加载。
