@@ -574,3 +574,17 @@
 - 保留：daemon 管理的 `master-idle project-patrol`（`sub-m1793435564045-635`）仍 armed；
   direct-message 接收保留。新增本地任务或外部环境就绪后，重新执行
   `appsdk goal subscribe --goal docs/goals/teams-long-running-delivery.md --interval 25m` 并派对应 owner。
+
+## 2026-11-02 Collab context 协议不匹配反馈 AppSDK
+
+- 触发：AgentTeams 当前会话执行 `collab context` 失败，原错为
+  `invalid project context envelope: unknown field invocation_cwd`。
+- 复现：项目根 `/Volumes/extension/code/AgentTeams`，已安装 CLI `collab 0.2.0411`。
+- 判断：已安装 CLI 向运行中 daemon 发送了不支持的 `invocation_cwd` 字段，属于
+  client/daemon 协议版本不匹配；不是目标地址、身份或未知名称问题。
+- 边界证据：`collab list` 与 `collab directory` 仍返回有效目标；`collab board show`
+  返回当前 AgentTeams master grant，`endpoint_live=true`；仅 `collab context` 被 envelope 拒绝。
+- 反馈：已通过匿名通知向 `appsdk.Jenny` 入队 `m1793598181358-406`（`durable=true`，
+  `consumed=false`）；已补登 AppSDK upstream bug `6a39174`（P1）。
+- 处理边界：未重启 daemon、未伪造送达、未修改运行态；等待 AppSDK owner 核对 CLI 与
+  daemon 版本一致性，并在该确认前保留原错。
