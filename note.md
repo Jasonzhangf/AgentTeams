@@ -595,3 +595,16 @@
   `m1793598871198-413`（`durable=true`、`consumed=false`、
   `notification=tmux-input-submitted`），要求核对 `invocation_cwd` 兼容性、修复版本和
   AgentTeams 后续动作。入队与宿主输入提交不等于对方消费或实际回信。
+
+## 2026-11-02 CEO 核心任务与紧急任务证据回报
+
+- 触发：Alice 以 CEO 身份要求每位项目 master 提供当前核心任务与紧急任务证据
+  （`m1793599611938-432`，policy=required）。
+- 回报：已用 `collab ceo reply --in-reply-to m1793599611938-432` 提交核心任务、开放门禁、
+  跨项目依赖与无紧急任务声明；消息 `m1793599691835-452`，`durable=true`、`recorded=true`、
+  `notification=tmux-input-submitted`、`consumed=false`；原消息 `reply_obligation=null`。
+- 内容边界：Phase 1 本地 LAN MVP 已验收；无紧急任务；`c5e5d4f`、`8ea5f7c`、`3c437d7`
+  仍为外部环境 Post-MVP 门禁；AppSDK `invocation_cwd` 协议问题由 `appsdk.Jenny` 跟进。
+- 资源核对：board 0 未关闭任务；Bob idle、Alice offline；无 ready 可派工作；未为汇报停工或重复验证。
+- 运行事实：`project-patrol` 仍 armed `sub-m1793435564045-635`，实际 `900000ms`，目标 `1500000ms`，
+  `cadence_runtime_gap=PATROL_CADENCE_RUNTIME_GAP`；已如实报告未对齐。
