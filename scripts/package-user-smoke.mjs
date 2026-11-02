@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -20,6 +20,34 @@ const CONSOLE_PASSWORD = 'installed-console-pass'
 
 function fail(message) {
   throw new Error(`package user smoke: ${message}`)
+}
+
+function npmCacheDir() {
+  if (process.env.AGENTTEAMS_NPM_CACHE) return process.env.AGENTTEAMS_NPM_CACHE
+  if (process.env.npm_config_cache) return process.env.npm_config_cache
+  return join(process.env.HOME || homedir(), '.npm')
+}
+
+function npmTimeoutMs() {
+  const raw = process.env.AGENTTEAMS_NPM_TIMEOUT_MS
+  if (raw === undefined) return 180000
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) fail(`invalid AGENTTEAMS_NPM_TIMEOUT_MS: ${raw}`)
+  return value
+}
+
+async function runNpm(command, args, options) {
+  const timeout = npmTimeoutMs()
+  const startedAt = Date.now()
+  try {
+    const result = await execFileAsync(command, args, { ...options, maxBuffer: 32 * 1024 * 1024, timeout })
+    return { command, args, exitCode: 0, stdout: result.stdout, stderr: result.stderr }
+  } catch (error) {
+    const elapsedMs = Date.now() - startedAt
+    const detail = error?.stderr?.trim() || error?.stdout?.trim() || error?.message || String(error)
+    const outcome = error?.killed === true || elapsedMs >= timeout ? 'timed out' : 'failed'
+    throw new Error(`npm ${command} ${args.join(' ')} ${outcome} after ${elapsedMs}ms: ${detail}`)
+  }
 }
 
 function parseOptions(argv) {
@@ -725,17 +753,15 @@ export async function runPackageUserSmoke(options = {}) {
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'at'))
   const prefix = join(temporaryRoot, 'prefix')
   const testHome = join(temporaryRoot, 'home')
-  const npmCache = join(temporaryRoot, 'npm-cache')
   const packDestination = join(temporaryRoot, 'pack')
   mkdirSync(testHome, { recursive: true })
   mkdirSync(prefix, { recursive: true })
-  mkdirSync(npmCache, { recursive: true })
   mkdirSync(packDestination, { recursive: true })
 
   let receipt
   try {
-    const npmEnv = { ...process.env, HOME: testHome, npm_config_cache: npmCache }
-    const packed = await run('npm', ['pack', packRoot, '--pack-destination', packDestination, '--json'], {
+    const npmEnv = { ...process.env, HOME: testHome, npm_config_cache: npmCacheDir() }
+    const packed = await runNpm('npm', ['pack', packRoot, '--pack-destination', packDestination, '--json'], {
       cwd: temporaryRoot,
       env: npmEnv,
     })
@@ -752,7 +778,7 @@ export async function runPackageUserSmoke(options = {}) {
     assert(tarballContentSha256 === packContent.sha256,
       `tarball file content ${tarballContentSha256} does not match staged pack content ${packContent.sha256}`)
 
-    await run('npm', ['install', '--prefix', prefix, '--no-audit', '--no-fund', '--no-package-lock', '--no-save', tarball], {
+    await runNpm('npm', ['install', '--prefix', prefix, '--no-audit', '--no-fund', '--no-package-lock', '--no-save', '--prefer-offline', tarball], {
       cwd: temporaryRoot,
       env: npmEnv,
     })

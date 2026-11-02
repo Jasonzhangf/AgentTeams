@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { execFile, execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
@@ -25,6 +25,33 @@ const defaultReceiptPath = process.env.AGENTTEAMS_U1_SDK_RECEIPT_PATH
 
 function fail(message) {
   throw new Error(`package SDK smoke: ${message}`)
+}
+
+function npmCacheDir() {
+  if (process.env.AGENTTEAMS_NPM_CACHE) return process.env.AGENTTEAMS_NPM_CACHE
+  if (process.env.npm_config_cache) return process.env.npm_config_cache
+  return join(process.env.HOME || homedir(), '.npm')
+}
+
+function npmTimeoutMs() {
+  const raw = process.env.AGENTTEAMS_NPM_TIMEOUT_MS
+  if (raw === undefined) return 180000
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) fail(`invalid AGENTTEAMS_NPM_TIMEOUT_MS: ${raw}`)
+  return value
+}
+
+async function runNpm(command, args, options) {
+  const timeout = npmTimeoutMs()
+  const startedAt = Date.now()
+  try {
+    return await execFileAsync(command, args, { ...options, maxBuffer: 32 * 1024 * 1024, timeout })
+  } catch (error) {
+    const elapsedMs = Date.now() - startedAt
+    const detail = error?.stderr?.trim() || error?.stdout?.trim() || error?.message || String(error)
+    const outcome = error?.killed === true || elapsedMs >= timeout ? 'timed out' : 'failed'
+    throw new Error(`npm ${command} ${args.join(' ')} ${outcome} after ${elapsedMs}ms: ${detail}`)
+  }
 }
 
 function parseOptions(argv) {
@@ -194,9 +221,8 @@ export async function runInstalledSdkSmoke(options = {}) {
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'agentteams-sdk-smoke-'))
   const prefix = join(temporaryRoot, 'prefix')
   const home = join(temporaryRoot, 'home')
-  const npmCache = join(temporaryRoot, 'npm-cache')
   const packDestination = join(temporaryRoot, 'pack')
-  for (const path of [prefix, home, npmCache, packDestination]) mkdirSync(path, { recursive: true })
+  for (const path of [prefix, home, packDestination]) mkdirSync(path, { recursive: true })
 
   let receipt
   let harness
@@ -205,8 +231,8 @@ export async function runInstalledSdkSmoke(options = {}) {
   let consumer
   let client
   try {
-    const npmEnv = { ...process.env, HOME: home, npm_config_cache: npmCache }
-    const packed = await execFileAsync('npm', ['pack', packRoot, '--pack-destination', packDestination, '--json'], {
+    const npmEnv = { ...process.env, HOME: home, npm_config_cache: npmCacheDir() }
+    const packed = await runNpm('npm', ['pack', packRoot, '--pack-destination', packDestination, '--json'], {
       cwd: temporaryRoot,
       env: npmEnv,
       maxBuffer: 32 * 1024 * 1024,
@@ -214,7 +240,7 @@ export async function runInstalledSdkSmoke(options = {}) {
     const packResult = JSON.parse(packed.stdout)[0]
     const tarball = join(packDestination, packResult.filename)
     const tarballSha256 = hashFile(tarball)
-    await execFileAsync('npm', ['install', '--prefix', prefix, '--no-audit', '--no-fund', '--no-package-lock', '--no-save', tarball], {
+    await runNpm('npm', ['install', '--prefix', prefix, '--no-audit', '--no-fund', '--no-package-lock', '--no-save', '--prefer-offline', tarball], {
       cwd: temporaryRoot,
       env: npmEnv,
       maxBuffer: 32 * 1024 * 1024,
