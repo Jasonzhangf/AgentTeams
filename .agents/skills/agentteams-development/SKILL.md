@@ -34,8 +34,8 @@ description: AgentTeams 项目开发、调试与验收入口；按现有架构�
    `mainline-call-map.json`、`module-registry.json`、`verification-map.json` 确认
    受影响真源、调用边和 gate。每个 mutable truth 一个 writer。Console/UI 只消费或
    提交，不在前端补账本、准入或恢复逻辑来绕过 owner。
-3. 代码改动在最新远端主线派生的独占 `/Volumes/Intel/playground/agentteams/<unit>`
-   工作树进行；同任务续作先关旧树再开新树。保留主树及他人修改。复杂开发先观察，
+3. 代码改动在最新 LayerFS main 派生的独占 task branch/Workspace 进行；新任务不新建
+   Git worktree，同任务续作先交接旧工作线再开新线。保留主树及他人修改。复杂开发先观察，
    沿宿主编排入口做独立计划。具体代码、文档、测试和集成执行统一交
    `codex exec --profile gcm` worker；peer 只保留目标编排与验收责任，不直接写
    代码；Alice 只做指导、审计和 review，不执行代码、文档、测试或集成；不使用

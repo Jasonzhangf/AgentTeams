@@ -628,3 +628,16 @@
 - 回交：已向 `appsdk.Jenny` 发送 `m1793600543037-471`（`durable=true`、
   `notification=tmux-input-submitted`），记录本机核对结果；等待含能力协商版本发布后
   按 `collab up` 同版本加载。
+
+## 2026-11-02 LayerFS 工作线迁移与初始化
+
+- 触发：CEO 通知 `m1793624388177-942` 要求全项目执行 LayerFS 工作空间规则；master 核实并负责本项目 main、Git 同步工作线和实际入口初始化，新任务改用 LayerFS。
+- 初始化事实：项目名 `agentteams`；总目录 `/Volumes/extension/layerfs`；项目 Store volume `layerfs-agentteams-store`，专用 VM `colima-layerfs`；统一入口 `layerfs --project agentteams`。LayerFS main genesis layer `32f7127e13fe3b1b5ebb9aa59bfaa4b9c52059d97962ae58467db241858cb856d3`，root `44f51e2f09cb2086c6a28e786521a78dc191af93ab5bb880870808f2af6bede4`。
+- Git 同步工作线：`git-sync` 分支；Sandbox `1`，Workspace `1:/workspaces/1`。
+- 独立 Git owner：`/Volumes/extension/layerfs/agentteams/git-owner.git`；`refs/heads/git-main` = `c8a21f85899ed9269295d96981969c93a4613ed6`（origin/main）。
+- typed 任务资源：`/Volumes/extension/layerfs/agentteams/state/task-events.json`；承载 layerfs 初始化、task-publish、git-capture 与 sync-publish 事件，不用日志重建控制决策。
+- 规则改动：`AGENTS.md` 的 worktree 规则改为 LayerFS 工作线、LayerFS main/Git mainline 只读、独立 Git owner 与 Git 同步链；`.agents/skills/agentteams-development/SKILL.md` 步骤 3 改为 LayerFS task branch/Workspace。两项在 LayerFS task branch `layerfs-rules` 完成，经 targeted checks（旧 `/Volumes/Intel/playground/agentteams` 引用清零、新 LayerFS 措辞写入）后合并为 `layerfs-rules-pub` 并 publish 到 LayerFS main 新层 `32bb2bb38671819d27572e0161b76a19cf93aac9425e2e427d3908a411afbf90ce`。
+- 交付链：task branch → LayerFS main publish → Git owner 捕获 Git 提交 → origin/main → Git 同步工作线核验。
+- CI 边界：本轮为纯文档/Skill 编辑，适用 targeted checks；`pnpm verify` 既有失败（4 项真实 Chrome DOM 与 package-install/最终打包超时）保留原错，不冒称全量 CI 通过。
+- 资源边界：未新建 Git worktree；主树 `/Volumes/extension/code/AgentTeams` 只读；未动其他 owner 的 worktree、进程或 daemon 生命周期。
+- 后续：旧 worktree 由原 owner 完成交付；其 PR 合并后由 Git 同步工作线更新 LayerFS main，保留未交付任务。

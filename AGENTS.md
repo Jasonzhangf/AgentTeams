@@ -176,20 +176,33 @@ Protocol fields, state transitions and DAGs have one owner:
   placeholder builds, or historical lifecycle evidence producers.
 - Before implementation read the resource, function, mainline, module, and
   verification maps. Bind every change to one feature and one owner.
-- Use one clean worktree below `/Volumes/Intel/playground/agentteams/<unit>` for
-  one semantic milestone. Keep main and other workers' dirty state untouched.
+- Use one clean LayerFS workline below `/Volumes/extension/layerfs/agentteams`
+  for one semantic milestone. New tasks use a LayerFS task branch and Workspace;
+  do not create a new Git worktree. Keep main and other workers' dirty state
+  untouched.
 - Append exploration, hypothesis, first divergence, intervention, root cause,
   and verification evidence to the current run notes.
-- Treat the mainline checkout as read-only. Develop in one clean owner worktree
-  created from the latest remote mainline, and preserve other workers' state.
+- Treat the LayerFS main and the Git mainline checkout as read-only. Develop in
+  one LayerFS task branch/Workspace created from the latest LayerFS main, and
+  preserve other workers' state. Every publish runs the applicable local CI on
+  the actual candidate; a failure keeps the original error and is not
+  published or bypassed.
 - The project's commit and push protection is procedural: a complete product
   milestone needs applicable validation and one independent overall review
   before integration. Pure documentation/Skill edits use targeted checks;
   internal steps do not each require a review. The project declares no
   commit-time or push-time hook, because a commit does not run the full gate. A
   merge, protection, or review result proves only its own boundary.
+- Git metadata lives in the master-managed independent Git owner at
+  `/Volumes/extension/layerfs/agentteams/git-owner.git`; Workspace and sync
+  worklines never modify its `.git`. After a task publish the Git owner captures
+  the Git commit; several commits may join one PR. After the PR merge and the
+  remote receipt, the Git sync workline updates LayerFS main and preserves
+  undelivered tasks.
 - Remove the owned worktree and release its claim only after required delivery,
-  the remote receipt, and retention evidence exist.
+  the remote receipt, and retention evidence exist. Existing worktrees finish
+  under their original owners and close after their PR merges; LayerFS main is
+  updated by the Git sync workline.
 
 ## Execution split (user-authorized)
 
